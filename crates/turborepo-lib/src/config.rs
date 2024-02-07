@@ -95,6 +95,14 @@ pub enum Error {
         #[source_code]
         text: String,
     },
+    #[error("`{field}` cannot contain an absolute path")]
+    AbsolutePathInConfig {
+        field: &'static str,
+        #[label("absolute path found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: String,
+    },
     #[error("No \"extends\" key found in {path}")]
     NoExtends { path: String },
     #[error("Failed to create APIClient: {0}")]

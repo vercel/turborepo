@@ -229,7 +229,7 @@ impl DeserializationVisitor for RawTaskDefinitionVisitor {
                 }
                 "inputs" => {
                     if let Some(inputs) = Vec::deserialize(&value, &key_text, diagnostics) {
-                        result.inputs = Some(Spanned::new(inputs).with_range(range));
+                        result.inputs = Some(inputs);
                     }
                 }
                 "passThroughEnv" => {
@@ -245,7 +245,7 @@ impl DeserializationVisitor for RawTaskDefinitionVisitor {
                 }
                 "outputs" => {
                     if let Some(outputs) = Vec::deserialize(&value, &key_text, diagnostics) {
-                        result.outputs = Some(Spanned::new(outputs).with_range(range));
+                        result.outputs = Some(outputs);
                     }
                 }
                 "outputMode" => {
@@ -463,8 +463,7 @@ impl DeserializationVisitor for RawTurboJsonVisitor {
                     if let Some(global_dependencies) =
                         Vec::deserialize(&value, &key_text, diagnostics)
                     {
-                        result.global_dependencies =
-                            Some(Spanned::new(global_dependencies).with_range(range));
+                        result.global_dependencies = Some(global_dependencies);
                     }
                 }
                 "globalEnv" => {
