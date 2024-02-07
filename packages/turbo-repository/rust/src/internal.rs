@@ -119,20 +119,27 @@ impl Workspace {
                 })?;
 
         let packages = package_json_paths
-            .map(|path| {
-                let pkg_json = PackageJson::load(&path)?;
+            .filter_map(|path| {
+                // Return an error if we fail to load the package.json
+                let pkg_json = match PackageJson::load(&path) {
+                    Ok(pkg) => pkg,
+                    Err(err) => return Some(Err(err.into())),
+                };
+
+                // Skip packages that don't have names
+                let name = pkg_json.name?;
+
+                // Get the package path and turn it into a package
+                // Error if we fail to get the package path (parent to
+                // package_json_path)
                 path.parent()
                     .map(|package_path| {
-                        let package = Package::new(
-                            pkg_json.name.unwrap(),
-                            &self.workspace_state.root,
-                            package_path,
-                        );
-                        package
+                        Ok(Package::new(name, &self.workspace_state.root, package_path))
                     })
-                    .ok_or_else(|| Error::MissingParent(path.to_owned()))
+                    .or_else(|| Some(Err(Error::MissingParent(path.to_owned()))))
             })
             .collect::<Result<Vec<Package>, Error>>()?;
+
         Ok(packages)
     }
 }
