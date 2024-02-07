@@ -48,18 +48,6 @@ impl From<Error> for napi::Error<Status> {
     }
 }
 
-impl From<turborepo_repository::package_json::Error> for Error {
-    fn from(err: turborepo_repository::package_json::Error) -> Self {
-        return Error::PackageGraphError;
-    }
-}
-
-impl From<turborepo_repository::package_graph::Error> for Error {
-    fn from(err: turborepo_repository::package_graph::Error) -> Self {
-        return Error::PackageGraphError;
-    }
-}
-
 impl Workspace {
     pub(crate) async fn find_internal(path: Option<String>) -> Result<Self, Error> {
         let reference_dir = path
