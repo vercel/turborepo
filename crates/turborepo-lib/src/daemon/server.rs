@@ -26,7 +26,7 @@ use semver::Version;
 use thiserror::Error;
 use tokio::{
     select,
-    sync::{mpsc, oneshot, watch, Mutex as AsyncMutex},
+    sync::{mpsc, oneshot, watch},
 };
 use tonic::transport::{NamedService, Server};
 use tower::ServiceBuilder;
@@ -39,7 +39,7 @@ use turborepo_filewatch::{
     FileSystemWatcher, WatchError,
 };
 use turborepo_repository::discovery::{
-    LocalPackageDiscoveryBuilder, PackageDiscovery, PackageDiscoveryBuilder,
+    DiscoveryResponse, LocalPackageDiscoveryBuilder, PackageDiscovery, PackageDiscoveryBuilder,
 };
 
 use super::{
@@ -47,10 +47,7 @@ use super::{
     endpoint::SocketOpenError,
     proto::{self},
 };
-use crate::{
-    daemon::{bump_timeout_layer::BumpTimeoutLayer, endpoint::listen_socket},
-    run::package_discovery::WatchingPackageDiscovery,
-};
+use crate::daemon::{bump_timeout_layer::BumpTimeoutLayer, endpoint::listen_socket};
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -123,7 +120,7 @@ async fn start_filewatching<PD: PackageDiscovery + Send + 'static>(
 /// Timeout for every RPC the server handles
 const REQUEST_TIMEOUT: Duration = Duration::from_millis(100);
 
-pub struct TurboGrpcService<S, PDA, PDB> {
+pub struct TurboGrpcService<S, PDB> {
     watcher_tx: watch::Sender<Option<Arc<FileWatching>>>,
     watcher_rx: watch::Receiver<Option<Arc<FileWatching>>>,
     repo_root: AbsoluteSystemPathBuf,
@@ -132,11 +129,10 @@ pub struct TurboGrpcService<S, PDA, PDB> {
     timeout: Duration,
     external_shutdown: S,
 
-    package_discovery: PDA,
     package_discovery_backup: PDB,
 }
 
-impl<S> TurboGrpcService<S, WatchingPackageDiscovery, LocalPackageDiscoveryBuilder>
+impl<S> TurboGrpcService<S, LocalPackageDiscoveryBuilder>
 where
     S: Future<Output = CloseReason>,
 {
@@ -155,7 +151,6 @@ where
     ) -> Self {
         let (watcher_tx, watcher_rx) = watch::channel(None);
 
-        let package_discovery = WatchingPackageDiscovery::new(watcher_rx.clone());
         let package_discovery_backup =
             LocalPackageDiscoveryBuilder::new(repo_root.clone(), None, None);
 
@@ -170,16 +165,14 @@ where
             log_file,
             timeout,
             external_shutdown,
-            package_discovery,
             package_discovery_backup,
         }
     }
 }
 
-impl<S, PDA, PDB> TurboGrpcService<S, PDA, PDB>
+impl<S, PDB> TurboGrpcService<S, PDB>
 where
     S: Future<Output = CloseReason>,
-    PDA: PackageDiscovery + Send + 'static,
     PDB: PackageDiscoveryBuilder,
     PDB::Output: PackageDiscovery + Send + 'static,
 {
@@ -188,9 +181,8 @@ where
     pub fn with_package_discovery_backup<PDB2: PackageDiscoveryBuilder>(
         self,
         package_discovery_backup: PDB2,
-    ) -> TurboGrpcService<S, PDA, PDB2> {
+    ) -> TurboGrpcService<S, PDB2> {
         TurboGrpcService {
-            package_discovery: self.package_discovery,
             daemon_root: self.daemon_root,
             external_shutdown: self.external_shutdown,
             log_file: self.log_file,
@@ -211,7 +203,6 @@ where
             log_file,
             repo_root,
             timeout,
-            package_discovery,
             package_discovery_backup,
         } = self;
 
@@ -270,7 +261,6 @@ where
         // so we use a private struct with just the pieces of state needed to handle
         // RPCs.
         let service = TurboGrpcServiceInner {
-            package_discovery: AsyncMutex::new(package_discovery),
             shutdown: trigger_shutdown,
             watcher_rx,
             times_saved: Arc::new(Mutex::new(HashMap::new())),
@@ -313,17 +303,15 @@ where
     }
 }
 
-struct TurboGrpcServiceInner<PD> {
-    //shutdown: Arc<Mutex<Option<oneshot::Sender<()>>>>,
+struct TurboGrpcServiceInner {
     shutdown: mpsc::Sender<()>,
     watcher_rx: watch::Receiver<Option<Arc<FileWatching>>>,
     times_saved: Arc<Mutex<HashMap<String, u64>>>,
     start_time: Instant,
     log_file: AbsoluteSystemPathBuf,
-    package_discovery: AsyncMutex<PD>,
 }
 
-impl<PD> TurboGrpcServiceInner<PD> {
+impl TurboGrpcServiceInner {
     async fn trigger_shutdown(&self) {
         info!("triggering shutdown");
         let _ = self.shutdown.send(()).await;
@@ -363,6 +351,14 @@ impl<PD> TurboGrpcServiceInner<PD> {
         let fw = self.wait_for_filewatching().await?;
         let changed_globs = fw.glob_watcher.get_changed_globs(hash, candidates).await?;
         Ok((changed_globs, time_saved))
+    }
+
+    async fn discover_packages(&self) -> Result<DiscoveryResponse, RpcError> {
+        let fw = self.wait_for_filewatching().await?;
+        Ok(DiscoveryResponse {
+            workspaces: fw.package_watcher.get_package_data().await,
+            package_manager: fw.package_watcher.get_package_manager().await,
+        })
     }
 }
 
@@ -422,10 +418,7 @@ async fn watch_root(
 }
 
 #[tonic::async_trait]
-impl<PD> proto::turbod_server::Turbod for TurboGrpcServiceInner<PD>
-where
-    PD: PackageDiscovery + Send + 'static,
-{
+impl proto::turbod_server::Turbod for TurboGrpcServiceInner {
     async fn hello(
         &self,
         request: tonic::Request<proto::HelloRequest>,
@@ -513,25 +506,18 @@ where
         &self,
         _request: tonic::Request<proto::DiscoverPackagesRequest>,
     ) -> Result<tonic::Response<proto::DiscoverPackagesResponse>, tonic::Status> {
-        self.package_discovery
-            .lock()
-            .await
-            .discover_packages()
-            .await
-            .map(|packages| {
-                tonic::Response::new(proto::DiscoverPackagesResponse {
-                    package_files: packages
-                        .workspaces
-                        .into_iter()
-                        .map(|d| proto::PackageFiles {
-                            package_json: d.package_json.to_string(),
-                            turbo_json: d.turbo_json.map(|t| t.to_string()),
-                        })
-                        .collect(),
-                    package_manager: proto::PackageManager::from(packages.package_manager).into(),
+        let resp = self.discover_packages().await?;
+        Ok(tonic::Response::new(proto::DiscoverPackagesResponse {
+            package_files: resp
+                .workspaces
+                .into_iter()
+                .map(|d| proto::PackageFiles {
+                    package_json: d.package_json.to_string(),
+                    turbo_json: d.turbo_json.map(|t| t.to_string()),
                 })
-            })
-            .map_err(|e| tonic::Status::internal(format!("{}", e)))
+                .collect(),
+            package_manager: proto::PackageManager::from(resp.package_manager).into(),
+        }))
     }
 }
 
@@ -558,7 +544,7 @@ fn compare_versions(client: Version, server: Version, constraint: proto::Version
     }
 }
 
-impl<T> NamedService for TurboGrpcServiceInner<T> {
+impl NamedService for TurboGrpcServiceInner {
     const NAME: &'static str = "turborepo.Daemon";
 }
 

@@ -19,5 +19,14 @@ describe("Workspace", () => {
     const packageManager: PackageManager = workspace.packageManager;
     expect(packageManager.name).toBe("pnpm");
   });
-  // TODO: proper tests on real fixtures
+
+  test("returns a package graph", async () => {
+    const dir = path.resolve(__dirname, "./fixtures/monorepo");
+    const workspace = await Workspace.find(dir);
+    const graph = await workspace.findPackagesAndDependents();
+    expect(graph).toEqual({
+      "apps/app": [],
+      "packages/ui": ["apps/app"],
+    });
+  });
 });

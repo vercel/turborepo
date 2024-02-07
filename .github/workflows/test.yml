@@ -245,6 +245,7 @@ jobs:
     needs: [determine_jobs, build_turborepo]
     if: needs.determine_jobs.outputs.turborepo_integration == 'true'
     runs-on: ${{ matrix.os.runner }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -510,11 +511,15 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           components: clippy
-          targets: wasm32-unknown-unknown
+          targets: wasm32-unknown-unknown,wasm32-wasi-preview1-threads
 
       - name: Run cargo check release
         run: |
           RUSTFLAGS="-D warnings -A deprecated" cargo groups check turbopack --features rustls-tls --release
+
+      - name: Run cargo check for the wasi targets
+        run: |
+          RUSTFLAGS="-D warnings -A deprecated" cargo groups check turbopack-wasi --release
 
   turbopack_rust_clippy:
     needs: [turbopack_rust_check]

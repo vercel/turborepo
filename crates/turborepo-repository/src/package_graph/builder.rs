@@ -103,7 +103,6 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
     /// Set the package discovery strategy to use. Note that whatever strategy
     /// selected here will be wrapped in a `CachingPackageDiscovery` to
     /// prevent unnecessary work during building.
-    #[allow(dead_code)]
     pub fn with_package_discovery<P2: PackageDiscoveryBuilder>(
         self,
         discovery: P2,
