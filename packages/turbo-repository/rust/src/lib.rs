@@ -103,7 +103,11 @@ impl Workspace {
     #[napi]
     pub async fn package_graph(&self) -> Result<HashMap<String, Vec<String>>, Error> {
         let packages = self.find_packages().await?;
-        let workspace_path = AbsoluteSystemPath::new(self.absolute_path.as_str()).unwrap();
+
+        let workspace_path = match AbsoluteSystemPath::new(self.absolute_path.as_str()) {
+            Ok(path) => path,
+            Err(e) => return Err(Error::from_reason(e.to_string())),
+        };
 
         let map: HashMap<String, Vec<String>> = packages
             .iter()
