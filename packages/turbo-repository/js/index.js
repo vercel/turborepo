@@ -85,20 +85,18 @@ switch (platform) {
     }
     break;
   case "linux":
-    if (isMusl()) {
-      throw new Error("musl not yet supported");
-    } else {
-      switch (arch) {
-        case "x64":
-          suffix = "linux-x64-gnu";
-          break;
-        case "arm64":
-          suffix = "linux-arm64-gnu";
-          break;
-        default:
-          throw new Error(`Unsupported architecture on Linux: ${arch}`);
-      }
+    const isMusl = isMusl();
+    switch (arch) {
+      case "x64":
+        suffix = isMusl ? "linux-x64-musl" : "linux-x64-gnu";
+        break;
+      case "arm64":
+        suffix = isMusl ? "linux-arm64-musl" : "linux-arm64-gnu";
+        break;
+      default:
+        throw new Error(`Unsupported architecture on Linux: ${arch}`);
     }
+
     break;
   default:
     throw new Error(`Unsupported OS: ${platform}, architecture: ${arch}`);
