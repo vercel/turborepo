@@ -267,8 +267,8 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     branch_env_var: Some("GITHUB_REF_NAME"),
                     username_env_var: Some("GITHUB_ACTOR"),
                     behavior: Some(VendorBehavior {
-                        group_prefix: |group_name, _| format!("::group::{group_name}"),
-                        group_suffix: |_, _| String::from("::endgroup::"),
+                        group_prefix: |group_name, _| format!("::group::{group_name}\n"),
+                        group_suffix: |_, _| String::from("::endgroup::\n"),
                     }),
                 },
                 Vendor {
