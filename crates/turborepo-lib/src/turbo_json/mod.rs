@@ -184,7 +184,7 @@ impl TryFrom<Vec<Spanned<UnescapedString>>> for TaskOutputs {
                     });
                 }
 
-                exclusions.push(glob.to_string());
+                exclusions.push(stripped_glob.to_string());
             } else {
                 if Utf8Path::new(&glob.value).is_absolute() {
                     let (span, text) = glob.span_and_text();
@@ -637,7 +637,7 @@ mod tests {
     #[test_case(r"{}", TurboJson::default() ; "empty")]
     #[test_case(r#"{ "globalDependencies": ["tsconfig.json", "jest.config.js"] }"#,
         TurboJson {
-            global_deps: Spanned::new(vec!["jest.config.js".to_string(), "tsconfig.json".to_string()]).with_range(24..59).with_text("{ \"globalDependencies\": [\"tsconfig.json\", \"jest.config.js\"] }"),
+            global_deps: vec!["jest.config.js".to_string(), "tsconfig.json".to_string()],
             ..TurboJson::default()
         }
     ; "global dependencies (sorted)")]
@@ -808,9 +808,9 @@ mod tests {
             dot_env: Some(Spanned::new(vec!["package/a/.env".into()]).with_range(60..78)),
             env: Some(vec![Spanned::<UnescapedString>::new("OS".into()).with_range(98..102)]),
             pass_through_env: Some(vec![Spanned::<UnescapedString>::new("AWS_SECRET_KEY".into()).with_range(134..150)]),
-            outputs: Some(Spanned::new(vec!["package/a/dist".into()]).with_range(174..192)),
+            outputs: Some(vec![Spanned::<UnescapedString>::new("package/a/dist".into()).with_range(175..191)]),
             cache: Spanned::new(Some(false)).with_range(213..218),
-            inputs: Some(Spanned::new(vec!["package/a/src/**".into()]).with_range(240..260)),
+            inputs: Some(vec![Spanned::<UnescapedString>::new("package/a/src/**".into()).with_range(241..259)]),
             output_mode: Some(Spanned::new(OutputLogsMode::Full).with_range(286..292)),
             persistent: Some(Spanned::new(true).with_range(318..322)),
         },
@@ -848,9 +848,9 @@ mod tests {
             dot_env: Some(Spanned::new(vec!["package\\a\\.env".into()]).with_range(68..88)),
             env: Some(vec![Spanned::<UnescapedString>::new("OS".into()).with_range(112..116)]),
             pass_through_env: Some(vec![Spanned::<UnescapedString>::new("AWS_SECRET_KEY".into()).with_range(152..168)]),
-            outputs: Some(Spanned::new(vec!["package\\a\\dist".into()]).with_range(196..216)),
+            outputs: Some(vec![Spanned::<UnescapedString>::new("package\\a\\dist".into()).with_range(197..215)]),
             cache: Spanned::new(Some(false)).with_range(241..246),
-            inputs: Some(Spanned::new(vec!["package\\a\\src\\**".into()]).with_range(272..295)),
+            inputs: Some(vec![Spanned::<UnescapedString>::new("package\\a\\src\\**".into()).with_range(273..294)]),
             output_mode: Some(Spanned::new(OutputLogsMode::Full).with_range(325..331)),
             persistent: Some(Spanned::new(true).with_range(361..365)),
         },
@@ -912,8 +912,12 @@ mod tests {
         task_outputs_str: &str,
         expected_task_outputs: TaskOutputs,
     ) -> Result<()> {
-        let raw_task_outputs: Vec<String> = serde_json::from_str(task_outputs_str)?;
-        let task_outputs: TaskOutputs = raw_task_outputs.into();
+        let raw_task_outputs: Vec<UnescapedString> = serde_json::from_str(task_outputs_str)?;
+        let raw_task_outputs = raw_task_outputs
+            .into_iter()
+            .map(Spanned::new)
+            .collect::<Vec<_>>();
+        let task_outputs: TaskOutputs = raw_task_outputs.try_into()?;
         assert_eq!(task_outputs, expected_task_outputs);
 
         Ok(())
