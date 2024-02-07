@@ -69,7 +69,10 @@ impl Package {
         workspace_path: &AbsoluteSystemPath,
     ) -> Vec<Package> {
         let node = WorkspaceNode::Workspace(WorkspaceName::Other(self.name.clone()));
-        let ancestors = graph.immediate_ancestors(&node).unwrap();
+        let ancestors = match graph.immediate_ancestors(&node) {
+            Some(ancestors) => ancestors,
+            None => return vec![],
+        };
 
         ancestors
             .iter()
