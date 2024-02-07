@@ -25,8 +25,8 @@ describe("Workspace", () => {
     const workspace = await Workspace.find(dir);
     const graph = await workspace.packageGraph();
     expect(graph).toEqual({
-      app: [],
-      ui: ["app"],
+      "apps/app": [],
+      "packages/ui": ["apps/app"],
     });
   });
 });
