@@ -74,7 +74,7 @@ impl Workspace {
     #[napi]
     pub async fn package_graph(&self) -> HashMap<String, Vec<String>> {
         let mut map = HashMap::new();
-        let packages = self.find_packages().await.unwrap();
+        let packages = self.find_packages().await?;
 
         for (_i, package) in packages.iter().enumerate() {
             let deps = package.dependents(); // Get upstream dependencies
