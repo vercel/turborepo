@@ -1,12 +1,23 @@
 use std::{net::SocketAddr, sync::Arc};
 
+use anyhow::Result;
 use async_trait::async_trait;
 use axum::{extract::Query, response::Redirect, routing::get, Router};
-use reqwest::Url;
 use serde::Deserialize;
 use tokio::sync::OnceCell;
+use url::Url;
 
 use crate::Error;
+
+pub enum LoginType {
+    Basic { login_url_configuration: String },
+    SSO,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct LoginPayload {
+    token: String,
+}
 
 #[derive(Debug, Default, Clone, Deserialize)]
 #[allow(dead_code)]
@@ -20,39 +31,71 @@ pub struct SsoPayload {
 }
 
 #[async_trait]
-pub trait SSOLoginServer {
-    async fn run(&self, port: u16, verification_token: Arc<OnceCell<String>>) -> Result<(), Error>;
+pub trait LoginServer {
+    async fn run(
+        &self,
+        port: u16,
+        login_type: LoginType,
+        token: Arc<OnceCell<String>>,
+    ) -> Result<(), Error>;
 }
 
-/// TODO: Document this.
-pub struct DefaultSSOLoginServer;
+/// A struct that implements LoginServer.
+///
+/// Listens on 127.0.0.1 and a port that's passed in.
+pub struct DefaultLoginServer;
 
 #[async_trait]
-impl SSOLoginServer for DefaultSSOLoginServer {
-    async fn run(&self, port: u16, verification_token: Arc<OnceCell<String>>) -> Result<(), Error> {
+impl LoginServer for DefaultLoginServer {
+    async fn run(
+        &self,
+        port: u16,
+        login_type: LoginType,
+        login_token: Arc<OnceCell<String>>,
+    ) -> Result<(), Error> {
         let handle = axum_server::Handle::new();
         let route_handle = handle.clone();
-        let app = Router::new()
-            // `GET /` goes to `root`
-            .route(
-                "/",
-                get(|sso_payload: Query<SsoPayload>| async move {
-                    let (token, location) = get_token_and_redirect(sso_payload.0).unwrap();
-                    if let Some(token) = token {
-                        // If token is already set, it's not a big deal, so we ignore the error.
-                        let _ = verification_token.set(token);
-                    }
-                    route_handle.shutdown();
-                    Redirect::to(location.as_str())
-                }),
-            );
         let addr = SocketAddr::from(([127, 0, 0, 1], port));
+        match login_type {
+            LoginType::Basic {
+                login_url_configuration,
+            } => {
+                let app = Router::new().route(
+                    "/",
+                    get(|login_payload: Query<LoginPayload>| async move {
+                        let _ = login_token.set(login_payload.0.token);
+                        route_handle.shutdown();
+                        Redirect::to(&format!("{login_url_configuration}/turborepo/success"))
+                    }),
+                );
 
-        axum_server::bind(addr)
-            .handle(handle)
-            .serve(app.into_make_service())
-            .await
-            .expect("failed to start one-shot server");
+                axum_server::bind(addr)
+                    .handle(handle)
+                    .serve(app.into_make_service())
+                    .await
+                    .expect("failed to start one-shot server");
+            }
+            LoginType::SSO => {
+                let app = Router::new().route(
+                    "/",
+                    get(|sso_payload: Query<SsoPayload>| async move {
+                        let (token, location) = get_token_and_redirect(sso_payload.0).unwrap();
+                        if let Some(token) = token {
+                            // If token is already set, it's not a big deal, so we ignore the error.
+                            let _ = login_token.set(token);
+                        }
+                        route_handle.shutdown();
+                        Redirect::to(location.as_str())
+                    }),
+                );
+
+                axum_server::bind(addr)
+                    .handle(handle)
+                    .serve(app.into_make_service())
+                    .await
+                    .expect("failed to start one-shot server");
+            }
+        }
 
         Ok(())
     }

@@ -1,12 +1,12 @@
-use std::{borrow::Cow, sync::Arc};
+use std::sync::Arc;
 
 use reqwest::Url;
 use tokio::sync::OnceCell;
 use tracing::warn;
 use turborepo_api_client::Client;
-use turborepo_ui::{start_spinner, BOLD, UI};
+use turborepo_ui::{start_spinner, BOLD};
 
-use crate::{error, server, ui, Error};
+use crate::{auth::extract_vercel_token, error, ui, Error, LoginOptions, Token};
 
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
@@ -21,19 +21,23 @@ fn make_token_name() -> Result<String, Error> {
     ))
 }
 
-/// present, and the token has access to the provided `sso_team`, we do not
-/// overwrite it and instead log that we found an existing token.
-pub async fn sso_login<'a>(
-    api_client: &impl Client,
-    ui: &UI,
-    existing_token: Option<&'a str>,
-    login_url_configuration: &str,
-    sso_team: &str,
-    login_server: &impl server::SSOLoginServer,
-) -> Result<Cow<'a, str>, Error> {
+/// Perform an SSO login flow. If an existing token is present, and the token
+/// has access to the provided `sso_team`, we do not overwrite it and instead
+/// log that we found an existing token.
+pub async fn sso_login<'a, T: Client>(options: &LoginOptions<'_, T>) -> Result<Token, Error> {
+    let LoginOptions {
+        api_client,
+        ui,
+        login_url: login_url_configuration,
+        login_server,
+        sso_team,
+        existing_token: _,
+    } = *options;
+
+    let sso_team = sso_team.ok_or(Error::EmptySSOTeam)?;
     // Check if token exists first. Must be there for the user and contain the
     // sso_team passed into this function.
-    if let Some(token) = existing_token {
+    if let Some(token) = options.existing_token {
         let (result_user, result_teams) =
             tokio::join!(api_client.get_user(token), api_client.get_teams(token));
 
@@ -45,7 +49,24 @@ pub async fn sso_login<'a>(
             {
                 println!("{}", ui.apply(BOLD.apply_to("Existing token found!")));
                 ui::print_cli_authorized(&response_user.user.email, ui);
-                return Ok(token.into());
+                return Ok(Token::Existing(token.into()));
+            }
+        }
+    }
+
+    // No existing token found. If the user is logging into Vercel, check for an
+    // existing `vc` token with correct scope.
+    if login_url_configuration.contains("vercel.com") {
+        match extract_vercel_token() {
+            Ok(token) => {
+                println!(
+                    "{}",
+                    ui.apply(BOLD.apply_to("Existing Vercel token found!"))
+                );
+                return Ok(Token::Existing(token));
+            }
+            Err(e) => {
+                dbg!("Failed to extract Vercel token: ", e);
             }
         }
     }
@@ -76,7 +97,9 @@ pub async fn sso_login<'a>(
     }
 
     let token_cell = Arc::new(OnceCell::new());
-    login_server.run(DEFAULT_PORT, token_cell.clone()).await?;
+    login_server
+        .run(DEFAULT_PORT, crate::LoginType::SSO, token_cell.clone())
+        .await?;
     spinner.finish_and_clear();
 
     let token = token_cell.get().ok_or(Error::FailedToGetToken)?;
@@ -95,7 +118,7 @@ pub async fn sso_login<'a>(
 
     ui::print_cli_authorized(&user_response.user.email, ui);
 
-    Ok(verified_user.token.into())
+    Ok(Token::New(verified_user.token))
 }
 
 #[cfg(test)]
@@ -105,6 +128,7 @@ mod tests {
     use async_trait::async_trait;
     use reqwest::{Method, RequestBuilder, Response};
     use turborepo_api_client::Client;
+    use turborepo_ui::UI;
     use turborepo_vercel_api::{
         CachingStatusResponse, Membership, Role, SpacesResponse, Team, TeamsResponse, User,
         UserResponse, VerifiedSsoUser,
@@ -112,7 +136,7 @@ mod tests {
     use turborepo_vercel_api_mock::start_test_server;
 
     use super::*;
-    use crate::SSOLoginServer;
+    use crate::{LoginServer, LoginType};
     const EXPECTED_VERIFICATION_TOKEN: &str = "expected_verification_token";
 
     lazy_static::lazy_static! {
@@ -276,14 +300,15 @@ mod tests {
     }
 
     #[async_trait]
-    impl SSOLoginServer for MockSSOLoginServer {
+    impl LoginServer for MockSSOLoginServer {
         async fn run(
             &self,
             _port: u16,
-            verification_token: Arc<OnceCell<String>>,
+            _login_type: LoginType,
+            login_token: Arc<OnceCell<String>>,
         ) -> Result<(), Error> {
             self.hits.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            verification_token
+            login_token
                 .set(EXPECTED_VERIFICATION_TOKEN.to_string())
                 .unwrap();
             Ok(())
@@ -304,31 +329,22 @@ mod tests {
         let login_server = MockSSOLoginServer {
             hits: Arc::new(0.into()),
         };
+        let mut options = LoginOptions {
+            sso_team: Some(team),
+            ..LoginOptions::new(&ui, &url, &api_client, &login_server)
+        };
 
-        let token = sso_login(&api_client, &ui, None, &url, team, &login_server)
-            .await
-            .unwrap();
+        let token = sso_login(&options).await.unwrap();
+        assert!(!matches!(token, Token::Existing(..)));
 
-        let got_token = Some(token.to_string());
-
-        assert_eq!(got_token, Some(EXPECTED_VERIFICATION_TOKEN.to_owned()));
+        let got_token = token.into_inner().to_string();
+        assert_eq!(got_token, EXPECTED_VERIFICATION_TOKEN.to_owned());
 
         // Call the login function twice to test that we check for existing tokens.
         // Total server hits should be 1.
-        let second_token = sso_login(
-            &api_client,
-            &ui,
-            got_token.as_deref(),
-            &url,
-            team,
-            &login_server,
-        )
-        .await
-        .unwrap();
-
-        // We can confirm that we didn't fetch a new token because we're borrowing the
-        // existing token and not getting a new allocation.
-        assert!(second_token.is_borrowed());
+        options.existing_token = Some(&got_token);
+        let second_token = sso_login(&options).await.unwrap();
+        assert!(matches!(second_token, Token::Existing(..)));
 
         handle.abort();
 

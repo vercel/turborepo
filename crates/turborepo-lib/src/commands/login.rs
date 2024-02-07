@@ -1,7 +1,6 @@
 use turborepo_api_client::APIClient;
 use turborepo_auth::{
-    login as auth_login, sso_login as auth_sso_login, DefaultLoginServer, DefaultSSOLoginServer,
-    LoginOptions,
+    login as auth_login, sso_login as auth_sso_login, DefaultLoginServer, LoginOptions, Token,
 };
 use turborepo_telemetry::events::command::{CommandEventBuilder, LoginMethod};
 
@@ -16,16 +15,18 @@ pub async fn sso_login(
     let api_client: APIClient = base.api_client()?;
     let ui = base.ui;
     let login_url_config = base.config()?.login_url().to_string();
+    let options = LoginOptions {
+        existing_token: base.config()?.token(),
+        sso_team: Some(sso_team),
+        ..LoginOptions::new(&ui, &login_url_config, &api_client, &DefaultLoginServer)
+    };
 
-    let token = auth_sso_login(
-        &api_client,
-        &ui,
-        base.config()?.token(),
-        &login_url_config,
-        sso_team,
-        &DefaultSSOLoginServer,
-    )
-    .await?;
+    let token = auth_sso_login(&options).await?;
+
+    // Don't write to disk if the token is already there
+    if matches!(token, Token::Existing(..)) {
+        return Ok(());
+    }
 
     let global_config_path = base.global_config_path()?;
     let before = global_config_path
@@ -35,7 +36,7 @@ pub async fn sso_login(
             error: e,
         })?;
 
-    let after = set_path(&before, &["token"], &format!("\"{}\"", token))?;
+    let after = set_path(&before, &["token"], &format!("\"{}\"", token.into_inner()))?;
 
     global_config_path
         .ensure_dir()
@@ -67,7 +68,7 @@ pub async fn login(base: &mut CommandBase, telemetry: CommandEventBuilder) -> Re
     let token = auth_login(&options).await?;
 
     // Don't write to disk if the token is already there
-    if token.exists {
+    if matches!(token, Token::Existing(..)) {
         return Ok(());
     }
 
@@ -78,7 +79,7 @@ pub async fn login(base: &mut CommandBase, telemetry: CommandEventBuilder) -> Re
             config_path: global_config_path.clone(),
             error: e,
         })?;
-    let after = set_path(&before, &["token"], &format!("\"{}\"", token.token))?;
+    let after = set_path(&before, &["token"], &format!("\"{}\"", token.into_inner()))?;
 
     global_config_path
         .ensure_dir()
