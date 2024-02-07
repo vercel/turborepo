@@ -8,7 +8,7 @@ use time::{format_description, OffsetDateTime};
 use tokio::signal::ctrl_c;
 use tracing::{trace, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_ui::{color, BOLD_GREEN, GREY};
+use turborepo_ui::{color, BOLD_GREEN, BOLD_RED, GREY};
 use which::which;
 
 use super::CommandBase;
@@ -66,7 +66,16 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
             println!("{} daemon is running", color!(base.ui, BOLD_GREEN, "✓"));
         }
         DaemonCommand::Stop => {
-            let client = connector.connect().await?;
+            let client = match connector.connect().await {
+                Ok(client) => client,
+                Err(DaemonConnectorError::NotRunning) => {
+                    println!("{} stopped daemon", color!(base.ui, BOLD_GREEN, "✓"));
+                    return Ok(());
+                }
+                Err(e) => {
+                    return Err(e.into());
+                }
+            };
             client.stop().await?;
             println!("{} stopped daemon", color!(base.ui, BOLD_GREEN, "✓"));
         }
@@ -78,7 +87,11 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
                     return Ok(());
                 }
                 Err(DaemonConnectorError::NotRunning) => {
-                    println!("{}", DAEMON_NOT_RUNNING_MESSAGE);
+                    println!(
+                        "{} {}",
+                        color!(base.ui, BOLD_RED, "x"),
+                        DAEMON_NOT_RUNNING_MESSAGE
+                    );
                     return Ok(());
                 }
                 Err(e) => {
