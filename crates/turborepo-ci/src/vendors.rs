@@ -21,7 +21,7 @@ pub struct Vendor {
     pub behavior: Option<VendorBehavior>,
 }
 
-static VENDORS: OnceLock<[Vendor; 44]> = OnceLock::new();
+static VENDORS: OnceLock<[Vendor; 45]> = OnceLock::new();
 
 pub(crate) fn get_vendors() -> &'static [Vendor] {
     VENDORS
@@ -269,6 +269,31 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     behavior: Some(VendorBehavior {
                         group_prefix: |group_name| format!("::group::{group_name}\n"),
                         group_suffix: |_| String::from("::endgroup::\n"),
+                    }),
+                },
+                Vendor {
+                    name: "GitLab CI",
+                    constant: "GITLAB",
+                    env: VendorEnvs {
+                        any: vec!["GITLAB_CI"],
+                        all: vec![],
+                    },
+                    eval_env: None,
+                    sha_env_var: None,
+                    branch_env_var: None,
+                    username_env_var: None,
+                    behavior: Some(VendorBehavior {
+                        group_prefix: |group_name, task_start_time| {
+                            let unix_timestamp = task_start_time.timestamp();
+                            return format!(
+                                "\\e[0Ksection_start:{unix_timestamp}:{group_name}\\r\\\
+                                 e[0K{group_name}"
+                            );
+                        },
+                        group_suffix: |group_name, task_end_time| {
+                            let unix_timestamp = task_end_time.timestamp();
+                            format!("\\e[0Ksection_end:{unix_timestamp}:{group_name}\\r\\e[0K")
+                        },
                     }),
                 },
                 Vendor {
