@@ -64,6 +64,11 @@ turbopack = [
   "path:crates/node-file-trace",
 ]
 
+# List of the packages can be compiled against wasm32-wasi target.
+turbopack-wasi = [
+  "path:crates/turbo-tasks-hash"
+]
+
 [workspace.lints.clippy]
 too_many_arguments = "allow"
 
