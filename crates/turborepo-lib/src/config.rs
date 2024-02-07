@@ -125,7 +125,7 @@ macro_rules! create_builder {
 
 const DEFAULT_API_URL: &str = "https://vercel.com/api";
 const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
-const DEFAULT_TIMEOUT: u64 = 20;
+const DEFAULT_TIMEOUT: u64 = 30;
 
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, Iterable)]
 #[serde(rename_all = "camelCase")]

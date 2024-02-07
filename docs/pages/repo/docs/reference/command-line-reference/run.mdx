@@ -279,6 +279,14 @@ turbo run build --no-cache
 turbo run dev --no-cache
 ```
 
+### `--remote-cache-timeout`
+
+Default `30` seconds. Set the timeout for remote cache operations in seconds.
+
+```shell
+turbo run build --remote-cache-timeout=60
+```
+
 ### `--no-daemon`
 
 Default `false`. `turbo` can run a standalone process in some cases to precalculate values used for determining what work needs to be done.
