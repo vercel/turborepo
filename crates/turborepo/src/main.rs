@@ -20,5 +20,6 @@ fn main() -> Result<()> {
         1
     });
 
+    // triggering a rust workflow
     process::exit(exit_code)
 }
