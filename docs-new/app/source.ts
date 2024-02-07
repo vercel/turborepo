@@ -12,6 +12,7 @@ export const {
   getPage: getBlogPage,
   getPages: getBlogPages,
   pageTree: blogPageTree,
+  files: blogFiles,
 } = loader({
   baseUrl: "/blog",
   rootDir: "blog",
