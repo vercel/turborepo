@@ -380,13 +380,13 @@ impl<'a> Visitor<'a> {
         let mut logger = self.sink.logger(behavior);
         if let Some(vendor_behavior) = vendor_behavior {
             let group_name = if self.run_opts.single_package {
-                ""
+                task_id.task().to_string()
             } else {
-                task_id.package()
+                format!("{}:{}", task_id.package(), task_id.task())
             };
             let (header, footer) = (
-                (vendor_behavior.group_prefix)(group_name, task_start_time),
-                (vendor_behavior.group_suffix)(group_name, task_start_time),
+                (vendor_behavior.group_prefix)(&group_name, task_start_time),
+                (vendor_behavior.group_suffix)(&group_name, task_start_time),
             );
             logger.with_header_footer(Some(header), Some(footer));
         }
