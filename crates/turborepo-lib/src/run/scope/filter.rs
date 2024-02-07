@@ -261,7 +261,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             }
 
             for package in selector_packages {
-                let node = package_graph::WorkspaceNode::Workspace(package.clone());
+                let node = package_graph::PackageNode::Workspace(package.clone());
 
                 if selector.include_dependencies {
                     let dependencies = self.pkg_graph.immediate_dependencies(&node);
@@ -283,7 +283,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                         // get the dependent's dependencies
                         if selector.include_dependencies {
                             let dependent_node =
-                                package_graph::WorkspaceNode::Workspace(dependent.to_owned());
+                                package_graph::PackageNode::Workspace(dependent.to_owned());
 
                             let dependent_dependencies =
                                 self.pkg_graph.immediate_dependencies(&dependent_node);
@@ -380,7 +380,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 continue;
             }
 
-            let workspace_node = package_graph::WorkspaceNode::Workspace(package.clone());
+            let workspace_node = package_graph::PackageNode::Workspace(package.clone());
             let dependencies = self.pkg_graph.immediate_dependencies(&workspace_node);
 
             for changed_package in &changed_packages {
@@ -390,7 +390,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 }
 
                 let changed_node =
-                    package_graph::WorkspaceNode::Workspace(changed_package.to_owned());
+                    package_graph::PackageNode::Workspace(changed_package.to_owned());
 
                 if dependencies
                     .as_ref()

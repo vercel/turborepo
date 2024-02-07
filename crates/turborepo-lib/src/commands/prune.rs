@@ -8,7 +8,7 @@ use turbopath::{
     AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPath,
 };
 use turborepo_repository::{
-    package_graph::{self, PackageGraph, WorkspaceName, WorkspaceNode},
+    package_graph::{self, PackageGraph, PackageNode, WorkspaceName},
     package_json::PackageJson,
 };
 use turborepo_telemetry::events::command::CommandEventBuilder;
@@ -404,9 +404,9 @@ impl<'a> Prune<'a> {
 
     fn internal_dependencies(&self) -> Vec<WorkspaceName> {
         let workspaces =
-            std::iter::once(WorkspaceNode::Workspace(WorkspaceName::Root))
+            std::iter::once(PackageNode::Workspace(WorkspaceName::Root))
                 .chain(self.scope.iter().map(|workspace| {
-                    WorkspaceNode::Workspace(WorkspaceName::Other(workspace.clone()))
+                    PackageNode::Workspace(WorkspaceName::Other(workspace.clone()))
                 }))
                 .collect::<Vec<_>>();
         let nodes = self.package_graph.transitive_closure(workspaces.iter());
@@ -414,8 +414,8 @@ impl<'a> Prune<'a> {
         let mut names: Vec<_> = nodes
             .into_iter()
             .filter_map(|node| match node {
-                WorkspaceNode::Root => None,
-                WorkspaceNode::Workspace(workspace) => Some(workspace.clone()),
+                PackageNode::Root => None,
+                PackageNode::Workspace(workspace) => Some(workspace.clone()),
             })
             .collect();
         names.sort();
