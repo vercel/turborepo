@@ -33,7 +33,7 @@ use tower::ServiceBuilder;
 use tracing::{error, info, trace, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_filewatch::{
-    cookie_jar::CookieWriter,
+    cookies::CookieWriter,
     globwatcher::{Error as GlobWatcherError, GlobError, GlobSet, GlobWatcher},
     package_watcher::PackageWatcher,
     FileSystemWatcher, WatchError,

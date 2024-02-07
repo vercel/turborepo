@@ -3,28 +3,14 @@ use std::{collections::BinaryHeap, fs::OpenOptions, time::Duration};
 use notify::EventKind;
 use thiserror::Error;
 use tokio::{
-    sync::{broadcast, mpsc, oneshot},
+    sync::{mpsc, oneshot},
     time::error::Elapsed,
 };
 use tracing::trace;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathRelation};
 
-use crate::NotifyError;
-
-#[derive(Clone, Debug, Error)]
-pub enum WatchError {
-    #[error(transparent)]
-    RecvError(#[from] broadcast::error::RecvError),
-    #[error("filewatching encountered errors: {0}")]
-    NotifyError(#[from] NotifyError),
-    #[error("filewatching has closed, cannot watch cookies")]
-    Closed,
-}
-
 #[derive(Debug, Error)]
 pub enum CookieError {
-    #[error(transparent)]
-    Watch(#[from] WatchError),
     #[error("cookie timeout expired")]
     Timeout(#[from] Elapsed),
     #[error("failed to receiver cookie notification: {0}")]
@@ -68,9 +54,7 @@ impl<T> Eq for CookiedRequest<T> {}
 
 impl<T> PartialOrd for CookiedRequest<T> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        // Lower serials should be sorted higher, since the heap pops the highest values
-        // first
-        other.serial.partial_cmp(&self.serial)
+        Some(self.cmp(other))
     }
 }
 
@@ -232,13 +216,15 @@ fn handle_cookie_request(
 mod test {
     use std::time::Duration;
 
-    use futures::channel::oneshot;
     use notify::{event::CreateKind, Event, EventKind};
-    use tokio::sync::{broadcast, mpsc};
+    use tokio::{
+        sync::{broadcast, mpsc, oneshot},
+        task::JoinSet,
+    };
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::{CookieWatcher, CookiedRequest};
-    use crate::{cookie_jar::CookieWriter, NotifyError};
+    use crate::{cookies::CookieWriter, NotifyError};
 
     struct TestQuery {
         resp: oneshot::Sender<()>,
@@ -277,6 +263,7 @@ mod test {
         }
     }
 
+    #[derive(Clone)]
     struct TestClient {
         reqs_tx: mpsc::Sender<CookiedRequest<TestQuery>>,
         cookie_jar: CookieWriter,
@@ -351,6 +338,68 @@ mod test {
                 .unwrap();
             scope.spawn(client.request());
         });
+        exit_tx.send(()).unwrap();
+        service_handle.await.unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_out_of_order_requests() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let path = AbsoluteSystemPathBuf::try_from(tempdir.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+
+        let (send_file_events, file_events) = broadcast::channel(16);
+        let (reqs_tx, reqs_rx) = mpsc::channel(16);
+        let cookie_jar = CookieWriter::new(&path, Duration::from_millis(100));
+        let (exit_tx, exit_rx) = oneshot::channel();
+
+        let service = TestService {
+            file_events,
+            cookie_watcher: CookieWatcher::new(path.clone()),
+            reqs_rx,
+        };
+        let service_handle = tokio::spawn(service.watch(exit_rx));
+
+        let client = TestClient {
+            reqs_tx,
+            cookie_jar,
+        };
+
+        let mut join_set = JoinSet::new();
+        let client_1 = client.clone();
+        join_set.spawn(async move { client_1.request().await });
+
+        let client_2 = client.clone();
+        join_set.spawn(async move { client_2.request().await });
+
+        let client_3 = client.clone();
+        join_set.spawn(async move { client_3.request().await });
+
+        send_file_events
+            .send(Ok(Event {
+                kind: EventKind::Create(CreateKind::File),
+                paths: vec![path.join_component("2.cookie").as_std_path().to_owned()],
+                ..Default::default()
+            }))
+            .unwrap();
+
+        // Expect 2 rpcs to be ready. We don't know which ones they will be
+        // but we also don't care. We don't have ordering semantics on the client
+        // side.
+        join_set.join_next().await.unwrap().unwrap();
+        join_set.join_next().await.unwrap().unwrap();
+
+        send_file_events
+            .send(Ok(Event {
+                kind: EventKind::Create(CreateKind::File),
+                paths: vec![path.join_component("3.cookie").as_std_path().to_owned()],
+                ..Default::default()
+            }))
+            .unwrap();
+        join_set.join_next().await.unwrap().unwrap();
+
         exit_tx.send(()).unwrap();
         service_handle.await.unwrap();
     }
