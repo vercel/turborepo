@@ -266,14 +266,14 @@ mod test {
     #[derive(Clone)]
     struct TestClient {
         reqs_tx: mpsc::Sender<CookiedRequest<TestQuery>>,
-        cookie_jar: CookieWriter,
+        cookie_writer: CookieWriter,
     }
 
     impl TestClient {
         async fn request(&self) {
             let (resp_tx, resp_rx) = oneshot::channel();
             let query = TestQuery { resp: resp_tx };
-            let req = self.cookie_jar.cookie_request(query).await.unwrap();
+            let req = self.cookie_writer.cookie_request(query).await.unwrap();
             self.reqs_tx.send(req).await.unwrap();
             resp_rx.await.unwrap();
         }
@@ -289,7 +289,7 @@ mod test {
 
         let (send_file_events, file_events) = broadcast::channel(16);
         let (reqs_tx, reqs_rx) = mpsc::channel(16);
-        let cookie_jar = CookieWriter::new(&path, Duration::from_millis(100));
+        let cookie_writer = CookieWriter::new(&path, Duration::from_secs(2));
         let (exit_tx, exit_rx) = oneshot::channel();
 
         let service = TestService {
@@ -301,7 +301,7 @@ mod test {
 
         let client = TestClient {
             reqs_tx,
-            cookie_jar,
+            cookie_writer,
         };
         // race request and file event. Either order should work.
         tokio_scoped::scope(|scope| {
@@ -352,7 +352,7 @@ mod test {
 
         let (send_file_events, file_events) = broadcast::channel(16);
         let (reqs_tx, reqs_rx) = mpsc::channel(16);
-        let cookie_jar = CookieWriter::new(&path, Duration::from_millis(100));
+        let cookie_writer = CookieWriter::new(&path, Duration::from_secs(2));
         let (exit_tx, exit_rx) = oneshot::channel();
 
         let service = TestService {
@@ -364,7 +364,7 @@ mod test {
 
         let client = TestClient {
             reqs_tx,
-            cookie_jar,
+            cookie_writer,
         };
 
         let mut join_set = JoinSet::new();
