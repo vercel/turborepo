@@ -2,6 +2,10 @@ name: Turborepo Library Release
 
 on:
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Do a dry run, skipping the final publish step."
+        type: boolean
 
 jobs:
   build:
@@ -154,6 +158,7 @@ jobs:
       - name: Publish Artifacts
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        if: ${{ !inputs.dry_run }}
         run: |
           npm config set --location=project "//registry.npmjs.org/:_authToken" ${NPM_TOKEN}
           VERSION=$(jq -r .version packages/turbo-repository/js/package.json)
