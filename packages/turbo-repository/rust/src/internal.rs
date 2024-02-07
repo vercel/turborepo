@@ -5,6 +5,8 @@ use thiserror::Error;
 use turbopath::{AbsoluteSystemPathBuf, PathError};
 use turborepo_repository::{
     inference::{self, RepoMode as WorkspaceType, RepoState as WorkspaceState},
+    package_graph::PackageGraphBuilder,
+    package_json::PackageJson,
     package_manager,
 };
 
@@ -34,11 +36,25 @@ pub(crate) enum Error {
     },
     #[error("Package directory {0} has no parent")]
     MissingParent(AbsoluteSystemPathBuf),
+    #[error("Package graph error")]
+    PackageGraphError,
 }
 
 impl From<Error> for napi::Error<Status> {
     fn from(value: Error) -> Self {
         napi::Error::from_reason(value.to_string())
+    }
+}
+
+impl From<turborepo_repository::package_json::Error> for Error {
+    fn from(err: turborepo_repository::package_json::Error) -> Self {
+        return Error::PackageGraphError;
+    }
+}
+
+impl From<turborepo_repository::package_graph::Error> for Error {
+    fn from(err: turborepo_repository::package_graph::Error) -> Self {
+        return Error::PackageGraphError;
     }
 }
 
@@ -67,6 +83,14 @@ impl Workspace {
                 path: workspace_state.root.clone(),
             })?
             .clone();
+
+        let workspace_root = workspace_state.root.clone();
+        let root_package_json = PackageJson::load(&workspace_root.join_component("package.json"))?;
+        let package_graph = PackageGraphBuilder::new(&workspace_root, root_package_json)
+            .with_single_package_mode(!is_multi_package)
+            .build()
+            .await?;
+
         Ok(Self {
             absolute_path: workspace_state.root.to_string(),
             workspace_state,
@@ -74,6 +98,7 @@ impl Workspace {
             package_manager: PackageManager {
                 name: package_manager_name.to_string(),
             },
+            graph: package_graph,
         })
     }
 
@@ -90,8 +115,10 @@ impl Workspace {
                 error: error.to_string(),
                 path: self.workspace_state.root.clone(),
             })?;
+
         let package_manager = *package_manager;
         let workspace_root = self.workspace_state.root.clone();
+
         let package_json_paths =
             tokio::task::spawn(async move { package_manager.get_package_jsons(&workspace_root) })
                 .await
@@ -100,10 +127,19 @@ impl Workspace {
                     error,
                     workspace_root: self.workspace_state.root.clone(),
                 })?;
+
         let packages = package_json_paths
             .map(|path| {
+                let pkg_json = PackageJson::load(&path)?;
                 path.parent()
-                    .map(|package_path| Package::new(&self.workspace_state.root, package_path))
+                    .map(|package_path| {
+                        let package = Package::new(
+                            pkg_json.name.unwrap(),
+                            &self.workspace_state.root,
+                            package_path,
+                        );
+                        package
+                    })
                     .ok_or_else(|| Error::MissingParent(path.to_owned()))
             })
             .collect::<Result<Vec<Package>, Error>>()?;

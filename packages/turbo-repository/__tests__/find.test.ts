@@ -25,7 +25,7 @@ describe("Workspace", () => {
     const graph = await workspace.packageGraph();
     expect(graph).toEqual({
       app: [],
-      ui: [],
+      ui: ["app"],
     });
   });
 });
