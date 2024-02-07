@@ -57,7 +57,7 @@ impl Package {
             .anchor(package_path)
             .expect("Package path is within the workspace");
         Self {
-            name: name,
+            name,
             absolute_path: package_path.to_string(),
             relative_path: relative_path.to_string(),
         }
