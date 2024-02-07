@@ -18,7 +18,7 @@ use crate::{
 /// Runs the daemon command.
 pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Result<(), DaemonError> {
     let (can_start_server, can_kill_server) = match command {
-        DaemonCommand::Status { .. } => (false, false),
+        DaemonCommand::Status { .. } | DaemonCommand::Logs => (false, false),
         DaemonCommand::Stop => (false, true),
         DaemonCommand::Restart | DaemonCommand::Start => (true, true),
         DaemonCommand::Clean => (false, true),
@@ -82,6 +82,16 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
                 println!("Daemon pid file: {}", status.pid_file);
                 println!("Daemon socket file: {}", status.sock_file);
             }
+        }
+        DaemonCommand::Logs => {
+            let mut client = connector.connect().await?;
+            let status = client.status().await?;
+            let log_file = log_filename(&status.log_file)?;
+            std::process::Command::new("tail")
+                .arg("-f")
+                .arg(log_file)
+                .status()
+                .expect("failed to execute tail");
         }
         DaemonCommand::Clean => {
             // try to connect and shutdown the daemon

@@ -186,7 +186,7 @@ impl<T: PackageDiscovery + Send + 'static> Subscriber<T> {
     }
 
     async fn handle_file_event(&mut self, file_event: Event) {
-        tracing::trace!("file event: {:?}", file_event);
+        tracing::trace!("file event: {:?} {:?}", file_event.kind, file_event.paths);
 
         if file_event
             .paths
