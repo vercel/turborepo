@@ -198,8 +198,11 @@ impl PackageGraph {
     ///
     /// immediate_ancestors(c) -> {b}
     #[allow(dead_code)]
-    pub fn immediate_ancestors(&self, package: &WorkspaceNode) -> Option<HashSet<&WorkspaceNode>> {
-        let index = self.node_lookup.get(package)?;
+    pub fn immediate_ancestors(
+        &self,
+        workspace: &WorkspaceNode,
+    ) -> Option<HashSet<&WorkspaceNode>> {
+        let index = self.node_lookup.get(workspace)?;
         Some(
             self.workspace_graph
                 .neighbors_directed(*index, petgraph::Incoming)
