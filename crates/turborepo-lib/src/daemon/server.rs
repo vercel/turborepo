@@ -327,7 +327,9 @@ impl TurboGrpcServiceInner {
     ) -> Result<(), RpcError> {
         let glob_set = GlobSet::from_raw(output_globs, output_glob_exclusions)?;
         let fw = self.wait_for_filewatching().await?;
-        fw.glob_watcher.watch_globs(hash.clone(), glob_set).await?;
+        fw.glob_watcher
+            .watch_globs(hash.clone(), glob_set, REQUEST_TIMEOUT)
+            .await?;
         {
             let mut times_saved = self.times_saved.lock().expect("times saved lock poisoned");
             times_saved.insert(hash, time_saved);
@@ -345,7 +347,10 @@ impl TurboGrpcServiceInner {
             times_saved.get(hash.as_str()).copied().unwrap_or_default()
         };
         let fw = self.wait_for_filewatching().await?;
-        let changed_globs = fw.glob_watcher.get_changed_globs(hash, candidates).await?;
+        let changed_globs = fw
+            .glob_watcher
+            .get_changed_globs(hash, candidates, REQUEST_TIMEOUT)
+            .await?;
         Ok((changed_globs, time_saved))
     }
 
