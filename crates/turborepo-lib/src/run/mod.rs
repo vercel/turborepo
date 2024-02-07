@@ -416,7 +416,7 @@ impl Run {
             tokio::spawn(async move {
                 let _guard = subscriber.listen().await;
                 let spinner = turborepo_ui::start_spinner("...Finishing writing to cache...");
-                runcache.wait_for_cache().await;
+                runcache.shutdown_cache().await;
                 spinner.finish_and_clear();
             });
         }
