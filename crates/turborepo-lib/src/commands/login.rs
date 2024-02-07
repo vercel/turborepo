@@ -1,6 +1,7 @@
 use turborepo_api_client::APIClient;
 use turborepo_auth::{
     login as auth_login, sso_login as auth_sso_login, DefaultLoginServer, DefaultSSOLoginServer,
+    LoginOptions,
 };
 use turborepo_telemetry::events::command::{CommandEventBuilder, LoginMethod};
 
@@ -58,15 +59,17 @@ pub async fn login(base: &mut CommandBase, telemetry: CommandEventBuilder) -> Re
     let api_client: APIClient = base.api_client()?;
     let ui = base.ui;
     let login_url_config = base.config()?.login_url().to_string();
+    let options = LoginOptions {
+        existing_token: base.config()?.token(),
+        ..LoginOptions::new(&ui, &login_url_config, &api_client, &DefaultLoginServer)
+    };
 
-    let token = auth_login(
-        &api_client,
-        &ui,
-        base.config()?.token(),
-        &login_url_config,
-        &DefaultLoginServer,
-    )
-    .await?;
+    let token = auth_login(&options).await?;
+
+    // Don't write to disk if the token is already there
+    if token.exists {
+        return Ok(());
+    }
 
     let global_config_path = base.global_config_path()?;
     let before = global_config_path
@@ -75,7 +78,7 @@ pub async fn login(base: &mut CommandBase, telemetry: CommandEventBuilder) -> Re
             config_path: global_config_path.clone(),
             error: e,
         })?;
-    let after = set_path(&before, &["token"], &format!("\"{}\"", token))?;
+    let after = set_path(&before, &["token"], &format!("\"{}\"", token.token))?;
 
     global_config_path
         .ensure_dir()

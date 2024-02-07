@@ -4,6 +4,13 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error(transparent)]
+    Io(#[from] io::Error),
+    #[error(transparent)]
+    SerdeError(#[from] serde_json::Error),
+    #[error(transparent)]
+    APIError(#[from] turborepo_api_client::Error),
+
     #[error(
         "loginUrl is configured to \"{value}\", but cannot be a base URL. This happens in \
          situations like using a `data:` URL."
@@ -19,4 +26,6 @@ pub enum Error {
     FailedToValidateSSOToken(#[source] turborepo_api_client::Error),
     #[error("failed to make sso token name")]
     FailedToMakeSSOTokenName(#[source] io::Error),
+    #[error("config directory not found")]
+    ConfigDirNotFound,
 }
