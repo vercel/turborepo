@@ -7,6 +7,7 @@ use time::{format_description, OffsetDateTime};
 use tokio::signal::ctrl_c;
 use tracing::{trace, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use which::which;
 
 use super::CommandBase;
 use crate::{
@@ -87,7 +88,8 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
             let mut client = connector.connect().await?;
             let status = client.status().await?;
             let log_file = log_filename(&status.log_file)?;
-            std::process::Command::new("tail")
+            let tail = which("tail").map_err(|_| DaemonError::TailNotInstalled)?;
+            std::process::Command::new(tail)
                 .arg("-f")
                 .arg(log_file)
                 .status()
