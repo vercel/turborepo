@@ -6,7 +6,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use chrono::{DateTime, Local};
 use console::{Style, StyledObject};
 use futures::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
@@ -258,12 +257,10 @@ impl<'a> Visitor<'a> {
                         persistent,
                     );
 
-                    let task_start_time = Local::now();
                     let vendor_behavior =
                         Vendor::infer().and_then(|vendor| vendor.behavior.as_ref());
 
-                    let output_client =
-                        self.output_client(&info, vendor_behavior, &task_start_time);
+                    let output_client = self.output_client(&info, vendor_behavior);
                     let tracker = self.run_tracker.track_task(info.clone().into_owned());
                     let spaces_client = self.run_tracker.spaces_task_client();
                     let parent_span = Span::current();
@@ -365,7 +362,6 @@ impl<'a> Visitor<'a> {
         &self,
         task_id: &TaskId,
         vendor_behavior: Option<&VendorBehavior>,
-        task_start_time: &DateTime<Local>,
     ) -> OutputClient<impl std::io::Write> {
         let behavior = match self.run_opts.log_order {
             crate::opts::ResolvedLogOrder::Stream if self.run_tracker.spaces_enabled() => {
@@ -385,8 +381,8 @@ impl<'a> Visitor<'a> {
                 format!("{}:{}", task_id.package(), task_id.task())
             };
             let (header, footer) = (
-                (vendor_behavior.group_prefix)(&group_name, task_start_time),
-                (vendor_behavior.group_suffix)(&group_name, task_start_time),
+                (vendor_behavior.group_prefix)(&group_name),
+                (vendor_behavior.group_suffix)(&group_name),
             );
             logger.with_header_footer(Some(header), Some(footer));
         }

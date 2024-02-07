@@ -1,6 +1,4 @@
-use chrono::{DateTime, Local};
-
-type GroupPrefixFn = fn(group_name: &str, time: &DateTime<Local>) -> String;
+type GroupPrefixFn = fn(group_name: &str) -> String;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct VendorBehavior {

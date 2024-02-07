@@ -78,8 +78,8 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     branch_env_var: None,
                     username_env_var: None,
                     behavior: Some(VendorBehavior {
-                        group_prefix: |group_name, _| format!("##[group]{group_name}\r\n"),
-                        group_suffix: |_, _| String::from("##[endgroup]\r\n"),
+                        group_prefix: |group_name| format!("##[group]{group_name}\r\n"),
+                        group_suffix: |_| String::from("##[endgroup]\r\n"),
                     }),
                 },
                 Vendor {
@@ -267,8 +267,8 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     branch_env_var: Some("GITHUB_REF_NAME"),
                     username_env_var: Some("GITHUB_ACTOR"),
                     behavior: Some(VendorBehavior {
-                        group_prefix: |group_name, _| format!("::group::{group_name}\n"),
-                        group_suffix: |_, _| String::from("::endgroup::\n"),
+                        group_prefix: |group_name| format!("::group::{group_name}\n"),
+                        group_suffix: |_| String::from("::endgroup::\n"),
                     }),
                 },
                 Vendor {
@@ -534,10 +534,10 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     branch_env_var: None,
                     username_env_var: None,
                     behavior: Some(VendorBehavior {
-                        group_prefix: |group_name, _| {
+                        group_prefix: |group_name| {
                             format!("##teamcity[blockOpened name='{group_name}']")
                         },
-                        group_suffix: |group_name, _| {
+                        group_suffix: |group_name| {
                             format!("##teamcity[blockClosed name='{group_name}']")
                         },
                     }),
@@ -554,8 +554,8 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     branch_env_var: None,
                     username_env_var: None,
                     behavior: Some(VendorBehavior {
-                        group_prefix: |group_name, _| format!("travis_fold:start:{group_name}\r\n"),
-                        group_suffix: |group_name, _| format!("travis_fold:end:{group_name}\r\n"),
+                        group_prefix: |group_name| format!("travis_fold:start:{group_name}\r\n"),
+                        group_suffix: |group_name| format!("travis_fold:end:{group_name}\r\n"),
                     }),
                 },
                 Vendor {
