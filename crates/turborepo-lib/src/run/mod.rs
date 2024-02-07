@@ -13,7 +13,7 @@ use std::{
     collections::HashSet,
     io::{IsTerminal, Write},
     sync::Arc,
-    time::{Duration, SystemTime},
+    time::SystemTime,
 };
 
 pub use cache::{RunCache, TaskCache};
@@ -28,7 +28,6 @@ use turborepo_cache::{AsyncCache, RemoteCacheOpts};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::{
-    discovery::{FallbackPackageDiscovery, LocalPackageDiscoveryBuilder, PackageDiscoveryBuilder},
     package_graph::{PackageGraph, WorkspaceName},
     package_json::PackageJson,
 };
@@ -40,6 +39,14 @@ use turborepo_telemetry::events::{
     EventBuilder,
 };
 use turborepo_ui::{cprint, cprintln, ColorSelector, BOLD_GREY, GREY};
+#[cfg(feature = "daemon-package-discovery")]
+use {
+    crate::run::package_discovery::DaemonPackageDiscovery,
+    std::time::Duration,
+    turborepo_repository::discovery::{
+        FallbackPackageDiscovery, LocalPackageDiscoveryBuilder, PackageDiscoveryBuilder,
+    },
+};
 
 use self::task_id::TaskName;
 pub use crate::run::error::Error;
@@ -50,10 +57,7 @@ use crate::{
     engine::{Engine, EngineBuilder},
     opts::Opts,
     process::ProcessManager,
-    run::{
-        global_hash::get_global_hash_inputs, package_discovery::DaemonPackageDiscovery,
-        summary::RunTracker,
-    },
+    run::{global_hash::get_global_hash_inputs, summary::RunTracker},
     shim::TurboState,
     signal::{SignalHandler, SignalSubscriber},
     task_graph::Visitor,
