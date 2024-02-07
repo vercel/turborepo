@@ -10,12 +10,12 @@ Copy config into the root of our monorepo
 Run build
   $ ${TURBO} build
     x `inputs` cannot contain an absolute path
-     ,-[5:1]
-   5 |     "build": {
-   6 |       "inputs": ["/another/absolute/path", "a/relative/path"]
+     ,-[4:1]
+   4 |     "build": {
+   5 |       "inputs": ["/another/absolute/path", "a/relative/path"]
      :                  ^^^^^^^^^^^^|^^^^^^^^^^^
      :                              `-- absolute path found here
-   7 |     }
+   6 |     }
      `----
   
   [1]
@@ -29,12 +29,12 @@ Copy config into the root of our monorepo
 Run build
   $ ${TURBO} build
     x `outputs` cannot contain an absolute path
-     ,-[5:1]
-   5 |     "build": {
-   6 |       "outputs": ["/another/absolute/path", "a/relative/path"]
+     ,-[4:1]
+   4 |     "build": {
+   5 |       "outputs": ["/another/absolute/path", "a/relative/path"]
      :                   ^^^^^^^^^^^^|^^^^^^^^^^^
      :                               `-- absolute path found here
-   7 |     }
+   6 |     }
      `----
   
   [1]
@@ -51,10 +51,10 @@ Run build
     x `globalDependencies` cannot contain an absolute path
      ,-[2:1]
    2 |   "$schema": "https://turbo.build/schema.json",
-   3 |   "globalDependencies": ["/an/absolute/path", "some/file"],
+   3 |   "globalDependencies": ["/an/absolute/path", "some/file"]
      :                          ^^^^^^^^^|^^^^^^^^^
      :                                   `-- absolute path found here
-   4 |   "pipeline": {
+   4 | }
      `----
   
   [1]
