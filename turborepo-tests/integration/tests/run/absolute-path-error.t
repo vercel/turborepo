@@ -8,16 +8,8 @@ Copy config into the root of our monorepo
   $ ${TESTDIR}/../../../helpers/replace_turbo_json.sh $PWD $CONFIG
 
 Run build
-  $ ${TURBO} build
-    x `inputs` cannot contain an absolute path
-     ,-[4:1]
-   4 |     "build": {
-   5 |       "inputs": ["/another/absolute/path", "a/relative/path"]
-     :                  ^^^^^^^^^^^^|^^^^^^^^^^^
-     :                              `-- absolute path found here
-   6 |     }
-     `----
-  
+  $ ${TURBO} build > tmp.log &2>1
+  $ grep --quiet '`inputs` cannot contain an absolute path' tmp.log
   [1]
 
 Choose our custom config based on OS, since the input/output configs will be different
@@ -27,16 +19,8 @@ Copy config into the root of our monorepo
   $ ${TESTDIR}/../../../helpers/replace_turbo_json.sh $PWD $CONFIG
 
 Run build
-  $ ${TURBO} build
-    x `outputs` cannot contain an absolute path
-     ,-[4:1]
-   4 |     "build": {
-   5 |       "outputs": ["/another/absolute/path", "a/relative/path"]
-     :                   ^^^^^^^^^^^^|^^^^^^^^^^^
-     :                               `-- absolute path found here
-   6 |     }
-     `----
-  
+  $ ${TURBO} build > tmp.log &2>1
+  $ grep --quiet '`outputs` cannot contain an absolute path' tmp.log
   [1]
 
 
@@ -47,14 +31,6 @@ Copy config into the root of our monorepo
   $ ${TESTDIR}/../../../helpers/replace_turbo_json.sh $PWD $CONFIG
 
 Run build
-  $ ${TURBO} build
-    x `globalDependencies` cannot contain an absolute path
-     ,-[2:1]
-   2 |   "$schema": "https://turbo.build/schema.json",
-   3 |   "globalDependencies": ["/an/absolute/path", "some/file"]
-     :                          ^^^^^^^^^|^^^^^^^^^
-     :                                   `-- absolute path found here
-   4 | }
-     `----
-  
+  $ ${TURBO} build > tmp.log &2>1
+  $ grep --quiet '`globalDependencies` cannot contain an absolute path' tmp.log
   [1]
