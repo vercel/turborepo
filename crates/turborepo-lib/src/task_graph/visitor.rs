@@ -871,22 +871,19 @@ impl ExecContext {
                 // Attempt to flush stdout_writer and log any errors encountered
                 if let Err(e) = stdout_writer.flush() {
                     error!("{e}");
-                } else {
-                    if self
-                        .task_access
-                        .can_cache(&self.task_hash, &self.task_id_for_display)
-                        .unwrap_or(true)
-                    {
-                        if let Err(e) = self.task_cache.save_outputs(task_duration, telemetry).await
-                        {
-                            error!("error caching output: {e}");
-                        } else {
-                            // If no errors, update hash tracker with expanded outputs
-                            self.hash_tracker.insert_expanded_outputs(
-                                self.task_id.clone(),
-                                self.task_cache.expanded_outputs().to_vec(),
-                            );
-                        }
+                } else if self
+                    .task_access
+                    .can_cache(&self.task_hash, &self.task_id_for_display)
+                    .unwrap_or(true)
+                {
+                    if let Err(e) = self.task_cache.save_outputs(task_duration, telemetry).await {
+                        error!("error caching output: {e}");
+                    } else {
+                        // If no errors, update hash tracker with expanded outputs
+                        self.hash_tracker.insert_expanded_outputs(
+                            self.task_id.clone(),
+                            self.task_cache.expanded_outputs().to_vec(),
+                        );
                     }
                 }
 

@@ -27,11 +27,11 @@ const TURBO_CONFIG_FILE: &str = "turbo.json";
 #[derive(Debug, thiserror::Error)]
 pub enum ToFileError {
     #[error("Unable to serialize traced config: {0}")]
-    ConfigSerializeError(#[from] serde_json::Error),
+    Serialize(#[from] serde_json::Error),
     #[error("Unable to write traced config: {0}")]
-    ConfigIOError(#[from] std::io::Error),
+    IO(#[from] std::io::Error),
     #[error("Unable to cache traced config: {0}")]
-    ConfigCacheError(#[from] turborepo_cache::CacheError),
+    Cache(#[from] turborepo_cache::CacheError),
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -212,7 +212,7 @@ impl TaskAccess {
         (TASK_ACCESS_ENV_KEY.to_string(), trace_file_path)
     }
 
-    pub async fn save(&self) -> () {
+    pub async fn save(&self) {
         match self.to_file().await {
             Ok(_) => (),
             Err(e) => {
