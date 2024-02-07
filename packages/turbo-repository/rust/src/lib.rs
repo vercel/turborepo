@@ -102,17 +102,22 @@ impl Workspace {
 
     #[napi]
     pub async fn package_graph(&self) -> Result<HashMap<String, Vec<String>>, Error> {
-        let mut map = HashMap::new();
+        // let mut map = HashMap::new();
         let packages = self.find_packages().await?;
         let workspace_path = AbsoluteSystemPath::new(self.absolute_path.as_str()).unwrap();
 
-        for (_i, package) in packages.iter().enumerate() {
-            let deps = package.dependents(&self.graph, workspace_path); // Get upstream dependencies
-            let dep_names = deps.iter().map(|p| p.relative_path.clone()).collect();
+        let map: HashMap<String, Vec<String>> = packages
+            .iter()
+            .map(|package| {
+                let deps = package.dependents(&self.graph, workspace_path);
+                let dep_names = deps
+                    .iter()
+                    .map(|p| p.relative_path.clone())
+                    .collect::<Vec<String>>();
 
-            // TODO: use name instead of relative_path for both the key and value?
-            map.insert(package.relative_path.clone(), dep_names);
-        }
+                (package.relative_path.clone(), dep_names)
+            })
+            .collect();
 
         return Ok(map);
     }
