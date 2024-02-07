@@ -1,13 +1,18 @@
 use std::{collections::HashMap, hash::Hash};
 
+use napi::Error;
 use napi_derive::napi;
 use turbopath::AbsoluteSystemPath;
-use turborepo_repository::inference::RepoState as WorkspaceState;
+use turborepo_repository::{
+    inference::RepoState as WorkspaceState,
+    package_graph::{PackageGraph, WorkspaceName, WorkspaceNode},
+};
 mod internal;
 
 #[napi]
 #[derive(PartialEq, Eq, Hash, Clone)]
 pub struct Package {
+    pub name: String,
     /// The absolute path to the package root.
     #[napi(readonly)]
     pub absolute_path: String,
@@ -37,22 +42,45 @@ pub struct Workspace {
     /// The package manager used by the workspace.
     #[napi(readonly)]
     pub package_manager: PackageManager,
+    /// The package graph for the workspace.
+    graph: PackageGraph,
 }
 
+#[napi]
 impl Package {
-    fn new(workspace_path: &AbsoluteSystemPath, package_path: &AbsoluteSystemPath) -> Self {
+    fn new(
+        name: String,
+        workspace_path: &AbsoluteSystemPath,
+        package_path: &AbsoluteSystemPath,
+    ) -> Self {
         let relative_path = workspace_path
             .anchor(package_path)
             .expect("Package path is within the workspace");
         Self {
+            name: name,
             absolute_path: package_path.to_string(),
             relative_path: relative_path.to_string(),
         }
     }
 
-    // TODO: implement this
-    fn dependents(&self) -> Vec<Package> {
-        vec![]
+    fn dependents(
+        &self,
+        graph: &PackageGraph,
+        workspace_path: &AbsoluteSystemPath,
+    ) -> Vec<Package> {
+        let node = WorkspaceNode::Workspace(WorkspaceName::Other(self.name.clone()));
+        let ancestors = graph.immediate_ancestors(&node).unwrap();
+
+        ancestors
+            .iter()
+            .map(|node| {
+                let info = graph.workspace_info(node.as_workspace()).unwrap();
+                let name = info.package_name().unwrap();
+                let anchored_package_path = info.package_path();
+                let package_path = workspace_path.resolve(anchored_package_path);
+                Package::new(name, workspace_path, &package_path)
+            })
+            .collect()
     }
 }
 
@@ -72,18 +100,19 @@ impl Workspace {
     }
 
     #[napi]
-    pub async fn package_graph(&self) -> HashMap<String, Vec<String>> {
+    pub async fn package_graph(&self) -> Result<HashMap<String, Vec<String>>, Error> {
         let mut map = HashMap::new();
         let packages = self.find_packages().await?;
+        let workspace_path = AbsoluteSystemPath::new(self.absolute_path.as_str()).unwrap();
 
         for (_i, package) in packages.iter().enumerate() {
-            let deps = package.dependents(); // Get upstream dependencies
+            let deps = package.dependents(&self.graph, workspace_path); // Get upstream dependencies
             let dep_names = deps.iter().map(|p| p.relative_path.clone()).collect();
 
             // TODO: use name instead of relative_path for both the key and value?
             map.insert(package.relative_path.clone(), dep_names);
         }
 
-        return map;
+        return Ok(map);
     }
 }

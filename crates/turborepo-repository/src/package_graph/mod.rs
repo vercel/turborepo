@@ -39,6 +39,10 @@ pub struct WorkspaceInfo {
 }
 
 impl WorkspaceInfo {
+    pub fn package_name(&self) -> Option<String> {
+        self.package_json.name.clone()
+    }
+
     pub fn package_json_path(&self) -> &AnchoredSystemPath {
         &self.package_json_path
     }
@@ -194,11 +198,8 @@ impl PackageGraph {
     ///
     /// immediate_ancestors(c) -> {b}
     #[allow(dead_code)]
-    pub fn immediate_ancestors(
-        &self,
-        workspace: &WorkspaceNode,
-    ) -> Option<HashSet<&WorkspaceNode>> {
-        let index = self.node_lookup.get(workspace)?;
+    pub fn immediate_ancestors(&self, package: &WorkspaceNode) -> Option<HashSet<&WorkspaceNode>> {
+        let index = self.node_lookup.get(package)?;
         Some(
             self.workspace_graph
                 .neighbors_directed(*index, petgraph::Incoming)
