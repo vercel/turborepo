@@ -38,12 +38,10 @@ pub async fn login<T: Client>(options: &LoginOptions<'_, T>) -> Result<Token, Er
 
     // If the user is logging into Vercel, check for an existing `vc` token.
     if login_url_configuration.contains("vercel.com") {
+        // The extraction can return an error, but we don't want to fail the login if
+        // the token is not found.
         if let Ok(token) = extract_vercel_token() {
-            println!(
-                "{}",
-                ui.apply(BOLD.apply_to("Existing Vercel token found!"))
-            );
-            return Ok(Token::Existing(token));
+            return check_token(&token, ui, api_client, "Existing Vercel token found!").await;
         }
     }
 
