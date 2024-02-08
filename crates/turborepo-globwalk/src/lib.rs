@@ -323,7 +323,7 @@ pub fn globwalk_internal(
         .collect()
 }
 
-#[tracing::instrument(fields(glob=glob.to_string().as_str()))]
+#[tracing::instrument(skip(ex_patterns), fields(glob=glob.to_string().as_str()))]
 fn walk_glob(
     walk_type: WalkType,
     base_path_new: &PathBuf,

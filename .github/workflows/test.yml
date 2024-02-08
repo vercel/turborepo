@@ -223,8 +223,13 @@ jobs:
         with:
           windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - run: turbo run build --filter=cli --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+      # We explicitly unset RUSTC_WRAPPER if it is an empty string as causes build issues
+      - run: |
+          if [ -z "${RUSTC_WRAPPER}" ]; then
+            unset RUSTC_WRAPPER
+          fi
+          turbo run build --filter=cli --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+        shell: bash
         env:
           SCCACHE_BUCKET: turborepo-sccache
           SCCACHE_REGION: us-east-2
