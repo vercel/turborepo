@@ -205,6 +205,9 @@ pub enum DaemonError {
 
     #[error("failed to determine package manager: {0}")]
     PackageManager(#[from] turborepo_repository::package_manager::Error),
+
+    #[error("`tail` is not installed. Please install it to use this feature.")]
+    TailNotInstalled,
 }
 
 impl From<Status> for DaemonError {
