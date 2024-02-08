@@ -102,29 +102,19 @@ jobs:
         settings:
           - host: macos-latest
             target: "x86_64-apple-darwin"
-            container-options: "--rm"
           - host: macos-latest
             target: "aarch64-apple-darwin"
-            container-options: "--rm"
           - host: ubuntu-latest
-            container: ubuntu:xenial
-            container-options: "--platform=linux/amd64 --rm"
-            container-setup: "apt-get update && apt-get install -y curl musl-tools sudo"
             target: "x86_64-unknown-linux-musl"
-            setup: "apt-get install -y build-essential clang-5.0 lldb-5.0 llvm-5.0-dev libclang-5.0-dev"
+            setup: "sudo apt-get update && sudo apt-get install -y build-essential musl-tools clang llvm"
           - host: ubuntu-latest
-            container-options: "--rm"
             target: "aarch64-unknown-linux-musl"
             rust-build-env: 'CC_aarch64_unknown_linux_musl=clang AR_aarch64_unknown_linux_musl=llvm-ar RUSTFLAGS="-Clink-self-contained=yes -Clinker=rust-lld"'
             setup: "sudo apt-get update && sudo apt-get install -y build-essential musl-tools clang llvm gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
           - host: windows-latest
             target: x86_64-pc-windows-gnu
             setup: "rustup set default-host x86_64-pc-windows-gnu"
-            container-options: "--rm"
     runs-on: ${{ matrix.settings.host }}
-    container:
-      image: ${{ matrix.settings.container }}
-      options: ${{ matrix.settings.container-options }}
     steps:
       - name: Show Stage Commit
         run: echo "${{ needs.stage.outputs.stage-branch }}"
@@ -132,10 +122,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: "${{ needs.stage.outputs.stage-branch }}"
-
-      - name: Setup Container
-        if: ${{ matrix.settings.container-setup }}
-        run: ${{ matrix.settings.container-setup }}
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
