@@ -36,7 +36,7 @@ pub struct PackageGraph {
 /// There are other structs in this module that have "Workspace" in the name,
 /// but they do NOT follow the glossary, and instead mean "package" when they
 /// say Workspace. Some of these are labeled as such.
-#[derive(Eq, PartialEq, Hash)]
+#[derive(Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct WorkspacePackage {
     pub name: WorkspaceName,
     pub path: AnchoredSystemPathBuf,
@@ -91,6 +91,15 @@ type PackageVersion = String;
 pub enum WorkspaceName {
     Root,
     Other(String),
+}
+
+impl From<WorkspaceName> for String {
+    fn from(workspace_name: WorkspaceName) -> Self {
+        match workspace_name {
+            WorkspaceName::Root => ROOT_PKG_NAME.to_string(),
+            WorkspaceName::Other(name) => name,
+        }
+    }
 }
 
 impl Serialize for WorkspaceName {

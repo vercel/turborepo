@@ -1,11 +1,15 @@
-use std::{collections::HashMap, hash::Hash};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+};
 
 use napi::Error;
 use napi_derive::napi;
-use turbopath::AbsoluteSystemPath;
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
+    change_mapper::{ChangeMapper, PackageChanges},
     inference::RepoState as WorkspaceState,
-    package_graph::{PackageGraph, WorkspaceName, WorkspaceNode},
+    package_graph::{PackageGraph, WorkspaceName, WorkspaceNode, WorkspacePackage},
 };
 mod internal;
 
@@ -130,5 +134,64 @@ impl Workspace {
             .collect();
 
         Ok(map)
+    }
+
+    #[napi]
+    pub async fn changed_packages(&self, files: Vec<String>) -> Result<Vec<Package>, Error> {
+        let mapper = ChangeMapper::new(&self.graph, vec![], vec![]);
+
+        let workspace_root = match AbsoluteSystemPath::new(&self.absolute_path) {
+            Ok(path) => path,
+            Err(e) => return Err(Error::from_reason(e.to_string())),
+        };
+
+        let hash_set_of_paths: HashSet<AnchoredSystemPathBuf> = files
+            .into_iter()
+            .filter_map(|s| {
+                let split = s.split(std::path::MAIN_SEPARATOR).collect::<Vec<&str>>();
+                let xx = workspace_root.join_components(&split);
+                match workspace_root.anchor(&xx) {
+                    Ok(path) => Some(path),
+                    Err(e) => None,
+                }
+            })
+            .collect();
+
+        let package_changes = match mapper.changed_packages(hash_set_of_paths, None) {
+            Ok(changes) => changes,
+            Err(e) => return Err(Error::from_reason(e.to_string())),
+        };
+
+        let packages = match package_changes {
+            PackageChanges::All => self
+                .graph
+                .workspaces()
+                .map(|(name, info)| WorkspacePackage {
+                    name: name.to_owned(),
+                    path: info.package_path().to_owned(),
+                })
+                .collect::<Vec<WorkspacePackage>>(),
+            // PackageChanges::All => self
+            //     .find_packages()
+            //     .await
+            //     .unwrap_or_else(|_| vec![])
+            //     .into_iter()
+            //     .map(|p| WorkspacePackage {
+            //         name: WorkspaceName::Other(p.name),
+            //         path: AnchoredSystemPathBuf::new(p.relative_path),
+            //     })
+            //     .collect::<Vec<WorkspacePackage>>(),
+            PackageChanges::Some(packages) => packages.into_iter().collect(),
+        };
+
+        let serializable_packages = packages
+            .into_iter()
+            .map(|p| {
+                let package_path = workspace_root.resolve(&p.path);
+                Package::new(p.name.to_string(), &workspace_root, &package_path)
+            })
+            .collect();
+
+        Ok(serializable_packages)
     }
 }

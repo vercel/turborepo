@@ -33,4 +33,5 @@ export class Workspace {
    * dependents (i.e. the packages that depend on each of those packages).
    */
   findPackagesAndDependents(): Promise<Record<string, Array<string>>>;
+  changedPackages(files: Array<string>): Promise<Array<string>>;
 }
