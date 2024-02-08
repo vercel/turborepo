@@ -218,9 +218,9 @@ impl SourceMap {
                         )
                     })
                     .collect::<Vec<sourcemap::SourceMapSection>>();
-                Arc::new(CrateMapWrapper(DecodedMap::Index(SourceMapIndex::new(
-                    None, sections,
-                ))))
+                let map = SourceMapIndex::new(None, sections);
+                let map = map.flatten()?;
+                Arc::new(CrateMapWrapper(DecodedMap::Regular(map)))
             }
         })
     }
@@ -489,7 +489,7 @@ impl SourceMap {
                             Some(map.0),
                         ));
                     }
-                    DecodedMap::Index(SourceMapIndex::new(file, new_sections))
+                    DecodedMap::Regular(SourceMapIndex::new(file, new_sections).flatten()?)
                 }
                 DecodedMap::Hermes(_) => {
                     todo!("hermes source maps are not implemented");
@@ -620,7 +620,20 @@ impl Serialize for CrateMapWrapper {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::Error;
         let mut bytes = vec![];
-        self.0.to_writer(&mut bytes).map_err(Error::custom)?;
+        match &self.0 {
+            DecodedMap::Regular(m) => {
+                m.to_writer(&mut bytes).map_err(Error::custom)?;
+            }
+            DecodedMap::Index(m) => {
+                m.flatten()
+                    .map_err(Error::custom)?
+                    .to_writer(&mut bytes)
+                    .map_err(Error::custom)?;
+            }
+            DecodedMap::Hermes(_) => {
+                todo!("hermes source maps are not implemented");
+            }
+        }
         serializer.serialize_bytes(bytes.as_slice())
     }
 }
