@@ -12,7 +12,7 @@ pub mod task;
 /// These events must be added to the backend (telemetry.vercel.com)
 /// before they can be tracked - invalid or unknown events will be
 /// ignored.
-pub use turborepo_vercel_api::TelemetryEvent;
+pub use turborepo_vercel_api::telemetry::TelemetryEvent;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EventType {
