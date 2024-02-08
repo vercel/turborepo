@@ -12,7 +12,7 @@ use regex::Regex;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, Instrument, Span};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
-use turborepo_ci::github_header_footer;
+use turborepo_ci::{Vendor, VendorBehavior};
 use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
 use turborepo_repository::{
     package_graph::{PackageGraph, WorkspaceName, ROOT_PKG_NAME},
@@ -261,7 +261,10 @@ impl<'a> Visitor<'a> {
                         self.task_access.clone(),
                     );
 
-                    let output_client = self.output_client(&info);
+                    let vendor_behavior =
+                        Vendor::infer().and_then(|vendor| vendor.behavior.as_ref());
+
+                    let output_client = self.output_client(&info, vendor_behavior);
                     let tracker = self.run_tracker.track_task(info.clone().into_owned());
                     let spaces_client = self.run_tracker.spaces_task_client();
                     let parent_span = Span::current();
@@ -362,7 +365,11 @@ impl<'a> Visitor<'a> {
         OutputSink::new(out, err)
     }
 
-    fn output_client(&self, task_id: &TaskId) -> OutputClient<impl std::io::Write> {
+    fn output_client(
+        &self,
+        task_id: &TaskId,
+        vendor_behavior: Option<&VendorBehavior>,
+    ) -> OutputClient<impl std::io::Write> {
         let behavior = match self.run_opts.log_order {
             crate::opts::ResolvedLogOrder::Stream if self.run_tracker.spaces_enabled() => {
                 turborepo_ui::OutputClientBehavior::InMemoryBuffer
@@ -374,13 +381,16 @@ impl<'a> Visitor<'a> {
         };
 
         let mut logger = self.sink.logger(behavior);
-        if self.run_opts.is_github_actions {
-            let package = if self.run_opts.single_package {
-                None
+        if let Some(vendor_behavior) = vendor_behavior {
+            let group_name = if self.run_opts.single_package {
+                task_id.task().to_string()
             } else {
-                Some(task_id.package())
+                format!("{}:{}", task_id.package(), task_id.task())
             };
-            let (header, footer) = github_header_footer(package, task_id.task());
+            let (header, footer) = (
+                (vendor_behavior.group_prefix)(&group_name),
+                (vendor_behavior.group_suffix)(&group_name),
+            );
             logger.with_header_footer(Some(header), Some(footer));
         }
         logger
