@@ -643,7 +643,15 @@ impl<'de> Deserialize<'de> for CrateMapWrapper {
         use serde::de::Error;
         let bytes = <&[u8]>::deserialize(deserializer)?;
         let map = DecodedMap::from_reader(bytes).map_err(Error::custom)?;
-        Ok(CrateMapWrapper(map))
+
+        match map {
+            DecodedMap::Regular(..) => Ok(CrateMapWrapper(map)),
+            DecodedMap::Index(map) => {
+                let map = map.flatten().map_err(Error::custom)?;
+                Ok(CrateMapWrapper(DecodedMap::Regular(map)))
+            }
+            DecodedMap::Hermes(_) => todo!("hermes source maps are not implemented"),
+        }
     }
 }
 
