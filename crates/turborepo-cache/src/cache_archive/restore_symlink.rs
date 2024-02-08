@@ -1,4 +1,4 @@
-use std::backtrace::Backtrace;
+use std::{backtrace::Backtrace, io::Read};
 
 use camino::Utf8Path;
 use turbopath::{
@@ -11,11 +11,11 @@ use crate::{cache_archive::restore_directory::CachedDirTree, CacheError};
 pub fn restore_symlink(
     dir_cache: &mut CachedDirTree,
     anchor: &AbsoluteSystemPath,
-    header: &tar::Header,
+    entry: &tar::Entry<impl Read>,
 ) -> Result<AnchoredSystemPathBuf, CacheError> {
-    let processed_name = AnchoredSystemPathBuf::from_system_path(&header.path()?)?;
+    let processed_name = AnchoredSystemPathBuf::from_system_path(&entry.path()?)?;
 
-    let linkname = header
+    let linkname = entry
         .link_name()?
         .ok_or_else(|| CacheError::MalformedTar(Backtrace::capture()))?;
 
@@ -28,7 +28,7 @@ pub fn restore_symlink(
         ));
     }
 
-    actually_restore_symlink(dir_cache, anchor, &processed_name, header)?;
+    actually_restore_symlink(dir_cache, anchor, &processed_name, entry)?;
 
     Ok(processed_name)
 }
@@ -36,11 +36,11 @@ pub fn restore_symlink(
 pub fn restore_symlink_allow_missing_target(
     dir_cache: &mut CachedDirTree,
     anchor: &AbsoluteSystemPath,
-    header: &tar::Header,
+    entry: &tar::Entry<impl Read>,
 ) -> Result<AnchoredSystemPathBuf, CacheError> {
-    let processed_name = AnchoredSystemPathBuf::from_system_path(&header.path()?)?;
+    let processed_name = AnchoredSystemPathBuf::from_system_path(&entry.path()?)?;
 
-    actually_restore_symlink(dir_cache, anchor, &processed_name, header)?;
+    actually_restore_symlink(dir_cache, anchor, &processed_name, entry)?;
 
     Ok(processed_name)
 }
@@ -49,7 +49,7 @@ fn actually_restore_symlink<'a>(
     dir_cache: &mut CachedDirTree,
     anchor: &AbsoluteSystemPath,
     processed_name: &'a AnchoredSystemPath,
-    header: &tar::Header,
+    entry: &tar::Entry<impl Read>,
 ) -> Result<&'a AnchoredSystemPath, CacheError> {
     dir_cache.safe_mkdir_file(anchor, processed_name)?;
 
@@ -57,7 +57,7 @@ fn actually_restore_symlink<'a>(
 
     _ = symlink_from.remove();
 
-    let link_name = header.link_name()?.expect("have linkname");
+    let link_name = entry.link_name()?.expect("have linkname");
     let symlink_to = link_name.to_str().ok_or_else(|| {
         CacheError::PathError(
             PathError::InvalidUnicode(link_name.to_string_lossy().to_string()),
@@ -76,7 +76,7 @@ fn actually_restore_symlink<'a>(
         use std::os::unix::fs::PermissionsExt;
         let metadata = symlink_from.symlink_metadata()?;
         let mut permissions = metadata.permissions();
-        if let Ok(mode) = header.mode() {
+        if let Ok(mode) = entry.header().mode() {
             permissions.set_mode(mode);
         }
     }

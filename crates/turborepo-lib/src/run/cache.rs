@@ -1,10 +1,14 @@
 use std::{io::Write, sync::Arc, time::Duration};
 
 use console::StyledObject;
-use tracing::{debug, log::warn};
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+use tracing::debug;
+use turbopath::{
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
+};
 use turborepo_cache::{AsyncCache, CacheError, CacheHitMetadata, CacheSource};
 use turborepo_repository::package_graph::WorkspaceInfo;
+use turborepo_scm::SCM;
+use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
 use turborepo_ui::{
     color, replay_logs, ColorSelector, LogWriter, PrefixedUI, PrefixedWriter, GREY, UI,
 };
@@ -12,6 +16,7 @@ use turborepo_ui::{
 use crate::{
     cli::OutputLogsMode,
     daemon::{DaemonClient, DaemonConnector},
+    hash::{FileHashes, TurboHash},
     opts::RunCacheOpts,
     run::task_id::TaskId,
     task_graph::{TaskDefinition, TaskOutputs},
@@ -25,10 +30,16 @@ pub enum Error {
     Cache(#[from] turborepo_cache::CacheError),
     #[error("Error finding outputs to save: {0}")]
     Globwalk(#[from] globwalk::WalkError),
+    #[error("Invalid globwalk pattern: {0}")]
+    Glob(#[from] globwalk::GlobError),
     #[error("Error with daemon: {0}")]
     Daemon(#[from] crate::daemon::DaemonError),
     #[error("no connection to daemon")]
     NoDaemon,
+    #[error(transparent)]
+    Scm(#[from] turborepo_scm::Error),
+    #[error(transparent)]
+    Path(#[from] turbopath::PathError),
 }
 
 pub struct RunCache {
@@ -176,6 +187,7 @@ impl TaskCache {
     pub async fn restore_outputs(
         &mut self,
         prefixed_ui: &mut PrefixedUI<impl Write>,
+        telemetry: &PackageTaskEventBuilder,
     ) -> Result<Option<CacheHitMetadata>, Error> {
         if self.caching_disabled || self.run_cache.reads_disabled {
             if !matches!(
@@ -201,9 +213,10 @@ impl TaskCache {
             {
                 Ok(changed_output_globs) => changed_output_globs.len(),
                 Err(err) => {
-                    warn!(
-                        "Failed to check if we can skip restoring outputs for {}: {:?}. \
-                         Proceeding to check cache",
+                    telemetry.track_error(TrackedErrors::DaemonSkipOutputRestoreCheckFailed);
+                    debug!(
+                        "Failed to check if we can skip restoring outputs for {}: {}. Proceeding \
+                         to check cache",
                         self.task_id, err
                     );
                     self.repo_relative_globs.inclusions.len()
@@ -253,13 +266,9 @@ impl TaskCache {
                 {
                     // Don't fail the whole operation just because we failed to
                     // watch the outputs
-                    prefixed_ui.warn(color!(
-                        self.ui,
-                        GREY,
-                        "Failed to mark outputs as cached for {}: {:?}",
-                        self.task_id,
-                        err
-                    ))
+                    telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);
+                    let task_id = &self.task_id;
+                    debug!("Failed to mark outputs as cached for {task_id}: {err}");
                 }
             }
 
@@ -304,8 +313,8 @@ impl TaskCache {
 
     pub async fn save_outputs(
         &mut self,
-        prefixed_ui: &mut PrefixedUI<impl Write>,
         duration: Duration,
+        telemetry: &PackageTaskEventBuilder,
     ) -> Result<(), Error> {
         if self.caching_disabled || self.run_cache.writes_disabled {
             return Ok(());
@@ -315,8 +324,8 @@ impl TaskCache {
 
         let files_to_be_cached = globwalk::globwalk(
             &self.run_cache.repo_root,
-            &self.repo_relative_globs.inclusions,
-            &self.repo_relative_globs.exclusions,
+            &self.repo_relative_globs.validated_inclusions()?,
+            &self.repo_relative_globs.validated_exclusions()?,
             globwalk::WalkType::All,
         )?;
 
@@ -349,11 +358,9 @@ impl TaskCache {
                 .map_err(Error::from);
 
             if let Err(err) = notify_result {
+                telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);
                 let task_id = &self.task_id;
-                warn!("Failed to mark outputs as cached for {task_id}: {err}");
-                prefixed_ui.warn(format!(
-                    "Failed to mark outputs as cached for {task_id}: {err}",
-                ));
+                debug!("Failed to mark outputs as cached for {task_id}: {err}");
             }
         }
 
@@ -364,5 +371,90 @@ impl TaskCache {
 
     pub fn expanded_outputs(&self) -> &[AnchoredSystemPathBuf] {
         &self.expanded_outputs
+    }
+}
+
+#[derive(Clone)]
+pub struct ConfigCache {
+    hash: String,
+    repo_root: AbsoluteSystemPathBuf,
+    config_file: AbsoluteSystemPathBuf,
+    anchored_path: AnchoredSystemPathBuf,
+    cache: AsyncCache,
+}
+
+impl ConfigCache {
+    pub fn new(
+        hash: String,
+        repo_root: AbsoluteSystemPathBuf,
+        config_path: &[&str],
+        cache: AsyncCache,
+    ) -> Self {
+        let config_file = repo_root.join_components(config_path);
+        ConfigCache {
+            hash,
+            repo_root: repo_root.clone(),
+            config_file: config_file.clone(),
+            anchored_path: AnchoredSystemPathBuf::relative_path_between(&repo_root, &config_file),
+            cache,
+        }
+    }
+
+    pub fn hash(&self) -> &str {
+        &self.hash
+    }
+
+    pub fn exists(&self) -> bool {
+        self.config_file.try_exists().unwrap_or(false)
+    }
+
+    pub async fn restore(
+        &self,
+    ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
+        self.cache.fetch(&self.repo_root, &self.hash).await
+    }
+
+    pub async fn save(&self) -> Result<(), CacheError> {
+        match self.exists() {
+            true => {
+                debug!("config file exists, caching");
+                self.cache
+                    .put(
+                        self.repo_root.clone(),
+                        self.hash.clone(),
+                        vec![self.anchored_path.clone()],
+                        0,
+                    )
+                    .await
+            }
+            false => {
+                debug!("config file does not exist, skipping cache save");
+                Ok(())
+            }
+        }
+    }
+
+    // The config hash is used for task access tracing, and is keyed off of all
+    // files in the repository
+    pub fn calculate_config_hash(
+        scm: &SCM,
+        repo_root: &AbsoluteSystemPathBuf,
+    ) -> Result<String, CacheError> {
+        // empty path to get all files
+        let anchored_root = match AnchoredSystemPath::new("") {
+            Ok(anchored_root) => anchored_root,
+            Err(_) => return Err(CacheError::ConfigCacheInvalidBase),
+        };
+
+        // empty inputs to get all files
+        let inputs: Vec<String> = vec![];
+        let hash_object = match scm.get_package_file_hashes(repo_root, anchored_root, &inputs, None)
+        {
+            Ok(hash_object) => hash_object,
+            Err(_) => return Err(CacheError::ConfigCacheError),
+        };
+
+        // return the hash
+        Ok(FileHashes(hash_object).hash())
     }
 }

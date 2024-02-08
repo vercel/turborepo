@@ -28,6 +28,7 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_api_client::{spaces::CreateSpaceRunPayload, APIAuth, APIClient};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::package_graph::{PackageGraph, WorkspaceName};
+use turborepo_scm::SCM;
 use turborepo_ui::{color, cprintln, cwriteln, BOLD, BOLD_CYAN, GREY, UI};
 
 use self::{
@@ -154,8 +155,9 @@ impl RunTracker {
         spaces_api_client: APIClient,
         api_auth: Option<APIAuth>,
         user: String,
+        scm: &SCM,
     ) -> Self {
-        let scm = SCMState::get(env_at_execution_start, repo_root);
+        let scm = SCMState::get(env_at_execution_start, scm, repo_root);
 
         let spaces_client_handle =
             SpacesClient::new(spaces_id.clone(), spaces_api_client, api_auth).and_then(
@@ -199,7 +201,7 @@ impl RunTracker {
         package_inference_root: Option<&'a AnchoredSystemPath>,
         exit_code: i32,
         end_time: DateTime<Local>,
-        run_opts: &RunOpts<'a>,
+        run_opts: &'a RunOpts,
         packages: HashSet<WorkspaceName>,
         global_hash_summary: GlobalHashSummary<'a>,
         global_env_mode: EnvMode,
@@ -269,7 +271,7 @@ impl RunTracker {
         ui: UI,
         repo_root: &'a AbsoluteSystemPath,
         package_inference_root: Option<&AnchoredSystemPath>,
-        run_opts: &RunOpts<'a>,
+        run_opts: &'a RunOpts,
         packages: HashSet<WorkspaceName>,
         global_hash_summary: GlobalHashSummary<'a>,
         global_env_mode: cli::EnvMode,
@@ -403,6 +405,7 @@ impl<'a> RunSummary<'a> {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all)]
     async fn send_to_space(
         &self,
         spaces_client_handle: SpacesClientHandle,
@@ -767,6 +770,12 @@ impl<'a> RunSummary<'a> {
         }
 
         self.tasks.sort_by(|a, b| a.task_id.cmp(&b.task_id));
+
+        // Sort dependencies
+        for task in &mut self.tasks {
+            task.shared.dependencies.sort();
+            task.shared.dependents.sort();
+        }
     }
 
     fn get_path(&self) -> AbsoluteSystemPathBuf {

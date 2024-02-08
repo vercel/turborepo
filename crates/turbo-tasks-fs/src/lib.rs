@@ -58,7 +58,7 @@ use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, BufReader},
     sync::{RwLock, RwLockReadGuard},
 };
-use tracing::{instrument, Level};
+use tracing::{instrument, Instrument, Level};
 use turbo_tasks::{
     mark_stateful, spawn_thread, trace::TraceRawVcs, Completion, InvalidationReason, Invalidator,
     ReadRef, ValueToString, Vc,
@@ -591,7 +591,13 @@ impl FileSystem for DiskFileSystem {
         self.register_invalidator(&full_path)?;
 
         let _lock = self.lock_path(&full_path).await;
-        let content = match retry_future(|| File::from_path(full_path.clone())).await {
+        let content = match retry_future(|| File::from_path(full_path.clone()))
+            .instrument(tracing::info_span!(
+                "read file",
+                path = display(full_path.display())
+            ))
+            .await
+        {
             Ok(file) => FileContent::new(file),
             Err(e) if e.kind() == ErrorKind::NotFound => FileContent::NotFound,
             Err(e) => {
@@ -609,7 +615,13 @@ impl FileSystem for DiskFileSystem {
 
         // we use the sync std function here as it's a lot faster (600%) in
         // node-file-trace
-        let read_dir = match retry_blocking(&full_path, |path| std::fs::read_dir(path)).await {
+        let read_dir = match retry_blocking(
+            &full_path,
+            tracing::info_span!("read directory", path = display(full_path.display())),
+            |path| std::fs::read_dir(path),
+        )
+        .await
+        {
             Ok(dir) => dir,
             Err(e)
                 if e.kind() == ErrorKind::NotFound
@@ -660,7 +672,13 @@ impl FileSystem for DiskFileSystem {
         self.register_invalidator(&full_path)?;
 
         let _lock = self.lock_path(&full_path).await;
-        let link_path = match retry_future(|| fs::read_link(&full_path)).await {
+        let link_path = match retry_future(|| fs::read_link(&full_path))
+            .instrument(tracing::info_span!(
+                "read symlink",
+                path = display(full_path.display())
+            ))
+            .await
+        {
             Ok(res) => res,
             Err(_) => return Ok(LinkContent::NotFound.cell()),
         };
@@ -762,7 +780,13 @@ impl FileSystem for DiskFileSystem {
         // be freed immediately. Given this is an output file, it's unlikely any Turbo
         // code will need to read the file from disk into a Vc<FileContent>, so we're
         // not wasting cycles.
-        let compare = content.streaming_compare(full_path.clone()).await?;
+        let compare = content
+            .streaming_compare(full_path.clone())
+            .instrument(tracing::info_span!(
+                "read file before write",
+                path = display(full_path.display())
+            ))
+            .await?;
         if compare == FileComparison::Equal {
             if !old_invalidators.is_empty() {
                 let key = path_to_key(&full_path);
@@ -780,6 +804,10 @@ impl FileSystem for DiskFileSystem {
                 if create_directory {
                     if let Some(parent) = full_path.parent() {
                         retry_future(move || fs::create_dir_all(parent))
+                            .instrument(tracing::info_span!(
+                                "create directory",
+                                path = display(parent.display())
+                            ))
                             .await
                             .with_context(|| {
                                 format!(
@@ -817,11 +845,19 @@ impl FileSystem for DiskFileSystem {
                         Ok::<(), io::Error>(())
                     }
                 })
+                .instrument(tracing::info_span!(
+                    "write file",
+                    path = display(full_path.display())
+                ))
                 .await
                 .with_context(|| format!("failed to write to {}", full_path.display()))?;
             }
             FileContent::NotFound => {
                 retry_future(|| fs::remove_file(full_path.clone()))
+                    .instrument(tracing::info_span!(
+                        "remove file",
+                        path = display(full_path.display())
+                    ))
                     .await
                     .or_else(|err| {
                         if err.kind() == ErrorKind::NotFound {
@@ -861,6 +897,10 @@ impl FileSystem for DiskFileSystem {
         if create_directory {
             if let Some(parent) = full_path.parent() {
                 retry_future(move || fs::create_dir_all(parent))
+                    .instrument(tracing::info_span!(
+                        "create directory",
+                        path = display(parent.display())
+                    ))
                     .await
                     .with_context(|| {
                         format!(
@@ -880,22 +920,26 @@ impl FileSystem for DiskFileSystem {
                 } else {
                     PathBuf::from(unix_to_sys(target).as_ref())
                 };
-                retry_blocking(&target_path, move |target_path| {
-                    // we use the sync std method here because `symlink` is fast
-                    // if we put it into a task, it will be slower
-                    #[cfg(not(target_family = "windows"))]
-                    {
-                        std::os::unix::fs::symlink(target_path, &full_path)
-                    }
-                    #[cfg(target_family = "windows")]
-                    {
-                        if link_type.contains(LinkType::DIRECTORY) {
-                            std::os::windows::fs::symlink_dir(target_path, &full_path)
-                        } else {
-                            std::os::windows::fs::symlink_file(target_path, &full_path)
+                retry_blocking(
+                    &target_path,
+                    tracing::info_span!("write symlink", path = display(full_path.display())),
+                    move |target_path| {
+                        // we use the sync std method here because `symlink` is fast
+                        // if we put it into a task, it will be slower
+                        #[cfg(not(target_family = "windows"))]
+                        {
+                            std::os::unix::fs::symlink(target_path, &full_path)
                         }
-                    }
-                })
+                        #[cfg(target_family = "windows")]
+                        {
+                            if link_type.contains(LinkType::DIRECTORY) {
+                                std::os::windows::fs::symlink_dir(target_path, &full_path)
+                            } else {
+                                std::os::windows::fs::symlink_file(target_path, &full_path)
+                            }
+                        }
+                    },
+                )
                 .await
                 .with_context(|| format!("create symlink to {}", target))?;
             }
@@ -925,6 +969,10 @@ impl FileSystem for DiskFileSystem {
 
         let _lock = self.lock_path(&full_path).await;
         let meta = retry_future(|| fs::metadata(full_path.clone()))
+            .instrument(tracing::info_span!(
+                "read metadata",
+                path = display(full_path.display())
+            ))
             .await
             .with_context(|| format!("reading metadata for {}", full_path.display()))?;
 
@@ -1427,41 +1475,40 @@ impl FileSystemPath {
                 path: self,
                 symlinks: Vec::new(),
             }
-            .into());
+            .cell());
         }
-        let segments = this.path.split('/');
-        let mut current = self.root().resolve().await?;
-        let mut symlinks = Vec::new();
-        for segment in segments {
-            current = current.join(segment.to_string()).resolve().await?;
-            while let FileSystemEntryType::Symlink = &*current.get_type().await? {
-                if let LinkContent::Link { target, link_type } = &*current.read_link().await? {
-                    symlinks.push(current.resolve().await?);
-                    current = if link_type.contains(LinkType::ABSOLUTE) {
-                        current.root().resolve().await?
-                    } else {
-                        current.parent().resolve().await?
-                    }
-                    .join(target.to_string())
-                    .resolve()
-                    .await?;
+        let parent = self.parent().resolve().await?;
+        let parent_result = parent.realpath_with_links().await?;
+        let basename = this
+            .path
+            .rsplit_once('/')
+            .map_or(this.path.as_str(), |(_, name)| name);
+        let real_self = if parent_result.path != parent {
+            parent_result
+                .path
+                .join(basename.to_string())
+                .resolve()
+                .await?
+        } else {
+            self
+        };
+        let mut result = parent_result.clone_value();
+        if matches!(*real_self.get_type().await?, FileSystemEntryType::Symlink) {
+            if let LinkContent::Link { target, link_type } = &*real_self.read_link().await? {
+                result.symlinks.push(real_self);
+                result.path = if link_type.contains(LinkType::ABSOLUTE) {
+                    real_self.root().resolve().await?
                 } else {
-                    break;
+                    result.path
                 }
+                .join(target.to_string())
+                .resolve()
+                .await?;
+                return Ok(result.cell());
             }
         }
-        if symlinks.is_empty() {
-            return Ok(RealPathResult {
-                path: self,
-                symlinks: Vec::new(),
-            }
-            .into());
-        }
-        Ok(RealPathResult {
-            path: current.resolve().await?,
-            symlinks,
-        }
-        .into())
+        result.path = real_self;
+        Ok(result.cell())
     }
 }
 

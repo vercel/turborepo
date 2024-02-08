@@ -66,7 +66,9 @@ function ensureDynamicExports(module, exports) {
  * Dynamically exports properties from an object
  */ function dynamicExport(module, exports, object) {
     ensureDynamicExports(module, exports);
-    module[REEXPORTED_OBJECTS].push(object);
+    if (typeof object === "object" && object !== null) {
+        module[REEXPORTED_OBJECTS].push(object);
+    }
 }
 function exportValue(module, value) {
     module.exports = value;
@@ -114,7 +116,7 @@ function esmImport(sourceModule, id) {
     if (module.namespaceObject) return module.namespaceObject;
     // only ESM can be an async module, so we don't need to worry about exports being a promise here.
     const raw = module.exports;
-    return module.namespaceObject = interopEsm(raw, {}, raw.__esModule);
+    return module.namespaceObject = interopEsm(raw, {}, raw && raw.__esModule);
 }
 // Add a simple runtime require so that environments without one can still pass
 // `typeof require` CommonJS checks so that exports are correctly registered.
@@ -344,9 +346,7 @@ const ABSOLUTE_ROOT = path.resolve(__filename, relativePathToDistRoot);
  * See ImportMetaBinding::code_generation for the usage.
  */ function resolveAbsolutePath(modulePath) {
     if (modulePath) {
-        // Module path can contain common relative path to the root, recalaute to avoid duplicated joined path.
-        const relativePathToRoot = path.relative(ABSOLUTE_ROOT, modulePath);
-        return path.join(ABSOLUTE_ROOT, relativePathToRoot);
+        return path.join(ABSOLUTE_ROOT, modulePath);
     }
     return ABSOLUTE_ROOT;
 }

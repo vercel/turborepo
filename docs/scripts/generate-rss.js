@@ -1,5 +1,5 @@
-const { promises: fs, statSync } = require("fs");
-const path = require("path");
+const { promises: fs, statSync } = require("node:fs");
+const path = require("node:path");
 const RSS = require("rss");
 const matter = require("gray-matter");
 
@@ -28,7 +28,9 @@ async function generate() {
     const file = await fs.readFile(
       path.join(__dirname, "..", "pages", "blog", post)
     );
-    sortedData.push({ ...matter(file), slug: post.replace(".mdx", "") });
+    const frontmatter = matter(file);
+    if (frontmatter.data.href) continue;
+    sortedData.push({ ...frontmatter, slug: post.replace(".mdx", "") });
   }
 
   // sort by date
@@ -41,11 +43,11 @@ async function generate() {
     );
     feed.item({
       title: frontmatter.data.title,
-      url: "https://turbo.build/blog/" + frontmatter.slug, // intentionally including slash here
+      url: `https://turbo.build/blog/${frontmatter.slug}`, // intentionally including slash here
       date: frontmatter.data.date,
       description: frontmatter.data.description,
       enclosure: {
-        url: "https://turbo.build" + frontmatter.data.ogImage, // intentionally omitting slash here
+        url: `https://turbo.build${frontmatter.data.ogImage}`, // intentionally omitting slash here
         type: "image/png",
         size: stat.size,
       },

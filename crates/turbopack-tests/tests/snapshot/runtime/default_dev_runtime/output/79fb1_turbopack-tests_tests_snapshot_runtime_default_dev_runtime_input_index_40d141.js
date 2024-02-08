@@ -76,7 +76,9 @@ function ensureDynamicExports(module, exports) {
  * Dynamically exports properties from an object
  */ function dynamicExport(module, exports, object) {
     ensureDynamicExports(module, exports);
-    module[REEXPORTED_OBJECTS].push(object);
+    if (typeof object === "object" && object !== null) {
+        module[REEXPORTED_OBJECTS].push(object);
+    }
 }
 function exportValue(module, value) {
     module.exports = value;
@@ -124,7 +126,7 @@ function esmImport(sourceModule, id) {
     if (module.namespaceObject) return module.namespaceObject;
     // only ESM can be an async module, so we don't need to worry about exports being a promise here.
     const raw = module.exports;
-    return module.namespaceObject = interopEsm(raw, {}, raw.__esModule);
+    return module.namespaceObject = interopEsm(raw, {}, raw && raw.__esModule);
 }
 // Add a simple runtime require so that environments without one can still pass
 // `typeof require` CommonJS checks so that exports are correctly registered.
@@ -1236,7 +1238,7 @@ function createModuleHot(moduleId, hotData) {
 /**
  * Returns the URL relative to the origin where a chunk can be fetched from.
  */ function getChunkRelativeUrl(chunkPath) {
-    return `${CHUNK_BASE_PATH}${chunkPath}`.split("/").map((p)=>encodeURIComponent(p)).join("/");
+    return `${CHUNK_BASE_PATH}${chunkPath.split("/").map((p)=>encodeURIComponent(p)).join("/")}`;
 }
 /**
  * Subscribes to chunk list updates from the update server and applies them.
@@ -1346,8 +1348,10 @@ async function loadWebAssemblyModule(_source, wasmChunkPath) {
         unloadChunk (chunkPath) {
             deleteResolver(chunkPath);
             const chunkUrl = getChunkRelativeUrl(chunkPath);
+            // TODO(PACK-2140): remove this once all filenames are guaranteed to be escaped.
+            const decodedChunkUrl = decodeURI(chunkUrl);
             if (chunkPath.endsWith(".css")) {
-                const links = document.querySelectorAll(`link[href="${chunkUrl}"],link[href^="${chunkUrl}?"]`);
+                const links = document.querySelectorAll(`link[href="${chunkUrl}"],link[href^="${chunkUrl}?"],link[href="${decodedChunkUrl}"],link[href^="${decodedChunkUrl}?"]`);
                 for (const link of Array.from(links)){
                     link.remove();
                 }
@@ -1356,7 +1360,7 @@ async function loadWebAssemblyModule(_source, wasmChunkPath) {
                 // runtime once evaluated.
                 // However, we still want to remove the script tag from the DOM to keep
                 // the HTML somewhat consistent from the user's perspective.
-                const scripts = document.querySelectorAll(`script[src="${chunkUrl}"],script[src^="${chunkUrl}?"]`);
+                const scripts = document.querySelectorAll(`script[src="${chunkUrl}"],script[src^="${chunkUrl}?"],script[src="${decodedChunkUrl}"],script[src^="${decodedChunkUrl}?"]`);
                 for (const script of Array.from(scripts)){
                     script.remove();
                 }
@@ -1371,14 +1375,26 @@ async function loadWebAssemblyModule(_source, wasmChunkPath) {
                     return;
                 }
                 const chunkUrl = getChunkRelativeUrl(chunkPath);
-                const previousLinks = document.querySelectorAll(`link[rel=stylesheet][href="${chunkUrl}"],link[rel=stylesheet][href^="${chunkUrl}?"]`);
+                const decodedChunkUrl = decodeURI(chunkUrl);
+                const previousLinks = document.querySelectorAll(`link[rel=stylesheet][href="${chunkUrl}"],link[rel=stylesheet][href^="${chunkUrl}?"],link[rel=stylesheet][href="${decodedChunkUrl}"],link[rel=stylesheet][href^="${decodedChunkUrl}?"]`);
                 if (previousLinks.length == 0) {
                     reject(new Error(`No link element found for chunk ${chunkPath}`));
                     return;
                 }
                 const link = document.createElement("link");
                 link.rel = "stylesheet";
-                link.href = chunkUrl;
+                if (navigator.userAgent.includes("Firefox")) {
+                    // Firefox won't reload CSS files that were previously loaded on the current page,
+                    // we need to add a query param to make sure CSS is actually reloaded from the server.
+                    //
+                    // I believe this is this issue: https://bugzilla.mozilla.org/show_bug.cgi?id=1037506
+                    //
+                    // Safari has a similar issue, but only if you have a `<link rel=preload ... />` tag
+                    // pointing to the same URL as the stylesheet: https://bugs.webkit.org/show_bug.cgi?id=187726
+                    link.href = `${chunkUrl}?ts=${Date.now()}`;
+                } else {
+                    link.href = chunkUrl;
+                }
                 link.onerror = ()=>{
                     reject();
                 };
@@ -1448,8 +1464,9 @@ async function loadWebAssemblyModule(_source, wasmChunkPath) {
             return resolver.promise;
         }
         const chunkUrl = getChunkRelativeUrl(chunkPath);
+        const decodedChunkUrl = decodeURI(chunkUrl);
         if (chunkPath.endsWith(".css")) {
-            const previousLinks = document.querySelectorAll(`link[rel=stylesheet][href="${chunkUrl}"],link[rel=stylesheet][href^="${chunkUrl}?"]`);
+            const previousLinks = document.querySelectorAll(`link[rel=stylesheet][href="${chunkUrl}"],link[rel=stylesheet][href^="${chunkUrl}?"],link[rel=stylesheet][href="${decodedChunkUrl}"],link[rel=stylesheet][href^="${decodedChunkUrl}?"]`);
             if (previousLinks.length > 0) {
                 // CSS chunks do not register themselves, and as such must be marked as
                 // loaded instantly.
@@ -1469,7 +1486,7 @@ async function loadWebAssemblyModule(_source, wasmChunkPath) {
                 document.body.appendChild(link);
             }
         } else if (chunkPath.endsWith(".js")) {
-            const previousScripts = document.querySelectorAll(`script[src="${chunkUrl}"],script[src^="${chunkUrl}?"]`);
+            const previousScripts = document.querySelectorAll(`script[src="${chunkUrl}"],script[src^="${chunkUrl}?"],script[src="${decodedChunkUrl}"],script[src^="${decodedChunkUrl}?"]`);
             if (previousScripts.length > 0) {
                 // There is this edge where the script already failed loading, but we
                 // can't detect that. The Promise will never resolve in this case.
@@ -1497,7 +1514,7 @@ async function loadWebAssemblyModule(_source, wasmChunkPath) {
 })();
 function _eval({ code, url, map }) {
     code += `\n\n//# sourceURL=${location.origin}/${CHUNK_BASE_PATH}${url}`;
-    if (map) code += `\n//# sourceMappingURL=${location.origin}/${CHUNK_BASE_PATH}${map}`;
+    if (map) code += `\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${btoa(map)}`;
     return eval(code);
 }
 const chunksToRegister = globalThis.TURBOPACK;

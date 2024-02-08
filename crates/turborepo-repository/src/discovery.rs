@@ -23,7 +23,7 @@ pub struct WorkspaceData {
     pub turbo_json: Option<AbsoluteSystemPathBuf>,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct DiscoveryResponse {
     pub workspaces: Vec<WorkspaceData>,
     pub package_manager: PackageManager,
@@ -59,9 +59,14 @@ pub trait PackageDiscoveryBuilder {
 
 impl<T: PackageDiscovery + Send> PackageDiscovery for Option<T> {
     async fn discover_packages(&mut self) -> Result<DiscoveryResponse, Error> {
+        tracing::debug!("discovering packages using optional strategy");
+
         match self {
             Some(d) => d.discover_packages().await,
-            None => Err(Error::Unavailable),
+            None => {
+                tracing::debug!("no strategy available");
+                Err(Error::Unavailable)
+            }
         }
     }
 }
@@ -121,6 +126,8 @@ impl PackageDiscoveryBuilder for LocalPackageDiscoveryBuilder {
 
 impl PackageDiscovery for LocalPackageDiscovery {
     async fn discover_packages(&mut self) -> Result<DiscoveryResponse, Error> {
+        tracing::debug!("discovering packages using local strategy");
+
         let package_paths = match self.package_manager.get_package_jsons(&self.repo_root) {
             Ok(packages) => packages,
             // if there is not a list of workspaces, it is not necessarily an error. just report no
@@ -189,15 +196,24 @@ impl<A: PackageDiscovery + Send, B: PackageDiscovery + Send> PackageDiscovery
     for FallbackPackageDiscovery<A, B>
 {
     async fn discover_packages(&mut self) -> Result<DiscoveryResponse, Error> {
+        tracing::debug!("discovering packages using fallback strategy");
+
+        tracing::debug!("attempting primary strategy");
         match tokio::time::timeout(self.timeout, self.primary.discover_packages()).await {
             Ok(Ok(packages)) => Ok(packages),
-            Ok(Err(err1)) => match self.fallback.discover_packages().await {
-                Ok(packages) => Ok(packages),
-                // if the backup is unavailable, return the original error
-                Err(Error::Unavailable) => Err(err1),
-                Err(err2) => Err(err2),
-            },
-            Err(_) => self.fallback.discover_packages().await,
+            Ok(Err(err1)) => {
+                tracing::debug!("primary strategy failed, attempting fallback strategy");
+                match self.fallback.discover_packages().await {
+                    Ok(packages) => Ok(packages),
+                    // if the backup is unavailable, return the original error
+                    Err(Error::Unavailable) => Err(err1),
+                    Err(err2) => Err(err2),
+                }
+            }
+            Err(_) => {
+                tracing::debug!("primary strategy timed out, attempting fallback strategy");
+                self.fallback.discover_packages().await
+            }
         }
     }
 }
@@ -218,9 +234,11 @@ impl<P: PackageDiscovery> CachingPackageDiscovery<P> {
 
 impl<P: PackageDiscovery + Send> PackageDiscovery for CachingPackageDiscovery<P> {
     async fn discover_packages(&mut self) -> Result<DiscoveryResponse, Error> {
-        match self.data.take() {
+        tracing::debug!("discovering packages using caching strategy");
+        match self.data.clone() {
             Some(data) => Ok(data),
             None => {
+                tracing::debug!("no cached data, running primary strategy");
                 let data = self.primary.discover_packages().await?;
                 self.data = Some(data.clone());
                 Ok(data)
@@ -259,7 +277,7 @@ mod fallback_tests {
                     "mock error",
                 ))))
             } else {
-                tokio::time::sleep(Duration::from_millis(10)).await;
+                tokio::time::sleep(Duration::from_millis(100)).await;
                 self.calls += 1;
                 // Simulate successful package discovery
                 Ok(DiscoveryResponse {
@@ -300,7 +318,7 @@ mod fallback_tests {
             let fallback = MockDiscovery::new(false);
 
             let mut discovery =
-                FallbackPackageDiscovery::new(primary, fallback, Duration::from_secs(0));
+                FallbackPackageDiscovery::new(primary, fallback, Duration::from_millis(1));
 
             // Invoke the method under test
             let result = discovery.discover_packages().await;

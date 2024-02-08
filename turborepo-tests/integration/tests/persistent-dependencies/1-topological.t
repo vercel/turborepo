@@ -1,6 +1,5 @@
 # Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) persistent_dependencies/1-topological
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh persistent_dependencies/1-topological
 
 // Workspace Graph
 // - app-a depends on pkg-a
@@ -14,6 +13,7 @@
 // app-a#dev
 // └── pkg-a#dev
   $ ${TURBO} run dev
-   ERROR  run failed: error preparing engine: Invalid persistent task configuration:
-  "pkg-a#dev" is a persistent task, "app-a#dev" cannot depend on it
+    x error preparing engine: Invalid persistent task configuration:
+    | "pkg-a#dev" is a persistent task, "app-a#dev" cannot depend on it
+  
   [1]

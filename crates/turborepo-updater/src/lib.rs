@@ -1,5 +1,8 @@
 #![deny(clippy::all)]
 
+//! Turborepo's update notifier. Indicates to the user that there is a new
+//! version of `turbo` available.
+
 use std::{fmt, time::Duration};
 
 use console::style;

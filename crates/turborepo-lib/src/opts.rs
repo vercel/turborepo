@@ -31,14 +31,14 @@ pub enum Error {
 }
 
 #[derive(Debug)]
-pub struct Opts<'a> {
-    pub cache_opts: CacheOpts<'a>,
-    pub run_opts: RunOpts<'a>,
+pub struct Opts {
+    pub cache_opts: CacheOpts,
+    pub run_opts: RunOpts,
     pub runcache_opts: RunCacheOpts,
     pub scope_opts: ScopeOpts,
 }
 
-impl<'a> Opts<'a> {
+impl Opts {
     pub fn synthesize_command(&self) -> String {
         let mut cmd = format!("turbo run {}", self.run_opts.tasks.join(" "));
         for pattern in &self.scope_opts.filter_patterns {
@@ -79,7 +79,7 @@ impl<'a> Opts<'a> {
     }
 }
 
-impl<'a> TryFrom<&'a Args> for Opts<'a> {
+impl<'a> TryFrom<&'a Args> for Opts {
     type Error = self::Error;
 
     fn try_from(args: &'a Args) -> Result<Self, Self::Error> {
@@ -118,20 +118,20 @@ impl<'a> From<&'a RunArgs> for RunCacheOpts {
 }
 
 #[derive(Debug)]
-pub struct RunOpts<'a> {
-    pub(crate) tasks: &'a [String],
+pub struct RunOpts {
+    pub(crate) tasks: Vec<String>,
     pub(crate) concurrency: u32,
     pub(crate) parallel: bool,
     pub(crate) env_mode: EnvMode,
     // Whether or not to infer the framework for each workspace.
     pub(crate) framework_inference: bool,
-    pub profile: Option<&'a str>,
+    pub profile: Option<String>,
     pub(crate) continue_on_error: bool,
-    pub(crate) pass_through_args: &'a [String],
+    pub(crate) pass_through_args: Vec<String>,
     pub(crate) only: bool,
     pub(crate) dry_run: Option<DryRunMode>,
-    pub graph: Option<GraphOpts<'a>>,
-    pub(crate) no_daemon: bool,
+    pub graph: Option<GraphOpts>,
+    pub(crate) daemon: Option<bool>,
     pub(crate) single_package: bool,
     pub log_prefix: ResolvedLogPrefix,
     pub log_order: ResolvedLogOrder,
@@ -140,7 +140,7 @@ pub struct RunOpts<'a> {
     pub is_github_actions: bool,
 }
 
-impl<'a> RunOpts<'a> {
+impl RunOpts {
     pub fn args_for_task(&self, task_id: &TaskId) -> Option<Vec<String>> {
         if !self.pass_through_args.is_empty()
             && self
@@ -148,7 +148,7 @@ impl<'a> RunOpts<'a> {
                 .iter()
                 .any(|task| task.as_str() == task_id.task())
         {
-            Some(Vec::from(self.pass_through_args))
+            Some(self.pass_through_args.clone())
         } else {
             None
         }
@@ -156,9 +156,9 @@ impl<'a> RunOpts<'a> {
 }
 
 #[derive(Debug)]
-pub enum GraphOpts<'a> {
+pub enum GraphOpts {
     Stdout,
-    File(&'a str),
+    File(String),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -175,7 +175,7 @@ pub enum ResolvedLogPrefix {
 
 const DEFAULT_CONCURRENCY: u32 = 10;
 
-impl<'a> TryFrom<&'a RunArgs> for RunOpts<'a> {
+impl<'a> TryFrom<&'a RunArgs> for RunOpts {
     type Error = self::Error;
 
     fn try_from(args: &'a RunArgs) -> Result<Self, Self::Error> {
@@ -188,7 +188,7 @@ impl<'a> TryFrom<&'a RunArgs> for RunOpts<'a> {
 
         let graph = args.graph.as_deref().map(|file| match file {
             "" => GraphOpts::Stdout,
-            f => GraphOpts::File(f),
+            f => GraphOpts::File(f.to_string()),
         });
 
         let (is_github_actions, log_order, log_prefix) = match args.log_order {
@@ -209,7 +209,7 @@ impl<'a> TryFrom<&'a RunArgs> for RunOpts<'a> {
         };
 
         Ok(Self {
-            tasks: args.tasks.as_slice(),
+            tasks: args.tasks.clone(),
             log_prefix,
             log_order,
             summarize: args.summarize,
@@ -218,11 +218,11 @@ impl<'a> TryFrom<&'a RunArgs> for RunOpts<'a> {
             env_mode: args.env_mode,
             concurrency,
             parallel: args.parallel,
-            profile: args.profile.as_deref(),
+            profile: args.profile.clone(),
             continue_on_error: args.continue_execution,
-            pass_through_args: args.pass_through_args.as_ref(),
+            pass_through_args: args.pass_through_args.clone(),
             only: args.only,
-            no_daemon: args.no_daemon,
+            daemon: args.daemon(),
             single_package: args.single_package,
             graph,
             dry_run: args.dry_run,
@@ -341,10 +341,10 @@ impl<'a> TryFrom<&'a RunArgs> for ScopeOpts {
     }
 }
 
-impl<'a> From<&'a RunArgs> for CacheOpts<'a> {
+impl<'a> From<&'a RunArgs> for CacheOpts {
     fn from(run_args: &'a RunArgs) -> Self {
         CacheOpts {
-            override_dir: run_args.cache_dir.as_deref(),
+            override_dir: run_args.cache_dir.clone(),
             skip_filesystem: run_args.remote_only,
             remote_cache_read_only: run_args.remote_cache_read_only,
             workers: run_args.cache_workers,
@@ -353,7 +353,7 @@ impl<'a> From<&'a RunArgs> for CacheOpts<'a> {
     }
 }
 
-impl<'a> RunOpts<'a> {
+impl RunOpts {
     pub fn should_redirect_stderr_to_stdout(&self) -> bool {
         // If we're running on Github Actions, force everything to stdout
         // so as not to have out-of-order log lines
@@ -514,18 +514,18 @@ mod test {
     )]
     fn test_synthesize_command(opts_input: TestCaseOpts, expected: &str) {
         let run_opts = RunOpts {
-            tasks: &opts_input.tasks,
+            tasks: opts_input.tasks,
             concurrency: 10,
             parallel: opts_input.parallel,
             env_mode: crate::cli::EnvMode::Loose,
             framework_inference: true,
             profile: None,
             continue_on_error: opts_input.continue_on_error,
-            pass_through_args: &opts_input.pass_through_args,
+            pass_through_args: opts_input.pass_through_args,
             only: opts_input.only,
             dry_run: opts_input.dry_run,
             graph: None,
-            no_daemon: false,
+            daemon: None,
             single_package: false,
             log_prefix: crate::opts::ResolvedLogPrefix::Task,
             log_order: crate::opts::ResolvedLogOrder::Stream,

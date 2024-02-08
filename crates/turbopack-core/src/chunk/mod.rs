@@ -25,14 +25,14 @@ use turbo_tasks::{
     debug::ValueDebugFormat,
     graph::{AdjacencyMap, GraphTraversal, GraphTraversalResult, Visit, VisitControlFlow},
     trace::TraceRawVcs,
-    ReadRef, TaskInput, TryFlatJoinIterExt, TryJoinIterExt, Upcast, ValueToString, Vc,
+    ReadRef, TaskInput, TryFlatJoinIterExt, TryJoinIterExt, Upcast, Value, ValueToString, Vc,
 };
 use turbo_tasks_fs::FileSystemPath;
 use turbo_tasks_hash::DeterministicHash;
 
 use self::availability_info::AvailabilityInfo;
 pub use self::{
-    chunking_context::{ChunkingContext, ChunkingContextExt},
+    chunking_context::{ChunkGroupResult, ChunkingContext, ChunkingContextExt},
     data::{ChunkData, ChunkDataOption, ChunksData},
     evaluate::{EvaluatableAsset, EvaluatableAssetExt, EvaluatableAssets},
     passthrough_asset::PassthroughModule,
@@ -273,6 +273,21 @@ struct ChunkContentContext {
     availability_info: AvailabilityInfo,
 }
 
+#[turbo_tasks::value_impl]
+impl ChunkContentContext {
+    #[turbo_tasks::function]
+    fn new(
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
+        availability_info: Value<AvailabilityInfo>,
+    ) -> Vc<Self> {
+        Self {
+            chunking_context,
+            availability_info: availability_info.into_value(),
+        }
+        .cell()
+    }
+}
+
 #[turbo_tasks::function]
 async fn graph_node_to_referenced_nodes(
     node: ChunkGraphNodeToReferences,
@@ -283,7 +298,7 @@ async fn graph_node_to_referenced_nodes(
         ChunkGraphNodeToReferences::PassthroughChunkItem(item) => (None, item.references()),
         ChunkGraphNodeToReferences::ChunkItem(item) => (Some(*item), item.references()),
     };
-    let chunk_content_context = chunk_content_context.await?;
+    let chunk_content_context = &*chunk_content_context.await?;
 
     let references = references.await?;
     let graph_nodes = references
@@ -306,13 +321,15 @@ async fn graph_node_to_referenced_nodes(
                 }]);
             };
 
-            let modules = reference.resolve_reference().primary_modules().await?;
+            // Dedupe modules to avoid duplicate work in the following loop
+            let mut modules = IndexSet::new();
+            for module in reference.resolve_reference().primary_modules().await? {
+                modules.insert(module.resolve().await?);
+            }
 
             let module_data = modules
-                .iter()
-                .map(|module| async {
-                    let module = (*module).resolve().await?;
-
+                .into_iter()
+                .map(|module| async move {
                     if Vc::try_resolve_sidecast::<Box<dyn PassthroughModule>>(module)
                         .await?
                         .is_some()
@@ -550,7 +567,7 @@ impl Visit<ChunkContentGraphNode, ()> for ChunkContentVisit {
 
     fn span(&mut self, node: &ChunkContentGraphNode) -> Span {
         if let ChunkContentGraphNode::ChunkItem { ident, .. } = node {
-            info_span!("module", name = display(ident))
+            info_span!("chunking module", name = display(ident))
         } else {
             Span::current()
         }
@@ -585,11 +602,8 @@ async fn chunk_content_internal_parallel(
         .try_flat_join()
         .await?;
 
-    let chunk_content_context = ChunkContentContext {
-        chunking_context,
-        availability_info,
-    }
-    .cell();
+    let chunk_content_context =
+        ChunkContentContext::new(chunking_context, Value::new(availability_info));
 
     let visit = ChunkContentVisit {
         chunk_content_context,
@@ -730,6 +744,9 @@ impl AsyncModuleInfo {
 }
 
 pub type ChunkItemWithAsyncModuleInfo = (Vc<Box<dyn ChunkItem>>, Option<Vc<AsyncModuleInfo>>);
+
+#[turbo_tasks::value(transparent)]
+pub struct ChunkItemsWithAsyncModuleInfo(Vec<ChunkItemWithAsyncModuleInfo>);
 
 pub trait ChunkItemExt: Send {
     /// Returns the module id of this chunk item.

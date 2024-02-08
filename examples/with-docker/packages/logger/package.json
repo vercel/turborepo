@@ -3,7 +3,6 @@
   "version": "0.0.0",
   "private": true,
   "main": "./dist/index.js",
-  "source": "./src/index.ts",
   "types": "./dist/index.d.ts",
   "files": [
     "dist/**"
@@ -19,12 +18,12 @@
     "preset": "@repo/jest-presets/jest/node"
   },
   "devDependencies": {
-    "@types/jest": "^29.5.10",
-    "eslint": "^8.54.0",
+    "@types/jest": "^29.5.11",
+    "eslint": "^8.56.0",
     "@repo/eslint-config": "*",
     "jest": "^29.7.0",
     "@repo/jest-presets": "*",
     "@repo/typescript-config": "*",
-    "typescript": "^5.3.2"
+    "typescript": "^5.3.3"
   }
 }

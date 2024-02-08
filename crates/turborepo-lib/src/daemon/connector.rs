@@ -35,7 +35,7 @@ pub enum DaemonConnectorError {
     #[error("unable to make handshake: {0}")]
     Handshake(#[from] Box<DaemonError>),
     /// Waiting for the socket timed out.
-    #[error("timeout while watchin directory: {0}")]
+    #[error("timeout while watching directory: {0}")]
     Timeout(#[from] tokio::time::error::Elapsed),
     /// There was an issue in the file watcher.
     #[error("unable to watch directory: {0}")]
@@ -113,10 +113,10 @@ impl DaemonConnector {
                         Ok(client.with_connect_settings(self))
                     }
                 }
-                Err(DaemonError::VersionMismatch) if self.can_kill_server => {
+                Err(DaemonError::VersionMismatch(_)) if self.can_kill_server => {
                     self.kill_live_server(client, pid).await?
                 }
-                Err(DaemonError::Unavailable) => self.kill_dead_server(pid).await?,
+                Err(DaemonError::Unavailable(_)) => self.kill_dead_server(pid).await?,
                 Err(e) => return Err(DaemonConnectorError::Handshake(Box::new(e))),
             };
         }
@@ -151,7 +151,6 @@ impl DaemonConnector {
     async fn start_daemon() -> Result<sysinfo::Pid, DaemonConnectorError> {
         let binary_path =
             std::env::current_exe().map_err(|e| DaemonConnectorError::Fork(e.into()))?;
-
         // this creates a new process group for the given command
         // in a cross platform way, directing all output to /dev/null
         let mut group = tokio::process::Command::new(binary_path)
@@ -714,7 +713,7 @@ mod test {
             .await
             .unwrap_err()
             .into();
-        assert_matches!(hello_resp, DaemonError::VersionMismatch);
+        assert_matches!(hello_resp, DaemonError::VersionMismatch(_));
         let client = DaemonClient::new(client);
 
         let shutdown_fut = conn.kill_live_server(client, Pid::from(1000));

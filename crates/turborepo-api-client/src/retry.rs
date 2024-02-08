@@ -22,7 +22,14 @@ pub(crate) async fn make_retryable_request(
 ) -> Result<Response, Error> {
     let mut last_error = None;
     for retry_count in 0..RETRY_MAX {
-        let builder = request_builder.try_clone().expect("cannot clone request");
+        // A request builder can fail to clone for two reasons:
+        // - the URL given was given as a string and isn't a valid URL this can be
+        //   mitigated by constructing requests with pre-parsed URLs via Url::parse
+        // - the request body is a stream, in this case we'll just send the one request
+        //   we have
+        let Some(builder) = request_builder.try_clone() else {
+            return Ok(request_builder.send().await?);
+        };
         match builder.send().await {
             Ok(value) => return Ok(value),
             Err(err) => {

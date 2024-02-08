@@ -1,4 +1,4 @@
-import Callout from "../../../../components/Callout";
+import { Callout } from "../../../../components/Callout";
 import HeartIcon from "@heroicons/react/solid/HeartIcon";
 import { Tabs, Tab } from "../../../../components/Tabs";
 
@@ -122,7 +122,7 @@ For instance, if we want `apps/docs` to import `packages/shared-utils`, we'd nee
 ```json filename="apps/docs/package.json"
 {
   "dependencies": {
-    "shared-utils": "*"
+    "shared-utils": "*" // If yarn v2+, use workspace:*
   }
 }
 ```

@@ -7,8 +7,6 @@
   ],
   "eslint.workingDirectories": [{ "mode": "auto" }],
   "debug.javascript.unmapMissingSources": true,
-  "go.lintTool": "golangci-lint",
-  "go.buildTags": "rust",
   "files.associations": {
     "libturbo.h": "c",
     "turbo.json": "jsonc"
@@ -22,4 +20,5 @@
   "search.exclude": {
     "crates/turbopack-tests/tests/snapshot/**": true
   },
+  "typescript.tsdk": "node_modules/typescript/lib"
 }

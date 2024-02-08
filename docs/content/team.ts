@@ -1,4 +1,4 @@
-const TURBO_TEAM: Record<string, AuthorDetails> = {
+export const TURBO_TEAM: Record<string, AuthorDetails> = {
   jaredpalmer: {
     name: "Jared Palmer",
     picture: "/images/people/jaredpalmer.jpeg",
@@ -50,7 +50,7 @@ const TURBO_TEAM: Record<string, AuthorDetails> = {
     xUsername: "alexkirsz",
   },
   anthonyshew: {
-    name: "Anthony Schew",
+    name: "Anthony Shew",
     picture: "/images/people/anthonyshew.png",
     xUsername: "anthonysheww",
   },
@@ -71,10 +71,8 @@ const TURBO_TEAM: Record<string, AuthorDetails> = {
 };
 
 export type Author = keyof typeof TURBO_TEAM;
-export type AuthorDetails = {
+export interface AuthorDetails {
   name: string;
   picture: string;
   xUsername?: string;
-};
-
-export default TURBO_TEAM;
+}

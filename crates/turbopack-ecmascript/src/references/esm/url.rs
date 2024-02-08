@@ -11,8 +11,8 @@ use turbopack_core::{
     environment::Rendering,
     issue::IssueSource,
     reference::ModuleReference,
-    reference_type::UrlReferenceSubType,
-    resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult},
+    reference_type::{ReferenceType, UrlReferenceSubType},
+    resolve::{origin::ResolveOrigin, parse::Request, url_resolve, ModuleResolveResult},
 };
 
 use super::base::ReferencedAsset;
@@ -21,7 +21,7 @@ use crate::{
     code_gen::{CodeGenerateable, CodeGeneration},
     create_visitor,
     references::AstPath,
-    resolve::{try_to_severity, url_resolve},
+    resolve::try_to_severity,
     utils::module_id_to_lit,
 };
 
@@ -80,12 +80,8 @@ impl UrlAssetReference {
     }
 
     #[turbo_tasks::function]
-    pub(super) async fn get_referenced_asset(self: Vc<Self>) -> Result<Vc<ReferencedAsset>> {
-        let this = self.await?;
-        Ok(ReferencedAsset::from_resolve_result(
-            self.resolve_reference(),
-            this.request,
-        ))
+    pub(crate) fn get_referenced_asset(self: Vc<Self>) -> Vc<ReferencedAsset> {
+        ReferencedAsset::from_resolve_result(self.resolve_reference())
     }
 }
 
@@ -96,8 +92,8 @@ impl ModuleReference for UrlAssetReference {
         url_resolve(
             self.origin,
             self.request,
-            Value::new(UrlReferenceSubType::EcmaScriptNewUrl),
-            self.issue_source,
+            Value::new(ReferenceType::Url(UrlReferenceSubType::EcmaScriptNewUrl)),
+            Some(self.issue_source),
             try_to_severity(self.in_try),
         )
     }

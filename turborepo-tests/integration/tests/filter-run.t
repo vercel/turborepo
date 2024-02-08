@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup.sh
-  $ . ${TESTDIR}/_helpers/setup_monorepo.sh $(pwd)
+  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh
 
 # Running with --filter works and exits with success
   $ ${TURBO} run build --filter="[main]"

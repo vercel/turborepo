@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) strict_env_vars
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh strict_env_vars
 
 With --env-mode=infer
 
@@ -27,19 +26,19 @@ Inferred mode as loose because no pass through configs, all vars are available
   globalpt: 'higlobalpt', localpt: 'hilocalpt', globaldep: 'higlobaldep', localdep: 'hilocaldep', other: 'hiother', sysroot set: 'yes', path set: 'yes'
 
 Inferred mode as strict, because global pass through config, no vars available
-  $ cp "$TESTDIR/../_fixtures/turbo-configs/strict_env_vars/global_pt-empty.json" "$(pwd)/turbo.json" && git commit -am "no comment" --quiet
+  $ ${TESTDIR}/../../../helpers/replace_turbo_json.sh $(pwd) "strict_env_vars/global_pt-empty.json"
   $ ${TURBO} build -vv --env-mode=infer > /dev/null 2>&1
   $ cat "$OUTPUT"
   globalpt: '', localpt: '', globaldep: '', localdep: '', other: '', sysroot set: 'yes', path set: 'yes'
 
 Inferred mode as strict, because task pass through config, no vars available
-  $ cp "$TESTDIR/../_fixtures/turbo-configs/strict_env_vars/task_pt-empty.json" "$(pwd)/turbo.json" && git commit -am "no comment" --quiet
+  $ ${TESTDIR}/../../../helpers/replace_turbo_json.sh $(pwd) "strict_env_vars/task_pt-empty.json"
   $ ${TURBO} build -vv --env-mode=infer > /dev/null 2>&1
   $ cat "$OUTPUT"
   globalpt: '', localpt: '', globaldep: '', localdep: '', other: '', sysroot set: 'yes', path set: 'yes'
 
 Inferred mode as strict, with declared deps and pass through. all declared available, other is not available
-  $ cp "$TESTDIR/../_fixtures/turbo-configs/strict_env_vars/all.json" "$(pwd)/turbo.json" && git commit -am "no comment" --quiet
+  $ ${TESTDIR}/../../../helpers/replace_turbo_json.sh $(pwd) "strict_env_vars/all.json"
   $ ${TURBO} build -vv --env-mode=infer > /dev/null 2>&1
   $ cat "$OUTPUT"
   globalpt: 'higlobalpt', localpt: 'hilocalpt', globaldep: 'higlobaldep', localdep: 'hilocaldep', other: '', sysroot set: 'yes', path set: 'yes'

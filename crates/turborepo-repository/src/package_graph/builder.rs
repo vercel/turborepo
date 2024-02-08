@@ -5,7 +5,7 @@ use std::{
 };
 
 use petgraph::graph::{Graph, NodeIndex};
-use tracing::warn;
+use tracing::{warn, Instrument};
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
     RelativeUnixPathBuf,
@@ -103,7 +103,6 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
     /// Set the package discovery strategy to use. Note that whatever strategy
     /// selected here will be wrapped in a `CachingPackageDiscovery` to
     /// prevent unnecessary work during building.
-    #[allow(dead_code)]
     pub fn with_package_discovery<P2: PackageDiscoveryBuilder>(
         self,
         discovery: P2,
@@ -281,7 +280,18 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
         }?;
 
         for (path, json) in package_jsons {
-            self.add_json(path, json)?;
+            match self.add_json(path, json) {
+                Ok(()) => {}
+                Err(Error::PackageJsonMissingName(path)) => {
+                    // previous implementations of turbo would silently ignore package.json files
+                    // that didn't have a name field (well, actually, if two or more had the same
+                    // name, it would throw a 'name clash' error, but that's a different story)
+                    //
+                    // let's try to match that behavior, but log a debug message
+                    tracing::debug!("ignoring package.json at {} since it has no name", path);
+                }
+                Err(err) => return Err(err),
+            }
         }
 
         let Self {
@@ -470,6 +480,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedLockfile, T> {
             .collect()
     }
 
+    #[tracing::instrument(skip_all)]
     fn populate_transitive_dependencies(&mut self) -> Result<(), Error> {
         let Some(lockfile) = self.lockfile.as_deref() else {
             return Ok(());
@@ -493,6 +504,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedLockfile, T> {
         let package_manager = self
             .package_discovery
             .discover_packages()
+            .instrument(tracing::debug_span!("package discovery"))
             .await?
             .package_manager;
         let Self {

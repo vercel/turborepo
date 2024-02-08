@@ -3,7 +3,7 @@ title: Configuration
 description: Learn how to configure Turborepo through `turbo.json`.
 ---
 
-import Callout from "../../../../components/Callout";
+import { Callout } from "../../../../components/Callout";
 import OutputModeTable from "../../../../components/output-mode-table.mdx";
 import Link from 'next/link'
 
@@ -359,30 +359,26 @@ Defaults to `true`. Whether or not to cache the task [`outputs`](#outputs). Sett
 
 `type: string[]`
 
-Defaults to `[]`. Tells `turbo` the set of files to consider when determining if a workspace has changed for a particular task.
-Setting this to a list of globs will cause the task to only be rerun when files matching those globs have
-changed. This can be helpful if you want to, for example, skip running tests unless a source file changed.
-
-Specifying `[]` will cause the task to be rerun when any file in the workspace changes.
+Tells `turbo` the set of files to consider when determining if a package has changed for a particular task.
+Setting this to a list of globs will cause the task to only be run when files matching those globs have
+changed. This can be helpful if you want to, for example, skip running tests unless a source file changed, or
+explicitly depend on a `.gitignore`d file.
 
 <Callout type="info">
-  `inputs` globs must be specified as relative paths rooted at the workspace directory.
+  Good to know:
+  - The default for `inputs` is `[]` to run the task when any file in the package changes.
+  - `inputs` globs must be specified as relative paths rooted at the package's directory.
+  - `turbo.json` is *always* considered an input. If you modify
+  `turbo.json`, all caches are invalidated.
 </Callout>
-
 **Example**
 
 ```jsonc
 {
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
-    // ... omitted for brevity
-
     "test": {
-      // A workspace's `test` task depends on that workspace's
-      // own `build` task being completed first.
-      "dependsOn": ["build"],
-      "outputs": [".next/**", "!.next/cache/**"],
-      // A workspace's `test` task should only be rerun when
+      // A package's `test` task should only be ran when
       // either a `.tsx` or `.ts` file has changed.
       "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
     }
@@ -390,10 +386,23 @@ Specifying `[]` will cause the task to be rerun when any file in the workspace c
 }
 ```
 
-<Callout type="info">
-  Note: `turbo.json` is *always* considered an input. If you modify
-  `turbo.json`, all caches are invalidated.
-</Callout>
+Because specifying an `inputs` key immediately opts out of the default behavior, you may specify
+the special string `$TURBO_DEFAULT$` within an inputs array to start with the default inputs. This is useful
+when you want to add or remove additional inputs from the default set.
+
+**Example** with `$TURBO_DEFAULT$`:
+
+```jsonc
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "check-types": {
+      // Consider all default inputs except the README.md
+      "inputs": ["$TURBO_DEFAULT$", "!README.md"],
+    }
+  }
+}
+```
 
 ### `outputMode`
 
@@ -442,5 +451,35 @@ option, `turbo` can warn you about an invalid configuration.
   }
 }
 ```
+
+## Glob specification for paths
+
+Turborepo's glob implementation allows you to specfically define the files you want `turbo` to interact with. The most useful patterns you'll need are in the table below:
+
+| Pattern             | Description                                                                        |
+| ------------------- | ---------------------------------------------------------------------------------- |
+| `*`                 | Match all files in the directory                                                   |
+| `**`                | Recursively match all files and sub-directories                                    |
+| `some-dir/`         | Match the `some-dir` directory **but not its contents**                            |
+| `some-dir*`         | Match files and directories that start with `some-dir`                             |
+| `*.js`              | Matches all `.js` files in the directory                                           |
+| `*.{js,ts,tsx,jsx}` | Matches all files that end with the provided extensions in the directory           |
+| `*.{js?x}`          | Matches all files with the `js` and `jsx` extensions in the directory              |
+| `!`                 | Negate the whole glob (automatically applies `/**` to the end of the defined glob) |
+
+Here are a few examples of how to use these patterns:
+
+| Pattern            | Description                                                                                       |
+| ------------------ | ------------------------------------------------------------------------------------------------- |
+| `dist/**`          | Match all files in the `dist` directory and all sub-directories                                   |
+| `dist/some-dir/**` | Match all files in the `dist/some-dir` directory and all sub-directories in the current directory |
+| `dist/`            | Match the `dist` directory **but not its contents**                                               |
+| `dist`             | Match the `dist` directory **but not its contents**                                               |
+| `!dist`            | Ignore the `dist` directory **and all of its contents**                                           |
+| `dist*`            | Match files and directories that start with `dist`                                                |
+| `dist/*.js`        | Match all `.js` files in the `dist` directory                                                     |
+| `!dist/*.js`       | Ignore all `.js` files in the `dist` directory                                                    |
+| `dist/**/*.js`     | Recursively match all `.js` files in the `dist` directory and its sub-directories                 |
+| `../scripts/**`    | Up one directory, match all files and sub-directories in the `scripts` directory                  |
 
 [1]: /repo/docs/core-concepts/monorepos/configuring-workspaces

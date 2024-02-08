@@ -21,6 +21,7 @@ use crate::{
 pub enum RootType {
     Once,
     Root,
+    ReadingStronglyConsistent,
 }
 
 #[derive(Debug, Default)]
@@ -59,8 +60,9 @@ pub struct Aggregated {
 
     /// Only used for the aggregation root. Which kind of root is this?
     /// [RootType::Once] for OnceTasks or [RootType::Root] for Root Tasks.
-    /// It's set to None for other tasks, when the once task is done or when the
-    /// root task is disposed.
+    /// [RootType::ReadingStronglyConsistent] while currently reading a task
+    /// strongly consistent. It's set to None for other tasks, when the once
+    /// task is done or when the root task is disposed.
     pub root_type: Option<RootType>,
 }
 
@@ -189,7 +191,7 @@ impl<'a> TaskAggregationContext<'a> {
         }
     }
 
-    pub fn aggregation_info(&mut self, id: TaskId) -> AggregationInfoReference<Aggregated> {
+    pub fn aggregation_info(&self, id: TaskId) -> AggregationInfoReference<Aggregated> {
         aggregation_info(self, &id)
     }
 }
@@ -236,7 +238,7 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
         let mut unfinished = 0;
         if info.unfinished > 0 {
             info.unfinished += change.unfinished;
-            if info.unfinished == 0 {
+            if info.unfinished <= 0 {
                 info.unfinished_event.notify(usize::MAX);
                 unfinished = -1;
             }
@@ -250,12 +252,10 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
         for &(task, count) in change.unfinished_tasks_update.iter() {
             update_count_entry(info.unfinished_tasks.entry(task), count);
         }
+        let is_root = info.root_type.is_some();
         for &(task, count) in change.dirty_tasks_update.iter() {
             let value = update_count_entry(info.dirty_tasks.entry(task), count);
-            if value > 0
-                && value <= count
-                && matches!(info.root_type, Some(RootType::Root) | Some(RootType::Once))
-            {
+            if is_root && value > 0 && value <= count {
                 let mut tasks_to_schedule = self.dirty_tasks_to_schedule.lock();
                 tasks_to_schedule.get_or_insert_default().insert(task);
             }
@@ -415,7 +415,13 @@ impl<'l> AggregationItemLock for TaskGuard<'l> {
 
     fn number_of_children(&self) -> usize {
         match self.guard {
-            TaskMetaStateWriteGuard::Full(ref guard) => guard.children.len(),
+            TaskMetaStateWriteGuard::Full(ref guard) => match &guard.state_type {
+                #[cfg(feature = "lazy_remove_children")]
+                TaskStateType::InProgress {
+                    outdated_children, ..
+                } => guard.children.len() + outdated_children.len(),
+                _ => guard.children.len(),
+            },
             TaskMetaStateWriteGuard::Partial(_) | TaskMetaStateWriteGuard::Unloaded(_) => 0,
         }
     }
@@ -423,9 +429,30 @@ impl<'l> AggregationItemLock for TaskGuard<'l> {
     fn children(&self) -> Self::ChildrenIter<'_> {
         match self.guard {
             TaskMetaStateWriteGuard::Full(ref guard) => {
-                Some(guard.children.iter().map(Cow::Borrowed))
+                #[cfg(feature = "lazy_remove_children")]
+                {
+                    let outdated_children = match &guard.state_type {
+                        TaskStateType::InProgress {
+                            outdated_children, ..
+                        } => Some(outdated_children.iter().map(Cow::Borrowed)),
+                        _ => None,
+                    };
+                    Some(
+                        guard
+                            .children
+                            .iter()
+                            .map(Cow::Borrowed)
+                            .chain(outdated_children.into_iter().flatten()),
+                    )
                     .into_iter()
                     .flatten()
+                }
+                #[cfg(not(feature = "lazy_remove_children"))]
+                {
+                    Some(guard.children.iter().map(Cow::Borrowed))
+                        .into_iter()
+                        .flatten()
+                }
             }
             TaskMetaStateWriteGuard::Partial(_) | TaskMetaStateWriteGuard::Unloaded(_) => {
                 None.into_iter().flatten()
@@ -455,6 +482,17 @@ impl<'l> AggregationItemLock for TaskGuard<'l> {
                 if let Some(collectibles) = guard.collectibles.as_ref() {
                     for (&(trait_type_id, collectible), _) in collectibles.iter() {
                         change.collectibles.push((trait_type_id, collectible, 1));
+                    }
+                }
+                if let TaskStateType::InProgress {
+                    outdated_collectibles,
+                    ..
+                } = &guard.state_type
+                {
+                    if let Some(collectibles) = outdated_collectibles.as_ref() {
+                        for (&(trait_type_id, collectible), _) in collectibles.iter() {
+                            change.collectibles.push((trait_type_id, collectible, 1));
+                        }
                     }
                 }
                 if change.is_empty() {
@@ -489,6 +527,17 @@ impl<'l> AggregationItemLock for TaskGuard<'l> {
                 if let Some(collectibles) = guard.collectibles.as_ref() {
                     for (&(trait_type_id, collectible), _) in collectibles.iter() {
                         change.collectibles.push((trait_type_id, collectible, -1));
+                    }
+                }
+                if let TaskStateType::InProgress {
+                    outdated_collectibles,
+                    ..
+                } = &guard.state_type
+                {
+                    if let Some(collectibles) = outdated_collectibles.as_ref() {
+                        for (&(trait_type_id, collectible), _) in collectibles.iter() {
+                            change.collectibles.push((trait_type_id, collectible, -1));
+                        }
                     }
                 }
                 if change.is_empty() {

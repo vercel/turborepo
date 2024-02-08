@@ -3,7 +3,7 @@ title: Remote Caching
 description: Share cache artifacts across machines for even faster builds.
 ---
 
-import Callout from "../../../../components/Callout";
+import { Callout } from "../../../../components/Callout";
 import { Tabs, Tab } from "../../../../components/Tabs";
 
 # Remote Caching
@@ -98,14 +98,24 @@ To enable this feature, set the `remoteCache` options on your `turbo.json` confi
 }
 ```
 
-## Custom Remote Caches
+## Remote Caching API
 
-You can self-host your own Remote Cache or use other remote caching service providers as long as they comply with Turborepo's Remote Caching Server API.
+A Remote Cache can be implemented by any HTTP server that meets Turborepo's Remote Caching API specification.
 
-You can set the remote caching domain by specifying the `--api` and `--token` flags, where `--api` is the hostname and `--token` is a bearer token.
+### Managed Remote Cache with Vercel
+
+[Vercel](https://vercel.com), the creators and maintainers of Turborepo, provide a managed Remote Cache that is fully compatible with Turborepo.
+
+Using [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching) is zero-configuration and automatically integrates with [Vercel deployments](https://vercel.com/docs/deployments/overview) through the open-source [Vercel Remote Cache SDK](https://github.com/vercel/remote-cache).
+
+Learn more about [Turborepo on Vercel](https://vercel.com/docs/monorepos/turborepo) or [deploy a template for free](https://vercel.com/templates?search=turborepo) to try it out.
+
+### Self-hosting
+
+You can also self-host your own Remote Cache and set the remote caching domain by specifying the `--api` and `--token` flags, where `--api` is the hostname and `--token` is a bearer token.
 
 ```sh
 turbo run build --api="https://my-server.example.com" --token="xxxxxxxxxxxxxxxxx"
 ```
 
-You can see the endpoints / requests [needed here](https://github.com/vercel/turbo/blob/main/cli/internal/client/client.go).
+You can [find the OpenAPI specification for the API here](/api/remote-cache-spec). At this time, all versions of `turbo` are compatible with the `v8` endpoints.

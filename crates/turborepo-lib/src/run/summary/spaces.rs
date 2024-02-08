@@ -24,6 +24,11 @@ use crate::{
     run::{summary::Error, task_id::TaskId},
 };
 
+// There's a 4.5 MB limit on serverless requests, we limit ourselves to a
+// conservative 4 MB to leave .5 MB for the other information in the response.
+// https://vercel.com/guides/how-to-bypass-vercel-body-size-limit-serverless-functions
+const LOG_SIZE_BYTE_LIMIT: usize = 4 * 1024 * 1024;
+
 pub struct SpacesClient {
     space_id: String,
     api_client: APIClient,
@@ -79,6 +84,7 @@ impl SpacesClientHandle {
         }
     }
 
+    #[tracing::instrument(skip_all)]
     pub async fn finish_run(&self, exit_code: i32, end_time: DateTime<Local>) -> Result<(), Error> {
         Ok(self
             .tx
@@ -303,7 +309,7 @@ impl<'a> From<SpacesTaskInformation<'a>> for SpaceTaskSummary {
             },
         );
 
-        let logs = String::from_utf8_lossy(&logs).to_string();
+        let logs = trim_logs(&logs, LOG_SIZE_BYTE_LIMIT);
 
         SpaceTaskSummary {
             key: task_id.to_string(),
@@ -321,10 +327,33 @@ impl<'a> From<SpacesTaskInformation<'a>> for SpaceTaskSummary {
     }
 }
 
+fn trim_logs(logs: &[u8], limit: usize) -> String {
+    // Go JSON encoding automatically did a lossy conversion for us when
+    // encoding Golang strings into JSON.
+    let lossy_logs = String::from_utf8_lossy(logs);
+    if lossy_logs.as_bytes().len() <= limit {
+        lossy_logs.into_owned()
+    } else {
+        // We try to trim down the logs so that it is valid utf8
+        // We attempt to parse it at every byte starting from the limit until we get a
+        // valid utf8 which means we aren't cutting in the middle of a cluster.
+        for start_index in (lossy_logs.as_bytes().len() - limit)..lossy_logs.as_bytes().len() {
+            let log_bytes = &lossy_logs.as_bytes()[start_index..];
+            if let Ok(log_str) = std::str::from_utf8(log_bytes) {
+                return log_str.to_string();
+            }
+        }
+        // This case can only happen if the limit is smaller than 4
+        // and we can't even store the invalid UTF8 character
+        String::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
     use chrono::Local;
+    use pretty_assertions::assert_eq;
     use test_case::test_case;
     use turborepo_api_client::{
         spaces::{CreateSpaceRunPayload, SpaceTaskSummary},
@@ -335,6 +364,7 @@ mod tests {
         EXPECTED_TEAM_SLUG, EXPECTED_TOKEN,
     };
 
+    use super::trim_logs;
     use crate::run::summary::spaces::SpacesClient;
 
     #[test_case(vec![] ; "empty")]
@@ -388,5 +418,14 @@ mod tests {
 
         handle.abort();
         Ok(())
+    }
+
+    #[test_case(b"abcdef", 4, "cdef" ; "trims from the front of the logs")]
+    #[test_case(b"abcdef", 6, "abcdef" ; "doesn't trim when logs are under limit")]
+    #[test_case(&[240, 159, 146, 150, b'o', b'k'], 4, "ok" ; "doesn't cut in between utf8 chars")]
+    #[test_case(&[0xa0, 0xa1, b'o', b'k'], 4, "ok" ; "handles invalid utf8 chars")]
+    fn test_log_trim(logs: &[u8], limit: usize, expected: &str) {
+        let actual = trim_logs(logs, limit);
+        assert_eq!(expected, actual);
     }
 }

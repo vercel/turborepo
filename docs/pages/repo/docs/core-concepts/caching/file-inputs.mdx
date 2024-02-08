@@ -3,7 +3,7 @@ title: File Inputs
 description: How to configure Turborepo file inputs
 ---
 
-import Callout from "../../../../../components/Callout";
+import { Callout } from "../../../../../components/Callout";
 
 # File Inputs
 
@@ -71,6 +71,10 @@ You should aim to have both Git and the Git index of your repository available f
 
 <Callout>
   Customizing the `inputs` immediately opts out of the default behavior. You must manually specify via `pipeline.<task>.inputs` all of the files that should be considered.
+
+For convienence, you can use the special string `$TURBO_DEFAULT$` within an inputs array to automatically include all files considered in the default behavior. This allows
+you to customize the inputs without needing to manually specify all of the files that would have been considered by default.
+
 </Callout>
 
 For some tasks it is worthwhile to reduce the number of file inputs into the task hash consideration. Very few tasks depend on the contents of `README.md`. Specifying just the files that matter can increase the frequency of cache hits.
@@ -114,3 +118,16 @@ If a task depends on another task which specifies file dependencies they do not 
 ```
 
 This pattern can be used to save yourself from needing to repetitively enumerate a list of file globs for every single task.
+
+You may also want to keep the default behavior, but only include, or exclude a few files. You can use the special string `$TURBO_DEFAULT$` to include all of the files that would have been considered by default:
+
+```jsonc filename="/turbo.json"
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      "inputs": ["$TURBO_DEFAULT$", "!README.md", "a-git-ignored-file.txt"]
+    }
+  }
+}
+```

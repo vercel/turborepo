@@ -2,7 +2,8 @@ use std::mem::take;
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use turbo_tasks::{trace::TraceRawVcs, Vc};
+use turbo_tasks::{trace::TraceRawVcs, TryJoinIterExt, Vc};
+use unicode_segmentation::GraphemeCursor;
 
 #[derive(PartialEq, Eq, Debug, Clone, TraceRawVcs, Serialize, Deserialize)]
 enum GlobPart {
@@ -157,6 +158,7 @@ impl GlobPart {
             part: self,
             match_partial,
             previous_part_is_path_separator_equivalent,
+            cursor: GraphemeCursor::new(0, path.len(), true),
             index: 0,
             glob_iterator: None,
         }
@@ -213,25 +215,38 @@ impl GlobPart {
             _ => {
                 let mut is_escaped = false;
                 let mut literal = String::new();
-                let mut index = 0;
-                for c in input.chars() {
+
+                let mut cursor = GraphemeCursor::new(0, input.len(), true);
+
+                let mut start = cursor.cur_cursor();
+                let mut end_cursor = cursor
+                    .next_boundary(input, 0)
+                    .map_err(|e| anyhow!("{:?}", e))?;
+
+                while let Some(end) = end_cursor {
+                    let c = &input[start..end];
                     if is_escaped {
                         is_escaped = false;
-                    } else if c == '\\' {
+                    } else if c == "\\" {
                         is_escaped = true;
-                    } else if c == '/'
-                        || c == '*'
-                        || c == '?'
-                        || c == '['
-                        || c == '{'
-                        || (inside_of_braces && (c == ',' || c == '}'))
+                    } else if c == "/"
+                        || c == "*"
+                        || c == "?"
+                        || c == "["
+                        || c == "{"
+                        || (inside_of_braces && (c == "," || c == "}"))
                     {
                         break;
                     }
-                    literal.push(c);
-                    index += 1;
+                    literal.push_str(c);
+
+                    start = cursor.cur_cursor();
+                    end_cursor = cursor
+                        .next_boundary(input, end)
+                        .map_err(|e| anyhow!("{:?}", e))?;
                 }
-                Ok((GlobPart::File(literal), &input[index..]))
+
+                Ok((GlobPart::File(literal), &input[start..]))
             }
         }
     }
@@ -242,6 +257,7 @@ struct GlobPartMatchesIterator<'a> {
     part: &'a GlobPart,
     match_partial: bool,
     previous_part_is_path_separator_equivalent: bool,
+    cursor: GraphemeCursor,
     index: usize,
     glob_iterator: Option<Box<GlobMatchesIterator<'a>>>,
 }
@@ -252,37 +268,55 @@ impl<'a> Iterator for GlobPartMatchesIterator<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         match self.part {
             GlobPart::AnyDirectories => {
-                if self.index == 0 {
-                    self.index += 1;
+                if self.cursor.cur_cursor() == 0 {
+                    let Ok(Some(_)) = self.cursor.next_boundary(self.path, 0) else {
+                        return None;
+                    };
                     return Some((self.path, true));
                 }
-                let mut iter = self.path.chars();
-                if iter.advance_by(self.index - 1).is_err() {
+
+                if self.cursor.cur_cursor() == self.path.len() {
                     return None;
                 }
+
                 loop {
-                    self.index += 1;
-                    match iter.next() {
-                        Some('/') => {
-                            return Some((&self.path[self.index - 1..], true));
+                    let start = self.cursor.cur_cursor();
+                    // next_boundary does not set cursor offset to the end of the string
+                    // if there is no next boundary - manually set cursor to the end
+                    let end = match self.cursor.next_boundary(self.path, 0) {
+                        Ok(end) => {
+                            if let Some(end) = end {
+                                end
+                            } else {
+                                self.cursor.set_cursor(self.path.len());
+                                self.cursor.cur_cursor()
+                            }
                         }
-                        Some(_) => {}
-                        None => {
-                            return Some((&self.path[self.index - 2..], false));
-                        }
+                        _ => return None,
+                    };
+
+                    if &self.path[start..end] == "/" {
+                        return Some((&self.path[end..], true));
+                    } else if start == end {
+                        return Some((&self.path[start..], false));
                     }
                 }
             }
             GlobPart::AnyFile => {
-                self.index += 1;
+                let Ok(Some(c)) = self.cursor.next_boundary(self.path, 0) else {
+                    return None;
+                };
+
+                let idx = self.path[0..c].len();
+
                 // TODO verify if `*` does match zero chars?
-                if let Some(slice) = self.path.get(0..self.index) {
+                if let Some(slice) = self.path.get(0..c) {
                     if slice.ends_with('/') {
                         None
                     } else {
                         Some((
-                            &self.path[self.index..],
-                            self.previous_part_is_path_separator_equivalent && self.index == 1,
+                            &self.path[c..],
+                            self.previous_part_is_path_separator_equivalent && idx == 1,
                         ))
                     }
                 } else {
@@ -291,10 +325,12 @@ impl<'a> Iterator for GlobPartMatchesIterator<'a> {
             }
             GlobPart::AnyFileChar => todo!(),
             GlobPart::PathSeparator => {
-                if self.index == 0 {
-                    self.index = 1;
+                if self.cursor.cur_cursor() == 0 {
+                    let Ok(Some(b)) = self.cursor.next_boundary(self.path, 0) else {
+                        return None;
+                    };
                     if self.path.starts_with('/') {
-                        Some((&self.path[1..], true))
+                        Some((&self.path[b..], true))
                     } else if self.previous_part_is_path_separator_equivalent {
                         Some((self.path, true))
                     } else {
@@ -304,19 +340,25 @@ impl<'a> Iterator for GlobPartMatchesIterator<'a> {
                     None
                 }
             }
-            GlobPart::FileChar(chars) => loop {
-                if let Some(c) = chars.get(self.index) {
-                    self.index += 1;
-                    if self.path.starts_with(*c) {
-                        return Some((&self.path[1..], false));
-                    }
-                } else {
+            GlobPart::FileChar(chars) => {
+                let start = self.cursor.cur_cursor();
+                let Ok(Some(end)) = self.cursor.next_boundary(self.path, 0) else {
+                    return None;
+                };
+                let mut chars_in_path = self.path[start..end].chars();
+                let Some(c) = chars_in_path.next() else {
+                    return None;
+                };
+                if chars_in_path.next().is_some() {
                     return None;
                 }
-            },
+                chars.contains(&c).then(|| (&self.path[end..], false))
+            }
             GlobPart::File(name) => {
-                if self.index == 0 && self.path.starts_with(name) {
-                    self.index += 1;
+                if self.cursor.cur_cursor() == 0 && self.path.starts_with(name) {
+                    let Ok(Some(_)) = self.cursor.next_boundary(self.path, 0) else {
+                        return None;
+                    };
                     Some((&self.path[name.len()..], false))
                 } else {
                     None
@@ -358,6 +400,24 @@ impl Glob {
     pub fn new(glob: String) -> Result<Vc<Self>> {
         Ok(Self::cell(Glob::try_from(glob.as_str())?))
     }
+
+    #[turbo_tasks::function]
+    pub async fn alternatives(globs: Vec<Vc<Glob>>) -> Result<Vc<Self>> {
+        if globs.len() == 1 {
+            return Ok(globs.into_iter().next().unwrap());
+        }
+        Ok(Self::cell(Glob {
+            expression: vec![GlobPart::Alternatives(
+                globs
+                    .into_iter()
+                    .try_join()
+                    .await?
+                    .into_iter()
+                    .map(|g| g.clone_value())
+                    .collect(),
+            )],
+        }))
+    }
 }
 
 #[cfg(test)]
@@ -368,6 +428,7 @@ mod tests {
 
     #[rstest]
     #[case::file("file.js", "file.js")]
+    #[case::dir_and_file("../public/äöüščří.png", "../public/äöüščří.png")]
     #[case::dir_and_file("dir/file.js", "dir/file.js")]
     #[case::dir_and_file_partial("dir/file.js", "dir/")]
     #[case::file_braces("file.{ts,js}", "file.js")]
@@ -386,6 +447,10 @@ mod tests {
     #[case::globstar_in_dir("dir/**/sub/file.js", "dir/sub/file.js")]
     #[case::globstar_in_dir("dir/**/sub/file.js", "dir/a/sub/file.js")]
     #[case::globstar_in_dir("dir/**/sub/file.js", "dir/a/b/sub/file.js")]
+    #[case::globstar_in_dir(
+        "**/next/dist/**/*.shared-runtime.js",
+        "next/dist/shared/lib/app-router-context.shared-runtime.js"
+    )]
     #[case::globstar_in_dir_partial("dir/**/sub/file.js", "dir/a/b/sub/")]
     #[case::globstar_in_dir_partial("dir/**/sub/file.js", "dir/a/b/")]
     #[case::globstar_in_dir_partial("dir/**/sub/file.js", "dir/a/")]
@@ -395,8 +460,16 @@ mod tests {
         "node_modules/next/dist/server/next.js"
     )]
     #[case::node_modules_root("**/node_modules/**", "node_modules/next/dist/server/next.js")]
+    #[case::node_modules_root_package(
+        "**/node_modules/next/**",
+        "node_modules/next/dist/server/next.js"
+    )]
     #[case::node_modules_nested(
         "**/node_modules/**",
+        "apps/some-app/node_modules/regenerate-unicode-properties/Script_Extensions/Osage.js"
+    )]
+    #[case::node_modules_nested_package(
+        "**/node_modules/regenerate-unicode-properties/**",
         "apps/some-app/node_modules/regenerate-unicode-properties/Script_Extensions/Osage.js"
     )]
     #[case::node_modules_pnpm(
@@ -404,10 +477,26 @@ mod tests {
         "node_modules/.pnpm/regenerate-unicode-properties@9.0.0/node_modules/\
          regenerate-unicode-properties/Script_Extensions/Osage.js"
     )]
+    #[case::node_modules_pnpm_package(
+        "**/node_modules/{regenerate,regenerate-unicode-properties}/**",
+        "node_modules/.pnpm/regenerate-unicode-properties@9.0.0/node_modules/\
+         regenerate-unicode-properties/Script_Extensions/Osage.js"
+    )]
+    #[case::node_modules_pnpm_prefixed_package(
+        "**/node_modules/{@blockfrost/blockfrost-js,@highlight-run/node,@libsql/client,@jpg-store/\
+         lucid-cardano,@mikro-orm/core,@mikro-orm/knex,@prisma/client,@sentry/nextjs,@sentry/node,\
+         @swc/core,argon2,autoprefixer,bcrypt,better-sqlite3,canvas,cpu-features,cypress,eslint,\
+         express,next-seo,node-pty,payload,pg,playwright,postcss,prettier,prisma,puppeteer,rimraf,\
+         sharp,shiki,sqlite3,tailwindcss,ts-node,typescript,vscode-oniguruma,webpack,websocket,@\
+         aws-sdk/client-dynamodb,@aws-sdk/lib-dynamodb}/**",
+        "node_modules/.pnpm/@aws-sdk+lib-dynamodb@3.445.0_@aws-sdk+client-dynamodb@3.445.0/\
+         node_modules/@aws-sdk/lib-dynamodb/dist-es/index.js"
+    )]
     #[case::alternatives_nested1("{a,b/c,d/e/{f,g/h}}", "a")]
     #[case::alternatives_nested2("{a,b/c,d/e/{f,g/h}}", "b/c")]
     #[case::alternatives_nested3("{a,b/c,d/e/{f,g/h}}", "d/e/f")]
     #[case::alternatives_nested4("{a,b/c,d/e/{f,g/h}}", "d/e/g/h")]
+    // #[case::alternatives_chars("[abc]", "b")]
     fn glob_match(#[case] glob: &str, #[case] path: &str) {
         let glob = Glob::parse(glob).unwrap();
 
@@ -418,6 +507,10 @@ mod tests {
 
     #[rstest]
     #[case::early_end("*.raw", "hello.raw.js")]
+    #[case::early_end(
+        "**/next/dist/esm/*.shared-runtime.js",
+        "next/dist/shared/lib/app-router-context.shared-runtime.js"
+    )]
     fn glob_not_matching(#[case] glob: &str, #[case] path: &str) {
         let glob = Glob::parse(glob).unwrap();
 

@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use itertools::Itertools;
+use miette::Diagnostic;
 use turbopath::AbsoluteSystemPath;
 use turborepo_graph_utils as graph;
 use turborepo_repository::package_graph::{
@@ -9,12 +10,13 @@ use turborepo_repository::package_graph::{
 
 use super::Engine;
 use crate::{
-    config::{validate_extends, validate_no_package_task_syntax, TurboJson},
+    config,
     run::task_id::{TaskId, TaskName},
-    task_graph::{BookkeepingTaskDefinition, TaskDefinition},
+    task_graph::TaskDefinition,
+    turbo_json::{validate_extends, validate_no_package_task_syntax, RawTaskDefinition, TurboJson},
 };
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum Error {
     #[error("Could not find the following tasks in project: {0}")]
     MissingTasks(String),
@@ -30,9 +32,13 @@ pub enum Error {
     #[error("Could not find \"{task_id}\" in root turbo.json or \"{task_name}\" in workspace")]
     MissingWorkspaceTask { task_id: String, task_name: String },
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Config(#[from] crate::config::Error),
-    #[error("Invalid turbo.json:\n{error_lines}")]
-    Validation { error_lines: String },
+    #[error("invalid turbo json")]
+    Validation {
+        #[related]
+        errors: Vec<config::Error>,
+    },
     #[error(transparent)]
     Graph(#[from] graph::Error),
     #[error("Invalid task name {task_name}: {reason}")]
@@ -176,11 +182,13 @@ impl<'a> EngineBuilder<'a> {
                     task_id: task_id.to_string(),
                 });
             }
-            let task_definition = TaskDefinition::from_iter(self.task_definition_chain(
+            let raw_task_definition = RawTaskDefinition::from_iter(self.task_definition_chain(
                 &mut turbo_jsons,
                 &task_id,
                 &task_id.as_non_workspace_task_name(),
             )?);
+
+            let task_definition = TaskDefinition::try_from(raw_task_definition)?;
 
             // Skip this iteration of the loop if we've already seen this taskID
             if visited.contains(&task_id) {
@@ -300,7 +308,7 @@ impl<'a> EngineBuilder<'a> {
         turbo_jsons: &mut HashMap<WorkspaceName, TurboJson>,
         task_id: &TaskId,
         task_name: &TaskName,
-    ) -> Result<Vec<BookkeepingTaskDefinition>, Error> {
+    ) -> Result<Vec<RawTaskDefinition>, Error> {
         let mut task_definitions = Vec::new();
 
         let root_turbo_json = self
@@ -326,15 +334,13 @@ impl<'a> EngineBuilder<'a> {
                     let validation_errors = workspace_json
                         .validate(&[validate_no_package_task_syntax, validate_extends]);
                     if !validation_errors.is_empty() {
-                        let error_lines = validation_errors
-                            .into_iter()
-                            .map(|err| format!(" - {err}"))
-                            .join("\n");
-                        return Err(Error::Validation { error_lines });
+                        return Err(Error::Validation {
+                            errors: validation_errors,
+                        });
                     }
 
                     if let Some(workspace_def) = workspace_json.pipeline.get(task_name) {
-                        task_definitions.push(workspace_def.clone());
+                        task_definitions.push(workspace_def.value.clone());
                     }
                 }
                 Ok(None) => (),
@@ -374,15 +380,14 @@ impl<'a> EngineBuilder<'a> {
                 workspace: workspace.clone(),
             }
         })?;
-        let workspace_dir =
-            self.repo_root
-                .resolve(self.package_graph.workspace_dir(workspace).ok_or_else(|| {
-                    Error::MissingPackageJson {
-                        workspace: workspace.clone(),
-                    }
-                })?);
+        let workspace_dir = self.package_graph.workspace_dir(workspace).ok_or_else(|| {
+            Error::MissingPackageJson {
+                workspace: workspace.clone(),
+            }
+        })?;
         Ok(TurboJson::load(
-            &workspace_dir,
+            self.repo_root,
+            workspace_dir,
             package_json,
             self.is_single,
         )?)
@@ -420,14 +425,14 @@ mod test {
     use serde_json::json;
     use tempdir::TempDir;
     use test_case::test_case;
-    use turbopath::AbsoluteSystemPathBuf;
+    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
     use turborepo_lockfiles::Lockfile;
     use turborepo_repository::{
         discovery::PackageDiscovery, package_json::PackageJson, package_manager::PackageManager,
     };
 
     use super::*;
-    use crate::{config::RawTurboJSON, engine::TaskNode};
+    use crate::{engine::TaskNode, turbo_json::RawTurboJson};
 
     // Only used to prevent package graph construction from attempting to read
     // lockfile from disk
@@ -552,7 +557,8 @@ mod test {
     }
 
     fn turbo_json(value: serde_json::Value) -> TurboJson {
-        let raw: RawTurboJSON = serde_json::from_value(value).unwrap();
+        let json_text = serde_json::to_string(&value).unwrap();
+        let raw = RawTurboJson::parse(&json_text, AnchoredSystemPath::new("").unwrap()).unwrap();
         TurboJson::try_from(raw).unwrap()
     }
 

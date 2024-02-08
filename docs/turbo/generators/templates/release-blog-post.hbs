@@ -9,8 +9,7 @@ ogImage: /images/blog/turbo-{{ dashCase version }}/x-card.png
 # Turborepo {{ majorMinor version }}
 
 import { Authors } from '../../components/Authors'
-import Badge from '../../components/Badge'
-import Date from "../../components/blog/Date";
+import { Date } from "../../components/blog/Date";
 
 <Date>
   Monday, April 11th, 2023
@@ -22,13 +21,13 @@ import Date from "../../components/blog/Date";
 {{/each}}
 ]} />
 
-Turborepo {{ majorMinor version }} focuses on improving observability for your task runs to better understand your caching behavior:
+Turborepo {{ majorMinor version }} {{ tagline }}:
 
 - [**{{ titleCase headlineTitle1 }}**](#{{ dashCase headlineTitle1}}): Description.
 - [**{{ titleCase headlineTitle2 }}**](#{{ dashCase headlineTitle2}}): Description.
 - [**{{ titleCase headlineTitle2 }}**](#{{ dashCase headlineTitle3}}): Description.
 
-Update today by running `npx @turbo/codemod migrate`.
+Update today by running `npx @turbo/codemod migrate` or get started with `npx create-turbo@latest`.
 
 ## {{ titleCase headlineTitle1 }}
 
@@ -44,11 +43,11 @@ Details
 
 ## Community
 
-Since releasing [Turborepo v{{ majorMinor prevVersion }}](/blog/turbo-{{ dashCase prevVersion }}) we've seen incredible adoption and community growth:
+Since releasing [Turborepo {{ majorMinor prevVersion }}](/blog/turbo-{{ dashCase prevVersion }}) we've seen incredible adoption and community growth:
 
 - [{{ turboStars }}+ GitHub Stars](https://github.com/vercel/turbo)
 - [{{ turboDownloads }}+ weekly NPM downloads](https://www.npmjs.com/package/turbo)
-- {{ turboYearsSaved }} years of compute time saved through [Remote Caching on Vercel](https://vercel.com/docs/concepts/monorepos/remote-caching)
+- {{ turboYearsSaved }} years of compute time saved using [Vercel Remote Cache](https://vercel.com/docs/concepts/monorepos/remote-caching)
 
 Turborepo is the result of the combined work of all of its contributors, including our core team.
 

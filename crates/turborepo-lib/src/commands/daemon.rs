@@ -6,7 +6,8 @@ use pidlock::PidlockError::AlreadyOwned;
 use time::{format_description, OffsetDateTime};
 use tokio::signal::ctrl_c;
 use tracing::{trace, warn};
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use which::which;
 
 use super::CommandBase;
 use crate::{
@@ -18,9 +19,9 @@ use crate::{
 /// Runs the daemon command.
 pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Result<(), DaemonError> {
     let (can_start_server, can_kill_server) = match command {
-        DaemonCommand::Status { .. } => (false, false),
-        DaemonCommand::Restart | DaemonCommand::Stop => (false, true),
-        DaemonCommand::Start => (true, true),
+        DaemonCommand::Status { .. } | DaemonCommand::Logs => (false, false),
+        DaemonCommand::Stop => (false, true),
+        DaemonCommand::Restart | DaemonCommand::Start => (true, true),
         DaemonCommand::Clean => (false, true),
     };
 
@@ -36,8 +37,20 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
 
     match command {
         DaemonCommand::Restart => {
-            let client = connector.connect().await?;
-            client.restart().await?;
+            let result: Result<_, DaemonError> = try {
+                let client = connector.clone().connect().await?;
+                client.restart().await?
+            };
+
+            if let Err(e) = result {
+                tracing::debug!("failed to restart the daemon: {:?}", e);
+                tracing::debug!("falling back to clean");
+                clean(&pid_file, &sock_file).await?;
+                tracing::debug!("connecting for second time");
+                let _ = connector.connect().await?;
+            }
+
+            println!("restarted daemon");
         }
         DaemonCommand::Start => {
             // We don't care about the client, but we do care that we can connect
@@ -71,6 +84,17 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
                 println!("Daemon socket file: {}", status.sock_file);
             }
         }
+        DaemonCommand::Logs => {
+            let mut client = connector.connect().await?;
+            let status = client.status().await?;
+            let log_file = log_filename(&status.log_file)?;
+            let tail = which("tail").map_err(|_| DaemonError::TailNotInstalled)?;
+            std::process::Command::new(tail)
+                .arg("-f")
+                .arg(log_file)
+                .status()
+                .expect("failed to execute tail");
+        }
         DaemonCommand::Clean => {
             // try to connect and shutdown the daemon
             let client = connector.connect().await;
@@ -87,40 +111,47 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
                     tracing::trace!("unable to connect to the daemon: {:?}", e);
                 }
             }
-
-            // remove pid and sock files
-            let mut success = true;
-            trace!("cleaning up daemon files");
-            // if the pid_file and sock_file still exist, remove them:
-            if pid_file.exists() {
-                let result = std::fs::remove_file(pid_file.clone());
-                // ignore this error
-                if let Err(e) = result {
-                    println!("Failed to remove pid file: {}", e);
-                    println!("Please remove manually: {}", pid_file);
-                    success = false;
-                }
-            }
-            if sock_file.exists() {
-                let result = std::fs::remove_file(sock_file.clone());
-                // ignore this error
-                if let Err(e) = result {
-                    println!("Failed to remove socket file: {}", e);
-                    println!("Please remove manually: {}", sock_file);
-                    success = false;
-                }
-            }
-
-            if success {
-                println!("Done");
-            } else {
-                // return error
-                return Err(DaemonError::CleanFailed);
-            }
+            clean(&pid_file, &sock_file).await?;
+            println!("Done");
         }
     };
 
     Ok(())
+}
+
+async fn clean(
+    pid_file: &AbsoluteSystemPath,
+    sock_file: &AbsoluteSystemPath,
+) -> Result<(), DaemonError> {
+    // remove pid and sock files
+    let mut success = true;
+    trace!("cleaning up daemon files");
+    // if the pid_file and sock_file still exist, remove them:
+    if pid_file.exists() {
+        let result = std::fs::remove_file(pid_file);
+        // ignore this error
+        if let Err(e) = result {
+            println!("Failed to remove pid file: {}", e);
+            println!("Please remove manually: {}", pid_file);
+            success = false;
+        }
+    }
+    if sock_file.exists() {
+        let result = std::fs::remove_file(sock_file);
+        // ignore this error
+        if let Err(e) = result {
+            println!("Failed to remove socket file: {}", e);
+            println!("Please remove manually: {}", sock_file);
+            success = false;
+        }
+    }
+
+    if success {
+        Ok(())
+    } else {
+        // return error
+        Err(DaemonError::CleanFailed)
+    }
 }
 
 // log_filename matches the algorithm used by tracing_appender::Rotation::DAILY
@@ -182,7 +213,7 @@ pub async fn daemon_server(
         exit_signal,
     );
 
-    let reason = server.serve().await;
+    let reason = server.serve().await?;
 
     match reason {
         CloseReason::SocketOpenError(SocketOpenError::LockError(AlreadyOwned)) => {

@@ -38,7 +38,7 @@ jobs:
           comment-id: ${{ steps.comment.outputs.comment-id }}
           issue-number: ${{ github.event.pull_request.number }}
           body: |
-            ## :hourglass_flowing_sand: Turbopack Benchmark CI is running again... :hourglass_flowing_sand:
+            ## ⏳ Turbopack Benchmark CI is running again... ⏳
 
             [Wait for it...](https://github.com/vercel/turbo/actions/runs/${{ github.run_id }})
 
@@ -123,7 +123,12 @@ jobs:
       needs.determine_jobs.outputs.cargo_on_main == 'true' ||
       needs.determine_jobs.outputs.cargo_only == 'true'
     name: Turbopack rust check
-    runs-on: ubuntu-latest-16-core-oss
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -133,11 +138,7 @@ jobs:
         with:
           components: clippy
           targets: wasm32-unknown-unknown
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run cargo check release
         run: |
@@ -182,17 +183,17 @@ jobs:
             args: -p turbopack-cli
             TURBOPACK_BENCH_COUNTS: 1000,10000
 
-    runs-on: ubuntu-latest-8-core-oss
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
+
     name: Benchmark on ${{ matrix.bench.name }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
@@ -202,6 +203,7 @@ jobs:
         with:
           shared-cache-key: benchmark-${{ matrix.bench.cache_key }}
           save-cache: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Clear benchmarks
         run: rm -rf target/criterion
@@ -317,7 +319,11 @@ jobs:
           - name: linux
             title: Linux
             quiet: false
-            runner: ubuntu-latest-16-core-oss
+            runs-on:
+              - "self-hosted"
+              - "linux"
+              - "x64"
+              - "metal"
           # - name: macos
           #   title: MacOS
           #   quiet: true
@@ -338,11 +344,6 @@ jobs:
       - name: Fetch the base branch
         run: git -c protocol.version=2 fetch --no-tags --progress --no-recurse-submodules --depth=1 origin +${{ github.base_ref }}:base
 
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
 
@@ -350,6 +351,7 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           shared-cache-key: benchmark-${{ matrix.os.name }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Benchmark and compare with base branch
         uses: sokra/criterion-compare-action@main
@@ -403,7 +405,7 @@ jobs:
       - name: Add failure prose text
         if: steps.info.outputs.failure == 'true'
         run: |
-          echo "## :warning: Turbopack Benchmark CI failed :warning:" > comment.md
+          echo "## ⚠️ Turbopack Benchmark CI failed ⚠️" > comment.md
           echo >> comment.md
           echo "The following steps have failed in CI:" >> comment.md
           echo >> comment.md
@@ -416,7 +418,7 @@ jobs:
       - name: Add success prose text
         if: steps.info.outputs.success == 'true'
         run: |
-          echo "## :green_circle: Turbopack Benchmark CI successful :green_circle:" > comment.md
+          echo "## 🟢 Turbopack Benchmark CI successful 🟢" > comment.md
           echo >> comment.md
           echo "Thanks" >> comment.md
           echo >> comment.md

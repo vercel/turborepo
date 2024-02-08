@@ -10,7 +10,6 @@ use super::{
 };
 use crate::{
     cli,
-    cli::DryRunMode,
     engine::{Engine, TaskNode},
     opts::RunOpts,
     run::task_id::TaskId,
@@ -23,7 +22,7 @@ pub struct TaskSummaryFactory<'a> {
     engine: &'a Engine,
     hash_tracker: TaskHashTracker,
     env_at_start: &'a EnvironmentVariableMap,
-    run_opts: &'a RunOpts<'a>,
+    run_opts: &'a RunOpts,
     global_env_mode: cli::EnvMode,
 }
 
@@ -41,7 +40,7 @@ impl<'a> TaskSummaryFactory<'a> {
         engine: &'a Engine,
         hash_tracker: TaskHashTracker,
         env_at_start: &'a EnvironmentVariableMap,
-        run_opts: &'a RunOpts<'a>,
+        run_opts: &'a RunOpts,
         global_env_mode: cli::EnvMode,
     ) -> Self {
         Self {

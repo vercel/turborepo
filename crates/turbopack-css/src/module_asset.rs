@@ -1,4 +1,4 @@
-use std::{fmt::Write, iter::once, sync::Arc};
+use std::{fmt::Write, sync::Arc};
 
 use anyhow::{bail, Context, Result};
 use indexmap::IndexMap;
@@ -10,7 +10,7 @@ use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{ChunkItem, ChunkItemExt, ChunkType, ChunkableModule, ChunkingContext},
-    context::AssetContext,
+    context::{AssetContext, ProcessResult},
     ident::AssetIdent,
     issue::{Issue, IssueExt, IssueSeverity, OptionStyledString, StyledString},
     module::Module,
@@ -18,6 +18,7 @@ use turbopack_core::{
     reference_type::{CssReferenceSubType, ReferenceType},
     resolve::{origin::ResolveOrigin, parse::Request},
     source::Source,
+    source_map::OptionSourceMap,
 };
 use turbopack_ecmascript::{
     chunk::{
@@ -71,13 +72,25 @@ impl Module for ModuleCssAsset {
 
     #[turbo_tasks::function]
     async fn references(self: Vc<Self>) -> Result<Vc<ModuleReferences>> {
-        // The inner reference must come first so it is processed before other potential
-        // references inside of the CSS, like `@import` and `composes:`.
+        // The inner reference must come last so it is loaded as the last in the
+        // resulting css. @import or composes references must be loaded first so
+        // that the css style rules in them are overridable from the local css.
+
         // This affects the order in which the resulting CSS chunks will be loaded:
-        // later references are processed first in the post-order traversal of the
-        // reference tree, and as such they will be loaded first in the resulting HTML.
-        let references = once(Vc::upcast(InternalCssAssetReference::new(self.inner())))
-            .chain(self.module_references().await?.iter().copied())
+        // 1. @import or composes references are loaded first
+        // 2. The local CSS is loaded last
+
+        let references = self
+            .module_references()
+            .await?
+            .iter()
+            .copied()
+            .chain(match *self.inner().await? {
+                ProcessResult::Module(inner) => {
+                    Some(Vc::upcast(InternalCssAssetReference::new(inner)))
+                }
+                ProcessResult::Ignore => None,
+            })
             .collect();
 
         Ok(Vc::cell(references))
@@ -139,7 +152,7 @@ struct ModuleCssClasses(IndexMap<String, Vec<ModuleCssClass>>);
 #[turbo_tasks::value_impl]
 impl ModuleCssAsset {
     #[turbo_tasks::function]
-    async fn inner(self: Vc<Self>) -> Result<Vc<Box<dyn Module>>> {
+    async fn inner(self: Vc<Self>) -> Result<Vc<ProcessResult>> {
         let this = self.await?;
         Ok(this.asset_context.process(
             this.source,
@@ -149,11 +162,11 @@ impl ModuleCssAsset {
 
     #[turbo_tasks::function]
     async fn classes(self: Vc<Self>) -> Result<Vc<ModuleCssClasses>> {
-        let inner = self.inner();
+        let inner = self.inner().module();
 
-        let Some(inner) = Vc::try_resolve_sidecast::<Box<dyn ProcessCss>>(inner).await? else {
-            bail!("inner asset should be CSS processable");
-        };
+        let inner = Vc::try_resolve_sidecast::<Box<dyn ProcessCss>>(inner)
+            .await?
+            .context("inner asset should be CSS processable")?;
 
         let result = inner.get_css_with_placeholder().await?;
         let mut classes = IndexMap::default();
@@ -386,10 +399,10 @@ impl EcmascriptChunkItem for ModuleChunkItem {
             inner_code: code.clone().into(),
             // We generate a minimal map for runtime code so that the filename is
             // displayed in dev tools.
-            source_map: Some(generate_minimal_source_map(
+            source_map: Some(Vc::upcast(generate_minimal_source_map(
                 self.module.ident().to_string().await?.to_string(),
                 code,
-            )),
+            ))),
             ..Default::default()
         }
         .cell())
@@ -412,7 +425,7 @@ fn generate_minimal_source_map(filename: String, source: String) -> Vc<ParseResu
     }
     let sm: Arc<SourceMap> = Default::default();
     sm.new_source_file(FileName::Custom(filename), source);
-    let map = ParseResultSourceMap::new(sm, mappings);
+    let map = ParseResultSourceMap::new(sm, mappings, OptionSourceMap::none());
     map.cell()
 }
 

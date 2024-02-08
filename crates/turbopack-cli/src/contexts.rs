@@ -5,7 +5,11 @@ use turbo_tasks::{Value, Vc};
 use turbo_tasks_fs::{FileSystem, FileSystemPath};
 use turbopack::{
     condition::ContextCondition,
-    module_options::{CustomEcmascriptTransformPlugins, JsxTransformOptions, ModuleOptionsContext},
+    ecmascript::{EcmascriptInputTransform, TreeShakingMode},
+    module_options::{
+        JsxTransformOptions, ModuleOptionsContext, ModuleRule, ModuleRuleCondition,
+        ModuleRuleEffect,
+    },
     resolve_options_context::ResolveOptionsContext,
     ModuleAssetContext,
 };
@@ -22,7 +26,9 @@ use turbopack_ecmascript_plugins::transform::{
     styled_components::{StyledComponentsTransformConfig, StyledComponentsTransformer},
     styled_jsx::StyledJsxTransformer,
 };
-use turbopack_node::execution_context::ExecutionContext;
+use turbopack_node::{
+    execution_context::ExecutionContext, transforms::postcss::PostCssTransformOptions,
+};
 
 #[turbo_tasks::value(shared)]
 pub enum NodeEnv {
@@ -99,6 +105,7 @@ async fn get_client_module_options_context(
     let module_options_context = ModuleOptionsContext {
         preset_env_versions: Some(env),
         execution_context: Some(execution_context),
+        tree_shaking_mode: Some(TreeShakingMode::ReexportsOnly),
         ..Default::default()
     };
 
@@ -117,33 +124,44 @@ async fn get_client_module_options_context(
         .cell(),
     );
 
-    let custom_ecma_transform_plugins = Some(CustomEcmascriptTransformPlugins::cell(
-        CustomEcmascriptTransformPlugins {
-            source_transforms: vec![
-                Vc::cell(Box::new(
+    let versions = *env.runtime_versions().await?;
+
+    let conditions = ModuleRuleCondition::any(vec![
+        ModuleRuleCondition::ResourcePathEndsWith(".js".to_string()),
+        ModuleRuleCondition::ResourcePathEndsWith(".jsx".to_string()),
+        ModuleRuleCondition::ResourcePathEndsWith(".ts".to_string()),
+        ModuleRuleCondition::ResourcePathEndsWith(".tsx".to_string()),
+    ]);
+
+    let custom_rules = ModuleRule::new(
+        conditions,
+        vec![ModuleRuleEffect::ExtendEcmascriptTransforms {
+            prepend: Vc::cell(vec![
+                EcmascriptInputTransform::Plugin(Vc::cell(Box::new(
                     EmotionTransformer::new(&EmotionTransformConfig::default())
                         .expect("Should be able to create emotion transformer"),
-                ) as _),
-                Vc::cell(Box::new(StyledComponentsTransformer::new(
-                    &StyledComponentsTransformConfig::default(),
-                )) as _),
-                Vc::cell(Box::new(StyledJsxTransformer::new(
+                ) as _)),
+                EcmascriptInputTransform::Plugin(Vc::cell(Box::new(
+                    StyledComponentsTransformer::new(&StyledComponentsTransformConfig::default()),
+                ) as _)),
+                EcmascriptInputTransform::Plugin(Vc::cell(Box::new(StyledJsxTransformer::new(
                     module_options_context.use_lightningcss,
-                )) as _),
-            ],
-            output_transforms: vec![],
-        },
-    ));
+                    versions,
+                )) as _)),
+            ]),
+            append: Vc::cell(vec![]),
+        }],
+    );
 
     let module_options_context = ModuleOptionsContext {
         enable_jsx,
-        enable_postcss_transform: Some(Default::default()),
+        enable_postcss_transform: Some(PostCssTransformOptions::default().cell()),
         enable_typescript_transform: Some(Default::default()),
         rules: vec![(
             foreign_code_context_condition().await?,
             module_options_context.clone().cell(),
         )],
-        custom_ecma_transform_plugins,
+        custom_rules: vec![custom_rules],
         ..module_options_context
     }
     .cell();

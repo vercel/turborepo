@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) task_dependencies/topological
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh task_dependencies/topological
 
 Graph to stdout
   $ ${TURBO} build -F my-app --graph
@@ -34,3 +33,11 @@ Graph to stdout
   graph TD
   \\t[A-Z]{4}\("my-app#build"\) --> [A-Z]{4}\("util#build"\).* (re)
   \\t[A-Z]{4}\("util#build"\) --> [A-Z]{4}\("___ROOT___"\).* (re)
+
+  $ ${TURBO} build -F my-app --graph=graph.mdx
+   ERROR  invalid value 'graph.mdx' for '--graph [<GRAPH>]': Invalid file extension: 'mdx'. Allowed extensions are: ["svg", "png", "jpg", "pdf", "json", "html", "mermaid", "dot"]
+  
+  For more information, try '--help'.
+  
+  [1]
+

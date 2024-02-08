@@ -1,19 +1,25 @@
 {
-  "name": "ui",
+  "name": "@repo/ui",
   "version": "0.0.0",
-  "main": "./index.tsx",
-  "types": "./index.tsx",
-  "license": "MIT",
+  "private": true,
+  "exports": {
+    "./card": "./src/card.tsx",
+    "./code": "./src/code.tsx"
+  },
   "scripts": {
-    "lint": "eslint \"**/*.ts*\""
+    "lint": "eslint . --max-warnings 0",
+    "generate:component": "turbo gen react-component"
   },
   "devDependencies": {
-    "@types/react": "^17.0.37",
-    "@types/react-dom": "^17.0.11",
-    "eslint": "^7.32.0",
-    "eslint-config-custom": "*",
-    "react": "18.2",
-    "tsconfig": "*",
-    "typescript": "^4.5.2"
+    "@repo/eslint-config": "*",
+    "@repo/typescript-config": "*",
+    "@turbo/gen": "^1.11.3",
+    "@types/node": "^20.10.6",
+    "@types/eslint": "^8.56.1",
+    "@types/react": "^18.2.46",
+    "@types/react-dom": "^18.2.18",
+    "eslint": "^8.56.0",
+    "react": "^18.2.0",
+    "typescript": "^5.3.3"
   }
 }

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment -- SVGs from static assets aren't TypeScript friendly. */
 import type Image from "next/image";
 import EcosystemIconDark from "../public/images/docs/shared/feature-icons/ecosystem-dark.svg";
 import EcosystemIconLight from "../public/images/docs/shared/feature-icons/ecosystem-light.svg";
@@ -28,15 +29,15 @@ import BeakerIconLight from "../public/images/docs/shared/feature-icons/beaker-l
 
 type NextImageSrc = Parameters<typeof Image>[0]["src"];
 
-export type Feature = {
+export interface Feature {
   name: string;
   description: string;
   iconDark: NextImageSrc;
   iconLight: NextImageSrc;
   page: "all" | "home" | "docs";
-};
+}
 
-export type Features = Array<Feature>;
+export type Features = Feature[];
 
 const REPO_FEATURES: Features = [
   {

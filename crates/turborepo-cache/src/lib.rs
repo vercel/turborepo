@@ -3,11 +3,19 @@
 #![feature(box_patterns)]
 #![deny(clippy::all)]
 
+/// A wrapper for the cache that uses a worker pool to perform cache operations
 mod async_cache;
+/// The core cache creation and restoration logic.
 pub mod cache_archive;
+/// File system cache
 pub mod fs;
+/// Remote cache
 pub mod http;
+/// A wrapper that allows reads and writes from the file system and remote
+/// cache.
 mod multiplexer;
+/// Cache signature authentication lets users provide a private key to sign
+/// their cache payloads.
 pub mod signature_authentication;
 #[cfg(test)]
 mod test_cases;
@@ -15,7 +23,7 @@ mod test_cases;
 use std::{backtrace, backtrace::Backtrace};
 
 pub use async_cache::AsyncCache;
-use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -34,7 +42,7 @@ pub enum CacheError {
     InvalidTag(#[backtrace] Backtrace),
     #[error("cannot untar file to {0}")]
     InvalidFilePath(String, #[backtrace] Backtrace),
-    #[error("artifact verification failed: {0}")]
+    #[error("failed to contact remote cache: {0}")]
     ApiClientError(Box<turborepo_api_client::Error>, #[backtrace] Backtrace),
     #[error("signing artifact failed: {0}")]
     SignatureError(#[from] SignatureError, #[backtrace] Backtrace),
@@ -66,6 +74,10 @@ pub enum CacheError {
     MetadataWriteFailure(serde_json::Error, #[backtrace] Backtrace),
     #[error("Unable to perform write as cache is shutting down")]
     CacheShuttingDown,
+    #[error("Unable to determine config cache base")]
+    ConfigCacheInvalidBase,
+    #[error("Unable to hash config cache inputs")]
+    ConfigCacheError,
 }
 
 impl From<turborepo_api_client::Error> for CacheError {
@@ -87,8 +99,8 @@ pub struct CacheHitMetadata {
 }
 
 #[derive(Debug, Default)]
-pub struct CacheOpts<'a> {
-    pub override_dir: Option<&'a Utf8Path>,
+pub struct CacheOpts {
+    pub override_dir: Option<Utf8PathBuf>,
     pub remote_cache_read_only: bool,
     pub skip_remote: bool,
     pub skip_filesystem: bool,
@@ -98,12 +110,15 @@ pub struct CacheOpts<'a> {
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RemoteCacheOpts {
-    team_id: String,
+    unused_team_id: Option<String>,
     signature: bool,
 }
 
 impl RemoteCacheOpts {
-    pub fn new(team_id: String, signature: bool) -> Self {
-        Self { team_id, signature }
+    pub fn new(unused_team_id: Option<String>, signature: bool) -> Self {
+        Self {
+            unused_team_id,
+            signature,
+        }
     }
 }

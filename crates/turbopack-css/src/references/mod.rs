@@ -15,13 +15,8 @@ use turbo_tasks::{Value, Vc};
 use turbopack_core::{
     issue::{IssueSeverity, IssueSource},
     reference::ModuleReference,
-    reference_type::{CssReferenceSubType, ReferenceType},
-    resolve::{
-        handle_resolve_error,
-        origin::{ResolveOrigin, ResolveOriginExt},
-        parse::Request,
-        ModuleResolveResult,
-    },
+    reference_type::{CssReferenceSubType, ImportContext, ReferenceType},
+    resolve::{origin::ResolveOrigin, parse::Request, url_resolve, ModuleResolveResult},
     source::Source,
     source_pos::SourcePos,
 };
@@ -49,11 +44,13 @@ pub fn analyze_references(
     stylesheet: &mut StyleSheetLike<'static, 'static>,
     source: Vc<Box<dyn Source>>,
     origin: Vc<Box<dyn ResolveOrigin>>,
+    import_context: Vc<ImportContext>,
 ) -> Result<AnalyzedRefs> {
     let mut references = Vec::new();
     let mut urls = Vec::new();
 
-    let mut visitor = ModuleReferencesVisitor::new(source, origin, &mut references, &mut urls);
+    let mut visitor =
+        ModuleReferencesVisitor::new(source, origin, import_context, &mut references, &mut urls);
     match stylesheet {
         StyleSheetLike::LightningCss(ss) => {
             ss.visit(&mut visitor).unwrap();
@@ -69,6 +66,7 @@ pub fn analyze_references(
 struct ModuleReferencesVisitor<'a> {
     source: Vc<Box<dyn Source>>,
     origin: Vc<Box<dyn ResolveOrigin>>,
+    import_context: Vc<ImportContext>,
     references: &'a mut Vec<Vc<Box<dyn ModuleReference>>>,
     urls: &'a mut Vec<(String, Vc<UrlAssetReference>)>,
 }
@@ -77,12 +75,14 @@ impl<'a> ModuleReferencesVisitor<'a> {
     fn new(
         source: Vc<Box<dyn Source>>,
         origin: Vc<Box<dyn ResolveOrigin>>,
+        import_context: Vc<ImportContext>,
         references: &'a mut Vec<Vc<Box<dyn ModuleReference>>>,
         urls: &'a mut Vec<(String, Vc<UrlAssetReference>)>,
     ) -> Self {
         Self {
             source,
             origin,
+            import_context,
             references,
             urls,
         }
@@ -105,6 +105,7 @@ impl VisitMut for ModuleReferencesVisitor<'_> {
             self.origin,
             Request::parse(Value::new(src.to_string().into())),
             ImportAttributes::new_from_swc(&i.clone()).into(),
+            self.import_context,
             IssueSource::from_swc_offsets(
                 Vc::upcast(self.source),
                 issue_span.lo.0 as _,
@@ -163,6 +164,7 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
                     self.origin,
                     Request::parse(Value::new(src.to_string().into())),
                     ImportAttributes::new_from_lightningcss(&i.clone().into_owned()).into(),
+                    self.import_context,
                     IssueSource::from_line_col(
                         Vc::upcast(self.source),
                         SourcePos {
@@ -225,19 +227,12 @@ pub async fn css_resolve(
     request: Vc<Request>,
     ty: Value<CssReferenceSubType>,
     issue_source: Option<Vc<IssueSource>>,
-) -> Result<Vc<ModuleResolveResult>> {
-    let ty = Value::new(ReferenceType::Css(ty.into_value()));
-    let options = origin.resolve_options(ty.clone());
-    let result = origin.resolve_asset(request, options, ty.clone());
-
-    handle_resolve_error(
-        result,
-        ty,
-        origin.origin_path(),
+) -> Vc<ModuleResolveResult> {
+    url_resolve(
+        origin,
         request,
-        options,
-        IssueSeverity::Error.cell(),
+        Value::new(ReferenceType::Css(ty.into_value())),
         issue_source,
+        IssueSeverity::Error.cell(),
     )
-    .await
 }

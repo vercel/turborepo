@@ -164,13 +164,13 @@ fn format_repo_relative_glob(glob: &str) -> String {
 #[derive(Error, Debug)]
 pub enum DaemonError {
     /// The server was connected but is now unavailable.
-    #[error("server is unavailable")]
-    Unavailable,
+    #[error("server is unavailable: {0}")]
+    Unavailable(String),
     #[error("error opening socket: {0}")]
     SocketOpen(#[from] SocketOpenError),
     /// The server is running a different version of turborepo.
-    #[error("version mismatch")]
-    VersionMismatch,
+    #[error("version mismatch: {0:?}")]
+    VersionMismatch(Option<String>),
     /// There is an issue with the underlying grpc transport.
     #[error("bad grpc transport: {0}")]
     GrpcTransport(#[from] tonic::transport::Error),
@@ -205,13 +205,19 @@ pub enum DaemonError {
 
     #[error("failed to determine package manager: {0}")]
     PackageManager(#[from] turborepo_repository::package_manager::Error),
+
+    #[error("`tail` is not installed. Please install it to use this feature.")]
+    TailNotInstalled,
 }
 
 impl From<Status> for DaemonError {
     fn from(status: Status) -> DaemonError {
         match status.code() {
-            Code::FailedPrecondition | Code::Unimplemented => DaemonError::VersionMismatch,
-            Code::Unavailable => DaemonError::Unavailable,
+            Code::FailedPrecondition => {
+                DaemonError::VersionMismatch(Some(status.message().to_owned()))
+            }
+            Code::Unimplemented => DaemonError::VersionMismatch(None),
+            Code::Unavailable => DaemonError::Unavailable(status.message().to_string()),
             c => DaemonError::GrpcFailure(c),
         }
     }

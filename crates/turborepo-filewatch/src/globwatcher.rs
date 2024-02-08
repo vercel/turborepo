@@ -10,7 +10,7 @@ use thiserror::Error;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing::warn;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
-use wax::{Any, Glob, Pattern};
+use wax::{Any, Glob, Program};
 
 use crate::{
     cookie_jar::{CookieError, CookieJar},

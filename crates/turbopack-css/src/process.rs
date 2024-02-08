@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use indexmap::IndexMap;
 use lightningcss::{
     css_modules::{CssModuleExport, CssModuleExports, CssModuleReference, Pattern, Segment},
-    dependencies::{Dependency, DependencyOptions, ImportDependency, Location, SourceRange},
+    dependencies::{Dependency, ImportDependency, Location, SourceRange},
     error::PrinterErrorKind,
     stylesheet::{ParserOptions, PrinterOptions, StyleSheet, ToCssResult},
     targets::{Features, Targets},
@@ -24,12 +24,15 @@ use swc_core::{
         visit::{VisitMut, VisitMutWith},
     },
 };
+use tracing::Instrument;
 use turbo_tasks::{ValueToString, Vc};
 use turbo_tasks_fs::{FileContent, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::ChunkingContext,
+    issue::{Issue, IssueExt, OptionStyledString, StyledString},
     reference::ModuleReferences,
+    reference_type::ImportContext,
     resolve::origin::ResolveOrigin,
     source::Source,
     source_map::{GenerateSourceMap, OptionSourceMap},
@@ -117,7 +120,7 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
                     } else {
                         Default::default()
                     },
-                    analyze_dependencies: Some(DependencyOptions { remove_imports }),
+                    analyze_dependencies: None,
                     ..Default::default()
                 })?;
 
@@ -426,41 +429,52 @@ pub trait ProcessCss: ParseCss {
 pub async fn parse_css(
     source: Vc<Box<dyn Source>>,
     origin: Vc<Box<dyn ResolveOrigin>>,
+    import_context: Vc<ImportContext>,
     ty: CssModuleAssetType,
     use_lightningcss: bool,
 ) -> Result<Vc<ParseCssResult>> {
-    let content = source.content();
-    let fs_path = &*source.ident().path().await?;
-    let ident_str = &*source.ident().to_string().await?;
-    Ok(match &*content.await? {
-        AssetContent::Redirect { .. } => ParseCssResult::Unparseable.cell(),
-        AssetContent::File(file) => match &*file.await? {
-            FileContent::NotFound => ParseCssResult::NotFound.cell(),
-            FileContent::Content(file) => match file.content().to_str() {
-                Err(_err) => ParseCssResult::Unparseable.cell(),
-                Ok(string) => {
-                    process_content(
-                        string.into_owned(),
-                        fs_path,
-                        ident_str,
-                        source,
-                        origin,
-                        ty,
-                        use_lightningcss,
-                    )
-                    .await?
-                }
+    let span = {
+        let name = source.ident().to_string().await?;
+        tracing::info_span!("parse css", name = *name)
+    };
+    async move {
+        let content = source.content();
+        let fs_path = source.ident().path();
+        let ident_str = &*source.ident().to_string().await?;
+        Ok(match &*content.await? {
+            AssetContent::Redirect { .. } => ParseCssResult::Unparseable.cell(),
+            AssetContent::File(file) => match &*file.await? {
+                FileContent::NotFound => ParseCssResult::NotFound.cell(),
+                FileContent::Content(file) => match file.content().to_str() {
+                    Err(_err) => ParseCssResult::Unparseable.cell(),
+                    Ok(string) => {
+                        process_content(
+                            string.into_owned(),
+                            fs_path,
+                            ident_str,
+                            source,
+                            origin,
+                            import_context,
+                            ty,
+                            use_lightningcss,
+                        )
+                        .await?
+                    }
+                },
             },
-        },
-    })
+        })
+    }
+    .instrument(span)
+    .await
 }
 
 async fn process_content(
     code: String,
-    fs_path: &FileSystemPath,
+    fs_path: Vc<FileSystemPath>,
     ident_str: &str,
     source: Vc<Box<dyn Source>>,
     origin: Vc<Box<dyn ResolveOrigin>>,
+    import_context: Vc<ImportContext>,
     ty: CssModuleAssetType,
     use_lightningcss: bool,
 ) -> Result<Vc<ParseCssResult>> {
@@ -494,6 +508,7 @@ async fn process_content(
             _ => None,
         },
         filename: ident_str.to_string(),
+        error_recovery: true,
         ..Default::default()
     };
 
@@ -502,13 +517,19 @@ async fn process_content(
     let stylesheet = if use_lightningcss {
         StyleSheetLike::LightningCss(match StyleSheet::parse(&code, config.clone()) {
             Ok(stylesheet) => stylesheet_into_static(&stylesheet, without_warnings(config.clone())),
-            Err(_e) => {
-                // TODO(kdy1): Report errors
-                // e.to_diagnostics(&handler).emit();
+            Err(e) => {
+                ParsingIssue {
+                    file: fs_path,
+                    msg: Vc::cell(e.to_string()),
+                }
+                .cell()
+                .emit();
                 return Ok(ParseCssResult::Unparseable.into());
             }
         })
     } else {
+        let fs_path = &*fs_path.await?;
+
         let handler = swc_core::common::errors::Handler::with_emitter(
             true,
             false,
@@ -574,7 +595,8 @@ async fn process_content(
     let config = without_warnings(config);
     let mut stylesheet = stylesheet.to_static(config.clone());
 
-    let (references, url_references) = analyze_references(&mut stylesheet, source, origin)?;
+    let (references, url_references) =
+        analyze_references(&mut stylesheet, source, origin, import_context)?;
 
     Ok(ParseCssResult::Ok {
         cm,
@@ -733,5 +755,31 @@ struct ModuleTransformConfig {
 impl TransformConfig for ModuleTransformConfig {
     fn new_name_for(&self, local: &Atom) -> Atom {
         format!("{}{}", *local, self.suffix).into()
+    }
+}
+
+#[turbo_tasks::value]
+struct ParsingIssue {
+    msg: Vc<String>,
+    file: Vc<FileSystemPath>,
+}
+
+#[turbo_tasks::value_impl]
+impl Issue for ParsingIssue {
+    #[turbo_tasks::function]
+    fn file_path(&self) -> Vc<FileSystemPath> {
+        self.file
+    }
+
+    #[turbo_tasks::function]
+    fn title(&self) -> Vc<StyledString> {
+        StyledString::Text("Parsing css source code failed".to_string()).cell()
+    }
+
+    #[turbo_tasks::function]
+    async fn description(&self) -> Result<Vc<OptionStyledString>> {
+        Ok(Vc::cell(Some(
+            StyledString::Text(self.msg.await?.clone_value()).cell(),
+        )))
     }
 }

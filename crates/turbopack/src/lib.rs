@@ -22,30 +22,36 @@ use std::{
     mem::swap,
 };
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use css::{CssModuleAsset, GlobalCssAsset, ModuleCssAsset};
 use ecmascript::{
-    typescript::resolve::TypescriptTypesAssetReference, EcmascriptModuleAsset,
-    EcmascriptModuleAssetType,
+    chunk::EcmascriptChunkPlaceable,
+    references::{follow_reexports, FollowExportsResult},
+    side_effect_optimization::facade::module::EcmascriptModuleFacadeModule,
+    typescript::resolve::type_resolve,
+    EcmascriptModuleAsset, EcmascriptModuleAssetType, TreeShakingMode,
 };
 use graph::{aggregate, AggregatedGraph, AggregatedGraphNodeContent};
 use module_options::{ModuleOptions, ModuleOptionsContext, ModuleRuleEffect, ModuleType};
 pub use resolve::resolve_options;
-use turbo_tasks::{Completion, Value, Vc};
+use tracing::Instrument;
+use turbo_tasks::{Completion, Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     asset::Asset,
     compile_time_info::CompileTimeInfo,
-    context::AssetContext,
+    context::{AssetContext, ProcessResult},
     ident::AssetIdent,
     issue::{Issue, IssueExt, OptionStyledString, StyledString},
     module::Module,
     output::OutputAsset,
     raw_module::RawModule,
-    reference_type::{EcmaScriptModulesReferenceSubType, InnerAssets, ReferenceType},
+    reference_type::{
+        CssReferenceSubType, EcmaScriptModulesReferenceSubType, InnerAssets, ReferenceType,
+    },
     resolve::{
-        options::ResolveOptions, origin::PlainResolveOrigin, parse::Request, resolve,
-        AffectingResolvingAssetReference, ModulePart, ModuleResolveResult, ResolveResult,
+        options::ResolveOptions, origin::PlainResolveOrigin, parse::Request, resolve, ModulePart,
+        ModuleResolveResult, ModuleResolveResultItem, ResolveResult,
     },
     source::Source,
 };
@@ -97,21 +103,21 @@ async fn apply_module_type(
     source: Vc<Box<dyn Source>>,
     module_asset_context: Vc<ModuleAssetContext>,
     module_type: Vc<ModuleType>,
+    reference_type: Value<ReferenceType>,
     part: Option<Vc<ModulePart>>,
     inner_assets: Option<Vc<InnerAssets>>,
-) -> Result<Vc<Box<dyn Module>>> {
+    runtime_code: bool,
+) -> Result<Vc<ProcessResult>> {
     let module_type = &*module_type.await?;
-    Ok(match module_type {
+    Ok(ProcessResult::Module(match module_type {
         ModuleType::Ecmascript {
             transforms,
             options,
         }
         | ModuleType::Typescript {
             transforms,
-            options,
-        }
-        | ModuleType::TypescriptWithTypes {
-            transforms,
+            tsx: _,
+            analyze_types: _,
             options,
         }
         | ModuleType::TypescriptDeclaration {
@@ -119,8 +125,10 @@ async fn apply_module_type(
             options,
         } => {
             let context_for_module = match module_type {
-                ModuleType::TypescriptWithTypes { .. }
-                | ModuleType::TypescriptDeclaration { .. } => {
+                ModuleType::Typescript { analyze_types, .. } if *analyze_types => {
+                    module_asset_context.with_types_resolving_enabled()
+                }
+                ModuleType::TypescriptDeclaration { .. } => {
                     module_asset_context.with_types_resolving_enabled()
                 }
                 _ => module_asset_context,
@@ -136,11 +144,13 @@ async fn apply_module_type(
                 ModuleType::Ecmascript { .. } => {
                     builder = builder.with_type(EcmascriptModuleAssetType::Ecmascript)
                 }
-                ModuleType::Typescript { .. } => {
-                    builder = builder.with_type(EcmascriptModuleAssetType::Typescript)
-                }
-                ModuleType::TypescriptWithTypes { .. } => {
-                    builder = builder.with_type(EcmascriptModuleAssetType::TypescriptWithTypes)
+                ModuleType::Typescript {
+                    tsx, analyze_types, ..
+                } => {
+                    builder = builder.with_type(EcmascriptModuleAssetType::Typescript {
+                        tsx: *tsx,
+                        analyze_types: *analyze_types,
+                    })
                 }
                 ModuleType::TypescriptDeclaration { .. } => {
                     builder = builder.with_type(EcmascriptModuleAssetType::TypescriptDeclaration)
@@ -152,13 +162,63 @@ async fn apply_module_type(
                 builder = builder.with_inner_assets(inner_assets);
             }
 
-            if options.split_into_parts {
-                if let Some(part) = part {
-                    builder = builder.with_part(part);
+            if runtime_code {
+                Vc::upcast(builder.build())
+            } else {
+                match options.tree_shaking_mode {
+                    Some(TreeShakingMode::ModuleFragments) => {
+                        if let Some(part) = part {
+                            Vc::upcast(builder.build_part(part))
+                        } else {
+                            Vc::upcast(builder.build_part(ModulePart::exports()))
+                        }
+                    }
+                    Some(TreeShakingMode::ReexportsOnly) => {
+                        let module = builder.build();
+                        if let Some(part) = part {
+                            match *part.await? {
+                                ModulePart::Evaluation => {
+                                    if *module.is_marked_as_side_effect_free().await? {
+                                        return Ok(ProcessResult::Ignore.cell());
+                                    }
+                                    if *module.get_exports().needs_facade().await? {
+                                        Vc::upcast(EcmascriptModuleFacadeModule::new(
+                                            Vc::upcast(module),
+                                            part,
+                                        ))
+                                    } else {
+                                        Vc::upcast(module)
+                                    }
+                                }
+                                ModulePart::Export(_) => {
+                                    if *module.get_exports().needs_facade().await? {
+                                        apply_reexport_tree_shaking(
+                                            Vc::upcast(EcmascriptModuleFacadeModule::new(
+                                                Vc::upcast(module),
+                                                ModulePart::exports(),
+                                            )),
+                                            part,
+                                        )
+                                    } else {
+                                        apply_reexport_tree_shaking(Vc::upcast(module), part)
+                                    }
+                                }
+                                _ => bail!(
+                                    "Invalid module part for reexports only tree shaking mode"
+                                ),
+                            }
+                        } else if *module.get_exports().needs_facade().await? {
+                            Vc::upcast(EcmascriptModuleFacadeModule::new(
+                                Vc::upcast(module),
+                                ModulePart::facade(),
+                            ))
+                        } else {
+                            Vc::upcast(module)
+                        }
+                    }
+                    None => Vc::upcast(builder.build()),
                 }
             }
-
-            builder.build()
         }
         ModuleType::Json => Vc::upcast(JsonModuleAsset::new(source)),
         ModuleType::Raw => Vc::upcast(RawModule::new(source)),
@@ -178,6 +238,13 @@ async fn apply_module_type(
             Vc::upcast(module_asset_context),
             *ty,
             *use_lightningcss,
+            if let ReferenceType::Css(CssReferenceSubType::AtImport(import)) =
+                reference_type.into_value()
+            {
+                import
+            } else {
+                None
+            },
         )),
         ModuleType::Static => Vc::upcast(StaticModuleAsset::new(
             source,
@@ -198,6 +265,39 @@ async fn apply_module_type(
         )),
         ModuleType::Custom(custom) => custom.create_module(source, module_asset_context, part),
     })
+    .cell())
+}
+
+#[turbo_tasks::function]
+async fn apply_reexport_tree_shaking(
+    module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
+    part: Vc<ModulePart>,
+) -> Result<Vc<Box<dyn Module>>> {
+    if let ModulePart::Export(export) = *part.await? {
+        let export = export.await?;
+        let FollowExportsResult {
+            module: final_module,
+            export_name: new_export,
+            ..
+        } = &*follow_reexports(module, export.clone_value()).await?;
+        let module = if let Some(new_export) = new_export {
+            if *new_export == *export {
+                Vc::upcast(*final_module)
+            } else {
+                Vc::upcast(EcmascriptModuleFacadeModule::new(
+                    *final_module,
+                    ModulePart::renamed_export(new_export.clone(), export.clone_value()),
+                ))
+            }
+        } else {
+            Vc::upcast(EcmascriptModuleFacadeModule::new(
+                *final_module,
+                ModulePart::renamed_namespace(export.clone_value()),
+            ))
+        };
+        return Ok(module);
+    }
+    Ok(Vc::upcast(module))
 }
 
 #[turbo_tasks::value]
@@ -289,7 +389,7 @@ impl ModuleAssetContext {
         self: Vc<Self>,
         source: Vc<Box<dyn Source>>,
         reference_type: Value<ReferenceType>,
-    ) -> Vc<Box<dyn Module>> {
+    ) -> Vc<ProcessResult> {
         process_default(self, source, reference_type, Vec::new())
     }
 }
@@ -300,8 +400,30 @@ async fn process_default(
     source: Vc<Box<dyn Source>>,
     reference_type: Value<ReferenceType>,
     processed_rules: Vec<usize>,
-) -> Result<Vc<Box<dyn Module>>> {
+) -> Result<Vc<ProcessResult>> {
+    let span = tracing::info_span!(
+        "process module",
+        name = *source.ident().to_string().await?,
+        reference_type = display(&*reference_type)
+    );
+    process_default_internal(
+        module_asset_context,
+        source,
+        reference_type,
+        processed_rules,
+    )
+    .instrument(span)
+    .await
+}
+
+async fn process_default_internal(
+    module_asset_context: Vc<ModuleAssetContext>,
+    source: Vc<Box<dyn Source>>,
+    reference_type: Value<ReferenceType>,
+    processed_rules: Vec<usize>,
+) -> Result<Vc<ProcessResult>> {
     let ident = source.ident().resolve().await?;
+    let path_ref = ident.path().await?;
     let options = ModuleOptions::new(
         ident.path().parent(),
         module_asset_context.module_options_context(),
@@ -324,10 +446,7 @@ async fn process_default(
         if processed_rules.contains(&i) {
             continue;
         }
-        if rule
-            .matches(source, &*ident.path().await?, &reference_type)
-            .await?
-        {
+        if rule.matches(source, &path_ref, &reference_type).await? {
             for effect in rule.effects() {
                 match effect {
                     ModuleRuleEffect::SourceTransforms(transforms) => {
@@ -347,34 +466,31 @@ async fn process_default(
                     ModuleRuleEffect::ModuleType(module) => {
                         current_module_type = Some(*module);
                     }
-                    ModuleRuleEffect::AddEcmascriptTransforms(additional_transforms) => {
+                    ModuleRuleEffect::ExtendEcmascriptTransforms { prepend, append } => {
                         current_module_type = match current_module_type {
                             Some(ModuleType::Ecmascript {
                                 transforms,
                                 options,
                             }) => Some(ModuleType::Ecmascript {
-                                transforms: transforms.extend(*additional_transforms),
+                                transforms: prepend.extend(transforms).extend(*append),
                                 options,
                             }),
                             Some(ModuleType::Typescript {
                                 transforms,
+                                tsx,
+                                analyze_types,
                                 options,
                             }) => Some(ModuleType::Typescript {
-                                transforms: transforms.extend(*additional_transforms),
-                                options,
-                            }),
-                            Some(ModuleType::TypescriptWithTypes {
-                                transforms,
-                                options,
-                            }) => Some(ModuleType::TypescriptWithTypes {
-                                transforms: transforms.extend(*additional_transforms),
+                                transforms: prepend.extend(transforms).extend(*append),
+                                tsx,
+                                analyze_types,
                                 options,
                             }),
                             Some(ModuleType::Mdx {
                                 transforms,
                                 options,
                             }) => Some(ModuleType::Mdx {
-                                transforms: transforms.extend(*additional_transforms),
+                                transforms: prepend.extend(transforms).extend(*append),
                                 options,
                             }),
                             Some(module_type) => {
@@ -422,8 +538,10 @@ async fn process_default(
         current_source,
         module_asset_context,
         module_type,
+        Value::new(reference_type.clone()),
         part,
         inner_assets,
+        matches!(reference_type, ReferenceType::Runtime),
     ))
 }
 
@@ -477,12 +595,12 @@ impl AssetContext for ModuleAssetContext {
         let mut result = self.process_resolve_result(result.resolve().await?, reference_type);
 
         if *self.is_types_resolving_enabled().await? {
-            let types_reference = TypescriptTypesAssetReference::new(
+            let types_result = type_resolve(
                 Vc::upcast(PlainResolveOrigin::new(Vc::upcast(self), origin_path)),
                 request,
             );
 
-            result = result.with_reference(Vc::upcast(types_reference));
+            result = ModuleResolveResult::alternatives(vec![result, types_result]);
         }
 
         Ok(result)
@@ -498,28 +616,20 @@ impl AssetContext for ModuleAssetContext {
         let transition = this.transition;
         Ok(result
             .await?
-            .map_module(
-                |source| {
-                    let reference_type = reference_type.clone();
-                    async move {
-                        if let Some(transition) = transition {
-                            Ok(Vc::upcast(
-                                transition
-                                    .process(source, self, reference_type)
-                                    .resolve()
-                                    .await?,
-                            ))
-                        } else {
-                            Ok(Vc::upcast(
-                                self.process_default(source, reference_type)
-                                    .resolve()
-                                    .await?,
-                            ))
-                        }
-                    }
-                },
-                |i| async move { Ok(Vc::upcast(AffectingResolvingAssetReference::new(i))) },
-            )
+            .map_module(|source| {
+                let reference_type = reference_type.clone();
+                async move {
+                    let process_result = if let Some(transition) = transition {
+                        transition.process(source, self, reference_type)
+                    } else {
+                        self.process_default(source, reference_type)
+                    };
+                    Ok(match *process_result.await? {
+                        ProcessResult::Module(m) => ModuleResolveResultItem::Module(Vc::upcast(m)),
+                        ProcessResult::Ignore => ModuleResolveResultItem::Ignore,
+                    })
+                }
+            })
             .await?
             .into())
     }
@@ -529,7 +639,7 @@ impl AssetContext for ModuleAssetContext {
         self: Vc<Self>,
         asset: Vc<Box<dyn Source>>,
         reference_type: Value<ReferenceType>,
-    ) -> Result<Vc<Box<dyn Module>>> {
+    ) -> Result<Vc<ProcessResult>> {
         let this = self.await?;
         if let Some(transition) = this.transition {
             Ok(transition.process(asset, self, reference_type))

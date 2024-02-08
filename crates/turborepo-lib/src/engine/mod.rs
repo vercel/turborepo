@@ -11,7 +11,9 @@ use std::{
 
 pub use builder::{EngineBuilder, Error as BuilderError};
 pub use execute::{ExecuteError, ExecutionOptions, Message, StopExecution};
+use miette::Diagnostic;
 use petgraph::Graph;
+use thiserror::Error;
 use turborepo_repository::package_graph::{PackageGraph, WorkspaceName};
 
 use crate::{run::task_id::TaskId, task_graph::TaskDefinition};
@@ -161,10 +163,6 @@ impl Engine<Built> {
                     // No need to check the root node if that's where we are.
                     return Ok(false);
                 };
-                let is_persistent = self
-                    .task_definitions
-                    .get(task_id)
-                    .map_or(false, |task_def| task_def.persistent);
 
                 for dep_index in self
                     .task_graph
@@ -201,7 +199,24 @@ impl Engine<Built> {
                     }
                 }
 
-                Ok(is_persistent)
+                // check if the package for the task has that task in its package.json
+                let info = package_graph
+                    .workspace_info(&WorkspaceName::from(task_id.package().to_string()))
+                    .expect("package graph should contain workspace info for task package");
+
+                let package_has_task = info
+                    .package_json
+                    .scripts
+                    .get(task_id.task())
+                    // handle legacy behaviour from go where an empty string may appear
+                    .map_or(false, |script| !script.is_empty());
+
+                let task_is_persistent = self
+                    .task_definitions
+                    .get(task_id)
+                    .map_or(false, |task_def| task_def.persistent);
+
+                Ok(task_is_persistent && package_has_task)
             })
             .fold((0, Vec::new()), |(mut count, mut errs), result| {
                 match result {
@@ -212,6 +227,8 @@ impl Engine<Built> {
                 (count, errs)
             });
 
+        // there must always be at least one concurrency 'slot' available for
+        // non-persistent tasks otherwise we get race conditions
         if persistent_count >= concurrency {
             validation_errors.push(ValidateError::PersistentTasksExceedConcurrency {
                 persistent_count,
@@ -226,7 +243,7 @@ impl Engine<Built> {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum ValidateError {
     #[error("Cannot find task definition for {task_id} in package {package_name}")]
     MissingTask {
@@ -256,5 +273,116 @@ impl fmt::Display for TaskNode {
             TaskNode::Root => f.write_str("___ROOT___"),
             TaskNode::Task(task) => task.fmt(f),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+
+    use std::collections::BTreeMap;
+
+    use tempdir::TempDir;
+    use turbopath::AbsoluteSystemPath;
+    use turborepo_repository::{
+        discovery::{DiscoveryResponse, PackageDiscovery, WorkspaceData},
+        package_json::PackageJson,
+    };
+
+    use super::*;
+
+    struct DummyDiscovery<'a>(&'a TempDir);
+
+    impl<'a> PackageDiscovery for DummyDiscovery<'a> {
+        async fn discover_packages(
+            &mut self,
+        ) -> Result<
+            turborepo_repository::discovery::DiscoveryResponse,
+            turborepo_repository::discovery::Error,
+        > {
+            // our workspace has three packages, two of which have a build script
+            let workspaces = [("a", true), ("b", true), ("c", false)]
+                .into_iter()
+                .map(|(name, had_build)| {
+                    let path = AbsoluteSystemPath::from_std_path(self.0.path()).unwrap();
+                    let package_json = path.join_component(&format!("{}.json", name));
+
+                    let scripts = if had_build {
+                        BTreeMap::from_iter(
+                            [("build".to_string(), "echo built!".to_string())].into_iter(),
+                        )
+                    } else {
+                        BTreeMap::default()
+                    };
+
+                    let package = PackageJson {
+                        name: Some(name.to_string()),
+                        scripts,
+                        ..Default::default()
+                    };
+
+                    let file = std::fs::File::create(package_json.as_std_path()).unwrap();
+                    serde_json::to_writer(file, &package).unwrap();
+
+                    WorkspaceData {
+                        package_json,
+                        turbo_json: None,
+                    }
+                })
+                .collect();
+
+            Ok(DiscoveryResponse {
+                package_manager: turborepo_repository::package_manager::PackageManager::Pnpm,
+                workspaces,
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn issue_4291() {
+        // we had an issue where our engine validation would reject running persistent
+        // tasks if the number of _total packages_ exceeded the concurrency limit,
+        // rather than the number of package that had that task. in this test, we
+        // set up a workspace with three packages, two of which have a persistent build
+        // task. we expect concurrency limit 1 to fail, but 2 and 3 to pass.
+
+        let tmp = tempdir::TempDir::new("issue_4291").unwrap();
+
+        let mut engine = Engine::new();
+
+        // add two packages with a persistent build task
+        for package in ["a", "b"] {
+            let task_id = TaskId::new(package, "build");
+            engine.get_index(&task_id);
+            engine.add_definition(
+                task_id,
+                TaskDefinition {
+                    persistent: true,
+                    ..Default::default()
+                },
+            );
+        }
+
+        let engine = engine.seal();
+
+        let graph_builder = PackageGraph::builder(
+            AbsoluteSystemPath::from_std_path(tmp.path()).unwrap(),
+            PackageJson::default(),
+        )
+        .with_package_discovery(DummyDiscovery(&tmp));
+
+        let graph = graph_builder.build().await.unwrap();
+
+        // if our limit is less than, it should fail
+        engine.validate(&graph, 1).expect_err("not enough");
+
+        // if our limit is less than, it should fail
+        engine.validate(&graph, 2).expect_err("not enough");
+
+        // we have two persistent tasks, and a slot for all other tasks, so this should
+        // pass
+        engine.validate(&graph, 3).expect("ok");
+
+        // if our limit is greater, then it should pass
+        engine.validate(&graph, 4).expect("ok");
     }
 }

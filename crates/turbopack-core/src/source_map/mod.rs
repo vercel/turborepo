@@ -1,13 +1,20 @@
-use std::{io::Write, ops::Deref, sync::Arc};
+use std::{borrow::Cow, io::Write, ops::Deref, sync::Arc};
 
 use anyhow::Result;
+use async_recursion::async_recursion;
 use indexmap::IndexMap;
+use once_cell::sync::Lazy;
+use ref_cast::RefCast;
+use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use sourcemap::{SourceMap as CrateMap, SourceMapBuilder};
-use turbo_tasks::{TryJoinIterExt, Vc};
-use turbo_tasks_fs::rope::{Rope, RopeBuilder};
+use sourcemap::{DecodedMap, SourceMap as RegularMap, SourceMapBuilder, SourceMapIndex};
+use turbo_tasks::{TryJoinIterExt, ValueToString, Vc};
+use turbo_tasks_fs::{
+    rope::{Rope, RopeBuilder},
+    FileContent, FileSystemPath,
+};
 
-use crate::source_pos::SourcePos;
+use crate::{source_pos::SourcePos, SOURCE_MAP_ROOT_NAME};
 
 pub(crate) mod source_map_asset;
 
@@ -28,13 +35,18 @@ pub trait GenerateSourceMap {
     }
 }
 
-/// The source map spec lists 2 formats, a regular format where a single map
-/// covers the entire file, and an "index" sectioned format where multiple maps
-/// cover different regions of the file.
+/// [SourceMap] enum implements the source map specification in 2 ways: A
+/// "decoded" map which represents a source map as if it was came out of a JSON
+/// decode, and a "sectioned" source map which is a tree of many [SourceMap]
+/// covering regions of an output file.
+///
+/// The distinction between the source map spec's [sourcemap::Index] and our
+/// [SourceMap::Sectioned] is whether the sections are represented with Vcs
+/// pointers.
 #[turbo_tasks::value(shared)]
 pub enum SourceMap {
-    /// A regular source map covers an entire file.
-    Regular(#[turbo_tasks(trace_ignore)] RegularSourceMap),
+    /// A decoded source map contains no Vcs.
+    Decoded(#[turbo_tasks(trace_ignore)] InnerSourceMap),
     /// A sectioned source map contains many (possibly recursive) maps covering
     /// different regions of the file.
     Sectioned(#[turbo_tasks(trace_ignore)] SectionedSourceMap),
@@ -45,6 +57,14 @@ pub struct SectionMapping(IndexMap<String, Vc<Box<dyn GenerateSourceMap>>>);
 
 #[turbo_tasks::value(transparent)]
 pub struct OptionSourceMap(Option<Vc<SourceMap>>);
+
+#[turbo_tasks::value_impl]
+impl OptionSourceMap {
+    #[turbo_tasks::function]
+    pub fn none() -> Vc<Self> {
+        Vc::cell(None)
+    }
+}
 
 #[turbo_tasks::value(transparent)]
 #[derive(Clone, Debug)]
@@ -68,6 +88,7 @@ pub enum Token {
 pub struct SyntheticToken {
     pub generated_line: usize,
     pub generated_column: usize,
+    pub guessed_original_file: Option<String>,
 }
 
 /// An OriginalToken represents a region of the generated file that exists in
@@ -99,9 +120,6 @@ impl Token {
     }
 }
 
-#[turbo_tasks::value(transparent)]
-pub struct OptionToken(Option<Token>);
-
 impl<'a> From<sourcemap::Token<'a>> for Token {
     fn from(t: sourcemap::Token) -> Self {
         if t.has_source() {
@@ -120,6 +138,7 @@ impl<'a> From<sourcemap::Token<'a>> for Token {
             Token::Synthetic(SyntheticToken {
                 generated_line: t.get_dst_line() as usize,
                 generated_column: t.get_dst_col() as usize,
+                guessed_original_file: None,
             })
         }
     }
@@ -154,10 +173,14 @@ impl TryInto<sourcemap::RawToken> for Token {
 }
 
 impl SourceMap {
-    /// Creates a new SourceMap::Regular Vc out of a sourcemap::SourceMap
-    /// ("CrateMap") instance.
-    pub fn new_regular(map: CrateMap) -> Self {
-        SourceMap::Regular(RegularSourceMap::new(map))
+    /// Creates a new SourceMap::Decoded Vc out of a [RegularMap] instance.
+    pub fn new_regular(map: RegularMap) -> Self {
+        Self::new_decoded(DecodedMap::Regular(map))
+    }
+
+    /// Creates a new SourceMap::Decoded Vc out of a [DecodedMap] instance.
+    pub fn new_decoded(map: DecodedMap) -> Self {
+        SourceMap::Decoded(InnerSourceMap::new(map))
     }
 
     /// Creates a new SourceMap::Sectioned Vc out of a collection of source map
@@ -166,24 +189,39 @@ impl SourceMap {
         SourceMap::Sectioned(SectionedSourceMap::new(sections))
     }
 
-    pub async fn tokens(&self) -> Result<Vec<Token>> {
-        Ok(match self {
-            Self::Regular(m) => (*m).tokens().map(|t| t.into()).collect(),
-            Self::Sectioned(m) => m.tokens().await?,
-        })
+    pub async fn new_from_file(file: Vc<FileSystemPath>) -> Result<Option<Self>> {
+        let read = file.read().await?;
+        let Some(contents) = read.as_content() else {
+            return Ok(None);
+        };
+        let Ok(map) = DecodedMap::from_reader(contents.read()) else {
+            return Ok(None);
+        };
+        Ok(Some(SourceMap::Decoded(InnerSourceMap::new(map))))
     }
+}
 
-    /// Returns a (String, Option<String>) tuple of (source path, Option<source
-    /// content>)
-    #[async_recursion::async_recursion]
-    pub async fn source_contents(&self) -> Result<Vec<(String, Option<String>)>> {
+impl SourceMap {
+    pub async fn to_source_map(&self) -> Result<Arc<CrateMapWrapper>> {
         Ok(match self {
-            Self::Regular(m) => m
-                .sources()
-                .zip(m.source_contents())
-                .map(|(source, content)| (source.to_string(), content))
-                .collect::<Vec<(String, Option<String>)>>(),
-            Self::Sectioned(m) => (*m.source_contents().await?).to_vec(),
+            Self::Decoded(m) => m.map.clone(),
+            Self::Sectioned(m) => {
+                let wrapped = m.to_crate_wrapper().await?;
+                let sections = wrapped
+                    .sections
+                    .iter()
+                    .map(|s| {
+                        sourcemap::SourceMapSection::new(
+                            (s.offset.line as u32, s.offset.column as u32),
+                            None,
+                            Some(s.map.0.clone()),
+                        )
+                    })
+                    .collect::<Vec<sourcemap::SourceMapSection>>();
+                Arc::new(CrateMapWrapper(DecodedMap::Index(SourceMapIndex::new(
+                    None, sections,
+                ))))
+            }
         })
     }
 }
@@ -200,16 +238,13 @@ impl SourceMap {
         builder.add(0, 0, 0, 0, None, None);
         SourceMap::new_regular(builder.into_sourcemap()).cell()
     }
-}
 
-#[turbo_tasks::value_impl]
-impl SourceMap {
     /// Stringifies the source map into JSON bytes.
     #[turbo_tasks::function]
     pub async fn to_rope(self: Vc<Self>) -> Result<Vc<Rope>> {
         let this = self.await?;
         let rope = match &*this {
-            SourceMap::Regular(r) => {
+            SourceMap::Decoded(r) => {
                 let mut bytes = vec![];
                 r.0.to_writer(&mut bytes)?;
                 Rope::from(bytes)
@@ -268,18 +303,35 @@ impl SourceMap {
     /// Traces a generated line/column into an mapping token representing either
     /// synthetic code or user-authored original code.
     #[turbo_tasks::function]
-    pub async fn lookup_token(
-        self: Vc<Self>,
-        line: usize,
-        column: usize,
-    ) -> Result<Vc<OptionToken>> {
+    pub async fn lookup_token(self: Vc<Self>, line: usize, column: usize) -> Result<Vc<Token>> {
         let token = match &*self.await? {
-            SourceMap::Regular(map) => {
-                map.lookup_token(line as u32, column as u32)
+            SourceMap::Decoded(map) => {
+                let mut token = map
+                    .lookup_token(line as u32, column as u32)
                     // The sourcemap crate incorrectly returns a previous line's token when there's
                     // not a match on this line.
                     .filter(|t| t.get_dst_line() == line as u32)
                     .map(Token::from)
+                    .unwrap_or_else(|| {
+                        Token::Synthetic(SyntheticToken {
+                            generated_line: line,
+                            generated_column: column,
+                            guessed_original_file: None,
+                        })
+                    });
+                if let Token::Synthetic(SyntheticToken {
+                    guessed_original_file,
+                    ..
+                }) = &mut token
+                {
+                    if let DecodedMap::Regular(map) = &map.map.0 {
+                        if map.get_source_count() == 1 {
+                            let source = map.sources().next().unwrap();
+                            *guessed_original_file = Some(source.to_string());
+                        }
+                    }
+                }
+                token
             }
 
             SourceMap::Sectioned(map) => {
@@ -316,76 +368,152 @@ impl SourceMap {
                     };
                     return Ok(map.lookup_token(l, c));
                 }
-                None
+                Token::Synthetic(SyntheticToken {
+                    generated_line: line,
+                    generated_column: column,
+                    guessed_original_file: None,
+                })
             }
         };
-        Ok(OptionToken(token).cell())
+        Ok(token.cell())
     }
 
-    /// Traces another sourcemap's generated tokens through to this map's
-    /// original tokens. Useful for cases like mapping tokens from a minified
-    /// chunk back to its original sources.
     #[turbo_tasks::function]
-    pub async fn trace(self: Vc<Self>, other: Vc<SourceMap>) -> Result<Vc<SourceMap>> {
-        let mut builder = sourcemap::SourceMapBuilder::new(None);
-        let other = &*other.await?;
-        let other_tokens = other.tokens().await?;
-        let traced_tokens = other_tokens
-            .iter()
-            .map(|other_token| async move {
-                Ok(match other_token {
-                    Token::Synthetic(_) => (None, other_token),
-                    Token::Original(t) => (
-                        (*self
-                            .lookup_token(t.original_line, t.original_column)
-                            .await?)
-                            .clone(),
-                        other_token,
-                    ),
-                })
-            })
-            .try_join()
-            .await?;
-
-        let mut source_to_src_id = IndexMap::new();
-        for (traced_token, other_token) in traced_tokens {
-            let (original_file, original_line, original_column, name) = match traced_token {
-                Some(Token::Original(t)) => (
-                    Some(t.original_file),
-                    t.original_line as u32,
-                    t.original_column as u32,
-                    t.name,
-                ),
-                _ => (
-                    None,
-                    SOURCEMAP_CRATE_NONE_U32,
-                    SOURCEMAP_CRATE_NONE_U32,
-                    None,
-                ),
-            };
-
-            let token = builder.add(
-                other_token.generated_line() as u32,
-                other_token.generated_column() as u32,
-                original_line,
-                original_column,
-                original_file.as_deref(),
-                name.as_deref(),
-            );
-
-            if let Some(original_file) = original_file {
-                source_to_src_id.insert(original_file, token.src_id);
+    pub async fn with_resolved_sources(
+        self: Vc<Self>,
+        origin: Vc<FileSystemPath>,
+    ) -> Result<Vc<Self>> {
+        async fn resolve_source(
+            source_request: String,
+            source_content: Option<String>,
+            origin: Vc<FileSystemPath>,
+        ) -> Result<(String, String)> {
+            Ok(
+                if let Some(path) = *origin.parent().try_join(source_request.to_string()).await? {
+                    let path_str = path.to_string().await?;
+                    let source = format!("/{SOURCE_MAP_ROOT_NAME}/{}", path_str);
+                    let source_content = if let Some(source_content) = source_content {
+                        source_content.to_string()
+                    } else if let FileContent::Content(file) = &*path.read().await? {
+                        let text = file.content().to_str()?;
+                        text.to_string()
+                    } else {
+                        format!("unable to read source {path_str}")
+                    };
+                    (source, source_content)
+                } else {
+                    let origin_str = origin.to_string().await?;
+                    static INVALID_REGEX: Lazy<Regex> =
+                        Lazy::new(|| Regex::new(r#"(?:^|/)(?:\.\.?(?:/|$))+"#).unwrap());
+                    let source = INVALID_REGEX
+                        .replace_all(&source_request, |s: &regex::Captures<'_>| {
+                            s[0].replace('.', "_")
+                        });
+                    let source = format!("/{SOURCE_MAP_ROOT_NAME}/{}/{}", origin_str, source);
+                    let source_content = source_content.unwrap_or_else(|| {
+                        format!(
+                            "unable to access {source_request} in {origin_str} (it's leaving the \
+                             filesystem root)"
+                        )
+                    });
+                    (source, source_content)
+                },
+            )
+        }
+        async fn regular_map_with_resolved_sources(
+            map: &RegularMapWrapper,
+            origin: Vc<FileSystemPath>,
+        ) -> Result<RegularMap> {
+            let map = &map.0;
+            let file = map.get_file().map(ToString::to_string);
+            let tokens = map.tokens().map(|t| t.get_raw_token()).collect();
+            let names = map.names().map(ToString::to_string).collect();
+            let count = map.get_source_count() as usize;
+            let sources = map.sources().map(ToString::to_string).collect::<Vec<_>>();
+            let source_contents = map
+                .source_contents()
+                .map(|s| s.map(ToString::to_string))
+                .collect::<Vec<_>>();
+            let mut new_sources = Vec::with_capacity(count);
+            let mut new_source_contents = Vec::with_capacity(count);
+            for (source, source_content) in sources.into_iter().zip(source_contents.into_iter()) {
+                let (source, name) = resolve_source(source, source_content, origin).await?;
+                new_sources.push(source);
+                new_source_contents.push(Some(name));
+            }
+            Ok(RegularMap::new(
+                file,
+                tokens,
+                names,
+                new_sources,
+                Some(new_source_contents),
+            ))
+        }
+        #[async_recursion]
+        async fn decoded_map_with_resolved_sources(
+            map: &CrateMapWrapper,
+            origin: Vc<FileSystemPath>,
+        ) -> Result<CrateMapWrapper> {
+            Ok(CrateMapWrapper(match &map.0 {
+                DecodedMap::Regular(map) => {
+                    let map = RegularMapWrapper::ref_cast(map);
+                    DecodedMap::Regular(regular_map_with_resolved_sources(map, origin).await?)
+                }
+                DecodedMap::Index(map) => {
+                    let count = map.get_section_count() as usize;
+                    let file = map.get_file().map(ToString::to_string);
+                    let sections = map
+                        .sections()
+                        .filter_map(|section| {
+                            section
+                                .get_sourcemap()
+                                .map(|s| (section.get_offset(), CrateMapWrapper::ref_cast(s)))
+                        })
+                        .collect::<Vec<_>>();
+                    let sections = sections
+                        .into_iter()
+                        .map(|(offset, map)| async move {
+                            Ok((
+                                offset,
+                                decoded_map_with_resolved_sources(map, origin).await?,
+                            ))
+                        })
+                        .try_join()
+                        .await?;
+                    let mut new_sections = Vec::with_capacity(count);
+                    for (offset, map) in sections {
+                        new_sections.push(sourcemap::SourceMapSection::new(
+                            offset,
+                            // Urls are deprecated and we don't accept them
+                            None,
+                            Some(map.0),
+                        ));
+                    }
+                    DecodedMap::Index(SourceMapIndex::new(file, new_sections))
+                }
+                DecodedMap::Hermes(_) => {
+                    todo!("hermes source maps are not implemented");
+                }
+            }))
+        }
+        Ok(match &*self.await? {
+            Self::Decoded(m) => {
+                let map = decoded_map_with_resolved_sources(&m.map, origin).await?;
+                Self::Decoded(InnerSourceMap::new(map.0))
+            }
+            Self::Sectioned(m) => {
+                let mut sections = Vec::with_capacity(m.sections.len());
+                for section in &m.sections {
+                    let map = section.map.with_resolved_sources(origin);
+                    sections.push(SourceMapSection::new(section.offset, map));
+                }
+                for section in &mut sections {
+                    section.map = section.map.resolve().await?;
+                }
+                SourceMap::new_sectioned(sections)
             }
         }
-
-        let this = &*self.await?;
-        for (source, contents) in this.source_contents().await? {
-            if let Some(our_src_id) = source_to_src_id.get(&source) {
-                builder.set_source_contents(*our_src_id, contents.as_deref());
-            }
-        }
-
-        Ok(Self::new_regular(builder.into_sourcemap()).into())
+        .cell())
     }
 }
 
@@ -404,30 +532,19 @@ impl GenerateSourceMap for SourceMap {
 
 /// A regular source map covers an entire file.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct RegularSourceMap {
+pub struct InnerSourceMap {
     map: Arc<CrateMapWrapper>,
-    source_contents: Vec<Option<String>>,
 }
 
-impl RegularSourceMap {
-    pub fn new(map: CrateMap) -> Self {
-        let source_contents = map
-            .source_contents()
-            .map(|o| o.map(|s| s.to_string()))
-            .collect();
-
-        RegularSourceMap {
+impl InnerSourceMap {
+    pub fn new(map: DecodedMap) -> Self {
+        InnerSourceMap {
             map: Arc::new(CrateMapWrapper(map)),
-            source_contents,
         }
     }
-
-    pub fn source_contents(&self) -> Vec<Option<String>> {
-        self.source_contents.clone()
-    }
 }
 
-impl Deref for RegularSourceMap {
+impl Deref for InnerSourceMap {
     type Target = Arc<CrateMapWrapper>;
 
     fn deref(&self) -> &Self::Target {
@@ -435,26 +552,64 @@ impl Deref for RegularSourceMap {
     }
 }
 
-impl Eq for RegularSourceMap {}
-impl PartialEq for RegularSourceMap {
+impl Eq for InnerSourceMap {}
+impl PartialEq for InnerSourceMap {
     fn eq(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.map, &other.map)
     }
 }
 
-/// Wraps the CrateMap struct so that it can be cached in a Vc.
-#[derive(Debug)]
-pub struct CrateMapWrapper(sourcemap::SourceMap);
+/// Wraps the DecodedMap struct so that it is Sync and Send.
+///
+/// # Safety
+///
+/// Must not use per line access to the SourceMap, as it is not thread safe.
+#[derive(Debug, RefCast)]
+#[repr(transparent)]
+pub struct CrateMapWrapper(DecodedMap);
 
-// Safety: CrateMap contains a raw pointer, which isn't Send, which is required
-// to cache in a Vc. So, we have wrap it in 4 layers of cruft to do it.
-// source_contents() is copied into the struct itself in
-// RegularSourceMap::new(), which is safe to access there.
+// Safety: DecodedMap contains a raw pointer, which isn't Send, which is
+// required to cache in a Vc. So, we have wrap it in 4 layers of cruft to do it.
 unsafe impl Send for CrateMapWrapper {}
 unsafe impl Sync for CrateMapWrapper {}
 
+/// Wraps the RegularMap struct so that it is Sync and Send.
+///
+/// # Safety
+///
+/// Must not use per line access to the SourceMap, as it is not thread safe.
+#[derive(Debug, RefCast)]
+#[repr(transparent)]
+pub struct RegularMapWrapper(RegularMap);
+
+// Safety: RegularMap contains a raw pointer, which isn't Send, which is
+// required to cache in a Vc. So, we have wrap it in 4 layers of cruft to do it.
+unsafe impl Send for RegularMapWrapper {}
+unsafe impl Sync for RegularMapWrapper {}
+
+#[derive(Debug)]
+pub struct CrateIndexWrapper {
+    pub sections: Vec<CrateSectionWrapper>,
+}
+
+#[derive(Debug)]
+pub struct CrateSectionWrapper {
+    pub offset: SourcePos,
+    pub map: Arc<CrateMapWrapper>,
+}
+
+impl CrateMapWrapper {
+    pub fn as_regular_source_map(&self) -> Option<Cow<'_, RegularMap>> {
+        match &self.0 {
+            DecodedMap::Regular(m) => Some(Cow::Borrowed(m)),
+            DecodedMap::Index(m) => m.flatten().map(Cow::Owned).ok(),
+            _ => None,
+        }
+    }
+}
+
 impl Deref for CrateMapWrapper {
-    type Target = sourcemap::SourceMap;
+    type Target = DecodedMap;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -474,7 +629,7 @@ impl<'de> Deserialize<'de> for CrateMapWrapper {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         use serde::de::Error;
         let bytes = <&[u8]>::deserialize(deserializer)?;
-        let map = CrateMap::from_slice(bytes).map_err(Error::custom)?;
+        let map = DecodedMap::from_reader(bytes).map_err(Error::custom)?;
         Ok(CrateMapWrapper(map))
     }
 }
@@ -491,77 +646,12 @@ impl SectionedSourceMap {
         Self { sections }
     }
 
-    pub async fn source_contents(&self) -> Result<Vec<(String, Option<String>)>> {
-        let mut sources = IndexMap::new();
-
+    pub async fn to_crate_wrapper(&self) -> Result<CrateIndexWrapper> {
+        let mut sections = Vec::with_capacity(self.sections.len());
         for section in &self.sections {
-            let map = section.map.await?;
-            for (source, contents) in map.source_contents().await? {
-                sources.entry(source).or_insert(contents);
-            }
+            sections.push(section.to_crate_wrapper().await?);
         }
-
-        Ok(sources
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.clone()))
-            .collect())
-    }
-
-    #[async_recursion::async_recursion]
-    pub async fn tokens(&self) -> Result<Vec<Token>> {
-        let mut tokens = vec![];
-        for (i, section) in self.sections.iter().enumerate() {
-            let (stop_line, stop_column) = if i + 1 < self.sections.len() {
-                let next_offset = self.sections[i + 1].offset;
-                (next_offset.line, next_offset.column)
-            } else {
-                (usize::MAX, usize::MAX)
-            };
-
-            let section_tokens: Vec<Token> = match &*section.map.await? {
-                SourceMap::Regular(m) => (*m).tokens().map(|t| t.into()).collect(),
-                SourceMap::Sectioned(_) => {
-                    unimplemented!(
-                        "Nested sectioned sourcemaps not yet implemented for \
-                         SectionedSourceMap::tokens()"
-                    )
-                }
-            };
-
-            for token in section_tokens {
-                // Derived from https://github.com/getsentry/rust-sourcemap/blob/f1b758a251a5edddc0767f58f8391912c062c889/src/types.rs#L946
-                let generated_line = token.generated_line() + section.offset.line;
-                let generated_column = token.generated_column()
-                    + if token.generated_line() == 0 {
-                        section.offset.column
-                    } else {
-                        0
-                    };
-
-                if generated_line > stop_line
-                    || (generated_line == stop_line && generated_column >= stop_column)
-                {
-                    break;
-                }
-
-                tokens.push(match token {
-                    Token::Original(token) => Token::Original(OriginalToken {
-                        generated_line,
-                        generated_column,
-                        original_file: token.original_file.clone(),
-                        original_line: token.original_line,
-                        original_column: token.original_column,
-                        name: token.name.clone(),
-                    }),
-                    Token::Synthetic(_) => Token::Synthetic(SyntheticToken {
-                        generated_line,
-                        generated_column,
-                    }),
-                });
-            }
-        }
-
-        Ok(tokens)
+        Ok(CrateIndexWrapper { sections })
     }
 }
 
@@ -576,5 +666,14 @@ pub struct SourceMapSection {
 impl SourceMapSection {
     pub fn new(offset: SourcePos, map: Vc<SourceMap>) -> Self {
         Self { offset, map }
+    }
+
+    #[async_recursion]
+    pub async fn to_crate_wrapper(&self) -> Result<CrateSectionWrapper> {
+        let map = (*self.map.await?).to_source_map().await?;
+        Ok(CrateSectionWrapper {
+            offset: self.offset,
+            map,
+        })
     }
 }

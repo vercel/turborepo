@@ -90,10 +90,12 @@ async function loadWebAssemblyModule(
       deleteResolver(chunkPath);
 
       const chunkUrl = getChunkRelativeUrl(chunkPath);
+      // TODO(PACK-2140): remove this once all filenames are guaranteed to be escaped.
+      const decodedChunkUrl = decodeURI(chunkUrl);
 
       if (chunkPath.endsWith(".css")) {
         const links = document.querySelectorAll(
-          `link[href="${chunkUrl}"],link[href^="${chunkUrl}?"]`
+          `link[href="${chunkUrl}"],link[href^="${chunkUrl}?"],link[href="${decodedChunkUrl}"],link[href^="${decodedChunkUrl}?"]`
         );
         for (const link of Array.from(links)) {
           link.remove();
@@ -104,7 +106,7 @@ async function loadWebAssemblyModule(
         // However, we still want to remove the script tag from the DOM to keep
         // the HTML somewhat consistent from the user's perspective.
         const scripts = document.querySelectorAll(
-          `script[src="${chunkUrl}"],script[src^="${chunkUrl}?"]`
+          `script[src="${chunkUrl}"],script[src^="${chunkUrl}?"],script[src="${decodedChunkUrl}"],script[src^="${decodedChunkUrl}?"]`
         );
         for (const script of Array.from(scripts)) {
           script.remove();
@@ -122,9 +124,10 @@ async function loadWebAssemblyModule(
         }
 
         const chunkUrl = getChunkRelativeUrl(chunkPath);
+        const decodedChunkUrl = decodeURI(chunkUrl);
 
         const previousLinks = document.querySelectorAll(
-          `link[rel=stylesheet][href="${chunkUrl}"],link[rel=stylesheet][href^="${chunkUrl}?"]`
+          `link[rel=stylesheet][href="${chunkUrl}"],link[rel=stylesheet][href^="${chunkUrl}?"],link[rel=stylesheet][href="${decodedChunkUrl}"],link[rel=stylesheet][href^="${decodedChunkUrl}?"]`
         );
 
         if (previousLinks.length == 0) {
@@ -134,7 +137,20 @@ async function loadWebAssemblyModule(
 
         const link = document.createElement("link");
         link.rel = "stylesheet";
-        link.href = chunkUrl;
+
+        if (navigator.userAgent.includes("Firefox")) {
+          // Firefox won't reload CSS files that were previously loaded on the current page,
+          // we need to add a query param to make sure CSS is actually reloaded from the server.
+          //
+          // I believe this is this issue: https://bugzilla.mozilla.org/show_bug.cgi?id=1037506
+          //
+          // Safari has a similar issue, but only if you have a `<link rel=preload ... />` tag
+          // pointing to the same URL as the stylesheet: https://bugs.webkit.org/show_bug.cgi?id=187726
+          link.href = `${chunkUrl}?ts=${Date.now()}`;
+        } else {
+          link.href = chunkUrl;
+        }
+
         link.onerror = () => {
           reject();
         };
@@ -222,10 +238,11 @@ async function loadWebAssemblyModule(
     }
 
     const chunkUrl = getChunkRelativeUrl(chunkPath);
+    const decodedChunkUrl = decodeURI(chunkUrl);
 
     if (chunkPath.endsWith(".css")) {
       const previousLinks = document.querySelectorAll(
-        `link[rel=stylesheet][href="${chunkUrl}"],link[rel=stylesheet][href^="${chunkUrl}?"]`
+        `link[rel=stylesheet][href="${chunkUrl}"],link[rel=stylesheet][href^="${chunkUrl}?"],link[rel=stylesheet][href="${decodedChunkUrl}"],link[rel=stylesheet][href^="${decodedChunkUrl}?"]`
       );
       if (previousLinks.length > 0) {
         // CSS chunks do not register themselves, and as such must be marked as
@@ -247,7 +264,7 @@ async function loadWebAssemblyModule(
       }
     } else if (chunkPath.endsWith(".js")) {
       const previousScripts = document.querySelectorAll(
-        `script[src="${chunkUrl}"],script[src^="${chunkUrl}?"]`
+        `script[src="${chunkUrl}"],script[src^="${chunkUrl}?"],script[src="${decodedChunkUrl}"],script[src^="${decodedChunkUrl}?"]`
       );
       if (previousScripts.length > 0) {
         // There is this edge where the script already failed loading, but we
@@ -279,6 +296,8 @@ async function loadWebAssemblyModule(
 function _eval({ code, url, map }: EcmascriptModuleEntry): ModuleFactory {
   code += `\n\n//# sourceURL=${location.origin}/${CHUNK_BASE_PATH}${url}`;
   if (map)
-    code += `\n//# sourceMappingURL=${location.origin}/${CHUNK_BASE_PATH}${map}`;
+    code += `\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${btoa(
+      map
+    )}`;
   return eval(code);
 }

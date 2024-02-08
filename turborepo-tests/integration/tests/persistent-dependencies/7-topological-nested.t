@@ -1,6 +1,5 @@
 # Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) persistent_dependencies/7-topological-nested
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh persistent_dependencies/7-topological-nested
 
 # WorkspaceGraph
 # - app-a depends on pkg-a
@@ -21,6 +20,7 @@
 # error message should say. Leaving as-is so we don't have to implement special casing logic to handle
 # this case.
   $ ${TURBO} run dev
-   ERROR  run failed: error preparing engine: Invalid persistent task configuration:
-  "pkg-b#dev" is a persistent task, "pkg-a#dev" cannot depend on it
+    x error preparing engine: Invalid persistent task configuration:
+    | "pkg-b#dev" is a persistent task, "pkg-a#dev" cannot depend on it
+  
   [1]

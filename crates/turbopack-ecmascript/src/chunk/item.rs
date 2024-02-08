@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{trace::TraceRawVcs, Upcast, ValueToString, Vc};
 use turbo_tasks_fs::rope::Rope;
@@ -9,20 +9,21 @@ use turbopack_core::{
     code_builder::{Code, CodeBuilder},
     error::PrettyPrintError,
     issue::{code_gen::CodeGenerationIssue, IssueExt, IssueSeverity, StyledString},
+    source_map::GenerateSourceMap,
 };
 
 use super::EcmascriptChunkingContext;
 use crate::{
     references::async_module::{AsyncModuleOptions, OptionAsyncModuleOptions},
     utils::FormatIter,
-    EcmascriptModuleContent, ParseResultSourceMap,
+    EcmascriptModuleContent,
 };
 
 #[turbo_tasks::value(shared)]
 #[derive(Default, Clone)]
 pub struct EcmascriptChunkItemContent {
     pub inner_code: Rope,
-    pub source_map: Option<Vc<ParseResultSourceMap>>,
+    pub source_map: Option<Vc<Box<dyn GenerateSourceMap>>>,
     pub options: EcmascriptChunkItemOptions,
     pub placeholder_for_future_extensions: (),
 }
@@ -42,12 +43,12 @@ impl EcmascriptChunkItemContent {
             .await?;
 
         let content = content.await?;
+        let async_module = async_module_options.await?.clone_value();
+
         Ok(EcmascriptChunkItemContent {
             inner_code: content.inner_code.clone(),
             source_map: content.source_map,
             options: if content.is_esm {
-                let async_module = async_module_options.await?.clone_value();
-
                 EcmascriptChunkItemOptions {
                     strict: true,
                     refresh,
@@ -56,6 +57,10 @@ impl EcmascriptChunkItemContent {
                     ..Default::default()
                 }
             } else {
+                if async_module.is_some() {
+                    bail!("CJS module can't be async.");
+                }
+
                 EcmascriptChunkItemOptions {
                     refresh,
                     externals,
@@ -130,11 +135,10 @@ impl EcmascriptChunkItemContent {
 
         if this.options.async_module.is_some() {
             code += "__turbopack_async_module__(async (__turbopack_handle_async_dependencies__, \
-                     __turbopack_async_result__) => { try {";
+                     __turbopack_async_result__) => { try {\n";
         }
 
-        let source_map = this.source_map.map(Vc::upcast);
-        code.push_source(&this.inner_code, source_map);
+        code.push_source(&this.inner_code, this.source_map);
 
         if let Some(opts) = &this.options.async_module {
             write!(

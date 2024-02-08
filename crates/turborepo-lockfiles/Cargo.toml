@@ -13,12 +13,14 @@ workspace = true
 nom = "7"
 pest = "2.5.6"
 pest_derive = "2.5.6"
+rayon = "1"
 regex = "1"
 semver = "1.0.17"
 serde = { version = "1.0.126", features = ["derive", "rc"] }
 serde_json = "1.0.86"
 serde_yaml = "0.9.27"
 thiserror = "1.0.38"
+tracing.workspace = true
 turbopath = { path = "../turborepo-paths" }
 
 [dev-dependencies]

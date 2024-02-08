@@ -63,7 +63,7 @@ impl ModuleOptions {
         let ModuleOptionsContext {
             enable_jsx,
             enable_types,
-            enable_tree_shaking,
+            tree_shaking_mode,
             ref enable_typescript_transform,
             ref decorators,
             enable_mdx,
@@ -72,7 +72,6 @@ impl ModuleOptions {
             ref enable_postcss_transform,
             ref enable_webpack_loaders,
             preset_env_versions,
-            ref custom_ecma_transform_plugins,
             ref custom_rules,
             execution_context,
             ref rules,
@@ -91,28 +90,7 @@ impl ModuleOptions {
             }
         }
 
-        let (before_transform_plugins, after_transform_plugins) =
-            if let Some(transform_plugins) = custom_ecma_transform_plugins {
-                let transform_plugins = transform_plugins.await?;
-                (
-                    transform_plugins
-                        .source_transforms
-                        .iter()
-                        .cloned()
-                        .map(EcmascriptInputTransform::Plugin)
-                        .collect(),
-                    transform_plugins
-                        .output_transforms
-                        .iter()
-                        .cloned()
-                        .map(EcmascriptInputTransform::Plugin)
-                        .collect(),
-                )
-            } else {
-                (vec![], vec![])
-            };
-
-        let mut transforms = before_transform_plugins;
+        let mut transforms = vec![];
 
         // Order of transforms is important. e.g. if the React transform occurs before
         // Styled JSX, there won't be JSX nodes for Styled JSX to transform.
@@ -130,8 +108,7 @@ impl ModuleOptions {
         }
 
         let ecmascript_options = EcmascriptOptions {
-            split_into_parts: enable_tree_shaking,
-            import_parts: enable_tree_shaking,
+            tree_shaking_mode,
             url_rewrite_behavior: esm_url_rewrite_behavior,
             import_externals,
             ..Default::default()
@@ -177,7 +154,6 @@ impl ModuleOptions {
                     .iter()
                     .cloned()
                     .chain(transforms.iter().cloned())
-                    .chain(after_transform_plugins.iter().cloned())
                     .collect(),
             )
         } else {
@@ -197,7 +173,6 @@ impl ModuleOptions {
             .iter()
             .cloned()
             .chain(transforms.iter().cloned())
-            .chain(after_transform_plugins.iter().cloned())
             .collect(),
         );
 
@@ -218,7 +193,6 @@ impl ModuleOptions {
             .iter()
             .cloned()
             .chain(transforms.iter().cloned())
-            .chain(after_transform_plugins.iter().cloned())
             .collect(),
         );
 
@@ -258,67 +232,70 @@ impl ModuleOptions {
                 })],
             ),
             ModuleRule::new_all(
-                ModuleRuleCondition::any(vec![
-                    ModuleRuleCondition::ResourcePathEndsWith(".ts".to_string()),
-                    ModuleRuleCondition::ResourcePathEndsWith(".tsx".to_string()),
-                ]),
-                vec![if enable_types {
-                    ModuleRuleEffect::ModuleType(ModuleType::TypescriptWithTypes {
-                        transforms: ts_app_transforms,
-                        options: ecmascript_options,
-                    })
-                } else {
-                    ModuleRuleEffect::ModuleType(ModuleType::Typescript {
-                        transforms: ts_app_transforms,
-                        options: ecmascript_options,
-                    })
-                }],
+                ModuleRuleCondition::ResourcePathEndsWith(".ts".to_string()),
+                vec![ModuleRuleEffect::ModuleType(ModuleType::Typescript {
+                    transforms: ts_app_transforms,
+                    tsx: false,
+                    analyze_types: enable_types,
+                    options: ecmascript_options,
+                })],
             ),
             ModuleRule::new_all(
-                ModuleRuleCondition::any(vec![
-                    ModuleRuleCondition::ResourcePathEndsWith(".mts".to_string()),
-                    ModuleRuleCondition::ResourcePathEndsWith(".mtsx".to_string()),
-                ]),
-                vec![if enable_types {
-                    ModuleRuleEffect::ModuleType(ModuleType::TypescriptWithTypes {
-                        transforms: ts_app_transforms,
-                        options: EcmascriptOptions {
-                            specified_module_type: SpecifiedModuleType::EcmaScript,
-                            ..ecmascript_options
-                        },
-                    })
-                } else {
-                    ModuleRuleEffect::ModuleType(ModuleType::Typescript {
-                        transforms: ts_app_transforms,
-                        options: EcmascriptOptions {
-                            specified_module_type: SpecifiedModuleType::EcmaScript,
-                            ..ecmascript_options
-                        },
-                    })
-                }],
+                ModuleRuleCondition::ResourcePathEndsWith(".tsx".to_string()),
+                vec![ModuleRuleEffect::ModuleType(ModuleType::Typescript {
+                    transforms: ts_app_transforms,
+                    tsx: true,
+                    analyze_types: enable_types,
+                    options: ecmascript_options,
+                })],
             ),
             ModuleRule::new_all(
-                ModuleRuleCondition::any(vec![
-                    ModuleRuleCondition::ResourcePathEndsWith(".cts".to_string()),
-                    ModuleRuleCondition::ResourcePathEndsWith(".ctsx".to_string()),
-                ]),
-                vec![if enable_types {
-                    ModuleRuleEffect::ModuleType(ModuleType::TypescriptWithTypes {
-                        transforms: ts_app_transforms,
-                        options: EcmascriptOptions {
-                            specified_module_type: SpecifiedModuleType::CommonJs,
-                            ..ecmascript_options
-                        },
-                    })
-                } else {
-                    ModuleRuleEffect::ModuleType(ModuleType::Typescript {
-                        transforms: ts_app_transforms,
-                        options: EcmascriptOptions {
-                            specified_module_type: SpecifiedModuleType::CommonJs,
-                            ..ecmascript_options
-                        },
-                    })
-                }],
+                ModuleRuleCondition::ResourcePathEndsWith(".mts".to_string()),
+                vec![ModuleRuleEffect::ModuleType(ModuleType::Typescript {
+                    transforms: ts_app_transforms,
+                    tsx: false,
+                    analyze_types: enable_types,
+                    options: EcmascriptOptions {
+                        specified_module_type: SpecifiedModuleType::EcmaScript,
+                        ..ecmascript_options
+                    },
+                })],
+            ),
+            ModuleRule::new_all(
+                ModuleRuleCondition::ResourcePathEndsWith(".mtsx".to_string()),
+                vec![ModuleRuleEffect::ModuleType(ModuleType::Typescript {
+                    transforms: ts_app_transforms,
+                    tsx: true,
+                    analyze_types: enable_types,
+                    options: EcmascriptOptions {
+                        specified_module_type: SpecifiedModuleType::EcmaScript,
+                        ..ecmascript_options
+                    },
+                })],
+            ),
+            ModuleRule::new_all(
+                ModuleRuleCondition::ResourcePathEndsWith(".cts".to_string()),
+                vec![ModuleRuleEffect::ModuleType(ModuleType::Typescript {
+                    transforms: ts_app_transforms,
+                    tsx: false,
+                    analyze_types: enable_types,
+                    options: EcmascriptOptions {
+                        specified_module_type: SpecifiedModuleType::CommonJs,
+                        ..ecmascript_options
+                    },
+                })],
+            ),
+            ModuleRule::new_all(
+                ModuleRuleCondition::ResourcePathEndsWith(".ctsx".to_string()),
+                vec![ModuleRuleEffect::ModuleType(ModuleType::Typescript {
+                    transforms: ts_app_transforms,
+                    tsx: true,
+                    analyze_types: enable_types,
+                    options: EcmascriptOptions {
+                        specified_module_type: SpecifiedModuleType::CommonJs,
+                        ..ecmascript_options
+                    },
+                })],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(".d.ts".to_string()),
@@ -398,6 +375,7 @@ impl ModuleOptions {
             ]);
         } else {
             if let Some(options) = enable_postcss_transform {
+                let options = options.await?;
                 let execution_context = execution_context
                     .context("execution_context is required for the postcss_transform")?;
 
@@ -418,6 +396,7 @@ impl ModuleOptions {
                                 "postcss".to_string(),
                             ),
                             execution_context,
+                            options.config_location,
                         )),
                     ]))],
                 ));
@@ -429,7 +408,7 @@ impl ModuleOptions {
                         ModuleRuleCondition::ResourcePathEndsWith(".css".to_string()),
                         // Only create a global CSS asset if not `@import`ed from CSS already.
                         ModuleRuleCondition::not(ModuleRuleCondition::ReferenceType(
-                            ReferenceType::Css(CssReferenceSubType::AtImport),
+                            ReferenceType::Css(CssReferenceSubType::AtImport(None)),
                         )),
                     ]),
                     vec![ModuleRuleEffect::ModuleType(ModuleType::CssGlobal)],
@@ -441,7 +420,7 @@ impl ModuleOptions {
                         // NOTE: `composes` references should not be treated as `@import`s and
                         // should also create a module CSS asset.
                         ModuleRuleCondition::not(ModuleRuleCondition::ReferenceType(
-                            ReferenceType::Css(CssReferenceSubType::AtImport),
+                            ReferenceType::Css(CssReferenceSubType::AtImport(None)),
                         )),
                     ]),
                     vec![ModuleRuleEffect::ModuleType(ModuleType::CssModule)],
@@ -451,7 +430,7 @@ impl ModuleOptions {
                         ModuleRuleCondition::ResourcePathEndsWith(".css".to_string()),
                         // Create a normal CSS asset if `@import`ed from CSS already.
                         ModuleRuleCondition::ReferenceType(ReferenceType::Css(
-                            CssReferenceSubType::AtImport,
+                            CssReferenceSubType::AtImport(None),
                         )),
                     ]),
                     vec![ModuleRuleEffect::ModuleType(ModuleType::Css {
@@ -464,7 +443,7 @@ impl ModuleOptions {
                         ModuleRuleCondition::ResourcePathEndsWith(".module.css".to_string()),
                         // Create a normal CSS asset if `@import`ed from CSS already.
                         ModuleRuleCondition::ReferenceType(ReferenceType::Css(
-                            CssReferenceSubType::AtImport,
+                            CssReferenceSubType::AtImport(None),
                         )),
                     ]),
                     vec![ModuleRuleEffect::ModuleType(ModuleType::Css {

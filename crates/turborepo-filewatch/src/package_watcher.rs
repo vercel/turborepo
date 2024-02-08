@@ -99,17 +99,23 @@ impl<T: PackageDiscovery + Send + 'static> Subscriber<T> {
         recv: broadcast::Receiver<Result<Event, NotifyError>>,
         mut discovery: T,
     ) -> Result<Self, Error> {
-        let manager = discovery.discover_packages().await?.package_manager;
+        let initial_discovery = discovery.discover_packages().await?;
 
         let (package_json_path, workspace_config_path, filter) =
-            Self::update_package_manager(&manager, &repo_root)?;
+            Self::update_package_manager(&initial_discovery.package_manager, &repo_root)?;
 
-        let (manager_tx, manager_rx) = watch::channel(manager);
+        let (manager_tx, manager_rx) = watch::channel(initial_discovery.package_manager);
 
         Ok(Self {
             exit_rx,
             filter,
-            package_data: Default::default(),
+            package_data: Arc::new(Mutex::new(
+                initial_discovery
+                    .workspaces
+                    .into_iter()
+                    .map(|p| (p.package_json.parent().expect("non-root").to_owned(), p))
+                    .collect(),
+            )),
             recv,
             manager_rx,
             manager_tx,
@@ -180,7 +186,7 @@ impl<T: PackageDiscovery + Send + 'static> Subscriber<T> {
     }
 
     async fn handle_file_event(&mut self, file_event: Event) {
-        tracing::trace!("file event: {:?}", file_event);
+        tracing::trace!("file event: {:?} {:?}", file_event.kind, file_event.paths);
 
         if file_event
             .paths
@@ -337,8 +343,8 @@ mod test {
     use tokio::sync::broadcast;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_repository::{
-        discovery::{self, DiscoveryResponse, PackageDiscovery, WorkspaceData},
-        package_manager::{self, PackageManager},
+        discovery::{self, DiscoveryResponse, WorkspaceData},
+        package_manager::PackageManager,
     };
 
     use super::Subscriber;
@@ -352,7 +358,7 @@ mod test {
     impl super::PackageDiscovery for MockDiscovery {
         async fn discover_packages(&mut self) -> Result<DiscoveryResponse, discovery::Error> {
             Ok(DiscoveryResponse {
-                package_manager: self.manager.clone(),
+                package_manager: self.manager,
                 workspaces: self.package_data.lock().unwrap().clone(),
             })
         }
@@ -366,7 +372,7 @@ mod test {
         let (tx, rx) = broadcast::channel(10);
         let (_exit_tx, exit_rx) = tokio::sync::oneshot::channel();
 
-        let root = AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy()).unwrap();
+        let root: AbsoluteSystemPathBuf = tmp.path().try_into().unwrap();
         let manager = PackageManager::Yarn;
 
         let package_data = vec![
@@ -400,7 +406,7 @@ mod test {
         .unwrap();
 
         let mock_discovery = MockDiscovery {
-            manager: manager.clone(),
+            manager,
             package_data: Arc::new(Mutex::new(package_data)),
         };
 
@@ -533,7 +539,7 @@ mod test {
         let package_data_raw = Arc::new(Mutex::new(package_data));
 
         let mock_discovery = MockDiscovery {
-            manager: manager.clone(),
+            manager,
             package_data: package_data_raw.clone(),
         };
 

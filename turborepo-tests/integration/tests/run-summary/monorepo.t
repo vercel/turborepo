@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd)
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
 
 # Delete all run summaries
   $ rm -rf .turbo/runs
@@ -73,7 +72,7 @@ Setup
   [0-9]+ (re)
 
 # Extract some task-specific summaries from each
-  $ source "$TESTDIR/../_helpers/run-summary-utils.sh"
+  $ source "$TESTDIR/../../../helpers/run_summary.sh"
   $ FIRST_APP_BUILD=$(getSummaryTaskId "$FIRST" "my-app#build")
   $ SECOND_APP_BUILD=$(getSummaryTaskId "$SECOND" "my-app#build")
   $ FIRST_UTIL_BUILD=$(getSummaryTaskId "$FIRST" "util#build")

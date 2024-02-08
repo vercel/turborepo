@@ -6,15 +6,19 @@ use std::{
 
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
-use turborepo_repository::package_graph::{self, PackageGraph, WorkspaceName};
+use turborepo_repository::{
+    change_mapper::ChangeMapError,
+    package_graph::{self, PackageGraph, WorkspaceName},
+};
 use turborepo_scm::SCM;
-use wax::Pattern;
+use wax::Program;
 
 use super::{
-    change_detector::{ChangeDetectError, PackageChangeDetector, SCMChangeDetector},
+    change_detector::GitChangeDetector,
     simple_glob::{Match, SimpleGlob},
     target_selector::{InvalidSelectorError, TargetSelector},
 };
+use crate::run::scope::change_detector::ScopeChangeDetector;
 
 pub struct PackageInference {
     package_name: Option<String>,
@@ -38,7 +42,7 @@ impl PackageInference {
         );
         let full_inference_path = turbo_root.resolve(pkg_inference_path);
         for (workspace_name, workspace_entry) in pkg_graph.workspaces() {
-            let pkg_path = turbo_root.resolve(workspace_entry.package_json_path());
+            let pkg_path = turbo_root.resolve(workspace_entry.package_path());
             let inferred_path_is_below = pkg_path.contains(&full_inference_path);
             // We skip over the root package as the inferred path will always be below it
             if inferred_path_is_below && (&pkg_path as &AbsoluteSystemPath) != turbo_root {
@@ -47,7 +51,7 @@ impl PackageInference {
                 // do so in a consistent manner
                 return Self {
                     package_name: Some(workspace_name.to_string()),
-                    directory_root: workspace_entry.package_json_path().to_owned(),
+                    directory_root: workspace_entry.package_path().to_owned(),
                 };
             }
             let inferred_path_is_between_root_and_pkg = full_inference_path.contains(&pkg_path);
@@ -75,7 +79,14 @@ impl PackageInference {
         }
 
         if selector.parent_dir != turbopath::AnchoredSystemPathBuf::default() {
-            selector.parent_dir = self.directory_root.join(&selector.parent_dir);
+            let repo_relative_parent_dir = self.directory_root.join(&selector.parent_dir);
+            let clean_parent_dir =
+                path_clean::clean(std::path::Path::new(repo_relative_parent_dir.as_path()))
+                    .into_os_string()
+                    .into_string()
+                    .expect("path was valid utf8 before cleaning");
+            selector.parent_dir = AnchoredSystemPathBuf::try_from(clean_parent_dir.as_str())
+                .expect("path wasn't absolute before cleaning");
         } else if self.package_name.is_none() {
             // fallback: the user didn't set a parent directory and we didn't find a single
             // package, so use the directory we inferred and select all subdirectories
@@ -86,7 +97,7 @@ impl PackageInference {
     }
 }
 
-pub struct FilterResolver<'a, T: PackageChangeDetector> {
+pub struct FilterResolver<'a, T: GitChangeDetector> {
     pkg_graph: &'a PackageGraph,
     turbo_root: &'a AbsoluteSystemPath,
     inference: Option<PackageInference>,
@@ -94,7 +105,7 @@ pub struct FilterResolver<'a, T: PackageChangeDetector> {
     change_detector: T,
 }
 
-impl<'a> FilterResolver<'a, SCMChangeDetector<'a>> {
+impl<'a> FilterResolver<'a, ScopeChangeDetector<'a>> {
     pub(crate) fn new(
         opts: &'a super::ScopeOpts,
         pkg_graph: &'a PackageGraph,
@@ -102,7 +113,7 @@ impl<'a> FilterResolver<'a, SCMChangeDetector<'a>> {
         inference: Option<PackageInference>,
         scm: &'a SCM,
     ) -> Self {
-        let change_detector = SCMChangeDetector::new(
+        let change_detector = ScopeChangeDetector::new(
             turbo_root,
             scm,
             pkg_graph,
@@ -113,7 +124,7 @@ impl<'a> FilterResolver<'a, SCMChangeDetector<'a>> {
     }
 }
 
-impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
+impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     pub(crate) fn new_with_change_detector(
         pkg_graph: &'a PackageGraph,
         turbo_root: &'a AbsoluteSystemPath,
@@ -343,7 +354,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
             } else {
                 let path = selector.parent_dir.to_unix();
                 let parent_dir_matcher = wax::Glob::new(path.as_str())?;
-                let matches = parent_dir_matcher.is_match(info.package_json_path.as_path());
+                let matches = parent_dir_matcher.is_match(info.package_path().as_path());
 
                 if matches {
                     entry_packages.insert(name.to_owned());
@@ -404,7 +415,11 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
         let mut selector_valid = false;
 
         let path = selector.parent_dir.to_unix();
-        let parent_dir_globber = wax::Glob::new(path.as_str()).unwrap();
+        let parent_dir_globber =
+            wax::Glob::new(path.as_str()).map_err(|err| ResolutionError::InvalidDirectoryGlob {
+                glob: path.as_str().to_string(),
+                err: Box::new(err),
+            })?;
 
         if !selector.from_ref.is_empty() {
             selector_valid = true;
@@ -413,7 +428,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
             let package_path_lookup = self
                 .pkg_graph
                 .workspaces()
-                .map(|(name, entry)| (name, entry.package_json_path()))
+                .map(|(name, entry)| (name, entry.package_path()))
                 .collect::<HashMap<_, _>>();
 
             for package in changed_packages {
@@ -446,7 +461,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
             } else {
                 let packages = self.pkg_graph.workspaces();
                 for (name, _) in packages.filter(|(_name, info)| {
-                    let path = info.package_json_path.as_path();
+                    let path = info.package_path().as_path();
                     parent_dir_globber.is_match(path)
                 }) {
                     entry_packages.insert(name.to_owned());
@@ -484,7 +499,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
         &self,
         from_ref: &str,
         to_ref: &str,
-    ) -> Result<HashSet<WorkspaceName>, ChangeDetectError> {
+    ) -> Result<HashSet<WorkspaceName>, ChangeMapError> {
         self.change_detector.changed_packages(from_ref, to_ref)
     }
 
@@ -560,7 +575,12 @@ pub enum ResolutionError {
     #[error("Unable to query SCM: {0}")]
     Scm(#[from] turborepo_scm::Error),
     #[error("Unable to calculate changes: {0}")]
-    ChangeDetectError(#[from] ChangeDetectError),
+    ChangeDetectError(#[from] ChangeMapError),
+    #[error("'Invalid directory filter '{glob}': {err}")]
+    InvalidDirectoryGlob {
+        glob: String,
+        err: Box<wax::BuildError>,
+    },
 }
 
 #[cfg(test)]
@@ -570,6 +590,7 @@ mod test {
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
     use turborepo_repository::{
+        change_mapper::ChangeMapError,
         discovery::PackageDiscovery,
         package_graph::{PackageGraph, WorkspaceName, ROOT_PKG_NAME},
         package_json::PackageJson,
@@ -577,7 +598,7 @@ mod test {
     };
 
     use super::{FilterResolver, PackageInference, TargetSelector};
-    use crate::run::scope::change_detector::{ChangeDetectError, PackageChangeDetector};
+    use crate::run::scope::change_detector::GitChangeDetector;
 
     fn get_name(name: &str) -> (Option<&str>, &str) {
         if let Some(idx) = name.rfind('/') {
@@ -614,7 +635,7 @@ mod test {
 
     /// Make a project resolver with the provided dependencies. Extras is for
     /// packages that are not dependencies of any other package.
-    fn make_project<T: PackageChangeDetector>(
+    fn make_project<T: GitChangeDetector>(
         dependencies: &[(&str, &str)],
         extras: &[&str],
         package_inference: Option<PackageInference>,
@@ -625,7 +646,7 @@ mod test {
             AbsoluteSystemPathBuf::new(temp_folder.path().as_os_str().to_str().unwrap()).unwrap(),
         ));
 
-        let packages = dependencies
+        let package_dirs = dependencies
             .iter()
             .flat_map(|(a, b)| vec![a, b])
             .chain(extras.iter())
@@ -641,13 +662,16 @@ mod test {
                     acc
                 });
 
-        let package_jsons = packages
+        let package_jsons = package_dirs
             .iter()
             .map(|package_path| {
                 let (_, name) = get_name(package_path);
                 (
                     turbo_root
-                        .join_unix_path(RelativeUnixPathBuf::new(**package_path).unwrap())
+                        .join_unix_path(
+                            RelativeUnixPathBuf::new(format!("{package_path}/package.json"))
+                                .unwrap(),
+                        )
                         .unwrap(),
                     PackageJson {
                         name: Some(name.to_string()),
@@ -807,6 +831,18 @@ mod test {
         None,
         &["project-0", "project-1"] ;
         "select by parentDir using glob"
+    )]
+    #[test_case(
+        vec![TargetSelector {
+            parent_dir: AnchoredSystemPathBuf::try_from(if cfg!(windows) { "..\\packages\\*" } else { "../packages/*" }).unwrap(),
+            ..Default::default()
+        }],
+        Some(PackageInference{
+            package_name: None,
+            directory_root: AnchoredSystemPathBuf::try_from("project-5").unwrap(),
+        }),
+        &["project-0", "project-1"] ;
+        "select sibling directory"
     )]
     #[test_case(
         vec![
@@ -1114,12 +1150,12 @@ mod test {
         }
     }
 
-    impl<'a> PackageChangeDetector for TestChangeDetector<'a> {
+    impl<'a> GitChangeDetector for TestChangeDetector<'a> {
         fn changed_packages(
             &self,
             from: &str,
             to: &str,
-        ) -> Result<HashSet<WorkspaceName>, ChangeDetectError> {
+        ) -> Result<HashSet<WorkspaceName>, ChangeMapError> {
             Ok(self
                 .0
                 .get(&(from, to))

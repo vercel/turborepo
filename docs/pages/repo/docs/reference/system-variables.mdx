@@ -1,0 +1,35 @@
+---
+title: System environment variables
+description: Modify Turborepo's behavior using environment variables for different environments and machines.
+---
+
+## System environment variables
+
+By setting certain environment variables, you can change Turborepo's behavior. This can be useful for creating specific configurations for different environments and machines.
+
+| Variable                           | Description                                                                                                                                                                                                                                   |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TURBO_API`                        | Set the base URL for [Remote Cache](/repo/docs/core-concepts/remote-caching).                                                                                                                                                                 |
+| `TURBO_BINARY_PATH`                | Manually set the path to the `turbo` binary. By default, `turbo` will automatically discover the binary so you should only use this in extremely rare circumstances.                                                                          |
+| `TURBO_CI_VENDOR_ENV_KEY`          | Set a prefix for environment variables that you want **excluded** from [Framework Inference](/repo/docs/core-concepts/caching/environment-variable-inputs#framework-inference).                                                               |
+| `TURBO_FORCE`                      | Always force all tasks in your pipelines to run in full, opting out of all caching.                                                                                                                                                           |
+| `TURBO_LOG_ORDER`                  | Set the [log order](https://turbo.build/repo/docs/reference/command-line-reference/run#--log-order) for your pipeline's logs. Allowed values are `grouped` and `default`.                                                                     |
+| `TURBO_LOGIN`                      | Set the URL used to log in to [Remote Cache](/repo/docs/core-concepts/remote-caching).                                                                                                                                                        |
+| `TURBO_NO_UPDATE_NOTIFIER`         | Remove the update notifier that appears when a new version of `turbo` is available. You can also use `NO_UPDATE_NOTIFIER` per ecosystem convention.                                                                                           |
+| `TURBO_PREFLIGHT`                  | Enables sending a preflight request before every cache artifact and analytics request. The follow-up upload and download will follow redirects. Only applicable when [Remote Caching](/repo/docs/core-concepts/remote-caching) is configured. |
+| `TURBO_REMOTE_CACHE_READ_ONLY`     | Prevent writing to the [Remote Cache](/repo/docs/core-concepts/remote-caching) - but still allow reading.                                                                                                                                     |
+| `TURBO_REMOTE_CACHE_TIMEOUT`       | Set a timeout in seconds for `turbo` to get artifacts from [Remote Cache](/repo/docs/core-concepts/remote-caching).                                                                                                                           |
+| `TURBO_REMOTE_ONLY`                | Always ignore the local filesystem cache for all tasks.                                                                                                                                                                                       |
+| `TURBO_RUN_SUMMARY`                | Generate a [Run Summary](/repo/docs/reference/command-line-reference/run#--summarize) when you run a pipeline.                                                                                                                                |
+| `TURBO_TEAM`                       | The account name associated with your repository. When using [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching#vercel-remote-cache), this is your team's slug.                                                           |
+| `TURBO_TEAMID`                     | The account identifier associated with your repository. When using [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching#vercel-remote-cache), this is your team's ID.                                                       |
+| `TURBO_TELEMETRY_MESSAGE_DISABLED` | Disable the message notifying you that [Telemetry](/repo/docs/telemetry) is enabled.                                                                                                                                                          |
+| `TURBO_TOKEN`                      | The Bearer token for authentication to access [Remote Cache](/repo/docs/core-concepts/remote-caching).                                                                                                                                        |
+
+## Environment variables in tasks
+
+Turborepo will make the following environment variables available within your tasks while they are executing:
+
+| Variable     | Description                             |
+| ------------ | --------------------------------------- |
+| `TURBO_HASH` | The hash of the currently running task. |

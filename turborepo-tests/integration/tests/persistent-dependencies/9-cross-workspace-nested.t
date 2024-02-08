@@ -1,6 +1,5 @@
 # Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) persistent_dependencies/9-cross-workspace-nested
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh persistent_dependencies/9-cross-workspace-nested
 
 // Workspace Graph
 // - No workspace dependencies
@@ -13,6 +12,7 @@
 // 		 		 └── workspace-z#dev // this one is persistent
 //
   $ ${TURBO} run build
-   ERROR  run failed: error preparing engine: Invalid persistent task configuration:
-  "app-z#dev" is a persistent task, "app-c#build" cannot depend on it
+    x error preparing engine: Invalid persistent task configuration:
+    | "app-z#dev" is a persistent task, "app-c#build" cannot depend on it
+  
   [1]

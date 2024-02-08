@@ -13,7 +13,7 @@ g++ turbo.cpp -o turbo.exe
 SCRIPT_DIR=$(dirname "${BASH_SOURCE[0]}")
 UP_ONE="$SCRIPT_DIR/.."
 ROOT_DIR="$SCRIPT_DIR/../.."
-FIND_TURBO_FIXTURES_DIR="${ROOT_DIR}/turborepo-tests/integration/tests/_fixtures/find_turbo"
+FIND_TURBO_FIXTURES_DIR="${ROOT_DIR}/turborepo-tests/integration/fixtures/find_turbo"
 
 echo "PWD: $PWD"
 echo "ROOT_DIR: $ROOT_DIR"
@@ -40,3 +40,5 @@ cp turbo.exe "${FIND_TURBO_FIXTURES_DIR}/unplugged_env_moved/.moved/unplugged/tu
 
 cp turbo.exe "${FIND_TURBO_FIXTURES_DIR}/unplugged_moved/.moved/unplugged/turbo-windows-64-npm-1.0.0-520925a700/node_modules/turbo-windows-64/bin/"
 cp turbo.exe "${FIND_TURBO_FIXTURES_DIR}/unplugged_moved/.moved/unplugged/turbo-windows-arm64-npm-1.0.0-520925a700/node_modules/turbo-windows-arm64/bin/"
+
+echo "Done copying files"

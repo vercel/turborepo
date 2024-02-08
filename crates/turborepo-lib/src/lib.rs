@@ -1,9 +1,11 @@
 #![feature(assert_matches)]
 #![feature(box_patterns)]
+#![feature(byte_slice_trim_ascii)]
 #![feature(error_generic_member_access)]
 #![feature(hash_extract_if)]
 #![feature(option_get_or_insert_default)]
 #![feature(once_cell_try)]
+#![feature(try_blocks)]
 #![deny(clippy::all)]
 // Clippy's needless mut lint is buggy: https://github.com/rust-lang/rust-clippy/issues/11299
 #![allow(clippy::needless_pass_by_ref_mut)]
@@ -15,7 +17,7 @@ mod commands;
 mod config;
 mod daemon;
 mod engine;
-mod execution_state;
+
 mod framework;
 pub(crate) mod globwatcher;
 mod hash;
@@ -28,19 +30,16 @@ mod signal;
 mod task_graph;
 mod task_hash;
 mod tracing;
+mod turbo_json;
+mod unescape;
 
-pub use child::spawn_child;
-
-use crate::commands::CommandBase;
-pub use crate::{cli::Args, execution_state::ExecutionState};
-
-/// The payload from running main, if the program can complete without using Go
-/// the Rust variant will be returned. If Go is needed then the execution state
-/// that should be passed to Go will be returned.
-pub enum Payload {
-    Rust(Result<i32, shim::Error>),
-    Go(Box<CommandBase>),
-}
+pub use crate::{
+    child::spawn_child,
+    cli::Args,
+    commands::DaemonRootHasher,
+    daemon::{DaemonClient, DaemonConnector},
+    run::package_discovery::DaemonPackageDiscovery,
+};
 
 pub fn get_version() -> &'static str {
     include_str!("../../../version.txt")
@@ -51,16 +50,12 @@ pub fn get_version() -> &'static str {
         .trim_end()
 }
 
-pub fn main() -> Payload {
-    match shim::run() {
-        Ok(payload) => payload,
-        // We don't need to print "Turbo error" for Run errors
-        Err(err @ shim::Error::Cli(cli::Error::Run(_))) => Payload::Rust(Err(err)),
-        Err(err) => {
-            // This raw print matches the Go behavior, once we no longer care
-            // about matching formatting we should remove this.
-            println!("Turbo error: {err}");
-            Payload::Rust(Err(err))
-        }
-    }
+pub fn main() -> Result<i32, shim::Error> {
+    shim::run()
 }
+
+#[cfg(all(feature = "native-tls", feature = "rustls-tls"))]
+compile_error!("You can't enable both the `native-tls` and `rustls-tls` feature.");
+
+#[cfg(all(not(feature = "native-tls"), not(feature = "rustls-tls")))]
+compile_error!("You have to enable one of the TLS features: `native-tls` or `rustls-tls`");

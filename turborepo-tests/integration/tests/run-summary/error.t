@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd)
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
 
   $ rm -rf .turbo/runs
 
@@ -10,7 +9,7 @@ that behavior in this test.
   $ ${TURBO} run maybefails --filter=my-app --summarize > /dev/null 2>&1
   [1]
 
-  $ source "$TESTDIR/../_helpers/run-summary-utils.sh"
+  $ source "$TESTDIR/../../../helpers/run_summary.sh"
   $ SUMMARY=$(/bin/ls .turbo/runs/*.json | head -n1)
 
 Validate that there was a failed task and exitCode is 1 (which is what we get from npm for the failed task)
@@ -92,7 +91,7 @@ Don't use --filter here, so we can validate that both tasks attempted to run
   $ ${TURBO} run maybefails --summarize --force --continue > /dev/null  2>&1
   [1]
 
-  $ source "$TESTDIR/../_helpers/run-summary-utils.sh"
+  $ source "$TESTDIR/../../../helpers/run_summary.sh"
   $ SUMMARY=$(/bin/ls .turbo/runs/*.json | head -n1)
 
 success should be 1, and attempted should be 2
