@@ -565,6 +565,7 @@ impl<'a> ExecContextFactory<'a> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn exec_context(
         &self,
         task_id: TaskId<'static>,
