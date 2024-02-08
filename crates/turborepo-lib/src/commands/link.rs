@@ -27,6 +27,7 @@ use crate::{
     cli::LinkTarget,
     commands::CommandBase,
     config,
+    gitignore::ensure_turbo_is_gitignored,
     rewrite_json::{self, set_path, unset_path},
 };
 
@@ -254,9 +255,11 @@ pub async fn link(
             };
 
             if modify_gitignore {
-                add_turbo_to_gitignore(base).map_err(|error| config::Error::FailedToSetConfig {
-                    config_path: base.repo_root.join_component(".gitignore"),
-                    error,
+                ensure_turbo_is_gitignored(&base.repo_root).map_err(|error| {
+                    config::Error::FailedToSetConfig {
+                        config_path: base.repo_root.join_component(".gitignore"),
+                        error,
+                    }
                 })?;
             }
 
