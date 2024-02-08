@@ -72,11 +72,11 @@ impl<T> DaemonClient<T> {
     pub async fn get_changed_outputs(
         &mut self,
         hash: String,
-        output_globs: Vec<String>,
+        output_globs: &Vec<ValidatedGlob>,
     ) -> Result<Vec<String>, DaemonError> {
         let output_globs = output_globs
             .iter()
-            .map(|raw_glob| format_repo_relative_glob(raw_glob))
+            .map(|validated_glob| validated_glob.as_str().to_string())
             .collect();
         Ok(self
             .client
@@ -89,8 +89,8 @@ impl<T> DaemonClient<T> {
     pub async fn notify_outputs_written(
         &mut self,
         hash: String,
-        output_globs: Vec<ValidatedGlob>,
-        output_exclusion_globs: Vec<ValidatedGlob>,
+        output_globs: &Vec<ValidatedGlob>,
+        output_exclusion_globs: &Vec<ValidatedGlob>,
         time_saved: u64,
     ) -> Result<(), DaemonError> {
         let output_globs = output_globs

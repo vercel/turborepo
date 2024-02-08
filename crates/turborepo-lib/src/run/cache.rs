@@ -195,12 +195,11 @@ impl TaskCache {
             return Ok(None);
         }
 
+        let validated_inclusions = self.repo_relative_globs.validated_inclusions()?;
+
         let changed_output_count = if let Some(daemon_client) = &mut self.daemon_client {
             match daemon_client
-                .get_changed_outputs(
-                    self.hash.to_string(),
-                    self.repo_relative_globs.inclusions.clone(),
-                )
+                .get_changed_outputs(self.hash.to_string(), &validated_inclusions)
                 .await
             {
                 Ok(changed_output_globs) => changed_output_globs.len(),
@@ -249,13 +248,12 @@ impl TaskCache {
             if let Some(daemon_client) = &mut self.daemon_client {
                 // Do we want to error the process if we can't parse the globs? We probably
                 // won't have even gotten this far if this fails...
-                let validated_inclusions = self.repo_relative_globs.validated_inclusions()?;
                 let validated_exclusions = self.repo_relative_globs.validated_exclusions()?;
                 if let Err(err) = daemon_client
                     .notify_outputs_written(
                         self.hash.clone(),
-                        validated_inclusions,
-                        validated_exclusions,
+                        &validated_inclusions,
+                        &validated_exclusions,
                         cache_hit_metadata.time_saved,
                     )
                     .await
@@ -348,8 +346,8 @@ impl TaskCache {
             let notify_result = daemon_client
                 .notify_outputs_written(
                     self.hash.to_string(),
-                    validated_inclusions,
-                    validated_exclusions,
+                    &validated_inclusions,
+                    &validated_exclusions,
                     duration.as_millis() as u64,
                 )
                 .await
