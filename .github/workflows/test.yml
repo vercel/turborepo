@@ -229,16 +229,11 @@ jobs:
           SCCACHE_BUCKET: turborepo-sccache
           SCCACHE_REGION: us-east-2
           # Only use sccache if we're in the Vercel repo.
-          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+          RUSTC_WRAPPER: ""
           CARGO_INCREMENTAL: 0
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           EXPERIMENTAL_RUST_CODEPATH: true
-
-      - name: Run sccache stat for check
-        shell: bash
-        run: ${SCCACHE_PATH} --show-stats
-        if: ${{ !github.event.pull_request.head.repo.fork }}
 
   turborepo_integration:
     name: Turborepo Integration
