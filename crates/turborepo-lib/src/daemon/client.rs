@@ -208,6 +208,9 @@ pub enum DaemonError {
 
     #[error("`tail` is not installed. Please install it to use this feature.")]
     TailNotInstalled,
+
+    #[error(transparent)]
+    PathError(#[from] turbopath::PathError),
 }
 
 impl From<Status> for DaemonError {

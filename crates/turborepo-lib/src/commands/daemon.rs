@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use camino::Utf8PathBuf;
 use futures::FutureExt;
+use itertools::Itertools;
 use pidlock::PidlockError::AlreadyOwned;
 use serde_json::json;
 use time::{format_description, OffsetDateTime};
@@ -28,7 +29,7 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
     let (can_start_server, can_kill_server) = match command {
         DaemonCommand::Status { .. } | DaemonCommand::Logs => (false, false),
         DaemonCommand::Stop => (false, true),
-        DaemonCommand::Restart | DaemonCommand::Start => (true, true),
+        DaemonCommand::Restart | DaemonCommand::Start | DaemonCommand::Packages => (true, true),
         DaemonCommand::Clean => (false, true),
     };
 
@@ -157,6 +158,22 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
             }
             clean(&pid_file, &sock_file).await?;
             println!("Done");
+        }
+        DaemonCommand::Packages => {
+            let mut client = connector.connect().await?;
+            let response = client.discover_packages().await?;
+            response
+                .package_files
+                .into_iter()
+                .map(|package| {
+                    let package_json_path =
+                        AbsoluteSystemPathBuf::new(package.package_json).unwrap();
+                    let package_path = package_json_path.parent().unwrap();
+                    let anchored_package_path = base.repo_root.anchor(package_path).unwrap();
+                    anchored_package_path
+                })
+                .sorted()
+                .for_each(|package| println!("{}", package));
         }
     };
 

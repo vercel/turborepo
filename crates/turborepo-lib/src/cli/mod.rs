@@ -256,6 +256,8 @@ pub enum DaemonCommand {
     Clean,
     /// Shows the daemon logs
     Logs,
+    /// Gets packages
+    Packages,
 }
 
 #[derive(Subcommand, Copy, Clone, Debug, Serialize, PartialEq)]
