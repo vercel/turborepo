@@ -116,8 +116,9 @@ impl RunCache {
         }
     }
 
-    pub async fn wait_for_cache(&self) {
-        self.cache.wait().await
+    pub async fn shutdown_cache(&self) {
+        // Ignore errors coming from cache already shutting down
+        self.cache.shutdown().await.ok();
     }
 }
 
