@@ -257,44 +257,24 @@ impl SourceMap {
                         return Ok(s.map.to_rope());
                     }
                 }
+                let s = s.to_crate_wrapper().await?;
 
-                // My kingdom for a decent dedent macro with interpolation!
-                let mut rope = RopeBuilder::from(
-                    r#"{
-  "version": 3,
-  "sections": ["#,
-                );
+                let mut sections = vec![];
 
-                let sections = s
-                    .sections
-                    .iter()
-                    .map(|s| async move { Ok((s.offset, s.map.to_rope().await?)) })
-                    .try_join()
-                    .await?;
-
-                let mut first_section = true;
-                for (offset, section_map) in sections {
-                    if !first_section {
-                        rope += ",";
-                    }
-                    first_section = false;
-
-                    write!(
-                        rope,
-                        r#"
-    {{"offset": {{"line": {}, "column": {}}}, "map": "#,
-                        offset.line, offset.column,
-                    )?;
-
-                    rope += &*section_map;
-
-                    rope += "}";
+                for section in &s.sections {
+                    let map = section.map.clone();
+                    sections.push(sourcemap::SourceMapSection::new(
+                        (section.offset.line as u32, section.offset.column as u32),
+                        None,
+                        Some(map.0.clone()),
+                    ));
                 }
 
-                rope += "]
-}";
-
-                rope.build()
+                let map = SourceMapIndex::new(None, sections);
+                let map = CrateMapWrapper(DecodedMap::Regular(map.flatten()?));
+                let mut bytes = vec![];
+                map.to_writer(&mut bytes)?;
+                Rope::from(bytes)
             }
         };
         Ok(rope.cell())
