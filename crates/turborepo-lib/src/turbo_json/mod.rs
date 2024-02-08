@@ -355,8 +355,13 @@ impl RawTurboJson {
         let mut pipeline = Pipeline::default();
 
         for (task_name, trace_file) in trace {
+            let spanned_outputs: Vec<Spanned<UnescapedString>> = trace_file
+                .outputs
+                .iter()
+                .map(|output| Spanned::new(output.clone()))
+                .collect();
             let task_definition = RawTaskDefinition {
-                outputs: Some(Spanned::new(trace_file.outputs.clone())),
+                outputs: Some(spanned_outputs),
                 env: Some(
                     trace_file
                         .accessed
