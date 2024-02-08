@@ -3,6 +3,7 @@ use std::{
     fmt::Display,
     future::IntoFuture,
     str::FromStr,
+    time::Duration,
 };
 
 use notify::Event;
@@ -13,7 +14,7 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
 use wax::{Any, Glob, Program};
 
 use crate::{
-    cookie_jar::{CookieError, CookieJar},
+    cookies::{CookieError, CookieWatcher, CookieWriter, CookiedRequest},
     NotifyError,
 };
 
@@ -80,8 +81,12 @@ impl GlobSet {
 pub enum Error {
     #[error(transparent)]
     CookieError(#[from] CookieError),
+    #[error("failed to send query to globwatcher: {0}")]
+    SendError(#[from] mpsc::error::SendError<CookiedRequest<Query>>),
     #[error("globwatcher has closed")]
     Closed,
+    #[error("globwatcher request timed out")]
+    Timeout(#[from] tokio::time::error::Elapsed),
 }
 
 impl From<mpsc::error::SendError<Query>> for Error {
@@ -97,13 +102,13 @@ impl From<oneshot::error::RecvError> for Error {
 }
 
 pub struct GlobWatcher {
-    cookie_jar: CookieJar,
+    cookie_jar: CookieWriter,
     // _exit_ch exists to trigger a close on the receiver when an instance
     // of this struct is dropped. The task that is receiving events will exit,
     // dropping the other sender for the broadcast channel, causing all receivers
     // to be notified of a close.
     _exit_ch: oneshot::Sender<()>,
-    query_ch: mpsc::Sender<Query>,
+    query_ch: mpsc::Sender<CookiedRequest<Query>>,
 }
 
 #[derive(Debug)]
@@ -134,19 +139,22 @@ struct GlobTracker {
 
     recv: broadcast::Receiver<Result<Event, NotifyError>>,
 
-    query_recv: mpsc::Receiver<Query>,
+    query_recv: mpsc::Receiver<CookiedRequest<Query>>,
+
+    cookie_watcher: CookieWatcher<Query>,
 }
 
 impl GlobWatcher {
     pub fn new(
         root: &AbsoluteSystemPath,
-        cookie_jar: CookieJar,
+        cookie_jar: CookieWriter,
         recv: broadcast::Receiver<Result<Event, NotifyError>>,
     ) -> Self {
         let (exit_ch, exit_signal) = tokio::sync::oneshot::channel();
         let (query_ch, query_recv) = mpsc::channel(256);
+        let cookie_root = cookie_jar.root().to_owned();
         tokio::task::spawn(
-            GlobTracker::new(root.to_owned(), exit_signal, recv, query_recv).watch(),
+            GlobTracker::new(root.to_owned(), cookie_root, exit_signal, recv, query_recv).watch(),
         );
         Self {
             cookie_jar,
@@ -155,34 +163,38 @@ impl GlobWatcher {
         }
     }
 
-    pub async fn watch_globs(&self, hash: Hash, globs: GlobSet) -> Result<(), Error> {
-        self.cookie_jar.wait_for_cookie().await?;
+    pub async fn watch_globs(
+        &self,
+        hash: Hash,
+        globs: GlobSet,
+        timeout: Duration,
+    ) -> Result<(), Error> {
         let (tx, rx) = oneshot::channel();
-        self.query_ch
-            .send(Query::WatchGlobs {
-                hash,
-                glob_set: globs,
-                resp: tx,
-            })
-            .await?;
-        rx.await?
+        let req = Query::WatchGlobs {
+            hash,
+            glob_set: globs,
+            resp: tx,
+        };
+        let cookied_request = self.cookie_jar.cookie_request(req).await?;
+        self.query_ch.send(cookied_request).await?;
+        tokio::time::timeout(timeout, rx).await??
     }
 
     pub async fn get_changed_globs(
         &self,
         hash: Hash,
         candidates: HashSet<String>,
+        timeout: Duration,
     ) -> Result<HashSet<String>, Error> {
-        self.cookie_jar.wait_for_cookie().await?;
         let (tx, rx) = oneshot::channel();
-        self.query_ch
-            .send(Query::GetChangedGlobs {
-                hash,
-                candidates,
-                resp: tx,
-            })
-            .await?;
-        rx.await?
+        let req = Query::GetChangedGlobs {
+            hash,
+            candidates,
+            resp: tx,
+        };
+        let cookied_request = self.cookie_jar.cookie_request(req).await?;
+        self.query_ch.send(cookied_request).await?;
+        tokio::time::timeout(timeout, rx).await??
     }
 }
 
@@ -197,9 +209,10 @@ enum WatchError {
 impl GlobTracker {
     fn new(
         root: AbsoluteSystemPathBuf,
+        cookie_root: AbsoluteSystemPathBuf,
         exit_signal: oneshot::Receiver<()>,
         recv: broadcast::Receiver<Result<Event, NotifyError>>,
-        query_recv: mpsc::Receiver<Query>,
+        query_recv: mpsc::Receiver<CookiedRequest<Query>>,
     ) -> Self {
         Self {
             root,
@@ -208,6 +221,13 @@ impl GlobTracker {
             exit_signal,
             recv,
             query_recv,
+            cookie_watcher: CookieWatcher::new(cookie_root),
+        }
+    }
+
+    fn handle_cookied_query(&mut self, cookied_query: CookiedRequest<Query>) {
+        if let Some(request) = self.cookie_watcher.check_request(cookied_query) {
+            self.handle_query(request);
         }
     }
 
@@ -267,6 +287,15 @@ impl GlobTracker {
                 for path in file_event.paths {
                     let path = AbsoluteSystemPathBuf::try_from(path)
                         .expect("filewatching should produce absolute paths");
+                    if let Some(queries) = self
+                        .cookie_watcher
+                        .pop_ready_requests(file_event.kind, &path)
+                    {
+                        for query in queries {
+                            self.handle_query(query);
+                        }
+                        return;
+                    }
                     let Ok(to_match) = self.root.anchor(path) else {
                         // irrelevant filesystem update
                         return;
@@ -281,7 +310,7 @@ impl GlobTracker {
         loop {
             tokio::select! {
                 _ = &mut self.exit_signal => return,
-                Some(query) = self.query_recv.recv().into_future() => self.handle_query(query),
+                Some(query) = self.query_recv.recv().into_future() => self.handle_cookied_query(query),
                 file_event = self.recv.recv().into_future() => self.handle_file_event(file_event)
             }
         }
@@ -350,7 +379,7 @@ mod test {
     use wax::{any, Glob};
 
     use crate::{
-        cookie_jar::CookieJar,
+        cookies::CookieWriter,
         globwatcher::{GlobSet, GlobWatcher},
         FileSystemWatcher,
     };
@@ -418,6 +447,7 @@ mod test {
 
     #[tokio::test]
     async fn test_track_outputs() {
+        let timeout = Duration::from_secs(2);
         let (repo_root, _tmp_dir) = temp_dir();
         setup(&repo_root);
         let cookie_dir = repo_root.join_component(".git");
@@ -425,7 +455,7 @@ mod test {
         let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)
             .await
             .unwrap();
-        let cookie_jar = CookieJar::new(&cookie_dir, Duration::from_secs(2), watcher.subscribe());
+        let cookie_jar = CookieWriter::new(&cookie_dir, Duration::from_secs(2));
 
         let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());
 
@@ -439,11 +469,14 @@ mod test {
 
         let hash = "the-hash".to_string();
 
-        glob_watcher.watch_globs(hash.clone(), globs).await.unwrap();
+        glob_watcher
+            .watch_globs(hash.clone(), globs, timeout)
+            .await
+            .unwrap();
 
         let candidates = HashSet::from_iter(raw_includes.iter().map(|s| s.to_string()));
         let results = glob_watcher
-            .get_changed_globs(hash.clone(), candidates.clone())
+            .get_changed_globs(hash.clone(), candidates.clone(), timeout)
             .await
             .unwrap();
         assert!(results.is_empty());
@@ -454,7 +487,7 @@ mod test {
             .create_with_contents("some bytes")
             .unwrap();
         let results = glob_watcher
-            .get_changed_globs(hash.clone(), candidates.clone())
+            .get_changed_globs(hash.clone(), candidates.clone(), timeout)
             .await
             .unwrap();
         assert!(results.is_empty());
@@ -465,7 +498,7 @@ mod test {
             .create_with_contents("some bytes")
             .unwrap();
         let results = glob_watcher
-            .get_changed_globs(hash.clone(), candidates.clone())
+            .get_changed_globs(hash.clone(), candidates.clone(), timeout)
             .await
             .unwrap();
         assert!(results.is_empty());
@@ -476,7 +509,7 @@ mod test {
             .create_with_contents("some bytes")
             .unwrap();
         let results = glob_watcher
-            .get_changed_globs(hash.clone(), candidates.clone())
+            .get_changed_globs(hash.clone(), candidates.clone(), timeout)
             .await
             .unwrap();
         let expected = HashSet::from_iter(["my-pkg/dist/**".to_string()]);
@@ -488,7 +521,7 @@ mod test {
             .create_with_contents("some bytes")
             .unwrap();
         let results = glob_watcher
-            .get_changed_globs(hash.clone(), candidates.clone())
+            .get_changed_globs(hash.clone(), candidates.clone(), timeout)
             .await
             .unwrap();
         let expected =
@@ -498,6 +531,7 @@ mod test {
 
     #[tokio::test]
     async fn test_track_multiple_hashes() {
+        let timeout = Duration::from_secs(2);
         let (repo_root, _tmp_dir) = temp_dir();
         setup(&repo_root);
         let cookie_dir = repo_root.join_component(".git");
@@ -505,7 +539,7 @@ mod test {
         let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)
             .await
             .unwrap();
-        let cookie_jar = CookieJar::new(&cookie_dir, Duration::from_secs(2), watcher.subscribe());
+        let cookie_jar = CookieWriter::new(&cookie_dir, Duration::from_secs(2));
 
         let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());
 
@@ -518,11 +552,14 @@ mod test {
 
         let hash = "the-hash".to_string();
 
-        glob_watcher.watch_globs(hash.clone(), globs).await.unwrap();
+        glob_watcher
+            .watch_globs(hash.clone(), globs, timeout)
+            .await
+            .unwrap();
 
         let candidates = HashSet::from_iter(raw_includes.iter().map(|s| s.to_string()));
         let results = glob_watcher
-            .get_changed_globs(hash.clone(), candidates.clone())
+            .get_changed_globs(hash.clone(), candidates.clone(), timeout)
             .await
             .unwrap();
         assert!(results.is_empty());
@@ -535,20 +572,20 @@ mod test {
         };
         let second_hash = "the-second-hash".to_string();
         glob_watcher
-            .watch_globs(second_hash.clone(), second_globs)
+            .watch_globs(second_hash.clone(), second_globs, timeout)
             .await
             .unwrap();
 
         let second_candidates =
             HashSet::from_iter(second_raw_includes.iter().map(|s| s.to_string()));
         let results = glob_watcher
-            .get_changed_globs(hash.clone(), candidates.clone())
+            .get_changed_globs(hash.clone(), candidates.clone(), timeout)
             .await
             .unwrap();
         assert!(results.is_empty());
 
         let results = glob_watcher
-            .get_changed_globs(second_hash.clone(), second_candidates.clone())
+            .get_changed_globs(second_hash.clone(), second_candidates.clone(), timeout)
             .await
             .unwrap();
         assert!(results.is_empty());
@@ -560,7 +597,7 @@ mod test {
             .unwrap();
         // expect one changed glob for the first hash
         let results = glob_watcher
-            .get_changed_globs(hash.clone(), candidates.clone())
+            .get_changed_globs(hash.clone(), candidates.clone(), timeout)
             .await
             .unwrap();
         let expected = HashSet::from_iter(["my-pkg/.next/**".to_string()]);
@@ -569,7 +606,7 @@ mod test {
         // The second hash which excludes the change should still not have any changed
         // globs
         let results = glob_watcher
-            .get_changed_globs(second_hash.clone(), second_candidates.clone())
+            .get_changed_globs(second_hash.clone(), second_candidates.clone(), timeout)
             .await
             .unwrap();
         assert!(results.is_empty());
@@ -580,7 +617,7 @@ mod test {
             .create_with_contents("hello")
             .unwrap();
         let results = glob_watcher
-            .get_changed_globs(second_hash.clone(), second_candidates.clone())
+            .get_changed_globs(second_hash.clone(), second_candidates.clone(), timeout)
             .await
             .unwrap();
         assert_eq!(results, second_candidates);
@@ -588,6 +625,7 @@ mod test {
 
     #[tokio::test]
     async fn test_watch_single_file() {
+        let timeout = Duration::from_secs(2);
         let (repo_root, _tmp_dir) = temp_dir();
         setup(&repo_root);
         let cookie_dir = repo_root.join_component(".git");
@@ -595,7 +633,7 @@ mod test {
         let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)
             .await
             .unwrap();
-        let cookie_jar = CookieJar::new(&cookie_dir, Duration::from_secs(2), watcher.subscribe());
+        let cookie_jar = CookieWriter::new(&cookie_dir, Duration::from_secs(2));
 
         let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());
 
@@ -613,7 +651,10 @@ mod test {
 
         let hash = "the-hash".to_string();
 
-        glob_watcher.watch_globs(hash.clone(), globs).await.unwrap();
+        glob_watcher
+            .watch_globs(hash.clone(), globs, timeout)
+            .await
+            .unwrap();
 
         // A change to an irrelevant file
         repo_root
@@ -623,7 +664,7 @@ mod test {
 
         let candidates = HashSet::from_iter(raw_includes.iter().map(|s| s.to_string()));
         let results = glob_watcher
-            .get_changed_globs(hash.clone(), candidates.clone())
+            .get_changed_globs(hash.clone(), candidates.clone(), timeout)
             .await
             .unwrap();
         assert!(results.is_empty());
@@ -632,7 +673,7 @@ mod test {
         let watched_file = repo_root.join_components(&["my-pkg", ".next", "next-file:build"]);
         watched_file.create_with_contents("hello").unwrap();
         let results = glob_watcher
-            .get_changed_globs(hash.clone(), candidates.clone())
+            .get_changed_globs(hash.clone(), candidates.clone(), timeout)
             .await
             .unwrap();
         assert_eq!(results, candidates);

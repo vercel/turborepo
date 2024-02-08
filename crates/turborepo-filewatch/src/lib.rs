@@ -35,7 +35,7 @@ use {
     walkdir::WalkDir,
 };
 
-pub mod cookie_jar;
+pub mod cookies;
 #[cfg(target_os = "macos")]
 mod fsevent;
 pub mod globwatcher;

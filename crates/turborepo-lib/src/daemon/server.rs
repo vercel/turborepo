@@ -33,7 +33,7 @@ use tower::ServiceBuilder;
 use tracing::{error, info, trace, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_filewatch::{
-    cookie_jar::CookieJar,
+    cookies::CookieWriter,
     globwatcher::{Error as GlobWatcherError, GlobError, GlobSet, GlobWatcher},
     package_watcher::PackageWatcher,
     FileSystemWatcher, WatchError,
@@ -97,12 +97,8 @@ async fn start_filewatching<PD: PackageDiscovery + Send + 'static>(
     backup_discovery: PD,
 ) -> Result<(), WatchError> {
     let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).await?;
-    let cookie_jar = CookieJar::new(
-        watcher.cookie_dir(),
-        Duration::from_millis(100),
-        watcher.subscribe(),
-    );
-    let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());
+    let cookie_writer = CookieWriter::new(watcher.cookie_dir(), Duration::from_millis(100));
+    let glob_watcher = GlobWatcher::new(&repo_root, cookie_writer, watcher.subscribe());
     let package_watcher =
         PackageWatcher::new(repo_root.clone(), watcher.subscribe(), backup_discovery)
             .await
@@ -331,7 +327,9 @@ impl TurboGrpcServiceInner {
     ) -> Result<(), RpcError> {
         let glob_set = GlobSet::from_raw(output_globs, output_glob_exclusions)?;
         let fw = self.wait_for_filewatching().await?;
-        fw.glob_watcher.watch_globs(hash.clone(), glob_set).await?;
+        fw.glob_watcher
+            .watch_globs(hash.clone(), glob_set, REQUEST_TIMEOUT)
+            .await?;
         {
             let mut times_saved = self.times_saved.lock().expect("times saved lock poisoned");
             times_saved.insert(hash, time_saved);
@@ -349,7 +347,10 @@ impl TurboGrpcServiceInner {
             times_saved.get(hash.as_str()).copied().unwrap_or_default()
         };
         let fw = self.wait_for_filewatching().await?;
-        let changed_globs = fw.glob_watcher.get_changed_globs(hash, candidates).await?;
+        let changed_globs = fw
+            .glob_watcher
+            .get_changed_globs(hash, candidates, REQUEST_TIMEOUT)
+            .await?;
         Ok((changed_globs, time_saved))
     }
 
