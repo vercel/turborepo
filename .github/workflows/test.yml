@@ -226,11 +226,8 @@ jobs:
 
       - run: turbo run build --filter=cli --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
         env:
-          SCCACHE_BUCKET: turborepo-sccache
-          SCCACHE_REGION: us-east-2
           # Only use sccache if we're in the Vercel repo.
           RUSTC_WRAPPER: ""
-          CARGO_INCREMENTAL: 0
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           EXPERIMENTAL_RUST_CODEPATH: true
