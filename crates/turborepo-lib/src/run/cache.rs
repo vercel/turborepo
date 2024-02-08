@@ -2,9 +2,12 @@ use std::{io::Write, sync::Arc, time::Duration};
 
 use console::StyledObject;
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+use turbopath::{
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
+};
 use turborepo_cache::{AsyncCache, CacheError, CacheHitMetadata, CacheSource};
 use turborepo_repository::package_graph::WorkspaceInfo;
+use turborepo_scm::SCM;
 use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
 use turborepo_ui::{
     color, replay_logs, ColorSelector, LogWriter, PrefixedUI, PrefixedWriter, GREY, UI,
@@ -13,6 +16,7 @@ use turborepo_ui::{
 use crate::{
     cli::OutputLogsMode,
     daemon::{DaemonClient, DaemonConnector},
+    hash::{FileHashes, TurboHash},
     opts::RunCacheOpts,
     run::task_id::TaskId,
     task_graph::{TaskDefinition, TaskOutputs},
@@ -32,6 +36,10 @@ pub enum Error {
     Daemon(#[from] crate::daemon::DaemonError),
     #[error("no connection to daemon")]
     NoDaemon,
+    #[error(transparent)]
+    Scm(#[from] turborepo_scm::Error),
+    #[error(transparent)]
+    Path(#[from] turbopath::PathError),
 }
 
 pub struct RunCache {
@@ -363,5 +371,90 @@ impl TaskCache {
 
     pub fn expanded_outputs(&self) -> &[AnchoredSystemPathBuf] {
         &self.expanded_outputs
+    }
+}
+
+#[derive(Clone)]
+pub struct ConfigCache {
+    hash: String,
+    repo_root: AbsoluteSystemPathBuf,
+    config_file: AbsoluteSystemPathBuf,
+    anchored_path: AnchoredSystemPathBuf,
+    cache: AsyncCache,
+}
+
+impl ConfigCache {
+    pub fn new(
+        hash: String,
+        repo_root: AbsoluteSystemPathBuf,
+        config_path: &[&str],
+        cache: AsyncCache,
+    ) -> Self {
+        let config_file = repo_root.join_components(config_path);
+        ConfigCache {
+            hash,
+            repo_root: repo_root.clone(),
+            config_file: config_file.clone(),
+            anchored_path: AnchoredSystemPathBuf::relative_path_between(&repo_root, &config_file),
+            cache,
+        }
+    }
+
+    pub fn hash(&self) -> &str {
+        &self.hash
+    }
+
+    pub fn exists(&self) -> bool {
+        self.config_file.try_exists().unwrap_or(false)
+    }
+
+    pub async fn restore(
+        &self,
+    ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
+        self.cache.fetch(&self.repo_root, &self.hash).await
+    }
+
+    pub async fn save(&self) -> Result<(), CacheError> {
+        match self.exists() {
+            true => {
+                debug!("config file exists, caching");
+                self.cache
+                    .put(
+                        self.repo_root.clone(),
+                        self.hash.clone(),
+                        vec![self.anchored_path.clone()],
+                        0,
+                    )
+                    .await
+            }
+            false => {
+                debug!("config file does not exist, skipping cache save");
+                Ok(())
+            }
+        }
+    }
+
+    // The config hash is used for task access tracing, and is keyed off of all
+    // files in the repository
+    pub fn calculate_config_hash(
+        scm: &SCM,
+        repo_root: &AbsoluteSystemPathBuf,
+    ) -> Result<String, CacheError> {
+        // empty path to get all files
+        let anchored_root = match AnchoredSystemPath::new("") {
+            Ok(anchored_root) => anchored_root,
+            Err(_) => return Err(CacheError::ConfigCacheInvalidBase),
+        };
+
+        // empty inputs to get all files
+        let inputs: Vec<String> = vec![];
+        let hash_object = match scm.get_package_file_hashes(repo_root, anchored_root, &inputs, None)
+        {
+            Ok(hash_object) => hash_object,
+            Err(_) => return Err(CacheError::ConfigCacheError),
+        };
+
+        // return the hash
+        Ok(FileHashes(hash_object).hash())
     }
 }
