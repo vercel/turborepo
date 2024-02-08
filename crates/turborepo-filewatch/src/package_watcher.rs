@@ -97,7 +97,7 @@ impl<T: PackageDiscovery + Send + 'static> Subscriber<T> {
         exit_rx: oneshot::Receiver<()>,
         repo_root: AbsoluteSystemPathBuf,
         recv: broadcast::Receiver<Result<Event, NotifyError>>,
-        mut discovery: T,
+        discovery: T,
     ) -> Result<Self, Error> {
         let initial_discovery = discovery.discover_packages().await?;
 
@@ -356,7 +356,7 @@ mod test {
     }
 
     impl super::PackageDiscovery for MockDiscovery {
-        async fn discover_packages(&mut self) -> Result<DiscoveryResponse, discovery::Error> {
+        async fn discover_packages(&self) -> Result<DiscoveryResponse, discovery::Error> {
             Ok(DiscoveryResponse {
                 package_manager: self.manager,
                 workspaces: self.package_data.lock().unwrap().clone(),
