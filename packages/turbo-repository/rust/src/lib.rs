@@ -14,7 +14,7 @@ use turborepo_repository::{
 mod internal;
 
 #[napi]
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone, Ord, PartialOrd)]
 pub struct Package {
     pub name: String,
     /// The absolute path to the package root.
@@ -174,13 +174,16 @@ impl Workspace {
             PackageChanges::Some(packages) => packages.into_iter().collect(),
         };
 
-        let serializable_packages = packages
+        let mut serializable_packages: Vec<Package> = packages
             .into_iter()
             .map(|p| {
                 let package_path = workspace_root.resolve(&p.path);
                 Package::new(p.name.to_string(), &workspace_root, &package_path)
             })
+            .filter(|p| p.name != "//")
             .collect();
+
+        serializable_packages.sort();
 
         Ok(serializable_packages)
     }

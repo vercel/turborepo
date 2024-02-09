@@ -1,9 +1,11 @@
 import * as path from "node:path";
 import { Workspace, Package, PackageManager } from "../js/dist/index.js";
 
+type PackageReduced = Pick<Package, "name" | "relativePath">;
+
 interface AffectedPackagesTestParams {
   files: string[];
-  expected: Package[];
+  expected: PackageReduced[];
   description: string;
 }
 
@@ -39,30 +41,30 @@ describe("Workspace", () => {
   describe("affectedPackages", () => {
     const tests: AffectedPackagesTestParams[] = [
       {
+        description: "app change",
         files: ["apps/app/file.txt"],
         expected: [{ name: "app-a", relativePath: "apps/app" }],
-        description: "app change",
       },
       {
+        description: "lib change",
         files: ["packages/ui/a.txt"],
         expected: [
           { name: "app-a", relativePath: "apps/app" },
           { name: "ui", relativePath: "packages/ui" },
         ],
-        description: "lib change",
       },
       {
+        description: "global change",
         files: ["package.json"],
         expected: [
           { name: "app-a", relativePath: "apps/app" },
-          { name: "ui", relativePath: "packges/ui" },
+          { name: "ui", relativePath: "packages/ui" },
         ],
-        description: "global change",
       },
       {
+        description: "global change that can be ignored",
         files: ["README.md"],
         expected: [],
-        description: "global change that can be ignored",
       },
     ];
 
@@ -73,10 +75,14 @@ describe("Workspace", () => {
         const dir = path.resolve(__dirname, "./fixtures/monorepo");
         const workspace = await Workspace.find(dir);
         let changedPackages = await workspace.changedPackages(files);
-        changedPackages = changedPackages.map((pkg) => {
-          return { name: pkg.name, relativePath: pkg.relativePath } as Package;
+        const reduced: PackageReduced[] = changedPackages.map((pkg) => {
+          return {
+            name: pkg.name,
+            relativePath: pkg.relativePath,
+          };
         });
-        expect(changedPackages).toEqual(expected);
+
+        expect(reduced).toEqual(expected);
       }
     );
   });
