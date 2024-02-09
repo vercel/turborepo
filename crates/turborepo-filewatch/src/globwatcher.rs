@@ -9,7 +9,7 @@ use std::{
 use notify::Event;
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc, oneshot};
-use tracing::warn;
+use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
 use wax::{Any, Glob, Program};
 
@@ -20,10 +20,19 @@ use crate::{
 
 type Hash = String;
 
-#[derive(Debug)]
 pub struct GlobSet {
     include: HashMap<String, wax::Glob<'static>>,
     exclude: Any<'static>,
+    exclude_raw: Vec<String>,
+}
+
+impl std::fmt::Debug for GlobSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GlobSet")
+            .field("include", &self.include.keys())
+            .field("exclude", &self.exclude_raw)
+            .finish()
+    }
 }
 
 #[derive(Debug, Error)]
@@ -61,6 +70,7 @@ impl GlobSet {
             })
             .collect::<Result<HashMap<_, _>, GlobError>>()?;
         let excludes = raw_excludes
+            .clone()
             .iter()
             .map(|raw_glob| {
                 let glob = compile_glob(raw_glob)?;
@@ -73,7 +83,11 @@ impl GlobSet {
                 raw_glob: format!("{{{}}}", raw_excludes.join(",")),
             })?
             .to_owned();
-        Ok(Self { include, exclude })
+        Ok(Self {
+            include,
+            exclude,
+            exclude_raw: raw_excludes,
+        })
     }
 }
 
@@ -238,6 +252,7 @@ impl GlobTracker {
                 glob_set,
                 resp,
             } => {
+                debug!("watching globs {:?} for hash {}", glob_set, hash);
                 // Assume cookie handling has happened external to this component.
                 // Other tasks _could_ write to the
                 // same output directories, however we are relying on task
@@ -353,6 +368,7 @@ impl GlobTracker {
                         return true;
                     }
                     // We didn't match an exclusion, we can remove this glob
+                    debug!("file change at {} invalidated glob {}", path, glob_str);
                     glob_set.include.remove(glob_str);
 
                     // We removed the last include, we can stop tracking this hash
@@ -465,6 +481,7 @@ mod test {
         let globs = GlobSet {
             include: make_includes(raw_includes),
             exclude,
+            exclude_raw: raw_excludes.iter().map(|s| s.to_string()).collect(),
         };
 
         let hash = "the-hash".to_string();
@@ -548,6 +565,7 @@ mod test {
         let globs = GlobSet {
             include: make_includes(raw_includes),
             exclude: any(raw_excludes).unwrap(),
+            exclude_raw: raw_excludes.iter().map(|s| s.to_string()).collect(),
         };
 
         let hash = "the-hash".to_string();
@@ -569,6 +587,7 @@ mod test {
         let second_globs = GlobSet {
             include: make_includes(second_raw_includes),
             exclude: any(second_raw_excludes).unwrap(),
+            exclude_raw: second_raw_excludes.iter().map(|s| s.to_string()).collect(),
         };
         let second_hash = "the-second-hash".to_string();
         glob_watcher
@@ -647,6 +666,7 @@ mod test {
         let globs = GlobSet {
             include: make_includes(raw_includes),
             exclude: any(raw_excludes).unwrap(),
+            exclude_raw: raw_excludes.iter().map(|s| s.to_string()).collect(),
         };
 
         let hash = "the-hash".to_string();
