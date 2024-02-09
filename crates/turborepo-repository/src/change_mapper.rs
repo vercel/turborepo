@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use wax::Program;
 
-use crate::package_graph::{ChangedPackagesError, PackageGraph, WorkspaceName};
+use crate::package_graph::{ChangedPackagesError, PackageGraph, WorkspaceName, WorkspacePackage};
 
 // We may not be able to load the lockfile contents, but we
 // still want to be able to express a generic change.
@@ -17,7 +17,7 @@ pub enum LockfileChange {
 
 pub enum PackageChanges {
     All,
-    Some(HashSet<WorkspaceName>),
+    Some(HashSet<WorkspacePackage>),
 }
 
 pub struct ChangeMapper<'a> {
@@ -102,7 +102,7 @@ impl<'a> ChangeMapper<'a> {
         &self,
         files: impl Iterator<Item = &'b AnchoredSystemPathBuf>,
         graph: &PackageGraph,
-    ) -> Result<HashSet<WorkspaceName>, turborepo_scm::Error> {
+    ) -> Result<HashSet<WorkspacePackage>, turborepo_scm::Error> {
         let mut changed_packages = HashSet::new();
         for file in files {
             let mut found = false;
@@ -112,7 +112,10 @@ impl<'a> ChangeMapper<'a> {
                 }
                 if let Some(package_path) = entry.package_json_path.parent() {
                     if Self::is_file_in_package(file, package_path) {
-                        changed_packages.insert(name.to_owned());
+                        changed_packages.insert(WorkspacePackage {
+                            name: name.clone(),
+                            path: entry.package_path().to_owned(),
+                        });
                         found = true;
                         break;
                     }
@@ -120,7 +123,7 @@ impl<'a> ChangeMapper<'a> {
             }
             if !found {
                 // if the file is not in any package, it must be in the root package
-                changed_packages.insert(WorkspaceName::Root);
+                changed_packages.insert(WorkspacePackage::root());
             }
         }
 
@@ -136,7 +139,7 @@ impl<'a> ChangeMapper<'a> {
     fn get_changed_packages_from_lockfile(
         &self,
         lockfile_content: Vec<u8>,
-    ) -> Result<Vec<WorkspaceName>, ChangeMapError> {
+    ) -> Result<Vec<WorkspacePackage>, ChangeMapError> {
         let previous_lockfile = self
             .pkg_graph
             .package_manager()

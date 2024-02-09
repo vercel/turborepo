@@ -30,6 +30,30 @@ pub struct PackageGraph {
     lockfile: Option<Box<dyn Lockfile>>,
 }
 
+/// The WorkspacePackage follows the Vercel glossary of terms where "Workspace"
+/// is the collection of packages and "Package" is a single package within the
+/// workspace. https://vercel.com/docs/vercel-platform/glossary
+/// There are other structs in this module that have "Workspace" in the name,
+/// but they do NOT follow the glossary, and instead mean "package" when they
+/// say Workspace. Some of these are labeled as such.
+#[derive(Eq, PartialEq, Hash)]
+pub struct WorkspacePackage {
+    pub name: WorkspaceName,
+    pub path: AnchoredSystemPathBuf,
+}
+
+impl WorkspacePackage {
+    pub fn root() -> Self {
+        Self {
+            name: WorkspaceName::Root,
+            path: AnchoredSystemPathBuf::default(),
+        }
+    }
+}
+
+/// WorkspaceInfo represents a package within the workspace.
+/// TODO: The name WorkspaceInfo should be changed to PackageInfo to follow the
+/// Vercel glossary.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct WorkspaceInfo {
     pub package_json: PackageJson,
@@ -61,7 +85,8 @@ impl WorkspaceInfo {
 type PackageName = String;
 type PackageVersion = String;
 
-/// Name of workspaces with a special marker for the workspace root
+/// WorkspaceName refers to the name of a *package* within a workspace.
+/// TODO: rename "WorkspaceName" to PackageName.
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub enum WorkspaceName {
     Root,
@@ -310,7 +335,7 @@ impl PackageGraph {
     pub fn changed_packages_from_lockfile(
         &self,
         previous: &dyn Lockfile,
-    ) -> Result<Vec<WorkspaceName>, ChangedPackagesError> {
+    ) -> Result<Vec<WorkspacePackage>, ChangedPackagesError> {
         let current = self.lockfile().ok_or(ChangedPackagesError::NoLockfile)?;
 
         let external_deps = self
@@ -340,16 +365,30 @@ impl PackageGraph {
                     closures.get(info.package_path().to_unix().as_str())
                         != info.transitive_dependencies.as_ref()
                 })
-                .map(|(name, _info)| match name {
-                    WorkspaceName::Other(n) => Some(WorkspaceName::Other(n.to_owned())),
+                .map(|(name, info)| match name {
+                    WorkspaceName::Other(n) => {
+                        let w_name = WorkspaceName::Other(n.to_owned());
+                        Some(WorkspacePackage {
+                            name: w_name.clone(),
+                            path: info.package_path().to_owned(),
+                        })
+                    }
                     // if the root package has changed, then we should report `None`
                     // since all packages need to be revalidated
                     WorkspaceName::Root => None,
                 })
-                .collect::<Option<Vec<WorkspaceName>>>()
+                .collect::<Option<Vec<WorkspacePackage>>>()
         };
 
-        Ok(changed.unwrap_or_else(|| self.workspaces.keys().cloned().collect()))
+        Ok(changed.unwrap_or_else(|| {
+            self.workspaces
+                .iter()
+                .map(|(name, info)| WorkspacePackage {
+                    name: name.clone(),
+                    path: info.package_path().to_owned(),
+                })
+                .collect()
+        }))
     }
 
     #[allow(dead_code)]
