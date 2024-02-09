@@ -28,5 +28,9 @@ export class Workspace {
   static find(path?: string | undefined | null): Promise<Workspace>;
   /** Finds and returns packages within the workspace. */
   findPackages(): Promise<Array<Package>>;
+  /**
+   * Finds and returns a map of packages within the workspace and its
+   * dependents (i.e. the packages that depend on each of those packages).
+   */
   findPackagesAndDependents(): Promise<Record<string, Array<string>>>;
 }

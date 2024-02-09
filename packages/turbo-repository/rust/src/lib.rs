@@ -103,6 +103,8 @@ impl Workspace {
         self.packages_internal().await.map_err(|e| e.into())
     }
 
+    /// Finds and returns a map of packages within the workspace and its
+    /// dependents (i.e. the packages that depend on each of those packages).
     #[napi]
     pub async fn find_packages_and_dependents(
         &self,
