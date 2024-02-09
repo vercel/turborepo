@@ -55,9 +55,6 @@ default-members = [
 ]
 
 [workspace.metadata.groups]
-# Only the libraries, does not include the turborepo binary.
-# That way we don't have to build the Go code
-turborepo-libraries = ["path:crates/turborepo-*"]
 turborepo = ["path:crates/turborepo*"]
 turbopack = [
   "path:crates/turbopack*",

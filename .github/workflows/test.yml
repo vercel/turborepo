@@ -451,7 +451,7 @@ jobs:
 
       - name: Run cargo check
         run: |
-          cargo groups check turborepo-libraries --features rustls-tls
+          cargo groups check turborepo --features rustls-tls
 
   turborepo_rust_clippy:
     needs: [turborepo_rust_check]
@@ -473,11 +473,11 @@ jobs:
 
       - name: Run cargo clippy
         run: |
-          cargo groups clippy turborepo-libraries --features rustls-tls -- --deny clippy::all
+          cargo groups clippy turborepo --features rustls-tls -- --deny clippy::all
 
       - name: Run ast-grep lints
         run: |
-          npx --package @ast-grep/cli -- ast-grep scan $(cargo groups list turborepo-libraries | awk '{ print $2 }' | tr '\n' ' ')
+          npx --package @ast-grep/cli -- ast-grep scan $(cargo groups list turborepo | awk '{ print $2 }' | tr '\n' ' ')
 
   turbopack_rust_check:
     needs: [determine_jobs]
@@ -659,7 +659,7 @@ jobs:
       - name: Run tests
         timeout-minutes: 120
         run: |
-          cargo groups test turborepo-libraries
+          cargo groups test turborepo
 
   turbopack_rust_test1:
     needs: [turbopack_rust_check]
