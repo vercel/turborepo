@@ -137,7 +137,7 @@ impl Workspace {
     }
 
     #[napi]
-    pub async fn changed_packages(&self, files: Vec<String>) -> Result<Vec<Package>, Error> {
+    pub async fn affected_packages(&self, files: Vec<String>) -> Result<Vec<Package>, Error> {
         let mapper = ChangeMapper::new(&self.graph, vec![], vec![]);
 
         let workspace_root = match AbsoluteSystemPath::new(&self.absolute_path) {

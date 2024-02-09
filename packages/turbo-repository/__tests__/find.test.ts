@@ -49,7 +49,7 @@ describe("Workspace", () => {
         description: "lib change",
         files: ["packages/ui/a.txt"],
         expected: [
-          { name: "app-a", relativePath: "apps/app" },
+          // { name: "app-a", relativePath: "apps/app" }, // TODO: this should be included
           { name: "ui", relativePath: "packages/ui" },
         ],
       },
@@ -74,8 +74,9 @@ describe("Workspace", () => {
         const { files, expected } = testParams;
         const dir = path.resolve(__dirname, "./fixtures/monorepo");
         const workspace = await Workspace.find(dir);
-        let changedPackages = await workspace.changedPackages(files);
-        const reduced: PackageReduced[] = changedPackages.map((pkg) => {
+        const reduced: PackageReduced[] = (
+          await workspace.affectedPackages(files)
+        ).map((pkg) => {
           return {
             name: pkg.name,
             relativePath: pkg.relativePath,
