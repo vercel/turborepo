@@ -9,23 +9,23 @@ inputs:
     description: "Don't run the install step."
     required: false
     default: "true"
-  node-version:
-    description: "Node version to install"
-    required: false
-    default: "20"
 
 runs:
   using: "composite"
   steps:
-    - name: Configure corepack
-      shell: bash
-      run: corepack enable
+    # TODO: remove when `actions/setup-node` supports corepack properly
+    - uses: pnpm/action-setup@v3
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: ${{ inputs.node-version }}
+        node-version-file: package.json
         cache: pnpm
+
+    - name: Configure corepack
+      shell: bash
+      run: |
+        corepack enable
 
     - name: pnpm install
       id: install
