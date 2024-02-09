@@ -449,7 +449,7 @@ impl Pattern {
             Pattern::Dynamic => {
                 lazy_static! {
                     static ref FORBIDDEN: Regex =
-                        Regex::new(r"(/|^)(\.|/|(node_modules|__tests?__)(/|$))").unwrap();
+                        Regex::new(r"(/|^)(ROOT|\.|/|(node_modules|__tests?__)(/|$))").unwrap();
                     static ref FORBIDDEN_MATCH: Regex = Regex::new(r"\.d\.ts$|\.map$").unwrap();
                 };
                 if let Some(m) = FORBIDDEN.find(value) {
@@ -1188,12 +1188,12 @@ mod tests {
         assert!(!pat.could_match("./inner/../"));
         assert!(!pat.could_match("./inner/./"));
         assert!(!pat.could_match("./inner/.git/"));
-        assert!(!pat.could_match("/"));
         assert!(!pat.could_match("dir//"));
         assert!(!pat.could_match("dir//dir"));
         assert!(!pat.could_match("dir///dir"));
         assert!(!pat.could_match("/"));
         assert!(!pat.could_match("//"));
+        assert!(!pat.could_match("/ROOT/"));
 
         assert!(!pat.could_match("node_modules"));
         assert!(!pat.could_match("node_modules/package"));
@@ -1210,6 +1210,82 @@ mod tests {
         assert!(!pat.is_match("dir/file.d.ts.map"));
         assert!(!pat.is_match("dir/inner/file.d.ts.map"));
         assert!(pat.could_match("dir/inner/file.d.ts.map"));
+    }
+
+    #[rstest]
+    fn dynamic_match2() {
+        let pat = Pattern::Concatenation(vec![
+            Pattern::Dynamic,
+            Pattern::Constant("/".to_string()),
+            Pattern::Dynamic,
+        ]);
+        assert!(pat.could_match("dir"));
+        assert!(pat.could_match("dir/"));
+        assert!(pat.is_match("dir/index.js"));
+
+        // forbidden:
+        assert!(!pat.could_match("./"));
+        assert!(!pat.is_match("./"));
+        assert!(!pat.could_match("."));
+        assert!(!pat.is_match("."));
+        assert!(!pat.could_match("../"));
+        assert!(!pat.is_match("../"));
+        assert!(!pat.could_match(".."));
+        assert!(!pat.is_match(".."));
+        assert!(!pat.is_match("./../index.js"));
+        assert!(!pat.is_match("././index.js"));
+        assert!(!pat.is_match("./.git/index.js"));
+        assert!(!pat.is_match("./inner/../index.js"));
+        assert!(!pat.is_match("./inner/./index.js"));
+        assert!(!pat.is_match("./inner/.git/index.js"));
+        assert!(!pat.could_match("./../"));
+        assert!(!pat.could_match("././"));
+        assert!(!pat.could_match("./.git/"));
+        assert!(!pat.could_match("./inner/../"));
+        assert!(!pat.could_match("./inner/./"));
+        assert!(!pat.could_match("./inner/.git/"));
+        assert!(!pat.could_match("dir//"));
+        assert!(!pat.could_match("dir//dir"));
+        assert!(!pat.could_match("dir///dir"));
+        assert!(!pat.could_match("/ROOT/"));
+
+        assert!(!pat.could_match("node_modules"));
+        assert!(!pat.could_match("node_modules/package"));
+        assert!(!pat.could_match("nested/node_modules"));
+        assert!(!pat.could_match("nested/node_modules/package"));
+
+        // forbidden match
+        assert!(pat.could_match("dir/file.map"));
+        assert!(!pat.is_match("dir/file.map"));
+        assert!(pat.is_match("file.map/file.js"));
+        assert!(!pat.is_match("dir/file.d.ts"));
+        assert!(!pat.is_match("dir/file.d.ts.map"));
+        assert!(!pat.is_match("dir/file.d.ts.map"));
+        assert!(!pat.is_match("dir/file.d.ts.map"));
+        assert!(!pat.is_match("dir/inner/file.d.ts.map"));
+        assert!(pat.could_match("dir/inner/file.d.ts.map"));
+    }
+
+    #[rstest]
+    #[case::dynamic(Pattern::Dynamic)]
+    #[case::dynamic_concat(Pattern::Concatenation(vec![Pattern::Dynamic, Pattern::Constant(".js".to_string())]))]
+    #[case::dynamic_concat2(Pattern::Concatenation(vec![
+        Pattern::Dynamic,
+        Pattern::Constant("/".to_string()),
+        Pattern::Dynamic,
+    ]))]
+    #[case::dynamic_alt_concat(Pattern::alternatives(vec![
+        Pattern::Concatenation(vec![
+            Pattern::Dynamic,
+            Pattern::Constant("/".to_string()),
+            Pattern::Dynamic,
+        ]),
+        Pattern::Dynamic,
+    ]))]
+    fn split_could_match(#[case] pat: Pattern) {
+        let (abs, rel) = pat.split_could_match("/ROOT/");
+        assert!(abs.is_none());
+        assert!(rel.is_some());
     }
 
     #[rstest]
