@@ -55,8 +55,10 @@ pub struct TurboJson {
     pub(crate) pipeline: Pipeline,
 }
 
-#[derive(Clone, Debug, Serialize)]
-struct RawRemoteCacheOptions {
+// Iterable is required to enumerate allowed keys
+#[derive(Clone, Debug, Default, Iterable, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RawRemoteCacheOptions {
     api_url: Option<String>,
     login_url: Option<String>,
     team_slug: Option<String>,

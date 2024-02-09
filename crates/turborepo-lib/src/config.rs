@@ -2,7 +2,7 @@ use std::{collections::HashMap, ffi::OsString, io};
 
 use convert_case::{Case, Casing};
 use miette::{Diagnostic, SourceSpan};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use struct_iterable::Iterable;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
@@ -135,6 +135,9 @@ const DEFAULT_API_URL: &str = "https://vercel.com/api";
 const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
 const DEFAULT_TIMEOUT: u64 = 30;
 
+// We intentionally don't derive Serialize so that different parts
+// of the code that want to display the config can tune how they
+// want to display and what fields they want to include.
 #[derive(Deserialize, Default, Debug, PartialEq, Eq, Clone, Iterable)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigurationOptions {
