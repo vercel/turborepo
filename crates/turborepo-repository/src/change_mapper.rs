@@ -114,7 +114,7 @@ impl<'a> ChangeMapper<'a> {
                     if Self::is_file_in_package(file, package_path) {
                         changed_packages.insert(WorkspacePackage {
                             name: name.clone(),
-                            path: entry.package_path().as_str().to_string(),
+                            path: entry.package_path().to_owned(),
                         });
                         found = true;
                         break;

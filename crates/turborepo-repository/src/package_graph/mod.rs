@@ -33,14 +33,14 @@ pub struct PackageGraph {
 #[derive(Eq, PartialEq, Hash)]
 pub struct WorkspacePackage {
     pub name: WorkspaceName,
-    pub path: String,
+    pub path: AnchoredSystemPathBuf,
 }
 
 impl WorkspacePackage {
     pub fn root() -> Self {
         Self {
             name: WorkspaceName::Root,
-            path: String::from(""),
+            path: AnchoredSystemPathBuf::from_raw("").unwrap(),
         }
     }
 }
@@ -360,7 +360,7 @@ impl PackageGraph {
                         let w_name = WorkspaceName::Other(n.to_owned());
                         Some(WorkspacePackage {
                             name: w_name.clone(),
-                            path: self.workspace_dir(&w_name).unwrap().to_owned().to_string(),
+                            path: self.workspace_dir(&w_name).unwrap().to_owned(),
                         })
                     }
                     // if the root package has changed, then we should report `None`
@@ -375,7 +375,7 @@ impl PackageGraph {
                 .keys()
                 .map(|name| WorkspacePackage {
                     name: name.clone(),
-                    path: self.workspace_dir(name).unwrap().to_owned().to_string(),
+                    path: self.workspace_dir(name).unwrap().to_owned(),
                 })
                 .collect()
         }))
