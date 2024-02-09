@@ -114,10 +114,6 @@ impl Run {
         });
     }
 
-    fn targets(&self) -> &[String] {
-        self.base.args().get_tasks()
-    }
-
     fn initialize_analytics(
         api_auth: Option<APIAuth>,
         api_client: APIClient,
@@ -347,7 +343,7 @@ impl Run {
             )?;
 
             if is_all_packages {
-                for target in self.targets() {
+                for target in self.opts.run_opts.tasks.iter() {
                     let mut task_name = TaskName::from(target.as_str());
                     // If it's not a package task, we convert to a root task
                     if !task_name.is_package_task() {
