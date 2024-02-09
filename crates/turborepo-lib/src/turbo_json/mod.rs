@@ -84,10 +84,10 @@ impl From<&RawRemoteCacheOptions> for ConfigurationOptions {
             login_url: remote_cache_opts.login_url.clone(),
             team_slug: remote_cache_opts.team_slug.clone(),
             team_id: remote_cache_opts.team_id.clone(),
-            signature: remote_cache_opts.signature.clone(),
-            preflight: remote_cache_opts.preflight.clone(),
-            timeout: remote_cache_opts.timeout.clone(),
-            enabled: remote_cache_opts.enabled.clone(),
+            signature: remote_cache_opts.signature,
+            preflight: remote_cache_opts.preflight,
+            timeout: remote_cache_opts.timeout,
+            enabled: remote_cache_opts.enabled,
             ..Self::default()
         }
     }
