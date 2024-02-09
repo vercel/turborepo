@@ -40,7 +40,7 @@ impl WorkspacePackage {
     pub fn root() -> Self {
         Self {
             name: WorkspaceName::Root,
-            path: AnchoredSystemPathBuf::from_raw("").unwrap(),
+            path: AnchoredSystemPathBuf::default(),
         }
     }
 }
