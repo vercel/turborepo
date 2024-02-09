@@ -211,8 +211,14 @@ async fn watch_events(
     _watch_root: AbsoluteSystemPathBuf,
     mut recv_file_events: mpsc::Receiver<EventResult>,
     exit_signal: tokio::sync::oneshot::Receiver<()>,
-    broadcast_sender: broadcast::Sender<Result<Event, NotifyError>>,
+    mut broadcast_sender: OptionalWatch<broadcast::Sender<Result<Event, NotifyError>>>,
 ) {
+    let Ok(broadcast_sender) = broadcast_sender.get().await.map(|b| b.clone()) else {
+        // if we are never sent a sender, we should not run the watcher
+        tracing::debug!("no downstream listeners, exiting");
+        return;
+    };
+
     let mut exit_signal = exit_signal;
     'outer: loop {
         tokio::select! {
