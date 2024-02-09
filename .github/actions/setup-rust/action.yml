@@ -82,10 +82,10 @@ runs:
       with:
         shared-key: ${{ inputs.shared-cache-key }}
         key: ${{ inputs.cache-key }}
-        # the cache is huge and we only get 10gb max, so we only save on master
+        # the cache is huge, and we only get 10gb max, so we only save on master
         save-if: ${{ github.ref == 'refs/heads/main' && inputs.save-cache || 'false' }}
 
-    - name: "Install cargo-sweep"
+    - name: "Install cargo-sweep,cargo-groups"
       uses: taiki-e/install-action@v2
       with:
         tool: cargo-sweep@0.6.2,cargo-groups
