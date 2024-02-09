@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use reqwest::Method;
-use turborepo_vercel_api::TelemetryEvent;
+use turborepo_vercel_api::telemetry::TelemetryEvent;
 
 use crate::{retry, AnonAPIClient, Error};
 
