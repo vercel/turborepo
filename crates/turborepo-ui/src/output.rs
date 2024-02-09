@@ -116,7 +116,7 @@ impl<W: Write> OutputClient<W> {
 
     /// Consume the client and flush any bytes to the underlying sink if
     /// necessary
-    pub fn finish(self) -> io::Result<Option<Vec<u8>>> {
+    pub fn finish(self, keep_group: bool) -> io::Result<Option<Vec<u8>>> {
         let Self {
             behavior,
             buffer,
@@ -133,7 +133,7 @@ impl<W: Write> OutputClient<W> {
             // We hold the mutex until we write all of the bytes associated for the client
             // to ensure that the bytes aren't interspersed.
             let mut writers = writers.lock().expect("lock poisoned");
-            if let Some(prefix) = header {
+            if let Some(prefix) = keep_group.then_some(header).flatten() {
                 writers.out.write_all(prefix.as_bytes())?;
             }
             for SinkBytes {
@@ -147,7 +147,7 @@ impl<W: Write> OutputClient<W> {
                 };
                 writer.write_all(buffer)?;
             }
-            if let Some(suffix) = footer {
+            if let Some(suffix) = keep_group.then_some(footer).flatten() {
                 writers.out.write_all(suffix.as_bytes())?;
             }
         }
@@ -253,7 +253,7 @@ mod test {
                 let mut err = pass_thru_logger.stderr();
                 writeln!(&mut out, "task 1: out").unwrap();
                 writeln!(&mut err, "task 1: err").unwrap();
-                assert!(pass_thru_logger.finish().unwrap().is_none());
+                assert!(pass_thru_logger.finish(true).unwrap().is_none());
             });
             s.spawn(move || {
                 let mut out = buffer_logger.stdout();
@@ -261,7 +261,7 @@ mod test {
                 writeln!(&mut out, "task 2: out").unwrap();
                 writeln!(&mut err, "task 2: err").unwrap();
                 assert_eq!(
-                    buffer_logger.finish().unwrap().unwrap(),
+                    buffer_logger.finish(true).unwrap().unwrap(),
                     b"task 2: out\ntask 2: err\n"
                 );
             });
@@ -291,7 +291,7 @@ mod test {
             "pass thru should end up in sink immediately"
         );
         assert!(
-            logger.finish()?.is_none(),
+            logger.finish(true)?.is_none(),
             "pass through logs shouldn't keep a buffer"
         );
         assert_eq!(
@@ -317,7 +317,7 @@ mod test {
             "buffer should end up in sink immediately"
         );
         assert_eq!(
-            logger.finish()?.unwrap(),
+            logger.finish(true)?.unwrap(),
             b"output for 1\n",
             "buffer should return buffer"
         );
@@ -343,11 +343,11 @@ mod test {
         writeln!(&mut group2_out, "output for 2")?;
         writeln!(&mut group1_out, "output for 1")?;
         let group1_logs = group1_logger
-            .finish()?
+            .finish(true)?
             .expect("grouped logs should have buffer");
         writeln!(&mut group2_err, "warning for 2")?;
         let group2_logs = group2_logger
-            .finish()?
+            .finish(true)?
             .expect("grouped logs should have buffer");
 
         assert_eq!(group1_logs, b"output for 1\n");
@@ -374,14 +374,14 @@ mod test {
                 write!(&mut out, "task 1:").unwrap();
                 b1.wait();
                 writeln!(&mut out, " echo building").unwrap();
-                assert!(logger1.finish().unwrap().is_none());
+                assert!(logger1.finish(true).unwrap().is_none());
             });
             s.spawn(move || {
                 let mut out = logger2.stdout();
                 write!(&mut out, "task 2:").unwrap();
                 b2.wait();
                 writeln!(&mut out, " echo failing").unwrap();
-                assert!(logger2.finish().unwrap().is_none(),);
+                assert!(logger2.finish(true).unwrap().is_none(),);
             });
         });
         let SinkWriters { out, .. } = Arc::into_inner(sink.writers).unwrap().into_inner().unwrap();

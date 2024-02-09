@@ -690,7 +690,10 @@ impl ExecContext {
             .instrument(span)
             .await;
 
-        let logs = match output_client.finish() {
+        // If the task resulted in an error, do not group in order to better highlight
+        // the error.
+        let keep_group = matches!(result, ExecOutcome::Success(_));
+        let logs = match output_client.finish(keep_group) {
             Ok(logs) => logs,
             Err(e) => {
                 telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);

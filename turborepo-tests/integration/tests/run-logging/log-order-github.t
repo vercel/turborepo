@@ -56,7 +56,6 @@ Verify that errors are grouped properly
   \xe2\x80\xa2 Packages in scope: my-app, util (esc)
   \xe2\x80\xa2 Running fail in 2 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  ::group::util:fail
   cache miss, executing 122cca10fdcda4f0
   
   \> fail (re)
@@ -68,7 +67,6 @@ Verify that errors are grouped properly
   npm ERR!   in workspace: util 
   npm ERR\!   at location: (.*)(\/|\\)packages(\/|\\)util  (re)
   \[ERROR\] command finished with error: command \((.*)(\/|\\)packages(\/|\\)util\) (.*)npm(?:\.cmd)? run fail exited \(1\) (re)
-  ::endgroup::
   ::error::util#fail: command \(.*(\/|\\)packages(\/|\\)util\) (.*)npm(?:\.cmd)? run fail exited \(1\) (re)
   
    Tasks:    0 successful, 1 total
