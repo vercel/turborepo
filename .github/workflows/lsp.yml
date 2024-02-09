@@ -30,8 +30,6 @@ jobs:
             target: x86_64-pc-windows-msvc
           - host: windows-latest
             target: aarch64-pc-windows-msvc
-            setup: |
-              echo "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Tools\Llvm\x64\bin" >> $GITHUB_PATH
     runs-on: ${{ matrix.settings.host }}
     steps:
       - name: Checkout repo
