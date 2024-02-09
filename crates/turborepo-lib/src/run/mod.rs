@@ -95,6 +95,9 @@ impl Run {
             unused_remote_cache_opts_team_id,
             signature,
         ));
+        if opts.run_opts.experimental_space_id.is_none() {
+            opts.run_opts.experimental_space_id = config.spaces_id().map(|s| s.to_owned());
+        }
         Ok(Self {
             base,
             processes,
@@ -158,7 +161,7 @@ impl Run {
 
     #[tracing::instrument(skip(self, signal_handler, api_client))]
     pub async fn run(
-        &mut self,
+        &self,
         signal_handler: &SignalHandler,
         telemetry: CommandEventBuilder,
         api_client: APIClient,
@@ -199,7 +202,7 @@ impl Run {
     // We split this into a separate function because we need
     // to close the AnalyticsHandle regardless of whether the run succeeds or not
     async fn run_with_analytics(
-        &mut self,
+        &self,
         start_at: DateTime<Local>,
         api_client: APIClient,
         analytics_sender: Option<AnalyticsSender>,
@@ -335,10 +338,6 @@ impl Run {
             &root_package_json,
             is_single_package,
         )?;
-
-        if self.opts.run_opts.experimental_space_id.is_none() {
-            self.opts.run_opts.experimental_space_id = root_turbo_json.space_id.clone();
-        }
 
         pkg_dep_graph.validate()?;
 

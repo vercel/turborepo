@@ -16,8 +16,40 @@ use crate::{cli, commands::CommandBase, config::ConfigurationOptions};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+struct InfoConfig {
+    api_url: Option<String>,
+    login_url: Option<String>,
+    team_slug: Option<String>,
+    team_id: Option<String>,
+    token: Option<String>,
+    signature: Option<bool>,
+    preflight: Option<bool>,
+    timeout: Option<u64>,
+    enabled: Option<bool>,
+    spaces_id: Option<String>,
+}
+
+impl<'a> From<&'a ConfigurationOptions> for InfoConfig {
+    fn from(config: &'a ConfigurationOptions) -> Self {
+        Self {
+            api_url: config.api_url.clone(),
+            login_url: config.login_url.clone(),
+            team_slug: config.team_slug.clone(),
+            team_id: config.team_id.clone(),
+            token: config.token.clone(),
+            signature: config.signature,
+            preflight: config.preflight,
+            timeout: config.timeout,
+            enabled: config.enabled,
+            spaces_id: config.spaces_id.clone(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct RepositoryDetails<'a> {
-    config: &'a ConfigurationOptions,
+    config: InfoConfig,
     package_manager: &'a PackageManager,
     workspaces: Vec<(&'a WorkspaceName, RepositoryWorkspaceDetails<'a>)>,
 }
@@ -81,7 +113,7 @@ impl<'a> RepositoryDetails<'a> {
         workspaces.sort_by(|a, b| a.0.cmp(b.0));
 
         Self {
-            config,
+            config: config.into(),
             package_manager: package_graph.package_manager(),
             workspaces,
         }

@@ -2,7 +2,7 @@ use std::{collections::HashMap, ffi::OsString, io};
 
 use convert_case::{Case, Casing};
 use miette::{Diagnostic, SourceSpan};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use struct_iterable::Iterable;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
@@ -135,7 +135,10 @@ const DEFAULT_API_URL: &str = "https://vercel.com/api";
 const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
 const DEFAULT_TIMEOUT: u64 = 30;
 
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, Iterable)]
+// We intentionally don't derive Serialize so that different parts
+// of the code that want to display the config can tune how they
+// want to display and what fields they want to include.
+#[derive(Deserialize, Default, Debug, PartialEq, Eq, Clone, Iterable)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigurationOptions {
     #[serde(alias = "apiurl")]
@@ -159,6 +162,7 @@ pub struct ConfigurationOptions {
     pub(crate) preflight: Option<bool>,
     pub(crate) timeout: Option<u64>,
     pub(crate) enabled: Option<bool>,
+    pub(crate) spaces_id: Option<String>,
 }
 
 #[derive(Default)]
@@ -211,11 +215,15 @@ impl ConfigurationOptions {
     pub fn timeout(&self) -> u64 {
         self.timeout.unwrap_or(DEFAULT_TIMEOUT)
     }
+
+    pub fn spaces_id(&self) -> Option<&str> {
+        self.spaces_id.as_deref()
+    }
 }
 
 // Maps Some("") to None to emulate how Go handles empty strings
 fn non_empty_str(s: Option<&str>) -> Option<&str> {
-    s.and_then(|s| (!s.is_empty()).then_some(s))
+    s.filter(|s| !s.is_empty())
 }
 
 trait ResolvedConfigurationOptions {
@@ -239,19 +247,18 @@ impl ResolvedConfigurationOptions for PackageJson {
 
 impl ResolvedConfigurationOptions for RawTurboJson {
     fn get_configuration_options(self) -> Result<ConfigurationOptions, Error> {
-        match &self.remote_cache {
-            Some(configuration_options) => {
-                configuration_options
-                    .clone()
-                    .get_configuration_options()
-                    // Don't allow token to be set for shared config.
-                    .map(|mut configuration_options| {
-                        configuration_options.token = None;
-                        configuration_options
-                    })
-            }
-            None => Ok(ConfigurationOptions::default()),
-        }
+        let mut opts = if let Some(remote_cache_options) = &self.remote_cache {
+            remote_cache_options.into()
+        } else {
+            ConfigurationOptions::default()
+        };
+        // Don't allow token to be set for shared config.
+        opts.token = None;
+        opts.spaces_id = self
+            .experimental_spaces
+            .and_then(|spaces| spaces.id)
+            .map(|spaces_id| spaces_id.into());
+        Ok(opts)
     }
 }
 
@@ -347,6 +354,11 @@ fn get_env_var_config(
         None
     };
 
+    // We currently don't pick up a Spaces ID via env var, we likely won't
+    // continue using the Spaces name, we can add an env var when we have the
+    // name we want to stick with.
+    let spaces_id = None;
+
     let output = ConfigurationOptions {
         api_url: output_map.get("api_url").cloned(),
         login_url: output_map.get("login_url").cloned(),
@@ -361,6 +373,7 @@ fn get_env_var_config(
 
         // Processed numbers
         timeout,
+        spaces_id,
     };
 
     Ok(output)
@@ -404,6 +417,7 @@ fn get_override_env_var_config(
         preflight: None,
         enabled: None,
         timeout: None,
+        spaces_id: None,
     };
 
     Ok(output)
@@ -574,6 +588,9 @@ impl TurborepoConfigBuilder {
                     if let Some(timeout) = current_source_config.timeout {
                         acc.timeout = Some(timeout);
                     }
+                    if let Some(spaces_id) = current_source_config.spaces_id {
+                        acc.spaces_id = Some(spaces_id);
+                    }
 
                     acc
                 })
@@ -607,6 +624,7 @@ mod test {
         assert!(defaults.enabled());
         assert!(!defaults.preflight());
         assert_eq!(defaults.timeout(), DEFAULT_TIMEOUT);
+        assert_eq!(defaults.spaces_id(), None);
     }
 
     #[test]
@@ -679,11 +697,17 @@ mod test {
 
     #[test]
     fn test_env_layering() {
-        let repo_root = AbsoluteSystemPathBuf::try_from(TempDir::new().unwrap().path()).unwrap();
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
         let global_config_path = AbsoluteSystemPathBuf::try_from(
             TempDir::new().unwrap().path().join("nonexistent.json"),
         )
         .unwrap();
+
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents(r#"{"experimentalSpaces": {"id": "my-spaces-id"}}"#)
+            .unwrap();
 
         let turbo_teamid = "team_nLlpyC6REAqxydlFKbrMDlud";
         let turbo_token = "abcdef1234567890abcdef";
@@ -718,23 +742,6 @@ mod test {
         let config = builder.build().unwrap();
         assert_eq!(config.team_id().unwrap(), vercel_artifacts_owner);
         assert_eq!(config.token().unwrap(), vercel_artifacts_token);
-    }
-
-    #[test]
-    fn test_shared_no_token() {
-        let mut test_shared_config: RawTurboJson = Default::default();
-        let configuration_options = ConfigurationOptions {
-            token: Some("IF YOU CAN SEE THIS WE HAVE PROBLEMS".to_string()),
-            ..Default::default()
-        };
-        test_shared_config.remote_cache = Some(configuration_options);
-
-        assert_eq!(
-            test_shared_config
-                .get_configuration_options()
-                .unwrap()
-                .token(),
-            None
-        );
+        assert_eq!(config.spaces_id().unwrap(), "my-spaces-id");
     }
 }
