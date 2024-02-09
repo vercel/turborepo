@@ -21,7 +21,6 @@ pub use cache::{ConfigCache, RunCache, TaskCache};
 use chrono::{DateTime, Local};
 use itertools::Itertools;
 use rayon::iter::ParallelBridge;
-use sha2::digest::typenum::Abs;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
@@ -75,6 +74,7 @@ pub struct Run {
     repo_root: AbsoluteSystemPathBuf,
     ui: UI,
     version: &'static str,
+    cwd: AbsoluteSystemPathBuf,
 }
 
 impl Run {
@@ -448,7 +448,7 @@ impl Run {
                 graph_opts,
                 &engine,
                 self.opts.run_opts.single_package,
-                self.base.cwd(),
+                &self.cwd,
             )?;
             return Ok(0);
         }
