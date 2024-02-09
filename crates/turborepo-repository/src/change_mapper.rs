@@ -15,9 +15,9 @@ pub enum LockfileChange {
     WithContent(Vec<u8>),
 }
 
-pub enum PackageChanges {
+pub enum PackageChanges<'a> {
     All,
-    Some(HashSet<WorkspacePackage>),
+    Some(HashSet<WorkspacePackage<'a>>),
 }
 
 pub struct ChangeMapper<'a> {
@@ -114,7 +114,7 @@ impl<'a> ChangeMapper<'a> {
                     if Self::is_file_in_package(file, package_path) {
                         changed_packages.insert(WorkspacePackage {
                             name: name.clone(),
-                            path: entry.package_path().as_str().to_string(),
+                            path: entry.package_path(),
                         });
                         found = true;
                         break;
