@@ -59,13 +59,21 @@ pub struct TurboJson {
 #[derive(Clone, Debug, Default, Iterable, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RawRemoteCacheOptions {
+    #[serde(skip_serializing_if = "Option::is_none")]
     api_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     login_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     team_slug: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     team_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     signature: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     preflight: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     timeout: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     enabled: Option<bool>,
 }
 

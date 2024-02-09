@@ -28,26 +28,25 @@ Verify turbo can read the produced turbo.json
     "util"
   ]
 
-Modify turbo.json to add a remoteCache.enabled field set to true and add a spaceId
+Modify turbo.json to add some fields to remoteCache and add a spaceId
   $ rm -rf out
-  $ cat turbo.json | jq '.remoteCache.enabled = true' > turbo.json.tmp
-  $ cat turbo.json.tmp | jq '.experimentalSpaces.id = "my-space-id"' > turbo.json
+  $ cat turbo.json | jq '.remoteCache.enabled = true | .remoteCache.timeout = 1000 | .remoteCache.apiUrl = "my-domain.com/cache" | .experimentalSpaces.id = "my-space-id"' > turbo.json.tmp
+  $ mv turbo.json.tmp turbo.json
   $ ${TURBO} prune docs > /dev/null
   $ cat out/turbo.json | jq '.remoteCache | keys'
   [
     "apiUrl",
     "enabled",
-    "loginUrl",
-    "preflight",
-    "signature",
-    "teamId",
-    "teamSlug",
     "timeout"
   ]
   $ cat out/turbo.json | jq '.remoteCache.enabled'
   true
   $ cat out/turbo.json | jq '.experimentalSpaces.id'
   "my-space-id"
+  $ cat out/turbo.json | jq '.remoteCache.timeout'
+  1000
+  $ cat out/turbo.json | jq '.remoteCache.apiUrl'
+  "my-domain.com/cache"
 
 Modify turbo.json to add a remoteCache.enabled field set to false
   $ rm -rf out
@@ -58,11 +57,6 @@ Modify turbo.json to add a remoteCache.enabled field set to false
   [
     "apiUrl",
     "enabled",
-    "loginUrl",
-    "preflight",
-    "signature",
-    "teamId",
-    "teamSlug",
     "timeout"
   ]
   $ cat out/turbo.json | jq '.remoteCache.enabled'
