@@ -30,6 +30,12 @@ pub struct PackageGraph {
     lockfile: Option<Box<dyn Lockfile>>,
 }
 
+/// The WorkspacePackage follows the Vercel glossary of terms where "Workspace"
+/// is the collection of packages and "Package" is a single package within the
+/// workspace. https://vercel.com/docs/vercel-platform/glossary
+/// There are other structs in this module that have "Workspace" in the name,
+/// but they do NOT follow the glossary, and instead mean "package" when they
+/// say Workspace. Some of these are labeled as such.
 #[derive(Eq, PartialEq, Hash)]
 pub struct WorkspacePackage {
     pub name: WorkspaceName,
@@ -45,6 +51,9 @@ impl WorkspacePackage {
     }
 }
 
+/// WorkspaceInfo represents a package within the workspace.
+/// TODO: The name WorkspaceInfo should be changed to PackageInfo to follow the
+/// Vercel glossary.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct WorkspaceInfo {
     pub package_json: PackageJson,
@@ -76,7 +85,8 @@ impl WorkspaceInfo {
 type PackageName = String;
 type PackageVersion = String;
 
-/// Name of workspaces with a special marker for the workspace root
+/// WorkspaceName refers to the name of a *package* within a workspace.
+/// TODO: rename "WorkspaceName" to PackageName.
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub enum WorkspaceName {
     Root,
