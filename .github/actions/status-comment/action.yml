@@ -53,7 +53,7 @@ runs:
 
     - name: Create or update PR comment
       if: github.event_name == 'pull_request'
-      uses: peter-evans/create-or-update-comment@v3
+      uses: peter-evans/create-or-update-comment@v4
       with:
         issue-number: ${{ inputs.issue-number }}
         comment-id: ${{ steps.comment.outputs.comment-id }}
