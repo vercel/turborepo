@@ -28,10 +28,10 @@ jobs:
             setup: "sudo apt-get update && sudo apt-get install -y build-essential musl-tools clang llvm gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
           - host: windows-latest
             target: x86_64-pc-windows-msvc
-            setup: "rustup set default-host x86_64-pc-windows-msvc"
           - host: windows-latest
             target: aarch64-pc-windows-msvc
-            setup: "rustup set default-host x86_64-pc-windows-msvc"
+            setup: |
+              echo "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Tools\Llvm\x64\bin" >> $GITHUB_PATH
     runs-on: ${{ matrix.settings.host }}
     steps:
       - name: Checkout repo
