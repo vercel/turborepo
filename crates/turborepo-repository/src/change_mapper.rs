@@ -112,11 +112,10 @@ impl<'a> ChangeMapper<'a> {
                 }
                 if let Some(package_path) = entry.package_json_path.parent() {
                     if Self::is_file_in_package(file, package_path) {
-                        let p = WorkspacePackage {
+                        changed_packages.insert(WorkspacePackage {
                             name: name.clone(),
                             path: entry.package_path().as_str().to_string(),
-                        };
-                        changed_packages.insert(p);
+                        });
                         found = true;
                         break;
                     }
