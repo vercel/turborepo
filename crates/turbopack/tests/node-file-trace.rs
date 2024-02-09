@@ -205,6 +205,7 @@ static ALLOC: turbo_tasks_malloc::TurboMalloc = turbo_tasks_malloc::TurboMalloc;
     CaseInput::new("integration/package-exports/fail/alt-multiple.js")
         .expected_stderr("Error [ERR_MODULE_NOT_FOUND]: Cannot find module")
 )]
+#[case::read_file("integration/read-file.mjs")]
 #[cfg_attr(
     not(feature = "bench_against_node_nft"),
     //[TODO]: WEB-1188 reenable once fixed.
