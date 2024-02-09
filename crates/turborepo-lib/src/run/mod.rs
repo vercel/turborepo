@@ -67,14 +67,12 @@ use crate::{
 };
 
 pub struct Run {
-    base: CommandBase,
     processes: ProcessManager,
     opts: Opts,
     api_auth: Option<APIAuth>,
     repo_root: AbsoluteSystemPathBuf,
     ui: UI,
     version: &'static str,
-    cwd: AbsoluteSystemPathBuf,
 }
 
 impl Run {
@@ -102,11 +100,15 @@ impl Run {
         if opts.run_opts.experimental_space_id.is_none() {
             opts.run_opts.experimental_space_id = config.spaces_id().map(|s| s.to_owned());
         }
+        let version = base.version();
+        let CommandBase { repo_root, ui, .. } = base;
         Ok(Self {
-            base,
             processes,
             opts,
             api_auth,
+            repo_root,
+            ui,
+            version,
         })
     }
 
@@ -252,7 +254,7 @@ impl Run {
                 let can_start_server = true;
                 let can_kill_server = true;
                 let connector =
-                    DaemonConnector::new(can_start_server, can_kill_server, &self.base.repo_root);
+                    DaemonConnector::new(can_start_server, can_kill_server, &self.repo_root);
                 match (connector.connect().await, self.opts.run_opts.daemon) {
                     (Ok(client), _) => {
                         run_telemetry.track_daemon_init(DaemonInitStatus::Started);
@@ -448,7 +450,9 @@ impl Run {
                 graph_opts,
                 &engine,
                 self.opts.run_opts.single_package,
-                &self.cwd,
+                // Note that cwd used to be pulled from CommandBase, which had it set
+                // as the repo root.
+                &self.repo_root,
             )?;
             return Ok(0);
         }
