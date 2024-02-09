@@ -3,7 +3,7 @@ import { Workspace, Package, PackageManager } from "../js/dist/index.js";
 
 interface AffectedPackagesTestParams {
   files: string[];
-  expected: string[];
+  expected: Package[];
   description: string;
 }
 
@@ -40,17 +40,23 @@ describe("Workspace", () => {
     const tests: AffectedPackagesTestParams[] = [
       {
         files: ["apps/app/file.txt"],
-        expected: ["app-a"],
+        expected: [{ name: "app-a", relativePath: "apps/app" }],
         description: "app change",
       },
       {
         files: ["packages/ui/a.txt"],
-        expected: ["app-a", "ui"],
+        expected: [
+          { name: "app-a", relativePath: "apps/app" },
+          { name: "ui", relativePath: "packages/ui" },
+        ],
         description: "lib change",
       },
       {
         files: ["package.json"],
-        expected: ["app-a", "ui"],
+        expected: [
+          { name: "app-a", relativePath: "apps/app" },
+          { name: "ui", relativePath: "packges/ui" },
+        ],
         description: "global change",
       },
       {
@@ -66,7 +72,10 @@ describe("Workspace", () => {
         const { files, expected } = testParams;
         const dir = path.resolve(__dirname, "./fixtures/monorepo");
         const workspace = await Workspace.find(dir);
-        const changedPackages = await workspace.changedPackages(files);
+        let changedPackages = await workspace.changedPackages(files);
+        changedPackages = changedPackages.map((pkg) => {
+          return { name: pkg.name, relativePath: pkg.relativePath } as Package;
+        });
         expect(changedPackages).toEqual(expected);
       }
     );

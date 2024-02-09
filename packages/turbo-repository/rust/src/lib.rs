@@ -171,16 +171,6 @@ impl Workspace {
                     path: info.package_path().to_owned(),
                 })
                 .collect::<Vec<WorkspacePackage>>(),
-            // PackageChanges::All => self
-            //     .find_packages()
-            //     .await
-            //     .unwrap_or_else(|_| vec![])
-            //     .into_iter()
-            //     .map(|p| WorkspacePackage {
-            //         name: WorkspaceName::Other(p.name),
-            //         path: AnchoredSystemPathBuf::new(p.relative_path),
-            //     })
-            //     .collect::<Vec<WorkspacePackage>>(),
             PackageChanges::Some(packages) => packages.into_iter().collect(),
         };
 
