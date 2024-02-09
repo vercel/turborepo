@@ -19,6 +19,7 @@ mod daemon;
 mod engine;
 
 mod framework;
+mod gitignore;
 pub(crate) mod globwatcher;
 mod hash;
 mod opts;
