@@ -31,7 +31,7 @@ jobs:
             setup: "rustup set default-host x86_64-pc-windows-msvc"
           - host: windows-latest
             target: aarch64-pc-windows-msvc
-            setup: "rustup set default-host aarch64-pc-windows-msvc"
+            setup: "rustup set default-host x86_64-pc-windows-msvc"
     runs-on: ${{ matrix.settings.host }}
     steps:
       - name: Checkout repo
