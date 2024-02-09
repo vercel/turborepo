@@ -605,8 +605,14 @@ jobs:
           See [job summary]($job_url) for details
           " > out.log
 
+      - name: Checkout local actions
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github
+          path: turbo-actions
+
       - name: Set PR status comment
-        uses: ./.github/actions/status-comment
+        uses: ./turbo-actions/.github/actions/status-comment
         if: always() && github.repository == 'vercel/turbo'
         continue-on-error: true
         with:
