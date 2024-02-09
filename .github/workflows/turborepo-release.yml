@@ -182,7 +182,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: rust-artifacts
-          merge-multiple: true
 
       - name: Move Rust artifacts into place
         run: |
