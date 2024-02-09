@@ -365,12 +365,12 @@ impl PackageGraph {
                     closures.get(info.package_path().to_unix().as_str())
                         != info.transitive_dependencies.as_ref()
                 })
-                .map(|(name, _info)| match name {
+                .map(|(name, info)| match name {
                     WorkspaceName::Other(n) => {
                         let w_name = WorkspaceName::Other(n.to_owned());
                         Some(WorkspacePackage {
                             name: w_name.clone(),
-                            path: self.workspace_dir(&w_name).unwrap().to_owned(),
+                            path: info.package_path().to_owned(),
                         })
                     }
                     // if the root package has changed, then we should report `None`
@@ -382,10 +382,10 @@ impl PackageGraph {
 
         Ok(changed.unwrap_or_else(|| {
             self.workspaces
-                .keys()
-                .map(|name| WorkspacePackage {
+                .iter()
+                .map(|(name, info)| WorkspacePackage {
                     name: name.clone(),
-                    path: self.workspace_dir(name).unwrap().to_owned(),
+                    path: info.package_path().to_owned(),
                 })
                 .collect()
         }))
