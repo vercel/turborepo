@@ -95,7 +95,10 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
                 .workspaces()
                 .map(|(name, _)| name.to_owned())
                 .collect()),
-            PackageChanges::Some(packages) => Ok(packages),
+            PackageChanges::Some(packages) => Ok(packages
+                .iter()
+                .map(|package| package.name.to_owned())
+                .collect()),
         }
     }
 }

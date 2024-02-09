@@ -30,6 +30,21 @@ pub struct PackageGraph {
     lockfile: Option<Box<dyn Lockfile>>,
 }
 
+#[derive(Eq, PartialEq, Hash)]
+pub struct WorkspacePackage {
+    pub name: WorkspaceName,
+    pub path: String,
+}
+
+impl WorkspacePackage {
+    pub fn root() -> Self {
+        Self {
+            name: WorkspaceName::Root,
+            path: String::from(""),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct WorkspaceInfo {
     pub package_json: PackageJson,
@@ -310,7 +325,7 @@ impl PackageGraph {
     pub fn changed_packages_from_lockfile(
         &self,
         previous: &dyn Lockfile,
-    ) -> Result<Vec<WorkspaceName>, ChangedPackagesError> {
+    ) -> Result<Vec<WorkspacePackage>, ChangedPackagesError> {
         let current = self.lockfile().ok_or(ChangedPackagesError::NoLockfile)?;
 
         let external_deps = self
@@ -341,15 +356,29 @@ impl PackageGraph {
                         != info.transitive_dependencies.as_ref()
                 })
                 .map(|(name, _info)| match name {
-                    WorkspaceName::Other(n) => Some(WorkspaceName::Other(n.to_owned())),
+                    WorkspaceName::Other(n) => {
+                        let w_name = WorkspaceName::Other(n.to_owned());
+                        Some(WorkspacePackage {
+                            name: w_name.clone(),
+                            path: self.workspace_dir(&w_name).unwrap().to_owned().to_string(),
+                        })
+                    }
                     // if the root package has changed, then we should report `None`
                     // since all packages need to be revalidated
                     WorkspaceName::Root => None,
                 })
-                .collect::<Option<Vec<WorkspaceName>>>()
+                .collect::<Option<Vec<WorkspacePackage>>>()
         };
 
-        Ok(changed.unwrap_or_else(|| self.workspaces.keys().cloned().collect()))
+        Ok(changed.unwrap_or_else(|| {
+            self.workspaces
+                .keys()
+                .map(|name| WorkspacePackage {
+                    name: name.clone(),
+                    path: self.workspace_dir(name).unwrap().to_owned().to_string(),
+                })
+                .collect()
+        }))
     }
 
     #[allow(dead_code)]
