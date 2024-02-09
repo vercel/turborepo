@@ -52,7 +52,7 @@ runs:
         body-includes: ${{ steps.marker.outputs.marker }}
 
     - name: Create or update PR comment
-      if: github.event_name == 'pull_request' && steps.comment.outputs.comment-id != ''
+      if: github.event_name == 'pull_request'
       uses: peter-evans/create-or-update-comment@v3
       with:
         issue-number: ${{ inputs.issue-number }}
