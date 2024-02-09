@@ -246,13 +246,10 @@ impl Run {
                 None
             }
             (_, Some(true)) | (false, None) => {
-                let connector = DaemonConnector {
-                    can_start_server: true,
-                    can_kill_server: true,
-                    pid_file: self.base.daemon_file_root().join_component("turbod.pid"),
-                    sock_file: self.base.daemon_file_root().join_component("turbod.sock"),
-                };
-
+                let can_start_server = true;
+                let can_kill_server = true;
+                let connector =
+                    DaemonConnector::new(can_start_server, can_kill_server, &self.base.repo_root);
                 match (connector.connect().await, self.opts.run_opts.daemon) {
                     (Ok(client), _) => {
                         run_telemetry.track_daemon_init(DaemonInitStatus::Started);

@@ -36,8 +36,7 @@ mod unescape;
 pub use crate::{
     child::spawn_child,
     cli::Args,
-    commands::DaemonRootHasher,
-    daemon::{DaemonClient, DaemonConnector},
+    daemon::{DaemonClient, DaemonConnector, Paths as DaemonPaths},
     run::package_discovery::DaemonPackageDiscovery,
 };
 
