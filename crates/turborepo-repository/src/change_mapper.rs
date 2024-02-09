@@ -99,9 +99,9 @@ impl<'a> ChangeMapper<'a> {
 
     // note: this could probably be optimized by using a hashmap of package paths
     fn get_changed_packages<'b>(
-        &self,
+        &'b self,
         files: impl Iterator<Item = &'b AnchoredSystemPathBuf>,
-        graph: &PackageGraph,
+        graph: &'b PackageGraph,
     ) -> Result<HashSet<WorkspacePackage>, turborepo_scm::Error> {
         let mut changed_packages = HashSet::new();
         for file in files {
