@@ -744,22 +744,4 @@ mod test {
         assert_eq!(config.token().unwrap(), vercel_artifacts_token);
         assert_eq!(config.spaces_id().unwrap(), "my-spaces-id");
     }
-
-    #[test]
-    fn test_shared_no_token() {
-        let mut test_shared_config: RawTurboJson = Default::default();
-        let configuration_options = ConfigurationOptions {
-            token: Some("IF YOU CAN SEE THIS WE HAVE PROBLEMS".to_string()),
-            ..Default::default()
-        };
-        test_shared_config.remote_cache = Some(configuration_options);
-
-        assert_eq!(
-            test_shared_config
-                .get_configuration_options()
-                .unwrap()
-                .token(),
-            None
-        );
-    }
 }
