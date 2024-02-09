@@ -773,6 +773,12 @@ mod test {
                 workspaces: vec![],
             })
         }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<crate::discovery::DiscoveryResponse, crate::discovery::Error> {
+            self.discover_packages().await
+        }
     }
 
     #[tokio::test]

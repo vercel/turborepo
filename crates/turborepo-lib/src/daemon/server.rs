@@ -527,6 +527,36 @@ impl<PD: PackageDiscovery + Send + Sync + 'static> proto::turbod_server::Turbod
                 }
             })
     }
+
+    async fn discover_packages_blocking(
+        &self,
+        _request: tonic::Request<proto::DiscoverPackagesRequest>,
+    ) -> Result<tonic::Response<proto::DiscoverPackagesResponse>, tonic::Status> {
+        self.package_discovery
+            .discover_packages_blocking()
+            .await
+            .map(|packages| {
+                tonic::Response::new(proto::DiscoverPackagesResponse {
+                    package_files: packages
+                        .workspaces
+                        .into_iter()
+                        .map(|d| proto::PackageFiles {
+                            package_json: d.package_json.to_string(),
+                            turbo_json: d.turbo_json.map(|t| t.to_string()),
+                        })
+                        .collect(),
+                    package_manager: proto::PackageManager::from(packages.package_manager).into(),
+                })
+            })
+            .map_err(|e| match e {
+                turborepo_repository::discovery::Error::Unavailable => {
+                    tonic::Status::unavailable("package discovery unavailable")
+                }
+                turborepo_repository::discovery::Error::Failed(e) => {
+                    tonic::Status::internal(format!("{}", e))
+                }
+            })
+    }
 }
 
 /// Determine whether a server can serve a client's request based on its
@@ -615,6 +645,15 @@ mod test {
                 package_manager: PackageManager::Yarn,
                 workspaces: vec![],
             })
+        }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<
+            turborepo_repository::discovery::DiscoveryResponse,
+            turborepo_repository::discovery::Error,
+        > {
+            self.discover_packages().await
         }
     }
 

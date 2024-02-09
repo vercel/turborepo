@@ -628,6 +628,13 @@ mod test {
         ) -> Result<tonic::Response<proto::DiscoverPackagesResponse>, tonic::Status> {
             unimplemented!()
         }
+
+        async fn discover_packages_blocking(
+            &self,
+            _req: tonic::Request<proto::DiscoverPackagesRequest>,
+        ) -> Result<tonic::Response<proto::DiscoverPackagesResponse>, tonic::Status> {
+            unimplemented!()
+        }
     }
 
     #[tokio::test]
