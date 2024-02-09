@@ -416,6 +416,7 @@ jobs:
 
       - name: Set PR status comment
         uses: ./.github/actions/status-comment
+        if: steps.info.outputs.cancelled != 'true'
         continue-on-error: true
         with:
           id: "bench-status"
