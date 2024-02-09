@@ -1,5 +1,6 @@
 use std::io;
 
+use globwalk::ValidatedGlob;
 use thiserror::Error;
 use tonic::{Code, Status};
 use tracing::info;
@@ -71,11 +72,11 @@ impl<T> DaemonClient<T> {
     pub async fn get_changed_outputs(
         &mut self,
         hash: String,
-        output_globs: Vec<String>,
+        output_globs: &[ValidatedGlob],
     ) -> Result<Vec<String>, DaemonError> {
         let output_globs = output_globs
             .iter()
-            .map(|raw_glob| format_repo_relative_glob(raw_glob))
+            .map(|validated_glob| validated_glob.as_str().to_string())
             .collect();
         Ok(self
             .client
@@ -88,17 +89,17 @@ impl<T> DaemonClient<T> {
     pub async fn notify_outputs_written(
         &mut self,
         hash: String,
-        output_globs: Vec<String>,
-        output_exclusion_globs: Vec<String>,
+        output_globs: &[ValidatedGlob],
+        output_exclusion_globs: &[ValidatedGlob],
         time_saved: u64,
     ) -> Result<(), DaemonError> {
         let output_globs = output_globs
             .iter()
-            .map(|raw_glob| format_repo_relative_glob(raw_glob))
+            .map(|validated_glob| validated_glob.as_str().to_string())
             .collect();
         let output_exclusion_globs = output_exclusion_globs
             .iter()
-            .map(|raw_glob| format_repo_relative_glob(raw_glob))
+            .map(|validated_glob| validated_glob.as_str().to_string())
             .collect();
         self.client
             .notify_outputs_written(proto::NotifyOutputsWrittenRequest {
@@ -205,6 +206,9 @@ pub enum DaemonError {
 
     #[error("failed to determine package manager: {0}")]
     PackageManager(#[from] turborepo_repository::package_manager::Error),
+
+    #[error("`tail` is not installed. Please install it to use this feature.")]
+    TailNotInstalled,
 }
 
 impl From<Status> for DaemonError {

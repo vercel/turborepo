@@ -1,6 +1,7 @@
 use std::{fmt, path::Path};
 
 use camino::{Utf8Component, Utf8Path};
+use path_clean::PathClean;
 use serde::Serialize;
 
 use crate::{AnchoredSystemPathBuf, PathError, RelativeUnixPathBuf};
@@ -98,5 +99,19 @@ impl AnchoredSystemPath {
     pub fn join_component(&self, segment: &str) -> AnchoredSystemPathBuf {
         debug_assert!(!segment.contains(std::path::MAIN_SEPARATOR));
         AnchoredSystemPathBuf(self.0.join(segment))
+    }
+
+    pub fn join_components(&self, segments: &[&str]) -> AnchoredSystemPathBuf {
+        debug_assert!(!segments
+            .iter()
+            .any(|segment| segment.contains(std::path::MAIN_SEPARATOR)));
+        AnchoredSystemPathBuf(
+            self.0
+                .join(segments.join(std::path::MAIN_SEPARATOR_STR))
+                .as_std_path()
+                .clean()
+                .try_into()
+                .unwrap(),
+        )
     }
 }

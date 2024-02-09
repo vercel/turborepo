@@ -12,7 +12,7 @@ use regex::Regex;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, Instrument, Span};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
-use turborepo_ci::github_header_footer;
+use turborepo_ci::{Vendor, VendorBehavior};
 use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
 use turborepo_repository::{
     package_graph::{PackageGraph, WorkspaceName, ROOT_PKG_NAME},
@@ -35,6 +35,7 @@ use crate::{
             self, GlobalHashSummary, RunTracker, SpacesTaskClient, SpacesTaskInformation,
             TaskExecutionSummary, TaskTracker,
         },
+        task_access::TaskAccess,
         task_id::TaskId,
         RunCache, TaskCache,
     },
@@ -53,6 +54,7 @@ pub struct Visitor<'a> {
     repo_root: &'a AbsoluteSystemPath,
     run_cache: Arc<RunCache>,
     run_tracker: RunTracker,
+    task_access: TaskAccess,
     sink: OutputSink<StdWriter>,
     task_hasher: TaskHasher<'a>,
     ui: UI,
@@ -88,6 +90,7 @@ impl<'a> Visitor<'a> {
         package_graph: Arc<PackageGraph>,
         run_cache: Arc<RunCache>,
         run_tracker: RunTracker,
+        task_access: TaskAccess,
         run_opts: &'a RunOpts,
         package_inputs_hashes: PackageInputsHashes,
         env_at_execution_start: &'a EnvironmentVariableMap,
@@ -118,6 +121,7 @@ impl<'a> Visitor<'a> {
             repo_root,
             run_cache,
             run_tracker,
+            task_access,
             sink,
             task_hasher,
             ui,
@@ -139,7 +143,6 @@ impl<'a> Visitor<'a> {
         };
         let mut tasks = FuturesUnordered::new();
         let errors = Arc::new(Mutex::new(Vec::new()));
-
         let span = Span::current();
 
         let factory = ExecContextFactory::new(self, errors.clone(), self.manager.clone(), &engine);
@@ -255,9 +258,13 @@ impl<'a> Visitor<'a> {
                         workspace_directory,
                         execution_env,
                         persistent,
+                        self.task_access.clone(),
                     );
 
-                    let output_client = self.output_client(&info);
+                    let vendor_behavior =
+                        Vendor::infer().and_then(|vendor| vendor.behavior.as_ref());
+
+                    let output_client = self.output_client(&info, vendor_behavior);
                     let tracker = self.run_tracker.track_task(info.clone().into_owned());
                     let spaces_client = self.run_tracker.spaces_task_client();
                     let parent_span = Span::current();
@@ -286,6 +293,9 @@ impl<'a> Visitor<'a> {
             result.expect("task executor panicked");
         }
         drop(factory);
+
+        // Write out the traced-config.json file if we have one
+        self.task_access.save().await;
 
         let errors = Arc::into_inner(errors)
             .expect("only one strong reference to errors should remain")
@@ -355,7 +365,11 @@ impl<'a> Visitor<'a> {
         OutputSink::new(out, err)
     }
 
-    fn output_client(&self, task_id: &TaskId) -> OutputClient<impl std::io::Write> {
+    fn output_client(
+        &self,
+        task_id: &TaskId,
+        vendor_behavior: Option<&VendorBehavior>,
+    ) -> OutputClient<impl std::io::Write> {
         let behavior = match self.run_opts.log_order {
             crate::opts::ResolvedLogOrder::Stream if self.run_tracker.spaces_enabled() => {
                 turborepo_ui::OutputClientBehavior::InMemoryBuffer
@@ -367,13 +381,16 @@ impl<'a> Visitor<'a> {
         };
 
         let mut logger = self.sink.logger(behavior);
-        if self.run_opts.is_github_actions {
-            let package = if self.run_opts.single_package {
-                None
+        if let Some(vendor_behavior) = vendor_behavior {
+            let group_name = if self.run_opts.single_package {
+                task_id.task().to_string()
             } else {
-                Some(task_id.package())
+                format!("{}:{}", task_id.package(), task_id.task())
             };
-            let (header, footer) = github_header_footer(package, task_id.task());
+            let (header, footer) = (
+                (vendor_behavior.group_prefix)(&group_name),
+                (vendor_behavior.group_suffix)(&group_name),
+            );
             logger.with_header_footer(Some(header), Some(footer));
         }
         logger
@@ -558,6 +575,7 @@ impl<'a> ExecContextFactory<'a> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn exec_context(
         &self,
         task_id: TaskId<'static>,
@@ -566,6 +584,7 @@ impl<'a> ExecContextFactory<'a> {
         workspace_directory: AbsoluteSystemPathBuf,
         execution_env: EnvironmentVariableMap,
         persistent: bool,
+        task_access: TaskAccess,
     ) -> ExecContext {
         let task_id_for_display = self.visitor.display_task_id(&task_id);
         let pass_through_args = self.visitor.run_opts.args_for_task(&task_id);
@@ -590,6 +609,7 @@ impl<'a> ExecContextFactory<'a> {
             pass_through_args,
             errors: self.errors.clone(),
             persistent,
+            task_access,
         }
     }
 
@@ -624,6 +644,7 @@ struct ExecContext {
     pass_through_args: Option<Vec<String>>,
     errors: Arc<Mutex<Vec<TaskError>>>,
     persistent: bool,
+    task_access: TaskAccess,
 }
 
 enum ExecOutcome {
@@ -788,6 +809,14 @@ impl ExecContext {
         cmd.envs(self.execution_env.iter());
         // Always last to make sure it overwrites any user configured env var.
         cmd.env("TURBO_HASH", &self.task_hash);
+        // enable task access tracing
+
+        // set the trace file env var - frameworks that support this can use it to
+        // write out a trace file that we will use to automatically cache the task
+        if self.task_access.is_enabled() {
+            let (task_access_trace_key, trace_file) = self.task_access.get_env_var(&self.task_hash);
+            cmd.env(task_access_trace_key, trace_file.to_string());
+        }
 
         // Many persistent tasks if started hooked up to a pseudoterminal
         // will shut down if stdin is closed, so we open it even if we don't pass
@@ -850,18 +879,26 @@ impl ExecContext {
 
         match exit_status {
             ChildExit::Finished(Some(0)) => {
+                // Attempt to flush stdout_writer and log any errors encountered
                 if let Err(e) = stdout_writer.flush() {
                     error!("{e}");
-                } else if let Err(e) = self.task_cache.save_outputs(task_duration, telemetry).await
+                } else if self
+                    .task_access
+                    .can_cache(&self.task_hash, &self.task_id_for_display)
+                    .unwrap_or(true)
                 {
-                    error!("error caching output: {e}");
-                } else {
-                    self.hash_tracker.insert_expanded_outputs(
-                        self.task_id.clone(),
-                        self.task_cache.expanded_outputs().to_vec(),
-                    );
+                    if let Err(e) = self.task_cache.save_outputs(task_duration, telemetry).await {
+                        error!("error caching output: {e}");
+                    } else {
+                        // If no errors, update hash tracker with expanded outputs
+                        self.hash_tracker.insert_expanded_outputs(
+                            self.task_id.clone(),
+                            self.task_cache.expanded_outputs().to_vec(),
+                        );
+                    }
                 }
 
+                // Return success outcome
                 ExecOutcome::Success(SuccessOutcome::Run)
             }
             ChildExit::Finished(Some(code)) => {

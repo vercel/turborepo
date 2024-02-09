@@ -364,16 +364,13 @@ Setting this to a list of globs will cause the task to only be run when files ma
 changed. This can be helpful if you want to, for example, skip running tests unless a source file changed, or
 explicitly depend on a `.gitignore`d file.
 
-Because specifying an `inputs` key immediately opts out of the default behavior, you may specify
-the special string `$TURBO_DEFAULT$` within an inputs array to include all default inputs. This is useful
-if you want to add or remove additional inputs from the default set.
-
-The default is `[]` to run the task when any file in the package changes.
-
 <Callout type="info">
-  `inputs` globs must be specified as relative paths rooted at the package's directory.
+  Good to know:
+  - The default for `inputs` is `[]` to run the task when any file in the package changes.
+  - `inputs` globs must be specified as relative paths rooted at the package's directory.
+  - `turbo.json` is *always* considered an input. If you modify
+  `turbo.json`, all caches are invalidated.
 </Callout>
-
 **Example**
 
 ```jsonc
@@ -389,7 +386,11 @@ The default is `[]` to run the task when any file in the package changes.
 }
 ```
 
-`$TURBO_DEFAULT$` **Example**
+Because specifying an `inputs` key immediately opts out of the default behavior, you may specify
+the special string `$TURBO_DEFAULT$` within an inputs array to start with the default inputs. This is useful
+when you want to add or remove additional inputs from the default set.
+
+**Example** with `$TURBO_DEFAULT$`:
 
 ```jsonc
 {
@@ -402,11 +403,6 @@ The default is `[]` to run the task when any file in the package changes.
   }
 }
 ```
-
-<Callout type="info">
-  Note: `turbo.json` is *always* considered an input. If you modify
-  `turbo.json`, all caches are invalidated.
-</Callout>
 
 ### `outputMode`
 

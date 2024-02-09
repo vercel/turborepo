@@ -7,16 +7,17 @@ mod graph_visualizer;
 pub(crate) mod package_discovery;
 mod scope;
 pub(crate) mod summary;
+pub mod task_access;
 pub mod task_id;
 
 use std::{
     collections::HashSet,
     io::{IsTerminal, Write},
     sync::Arc,
-    time::{Duration, SystemTime},
+    time::SystemTime,
 };
 
-pub use cache::{RunCache, TaskCache};
+pub use cache::{ConfigCache, RunCache, TaskCache};
 use chrono::{DateTime, Local};
 use itertools::Itertools;
 use rayon::iter::ParallelBridge;
@@ -28,7 +29,6 @@ use turborepo_cache::{AsyncCache, RemoteCacheOpts};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::{
-    discovery::{FallbackPackageDiscovery, LocalPackageDiscoveryBuilder, PackageDiscoveryBuilder},
     package_graph::{PackageGraph, WorkspaceName},
     package_json::PackageJson,
 };
@@ -40,6 +40,14 @@ use turborepo_telemetry::events::{
     EventBuilder,
 };
 use turborepo_ui::{cprint, cprintln, ColorSelector, BOLD_GREY, GREY};
+#[cfg(feature = "daemon-package-discovery")]
+use {
+    crate::run::package_discovery::DaemonPackageDiscovery,
+    std::time::Duration,
+    turborepo_repository::discovery::{
+        FallbackPackageDiscovery, LocalPackageDiscoveryBuilder, PackageDiscoveryBuilder,
+    },
+};
 
 use self::task_id::TaskName;
 pub use crate::run::error::Error;
@@ -50,10 +58,7 @@ use crate::{
     engine::{Engine, EngineBuilder},
     opts::Opts,
     process::ProcessManager,
-    run::{
-        global_hash::get_global_hash_inputs, package_discovery::DaemonPackageDiscovery,
-        summary::RunTracker,
-    },
+    run::{global_hash::get_global_hash_inputs, summary::RunTracker, task_access::TaskAccess},
     shim::TurboState,
     signal::{SignalHandler, SignalSubscriber},
     task_graph::Visitor,
@@ -90,6 +95,9 @@ impl Run {
             unused_remote_cache_opts_team_id,
             signature,
         ));
+        if opts.run_opts.experimental_space_id.is_none() {
+            opts.run_opts.experimental_space_id = config.spaces_id().map(|s| s.to_owned());
+        }
         Ok(Self {
             base,
             processes,
@@ -153,7 +161,7 @@ impl Run {
 
     #[tracing::instrument(skip(self, signal_handler, api_client))]
     pub async fn run(
-        &mut self,
+        &self,
         signal_handler: &SignalHandler,
         telemetry: CommandEventBuilder,
         api_client: APIClient,
@@ -194,7 +202,7 @@ impl Run {
     // We split this into a separate function because we need
     // to close the AnalyticsHandle regardless of whether the run succeeds or not
     async fn run_with_analytics(
-        &mut self,
+        &self,
         start_at: DateTime<Local>,
         api_client: APIClient,
         analytics_sender: Option<AnalyticsSender>,
@@ -232,6 +240,8 @@ impl Run {
         let is_ci_or_not_tty = turborepo_ci::is_ci() || !std::io::stdout().is_terminal();
         run_telemetry.track_ci(turborepo_ci::Vendor::get_name());
 
+        // Remove allow when daemon is flagged back on
+        #[allow(unused_mut)]
         let mut daemon = match (is_ci_or_not_tty, self.opts.run_opts.daemon) {
             (true, None) => {
                 run_telemetry.track_daemon_init(DaemonInitStatus::Skipped);
@@ -272,37 +282,55 @@ impl Run {
             }
         };
 
-        // if we are forcing the daemon, we don't want to fallback to local discovery
-        let (fallback, duration) = if let Some(true) = self.opts.run_opts.daemon {
-            (None, Duration::MAX)
-        } else {
-            (
-                Some(
-                    LocalPackageDiscoveryBuilder::new(
-                        self.base.repo_root.clone(),
-                        None,
-                        Some(root_package_json.clone()),
-                    )
-                    .build()?,
-                ),
-                Duration::from_millis(10),
-            )
-        };
+        let mut pkg_dep_graph = {
+            let builder = PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
+                .with_single_package_mode(self.opts.run_opts.single_package);
 
-        let mut pkg_dep_graph =
-            PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
-                .with_single_package_mode(self.opts.run_opts.single_package)
-                .with_package_discovery(FallbackPackageDiscovery::new(
+            #[cfg(feature = "daemon-package-discovery")]
+            let builder = {
+                // if we are forcing the daemon, we don't want to fallback to local discovery
+                let (fallback, duration) = if let Some(true) = self.opts.run_opts.daemon {
+                    (None, Duration::MAX)
+                } else {
+                    (
+                        Some(
+                            LocalPackageDiscoveryBuilder::new(
+                                self.base.repo_root.clone(),
+                                None,
+                                Some(root_package_json.clone()),
+                            )
+                            .build()?,
+                        ),
+                        Duration::from_millis(10),
+                    )
+                };
+                let fallback_discovery = FallbackPackageDiscovery::new(
                     daemon.as_mut().map(DaemonPackageDiscovery::new),
                     fallback,
                     duration,
-                ))
-                .build()
-                .await?;
+                );
+                builder.with_package_discovery(fallback_discovery)
+            };
+
+            builder.build().await?
+        };
 
         repo_telemetry.track_package_manager(pkg_dep_graph.package_manager().to_string());
         repo_telemetry.track_size(pkg_dep_graph.len());
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
+
+        let scm = scm.await.expect("detecting scm panicked");
+        let async_cache = AsyncCache::new(
+            &self.opts.cache_opts,
+            &self.base.repo_root,
+            api_client.clone(),
+            self.api_auth.clone(),
+            analytics_sender,
+        )?;
+
+        // restore config from task access trace if it's enabled
+        let task_access = TaskAccess::new(self.base.repo_root.clone(), async_cache.clone(), &scm);
+        task_access.restore_config().await;
 
         let root_turbo_json = TurboJson::load(
             &self.base.repo_root,
@@ -311,13 +339,7 @@ impl Run {
             is_single_package,
         )?;
 
-        if self.opts.run_opts.experimental_space_id.is_none() {
-            self.opts.run_opts.experimental_space_id = root_turbo_json.space_id.clone();
-        }
-
         pkg_dep_graph.validate()?;
-
-        let scm = scm.await.expect("detecting scm panicked");
 
         let filtered_pkgs = {
             let (mut filtered_pkgs, is_all_packages) = scope::resolve_packages(
@@ -346,15 +368,6 @@ impl Run {
         };
 
         let env_at_execution_start = EnvironmentVariableMap::infer();
-
-        let async_cache = AsyncCache::new(
-            &self.opts.cache_opts,
-            &self.base.repo_root,
-            api_client.clone(),
-            self.api_auth.clone(),
-            analytics_sender,
-        )?;
-
         let mut engine = self.build_engine(&pkg_dep_graph, &root_turbo_json, &filtered_pkgs)?;
 
         if self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none() {
@@ -405,7 +418,7 @@ impl Run {
             tokio::spawn(async move {
                 let _guard = subscriber.listen().await;
                 let spinner = turborepo_ui::start_spinner("...Finishing writing to cache...");
-                runcache.wait_for_cache().await;
+                runcache.shutdown_cache().await;
                 spinner.finish_and_clear();
             });
         }
@@ -474,6 +487,7 @@ impl Run {
             pkg_dep_graph.clone(),
             runcache,
             run_tracker,
+            task_access,
             &self.opts.run_opts,
             package_inputs_hashes,
             &env_at_execution_start,

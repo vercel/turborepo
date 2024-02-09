@@ -354,6 +354,14 @@ You must provide a verbosity flag (`-v`, `-vv`, or `-vvv`) with the `--profile` 
 turbo run build --profile=profile.json
 ```
 
+### `--remote-cache-timeout`
+
+Default `30` seconds. Set the timeout for remote cache operations in seconds.
+
+```shell
+turbo run build --remote-cache-timeout=60
+```
+
 ### `--remote-only`
 
 Default `false`. Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache.

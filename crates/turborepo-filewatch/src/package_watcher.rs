@@ -186,7 +186,7 @@ impl<T: PackageDiscovery + Send + 'static> Subscriber<T> {
     }
 
     async fn handle_file_event(&mut self, file_event: Event) {
-        tracing::trace!("file event: {:?}", file_event);
+        tracing::trace!("file event: {:?} {:?}", file_event.kind, file_event.paths);
 
         if file_event
             .paths
@@ -372,7 +372,7 @@ mod test {
         let (tx, rx) = broadcast::channel(10);
         let (_exit_tx, exit_rx) = tokio::sync::oneshot::channel();
 
-        let root = AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy()).unwrap();
+        let root: AbsoluteSystemPathBuf = tmp.path().try_into().unwrap();
         let manager = PackageManager::Yarn;
 
         let package_data = vec![

@@ -254,6 +254,8 @@ pub enum DaemonCommand {
     /// Stops the turbo daemon if it is already running, and removes any stale
     /// daemon state
     Clean,
+    /// Shows the daemon logs
+    Logs,
 }
 
 #[derive(Subcommand, Copy, Clone, Debug, Serialize, PartialEq)]
@@ -1167,16 +1169,11 @@ pub async fn run(
 
             args.track(&event);
             event.track_run_code_path(CodePath::Rust);
-            let exit_code = run::run(base, event)
-                .await
-                .inspect(|code| {
-                    if *code != 0 {
-                        error!("run failed: command  exited ({code})");
-                    }
-                })
-                .inspect_err(|err| {
-                    error!("run failed: {err}");
-                })?;
+            let exit_code = run::run(base, event).await.inspect(|code| {
+                if *code != 0 {
+                    error!("run failed: command  exited ({code})");
+                }
+            })?;
             Ok(exit_code)
         }
         Command::Prune {
