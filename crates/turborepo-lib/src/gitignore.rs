@@ -23,7 +23,10 @@ pub fn ensure_turbo_is_gitignored(repo_root: &AbsoluteSystemPath) -> Result<(), 
 
     if !gitignore_path.try_exists().unwrap_or(true) {
         gitignore_path.create_with_contents(get_ignore_string())?;
-        gitignore_path.set_mode(0o0644)?;
+        #[cfg(unix)]
+        {
+            gitignore_path.set_mode(0o0644)?;
+        }
     } else {
         let gitignore = gitignore_path.open()?;
         let lines = io::BufReader::new(gitignore).lines();
@@ -95,7 +98,10 @@ mod tests {
         // create gitignore with no turbo entry
         let gitignore_path = repo_root.join_component(GITIGNORE_FILE);
         gitignore_path.create_with_contents(format!("{}", "node_modules/\n"))?;
-        gitignore_path.set_mode(0o0644)?;
+        #[cfg(unix)]
+        {
+            gitignore_path.set_mode(0o0644)?;
+        }
         assert_eq!(get_gitignore_size(&gitignore_path), 1);
 
         ensure_turbo_is_gitignored(&repo_root).expect("Failed to ensure turbo is gitignored");
