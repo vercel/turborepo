@@ -136,6 +136,8 @@ impl Workspace {
         Ok(map)
     }
 
+    /// Given a set of "changed" files, returns a set of packages that are
+    /// "affected" by the changes.
     #[napi]
     pub async fn affected_packages(&self, files: Vec<String>) -> Result<Vec<Package>, Error> {
         let mapper = ChangeMapper::new(&self.graph, vec![], vec![]);
