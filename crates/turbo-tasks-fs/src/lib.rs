@@ -418,7 +418,8 @@ impl DiskFileSystem {
                                             #[cfg(not(any(target_os = "macos", target_os = "windows")))]
                                             batched_new_paths.insert(destination.clone());
                                         } else {
-                                            println!("Rename event does not contain source and destination paths {:#?}", paths);
+                                            // If we hit here, we expect this as a bug either in notify or system weirdness.
+                                            panic!("Rename event does not contain source and destination paths {:#?}", paths);
                                         }
                                     }
                                     // [NOTE] Observing `ModifyKind::Metadata(MetadataKind::Any)` is not a mistake.
