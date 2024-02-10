@@ -140,8 +140,6 @@ impl Workspace {
     /// "affected" by the changes.
     #[napi]
     pub async fn affected_packages(&self, files: Vec<String>) -> Result<Vec<Package>, Error> {
-        let mapper = ChangeMapper::new(&self.graph, vec![], vec![]);
-
         let workspace_root = match AbsoluteSystemPath::new(&self.absolute_path) {
             Ok(path) => path,
             Err(e) => return Err(Error::from_reason(e.to_string())),
@@ -159,6 +157,8 @@ impl Workspace {
             })
             .collect();
 
+        // Create a ChangeMapper with no custom global deps or ignore patterns
+        let mapper = ChangeMapper::new(&self.graph, vec![], vec![]);
         let package_changes = match mapper.changed_packages(hash_set_of_paths, None) {
             Ok(changes) => changes,
             Err(e) => return Err(Error::from_reason(e.to_string())),
