@@ -30,6 +30,9 @@ jobs:
           comment-author: "github-actions[bot]"
           body-includes: "<!-- CI COMMENT -->"
 
+      - name: Lil test
+        run: "echo Part 1; echo ::group::{\033[;31mError group\033[;0m}; echo Inside the error; echo ::endgroup"
+
       - name: Create or update PR comment
         if: github.event_name == 'pull_request' && steps.comment.outputs.comment-id != ''
         uses: peter-evans/create-or-update-comment@v2
