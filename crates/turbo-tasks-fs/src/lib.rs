@@ -270,26 +270,23 @@ impl DiskFileSystem {
         self.start_watching_internal(true)
     }
 
-    /**
-     * Create a watcher and start watching by creating `debounced` watcher
-     * via `full debouncer`
-     *
-     * `notify` provides 2 different debouncer implementation, `-full`
-     * provides below differences for the easy of use:
-     *
-     * - Only emits a single Rename event if the rename From and To events
-     *   can be matched
-     * - Merges multiple Rename events
-     * - Takes Rename events into account and updates paths for events that
-     *   occurred before the rename event, but which haven't been emitted,
-     *   yet
-     * - Optionally keeps track of the file system IDs all files and stiches
-     *   rename events together (FSevents, Windows)
-     * - Emits only one Remove event when deleting a directory (inotify)
-     * - Doesn't emit duplicate create events
-     * - Doesn't emit Modify events after a Create event
-     *
-     */
+    ///
+    /// Create a watcher and start watching by creating `debounced` watcher
+    /// via `full debouncer`
+    ///
+    /// `notify` provides 2 different debouncer implementation, `-full`
+    /// provides below differences for the easy of use:
+    ///
+    /// - Only emits a single Rename event if the rename From and To events can
+    ///   be matched
+    /// - Merges multiple Rename events
+    /// - Takes Rename events into account and updates paths for events that
+    ///   occurred before the rename event, but which haven't been emitted, yet
+    /// - Optionally keeps track of the file system IDs all files and stiches
+    ///   rename events together (FSevents, Windows)
+    /// - Emits only one Remove event when deleting a directory (inotify)
+    /// - Doesn't emit duplicate create events
+    /// - Doesn't emit Modify events after a Create event
     fn start_watching_internal(&self, report_invalidation_reason: bool) -> Result<()> {
         let mut watcher_guard = self.watcher.watcher.lock().unwrap();
         if watcher_guard.is_some() {
@@ -379,7 +376,16 @@ impl DiskFileSystem {
                                 // [NOTE] there is attrs in the `Event` struct, which contains few more metadata like process_id who triggered the event,
                                 // or the source we may able to utilize later.
                                 match kind {
-                                    EventKind::Modify(ModifyKind::Data(_)) => {
+                                    // [NOTE] Observing `ModifyKind::Metadata(MetadataKind::Any)` is not a mistake, fix for PACK-2437.
+                                    // In here explicitly subscribes to the `ModifyKind::Data` which
+                                    // indicates file content changes - in case of fsevents backend, this is `kFSEventStreamEventFlagItemModified`.
+                                    // Also meanwhile we subscribe to ModifyKind::Metadata as well.
+                                    // This is due to in some cases fsevents does not emit explicit kFSEventStreamEventFlagItemModified kernel events,
+                                    // but only emits kFSEventStreamEventFlagItemInodeMetaMod. While this could cause redundant invalidation,
+                                    // it's the way to reliably detect file content changes.
+                                    // ref other implementation, i.e libuv does same thing to trigger UV_CHANEGS
+                                    // https://github.com/libuv/libuv/commit/73cf3600d75a5884b890a1a94048b8f3f9c66876#diff-e12fdb1f404f1c97bbdcc0956ac90d7db0d811d9fa9ca83a3deef90c937a486cR95-R99
+                                    EventKind::Modify(ModifyKind::Data(_) | ModifyKind::Metadata(MetadataKind::Any)) => {
                                         batched_invalidate_path.extend(paths.clone());
                                     }
                                     EventKind::Create(_) => {
@@ -422,14 +428,9 @@ impl DiskFileSystem {
                                             panic!("Rename event does not contain source and destination paths {:#?}", paths);
                                         }
                                     }
-                                    // [NOTE] Observing `ModifyKind::Metadata(MetadataKind::Any)` is not a mistake.
-                                    // PACK-2437 addresses some cases notify doesn't emit event to trigger hmr,
-                                    // cases like starting from a file have contents -> clear & save.
-                                    // v4 doesn't emit any debounced event for those,
-                                    // and v6 emits an event with `ModifyKind::Metadata(MetadataKind::Any)`
-                                    // it is unclear why these case are not considered as normal modify, anyway we use certain
-                                    // event to workaround.
-                                    EventKind::Any | EventKind::Modify(ModifyKind::Any | ModifyKind::Metadata(MetadataKind::Any)) => {
+                                    // We expect RenameMode::Both covers most of the case we need to invalidate,
+                                    // but also checks RenameMode::To just in case to avoid edge cases.
+                                    EventKind::Any | EventKind::Modify(ModifyKind::Any | ModifyKind::Name(RenameMode::To)) => {
                                         batched_invalidate_path.extend(paths.clone());
                                         batched_invalidate_path_and_children.extend(paths.clone());
                                         batched_invalidate_path_and_children_dir.extend(paths.clone());
@@ -440,7 +441,6 @@ impl DiskFileSystem {
                                     EventKind::Modify(
                                         ModifyKind::Metadata(..)
                                         | ModifyKind::Other
-                                        // hope RenameMode::both are suffecient for the rename event, ignore others
                                         | ModifyKind::Name(..)
                                     )
                                     | EventKind::Access(_)
