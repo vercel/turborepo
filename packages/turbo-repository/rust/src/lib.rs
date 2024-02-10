@@ -149,12 +149,12 @@ impl Workspace {
 
         let hash_set_of_paths: HashSet<AnchoredSystemPathBuf> = files
             .into_iter()
-            .filter_map(|s| {
-                let split = s.split(std::path::MAIN_SEPARATOR).collect::<Vec<&str>>();
-                let xx = workspace_root.join_components(&split);
-                match workspace_root.anchor(&xx) {
+            .filter_map(|path| {
+                let path_components = path.split(std::path::MAIN_SEPARATOR).collect::<Vec<&str>>();
+                let absolute_path = workspace_root.join_components(&path_components);
+                match workspace_root.anchor(&absolute_path) {
                     Ok(path) => Some(path),
-                    Err(e) => None,
+                    Err(_) => None,
                 }
             })
             .collect();
