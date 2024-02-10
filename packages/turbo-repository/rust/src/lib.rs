@@ -9,7 +9,7 @@ use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
     change_mapper::{ChangeMapper, PackageChanges},
     inference::RepoState as WorkspaceState,
-    package_graph::{PackageGraph, WorkspaceName, WorkspaceNode, WorkspacePackage},
+    package_graph::{PackageGraph, WorkspaceName, WorkspaceNode, WorkspacePackage, ROOT_PKG_NAME},
 };
 mod internal;
 
@@ -182,7 +182,7 @@ impl Workspace {
                 let package_path = workspace_root.resolve(&p.path);
                 Package::new(p.name.to_string(), &workspace_root, &package_path)
             })
-            .filter(|p| p.name != "//")
+            .filter(|p| p.name != ROOT_PKG_NAME.to_string())
             .collect();
 
         serializable_packages.sort();
