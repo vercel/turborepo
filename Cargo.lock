@@ -512,7 +512,7 @@ name = "auto-hash-map"
 version = "0.1.0"
 dependencies = [
  "serde",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
 ]
 
 [[package]]
@@ -1373,7 +1373,7 @@ version = "0.15.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b40ccee03b5175c18cde8f37e7d2a33bcef6f8ec8f7cc0d81090d1bb380949c9"
 dependencies = [
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "target-lexicon",
 ]
 
@@ -1945,7 +1945,7 @@ dependencies = [
  "gimli 0.26.2",
  "log 0.4.20",
  "regalloc2",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "target-lexicon",
 ]
 
@@ -1975,7 +1975,7 @@ dependencies = [
  "hashbrown 0.12.3",
  "indexmap 1.9.3",
  "log 0.4.20",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
 ]
 
 [[package]]
@@ -1992,7 +1992,7 @@ checksum = "0d70abacb8cfef3dc8ff7e8836e9c1d70f7967dfdac824a4cd5e30223415aca6"
 dependencies = [
  "cranelift-codegen",
  "log 0.4.20",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "target-lexicon",
 ]
 
@@ -2219,7 +2219,7 @@ dependencies = [
  "itoa",
  "phf 0.11.2",
  "serde",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
 ]
 
 [[package]]
@@ -3553,7 +3553,7 @@ dependencies = [
  "once_cell",
  "phf 0.11.2",
  "rustc-hash",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
 ]
 
 [[package]]
@@ -3976,7 +3976,7 @@ version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "270bc34e57047cab801a8c871c124d9dc7132f6473c6401f645524f4e6edd111"
 dependencies = [
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
 ]
 
 [[package]]
@@ -4489,7 +4489,7 @@ dependencies = [
  "pathdiff",
  "rayon",
  "serde",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "static-self",
 ]
 
@@ -5558,7 +5558,7 @@ dependencies = [
  "phf_codegen",
  "precomputed-hash",
  "serde",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "static-self",
 ]
 
@@ -5627,7 +5627,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "libc",
  "redox_syscall 0.3.5",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "windows-targets 0.48.1",
 ]
 
@@ -6070,7 +6070,7 @@ dependencies = [
  "prost-build",
  "prost-derive",
  "sha2",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "symbolic-demangle",
  "tempfile",
  "thiserror",
@@ -6667,7 +6667,7 @@ dependencies = [
  "fxhash",
  "log 0.4.20",
  "slice-group-by",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
 ]
 
 [[package]]
@@ -7700,9 +7700,9 @@ dependencies = [
 
 [[package]]
 name = "smallvec"
-version = "1.11.1"
+version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "942b4a808e05215192e39f4ab80813e599068285906cc91aa64f923db842bd5a"
+checksum = "e6ecd384b10a64542d77071bd64bd7b231f4ed5940fba55e98c3de13824cf3d7"
 dependencies = [
  "serde",
 ]
@@ -7831,7 +7831,7 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "253e76c8c993a7b1b201b0539228b334582153cd4364292822d2c30776d469c7"
 dependencies = [
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "static-self-derive",
 ]
 
@@ -8606,7 +8606,7 @@ dependencies = [
  "is-macro",
  "serde",
  "serde_derive",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "swc_atoms",
  "swc_common",
  "swc_config",
@@ -8861,7 +8861,7 @@ dependencies = [
  "num-traits",
  "phf 0.11.2",
  "serde",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "smartstring",
  "stacker",
  "swc_atoms",
@@ -8960,7 +8960,7 @@ dependencies = [
  "rayon",
  "rustc-hash",
  "serde",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "swc_atoms",
  "swc_common",
  "swc_ecma_ast",
@@ -8996,7 +8996,7 @@ dependencies = [
  "num-bigint",
  "rayon",
  "serde",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "swc_atoms",
  "swc_common",
  "swc_config",
@@ -9094,7 +9094,7 @@ dependencies = [
  "either",
  "rustc-hash",
  "serde",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "swc_atoms",
  "swc_common",
  "swc_ecma_ast",
@@ -10449,7 +10449,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sharded-slab",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "thread_local",
  "tracing",
  "tracing-core",
@@ -10740,7 +10740,7 @@ dependencies = [
  "ref-cast",
  "rustc-hash",
  "serde",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "tokio",
  "tracing",
  "turbo-tasks",
@@ -11057,7 +11057,7 @@ dependencies = [
  "parcel_sourcemap",
  "regex",
  "serde",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "swc_core",
  "tracing",
  "turbo-tasks",
@@ -12665,7 +12665,7 @@ dependencies = [
  "memmap2 0.5.10",
  "more-asserts",
  "region",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "thiserror",
  "wasmer-types",
  "wasmer-vm",
@@ -12685,7 +12685,7 @@ dependencies = [
  "gimli 0.26.2",
  "more-asserts",
  "rayon",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "target-lexicon",
  "tracing",
  "wasmer-compiler",
