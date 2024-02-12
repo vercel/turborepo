@@ -25,7 +25,7 @@ pub struct PackageGraph {
     workspace_graph: petgraph::Graph<PackageNode, ()>,
     #[allow(dead_code)]
     node_lookup: HashMap<PackageNode, petgraph::graph::NodeIndex>,
-    workspaces: HashMap<WorkspaceName, WorkspaceInfo>,
+    workspaces: HashMap<WorkspaceName, PackageInfo>,
     package_manager: PackageManager,
     lockfile: Option<Box<dyn Lockfile>>,
 }
@@ -51,18 +51,18 @@ impl WorkspacePackage {
     }
 }
 
-/// WorkspaceInfo represents a package within the workspace.
-/// TODO: The name WorkspaceInfo should be changed to PackageInfo to follow the
+/// PackageInfo represents a package within the workspace.
+/// TODO: The name PackageInfo should be changed to PackageInfo to follow the
 /// Vercel glossary.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct WorkspaceInfo {
+pub struct PackageInfo {
     pub package_json: PackageJson,
     pub package_json_path: AnchoredSystemPathBuf,
     pub unresolved_external_dependencies: Option<BTreeMap<PackageName, PackageVersion>>,
     pub transitive_dependencies: Option<HashSet<turborepo_lockfiles::Package>>,
 }
 
-impl WorkspaceInfo {
+impl PackageInfo {
     pub fn package_name(&self) -> Option<String> {
         self.package_json.name.clone()
     }
@@ -176,11 +176,11 @@ impl PackageGraph {
         )
     }
 
-    pub fn workspace_info(&self, workspace: &WorkspaceName) -> Option<&WorkspaceInfo> {
+    pub fn workspace_info(&self, workspace: &WorkspaceName) -> Option<&PackageInfo> {
         self.workspaces.get(workspace)
     }
 
-    pub fn workspaces(&self) -> impl Iterator<Item = (&WorkspaceName, &WorkspaceInfo)> {
+    pub fn workspaces(&self) -> impl Iterator<Item = (&WorkspaceName, &PackageInfo)> {
         self.workspaces.iter()
     }
 

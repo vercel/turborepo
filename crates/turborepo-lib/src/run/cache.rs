@@ -6,7 +6,7 @@ use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
 use turborepo_cache::{AsyncCache, CacheError, CacheHitMetadata, CacheSource};
-use turborepo_repository::package_graph::WorkspaceInfo;
+use turborepo_repository::package_graph::PackageInfo;
 use turborepo_scm::SCM;
 use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
 use turborepo_ui::{
@@ -84,7 +84,7 @@ impl RunCache {
         self: &Arc<Self>,
         // TODO: Group these in a struct
         task_definition: &TaskDefinition,
-        workspace_info: &WorkspaceInfo,
+        workspace_info: &PackageInfo,
         task_id: TaskId<'static>,
         hash: &str,
     ) -> TaskCache {

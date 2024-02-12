@@ -44,7 +44,7 @@ export interface Workspace {
   };
 }
 
-export type WorkspaceInfo = Pick<Workspace, "name" | "description">;
+export type PackageInfo = Pick<Workspace, "name" | "description">;
 
 export interface DetectArgs {
   workspaceRoot: string;

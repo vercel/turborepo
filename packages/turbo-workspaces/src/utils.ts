@@ -10,7 +10,7 @@ import {
 import { sync as globSync } from "fast-glob";
 import yaml from "js-yaml";
 import type { PackageJson, PackageManager } from "@turbo/utils";
-import type { Project, Workspace, WorkspaceInfo, Options } from "./types";
+import type { Project, Workspace, PackageInfo, Options } from "./types";
 import { ConvertError } from "./errors";
 
 // adapted from https://github.com/nodejs/corepack/blob/cae770694e62f15fed33dd8023649d77d96023c1/sources/specUtils.ts#L14
@@ -70,7 +70,7 @@ function getWorkspaceInfo({
   workspaceRoot,
 }: {
   workspaceRoot: string;
-}): WorkspaceInfo {
+}): PackageInfo {
   const packageJson = getPackageJson({ workspaceRoot });
   const workspaceDirectory = path.basename(workspaceRoot);
 
