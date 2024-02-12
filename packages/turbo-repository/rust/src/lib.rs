@@ -179,7 +179,7 @@ impl Workspace {
                 let package_path = workspace_root.resolve(&p.path);
                 Package::new(p.name.to_string(), &workspace_root, &package_path)
             })
-            .filter(|p| p.name != ROOT_PKG_NAME.to_string())
+            .filter(|p| p.name != ROOT_PKG_NAME)
             .collect();
 
         serializable_packages.sort();
