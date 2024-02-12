@@ -9,7 +9,7 @@ use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
     change_mapper::{ChangeMapper, PackageChanges},
     inference::RepoState as WorkspaceState,
-    package_graph::{PackageGraph, WorkspaceName, WorkspaceNode, WorkspacePackage, ROOT_PKG_NAME},
+    package_graph::{PackageGraph, PackageNode, WorkspaceName, WorkspacePackage, ROOT_PKG_NAME},
 };
 mod internal;
 
@@ -72,7 +72,7 @@ impl Package {
         graph: &PackageGraph,
         workspace_path: &AbsoluteSystemPath,
     ) -> Vec<Package> {
-        let node = WorkspaceNode::Workspace(WorkspaceName::Other(self.name.clone()));
+        let node = PackageNode::Workspace(WorkspaceName::Other(self.name.clone()));
         let ancestors = match graph.immediate_ancestors(&node) {
             Some(ancestors) => ancestors,
             None => return vec![],

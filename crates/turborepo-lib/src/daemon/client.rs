@@ -10,6 +10,7 @@ use super::{
     connector::{DaemonConnector, DaemonConnectorError},
     endpoint::SocketOpenError,
     proto::DiscoverPackagesResponse,
+    Paths,
 };
 use crate::{daemon::proto, globwatcher::HashGlobSetupError};
 
@@ -140,12 +141,8 @@ impl DaemonClient<DaemonConnector> {
         self.stop().await?.connect().await.map_err(Into::into)
     }
 
-    pub fn pid_file(&self) -> &turbopath::AbsoluteSystemPathBuf {
-        &self.connect_settings.pid_file
-    }
-
-    pub fn sock_file(&self) -> &turbopath::AbsoluteSystemPathBuf {
-        &self.connect_settings.sock_file
+    pub fn paths(&self) -> &Paths {
+        &self.connect_settings.paths
     }
 }
 
