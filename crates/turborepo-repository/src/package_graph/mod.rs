@@ -91,15 +91,6 @@ pub enum WorkspaceName {
     Other(String),
 }
 
-impl From<WorkspaceName> for String {
-    fn from(workspace_name: WorkspaceName) -> Self {
-        match workspace_name {
-            WorkspaceName::Root => ROOT_PKG_NAME.to_string(),
-            WorkspaceName::Other(name) => name,
-        }
-    }
-}
-
 impl Serialize for WorkspaceName {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
