@@ -150,7 +150,7 @@ impl Workspace {
             .filter_map(|path| {
                 let path_components = path.split(std::path::MAIN_SEPARATOR).collect::<Vec<&str>>();
                 let absolute_path = workspace_root.join_components(&path_components);
-               workspace_root.anchor(&absolute_path).ok()
+                workspace_root.anchor(&absolute_path).ok()
             })
             .collect();
 
@@ -183,7 +183,6 @@ impl Workspace {
                 let package_path = workspace_root.resolve(&p.path);
                 Package::new(p.name.to_string(), &workspace_root, &package_path)
             })
-            .filter(|p| p.name != ROOT_PKG_NAME)
             .collect();
 
         serializable_packages.sort();
