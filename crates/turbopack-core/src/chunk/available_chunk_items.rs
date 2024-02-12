@@ -1,15 +1,12 @@
 use anyhow::Result;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use turbo_tasks::{
-    debug::ValueDebugFormat, trace::TraceRawVcs, TryFlatJoinIterExt, TryJoinIterExt, ValueToString,
-    Vc,
-};
+use turbo_tasks::{trace::TraceRawVcs, TryFlatJoinIterExt, TryJoinIterExt, ValueToString, Vc};
 use turbo_tasks_hash::Xxh3Hash64Hasher;
 
 use super::ChunkItem;
 
-#[derive(PartialEq, Eq, TraceRawVcs, Copy, Clone, Serialize, Deserialize, ValueDebugFormat)]
+#[derive(PartialEq, Eq, TraceRawVcs, Copy, Clone, Serialize, Deserialize, Debug)]
 pub struct AvailableChunkItemInfo {
     pub is_async: bool,
 }

@@ -11,7 +11,7 @@ use swc_core::{
     },
     quote, quote_expr,
 };
-use turbo_tasks::{debug::ValueDebugFormat, trace::TraceRawVcs, TryJoinIterExt, Value, Vc};
+use turbo_tasks::{trace::TraceRawVcs, TryJoinIterExt, Value, Vc};
 use turbopack_core::{
     chunk::{ChunkItemExt, ChunkableModule, ChunkingContext, ModuleId},
     issue::{code_gen::CodeGenerationIssue, IssueExt, IssueSeverity, StyledString},
@@ -23,7 +23,7 @@ use turbopack_core::{
 use super::util::{request_to_string, throw_module_not_found_expr};
 use crate::utils::module_id_to_lit;
 
-#[derive(PartialEq, Eq, ValueDebugFormat, TraceRawVcs, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Debug, TraceRawVcs, Serialize, Deserialize)]
 pub(crate) enum SinglePatternMapping {
     /// Invalid request.
     Invalid,
