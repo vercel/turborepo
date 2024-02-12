@@ -363,13 +363,9 @@ impl PatternMapping {
                         }
                     })
                     .map(|(k, v)| async move {
-                        let single_pattern_mapping = to_single_pattern_mapping(
-                            origin.clone(),
-                            chunking_context.clone(),
-                            v,
-                            resolve_type,
-                        )
-                        .await?;
+                        let single_pattern_mapping =
+                            to_single_pattern_mapping(origin, chunking_context, v, resolve_type)
+                                .await?;
                         Ok((k, single_pattern_mapping))
                     })
                     .try_join()
