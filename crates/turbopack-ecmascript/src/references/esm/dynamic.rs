@@ -123,39 +123,36 @@ impl CodeGenerateable for EsmAsyncAssetReference {
 
         let visitor = create_visitor!(path, visit_mut_expr(expr: &mut Expr) {
             let old_expr = expr.take();
-            let Expr::Call(CallExpr { args, ..}) = old_expr else {
-                // It's always a call
-                return;
-            };
-            match args.into_iter().next() {
-                Some(ExprOrSpread { spread: None, expr: key_expr }) => {
-                    *expr = pm.create_import(*key_expr, import_externals);
+            let message = if let Expr::Call(CallExpr { args, ..}) = old_expr {
+                match args.into_iter().next() {
+                    Some(ExprOrSpread { spread: None, expr: key_expr }) => {
+                        *expr = pm.create_import(*key_expr, import_externals);
+                        return;
+                    }
+                    // These are SWC bugs: https://github.com/swc-project/swc/issues/5394
+                    Some(ExprOrSpread { spread: Some(_), expr: _ }) => {
+                        "spread operator is illegal in import() expressions."
+                    }
+                    _ => {
+                        "import() expressions require at least 1 argument"
+                    }
                 }
-                other => {
-                    let message = match other {
-                        // These are SWC bugs: https://github.com/swc-project/swc/issues/5394
-                        Some(ExprOrSpread { spread: Some(_), expr: _ }) => {
-                            "spread operator is illegal in import() expressions."
-                        }
-                        _ => {
-                            "import() expressions require at least 1 argument"
-                        }
-                    };
-                    let error = quote_expr!(
-                        "() => { throw new Error($message); }",
-                        message: Expr = Expr::Lit(Lit::Str(message.into()))
-                    );
-                    *expr = Expr::Call(CallExpr {
-                        callee: Callee::Expr(quote_expr!("Promise.resolve().then")),
-                        args: vec![ExprOrSpread {
-                            spread: None,
-                            expr: error,
-                        }],
-                        span: DUMMY_SP,
-                        type_args: None,
-                    });
-                }
+            } else {
+                "visitor must be executed on a CallExpr"
             };
+            let error = quote_expr!(
+                "() => { throw new Error($message); }",
+                message: Expr = Expr::Lit(Lit::Str(message.into()))
+            );
+            *expr = Expr::Call(CallExpr {
+                callee: Callee::Expr(quote_expr!("Promise.resolve().then")),
+                args: vec![ExprOrSpread {
+                    spread: None,
+                    expr: error,
+                }],
+                span: DUMMY_SP,
+                type_args: None,
+            });
         });
 
         Ok(CodeGeneration {

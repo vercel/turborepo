@@ -157,30 +157,26 @@ impl CodeGenerateable for CjsRequireAssetReference {
         let path = &self.path.await?;
         visitors.push(create_visitor!(path, visit_mut_expr(expr: &mut Expr) {
             let old_expr = expr.take();
-            let Expr::Call(CallExpr { args, ..}) = old_expr else {
-                // It's always a call
-                return;
-            };
-            match args.into_iter().next() {
-                Some(ExprOrSpread { spread: None, expr: key_expr }) => {
-                    *expr = pm.create_require(*key_expr);
+            let message = if let Expr::Call(CallExpr { args, ..}) = old_expr {
+                match args.into_iter().next() {
+                    Some(ExprOrSpread { spread: None, expr: key_expr }) => {
+                        *expr = pm.create_require(*key_expr);
+                        return;
+                    }
+                    Some(ExprOrSpread { spread: Some(_), expr: _ }) => {
+                        "spread operator is not analyse-able in require() expressions."
+                    }
+                    _ => {
+                        "require() expressions require at least 1 argument"
+                    }
                 }
-                other => {
-                    let message = match other {
-                        // These are SWC bugs: https://github.com/swc-project/swc/issues/5394
-                        Some(ExprOrSpread { spread: Some(_), expr: _ }) => {
-                            "spread operator is not analyse-able in require() expressions."
-                        }
-                        _ => {
-                            "require() expressions require at least 1 argument"
-                        }
-                    };
-                    *expr = quote!(
-                        "(() => { throw new Error($message); })()" as Expr,
-                        message: Expr = Expr::Lit(Lit::Str(message.into()))
-                    );
-                }
+            } else {
+                "visitor must be executed on a CallExpr"
             };
+            *expr = quote!(
+                "(() => { throw new Error($message); })()" as Expr,
+                message: Expr = Expr::Lit(Lit::Str(message.into()))
+            );
         }));
 
         Ok(CodeGeneration { visitors }.into())
