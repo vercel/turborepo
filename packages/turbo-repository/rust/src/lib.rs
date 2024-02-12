@@ -175,6 +175,10 @@ impl Workspace {
 
         let mut serializable_packages: Vec<Package> = packages
             .into_iter()
+            .filter(|p| match &p.name {
+                WorkspaceName::Root => false,
+                WorkspaceName::Other(name) => name != ROOT_PKG_NAME,
+            })
             .map(|p| {
                 let package_path = workspace_root.resolve(&p.path);
                 Package::new(p.name.to_string(), &workspace_root, &package_path)
