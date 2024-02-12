@@ -372,7 +372,7 @@ impl Run {
         }
 
         let root_workspace = pkg_dep_graph
-            .workspace_info(&PackageName::Root)
+            .package_info(&PackageName::Root)
             .expect("must have root workspace");
 
         let is_monorepo = !self.opts.run_opts.single_package;
@@ -427,7 +427,7 @@ impl Run {
             global_env_mode = EnvMode::Strict;
         }
 
-        let workspaces = pkg_dep_graph.workspaces().collect();
+        let workspaces = pkg_dep_graph.packages().collect();
         let package_inputs_hashes = PackageInputsHashes::calculate_file_hashes(
             &scm,
             engine.tasks().par_bridge(),
@@ -438,7 +438,7 @@ impl Run {
         )?;
 
         if self.opts.run_opts.parallel {
-            pkg_dep_graph.remove_workspace_dependencies();
+            pkg_dep_graph.remove_package_dependencies();
             engine = self.build_engine(&pkg_dep_graph, &root_turbo_json, &filtered_pkgs)?;
         }
 

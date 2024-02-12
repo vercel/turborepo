@@ -377,11 +377,12 @@ impl<'a> EngineBuilder<'a> {
                 workspace: workspace.clone(),
             }
         })?;
-        let workspace_dir = self.package_graph.workspace_dir(workspace).ok_or_else(|| {
-            Error::MissingPackageJson {
-                workspace: workspace.clone(),
-            }
-        })?;
+        let workspace_dir =
+            self.package_graph
+                .package_dir(workspace)
+                .ok_or_else(|| Error::MissingPackageJson {
+                    workspace: workspace.clone(),
+                })?;
         Ok(TurboJson::load(
             self.repo_root,
             workspace_dir,

@@ -205,7 +205,7 @@ impl<'a> TaskSummaryFactory<'a> {
     fn workspace_info(&self, task_id: &TaskId) -> Result<&PackageInfo, Error> {
         let workspace_name = PackageName::from(task_id.package());
         self.package_graph
-            .workspace_info(&workspace_name)
+            .package_info(&workspace_name)
             .ok_or_else(|| Error::MissingWorkspace(workspace_name.to_string()))
     }
 

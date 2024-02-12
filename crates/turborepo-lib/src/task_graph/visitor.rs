@@ -153,13 +153,13 @@ impl<'a> Visitor<'a> {
             let crate::engine::Message { info, callback } = message;
             let package_name = PackageName::from(info.package());
 
-            let workspace_info = self
-                .package_graph
-                .workspace_info(&package_name)
-                .ok_or_else(|| Error::MissingPackage {
-                    package_name: package_name.clone(),
-                    task_id: info.clone(),
-                })?;
+            let workspace_info =
+                self.package_graph
+                    .package_info(&package_name)
+                    .ok_or_else(|| Error::MissingPackage {
+                        package_name: package_name.clone(),
+                        task_id: info.clone(),
+                    })?;
 
             let package_task_event =
                 PackageTaskEventBuilder::new(info.package(), info.task()).with_parent(telemetry);

@@ -144,7 +144,7 @@ struct BuildState<'a, S, T> {
     repo_root: &'a AbsoluteSystemPath,
     single: bool,
     workspaces: HashMap<PackageName, PackageInfo>,
-    workspace_graph: Graph<PackageNode, ()>,
+    package_graph: Graph<PackageNode, ()>,
     node_lookup: HashMap<PackageNode, NodeIndex>,
     lockfile: Option<Box<dyn Lockfile>>,
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
@@ -152,10 +152,10 @@ struct BuildState<'a, S, T> {
     package_discovery: T,
 }
 
-// Allows us to perform workspace discovery and parse package jsons
+// Allows us to perform package discovery and parse package jsons
 enum ResolvedPackageManager {}
 
-// Allows us to build the workspace graph and list over external dependencies
+// Allows us to build the package graph and list over external dependencies
 enum ResolvedWorkspaces {}
 
 // Allows us to collect all transitive deps
@@ -163,7 +163,7 @@ enum ResolvedLockfile {}
 
 impl<'a, S, T> BuildState<'a, S, T> {
     fn add_node(&mut self, node: PackageNode) -> NodeIndex {
-        let idx = self.workspace_graph.add_node(node.clone());
+        let idx = self.package_graph.add_node(node.clone());
         self.node_lookup.insert(node, idx);
         idx
     }
@@ -171,8 +171,7 @@ impl<'a, S, T> BuildState<'a, S, T> {
     fn add_root_workspace(&mut self) {
         let root_index = self.add_node(PackageNode::Root);
         let root_workspace = self.add_node(PackageNode::Workspace(PackageName::Root));
-        self.workspace_graph
-            .add_edge(root_workspace, root_index, ());
+        self.package_graph.add_edge(root_workspace, root_index, ());
     }
 }
 
@@ -214,7 +213,7 @@ where
             workspaces,
             lockfile,
             package_jsons,
-            workspace_graph: Graph::new(),
+            package_graph: Graph::new(),
             node_lookup: HashMap::new(),
             state: std::marker::PhantomData,
             package_discovery: CachingPackageDiscovery::new(
@@ -262,7 +261,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
     // need our own type
     #[tracing::instrument(skip(self))]
     async fn parse_package_jsons(mut self) -> Result<BuildState<'a, ResolvedWorkspaces, T>, Error> {
-        // The root workspace will be present
+        // The workspace root will be present.
         // we either read from disk or just read the map
         self.add_root_workspace();
 
@@ -297,7 +296,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
             repo_root,
             single,
             workspaces,
-            workspace_graph,
+            package_graph,
             node_lookup,
             lockfile,
             package_discovery,
@@ -307,7 +306,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
             repo_root,
             single,
             workspaces,
-            workspace_graph,
+            package_graph,
             node_lookup,
             lockfile,
             package_discovery,
@@ -320,8 +319,8 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
         self.add_root_workspace();
         let Self {
             single,
-            workspaces,
-            workspace_graph,
+            workspaces: packages,
+            package_graph: graph,
             node_lookup,
             lockfile,
             mut package_discovery,
@@ -332,9 +331,9 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
 
         debug_assert!(single, "expected single package graph");
         Ok(PackageGraph {
-            workspace_graph,
+            graph,
             node_lookup,
-            workspaces,
+            packages,
             lockfile,
             package_manager,
         })
@@ -375,15 +374,14 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
                     .node_lookup
                     .get(&PackageNode::Root)
                     .expect("root node should have index");
-                self.workspace_graph.add_edge(*node_idx, *root_idx, ());
+                self.package_graph.add_edge(*node_idx, *root_idx, ());
             }
             for dependency in internal {
                 let dependency_idx = self
                     .node_lookup
                     .get(&PackageNode::Workspace(dependency))
                     .expect("unable to find workspace node index");
-                self.workspace_graph
-                    .add_edge(*node_idx, *dependency_idx, ());
+                self.package_graph.add_edge(*node_idx, *dependency_idx, ());
             }
             entry.unresolved_external_dependencies = Some(external);
         }
@@ -435,7 +433,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
             repo_root,
             single,
             workspaces,
-            workspace_graph,
+            package_graph,
             node_lookup,
             package_discovery,
             ..
@@ -444,7 +442,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
             repo_root,
             single,
             workspaces,
-            workspace_graph,
+            package_graph,
             node_lookup,
             lockfile,
             package_jsons: None,
@@ -507,16 +505,16 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedLockfile, T> {
             .await?
             .package_manager;
         let Self {
-            workspaces,
-            workspace_graph,
+            workspaces: packages,
+            package_graph: graph,
             node_lookup,
             lockfile,
             ..
         } = self;
         Ok(PackageGraph {
-            workspace_graph,
+            graph,
             node_lookup,
-            workspaces,
+            packages,
             package_manager,
             lockfile,
         })
@@ -547,8 +545,8 @@ impl Dependencies {
             workspaces,
         };
         for (name, version) in dependencies.into_iter() {
-            if let Some(workspace) = splitter.is_internal(name, version) {
-                internal.insert(workspace);
+            if let Some(package) = splitter.is_internal(name, version) {
+                internal.insert(package);
             } else {
                 external.insert(name.clone(), version.clone());
             }

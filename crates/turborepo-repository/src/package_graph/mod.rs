@@ -22,10 +22,10 @@ pub const ROOT_PKG_NAME: &str = "//";
 
 #[derive(Debug)]
 pub struct PackageGraph {
-    workspace_graph: petgraph::Graph<PackageNode, ()>,
+    graph: petgraph::Graph<PackageNode, ()>,
     #[allow(dead_code)]
     node_lookup: HashMap<PackageNode, petgraph::graph::NodeIndex>,
-    workspaces: HashMap<PackageName, PackageInfo>,
+    packages: HashMap<PackageName, PackageInfo>,
     package_manager: PackageManager,
     lockfile: Option<Box<dyn Lockfile>>,
 }
@@ -105,7 +105,7 @@ pub enum PackageNode {
 }
 
 impl PackageNode {
-    pub fn as_workspace(&self) -> &PackageName {
+    pub fn as_package(&self) -> &PackageName {
         match self {
             PackageNode::Workspace(name) => name,
             PackageNode::Root => &PackageName::Root,
@@ -123,7 +123,7 @@ impl PackageGraph {
 
     #[tracing::instrument(skip(self))]
     pub fn validate(&self) -> Result<(), Error> {
-        graph::validate_graph(&self.workspace_graph).map_err(Error::InvalidPackageGraph)
+        graph::validate_graph(&self.graph).map_err(Error::InvalidPackageGraph)
     }
 
     pub fn remove_workspace_dependencies(&mut self) {
@@ -131,7 +131,7 @@ impl PackageGraph {
             .node_lookup
             .get(&PackageNode::Root)
             .expect("graph should have root workspace node");
-        self.workspace_graph.retain_edges(|graph, index| {
+        self.graph.retain_edges(|graph, index| {
             let Some((_src, dst)) = graph.edge_endpoints(index) else {
                 return false;
             };
@@ -142,11 +142,11 @@ impl PackageGraph {
     /// Returns the number of workspaces in the repo
     /// *including* the root workspace.
     pub fn len(&self) -> usize {
-        self.workspaces.len()
+        self.packages.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.workspaces.is_empty()
+        self.packages.is_empty()
     }
 
     pub fn package_manager(&self) -> &PackageManager {
@@ -158,12 +158,12 @@ impl PackageGraph {
     }
 
     pub fn package_json(&self, workspace: &PackageName) -> Option<&PackageJson> {
-        let entry = self.workspaces.get(workspace)?;
+        let entry = self.packages.get(workspace)?;
         Some(&entry.package_json)
     }
 
-    pub fn workspace_dir(&self, workspace: &PackageName) -> Option<&AnchoredSystemPath> {
-        let entry = self.workspaces.get(workspace)?;
+    pub fn package_dir(&self, workspace: &PackageName) -> Option<&AnchoredSystemPath> {
+        let entry = self.packages.get(workspace)?;
         Some(
             entry
                 .package_json_path()
@@ -172,12 +172,12 @@ impl PackageGraph {
         )
     }
 
-    pub fn workspace_info(&self, workspace: &PackageName) -> Option<&PackageInfo> {
-        self.workspaces.get(workspace)
+    pub fn package_info(&self, workspace: &PackageName) -> Option<&PackageInfo> {
+        self.packages.get(workspace)
     }
 
-    pub fn workspaces(&self) -> impl Iterator<Item = (&PackageName, &PackageInfo)> {
-        self.workspaces.iter()
+    pub fn packages(&self) -> impl Iterator<Item = (&PackageName, &PackageInfo)> {
+        self.packages.iter()
     }
 
     pub fn root_package_json(&self) -> &PackageJson {
@@ -196,10 +196,10 @@ impl PackageGraph {
     pub fn immediate_dependencies(&self, workspace: &PackageNode) -> Option<HashSet<&PackageNode>> {
         let index = self.node_lookup.get(workspace)?;
         Some(
-            self.workspace_graph
+            self.graph
                 .neighbors_directed(*index, petgraph::Outgoing)
                 .map(|index| {
-                    self.workspace_graph
+                    self.graph
                         .node_weight(index)
                         .expect("node index from neighbors should be present")
                 })
@@ -219,10 +219,10 @@ impl PackageGraph {
     pub fn immediate_ancestors(&self, workspace: &PackageNode) -> Option<HashSet<&PackageNode>> {
         let index = self.node_lookup.get(workspace)?;
         Some(
-            self.workspace_graph
+            self.graph
                 .neighbors_directed(*index, petgraph::Incoming)
                 .map(|index| {
-                    self.workspace_graph
+                    self.graph
                         .node_weight(index)
                         .expect("node index from neighbors should be present")
                 })
@@ -288,7 +288,7 @@ impl PackageGraph {
         let visitor = |event| {
             if let petgraph::visit::DfsEvent::Discover(n, _) = event {
                 visited.insert(
-                    self.workspace_graph
+                    self.graph
                         .node_weight(n)
                         .expect("node index found during dfs doesn't exist"),
                 );
@@ -296,11 +296,9 @@ impl PackageGraph {
         };
 
         match direction {
-            petgraph::Direction::Outgoing => {
-                depth_first_search(&self.workspace_graph, indices, visitor)
-            }
+            petgraph::Direction::Outgoing => depth_first_search(&self.graph, indices, visitor),
             petgraph::Direction::Incoming => {
-                depth_first_search(Reversed(&self.workspace_graph), indices, visitor)
+                depth_first_search(Reversed(&self.graph), indices, visitor)
             }
         };
 
@@ -313,7 +311,7 @@ impl PackageGraph {
     ) -> HashSet<&turborepo_lockfiles::Package> {
         workspaces
             .into_iter()
-            .filter_map(|workspace| self.workspaces.get(workspace))
+            .filter_map(|workspace| self.packages.get(workspace))
             .filter_map(|entry| entry.transitive_dependencies.as_ref())
             .flatten()
             .collect()
@@ -329,7 +327,7 @@ impl PackageGraph {
         let current = self.lockfile().ok_or(ChangedPackagesError::NoLockfile)?;
 
         let external_deps = self
-            .workspaces()
+            .packages()
             .filter_map(|(_name, info)| {
                 info.unresolved_external_dependencies.as_ref().map(|dep| {
                     (
@@ -349,7 +347,7 @@ impl PackageGraph {
         let changed = if global_change {
             None
         } else {
-            self.workspaces
+            self.packages
                 .iter()
                 .filter(|(_name, info)| {
                     closures.get(info.package_path().to_unix().as_str())
@@ -371,7 +369,7 @@ impl PackageGraph {
         };
 
         Ok(changed.unwrap_or_else(|| {
-            self.workspaces
+            self.packages
                 .iter()
                 .map(|(name, info)| WorkspacePackage {
                     name: name.clone(),
@@ -384,7 +382,7 @@ impl PackageGraph {
     // Returns a map of package name and version for external dependencies
     #[allow(dead_code)]
     fn external_dependencies(&self, workspace: &PackageName) -> Option<&BTreeMap<String, String>> {
-        let entry = self.workspaces.get(workspace)?;
+        let entry = self.packages.get(workspace)?;
         entry.unresolved_external_dependencies.as_ref()
     }
 }
