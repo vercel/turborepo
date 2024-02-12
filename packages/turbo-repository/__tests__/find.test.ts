@@ -48,10 +48,7 @@ describe("Workspace", () => {
       {
         description: "lib change",
         files: ["packages/ui/a.txt"],
-        expected: [
-          // { name: "app-a", relativePath: "apps/app" }, // TODO: this should be included
-          { name: "ui", relativePath: "packages/ui" },
-        ],
+        expected: [{ name: "ui", relativePath: "packages/ui" }],
       },
       {
         description: "global change",
