@@ -82,15 +82,13 @@ function ensureDynamicExports(module, exports) {
 }
 /**
  * Access one entry from a mapping from name to functor.
- * flags:
- *  * 1: Error as rejected promise
- */ function moduleLookup(map, name, flags = 0) {
+ */ function moduleLookup(map, name, returnPromise = false) {
     if (hasOwnProperty.call(map, name)) {
         return map[name]();
     }
     const e = new Error(`Cannot find module '${name}'`);
     e.code = "MODULE_NOT_FOUND";
-    if (flags & 1) {
+    if (returnPromise) {
         return Promise.resolve().then(()=>{
             throw e;
         });
