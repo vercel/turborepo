@@ -257,6 +257,71 @@ impl PatternMapping {
     }
 }
 
+async fn to_single_pattern_mapping(
+    origin: Vc<Box<dyn ResolveOrigin>>,
+    chunking_context: Vc<Box<dyn ChunkingContext>>,
+    resolve_item: &ModuleResolveResultItem,
+    resolve_type: ResolveType,
+) -> Result<SinglePatternMapping> {
+    let module = match resolve_item {
+        ModuleResolveResultItem::Module(module) => *module,
+        ModuleResolveResultItem::OriginalReferenceTypeExternal(s) => {
+            return Ok(SinglePatternMapping::OriginalReferenceTypeExternal(
+                s.clone(),
+            ))
+        }
+        ModuleResolveResultItem::Ignore => return Ok(SinglePatternMapping::Ignored),
+        _ => {
+            // TODO implement mapping
+            CodeGenerationIssue {
+                severity: IssueSeverity::Bug.into(),
+                title: StyledString::Text(
+                    "pattern mapping is not implemented for this result".to_string(),
+                )
+                .cell(),
+                message: StyledString::Text(format!(
+                    "the reference resolves to a non-trivial result, which is not supported yet: \
+                     {:?}",
+                    resolve_item
+                ))
+                .cell(),
+                path: origin.origin_path(),
+            }
+            .cell()
+            .emit();
+            return Ok(SinglePatternMapping::Invalid);
+        }
+    };
+    if let Some(chunkable) = Vc::try_resolve_downcast::<Box<dyn ChunkableModule>>(module).await? {
+        match resolve_type {
+            ResolveType::AsyncChunkLoader => {
+                let loader_id = chunking_context.async_loader_chunk_item_id(chunkable);
+                return Ok(SinglePatternMapping::ModuleLoader(
+                    loader_id.await?.clone_value(),
+                ));
+            }
+            ResolveType::ChunkItem => {
+                let chunk_item = chunkable.as_chunk_item(chunking_context);
+                return Ok(SinglePatternMapping::Module(
+                    chunk_item.id().await?.clone_value(),
+                ));
+            }
+        }
+    }
+    CodeGenerationIssue {
+        severity: IssueSeverity::Bug.into(),
+        title: StyledString::Text("non-ecmascript placeable asset".to_string()).cell(),
+        message: StyledString::Text(
+            "asset is not placeable in ESM chunks, so it doesn't have a module id".to_string(),
+        )
+        .cell(),
+        path: origin.origin_path(),
+    }
+    .cell()
+    .emit();
+    Ok(SinglePatternMapping::Invalid)
+}
+
 #[turbo_tasks::value_impl]
 impl PatternMapping {
     /// Resolves a request into a pattern mapping.
@@ -270,74 +335,6 @@ impl PatternMapping {
         resolve_result: Vc<ModuleResolveResult>,
         resolve_type: Value<ResolveType>,
     ) -> Result<Vc<PatternMapping>> {
-        async fn to_single_pattern_mapping(
-            origin: Vc<Box<dyn ResolveOrigin>>,
-            chunking_context: Vc<Box<dyn ChunkingContext>>,
-            resolve_item: &ModuleResolveResultItem,
-            resolve_type: ResolveType,
-        ) -> Result<SinglePatternMapping> {
-            let module = match resolve_item {
-                ModuleResolveResultItem::Module(module) => *module,
-                ModuleResolveResultItem::OriginalReferenceTypeExternal(s) => {
-                    return Ok(SinglePatternMapping::OriginalReferenceTypeExternal(
-                        s.clone(),
-                    ))
-                }
-                ModuleResolveResultItem::Ignore => return Ok(SinglePatternMapping::Ignored),
-                _ => {
-                    // TODO implement mapping
-                    CodeGenerationIssue {
-                        severity: IssueSeverity::Bug.into(),
-                        title: StyledString::Text(
-                            "pattern mapping is not implemented for this result".to_string(),
-                        )
-                        .cell(),
-                        message: StyledString::Text(format!(
-                            "the reference resolves to a non-trivial result, which is not \
-                             supported yet: {:?}",
-                            resolve_item
-                        ))
-                        .cell(),
-                        path: origin.origin_path(),
-                    }
-                    .cell()
-                    .emit();
-                    return Ok(SinglePatternMapping::Invalid);
-                }
-            };
-            if let Some(chunkable) =
-                Vc::try_resolve_downcast::<Box<dyn ChunkableModule>>(module).await?
-            {
-                match resolve_type {
-                    ResolveType::AsyncChunkLoader => {
-                        let loader_id = chunking_context.async_loader_chunk_item_id(chunkable);
-                        return Ok(SinglePatternMapping::ModuleLoader(
-                            loader_id.await?.clone_value(),
-                        ));
-                    }
-                    ResolveType::ChunkItem => {
-                        let chunk_item = chunkable.as_chunk_item(chunking_context);
-                        return Ok(SinglePatternMapping::Module(
-                            chunk_item.id().await?.clone_value(),
-                        ));
-                    }
-                }
-            }
-            CodeGenerationIssue {
-                severity: IssueSeverity::Bug.into(),
-                title: StyledString::Text("non-ecmascript placeable asset".to_string()).cell(),
-                message: StyledString::Text(
-                    "asset is not placeable in ESM chunks, so it doesn't have a module id"
-                        .to_string(),
-                )
-                .cell(),
-                path: origin.origin_path(),
-            }
-            .cell()
-            .emit();
-            Ok(SinglePatternMapping::Invalid)
-        }
-
         let resolve_type = resolve_type.into_value();
         let result = resolve_result.await?;
         match result.primary.len() {
