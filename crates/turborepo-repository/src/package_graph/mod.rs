@@ -52,8 +52,6 @@ impl WorkspacePackage {
 }
 
 /// PackageInfo represents a package within the workspace.
-/// TODO: The name PackageInfo should be changed to PackageInfo to follow the
-/// Vercel glossary.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct PackageInfo {
     pub package_json: PackageJson,
