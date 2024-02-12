@@ -13,7 +13,7 @@ use turbopath::{
 use turborepo_graph_utils as graph;
 use turborepo_lockfiles::Lockfile;
 
-use super::{PackageGraph, WorkspaceInfo, WorkspaceName, WorkspaceNode};
+use super::{PackageGraph, PackageNode, WorkspaceInfo, WorkspaceName};
 use crate::{
     discovery::{
         self, CachingPackageDiscovery, LocalPackageDiscoveryBuilder, PackageDiscovery,
@@ -145,8 +145,8 @@ struct BuildState<'a, S, T> {
     repo_root: &'a AbsoluteSystemPath,
     single: bool,
     workspaces: HashMap<WorkspaceName, WorkspaceInfo>,
-    workspace_graph: Graph<WorkspaceNode, ()>,
-    node_lookup: HashMap<WorkspaceNode, NodeIndex>,
+    workspace_graph: Graph<PackageNode, ()>,
+    node_lookup: HashMap<PackageNode, NodeIndex>,
     lockfile: Option<Box<dyn Lockfile>>,
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
     state: std::marker::PhantomData<S>,
@@ -163,15 +163,15 @@ enum ResolvedWorkspaces {}
 enum ResolvedLockfile {}
 
 impl<'a, S, T> BuildState<'a, S, T> {
-    fn add_node(&mut self, node: WorkspaceNode) -> NodeIndex {
+    fn add_node(&mut self, node: PackageNode) -> NodeIndex {
         let idx = self.workspace_graph.add_node(node.clone());
         self.node_lookup.insert(node, idx);
         idx
     }
 
     fn add_root_workspace(&mut self) {
-        let root_index = self.add_node(WorkspaceNode::Root);
-        let root_workspace = self.add_node(WorkspaceNode::Workspace(WorkspaceName::Root));
+        let root_index = self.add_node(PackageNode::Root);
+        let root_workspace = self.add_node(PackageNode::Workspace(WorkspaceName::Root));
         self.workspace_graph
             .add_edge(root_workspace, root_index, ());
     }
@@ -256,7 +256,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
                 existing_path: existing.package_json_path.to_string(),
             });
         }
-        self.add_node(WorkspaceNode::Workspace(name));
+        self.add_node(PackageNode::Workspace(name));
         Ok(())
     }
 
@@ -369,19 +369,19 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
             let Dependencies { internal, external } = deps;
             let node_idx = self
                 .node_lookup
-                .get(&WorkspaceNode::Workspace(name))
+                .get(&PackageNode::Workspace(name))
                 .expect("unable to find workspace node index");
             if internal.is_empty() {
                 let root_idx = self
                     .node_lookup
-                    .get(&WorkspaceNode::Root)
+                    .get(&PackageNode::Root)
                     .expect("root node should have index");
                 self.workspace_graph.add_edge(*node_idx, *root_idx, ());
             }
             for dependency in internal {
                 let dependency_idx = self
                     .node_lookup
-                    .get(&WorkspaceNode::Workspace(dependency))
+                    .get(&PackageNode::Workspace(dependency))
                     .expect("unable to find workspace node index");
                 self.workspace_graph
                     .add_edge(*node_idx, *dependency_idx, ());

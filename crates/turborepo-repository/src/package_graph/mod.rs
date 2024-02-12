@@ -22,9 +22,9 @@ pub const ROOT_PKG_NAME: &str = "//";
 
 #[derive(Debug)]
 pub struct PackageGraph {
-    workspace_graph: petgraph::Graph<WorkspaceNode, ()>,
+    workspace_graph: petgraph::Graph<PackageNode, ()>,
     #[allow(dead_code)]
-    node_lookup: HashMap<WorkspaceNode, petgraph::graph::NodeIndex>,
+    node_lookup: HashMap<PackageNode, petgraph::graph::NodeIndex>,
     workspaces: HashMap<WorkspaceName, WorkspaceInfo>,
     package_manager: PackageManager,
     lockfile: Option<Box<dyn Lockfile>>,
@@ -103,16 +103,16 @@ impl Serialize for WorkspaceName {
 }
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
-pub enum WorkspaceNode {
+pub enum PackageNode {
     Root,
     Workspace(WorkspaceName),
 }
 
-impl WorkspaceNode {
+impl PackageNode {
     pub fn as_workspace(&self) -> &WorkspaceName {
         match self {
-            WorkspaceNode::Workspace(name) => name,
-            WorkspaceNode::Root => &WorkspaceName::Root,
+            PackageNode::Workspace(name) => name,
+            PackageNode::Root => &WorkspaceName::Root,
         }
     }
 }
@@ -133,7 +133,7 @@ impl PackageGraph {
     pub fn remove_workspace_dependencies(&mut self) {
         let root_index = self
             .node_lookup
-            .get(&WorkspaceNode::Root)
+            .get(&PackageNode::Root)
             .expect("graph should have root workspace node");
         self.workspace_graph.retain_edges(|graph, index| {
             let Some((_src, dst)) = graph.edge_endpoints(index) else {
@@ -197,10 +197,7 @@ impl PackageGraph {
     /// a -> b -> c
     ///
     /// immediate_dependencies(a) -> {b}
-    pub fn immediate_dependencies(
-        &self,
-        workspace: &WorkspaceNode,
-    ) -> Option<HashSet<&WorkspaceNode>> {
+    pub fn immediate_dependencies(&self, workspace: &PackageNode) -> Option<HashSet<&PackageNode>> {
         let index = self.node_lookup.get(workspace)?;
         Some(
             self.workspace_graph
@@ -223,10 +220,7 @@ impl PackageGraph {
     ///
     /// immediate_ancestors(c) -> {b}
     #[allow(dead_code)]
-    pub fn immediate_ancestors(
-        &self,
-        workspace: &WorkspaceNode,
-    ) -> Option<HashSet<&WorkspaceNode>> {
+    pub fn immediate_ancestors(&self, workspace: &PackageNode) -> Option<HashSet<&PackageNode>> {
         let index = self.node_lookup.get(workspace)?;
         Some(
             self.workspace_graph
@@ -249,7 +243,7 @@ impl PackageGraph {
     ///
     /// dependencies(a) = {b, c}
     #[allow(dead_code)]
-    pub fn dependencies<'a>(&'a self, node: &WorkspaceNode) -> HashSet<&'a WorkspaceNode> {
+    pub fn dependencies<'a>(&'a self, node: &PackageNode) -> HashSet<&'a PackageNode> {
         let mut dependencies =
             self.transitive_closure_inner(Some(node), petgraph::Direction::Outgoing);
         dependencies.remove(node);
@@ -264,7 +258,7 @@ impl PackageGraph {
     /// a -> b -> c (external)
     ///
     /// ancestors(c) = {a, b}
-    pub fn ancestors(&self, node: &WorkspaceNode) -> HashSet<&WorkspaceNode> {
+    pub fn ancestors(&self, node: &PackageNode) -> HashSet<&PackageNode> {
         let mut dependents =
             self.transitive_closure_inner(Some(node), petgraph::Direction::Incoming);
         dependents.remove(node);
@@ -276,18 +270,18 @@ impl PackageGraph {
     /// the dependencies, or the dependents, use `dependencies` or `ancestors`.
     /// Alternatively, if you need just direct dependents, use
     /// `immediate_dependents`.
-    pub fn transitive_closure<'a, 'b, I: IntoIterator<Item = &'b WorkspaceNode>>(
+    pub fn transitive_closure<'a, 'b, I: IntoIterator<Item = &'b PackageNode>>(
         &'a self,
         nodes: I,
-    ) -> HashSet<&'a WorkspaceNode> {
+    ) -> HashSet<&'a PackageNode> {
         self.transitive_closure_inner(nodes, petgraph::Direction::Outgoing)
     }
 
-    fn transitive_closure_inner<'a, 'b, I: IntoIterator<Item = &'b WorkspaceNode>>(
+    fn transitive_closure_inner<'a, 'b, I: IntoIterator<Item = &'b PackageNode>>(
         &'a self,
         nodes: I,
         direction: petgraph::Direction,
-    ) -> HashSet<&'a WorkspaceNode> {
+    ) -> HashSet<&'a PackageNode> {
         let indices = nodes
             .into_iter()
             .filter_map(|node| self.node_lookup.get(node))
@@ -418,11 +412,11 @@ impl fmt::Display for WorkspaceName {
     }
 }
 
-impl fmt::Display for WorkspaceNode {
+impl fmt::Display for PackageNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            WorkspaceNode::Root => f.write_str("___ROOT___"),
-            WorkspaceNode::Workspace(workspace) => workspace.fmt(f),
+            PackageNode::Root => f.write_str("___ROOT___"),
+            PackageNode::Workspace(workspace) => workspace.fmt(f),
         }
     }
 }
@@ -484,8 +478,8 @@ mod test {
             .unwrap();
 
         let closure =
-            pkg_graph.transitive_closure(Some(&WorkspaceNode::Workspace(WorkspaceName::Root)));
-        assert!(closure.contains(&WorkspaceNode::Root));
+            pkg_graph.transitive_closure(Some(&PackageNode::Workspace(WorkspaceName::Root)));
+        assert!(closure.contains(&PackageNode::Root));
         assert!(pkg_graph.validate().is_ok());
     }
 
@@ -527,13 +521,13 @@ mod test {
         .unwrap();
 
         assert!(pkg_graph.validate().is_ok());
-        let closure = pkg_graph.transitive_closure(Some(&WorkspaceNode::Workspace("a".into())));
+        let closure = pkg_graph.transitive_closure(Some(&PackageNode::Workspace("a".into())));
         assert_eq!(
             closure,
             [
-                WorkspaceNode::Root,
-                WorkspaceNode::Workspace("a".into()),
-                WorkspaceNode::Workspace("b".into())
+                PackageNode::Root,
+                PackageNode::Workspace("a".into()),
+                PackageNode::Workspace("b".into())
             ]
             .iter()
             .collect::<HashSet<_>>()

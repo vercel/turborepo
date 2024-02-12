@@ -6,7 +6,7 @@
 use serde::Serialize;
 use turbopath::AnchoredSystemPath;
 use turborepo_repository::{
-    package_graph::{PackageGraph, WorkspaceName, WorkspaceNode},
+    package_graph::{PackageGraph, PackageNode, WorkspaceName},
     package_json::PackageJson,
     package_manager::PackageManager,
 };
@@ -150,8 +150,8 @@ impl<'a> RepositoryDetails<'a> {
 impl<'a> WorkspaceDetails<'a> {
     fn new(package_graph: &'a PackageGraph, workspace_name: &'a str) -> Self {
         let workspace_node = match workspace_name {
-            "//" => WorkspaceNode::Root,
-            name => WorkspaceNode::Workspace(WorkspaceName::Other(name.to_string())),
+            "//" => PackageNode::Root,
+            name => PackageNode::Workspace(WorkspaceName::Other(name.to_string())),
         };
 
         let transitive_dependencies = package_graph.transitive_closure(Some(&workspace_node));
@@ -159,13 +159,13 @@ impl<'a> WorkspaceDetails<'a> {
         let mut workspace_dep_names: Vec<&str> = transitive_dependencies
             .into_iter()
             .filter_map(|dependency| match dependency {
-                WorkspaceNode::Root | WorkspaceNode::Workspace(WorkspaceName::Root) => Some("root"),
-                WorkspaceNode::Workspace(WorkspaceName::Other(dep_name))
+                PackageNode::Root | PackageNode::Workspace(WorkspaceName::Root) => Some("root"),
+                PackageNode::Workspace(WorkspaceName::Other(dep_name))
                     if dep_name == workspace_name =>
                 {
                     None
                 }
-                WorkspaceNode::Workspace(WorkspaceName::Other(dep_name)) => Some(dep_name.as_str()),
+                PackageNode::Workspace(WorkspaceName::Other(dep_name)) => Some(dep_name.as_str()),
             })
             .collect();
         workspace_dep_names.sort();

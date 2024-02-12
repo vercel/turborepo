@@ -5,7 +5,7 @@ use miette::Diagnostic;
 use turbopath::AbsoluteSystemPath;
 use turborepo_graph_utils as graph;
 use turborepo_repository::package_graph::{
-    PackageGraph, WorkspaceName, WorkspaceNode, ROOT_PKG_NAME,
+    PackageGraph, PackageNode, WorkspaceName, ROOT_PKG_NAME,
 };
 
 use super::Engine;
@@ -221,7 +221,7 @@ impl<'a> EngineBuilder<'a> {
 
             let dep_pkgs = self
                 .package_graph
-                .immediate_dependencies(&WorkspaceNode::Workspace(to_task_id.package().into()));
+                .immediate_dependencies(&PackageNode::Workspace(to_task_id.package().into()));
 
             let mut has_deps = false;
             let mut has_topo_deps = false;
@@ -231,7 +231,7 @@ impl<'a> EngineBuilder<'a> {
                 .cartesian_product(dep_pkgs.iter().flatten())
                 .for_each(|(from, dependency_workspace)| {
                     // We don't need to add an edge from the root node if we're in this branch
-                    if let WorkspaceNode::Workspace(dependency_workspace) = dependency_workspace {
+                    if let PackageNode::Workspace(dependency_workspace) = dependency_workspace {
                         has_topo_deps = true;
                         let from_task_id = TaskId::from_graph(dependency_workspace, from);
                         let from_task_index = engine.get_index(&from_task_id);
