@@ -85,7 +85,10 @@ impl ChunkableModuleReference for AmdDefineAssetReference {}
 
 #[derive(ValueDebugFormat, Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs, Clone)]
 pub enum AmdDefineDependencyElement {
-    Request(Vc<Request>, String),
+    Request {
+        request: Vc<Request>,
+        request_str: String,
+    },
     Exports,
     Module,
     Require,
@@ -145,24 +148,25 @@ impl CodeGenerateable for AmdDefineWithDependenciesCodeGen {
             .iter()
             .map(|element| async move {
                 Ok(match element {
-                    AmdDefineDependencyElement::Request(request, req) => {
-                        ResolvedElement::PatternMapping {
-                            pattern_mapping: PatternMapping::resolve_request(
-                                *request,
+                    AmdDefineDependencyElement::Request {
+                        request,
+                        request_str,
+                    } => ResolvedElement::PatternMapping {
+                        pattern_mapping: PatternMapping::resolve_request(
+                            *request,
+                            self.origin,
+                            Vc::upcast(chunking_context),
+                            cjs_resolve(
                                 self.origin,
-                                Vc::upcast(chunking_context),
-                                cjs_resolve(
-                                    self.origin,
-                                    *request,
-                                    Some(self.issue_source),
-                                    try_to_severity(self.in_try),
-                                ),
-                                Value::new(ChunkItem),
-                            )
-                            .await?,
-                            request: req.to_string(),
-                        }
-                    }
+                                *request,
+                                Some(self.issue_source),
+                                try_to_severity(self.in_try),
+                            ),
+                            Value::new(ChunkItem),
+                        )
+                        .await?,
+                        request_str: request_str.to_string(),
+                    },
                     AmdDefineDependencyElement::Exports => {
                         ResolvedElement::Expr(quote!("exports" as Expr))
                     }
@@ -193,7 +197,7 @@ impl CodeGenerateable for AmdDefineWithDependenciesCodeGen {
 enum ResolvedElement {
     PatternMapping {
         pattern_mapping: ReadRef<PatternMapping>,
-        request: String,
+        request_str: String,
     },
     Expr(Expr),
 }
@@ -222,7 +226,7 @@ fn transform_amd_factory(
         .map(|element| match element {
             ResolvedElement::PatternMapping {
                 pattern_mapping: pm,
-                request,
+                request_str: request,
             } => {
                 let key_expr = Expr::Lit(Lit::Str(request.as_str().into()));
                 pm.create_require(key_expr)
