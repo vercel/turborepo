@@ -12,8 +12,9 @@ use reqwest::{Method, RequestBuilder, StatusCode};
 use serde::Deserialize;
 use turborepo_ci::{is_ci, Vendor};
 use turborepo_vercel_api::{
-    APIError, CachingStatus, CachingStatusResponse, PreflightResponse, SpacesResponse, Team,
-    TeamsResponse, UserResponse, VerificationResponse, VerifiedSsoUser,
+    token::ResponseTokenMetadata, APIError, CachingStatus, CachingStatusResponse,
+    PreflightResponse, SpacesResponse, Team, TeamsResponse, UserResponse, VerificationResponse,
+    VerifiedSsoUser,
 };
 use url::Url;
 
@@ -79,6 +80,11 @@ pub trait Client {
         method: Method,
     ) -> Result<Option<Response>>;
     fn make_url(&self, endpoint: &str) -> Result<Url>;
+}
+
+#[async_trait]
+pub trait TokenClient {
+    async fn get_metadata(&self, token: &str) -> Result<ResponseTokenMetadata>;
 }
 
 #[derive(Clone)]
@@ -397,6 +403,28 @@ impl Client for APIClient {
     fn make_url(&self, endpoint: &str) -> Result<Url> {
         let url = format!("{}{}", self.base_url, endpoint);
         Url::parse(&url).map_err(|err| Error::InvalidUrl { url, err })
+    }
+}
+
+#[async_trait]
+impl TokenClient for APIClient {
+    async fn get_metadata(&self, token: &str) -> Result<ResponseTokenMetadata> {
+        let url = self.make_url("/v5/user/tokens/current")?;
+        let request_builder = self
+            .client
+            .get(url)
+            .header("User-Agent", self.user_agent.clone())
+            .header("Authorization", format!("Bearer {}", token))
+            .header("Content-Type", "application/json");
+        let response = retry::make_retryable_request(request_builder).await?;
+
+        #[derive(Deserialize, Debug)]
+        struct Response {
+            #[serde(rename = "token")]
+            metadata: ResponseTokenMetadata,
+        }
+        let body = response.json::<Response>().await?;
+        Ok(body.metadata)
     }
 }
 
