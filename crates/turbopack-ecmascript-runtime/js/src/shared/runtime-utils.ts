@@ -144,20 +144,18 @@ function dynamicExport(
 
 /**
  * Access one entry from a mapping from name to functor.
- * flags:
- *  * 1: Error as rejected promise
  */
 function moduleLookup(
   map: Record<string, () => any>,
   name: string,
-  flags: number = 0
+  returnPromise: boolean = false
 ) {
   if (hasOwnProperty.call(map, name)) {
     return map[name]();
   }
   const e = new Error(`Cannot find module '${name}'`);
   (e as any).code = "MODULE_NOT_FOUND";
-  if (flags & 1) {
+  if (returnPromise) {
     return Promise.resolve().then(() => {
       throw e;
     });

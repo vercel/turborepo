@@ -248,7 +248,7 @@ impl PatternMapping {
                         })
                         .collect(),
                 });
-                quote!("__turbopack_lookup__($map, $key, 1)" as Expr,
+                quote!("__turbopack_lookup__($map, $key, true)" as Expr,
                     map: Expr = map,
                     key: Expr = key_expr
                 )
