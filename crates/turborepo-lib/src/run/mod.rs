@@ -29,7 +29,7 @@ use turborepo_cache::{AsyncCache, RemoteCacheOpts};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::{
-    package_graph::{PackageGraph, WorkspaceName},
+    package_graph::{PackageGraph, PackageName},
     package_json::PackageJson,
 };
 use turborepo_scm::SCM;
@@ -129,7 +129,7 @@ impl Run {
             .then(|| start_analytics(api_auth, api_client))
     }
 
-    fn print_run_prelude(&self, filtered_pkgs: &HashSet<WorkspaceName>) {
+    fn print_run_prelude(&self, filtered_pkgs: &HashSet<PackageName>) {
         let targets_list = self.opts.run_opts.tasks.join(", ");
         if self.opts.run_opts.single_package {
             cprint!(self.base.ui, GREY, "{}", "• Running");
@@ -355,7 +355,7 @@ impl Run {
                     }
 
                     if root_turbo_json.pipeline.contains_key(&task_name) {
-                        filtered_pkgs.insert(WorkspaceName::Root);
+                        filtered_pkgs.insert(PackageName::Root);
                         break;
                     }
                 }
@@ -372,7 +372,7 @@ impl Run {
         }
 
         let root_workspace = pkg_dep_graph
-            .workspace_info(&WorkspaceName::Root)
+            .workspace_info(&PackageName::Root)
             .expect("must have root workspace");
 
         let is_monorepo = !self.opts.run_opts.single_package;
@@ -541,7 +541,7 @@ impl Run {
         &self,
         pkg_dep_graph: &PackageGraph,
         root_turbo_json: &TurboJson,
-        filtered_pkgs: &HashSet<WorkspaceName>,
+        filtered_pkgs: &HashSet<PackageName>,
     ) -> Result<Engine, Error> {
         let engine = EngineBuilder::new(
             &self.base.repo_root,
@@ -550,7 +550,7 @@ impl Run {
         )
         .with_root_tasks(root_turbo_json.pipeline.keys().cloned())
         .with_turbo_jsons(Some(
-            Some((WorkspaceName::Root, root_turbo_json.clone()))
+            Some((PackageName::Root, root_turbo_json.clone()))
                 .into_iter()
                 .collect(),
         ))
