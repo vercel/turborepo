@@ -5,7 +5,7 @@ use indexmap::{IndexMap, IndexSet};
 use turbo_tasks::Vc;
 pub use turbo_tasks_macros::ValueDebugFormat;
 
-use crate::{self as turbo_tasks, TryJoinIterExt};
+use crate::{self as turbo_tasks};
 
 #[doc(hidden)]
 pub mod internal;
@@ -280,35 +280,35 @@ where
 
 impl<K, V> ValueDebugFormat for IndexMap<K, V>
 where
-    for<'a> &'a K: ValueDebugFormat,
-    for<'a> &'a V: ValueDebugFormat,
-    K: Sync,
-    V: Sync,
+    K: ValueDebugFormat,
+    V: ValueDebugFormat,
 {
     fn value_debug_format(&self, depth: usize) -> ValueDebugFormatString {
         if depth == 0 {
             return ValueDebugFormatString::Sync(std::any::type_name::<Self>().to_string());
         }
 
-        ValueDebugFormatString::Async(Box::pin(async move {
-            let values = self
-                .iter()
-                .map(|(key, value)| async move {
-                    Ok((
-                        key.value_debug_format(depth.saturating_sub(1))
-                            .try_to_string()
-                            .await?,
-                        value
-                            .value_debug_format(depth.saturating_sub(1))
-                            .try_to_string()
-                            .await?,
-                    ))
-                })
-                .try_join()
-                .await?;
+        let values = self
+            .iter()
+            .map(|(key, value)| {
+                (
+                    key.value_debug_format(depth.saturating_sub(1)),
+                    value.value_debug_format(depth.saturating_sub(1)),
+                )
+            })
+            .collect::<Vec<_>>();
 
+        ValueDebugFormatString::Async(Box::pin(async move {
             let mut values_string = IndexMap::new();
             for (key, value) in values {
+                let key = match key {
+                    ValueDebugFormatString::Sync(string) => string,
+                    ValueDebugFormatString::Async(future) => future.await?,
+                };
+                let value = match value {
+                    ValueDebugFormatString::Sync(string) => string,
+                    ValueDebugFormatString::Async(future) => future.await?,
+                };
                 values_string.insert(
                     PassthroughDebug::new_string(key),
                     PassthroughDebug::new_string(value),
