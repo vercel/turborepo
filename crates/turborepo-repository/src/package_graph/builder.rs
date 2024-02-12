@@ -13,7 +13,7 @@ use turbopath::{
 use turborepo_graph_utils as graph;
 use turborepo_lockfiles::Lockfile;
 
-use super::{PackageGraph, PackageNode, WorkspaceInfo, WorkspaceName};
+use super::{PackageGraph, PackageInfo, PackageNode, WorkspaceName};
 use crate::{
     discovery::{
         self, CachingPackageDiscovery, LocalPackageDiscoveryBuilder, PackageDiscovery,
@@ -144,7 +144,7 @@ where
 struct BuildState<'a, S, T> {
     repo_root: &'a AbsoluteSystemPath,
     single: bool,
-    workspaces: HashMap<WorkspaceName, WorkspaceInfo>,
+    workspaces: HashMap<WorkspaceName, PackageInfo>,
     workspace_graph: Graph<PackageNode, ()>,
     node_lookup: HashMap<PackageNode, NodeIndex>,
     lockfile: Option<Box<dyn Lockfile>>,
@@ -201,7 +201,7 @@ where
         let mut workspaces = HashMap::new();
         workspaces.insert(
             WorkspaceName::Root,
-            WorkspaceInfo {
+            PackageInfo {
                 package_json: root_package_json,
                 package_json_path: AnchoredSystemPathBuf::from_raw("package.json").unwrap(),
                 ..Default::default()
@@ -238,7 +238,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
                 .clone()
                 .ok_or(Error::PackageJsonMissingName(package_json_path))?,
         );
-        let entry = WorkspaceInfo {
+        let entry = PackageInfo {
             package_json: json,
             package_json_path: relative_json_path,
             ..Default::default()
@@ -533,7 +533,7 @@ impl Dependencies {
     pub fn new<'a, I: IntoIterator<Item = (&'a String, &'a String)>>(
         repo_root: &AbsoluteSystemPath,
         workspace_json_path: &AnchoredSystemPathBuf,
-        workspaces: &HashMap<WorkspaceName, WorkspaceInfo>,
+        workspaces: &HashMap<WorkspaceName, PackageInfo>,
         dependencies: I,
     ) -> Self {
         let resolved_workspace_json_path = repo_root.resolve(workspace_json_path);
@@ -561,7 +561,7 @@ impl Dependencies {
 struct DependencySplitter<'a, 'b, 'c> {
     repo_root: &'a AbsoluteSystemPath,
     workspace_dir: &'b AbsoluteSystemPath,
-    workspaces: &'c HashMap<WorkspaceName, WorkspaceInfo>,
+    workspaces: &'c HashMap<WorkspaceName, PackageInfo>,
 }
 
 impl<'a, 'b, 'c> DependencySplitter<'a, 'b, 'c> {
@@ -680,7 +680,7 @@ impl<'a> fmt::Display for DependencyVersion<'a> {
     }
 }
 
-impl WorkspaceInfo {
+impl PackageInfo {
     fn unix_dir_str(&self) -> Result<String, Error> {
         let unix = self
             .package_json_path
@@ -739,7 +739,7 @@ mod test {
             let mut map = HashMap::new();
             map.insert(
                 WorkspaceName::Other("@scope/foo".to_string()),
-                WorkspaceInfo {
+                PackageInfo {
                     package_json: PackageJson {
                         version: Some(package_version.to_string()),
                         ..Default::default()

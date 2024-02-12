@@ -10,7 +10,7 @@ use tracing::{debug, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_cache::CacheHitMetadata;
 use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap, ResolvedEnvMode};
-use turborepo_repository::package_graph::{WorkspaceInfo, WorkspaceName};
+use turborepo_repository::package_graph::{PackageInfo, WorkspaceName};
 use turborepo_scm::SCM;
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder,
@@ -70,7 +70,7 @@ impl PackageInputsHashes {
     pub fn calculate_file_hashes<'a>(
         scm: &SCM,
         all_tasks: impl ParallelIterator<Item = &'a TaskNode>,
-        workspaces: HashMap<&WorkspaceName, &WorkspaceInfo>,
+        workspaces: HashMap<&WorkspaceName, &PackageInfo>,
         task_definitions: &HashMap<TaskId<'static>, TaskDefinition>,
         repo_root: &AbsoluteSystemPath,
         telemetry: &GenericEventBuilder,
@@ -213,7 +213,7 @@ impl<'a> TaskHasher<'a> {
         task_id: &TaskId<'static>,
         task_definition: &TaskDefinition,
         task_env_mode: ResolvedEnvMode,
-        workspace: &WorkspaceInfo,
+        workspace: &PackageInfo,
         dependency_set: HashSet<&TaskNode>,
         telemetry: PackageTaskEventBuilder,
     ) -> Result<String, Error> {
