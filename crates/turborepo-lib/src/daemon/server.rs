@@ -42,11 +42,7 @@ use turborepo_repository::discovery::{
     DiscoveryResponse, LocalPackageDiscoveryBuilder, PackageDiscovery, PackageDiscoveryBuilder,
 };
 
-use super::{
-    bump_timeout::BumpTimeout,
-    endpoint::SocketOpenError,
-    proto::{self},
-};
+use super::{bump_timeout::BumpTimeout, endpoint::SocketOpenError, proto, Paths};
 use crate::daemon::{bump_timeout_layer::BumpTimeoutLayer, endpoint::listen_socket};
 
 #[derive(Debug)]
@@ -120,8 +116,7 @@ pub struct TurboGrpcService<S, PDB> {
     watcher_tx: watch::Sender<Option<Arc<FileWatching>>>,
     watcher_rx: watch::Receiver<Option<Arc<FileWatching>>>,
     repo_root: AbsoluteSystemPathBuf,
-    daemon_root: AbsoluteSystemPathBuf,
-    log_file: AbsoluteSystemPathBuf,
+    paths: Paths,
     timeout: Duration,
     external_shutdown: S,
 
@@ -140,8 +135,7 @@ where
     /// state if the filewatcher encounters errors.
     pub fn new(
         repo_root: AbsoluteSystemPathBuf,
-        daemon_root: AbsoluteSystemPathBuf,
-        log_file: AbsoluteSystemPathBuf,
+        paths: Paths,
         timeout: Duration,
         external_shutdown: S,
     ) -> Self {
@@ -157,8 +151,7 @@ where
             watcher_tx,
             watcher_rx,
             repo_root,
-            daemon_root,
-            log_file,
+            paths,
             timeout,
             external_shutdown,
             package_discovery_backup,
@@ -179,9 +172,8 @@ where
         package_discovery_backup: PDB2,
     ) -> TurboGrpcService<S, PDB2> {
         TurboGrpcService {
-            daemon_root: self.daemon_root,
             external_shutdown: self.external_shutdown,
-            log_file: self.log_file,
+            paths: self.paths,
             repo_root: self.repo_root,
             timeout: self.timeout,
             watcher_rx: self.watcher_rx,
@@ -194,19 +186,19 @@ where
         let Self {
             watcher_tx,
             watcher_rx,
-            daemon_root,
             external_shutdown,
-            log_file,
+            paths,
             repo_root,
             timeout,
             package_discovery_backup,
         } = self;
 
         let running = Arc::new(AtomicBool::new(true));
-        let (_pid_lock, stream) = match listen_socket(&daemon_root, running.clone()).await {
-            Ok((pid_lock, stream)) => (pid_lock, stream),
-            Err(e) => return Ok(CloseReason::SocketOpenError(e)),
-        };
+        let (_pid_lock, stream) =
+            match listen_socket(&paths.pid_file, &paths.sock_file, running.clone()).await {
+                Ok((pid_lock, stream)) => (pid_lock, stream),
+                Err(e) => return Ok(CloseReason::SocketOpenError(e)),
+            };
         trace!("acquired connection stream for socket");
 
         let watcher_repo_root = repo_root.to_owned();
@@ -261,7 +253,7 @@ where
             watcher_rx,
             times_saved: Arc::new(Mutex::new(HashMap::new())),
             start_time: Instant::now(),
-            log_file: log_file.to_owned(),
+            log_file: paths.log_file.clone(),
         };
         let server_fut = {
             let service = ServiceBuilder::new()
@@ -567,7 +559,7 @@ mod test {
     };
 
     use super::compare_versions;
-    use crate::daemon::{proto::VersionRange, CloseReason, TurboGrpcService};
+    use crate::daemon::{proto::VersionRange, CloseReason, Paths, TurboGrpcService};
 
     #[test_case("1.2.3", "1.2.3", VersionRange::Exact, true ; "exact match")]
     #[test_case("1.2.3", "1.2.3", VersionRange::Patch, true ; "patch match")]
@@ -623,19 +615,15 @@ mod test {
             .unwrap();
 
         let repo_root = path.join_component("repo");
-        let daemon_root = path.join_component("daemon");
-        let log_file = daemon_root.join_component("log");
+        let paths = Paths::from_repo_root(&repo_root);
         tracing::info!("start");
-
-        let pid_path = daemon_root.join_component("turbod.pid");
 
         let (tx, rx) = oneshot::channel::<CloseReason>();
         let exit_signal = rx.map(|_result| CloseReason::Interrupt);
 
         let service = TurboGrpcService::new(
             repo_root.clone(),
-            daemon_root,
-            log_file,
+            paths.clone(),
             Duration::from_secs(60 * 60),
             exit_signal,
         )
@@ -651,9 +639,9 @@ mod test {
 
         tokio::time::sleep(Duration::from_millis(2000)).await;
         assert!(
-            pid_path.exists(),
+            paths.pid_file.exists(),
             "pid file must be present at {:?}",
-            pid_path
+            paths.pid_file
         );
         // signal server exit
         tx.send(CloseReason::Interrupt).unwrap();
@@ -662,7 +650,7 @@ mod test {
         // The serve future should be dropped here, closing the server.
         tracing::info!("yay we are done");
 
-        assert!(!pid_path.exists(), "pid file must be deleted");
+        assert!(!paths.pid_file.exists(), "pid file must be deleted");
 
         tracing::info!("and files cleaned up");
     }
@@ -679,10 +667,7 @@ mod test {
             .unwrap();
 
         let repo_root = path.join_component("repo");
-        let daemon_root = path.join_component("daemon");
-        let log_file = daemon_root.join_component("log");
-
-        let pid_path = daemon_root.join_component("turbod.pid");
+        let paths = Paths::from_repo_root(&repo_root);
 
         let now = Instant::now();
         let (_tx, rx) = oneshot::channel::<CloseReason>();
@@ -690,8 +675,7 @@ mod test {
 
         let server = TurboGrpcService::new(
             repo_root.clone(),
-            daemon_root,
-            log_file,
+            paths.clone(),
             Duration::from_millis(10),
             exit_signal,
         )
@@ -714,7 +698,7 @@ mod test {
             Ok(CloseReason::Timeout),
             "must close due to timeout"
         );
-        assert!(!pid_path.exists(), "pid file must be deleted");
+        assert!(!paths.pid_file.exists(), "pid file must be deleted");
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -727,17 +711,14 @@ mod test {
             .unwrap();
 
         let repo_root = path.join_component("repo");
-        let daemon_root = path.join_component("daemon");
-        daemon_root.create_dir_all().unwrap();
-        let log_file = daemon_root.join_component("log");
+        let paths = Paths::from_repo_root(&repo_root);
 
         let (_tx, rx) = oneshot::channel::<CloseReason>();
         let exit_signal = rx.map(|_result| CloseReason::Interrupt);
 
         let server = TurboGrpcService::new(
             repo_root.clone(),
-            daemon_root,
-            log_file,
+            paths,
             Duration::from_secs(60 * 60),
             exit_signal,
         )
