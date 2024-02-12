@@ -137,7 +137,9 @@ impl Workspace {
     }
 
     /// Given a set of "changed" files, returns a set of packages that are
-    /// "affected" by the changes.
+    /// "affected" by the changes. The `files` argument is expected to be a list
+    /// of strings relative to the monorepo root and use the current system's
+    /// path separator.
     #[napi]
     pub async fn affected_packages(&self, files: Vec<String>) -> Result<Vec<Package>, Error> {
         let workspace_root = match AbsoluteSystemPath::new(&self.absolute_path) {
