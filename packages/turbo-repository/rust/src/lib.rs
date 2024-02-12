@@ -150,10 +150,7 @@ impl Workspace {
             .filter_map(|path| {
                 let path_components = path.split(std::path::MAIN_SEPARATOR).collect::<Vec<&str>>();
                 let absolute_path = workspace_root.join_components(&path_components);
-                match workspace_root.anchor(&absolute_path) {
-                    Ok(path) => Some(path),
-                    Err(_) => None,
-                }
+               workspace_root.anchor(&absolute_path).ok()
             })
             .collect();
 
