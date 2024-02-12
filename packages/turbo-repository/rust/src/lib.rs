@@ -5,7 +5,7 @@ use napi_derive::napi;
 use turbopath::AbsoluteSystemPath;
 use turborepo_repository::{
     inference::RepoState as WorkspaceState,
-    package_graph::{PackageGraph, PackageNode, WorkspaceName},
+    package_graph::{PackageGraph, WorkspaceName, WorkspaceNode},
 };
 mod internal;
 
@@ -68,7 +68,7 @@ impl Package {
         graph: &PackageGraph,
         workspace_path: &AbsoluteSystemPath,
     ) -> Vec<Package> {
-        let node = PackageNode::Workspace(WorkspaceName::Other(self.name.clone()));
+        let node = WorkspaceNode::Workspace(WorkspaceName::Other(self.name.clone()));
         let ancestors = match graph.immediate_ancestors(&node) {
             Some(ancestors) => ancestors,
             None => return vec![],
