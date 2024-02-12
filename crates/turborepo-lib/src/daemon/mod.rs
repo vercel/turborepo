@@ -111,24 +111,16 @@ pub(crate) mod proto {
 
 #[cfg(test)]
 mod test {
-    use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::repo_hash;
 
-    #[cfg(not(target_os = "windows"))]
-    #[test_case("/tmp/turborepo", "6e0cfa616f75a61c"; "basic example")]
-    fn test_repo_hash(path: &str, expected_hash: &str) {
-        let repo_root = AbsoluteSystemPathBuf::new(path).unwrap();
-        let hash = repo_hash(&repo_root);
-
-        assert_eq!(hash, expected_hash);
-        assert_eq!(hash.len(), 16);
-    }
-
-    #[cfg(target_os = "windows")]
-    #[test_case("C:\\\\tmp\\turborepo", "0103736e6883e35f"; "basic example")]
-    fn test_repo_hash_win(path: &str, expected_hash: &str) {
+    #[test]
+    fn test_repo_hash() {
+        #[cfg(not(target_os = "windows"))]
+        let (path, expected_hash) = ("/tmp/turborepo", "6e0cfa616f75a61c");
+        #[cfg(target_os = "windows")]
+        let (path, expected_hash) = ("C:\\\\tmp\\turborepo", "0103736e6883e35f");
         let repo_root = AbsoluteSystemPathBuf::new(path).unwrap();
         let hash = repo_hash(&repo_root);
 
