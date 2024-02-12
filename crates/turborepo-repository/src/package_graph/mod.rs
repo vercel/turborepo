@@ -80,7 +80,7 @@ impl PackageInfo {
     }
 }
 
-// PackageName refers to a rel real package's name or the root package.
+// PackageName refers to a real package's name or the root package.
 // It's not the best name, because root isn't a real package, but it's
 // the best we have right now.
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
