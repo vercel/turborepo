@@ -531,7 +531,7 @@ mod test {
             .collect::<HashSet<_>>()
         );
         let b_external = pkg_graph
-            .workspaces
+            .packages
             .get(&PackageName::from("b"))
             .unwrap()
             .unresolved_external_dependencies
@@ -643,14 +643,14 @@ mod test {
         let bar = PackageName::from("bar");
 
         let foo_deps = pkg_graph
-            .workspaces
+            .packages
             .get(&foo)
             .unwrap()
             .transitive_dependencies
             .as_ref()
             .unwrap();
         let bar_deps = pkg_graph
-            .workspaces
+            .packages
             .get(&bar)
             .unwrap()
             .transitive_dependencies
