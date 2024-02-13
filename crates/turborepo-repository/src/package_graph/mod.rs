@@ -142,7 +142,7 @@ impl PackageGraph {
         });
     }
 
-    /// Returns the number of workspaces in the repo
+    /// Returns the number of packages in the repo
     /// *including* the root package.
     pub fn len(&self) -> usize {
         self.packages.len()
@@ -233,7 +233,7 @@ impl PackageGraph {
         )
     }
 
-    /// For a given package in the repo, returns the set of workspaces
+    /// For a given package in the repo, returns the set of packages
     /// that this one depends on, excluding those that are unresolved.
     ///
     /// Example:
@@ -249,7 +249,7 @@ impl PackageGraph {
         dependencies
     }
 
-    /// For a given package in the repo, returns the set of workspaces
+    /// For a given package in the repo, returns the set of packages
     /// that depend on this one, excluding those that are unresolved.
     ///
     /// Example:
