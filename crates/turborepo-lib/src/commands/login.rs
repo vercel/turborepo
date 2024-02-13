@@ -10,6 +10,7 @@ pub async fn sso_login(
     base: &mut CommandBase,
     sso_team: &str,
     telemetry: CommandEventBuilder,
+    force: bool,
 ) -> Result<(), Error> {
     telemetry.track_login_method(LoginMethod::SSO);
     let api_client: APIClient = base.api_client()?;
@@ -18,6 +19,7 @@ pub async fn sso_login(
     let options = LoginOptions {
         existing_token: base.config()?.token(),
         sso_team: Some(sso_team),
+        force,
         ..LoginOptions::new(&ui, &login_url_config, &api_client, &DefaultLoginServer)
     };
 
@@ -55,13 +57,18 @@ pub async fn sso_login(
     Ok(())
 }
 
-pub async fn login(base: &mut CommandBase, telemetry: CommandEventBuilder) -> Result<(), Error> {
+pub async fn login(
+    base: &mut CommandBase,
+    telemetry: CommandEventBuilder,
+    force: bool,
+) -> Result<(), Error> {
     telemetry.track_login_method(LoginMethod::Standard);
     let api_client: APIClient = base.api_client()?;
     let ui = base.ui;
     let login_url_config = base.config()?.login_url().to_string();
     let options = LoginOptions {
         existing_token: base.config()?.token(),
+        force,
         ..LoginOptions::new(&ui, &login_url_config, &api_client, &DefaultLoginServer)
     };
 

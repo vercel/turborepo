@@ -37,32 +37,36 @@ pub async fn sso_login<'a, T: Client + TokenClient>(
         login_server,
         sso_team,
         existing_token,
+        force,
     } = *options;
 
     let sso_team = sso_team.ok_or(Error::EmptySSOTeam)?;
     // Check if token exists first. Must be there for the user and contain the
     // sso_team passed into this function.
-    if let Some(token) = existing_token {
-        if Token::existing(token.to_string())
-            .is_valid(api_client)
-            .await?
-        {
-            return check_sso_token(token, sso_team, ui, api_client, "Existing token found!").await;
+    if !force {
+        if let Some(token) = existing_token {
+            if Token::existing(token.to_string())
+                .is_valid(api_client)
+                .await?
+            {
+                return check_sso_token(token, sso_team, ui, api_client, "Existing token found!")
+                    .await;
+            }
         }
-    }
 
-    // No existing turbo token found. If the user is logging into Vercel, check for
-    // an existing `vc` token with correct scope.
-    if login_url_configuration.contains("vercel.com") {
-        if let Ok(token) = extract_vercel_token() {
-            return check_sso_token(
-                &token,
-                sso_team,
-                ui,
-                api_client,
-                "Existing Vercel token found!",
-            )
-            .await;
+        // No existing turbo token found. If the user is logging into Vercel, check for
+        // an existing `vc` token with correct scope.
+        if login_url_configuration.contains("vercel.com") {
+            if let Ok(token) = extract_vercel_token() {
+                return check_sso_token(
+                    &token,
+                    sso_team,
+                    ui,
+                    api_client,
+                    "Existing Vercel token found!",
+                )
+                .await;
+            }
         }
     }
 
