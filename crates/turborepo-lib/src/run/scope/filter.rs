@@ -41,7 +41,7 @@ impl PackageInference {
             pkg_inference_path
         );
         let full_inference_path = turbo_root.resolve(pkg_inference_path);
-        for (workspace_name, workspace_entry) in pkg_graph.workspaces() {
+        for (workspace_name, workspace_entry) in pkg_graph.packages() {
             let pkg_path = turbo_root.resolve(workspace_entry.package_path());
             let inferred_path_is_below = pkg_path.contains(&full_inference_path);
             // We skip over the root package as the inferred path will always be below it
@@ -158,7 +158,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         let filter_patterns = if is_all_packages {
             // return all packages in the workspace
             self.pkg_graph
-                .workspaces()
+                .packages()
                 .filter(|(name, _)| matches!(name, PackageName::Other(_)))
                 .map(|(name, _)| name.to_owned())
                 .collect()
@@ -228,7 +228,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             self.filter_graph_with_selectors(include_selectors)?
         } else {
             self.pkg_graph
-                .workspaces()
+                .packages()
                 // todo: a type-level way of dealing with non-root packages
                 .filter(|(name, _)| !PackageName::Root.eq(name)) // the root package has to be explicitly included
                 .map(|(name, _)| name.to_owned())
@@ -268,7 +268,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                     let dependencies = dependencies
                         .iter()
                         .flatten()
-                        .map(|i| i.as_workspace().to_owned())
+                        .map(|i| i.as_package_name().to_owned())
                         .collect::<Vec<_>>();
 
                     // flatmap through the option, the set, and then the optional package name
@@ -277,7 +277,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
 
                 if selector.include_dependents {
                     let dependents = self.pkg_graph.ancestors(&node);
-                    for dependent in dependents.iter().map(|i| i.as_workspace()) {
+                    for dependent in dependents.iter().map(|i| i.as_package_name()) {
                         walked_dependents.insert(dependent.clone());
 
                         // get the dependent's dependencies
@@ -291,7 +291,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                             let dependent_dependencies = dependent_dependencies
                                 .iter()
                                 .flatten()
-                                .map(|i| i.as_workspace().to_owned())
+                                .map(|i| i.as_package_name().to_owned())
                                 .collect::<HashSet<_>>();
 
                             walked_dependent_dependencies.extend(dependent_dependencies);
@@ -348,7 +348,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     ) -> Result<HashSet<PackageName>, ResolutionError> {
         let mut entry_packages = HashSet::new();
 
-        for (name, info) in self.pkg_graph.workspaces() {
+        for (name, info) in self.pkg_graph.packages() {
             if selector.parent_dir == AnchoredSystemPathBuf::default() {
                 entry_packages.insert(name.to_owned());
             } else {
@@ -427,7 +427,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 self.packages_changed_in_range(&selector.from_ref, selector.to_ref())?;
             let package_path_lookup = self
                 .pkg_graph
-                .workspaces()
+                .packages()
                 .map(|(name, entry)| (name, entry.package_path()))
                 .collect::<HashMap<_, _>>();
 
@@ -459,7 +459,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             {
                 entry_packages.insert(PackageName::Root);
             } else {
-                let packages = self.pkg_graph.workspaces();
+                let packages = self.pkg_graph.packages();
                 for (name, _) in packages.filter(|(_name, info)| {
                     let path = info.package_path().as_path();
                     parent_dir_globber.is_match(path)
@@ -474,7 +474,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 entry_packages = self.match_package_names_to_vertices(
                     &selector.name_pattern,
                     self.pkg_graph
-                        .workspaces()
+                        .packages()
                         .map(|(name, _)| name.to_owned())
                         .collect(),
                 )?;

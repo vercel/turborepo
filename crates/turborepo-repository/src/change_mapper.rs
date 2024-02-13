@@ -106,7 +106,7 @@ impl<'a> ChangeMapper<'a> {
         let mut changed_packages = HashSet::new();
         for file in files {
             let mut found = false;
-            for (name, entry) in graph.workspaces() {
+            for (name, entry) in graph.packages() {
                 if name == &PackageName::Root {
                     continue;
                 }

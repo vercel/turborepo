@@ -332,9 +332,9 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
 
         debug_assert!(single, "expected single package graph");
         Ok(PackageGraph {
-            workspace_graph,
+            graph: workspace_graph,
             node_lookup,
-            workspaces,
+            packages: workspaces,
             lockfile,
             package_manager,
         })
@@ -514,9 +514,9 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedLockfile, T> {
             ..
         } = self;
         Ok(PackageGraph {
-            workspace_graph,
+            graph: workspace_graph,
             node_lookup,
-            workspaces,
+            packages: workspaces,
             package_manager,
             lockfile,
         })

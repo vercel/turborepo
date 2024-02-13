@@ -132,7 +132,7 @@ pub async fn prune(
     for workspace in workspaces {
         let entry = prune
             .package_graph
-            .workspace_info(&workspace)
+            .package_info(&workspace)
             .ok_or_else(|| Error::MissingWorkspace(workspace.clone()))?;
 
         // We don't want to do any copying for the root workspace
@@ -282,7 +282,7 @@ impl<'a> Prune<'a> {
 
         for target in scope {
             let workspace = PackageName::Other(target.clone());
-            let Some(info) = package_graph.workspace_info(&workspace) else {
+            let Some(info) = package_graph.package_info(&workspace) else {
                 return Err(Error::MissingWorkspace(workspace));
             };
             trace!(

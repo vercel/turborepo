@@ -81,7 +81,7 @@ impl Package {
         ancestors
             .iter()
             .filter_map(|node| {
-                let info = graph.workspace_info(node.as_workspace())?;
+                let info = graph.package_info(node.as_package_name())?;
                 // If we don't get a package name back, we'll just skip it.
                 let name = info.package_name()?;
                 let anchored_package_path = info.package_path();
@@ -166,7 +166,7 @@ impl Workspace {
         let packages = match package_changes {
             PackageChanges::All => self
                 .graph
-                .workspaces()
+                .packages()
                 .map(|(name, info)| WorkspacePackage {
                     name: name.to_owned(),
                     path: info.package_path().to_owned(),
