@@ -512,7 +512,7 @@ name = "auto-hash-map"
 version = "0.1.0"
 dependencies = [
  "serde",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
 ]
 
 [[package]]
@@ -1374,7 +1374,7 @@ version = "0.15.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b40ccee03b5175c18cde8f37e7d2a33bcef6f8ec8f7cc0d81090d1bb380949c9"
 dependencies = [
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "target-lexicon",
 ]
 
@@ -1946,7 +1946,7 @@ dependencies = [
  "gimli 0.26.2",
  "log 0.4.20",
  "regalloc2",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "target-lexicon",
 ]
 
@@ -1976,7 +1976,7 @@ dependencies = [
  "hashbrown 0.12.3",
  "indexmap 1.9.3",
  "log 0.4.20",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
 ]
 
 [[package]]
@@ -1993,7 +1993,7 @@ checksum = "0d70abacb8cfef3dc8ff7e8836e9c1d70f7967dfdac824a4cd5e30223415aca6"
 dependencies = [
  "cranelift-codegen",
  "log 0.4.20",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "target-lexicon",
 ]
 
@@ -2220,7 +2220,7 @@ dependencies = [
  "itoa",
  "phf 0.11.2",
  "serde",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
 ]
 
 [[package]]
@@ -2869,6 +2869,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "file-id"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6584280525fb2059cba3db2c04abf947a1a29a45ddae89f3870f8281704fafc9"
+dependencies = [
+ "windows-sys 0.48.0",
+]
+
+[[package]]
 name = "filedescriptor"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3023,25 +3032,6 @@ name = "fs_extra"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
-
-[[package]]
-name = "fsevent"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ab7d1bd1bd33cc98b0889831b72da23c0aa4df9cec7e0702f46ecea04b35db6"
-dependencies = [
- "bitflags 1.3.2",
- "fsevent-sys 2.0.1",
-]
-
-[[package]]
-name = "fsevent-sys"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f41b048a94555da0f42f1d632e2e19510084fb8e303b0daa2816e733fb3644a0"
-dependencies = [
- "libc",
-]
 
 [[package]]
 name = "fsevent-sys"
@@ -3564,7 +3554,7 @@ dependencies = [
  "once_cell",
  "phf 0.11.2",
  "rustc-hash",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
 ]
 
 [[package]]
@@ -3913,17 +3903,6 @@ checksum = "9f2cb48b81b1dc9f39676bf99f5499babfec7cd8fe14307f7b3d747208fb5690"
 
 [[package]]
 name = "inotify"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4816c66d2c8ae673df83366c18341538f234a26d65a9ecea5c348b453ac1d02f"
-dependencies = [
- "bitflags 1.3.2",
- "inotify-sys",
- "libc",
-]
-
-[[package]]
-name = "inotify"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8069d3ec154eb856955c1c0fbffefbf5f3c40a104ec912d4797314c1801abff"
@@ -3998,7 +3977,7 @@ version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "270bc34e57047cab801a8c871c124d9dc7132f6473c6401f645524f4e6edd111"
 dependencies = [
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
 ]
 
 [[package]]
@@ -4511,7 +4490,7 @@ dependencies = [
  "pathdiff",
  "rayon",
  "serde",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "static-self",
 ]
 
@@ -4955,18 +4934,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mio-extras"
-version = "2.0.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52403fe290012ce777c4626790c8951324a2b9e3316b3143779c72b029742f19"
-dependencies = [
- "lazycell",
- "log 0.4.20",
- "mio 0.6.23",
- "slab",
-]
-
-[[package]]
 name = "miow"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5241,24 +5208,6 @@ dependencies = [
 
 [[package]]
 name = "notify"
-version = "4.0.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae03c8c853dba7bfd23e571ff0cff7bc9dceb40a4cd684cd1681824183f45257"
-dependencies = [
- "bitflags 1.3.2",
- "filetime",
- "fsevent",
- "fsevent-sys 2.0.1",
- "inotify 0.7.1",
- "libc",
- "mio 0.6.23",
- "mio-extras",
- "walkdir",
- "winapi 0.3.9",
-]
-
-[[package]]
-name = "notify"
 version = "5.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "58ea850aa68a06e48fdb069c0ec44d0d64c8dbffa49bf3b6f7f0a901fdea1ba9"
@@ -5266,8 +5215,8 @@ dependencies = [
  "bitflags 1.3.2",
  "crossbeam-channel",
  "filetime",
- "fsevent-sys 4.1.0",
- "inotify 0.9.6",
+ "fsevent-sys",
+ "inotify",
  "kqueue",
  "libc",
  "mio 0.8.8",
@@ -5284,14 +5233,28 @@ dependencies = [
  "bitflags 2.4.0",
  "crossbeam-channel",
  "filetime",
- "fsevent-sys 4.1.0",
- "inotify 0.9.6",
+ "fsevent-sys",
+ "inotify",
  "kqueue",
  "libc",
  "log 0.4.20",
  "mio 0.8.8",
  "walkdir",
  "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "notify-debouncer-full"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49f5dab59c348b9b50cf7f261960a20e389feb2713636399cd9082cd4b536154"
+dependencies = [
+ "crossbeam-channel",
+ "file-id",
+ "log 0.4.20",
+ "notify 6.1.1",
+ "parking_lot 0.12.1",
+ "walkdir",
 ]
 
 [[package]]
@@ -5596,7 +5559,7 @@ dependencies = [
  "phf_codegen",
  "precomputed-hash",
  "serde",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "static-self",
 ]
 
@@ -5665,7 +5628,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "libc",
  "redox_syscall 0.3.5",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "windows-targets 0.48.1",
 ]
 
@@ -6108,7 +6071,7 @@ dependencies = [
  "prost-build",
  "prost-derive",
  "sha2",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "symbolic-demangle",
  "tempfile",
  "thiserror",
@@ -6705,7 +6668,7 @@ dependencies = [
  "fxhash",
  "log 0.4.20",
  "slice-group-by",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
 ]
 
 [[package]]
@@ -6820,6 +6783,7 @@ dependencies = [
  "percent-encoding 2.3.0",
  "pin-project-lite",
  "rustls 0.20.9",
+ "rustls-native-certs",
  "rustls-pemfile",
  "serde",
  "serde_json",
@@ -7083,6 +7047,18 @@ dependencies = [
  "ring 0.17.7",
  "rustls-webpki",
  "sct",
+]
+
+[[package]]
+name = "rustls-native-certs"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a9aace74cb666635c918e9c12bc0d348266037aa8eb599b5cba565709a8dff00"
+dependencies = [
+ "openssl-probe",
+ "rustls-pemfile",
+ "schannel",
+ "security-framework",
 ]
 
 [[package]]
@@ -7738,9 +7714,9 @@ dependencies = [
 
 [[package]]
 name = "smallvec"
-version = "1.11.1"
+version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "942b4a808e05215192e39f4ab80813e599068285906cc91aa64f923db842bd5a"
+checksum = "e6ecd384b10a64542d77071bd64bd7b231f4ed5940fba55e98c3de13824cf3d7"
 dependencies = [
  "serde",
 ]
@@ -7869,7 +7845,7 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "253e76c8c993a7b1b201b0539228b334582153cd4364292822d2c30776d469c7"
 dependencies = [
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "static-self-derive",
 ]
 
@@ -8644,7 +8620,7 @@ dependencies = [
  "is-macro",
  "serde",
  "serde_derive",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "swc_atoms",
  "swc_common",
  "swc_config",
@@ -8899,7 +8875,7 @@ dependencies = [
  "num-traits",
  "phf 0.11.2",
  "serde",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "smartstring",
  "stacker",
  "swc_atoms",
@@ -8998,7 +8974,7 @@ dependencies = [
  "rayon",
  "rustc-hash",
  "serde",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "swc_atoms",
  "swc_common",
  "swc_ecma_ast",
@@ -9034,7 +9010,7 @@ dependencies = [
  "num-bigint",
  "rayon",
  "serde",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "swc_atoms",
  "swc_common",
  "swc_config",
@@ -9132,7 +9108,7 @@ dependencies = [
  "either",
  "rustc-hash",
  "serde",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "swc_atoms",
  "swc_common",
  "swc_ecma_ast",
@@ -10487,7 +10463,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sharded-slab",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "thread_local",
  "tracing",
  "tracing-core",
@@ -10688,7 +10664,7 @@ dependencies = [
  "indexmap 1.9.3",
  "jsonc-parser 0.21.0",
  "mime 0.3.17",
- "notify 4.0.17",
+ "notify-debouncer-full",
  "parking_lot 0.12.1",
  "rstest",
  "serde",
@@ -10778,7 +10754,7 @@ dependencies = [
  "ref-cast",
  "rustc-hash",
  "serde",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "tokio",
  "tracing",
  "turbo-tasks",
@@ -11095,7 +11071,7 @@ dependencies = [
  "parcel_sourcemap",
  "regex",
  "serde",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "swc_core",
  "tracing",
  "turbo-tasks",
@@ -11175,6 +11151,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "criterion",
+ "either",
  "futures 0.3.28",
  "indexmap 1.9.3",
  "indoc",
@@ -11603,6 +11580,7 @@ dependencies = [
 name = "turborepo-ci"
 version = "0.1.0"
 dependencies = [
+ "test-case",
  "tracing",
 ]
 
@@ -11644,7 +11622,7 @@ dependencies = [
  "anyhow",
  "bitflags 1.3.2",
  "dashmap",
- "fsevent-sys 4.1.0",
+ "fsevent-sys",
  "futures 0.3.28",
  "itertools 0.10.5",
  "libc",
@@ -12701,7 +12679,7 @@ dependencies = [
  "memmap2 0.5.10",
  "more-asserts",
  "region",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "thiserror",
  "wasmer-types",
  "wasmer-vm",
@@ -12721,7 +12699,7 @@ dependencies = [
  "gimli 0.26.2",
  "more-asserts",
  "rayon",
- "smallvec 1.11.1",
+ "smallvec 1.13.1",
  "target-lexicon",
  "tracing",
  "wasmer-compiler",

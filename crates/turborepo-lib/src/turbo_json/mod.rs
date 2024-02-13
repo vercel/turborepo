@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     ops::{Deref, DerefMut},
     sync::Arc,
 };
@@ -7,6 +7,7 @@ use std::{
 use camino::Utf8Path;
 use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
+use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, RelativeUnixPathBuf};
 use turborepo_errors::Spanned;
 use turborepo_repository::{package_graph::ROOT_PKG_NAME, package_json::PackageJson};
@@ -14,7 +15,10 @@ use turborepo_repository::{package_graph::ROOT_PKG_NAME, package_json::PackageJs
 use crate::{
     cli::OutputLogsMode,
     config::{ConfigurationOptions, Error},
-    run::task_id::{TaskId, TaskName},
+    run::{
+        task_access::{TaskAccessTraceFile, TASK_ACCESS_CONFIG_PATH},
+        task_id::{TaskId, TaskName},
+    },
     task_graph::{TaskDefinition, TaskOutputs},
     unescape::UnescapedString,
 };
@@ -35,6 +39,10 @@ pub struct SpacesJson {
 // turbo.json files into a single definition. Therefore we keep the
 // `RawTaskDefinition` type so we can determine which fields are actually
 // set when we resolve the configuration.
+//
+// Note that the values here are limited to pipeline configuration.
+// Configuration that needs to account for flags, env vars, etc. is
+// handled via layered config.
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct TurboJson {
     text: Option<Arc<str>>,
@@ -45,11 +53,47 @@ pub struct TurboJson {
     pub(crate) global_env: Vec<String>,
     pub(crate) global_pass_through_env: Option<Vec<String>>,
     pub(crate) pipeline: Pipeline,
-    pub(crate) remote_cache: Option<ConfigurationOptions>,
-    pub(crate) space_id: Option<String>,
 }
 
-#[derive(Serialize, Default, Debug, PartialEq, Clone, Iterable)]
+// Iterable is required to enumerate allowed keys
+#[derive(Clone, Debug, Default, Iterable, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RawRemoteCacheOptions {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    api_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    login_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    team_slug: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    team_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    signature: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    preflight: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    timeout: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    enabled: Option<bool>,
+}
+
+impl From<&RawRemoteCacheOptions> for ConfigurationOptions {
+    fn from(remote_cache_opts: &RawRemoteCacheOptions) -> Self {
+        Self {
+            api_url: remote_cache_opts.api_url.clone(),
+            login_url: remote_cache_opts.login_url.clone(),
+            team_slug: remote_cache_opts.team_slug.clone(),
+            team_id: remote_cache_opts.team_id.clone(),
+            signature: remote_cache_opts.signature,
+            preflight: remote_cache_opts.preflight,
+            timeout: remote_cache_opts.timeout,
+            enabled: remote_cache_opts.enabled,
+            ..Self::default()
+        }
+    }
+}
+
+#[derive(Serialize, Default, Debug, Clone, Iterable)]
 #[serde(rename_all = "camelCase")]
 // The raw deserialized turbo.json file.
 pub struct RawTurboJson {
@@ -82,7 +126,7 @@ pub struct RawTurboJson {
     pub pipeline: Option<Pipeline>,
     // Configuration options when interfacing with the remote cache
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) remote_cache: Option<ConfigurationOptions>,
+    pub(crate) remote_cache: Option<RawRemoteCacheOptions>,
 }
 
 #[derive(Serialize, Default, Debug, PartialEq, Clone)]
@@ -342,6 +386,43 @@ impl RawTurboJson {
 
         this
     }
+
+    pub fn from_task_access_trace(trace: &HashMap<String, TaskAccessTraceFile>) -> Option<Self> {
+        if trace.is_empty() {
+            return None;
+        }
+
+        let mut pipeline = Pipeline::default();
+
+        for (task_name, trace_file) in trace {
+            let spanned_outputs: Vec<Spanned<UnescapedString>> = trace_file
+                .outputs
+                .iter()
+                .map(|output| Spanned::new(output.clone()))
+                .collect();
+            let task_definition = RawTaskDefinition {
+                outputs: Some(spanned_outputs),
+                env: Some(
+                    trace_file
+                        .accessed
+                        .env_var_keys
+                        .iter()
+                        .map(|unescaped_string| Spanned::new(unescaped_string.clone()))
+                        .collect(),
+                ),
+                ..Default::default()
+            };
+
+            let name = TaskName::from(task_name.as_str());
+            let root_task = name.into_root_task();
+            pipeline.insert(root_task, Spanned::new(task_definition.clone()));
+        }
+
+        Some(RawTurboJson {
+            pipeline: Some(pipeline),
+            ..RawTurboJson::default()
+        })
+    }
 }
 
 impl TryFrom<RawTurboJson> for TurboJson {
@@ -419,16 +500,11 @@ impl TryFrom<RawTurboJson> for TurboJson {
                 .transpose()?,
             pipeline: raw_turbo.pipeline.unwrap_or_default(),
             // copy these over, we don't need any changes here.
-            remote_cache: raw_turbo.remote_cache,
             extends: raw_turbo
                 .extends
                 .unwrap_or_default()
                 .map(|s| s.into_iter().map(|s| s.into()).collect()),
-            // Directly to space_id, we don't need to keep the struct
-            space_id: raw_turbo
-                .experimental_spaces
-                .and_then(|s| s.id)
-                .map(|s| s.into()),
+            // Spaces and Remote Cache config is handled through layered config
         })
     }
 }
@@ -451,6 +527,16 @@ impl TurboJson {
         }
 
         let turbo_from_files = Self::read(repo_root, &dir.join_component(CONFIG_FILE));
+        let turbo_from_trace =
+            Self::read(repo_root, &dir.join_components(&TASK_ACCESS_CONFIG_PATH));
+
+        // check the zero config case (turbo trace file, but no turbo.json file)
+        if let Ok(turbo_from_trace) = turbo_from_trace {
+            if turbo_from_files.is_err() {
+                debug!("Using turbo.json synthesized from trace file");
+                return Ok(turbo_from_trace);
+            }
+        }
 
         let mut turbo_json = match (include_synthesized_from_root_package_json, turbo_from_files) {
             // If the file didn't exist, throw a custom error here instead of propagating

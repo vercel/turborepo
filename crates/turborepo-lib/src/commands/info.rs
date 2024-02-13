@@ -6,7 +6,7 @@
 use serde::Serialize;
 use turbopath::AnchoredSystemPath;
 use turborepo_repository::{
-    package_graph::{PackageGraph, WorkspaceName, WorkspaceNode},
+    package_graph::{PackageGraph, PackageNode, WorkspaceName},
     package_json::PackageJson,
     package_manager::PackageManager,
 };
@@ -16,8 +16,40 @@ use crate::{cli, commands::CommandBase, config::ConfigurationOptions};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+struct InfoConfig {
+    api_url: Option<String>,
+    login_url: Option<String>,
+    team_slug: Option<String>,
+    team_id: Option<String>,
+    token: Option<String>,
+    signature: Option<bool>,
+    preflight: Option<bool>,
+    timeout: Option<u64>,
+    enabled: Option<bool>,
+    spaces_id: Option<String>,
+}
+
+impl<'a> From<&'a ConfigurationOptions> for InfoConfig {
+    fn from(config: &'a ConfigurationOptions) -> Self {
+        Self {
+            api_url: config.api_url.clone(),
+            login_url: config.login_url.clone(),
+            team_slug: config.team_slug.clone(),
+            team_id: config.team_id.clone(),
+            token: config.token.clone(),
+            signature: config.signature,
+            preflight: config.preflight,
+            timeout: config.timeout,
+            enabled: config.enabled,
+            spaces_id: config.spaces_id.clone(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct RepositoryDetails<'a> {
-    config: &'a ConfigurationOptions,
+    config: InfoConfig,
     package_manager: &'a PackageManager,
     workspaces: Vec<(&'a WorkspaceName, RepositoryWorkspaceDetails<'a>)>,
 }
@@ -81,7 +113,7 @@ impl<'a> RepositoryDetails<'a> {
         workspaces.sort_by(|a, b| a.0.cmp(b.0));
 
         Self {
-            config,
+            config: config.into(),
             package_manager: package_graph.package_manager(),
             workspaces,
         }
@@ -118,8 +150,8 @@ impl<'a> RepositoryDetails<'a> {
 impl<'a> WorkspaceDetails<'a> {
     fn new(package_graph: &'a PackageGraph, workspace_name: &'a str) -> Self {
         let workspace_node = match workspace_name {
-            "//" => WorkspaceNode::Root,
-            name => WorkspaceNode::Workspace(WorkspaceName::Other(name.to_string())),
+            "//" => PackageNode::Root,
+            name => PackageNode::Workspace(WorkspaceName::Other(name.to_string())),
         };
 
         let transitive_dependencies = package_graph.transitive_closure(Some(&workspace_node));
@@ -127,13 +159,13 @@ impl<'a> WorkspaceDetails<'a> {
         let mut workspace_dep_names: Vec<&str> = transitive_dependencies
             .into_iter()
             .filter_map(|dependency| match dependency {
-                WorkspaceNode::Root | WorkspaceNode::Workspace(WorkspaceName::Root) => Some("root"),
-                WorkspaceNode::Workspace(WorkspaceName::Other(dep_name))
+                PackageNode::Root | PackageNode::Workspace(WorkspaceName::Root) => Some("root"),
+                PackageNode::Workspace(WorkspaceName::Other(dep_name))
                     if dep_name == workspace_name =>
                 {
                     None
                 }
-                WorkspaceNode::Workspace(WorkspaceName::Other(dep_name)) => Some(dep_name.as_str()),
+                PackageNode::Workspace(WorkspaceName::Other(dep_name)) => Some(dep_name.as_str()),
             })
             .collect();
         workspace_dep_names.sort();

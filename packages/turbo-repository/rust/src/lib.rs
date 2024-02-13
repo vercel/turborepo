@@ -5,7 +5,7 @@ use napi_derive::napi;
 use turbopath::AbsoluteSystemPath;
 use turborepo_repository::{
     inference::RepoState as WorkspaceState,
-    package_graph::{PackageGraph, WorkspaceName, WorkspaceNode},
+    package_graph::{PackageGraph, PackageNode, WorkspaceName},
 };
 mod internal;
 
@@ -68,7 +68,7 @@ impl Package {
         graph: &PackageGraph,
         workspace_path: &AbsoluteSystemPath,
     ) -> Vec<Package> {
-        let node = WorkspaceNode::Workspace(WorkspaceName::Other(self.name.clone()));
+        let node = PackageNode::Workspace(WorkspaceName::Other(self.name.clone()));
         let ancestors = match graph.immediate_ancestors(&node) {
             Some(ancestors) => ancestors,
             None => return vec![],
@@ -103,6 +103,8 @@ impl Workspace {
         self.packages_internal().await.map_err(|e| e.into())
     }
 
+    /// Finds and returns a map of packages within the workspace and its
+    /// dependents (i.e. the packages that depend on each of those packages).
     #[napi]
     pub async fn find_packages_and_dependents(
         &self,

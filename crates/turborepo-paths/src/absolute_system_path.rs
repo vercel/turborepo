@@ -401,6 +401,10 @@ impl AbsoluteSystemPath {
         self.0.parent().map(Self::new_unchecked)
     }
 
+    pub fn file_name(&self) -> Option<&str> {
+        self.0.file_name()
+    }
+
     /// Opens file and sets the `FILE_FLAG_SEQUENTIAL_SCAN` flag on Windows to
     /// help with performance
     pub fn open(&self) -> Result<File, io::Error> {

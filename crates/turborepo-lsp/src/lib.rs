@@ -18,7 +18,7 @@ use tower_lsp::{
     Client, LanguageServer,
 };
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_lib::{DaemonClient, DaemonConnector, DaemonPackageDiscovery, DaemonRootHasher};
+use turborepo_lib::{DaemonClient, DaemonConnector, DaemonPackageDiscovery, DaemonPaths};
 use turborepo_repository::{
     discovery::{self, DiscoveryResponse, PackageDiscovery},
     package_json::PackageJson,
@@ -60,22 +60,18 @@ impl LanguageServer for Backend {
                 .expect("only fails if poisoned")
                 .replace(repo_root.clone());
 
-            let hasher = DaemonRootHasher::new(&repo_root);
+            let paths = DaemonPaths::from_repo_root(&repo_root);
 
             let (_, daemon) = tokio::join!(
-                self.client.log_message(
-                    MessageType::INFO,
-                    format!("root uri: {}", hasher.sock_path()),
-                ),
+                self.client
+                    .log_message(MessageType::INFO, format!("root uri: {}", paths.sock_file),),
                 tokio_retry::Retry::spawn(
                     tokio_retry::strategy::FixedInterval::from_millis(100).take(5),
                     || {
-                        let connector = DaemonConnector {
-                            can_start_server: true,
-                            can_kill_server: false,
-                            pid_file: hasher.lock_path(),
-                            sock_file: hasher.sock_path(),
-                        };
+                        let can_start_server = true;
+                        let can_kill_server = false;
+                        let connector =
+                            DaemonConnector::new(can_start_server, can_kill_server, &repo_root);
                         connector.connect()
                     },
                 )
@@ -98,7 +94,7 @@ impl LanguageServer for Backend {
                 .send(Some(daemon))
                 .expect("there is a receiver");
 
-            let mut lock = pidlock::Pidlock::new(hasher.lsp_path().as_std_path().to_owned());
+            let mut lock = pidlock::Pidlock::new(paths.lsp_pid_file.as_std_path().to_owned());
 
             if let Err(e) = lock.acquire() {
                 self.client

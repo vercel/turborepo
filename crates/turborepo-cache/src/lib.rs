@@ -74,6 +74,10 @@ pub enum CacheError {
     MetadataWriteFailure(serde_json::Error, #[backtrace] Backtrace),
     #[error("Unable to perform write as cache is shutting down")]
     CacheShuttingDown,
+    #[error("Unable to determine config cache base")]
+    ConfigCacheInvalidBase,
+    #[error("Unable to hash config cache inputs")]
+    ConfigCacheError,
 }
 
 impl From<turborepo_api_client::Error> for CacheError {
