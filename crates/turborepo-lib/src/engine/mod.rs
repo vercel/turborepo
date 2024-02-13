@@ -14,7 +14,7 @@ pub use execute::{ExecuteError, ExecutionOptions, Message, StopExecution};
 use miette::Diagnostic;
 use petgraph::Graph;
 use thiserror::Error;
-use turborepo_repository::package_graph::{PackageGraph, WorkspaceName};
+use turborepo_repository::package_graph::{PackageGraph, PackageName};
 
 use crate::{run::task_id::TaskId, task_graph::TaskDefinition};
 
@@ -185,7 +185,7 @@ impl Engine<Built> {
                     })?;
 
                     let package_json = package_graph
-                        .package_json(&WorkspaceName::from(dep_id.package()))
+                        .package_json(&PackageName::from(dep_id.package()))
                         .ok_or_else(|| ValidateError::MissingPackageJson {
                             package: dep_id.package().to_string(),
                         })?;
@@ -201,7 +201,7 @@ impl Engine<Built> {
 
                 // check if the package for the task has that task in its package.json
                 let info = package_graph
-                    .workspace_info(&WorkspaceName::from(task_id.package().to_string()))
+                    .workspace_info(&PackageName::from(task_id.package().to_string()))
                     .expect("package graph should contain workspace info for task package");
 
                 let package_has_task = info

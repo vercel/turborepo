@@ -25,7 +25,7 @@ pub struct PackageGraph {
     workspace_graph: petgraph::Graph<PackageNode, ()>,
     #[allow(dead_code)]
     node_lookup: HashMap<PackageNode, petgraph::graph::NodeIndex>,
-    workspaces: HashMap<WorkspaceName, PackageInfo>,
+    workspaces: HashMap<PackageName, PackageInfo>,
     package_manager: PackageManager,
     lockfile: Option<Box<dyn Lockfile>>,
 }
@@ -38,14 +38,14 @@ pub struct PackageGraph {
 /// say Workspace. Some of these are labeled as such.
 #[derive(Eq, PartialEq, Hash)]
 pub struct WorkspacePackage {
-    pub name: WorkspaceName,
+    pub name: PackageName,
     pub path: AnchoredSystemPathBuf,
 }
 
 impl WorkspacePackage {
     pub fn root() -> Self {
         Self {
-            name: WorkspaceName::Root,
+            name: PackageName::Root,
             path: AnchoredSystemPathBuf::default(),
         }
     }
@@ -56,7 +56,7 @@ impl WorkspacePackage {
 pub struct PackageInfo {
     pub package_json: PackageJson,
     pub package_json_path: AnchoredSystemPathBuf,
-    pub unresolved_external_dependencies: Option<BTreeMap<PackageName, PackageVersion>>,
+    pub unresolved_external_dependencies: Option<BTreeMap<PackageKey, PackageVersion>>, /* name -> version */
     pub transitive_dependencies: Option<HashSet<turborepo_lockfiles::Package>>,
 }
 
@@ -80,22 +80,23 @@ impl PackageInfo {
     }
 }
 
-type PackageName = String;
+type PackageKey = String;
 type PackageVersion = String;
 
-/// WorkspaceName refers to the name of a *package* within a workspace.
-/// TODO: rename "WorkspaceName" to PackageName.
+// PackageName refers to a real package's name or the root package.
+// It's not the best name, because root isn't a real package, but it's
+// the best we have right now.
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
-pub enum WorkspaceName {
+pub enum PackageName {
     Root,
     Other(String),
 }
 
-impl Serialize for WorkspaceName {
+impl Serialize for PackageName {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
-            WorkspaceName::Root => serializer.serialize_str(ROOT_PKG_NAME),
-            WorkspaceName::Other(other) => serializer.serialize_str(other),
+            PackageName::Root => serializer.serialize_str(ROOT_PKG_NAME),
+            PackageName::Other(other) => serializer.serialize_str(other),
         }
     }
 }
@@ -103,14 +104,14 @@ impl Serialize for WorkspaceName {
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub enum PackageNode {
     Root,
-    Workspace(WorkspaceName),
+    Workspace(PackageName),
 }
 
 impl PackageNode {
-    pub fn as_workspace(&self) -> &WorkspaceName {
+    pub fn as_workspace(&self) -> &PackageName {
         match self {
             PackageNode::Workspace(name) => name,
-            PackageNode::Root => &WorkspaceName::Root,
+            PackageNode::Root => &PackageName::Root,
         }
     }
 }
@@ -159,12 +160,12 @@ impl PackageGraph {
         self.lockfile.as_deref()
     }
 
-    pub fn package_json(&self, workspace: &WorkspaceName) -> Option<&PackageJson> {
+    pub fn package_json(&self, workspace: &PackageName) -> Option<&PackageJson> {
         let entry = self.workspaces.get(workspace)?;
         Some(&entry.package_json)
     }
 
-    pub fn workspace_dir(&self, workspace: &WorkspaceName) -> Option<&AnchoredSystemPath> {
+    pub fn workspace_dir(&self, workspace: &PackageName) -> Option<&AnchoredSystemPath> {
         let entry = self.workspaces.get(workspace)?;
         Some(
             entry
@@ -174,16 +175,16 @@ impl PackageGraph {
         )
     }
 
-    pub fn workspace_info(&self, workspace: &WorkspaceName) -> Option<&PackageInfo> {
+    pub fn workspace_info(&self, workspace: &PackageName) -> Option<&PackageInfo> {
         self.workspaces.get(workspace)
     }
 
-    pub fn workspaces(&self) -> impl Iterator<Item = (&WorkspaceName, &PackageInfo)> {
+    pub fn workspaces(&self) -> impl Iterator<Item = (&PackageName, &PackageInfo)> {
         self.workspaces.iter()
     }
 
     pub fn root_package_json(&self) -> &PackageJson {
-        self.package_json(&WorkspaceName::Root)
+        self.package_json(&PackageName::Root)
             .expect("package graph was built without root package.json")
     }
 
@@ -309,7 +310,7 @@ impl PackageGraph {
         visited
     }
 
-    pub fn transitive_external_dependencies<'a, I: IntoIterator<Item = &'a WorkspaceName>>(
+    pub fn transitive_external_dependencies<'a, I: IntoIterator<Item = &'a PackageName>>(
         &self,
         workspaces: I,
     ) -> HashSet<&turborepo_lockfiles::Package> {
@@ -358,8 +359,8 @@ impl PackageGraph {
                         != info.transitive_dependencies.as_ref()
                 })
                 .map(|(name, info)| match name {
-                    WorkspaceName::Other(n) => {
-                        let w_name = WorkspaceName::Other(n.to_owned());
+                    PackageName::Other(n) => {
+                        let w_name = PackageName::Other(n.to_owned());
                         Some(WorkspacePackage {
                             name: w_name.clone(),
                             path: info.package_path().to_owned(),
@@ -367,7 +368,7 @@ impl PackageGraph {
                     }
                     // if the root package has changed, then we should report `None`
                     // since all packages need to be revalidated
-                    WorkspaceName::Root => None,
+                    PackageName::Root => None,
                 })
                 .collect::<Option<Vec<WorkspacePackage>>>()
         };
@@ -383,11 +384,12 @@ impl PackageGraph {
         }))
     }
 
+    // Returns a map of package name and version for external dependencies
     #[allow(dead_code)]
     fn external_dependencies(
         &self,
-        workspace: &WorkspaceName,
-    ) -> Option<&BTreeMap<PackageName, PackageVersion>> {
+        workspace: &PackageName,
+    ) -> Option<&BTreeMap<PackageKey, PackageVersion>> {
         let entry = self.workspaces.get(workspace)?;
         entry.unresolved_external_dependencies.as_ref()
     }
@@ -401,11 +403,11 @@ pub enum ChangedPackagesError {
     Lockfile(#[from] turborepo_lockfiles::Error),
 }
 
-impl fmt::Display for WorkspaceName {
+impl fmt::Display for PackageName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            WorkspaceName::Root => f.write_str("//"),
-            WorkspaceName::Other(other) => f.write_str(other),
+            PackageName::Root => f.write_str("//"),
+            PackageName::Other(other) => f.write_str(other),
         }
     }
 }
@@ -418,7 +420,7 @@ impl fmt::Display for PackageNode {
         }
     }
 }
-impl From<String> for WorkspaceName {
+impl From<String> for PackageName {
     fn from(value: String) -> Self {
         match value == "//" {
             true => Self::Root,
@@ -427,17 +429,17 @@ impl From<String> for WorkspaceName {
     }
 }
 
-impl<'a> From<&'a str> for WorkspaceName {
+impl<'a> From<&'a str> for PackageName {
     fn from(value: &'a str) -> Self {
         Self::from(value.to_string())
     }
 }
 
-impl AsRef<str> for WorkspaceName {
+impl AsRef<str> for PackageName {
     fn as_ref(&self) -> &str {
         match self {
-            WorkspaceName::Root => "//",
-            WorkspaceName::Other(workspace) => workspace,
+            PackageName::Root => "//",
+            PackageName::Other(workspace) => workspace,
         }
     }
 }
@@ -476,7 +478,7 @@ mod test {
             .unwrap();
 
         let closure =
-            pkg_graph.transitive_closure(Some(&PackageNode::Workspace(WorkspaceName::Root)));
+            pkg_graph.transitive_closure(Some(&PackageNode::Workspace(PackageName::Root)));
         assert!(closure.contains(&PackageNode::Root));
         assert!(pkg_graph.validate().is_ok());
     }
@@ -532,7 +534,7 @@ mod test {
         );
         let b_external = pkg_graph
             .workspaces
-            .get(&WorkspaceName::from("b"))
+            .get(&PackageName::from("b"))
             .unwrap()
             .unresolved_external_dependencies
             .as_ref()
@@ -639,8 +641,8 @@ mod test {
         .unwrap();
 
         assert!(pkg_graph.validate().is_ok());
-        let foo = WorkspaceName::from("foo");
-        let bar = WorkspaceName::from("bar");
+        let foo = PackageName::from("foo");
+        let bar = PackageName::from("bar");
 
         let foo_deps = pkg_graph
             .workspaces

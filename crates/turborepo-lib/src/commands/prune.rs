@@ -8,7 +8,7 @@ use turbopath::{
     AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPath,
 };
 use turborepo_repository::{
-    package_graph::{self, PackageGraph, PackageNode, WorkspaceName},
+    package_graph::{self, PackageGraph, PackageName, PackageNode},
     package_json::PackageJson,
 };
 use turborepo_telemetry::events::command::CommandEventBuilder;
@@ -42,7 +42,7 @@ pub enum Error {
     #[error("at least one target must be specified")]
     NoWorkspaceSpecified,
     #[error("invalid scope: package {0} not found")]
-    MissingWorkspace(WorkspaceName),
+    MissingWorkspace(PackageName),
     #[error("Cannot prune without parsed lockfile")]
     MissingLockfile,
     #[error("Prune is not supported for Bun")]
@@ -136,7 +136,7 @@ pub async fn prune(
             .ok_or_else(|| Error::MissingWorkspace(workspace.clone()))?;
 
         // We don't want to do any copying for the root workspace
-        if let WorkspaceName::Other(workspace) = workspace {
+        if let PackageName::Other(workspace) = workspace {
             prune.copy_workspace(entry.package_json_path())?;
             workspace_paths.push(
                 entry
@@ -281,7 +281,7 @@ impl<'a> Prune<'a> {
         trace!("out directory: {}", &out_directory);
 
         for target in scope {
-            let workspace = WorkspaceName::Other(target.clone());
+            let workspace = PackageName::Other(target.clone());
             let Some(info) = package_graph.workspace_info(&workspace) else {
                 return Err(Error::MissingWorkspace(workspace));
             };
@@ -402,13 +402,14 @@ impl<'a> Prune<'a> {
         Ok(())
     }
 
-    fn internal_dependencies(&self) -> Vec<WorkspaceName> {
-        let workspaces =
-            std::iter::once(PackageNode::Workspace(WorkspaceName::Root))
-                .chain(self.scope.iter().map(|workspace| {
-                    PackageNode::Workspace(WorkspaceName::Other(workspace.clone()))
-                }))
-                .collect::<Vec<_>>();
+    fn internal_dependencies(&self) -> Vec<PackageName> {
+        let workspaces = std::iter::once(PackageNode::Workspace(PackageName::Root))
+            .chain(
+                self.scope
+                    .iter()
+                    .map(|workspace| PackageNode::Workspace(PackageName::Other(workspace.clone()))),
+            )
+            .collect::<Vec<_>>();
         let nodes = self.package_graph.transitive_closure(workspaces.iter());
 
         let mut names: Vec<_> = nodes
