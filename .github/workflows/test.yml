@@ -31,7 +31,16 @@ jobs:
           body-includes: "<!-- CI COMMENT -->"
 
       - name: Lil test
-        run: "echo Part 1; echo '::group::\e[;31mError group\e[;0m'; echo Inside the error; echo '::endgroup::'"
+        run: "echo Part 1
+          echo '::group::\e[;31mError group\e[;0m'
+          echo Inside the error
+          echo '::group::\e[;31mAnother group\e[;0m'
+          echo Inside the error
+          echo '::endgroup::'
+          echo '\e[;31m::group::Final group\e[;0m'
+          echo Inside the error
+          echo '::endgroup::'
+          "
 
       - name: Create or update PR comment
         if: github.event_name == 'pull_request' && steps.comment.outputs.comment-id != ''
