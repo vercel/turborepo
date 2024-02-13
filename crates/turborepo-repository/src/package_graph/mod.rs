@@ -196,8 +196,8 @@ impl PackageGraph {
     /// a -> b -> c
     ///
     /// immediate_dependencies(a) -> {b}
-    pub fn immediate_dependencies(&self, workspace: &PackageNode) -> Option<HashSet<&PackageNode>> {
-        let index = self.node_lookup.get(workspace)?;
+    pub fn immediate_dependencies(&self, package: &PackageNode) -> Option<HashSet<&PackageNode>> {
+        let index = self.node_lookup.get(package)?;
         Some(
             self.workspace_graph
                 .neighbors_directed(*index, petgraph::Outgoing)
@@ -219,8 +219,8 @@ impl PackageGraph {
     ///
     /// immediate_ancestors(c) -> {b}
     #[allow(dead_code)]
-    pub fn immediate_ancestors(&self, workspace: &PackageNode) -> Option<HashSet<&PackageNode>> {
-        let index = self.node_lookup.get(workspace)?;
+    pub fn immediate_ancestors(&self, package: &PackageNode) -> Option<HashSet<&PackageNode>> {
+        let index = self.node_lookup.get(package)?;
         Some(
             self.workspace_graph
                 .neighbors_directed(*index, petgraph::Incoming)
@@ -312,11 +312,11 @@ impl PackageGraph {
 
     pub fn transitive_external_dependencies<'a, I: IntoIterator<Item = &'a PackageName>>(
         &self,
-        workspaces: I,
+        packages: I,
     ) -> HashSet<&turborepo_lockfiles::Package> {
-        workspaces
+        packages
             .into_iter()
-            .filter_map(|workspace| self.packages.get(workspace))
+            .filter_map(|package| self.packages.get(package))
             .filter_map(|entry| entry.transitive_dependencies.as_ref())
             .flatten()
             .collect()
@@ -416,7 +416,7 @@ impl fmt::Display for PackageNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             PackageNode::Root => f.write_str("___ROOT___"),
-            PackageNode::Workspace(workspace) => workspace.fmt(f),
+            PackageNode::Workspace(package) => package.fmt(f),
         }
     }
 }
@@ -439,7 +439,7 @@ impl AsRef<str> for PackageName {
     fn as_ref(&self) -> &str {
         match self {
             PackageName::Root => "//",
-            PackageName::Other(workspace) => workspace,
+            PackageName::Other(package) => package,
         }
     }
 }
