@@ -16,12 +16,13 @@ use turbopack_core::{
     chunk::{ChunkItemExt, ChunkableModule, ChunkingContext, ModuleId},
     issue::{code_gen::CodeGenerationIssue, IssueExt, IssueSeverity, StyledString},
     resolve::{
-        origin::ResolveOrigin, parse::Request, ModuleResolveResult, ModuleResolveResultItem,
+        origin::ResolveOrigin, parse::Request, ExternalType, ModuleResolveResult,
+        ModuleResolveResultItem,
     },
 };
 
 use super::util::{request_to_string, throw_module_not_found_expr};
-use crate::utils::module_id_to_lit;
+use crate::{references::util::throw_module_not_found_error_expr, utils::module_id_to_lit};
 
 #[derive(PartialEq, Eq, ValueDebugFormat, TraceRawVcs, Serialize, Deserialize)]
 pub(crate) enum SinglePatternMapping {
@@ -47,8 +48,8 @@ pub(crate) enum SinglePatternMapping {
     /// import("./module")
     /// ```
     ModuleLoader(ModuleId),
-    /// Original reference with (different) request
-    OriginalReferenceTypeExternal(String),
+    /// External reference with request and type
+    External(String, ExternalType),
 }
 
 /// A mapping from a request pattern (e.g. "./module", `./images/${name}.png`)
@@ -87,7 +88,7 @@ impl SinglePatternMapping {
             | Self::Ignored
             | Self::Module(_)
             | Self::ModuleLoader(_) => true,
-            Self::OriginalReferenceTypeExternal(_) => false,
+            Self::External(..) => false,
         }
     }
 
@@ -104,7 +105,7 @@ impl SinglePatternMapping {
                 quote!("undefined" as Expr)
             }
             Self::Module(module_id) | Self::ModuleLoader(module_id) => module_id_to_lit(module_id),
-            Self::OriginalReferenceTypeExternal(s) => Expr::Lit(Lit::Str(s.as_str().into())),
+            Self::External(s, _) => Expr::Lit(Lit::Str(s.as_str().into())),
         }
     }
 
@@ -124,15 +125,21 @@ impl SinglePatternMapping {
                 span: DUMMY_SP,
                 type_args: None,
             }),
-            Self::OriginalReferenceTypeExternal(request) => Expr::Call(CallExpr {
-                callee: Callee::Expr(quote_expr!("require")),
-                args: vec![ExprOrSpread {
-                    spread: None,
-                    expr: Box::new(Expr::Lit(Lit::Str(request.as_str().into()))),
-                }],
-                span: DUMMY_SP,
-                type_args: None,
-            }),
+            Self::External(request, ExternalType::OriginalReference | ExternalType::CommonJs) => {
+                Expr::Call(CallExpr {
+                    callee: Callee::Expr(quote_expr!("require")),
+                    args: vec![ExprOrSpread {
+                        spread: None,
+                        expr: Box::new(Expr::Lit(Lit::Str(request.as_str().into()))),
+                    }],
+                    span: DUMMY_SP,
+                    type_args: None,
+                })
+            }
+            Self::External(request, ty) => throw_module_not_found_error_expr(
+                request,
+                &format!("Unsupported external type {:?} for commonjs reference", ty),
+            ),
         }
     }
 
@@ -153,13 +160,13 @@ impl SinglePatternMapping {
                     type_args: None,
                 })
             }
-            Self::OriginalReferenceTypeExternal(request) => {
+            Self::External(_, ExternalType::EcmaScriptModule | ExternalType::OriginalReference) => {
                 if import_externals {
                     Expr::Call(CallExpr {
                         callee: Callee::Expr(quote_expr!("__turbopack_external_import__")),
                         args: vec![ExprOrSpread {
                             spread: None,
-                            expr: Box::new(request.as_str().into()),
+                            expr: Box::new(key_expr.into_owned()),
                         }],
                         span: DUMMY_SP,
                         type_args: None,
@@ -171,7 +178,7 @@ impl SinglePatternMapping {
                             spread: None,
                             expr: quote_expr!(
                                 "() => __turbopack_external_require__($arg, true)",
-                                arg: Expr = request.as_str().into()
+                                arg: Expr = key_expr.into_owned()
                             ),
                         }],
                         span: DUMMY_SP,
@@ -179,6 +186,13 @@ impl SinglePatternMapping {
                     })
                 }
             }
+            Self::External(request, ty) => throw_module_not_found_error_expr(
+                request,
+                &format!(
+                    "Unsupported external type {:?} for dynamc import reference",
+                    ty
+                ),
+            ),
             Self::ModuleLoader(module_id) => Expr::Call(CallExpr {
                 callee: Callee::Expr(quote_expr!(
                     "__turbopack_require__($arg)",
@@ -265,10 +279,8 @@ async fn to_single_pattern_mapping(
 ) -> Result<SinglePatternMapping> {
     let module = match resolve_item {
         ModuleResolveResultItem::Module(module) => *module,
-        ModuleResolveResultItem::OriginalReferenceTypeExternal(s) => {
-            return Ok(SinglePatternMapping::OriginalReferenceTypeExternal(
-                s.clone(),
-            ))
+        ModuleResolveResultItem::External(s, ty) => {
+            return Ok(SinglePatternMapping::External(s.clone(), ty.clone()))
         }
         ModuleResolveResultItem::Ignore => return Ok(SinglePatternMapping::Ignored),
         _ => {

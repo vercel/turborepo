@@ -9,7 +9,7 @@ use turbo_tasks_fs::{glob::Glob, FileSystemPath};
 
 use super::{
     alias_map::{AliasMap, AliasTemplate},
-    AliasPattern, ResolveResult, ResolveResultItem,
+    AliasPattern, ExternalType, ResolveResult, ResolveResultItem,
 };
 use crate::resolve::{parse::Request, plugin::ResolvePlugin};
 
@@ -273,9 +273,9 @@ async fn import_mapping_to_result(
         ImportMapping::Direct(result) => ImportMapResult::Result(*result),
         ImportMapping::External(name) => ImportMapResult::Result(
             ResolveResult::primary(if let Some(name) = name {
-                ResolveResultItem::OriginalReferenceTypeExternal(name.to_string())
+                ResolveResultItem::External(name.to_string(), ExternalType::OriginalReference)
             } else if let Some(request) = request.await?.request() {
-                ResolveResultItem::OriginalReferenceTypeExternal(request)
+                ResolveResultItem::External(request, ExternalType::OriginalReference)
             } else {
                 bail!("Cannot resolve external reference without request")
             })
