@@ -22,7 +22,7 @@ pub const ROOT_PKG_NAME: &str = "//";
 
 #[derive(Debug)]
 pub struct PackageGraph {
-    workspace_graph: petgraph::Graph<PackageNode, ()>,
+    graph: petgraph::Graph<PackageNode, ()>,
     #[allow(dead_code)]
     node_lookup: HashMap<PackageNode, petgraph::graph::NodeIndex>,
     packages: HashMap<PackageName, PackageInfo>,
@@ -126,7 +126,7 @@ impl PackageGraph {
 
     #[tracing::instrument(skip(self))]
     pub fn validate(&self) -> Result<(), Error> {
-        graph::validate_graph(&self.workspace_graph).map_err(Error::InvalidPackageGraph)
+        graph::validate_graph(&self.graph).map_err(Error::InvalidPackageGraph)
     }
 
     pub fn remove_workspace_dependencies(&mut self) {
@@ -134,7 +134,7 @@ impl PackageGraph {
             .node_lookup
             .get(&PackageNode::Root)
             .expect("graph should have root package node");
-        self.workspace_graph.retain_edges(|graph, index| {
+        self.graph.retain_edges(|graph, index| {
             let Some((_src, dst)) = graph.edge_endpoints(index) else {
                 return false;
             };
@@ -199,10 +199,10 @@ impl PackageGraph {
     pub fn immediate_dependencies(&self, package: &PackageNode) -> Option<HashSet<&PackageNode>> {
         let index = self.node_lookup.get(package)?;
         Some(
-            self.workspace_graph
+            self.graph
                 .neighbors_directed(*index, petgraph::Outgoing)
                 .map(|index| {
-                    self.workspace_graph
+                    self.graph
                         .node_weight(index)
                         .expect("node index from neighbors should be present")
                 })
@@ -222,10 +222,10 @@ impl PackageGraph {
     pub fn immediate_ancestors(&self, package: &PackageNode) -> Option<HashSet<&PackageNode>> {
         let index = self.node_lookup.get(package)?;
         Some(
-            self.workspace_graph
+            self.graph
                 .neighbors_directed(*index, petgraph::Incoming)
                 .map(|index| {
-                    self.workspace_graph
+                    self.graph
                         .node_weight(index)
                         .expect("node index from neighbors should be present")
                 })
@@ -291,7 +291,7 @@ impl PackageGraph {
         let visitor = |event| {
             if let petgraph::visit::DfsEvent::Discover(n, _) = event {
                 visited.insert(
-                    self.workspace_graph
+                    self.graph
                         .node_weight(n)
                         .expect("node index found during dfs doesn't exist"),
                 );
@@ -299,11 +299,9 @@ impl PackageGraph {
         };
 
         match direction {
-            petgraph::Direction::Outgoing => {
-                depth_first_search(&self.workspace_graph, indices, visitor)
-            }
+            petgraph::Direction::Outgoing => depth_first_search(&self.graph, indices, visitor),
             petgraph::Direction::Incoming => {
-                depth_first_search(Reversed(&self.workspace_graph), indices, visitor)
+                depth_first_search(Reversed(&self.graph), indices, visitor)
             }
         };
 
