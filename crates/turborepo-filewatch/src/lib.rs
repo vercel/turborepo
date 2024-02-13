@@ -112,7 +112,6 @@ impl FileSystemWatcher {
             )));
         }
 
-        let (sender_tx, sender_rx) = OptionalWatch::new();
         let (receiver_tx, receiver_rx) = OptionalWatch::new();
         let (send_file_events, mut recv_file_events) = mpsc::channel(1024);
         let (exit_ch, exit_signal) = tokio::sync::oneshot::channel();
@@ -147,20 +146,15 @@ impl FileSystemWatcher {
 
                 let (sender, receiver) = broadcast::channel(1024);
 
-                // if either of these things fail, it means that events that we either won't
-                // receive events or don't have any downstream listeners. In either case, we
-                // should probably not run the watcher
-                _ = sender_tx.send(Some(sender.clone()));
-                _ = receiver_tx.send(Some(receiver));
+                if receiver_tx.send(Some(receiver)).is_err() {
+                    // if this fails, it means that nobody is listening (and
+                    // nobody ever will) likely because the
+                    // watcher has been dropped. We can just exit early.
+                    tracing::debug!("no downstream listeners, exiting");
+                    return;
+                }
 
-                watch_events(
-                    watcher,
-                    watch_root,
-                    recv_file_events,
-                    exit_signal,
-                    sender_rx,
-                )
-                .await;
+                watch_events(watcher, watch_root, recv_file_events, exit_signal, sender).await;
             }
         });
 
@@ -238,14 +232,8 @@ async fn watch_events(
     watch_root: AbsoluteSystemPathBuf,
     mut recv_file_events: mpsc::Receiver<EventResult>,
     exit_signal: tokio::sync::oneshot::Receiver<()>,
-    mut broadcast_sender: OptionalWatch<broadcast::Sender<Result<Event, NotifyError>>>,
+    broadcast_sender: broadcast::Sender<Result<Event, NotifyError>>,
 ) {
-    let Ok(broadcast_sender) = broadcast_sender.get().await.map(|b| b.clone()) else {
-        // if we are never sent a sender, we should not run the watcher
-        tracing::debug!("no downstream listeners, exiting");
-        return;
-    };
-
     let mut exit_signal = exit_signal;
     'outer: loop {
         tokio::select! {
