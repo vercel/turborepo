@@ -175,8 +175,8 @@ impl PackageGraph {
         )
     }
 
-    pub fn workspace_info(&self, workspace: &PackageName) -> Option<&PackageInfo> {
-        self.workspaces.get(workspace)
+    pub fn package_info(&self, package: &PackageName) -> Option<&PackageInfo> {
+        self.workspaces.get(package)
     }
 
     pub fn packages(&self) -> impl Iterator<Item = (&PackageName, &PackageInfo)> {

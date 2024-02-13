@@ -374,7 +374,7 @@ impl Run {
         }
 
         let root_workspace = pkg_dep_graph
-            .workspace_info(&PackageName::Root)
+            .package_info(&PackageName::Root)
             .expect("must have root workspace");
 
         let is_monorepo = !self.opts.run_opts.single_package;
