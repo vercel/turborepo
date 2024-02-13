@@ -253,14 +253,14 @@ impl<T: PackageDiscovery + Send + 'static> Subscriber<T> {
 
                 // if either of these fail, it means that there are no more subscribers and we
                 // should just ignore it, since we are likely closing
-                let a = if manager_tx.send(Some(state)).is_err() {
+                let manager_listeners = if manager_tx.send(Some(state)).is_err() {
                     tracing::debug!("no listeners for package manager");
                     false
                 } else {
                     true
                 };
 
-                let b = if package_data_tx
+                let package_data_listeners = if package_data_tx
                     .send(Some(
                         initial_discovery
                             .workspaces
@@ -277,7 +277,7 @@ impl<T: PackageDiscovery + Send + 'static> Subscriber<T> {
                 };
 
                 // if we have no listeners for either, we should just exit
-                if a || b {
+                if manager_listeners || package_data_listeners {
                     _ = recv_tx.send(Some(recv));
                 }
             }
