@@ -429,7 +429,7 @@ impl Run {
             global_env_mode = EnvMode::Strict;
         }
 
-        let workspaces = pkg_dep_graph.workspaces().collect();
+        let workspaces = pkg_dep_graph.packages().collect();
         let package_inputs_hashes = PackageInputsHashes::calculate_file_hashes(
             &scm,
             engine.tasks().par_bridge(),

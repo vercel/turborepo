@@ -179,7 +179,7 @@ impl PackageGraph {
         self.workspaces.get(workspace)
     }
 
-    pub fn workspaces(&self) -> impl Iterator<Item = (&PackageName, &PackageInfo)> {
+    pub fn packages(&self) -> impl Iterator<Item = (&PackageName, &PackageInfo)> {
         self.workspaces.iter()
     }
 
@@ -332,7 +332,7 @@ impl PackageGraph {
         let current = self.lockfile().ok_or(ChangedPackagesError::NoLockfile)?;
 
         let external_deps = self
-            .workspaces()
+            .packages()
             .filter_map(|(_name, info)| {
                 info.unresolved_external_dependencies.as_ref().map(|dep| {
                     (
