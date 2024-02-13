@@ -268,7 +268,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                     let dependencies = dependencies
                         .iter()
                         .flatten()
-                        .map(|i| i.as_workspace().to_owned())
+                        .map(|i| i.as_package_name().to_owned())
                         .collect::<Vec<_>>();
 
                     // flatmap through the option, the set, and then the optional package name
@@ -277,7 +277,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
 
                 if selector.include_dependents {
                     let dependents = self.pkg_graph.ancestors(&node);
-                    for dependent in dependents.iter().map(|i| i.as_workspace()) {
+                    for dependent in dependents.iter().map(|i| i.as_package_name()) {
                         walked_dependents.insert(dependent.clone());
 
                         // get the dependent's dependencies
@@ -291,7 +291,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                             let dependent_dependencies = dependent_dependencies
                                 .iter()
                                 .flatten()
-                                .map(|i| i.as_workspace().to_owned())
+                                .map(|i| i.as_package_name().to_owned())
                                 .collect::<HashSet<_>>();
 
                             walked_dependent_dependencies.extend(dependent_dependencies);

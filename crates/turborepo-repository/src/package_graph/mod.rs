@@ -108,7 +108,7 @@ pub enum PackageNode {
 }
 
 impl PackageNode {
-    pub fn as_workspace(&self) -> &PackageName {
+    pub fn as_package_name(&self) -> &PackageName {
         match self {
             PackageNode::Workspace(name) => name,
             PackageNode::Root => &PackageName::Root,
