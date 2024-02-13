@@ -52,4 +52,4 @@ jobs:
       - name: Run tests
         # Manually set TURBO_API to an empty string to override Hetzner env
         run: |
-          TURBO_API= turbo run test --filter=turborepo-repository --color --env-mode=strict
+          TURBO_API= turbo run test --filter={./packages/turborepo-repository}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
