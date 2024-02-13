@@ -154,6 +154,7 @@ impl PackageWatcher {
 struct Subscriber<T: PackageDiscovery> {
     /// we need to hold on to this. dropping it will close the downstream
     /// data dependencies
+    #[allow(clippy::type_complexity)]
     _recv_tx: Arc<watch::Sender<Option<broadcast::Receiver<Result<Event, NotifyError>>>>>,
 
     recv: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
