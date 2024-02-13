@@ -56,7 +56,7 @@ impl WorkspacePackage {
 pub struct PackageInfo {
     pub package_json: PackageJson,
     pub package_json_path: AnchoredSystemPathBuf,
-    pub unresolved_external_dependencies: Option<BTreeMap<String, String>>, // name -> version
+    pub unresolved_external_dependencies: Option<BTreeMap<String, PackageVersion>>, /* name -> version */
     pub transitive_dependencies: Option<HashSet<turborepo_lockfiles::Package>>,
 }
 
@@ -79,6 +79,8 @@ impl PackageInfo {
             .expect("at least one segment")
     }
 }
+
+type PackageVersion = String;
 
 // PackageName refers to a real package's name or the root package.
 // It's not the best name, because root isn't a real package, but it's
@@ -383,7 +385,10 @@ impl PackageGraph {
 
     // Returns a map of package name and version for external dependencies
     #[allow(dead_code)]
-    fn external_dependencies(&self, workspace: &PackageName) -> Option<&BTreeMap<String, String>> {
+    fn external_dependencies(
+        &self,
+        workspace: &PackageName,
+    ) -> Option<&BTreeMap<String, PackageVersion>> {
         let entry = self.workspaces.get(workspace)?;
         entry.unresolved_external_dependencies.as_ref()
     }
