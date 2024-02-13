@@ -187,7 +187,7 @@ impl Workspace {
             })
             .collect();
 
-        serializable_packages.sort();
+        serializable_packages.sort_by_key(|p| p.name.clone());
 
         Ok(serializable_packages)
     }
