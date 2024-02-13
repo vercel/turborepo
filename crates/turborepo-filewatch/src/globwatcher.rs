@@ -101,6 +101,8 @@ pub enum Error {
     Closed,
     #[error("globwatcher request timed out")]
     Timeout(#[from] tokio::time::error::Elapsed),
+    #[error("glob watching is unavailable")]
+    Unavailable,
 }
 
 impl From<mpsc::error::SendError<Query>> for Error {
@@ -122,7 +124,7 @@ pub struct GlobWatcher {
     // dropping the other sender for the broadcast channel, causing all receivers
     // to be notified of a close.
     _exit_ch: oneshot::Sender<()>,
-    query_ch: mpsc::Sender<CookiedRequest<Query>>,
+    query_ch_rx: OptionalWatch<mpsc::Sender<CookiedRequest<Query>>>,
 }
 
 #[derive(Debug)]
@@ -165,7 +167,7 @@ impl GlobWatcher {
         mut recv: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
     ) -> Self {
         let (exit_ch, exit_signal) = tokio::sync::oneshot::channel();
-        let (query_ch, query_recv) = mpsc::channel(256);
+        let (query_ch_tx, query_ch_rx) = OptionalWatch::new();
         let cookie_root = cookie_jar.root().to_owned();
         tokio::task::spawn(async move {
             let Ok(recv) = recv.get().await.map(|r| r.resubscribe()) else {
@@ -174,6 +176,14 @@ impl GlobWatcher {
                 return;
             };
 
+            // if the receiver is closed, it means the glob watcher is closed and we
+            // probably don't want to start the glob tracker
+            let (query_ch, query_recv) = mpsc::channel(128);
+            if query_ch_tx.send(Some(query_ch)).is_err() {
+                tracing::debug!("no queryers for glob watcher, exiting");
+                return;
+            }
+
             GlobTracker::new(root, cookie_root, exit_signal, recv, query_recv)
                 .watch()
                 .await
@@ -181,10 +191,14 @@ impl GlobWatcher {
         Self {
             cookie_jar,
             _exit_ch: exit_ch,
-            query_ch,
+            query_ch_rx,
         }
     }
 
+    /// Watch a set of globs for a given hash.
+    ///
+    /// This function will return `Error::Unavailable` if the globwatcher is not
+    /// yet available.
     pub async fn watch_globs(
         &self,
         hash: Hash,
@@ -197,11 +211,14 @@ impl GlobWatcher {
             glob_set: globs,
             resp: tx,
         };
-        let cookied_request = self.cookie_jar.cookie_request(req).await?;
-        self.query_ch.send(cookied_request).await?;
+        self.send_request(req).await?;
         tokio::time::timeout(timeout, rx).await??
     }
 
+    /// Get the globs that have changed for a given hash.
+    ///
+    /// This function will return `Error::Unavailable` if the globwatcher is not
+    /// yet available.
     pub async fn get_changed_globs(
         &self,
         hash: Hash,
@@ -214,9 +231,21 @@ impl GlobWatcher {
             candidates,
             resp: tx,
         };
-        let cookied_request = self.cookie_jar.cookie_request(req).await?;
-        self.query_ch.send(cookied_request).await?;
+        self.send_request(req).await?;
         tokio::time::timeout(timeout, rx).await??
+    }
+
+    async fn send_request(&self, req: Query) -> Result<(), Error> {
+        let cookied_request = self.cookie_jar.cookie_request(req).await?;
+        let mut query_ch = self.query_ch_rx.clone();
+        let query_ch = query_ch
+            .get_immediate()
+            .ok_or(Error::Unavailable)?
+            .map(|ch| ch.clone())
+            .map_err(|_| Error::Unavailable)?;
+
+        query_ch.send(cookied_request).await?;
+        Ok(())
     }
 }
 

@@ -1,3 +1,4 @@
+use futures::FutureExt;
 use tokio::sync::watch::{self, error::RecvError, Ref};
 
 #[derive(Debug)]
@@ -15,13 +16,14 @@ impl<T> OptionalWatch<T> {
     /// Create a new `OptionalWatch` with no initial value.
     ///
     /// Keep in mind that when the sender is dropped, down stream
-    /// dependencies will get a RecvError.
+    /// dependencies that are currently waiting will get a RecvError.
     pub fn new() -> (watch::Sender<Option<T>>, OptionalWatch<T>) {
         let (tx, rx) = watch::channel(None);
         (tx, OptionalWatch(rx))
     }
 
     /// Create a new `OptionalWatch` with an initial, unchanging value.
+    #[cfg(test)]
     pub fn once(init: T) -> Self {
         let (_tx, rx) = watch::channel(Some(init));
         OptionalWatch(rx)
@@ -36,6 +38,11 @@ impl<T> OptionalWatch<T> {
     pub async fn get(&mut self) -> Result<SomeRef<'_, T>, RecvError> {
         let recv = self.0.wait_for(|f| f.is_some()).await?;
         Ok(SomeRef(recv))
+    }
+
+    /// Get the current value, if it is available.
+    pub fn get_immediate(&mut self) -> Option<Result<SomeRef<'_, T>, RecvError>> {
+        self.get().now_or_never()
     }
 }
 
