@@ -9,7 +9,7 @@ use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
     change_mapper::{ChangeMapper, PackageChanges},
     inference::RepoState as WorkspaceState,
-    package_graph::{PackageGraph, PackageNode, WorkspaceName, WorkspacePackage, ROOT_PKG_NAME},
+    package_graph::{PackageGraph, PackageName, PackageNode, WorkspacePackage, ROOT_PKG_NAME},
 };
 mod internal;
 
@@ -72,7 +72,7 @@ impl Package {
         graph: &PackageGraph,
         workspace_path: &AbsoluteSystemPath,
     ) -> Vec<Package> {
-        let node = PackageNode::Workspace(WorkspaceName::Other(self.name.clone()));
+        let node = PackageNode::Workspace(PackageName::Other(self.name.clone()));
         let ancestors = match graph.immediate_ancestors(&node) {
             Some(ancestors) => ancestors,
             None => return vec![],
@@ -178,8 +178,8 @@ impl Workspace {
         let mut serializable_packages: Vec<Package> = packages
             .into_iter()
             .filter(|p| match &p.name {
-                WorkspaceName::Root => false,
-                WorkspaceName::Other(name) => name != ROOT_PKG_NAME,
+                PackageName::Root => false,
+                PackageName::Other(name) => name != ROOT_PKG_NAME,
             })
             .map(|p| {
                 let package_path = workspace_root.resolve(&p.path);
