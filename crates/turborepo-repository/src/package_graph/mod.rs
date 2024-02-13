@@ -69,7 +69,7 @@ impl PackageInfo {
         &self.package_json_path
     }
 
-    /// Get the path to this workspace.
+    /// Get the path to this package.
     ///
     /// note: This is infallible because `package_json_path` is guaranteed to
     /// have       at least one segment
@@ -133,7 +133,7 @@ impl PackageGraph {
         let root_index = self
             .node_lookup
             .get(&PackageNode::Root)
-            .expect("graph should have root workspace node");
+            .expect("graph should have root package node");
         self.workspace_graph.retain_edges(|graph, index| {
             let Some((_src, dst)) = graph.edge_endpoints(index) else {
                 return false;
@@ -143,7 +143,7 @@ impl PackageGraph {
     }
 
     /// Returns the number of workspaces in the repo
-    /// *including* the root workspace.
+    /// *including* the root package.
     pub fn len(&self) -> usize {
         self.packages.len()
     }
@@ -189,7 +189,7 @@ impl PackageGraph {
     }
 
     /// Gets all the nodes that directly depend on this one, that is to say
-    /// have a edge to `workspace`.
+    /// have a edge to `package`.
     ///
     /// Example:
     ///
@@ -211,7 +211,7 @@ impl PackageGraph {
     }
 
     /// Gets all the nodes that directly depend on this one, that is to say
-    /// have a edge to `workspace`.
+    /// have a edge to `package`.
     ///
     /// Example:
     ///
@@ -233,7 +233,7 @@ impl PackageGraph {
         )
     }
 
-    /// For a given workspace in the repo, returns the set of workspaces
+    /// For a given package in the repo, returns the set of workspaces
     /// that this one depends on, excluding those that are unresolved.
     ///
     /// Example:
@@ -249,7 +249,7 @@ impl PackageGraph {
         dependencies
     }
 
-    /// For a given workspace in the repo, returns the set of workspaces
+    /// For a given package in the repo, returns the set of workspaces
     /// that depend on this one, excluding those that are unresolved.
     ///
     /// Example:
@@ -264,7 +264,7 @@ impl PackageGraph {
         dependents
     }
 
-    /// Returns the transitive closure of the given nodes in the workspace
+    /// Returns the transitive closure of the given nodes in the package
     /// graph. Note that this includes the nodes themselves. If you want just
     /// the dependencies, or the dependents, use `dependencies` or `ancestors`.
     /// Alternatively, if you need just direct dependents, use
@@ -323,7 +323,7 @@ impl PackageGraph {
     }
 
     /// Returns a list of changed packages based on the contents of a previous
-    /// `Lockfile`. This assumes that none of the package.json in the workspace
+    /// `Lockfile`. This assumes that none of the package.json in the package
     /// change, it is the responsibility of the caller to verify this.
     pub fn changed_packages_from_lockfile(
         &self,
