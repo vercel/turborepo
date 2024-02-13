@@ -32,8 +32,9 @@ jobs:
 
       - name: Lil test
         run: "echo Part 1;
-          echo '::group::\e[;31mError group\e[;0m';
+          echo '\e[;31mError group\e[;0m';
           echo Inside the error;
+          echo '\e[;31mEnd Error group\e[;0m';
           echo '::group::\e[;31mAnother group\e[;0m';
           echo Inside the error;
           echo '::endgroup::';
