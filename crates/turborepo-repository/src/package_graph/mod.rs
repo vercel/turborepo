@@ -25,7 +25,7 @@ pub struct PackageGraph {
     workspace_graph: petgraph::Graph<PackageNode, ()>,
     #[allow(dead_code)]
     node_lookup: HashMap<PackageNode, petgraph::graph::NodeIndex>,
-    workspaces: HashMap<PackageName, PackageInfo>,
+    packages: HashMap<PackageName, PackageInfo>,
     package_manager: PackageManager,
     lockfile: Option<Box<dyn Lockfile>>,
 }
@@ -145,11 +145,11 @@ impl PackageGraph {
     /// Returns the number of workspaces in the repo
     /// *including* the root workspace.
     pub fn len(&self) -> usize {
-        self.workspaces.len()
+        self.packages.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.workspaces.is_empty()
+        self.packages.is_empty()
     }
 
     pub fn package_manager(&self) -> &PackageManager {
@@ -161,12 +161,12 @@ impl PackageGraph {
     }
 
     pub fn package_json(&self, package: &PackageName) -> Option<&PackageJson> {
-        let entry = self.workspaces.get(package)?;
+        let entry = self.packages.get(package)?;
         Some(&entry.package_json)
     }
 
     pub fn package_dir(&self, package: &PackageName) -> Option<&AnchoredSystemPath> {
-        let entry = self.workspaces.get(package)?;
+        let entry = self.packages.get(package)?;
         Some(
             entry
                 .package_json_path()
@@ -176,11 +176,11 @@ impl PackageGraph {
     }
 
     pub fn package_info(&self, package: &PackageName) -> Option<&PackageInfo> {
-        self.workspaces.get(package)
+        self.packages.get(package)
     }
 
     pub fn packages(&self) -> impl Iterator<Item = (&PackageName, &PackageInfo)> {
-        self.workspaces.iter()
+        self.packages.iter()
     }
 
     pub fn root_package_json(&self) -> &PackageJson {
@@ -316,7 +316,7 @@ impl PackageGraph {
     ) -> HashSet<&turborepo_lockfiles::Package> {
         workspaces
             .into_iter()
-            .filter_map(|workspace| self.workspaces.get(workspace))
+            .filter_map(|workspace| self.packages.get(workspace))
             .filter_map(|entry| entry.transitive_dependencies.as_ref())
             .flatten()
             .collect()
@@ -352,7 +352,7 @@ impl PackageGraph {
         let changed = if global_change {
             None
         } else {
-            self.workspaces
+            self.packages
                 .iter()
                 .filter(|(_name, info)| {
                     closures.get(info.package_path().to_unix().as_str())
@@ -374,7 +374,7 @@ impl PackageGraph {
         };
 
         Ok(changed.unwrap_or_else(|| {
-            self.workspaces
+            self.packages
                 .iter()
                 .map(|(name, info)| WorkspacePackage {
                     name: name.clone(),
@@ -390,7 +390,7 @@ impl PackageGraph {
         &self,
         package: &PackageName,
     ) -> Option<&BTreeMap<PackageKey, PackageVersion>> {
-        let entry = self.workspaces.get(package)?;
+        let entry = self.packages.get(package)?;
         entry.unresolved_external_dependencies.as_ref()
     }
 }

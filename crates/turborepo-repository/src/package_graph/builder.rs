@@ -334,7 +334,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
         Ok(PackageGraph {
             workspace_graph,
             node_lookup,
-            workspaces,
+            packages: workspaces,
             lockfile,
             package_manager,
         })
@@ -516,7 +516,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedLockfile, T> {
         Ok(PackageGraph {
             workspace_graph,
             node_lookup,
-            workspaces,
+            packages: workspaces,
             package_manager,
             lockfile,
         })
