@@ -33,4 +33,11 @@ export class Workspace {
    * dependents (i.e. the packages that depend on each of those packages).
    */
   findPackagesAndDependents(): Promise<Record<string, Array<string>>>;
+  /**
+   * Given a set of "changed" files, returns a set of packages that are
+   * "affected" by the changes. The `files` argument is expected to be a list
+   * of strings relative to the monorepo root and use the current system's
+   * path separator.
+   */
+  affectedPackages(files: Array<string>): Promise<Array<Package>>;
 }
