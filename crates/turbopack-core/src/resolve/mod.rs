@@ -1899,8 +1899,8 @@ async fn resolve_module_request(
     // "[baseUrl]/foo/bar" or "[baseUrl]/node_modules/foo/bar", and we'll need to
     // try both.
     for item in &result.packages {
-        match item {
-            &FindPackageItem::PackageDirectory(package_path) => {
+        match *item {
+            FindPackageItem::PackageDirectory(package_path) => {
                 results.push(resolve_into_package(
                     Value::new(path.clone()),
                     package_path,
@@ -1908,7 +1908,7 @@ async fn resolve_module_request(
                     options,
                 ));
             }
-            &FindPackageItem::PackageFile(package_path) => {
+            FindPackageItem::PackageFile(package_path) => {
                 if path.is_match("") {
                     let resolved = resolved(
                         RequestKey::new(".".to_string()),
