@@ -225,6 +225,7 @@ impl ValueDefault for TsConfigResolveOptions {
 #[turbo_tasks::function]
 pub async fn tsconfig_resolve_options(
     tsconfig: Vc<FileSystemPath>,
+    resolve_for_types: bool,
 ) -> Result<Vc<TsConfigResolveOptions>> {
     let configs = read_tsconfigs(
         tsconfig.read(),
@@ -271,7 +272,7 @@ pub async fn tsconfig_resolve_options(
                                 let s = entry.as_str()?;
 
                                 match s {
-                                    s if s.ends_with("d.ts") => None,
+                                    s if s.ends_with("d.ts") && !resolve_for_types => None,
                                     s if s.starts_with("./") || s.starts_with("../") => {
                                         Some(s.to_string())
                                     }

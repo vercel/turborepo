@@ -64,6 +64,7 @@ use turbopack_wasm::{module_asset::WebAssemblyModuleAsset, source::WebAssemblySo
 
 use self::{
     module_options::CustomModuleType,
+    resolve::resolve_options_for_types,
     resolve_options_context::ResolveOptionsContext,
     transition::{Transition, TransitionsByName},
 };
@@ -466,6 +467,9 @@ async fn process_default_internal(
                     ModuleRuleEffect::ModuleType(module) => {
                         current_module_type = Some(*module);
                     }
+                    ModuleRuleEffect::Ignore => {
+                        return Ok(ProcessResult::Ignore.cell());
+                    }
                     ModuleRuleEffect::ExtendEcmascriptTransforms { prepend, append } => {
                         current_module_type = match current_module_type {
                             Some(ModuleType::Ecmascript {
@@ -561,7 +565,7 @@ impl AssetContext for ModuleAssetContext {
     async fn resolve_options(
         self: Vc<Self>,
         origin_path: Vc<FileSystemPath>,
-        _reference_type: Value<ReferenceType>,
+        reference_type: Value<ReferenceType>,
     ) -> Result<Vc<ResolveOptions>> {
         let this = self.await?;
         let module_asset_context = if let Some(transition) = this.transition {
@@ -569,11 +573,16 @@ impl AssetContext for ModuleAssetContext {
         } else {
             self
         };
+        let path = origin_path.parent().resolve().await?;
+        let resolve_options_context = module_asset_context.await?.resolve_options_context;
         // TODO move `apply_commonjs/esm_resolve_options` etc. to here
-        Ok(resolve_options(
-            origin_path.parent().resolve().await?,
-            module_asset_context.await?.resolve_options_context,
-        ))
+        Ok(
+            if matches!(reference_type.into_value(), ReferenceType::TypeScript(_)) {
+                resolve_options_for_types(path, resolve_options_context)
+            } else {
+                resolve_options(path, resolve_options_context)
+            },
+        )
     }
 
     #[turbo_tasks::function]

@@ -85,6 +85,9 @@ impl ModuleRule {
 #[derive(Debug, Clone)]
 pub enum ModuleRuleEffect {
     ModuleType(ModuleType),
+    /// Ignore the module, and use different alternatives if possible. Otherwise
+    /// resolve to nothing.
+    Ignore,
     /// Allow to extend an existing Ecmascript module rules for the additional
     /// transforms. First argument will prepend the existing transforms, and
     /// the second argument will append the new transforms.

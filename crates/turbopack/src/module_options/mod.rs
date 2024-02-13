@@ -352,6 +352,13 @@ impl ModuleOptions {
             ),
         ];
 
+        if !enable_types {
+            rules.push(ModuleRule::new(
+                ModuleRuleCondition::ResourcePathEndsWith(".d.ts".to_string()),
+                vec![ModuleRuleEffect::Ignore],
+            ));
+        }
+
         if enable_raw_css {
             rules.extend([
                 ModuleRule::new(

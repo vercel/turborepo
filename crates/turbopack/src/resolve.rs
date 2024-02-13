@@ -257,17 +257,36 @@ async fn base_resolve_options(
     .into())
 }
 
-#[turbo_tasks::function]
-pub async fn resolve_options(
+pub fn resolve_options(
     resolve_path: Vc<FileSystemPath>,
     options_context: Vc<ResolveOptionsContext>,
+) -> Vc<ResolveOptions> {
+    resolve_options_internal(resolve_path, options_context, false)
+}
+
+pub fn resolve_options_for_types(
+    resolve_path: Vc<FileSystemPath>,
+    options_context: Vc<ResolveOptionsContext>,
+) -> Vc<ResolveOptions> {
+    resolve_options_internal(resolve_path, options_context, true)
+}
+
+#[turbo_tasks::function]
+async fn resolve_options_internal(
+    resolve_path: Vc<FileSystemPath>,
+    options_context: Vc<ResolveOptionsContext>,
+    resolve_for_types: bool,
 ) -> Result<Vc<ResolveOptions>> {
     let options_context_value = options_context.await?;
     if !options_context_value.rules.is_empty() {
         let context_value = &*resolve_path.await?;
         for (condition, new_options_context) in options_context_value.rules.iter() {
             if condition.matches(context_value).await? {
-                return Ok(resolve_options(resolve_path, *new_options_context));
+                return Ok(resolve_options_internal(
+                    resolve_path,
+                    *new_options_context,
+                    resolve_for_types,
+                ));
             }
         }
     }
@@ -277,9 +296,10 @@ pub async fn resolve_options(
     let resolve_options = if options_context_value.enable_typescript {
         let tsconfig = find_context_file(resolve_path, tsconfig()).await?;
         match *tsconfig {
-            FindContextFileResult::Found(path, _) => {
-                apply_tsconfig_resolve_options(resolve_options, tsconfig_resolve_options(path))
-            }
+            FindContextFileResult::Found(path, _) => apply_tsconfig_resolve_options(
+                resolve_options,
+                tsconfig_resolve_options(path, resolve_for_types),
+            ),
             FindContextFileResult::NotFound(_) => resolve_options,
         }
     } else {
