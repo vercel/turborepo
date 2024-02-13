@@ -160,8 +160,8 @@ impl PackageGraph {
         self.lockfile.as_deref()
     }
 
-    pub fn package_json(&self, workspace: &PackageName) -> Option<&PackageJson> {
-        let entry = self.workspaces.get(workspace)?;
+    pub fn package_json(&self, package: &PackageName) -> Option<&PackageJson> {
+        let entry = self.workspaces.get(package)?;
         Some(&entry.package_json)
     }
 
@@ -388,9 +388,9 @@ impl PackageGraph {
     #[allow(dead_code)]
     fn external_dependencies(
         &self,
-        workspace: &PackageName,
+        package: &PackageName,
     ) -> Option<&BTreeMap<PackageKey, PackageVersion>> {
-        let entry = self.workspaces.get(workspace)?;
+        let entry = self.workspaces.get(package)?;
         entry.unresolved_external_dependencies.as_ref()
     }
 }
