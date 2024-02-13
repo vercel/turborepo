@@ -303,7 +303,7 @@ async fn parse_content(
                 );
 
                 let mut parser = Parser::new_from(lexer);
-                let program_result = parser.parse_program();
+                let program_result = parser.parse_module().map(Program::Module);
 
                 let mut has_errors = false;
                 for e in parser.take_errors() {
