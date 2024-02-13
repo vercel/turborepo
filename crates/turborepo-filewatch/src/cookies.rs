@@ -189,17 +189,18 @@ impl CookieWriter {
         request: T,
     ) -> Result<CookiedRequest<T>, CookieError> {
         // we need to write the cookie from a single task so as to serialize them
-        let (resp_tx, resp_rx) = oneshot::channel();
+        tokio::time::timeout(self.timeout, self.cookie_request_inner(request)).await?
+    }
 
-        // make sure the cookie writer is ready
+    async fn cookie_request_inner<T>(&self, request: T) -> Result<CookiedRequest<T>, CookieError> {
+        let (resp_tx, resp_rx) = oneshot::channel();
         let mut cookie_request_tx = self.cookie_request_tx.clone();
         let Ok(cookie_request_tx) = cookie_request_tx.get().await.map(|s| s.to_owned()) else {
             // the cookie queue is not ready and will never be ready
             return Err(CookieError::Unavailable);
         };
-
         cookie_request_tx.send(resp_tx).await?;
-        let serial = tokio::time::timeout(self.timeout, resp_rx).await???;
+        let serial = resp_rx.await??;
         Ok(CookiedRequest { request, serial })
     }
 }
