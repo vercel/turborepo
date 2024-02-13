@@ -56,7 +56,7 @@ impl WorkspacePackage {
 pub struct PackageInfo {
     pub package_json: PackageJson,
     pub package_json_path: AnchoredSystemPathBuf,
-    pub unresolved_external_dependencies: Option<BTreeMap<String, PackageVersion>>, /* name -> version */
+    pub unresolved_external_dependencies: Option<BTreeMap<PackageKey, PackageVersion>>, /* name -> version */
     pub transitive_dependencies: Option<HashSet<turborepo_lockfiles::Package>>,
 }
 
@@ -80,6 +80,7 @@ impl PackageInfo {
     }
 }
 
+type PackageKey = String;
 type PackageVersion = String;
 
 // PackageName refers to a real package's name or the root package.
@@ -388,7 +389,7 @@ impl PackageGraph {
     fn external_dependencies(
         &self,
         workspace: &PackageName,
-    ) -> Option<&BTreeMap<String, PackageVersion>> {
+    ) -> Option<&BTreeMap<PackageKey, PackageVersion>> {
         let entry = self.workspaces.get(workspace)?;
         entry.unresolved_external_dependencies.as_ref()
     }
