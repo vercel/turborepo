@@ -129,7 +129,7 @@ impl PackageGraph {
         graph::validate_graph(&self.graph).map_err(Error::InvalidPackageGraph)
     }
 
-    pub fn remove_workspace_dependencies(&mut self) {
+    pub fn remove_package_dependencies(&mut self) {
         let root_index = self
             .node_lookup
             .get(&PackageNode::Root)

@@ -440,7 +440,7 @@ impl Run {
         )?;
 
         if self.opts.run_opts.parallel {
-            pkg_dep_graph.remove_workspace_dependencies();
+            pkg_dep_graph.remove_package_dependencies();
             engine = self.build_engine(&pkg_dep_graph, &root_turbo_json, &filtered_pkgs)?;
         }
 
