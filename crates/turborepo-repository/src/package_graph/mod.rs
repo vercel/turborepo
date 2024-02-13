@@ -165,8 +165,8 @@ impl PackageGraph {
         Some(&entry.package_json)
     }
 
-    pub fn workspace_dir(&self, workspace: &PackageName) -> Option<&AnchoredSystemPath> {
-        let entry = self.workspaces.get(workspace)?;
+    pub fn package_dir(&self, package: &PackageName) -> Option<&AnchoredSystemPath> {
+        let entry = self.workspaces.get(package)?;
         Some(
             entry
                 .package_json_path()
