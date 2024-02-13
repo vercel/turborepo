@@ -14,7 +14,7 @@ use turborepo_repository::{
 mod internal;
 
 #[napi]
-#[derive(PartialEq, Eq, Hash, Clone, Ord, PartialOrd)]
+#[derive(PartialEq, Eq, Hash, Clone)]
 pub struct Package {
     pub name: String,
     /// The absolute path to the package root.

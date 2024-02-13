@@ -36,7 +36,7 @@ pub struct PackageGraph {
 /// There are other structs in this module that have "Workspace" in the name,
 /// but they do NOT follow the glossary, and instead mean "package" when they
 /// say Workspace. Some of these are labeled as such.
-#[derive(Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[derive(Eq, PartialEq, Hash)]
 pub struct WorkspacePackage {
     pub name: WorkspaceName,
     pub path: AnchoredSystemPathBuf,
