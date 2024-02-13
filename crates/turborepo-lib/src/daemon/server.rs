@@ -99,7 +99,7 @@ impl FileWatching {
     /// waiting for the filewatcher to be ready. Using `OptionalWatch`,
     /// dependent services can wait for resources they need to become
     /// available, and the server can start up without waiting for them.
-    pub fn new<PD: PackageDiscovery + Send + 'static>(
+    pub fn new<PD: PackageDiscovery + Send + Sync + 'static>(
         repo_root: AbsoluteSystemPathBuf,
         backup_discovery: PD,
     ) -> Result<FileWatching, WatchError> {

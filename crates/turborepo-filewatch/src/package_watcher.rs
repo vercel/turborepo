@@ -9,7 +9,7 @@ use tokio::{
     join,
     sync::{
         broadcast::{self, error::RecvError},
-        oneshot, watch, Mutex as AsyncMutex,
+        oneshot, watch,
     },
 };
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
@@ -83,7 +83,7 @@ impl PackageWatcher {
     /// Creates a new package watcher whose current package data can be queried.
     /// `backup_discovery` is used to perform the initial discovery of packages,
     /// to populate the state before we can watch.
-    pub fn new<T: PackageDiscovery + Send + 'static>(
+    pub fn new<T: PackageDiscovery + Send + Sync + 'static>(
         root: AbsoluteSystemPathBuf,
         recv: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
         backup_discovery: T,
@@ -157,7 +157,7 @@ struct Subscriber<T: PackageDiscovery> {
     _recv_tx: Arc<watch::Sender<Option<broadcast::Receiver<Result<Event, NotifyError>>>>>,
 
     recv: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
-    backup_discovery: Arc<AsyncMutex<T>>,
+    backup_discovery: Arc<T>,
 
     repo_root: AbsoluteSystemPathBuf,
     root_package_json_path: AbsoluteSystemPathBuf,
@@ -179,7 +179,7 @@ struct PackageManagerState {
     workspace_config_path: AbsoluteSystemPathBuf,
 }
 
-impl<T: PackageDiscovery + Send + 'static> Subscriber<T> {
+impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
     /// Creates a new instance of PackageDiscovery. This will start a task that
     /// performs the initial discovery using the `backup_discovery` of your
     /// choice, and then listens to file system events to keep the package
@@ -200,7 +200,7 @@ impl<T: PackageDiscovery + Send + 'static> Subscriber<T> {
         let (recv_tx, recv_rx) = OptionalWatch::new();
         let recv_tx = Arc::new(recv_tx);
 
-        let backup_discovery = Arc::new(AsyncMutex::new(backup_discovery));
+        let backup_discovery = Arc::new(backup_discovery);
 
         let package_json_path = repo_root.join_component("package.json");
 
@@ -220,7 +220,7 @@ impl<T: PackageDiscovery + Send + 'static> Subscriber<T> {
                     return;
                 };
 
-                let initial_discovery = backup_discovery.lock().await.discover_packages().await;
+                let initial_discovery = backup_discovery.discover_packages().await;
 
                 let Ok(initial_discovery) = initial_discovery else {
                     // if initial discovery fails, there is nothing we can do. we should just report
@@ -536,12 +536,7 @@ impl<T: PackageDiscovery + Send + 'static> Subscriber<T> {
             self.package_data_tx.send(None).ok();
         }
         tracing::debug!("root package.json changed, refreshing package manager and globs");
-        let resp = self
-            .backup_discovery
-            .lock()
-            .await
-            .discover_packages()
-            .await?;
+        let resp = self.backup_discovery.discover_packages().await?;
         let new_manager = Self::update_package_manager(
             &resp.package_manager,
             &self.repo_root,
@@ -602,7 +597,7 @@ impl<T: PackageDiscovery + Send + 'static> Subscriber<T> {
             return;
         }
 
-        if let Ok(response) = self.backup_discovery.lock().await.discover_packages().await {
+        if let Ok(response) = self.backup_discovery.discover_packages().await {
             self.package_data_tx.send_modify(|d| {
                 let new_data = response
                     .workspaces
