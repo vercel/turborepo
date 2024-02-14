@@ -378,6 +378,44 @@ mod test {
     }
 
     #[test]
+    fn test_marginals() -> io::Result<()> {
+        let sink = OutputSink::new(Vec::new(), Vec::new());
+        let mut group1_logger = sink.logger(OutputClientBehavior::Grouped);
+        group1_logger
+            .with_header_footer(Some("good header\n".into()), Some("good footer\n".into()));
+        group1_logger
+            .with_error_header_footer(Some("bad header\n".into()), Some("bad footer\n".into()));
+        let mut group2_logger = sink.logger(OutputClientBehavior::Grouped);
+        group2_logger
+            .with_header_footer(Some("good header\n".into()), Some("good footer\n".into()));
+
+        let mut group1_out = group1_logger.stdout();
+        let mut group2_out = group2_logger.stdout();
+
+        writeln!(&mut group2_out, "output for 2")?;
+        writeln!(&mut group1_out, "output for 1")?;
+        let group1_logs = group1_logger
+            .finish(true)?
+            .expect("grouped logs should have buffer");
+        let group2_logs = group2_logger
+            .finish(true)?
+            .expect("grouped logs should have buffer");
+
+        assert_eq!(group1_logs, b"output for 1\n");
+        assert_eq!(group2_logs, b"output for 2\n");
+
+        let SinkWriters { out, .. } = Arc::into_inner(sink.writers).unwrap().into_inner().unwrap();
+        // Error marginals used when present, primary ones used if errors aren't
+        // provided
+        assert_eq!(
+            out,
+            b"bad header\noutput for 1\nbad footer\ngood header\noutput for 2\ngood header\n"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn test_loggers_wait_for_newline() {
         let b1 = Arc::new(Barrier::new(2));
         let b2 = Arc::clone(&b1);
