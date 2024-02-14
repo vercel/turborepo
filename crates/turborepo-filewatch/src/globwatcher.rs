@@ -124,7 +124,7 @@ pub struct GlobWatcher {
     // dropping the other sender for the broadcast channel, causing all receivers
     // to be notified of a close.
     _exit_ch: oneshot::Sender<()>,
-    query_ch_rx: OptionalWatch<mpsc::Sender<CookiedRequest<Query>>>,
+    query_ch_lazy: OptionalWatch<mpsc::Sender<CookiedRequest<Query>>>,
 }
 
 #[derive(Debug)]
@@ -167,7 +167,7 @@ impl GlobWatcher {
         mut recv: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
     ) -> Self {
         let (exit_ch, exit_signal) = tokio::sync::oneshot::channel();
-        let (query_ch_tx, query_ch_rx) = OptionalWatch::new();
+        let (query_ch_tx, query_ch_lazy) = OptionalWatch::new();
         let cookie_root = cookie_jar.root().to_owned();
         tokio::task::spawn(async move {
             let Ok(recv) = recv.get().await.map(|r| r.resubscribe()) else {
@@ -191,7 +191,7 @@ impl GlobWatcher {
         Self {
             cookie_jar,
             _exit_ch: exit_ch,
-            query_ch_rx,
+            query_ch_lazy,
         }
     }
 
@@ -237,7 +237,7 @@ impl GlobWatcher {
 
     async fn send_request(&self, req: Query) -> Result<(), Error> {
         let cookied_request = self.cookie_jar.cookie_request(req).await?;
-        let mut query_ch = self.query_ch_rx.clone();
+        let mut query_ch = self.query_ch_lazy.clone();
         let query_ch = query_ch
             .get_immediate()
             .ok_or(Error::Unavailable)?

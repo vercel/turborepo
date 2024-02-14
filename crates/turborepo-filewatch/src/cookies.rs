@@ -34,7 +34,8 @@ pub enum CookieError {
 pub struct CookieWriter {
     root: AbsoluteSystemPathBuf,
     timeout: Duration,
-    cookie_request_tx: OptionalWatch<mpsc::Sender<oneshot::Sender<Result<usize, CookieError>>>>,
+    cookie_request_sender_lazy:
+        OptionalWatch<mpsc::Sender<oneshot::Sender<Result<usize, CookieError>>>>,
     // _exit_ch exists to trigger a close on the receiver when all instances
     // of this struct are dropped. The task that is receiving events will exit,
     // dropping the other sender for the broadcast channel, causing all receivers
@@ -147,7 +148,7 @@ impl CookieWriter {
         timeout: Duration,
         mut recv: OptionalWatch<broadcast::Receiver<Result<notify::Event, NotifyError>>>,
     ) -> Self {
-        let (cookie_request_sender_tx, cookie_request_sender_rx) = OptionalWatch::new();
+        let (cookie_request_sender_tx, cookie_request_sender_lazy) = OptionalWatch::new();
         let (exit_ch, exit_signal) = mpsc::channel(16);
         tokio::spawn({
             let root = root.to_owned();
@@ -175,7 +176,7 @@ impl CookieWriter {
         Self {
             root: root.to_owned(),
             timeout,
-            cookie_request_tx: cookie_request_sender_rx,
+            cookie_request_sender_lazy,
             _exit_ch: exit_ch,
         }
     }
@@ -194,7 +195,7 @@ impl CookieWriter {
 
     async fn cookie_request_inner<T>(&self, request: T) -> Result<CookiedRequest<T>, CookieError> {
         let (resp_tx, resp_rx) = oneshot::channel();
-        let mut cookie_request_tx = self.cookie_request_tx.clone();
+        let mut cookie_request_tx = self.cookie_request_sender_lazy.clone();
         let Ok(cookie_request_tx) = cookie_request_tx.get().await.map(|s| s.to_owned()) else {
             // the cookie queue is not ready and will never be ready
             return Err(CookieError::Unavailable);

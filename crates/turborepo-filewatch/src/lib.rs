@@ -112,7 +112,7 @@ impl FileSystemWatcher {
             )));
         }
 
-        let (receiver_tx, receiver_rx) = OptionalWatch::new();
+        let (file_events_receiver_tx, file_events_receiver_lazy) = OptionalWatch::new();
         let (send_file_events, mut recv_file_events) = mpsc::channel(1024);
         let (exit_ch, exit_signal) = tokio::sync::oneshot::channel();
 
@@ -146,7 +146,7 @@ impl FileSystemWatcher {
 
                 let (sender, receiver) = broadcast::channel(1024);
 
-                if receiver_tx.send(Some(receiver)).is_err() {
+                if file_events_receiver_tx.send(Some(receiver)).is_err() {
                     // if this fails, it means that nobody is listening (and
                     // nobody ever will) likely because the
                     // watcher has been dropped. We can just exit early.
@@ -159,7 +159,7 @@ impl FileSystemWatcher {
         });
 
         Ok(Self {
-            receiver: receiver_rx,
+            receiver: file_events_receiver_lazy,
             _exit_ch: exit_ch,
             cookie_dir,
         })
