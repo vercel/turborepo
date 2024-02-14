@@ -201,7 +201,7 @@ impl Engine<Built> {
 
                 // check if the package for the task has that task in its package.json
                 let info = package_graph
-                    .workspace_info(&PackageName::from(task_id.package().to_string()))
+                    .package_info(&PackageName::from(task_id.package().to_string()))
                     .expect("package graph should contain workspace info for task package");
 
                 let package_has_task = info

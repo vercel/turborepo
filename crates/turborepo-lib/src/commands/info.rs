@@ -101,7 +101,7 @@ pub async fn run(
 impl<'a> RepositoryDetails<'a> {
     fn new(package_graph: &'a PackageGraph, config: &'a ConfigurationOptions) -> Self {
         let mut workspaces: Vec<_> = package_graph
-            .workspaces()
+            .packages()
             .map(|(workspace_name, workspace_info)| {
                 let workspace_details = RepositoryWorkspaceDetails {
                     path: workspace_info.package_path(),

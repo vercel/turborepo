@@ -467,7 +467,7 @@ impl<'a> RunSummary<'a> {
                     continue;
                 }
                 let dir = pkg_dep_graph
-                    .workspace_info(pkg)
+                    .package_info(pkg)
                     .ok_or_else(|| Error::MissingWorkspace(pkg.clone()))?
                     .package_path();
 
