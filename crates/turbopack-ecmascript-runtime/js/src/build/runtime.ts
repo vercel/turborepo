@@ -189,7 +189,7 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
       w: loadWebAssembly,
       u: loadWebAssemblyModule,
       g: globalThis,
-      p: resolveAbsolutePath,
+      P: resolveAbsolutePath,
       U: relativeURL,
       R: createResolvePathFromModule(r),
       __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
