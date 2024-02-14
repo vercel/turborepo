@@ -38,6 +38,7 @@ use turbopack_core::{
     resolve::origin::ResolveOrigin,
     source::Source,
     source_map::{GenerateSourceMap, OptionSourceMap},
+    source_pos::SourcePos,
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
 
@@ -528,9 +529,18 @@ async fn process_content(
                 stylesheet_into_static(&ss, without_warnings(config.clone()))
             }
             Err(e) => {
+                let source = e.loc.as_ref().map(|loc| {
+                    let pos = SourcePos {
+                        line: loc.line as _,
+                        column: loc.column as _,
+                    };
+                    IssueSource::from_line_col(source, pos, pos)
+                });
+
                 ParsingIssue {
                     file: fs_path_vc,
                     msg: Vc::cell(e.to_string()),
+                    source: Vc::cell(source),
                 }
                 .cell()
                 .emit();
@@ -687,6 +697,7 @@ impl lightningcss::visitor::Visitor<'_> for CssModuleValidator {
             ParsingIssue {
                 file: self.file,
                 msg: Vc::cell(CSS_MODULE_ERROR.to_string()),
+                source: Vc::cell(None),
             }
             .cell()
             .emit();
