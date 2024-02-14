@@ -651,10 +651,9 @@ struct CssModuleValidator {
 const CSS_MODULE_ERROR: &str =
     "Selector is not pure (pure selectors must contain at least one local class or id)";
 
+/// We only vist top-level selectors.
 impl swc_core::css::visit::Visit for CssModuleValidator {
     fn visit_complex_selector(&mut self, n: &swc_core::css::ast::ComplexSelector) {
-        n.visit_children_with(self);
-
         if n.children.iter().all(|sel| match sel {
             swc_core::css::ast::ComplexSelectorChildren::CompoundSelector(sel) => {
                 sel.type_selector.is_some() && sel.subclass_selectors.is_empty()
@@ -663,7 +662,7 @@ impl swc_core::css::visit::Visit for CssModuleValidator {
         }) {
             ParsingIssue {
                 file: self.file,
-                msg: Vc::cell(CSS_MODULE_ERROR.to_string()),
+                msg: Vc::cell(format!("swc_css: {CSS_MODULE_ERROR}")),
                 source: Vc::cell(Some(IssueSource::from_swc_offsets(
                     self.source,
                     n.span.lo.0 as _,
@@ -674,8 +673,11 @@ impl swc_core::css::visit::Visit for CssModuleValidator {
             .emit();
         }
     }
+
+    fn visit_simple_block(&mut self, _: &swc_core::css::ast::SimpleBlock) {}
 }
 
+/// We only vist top-level selectors.
 impl lightningcss::visitor::Visitor<'_> for CssModuleValidator {
     type Error = ();
 
