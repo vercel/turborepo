@@ -525,7 +525,7 @@ function instantiateModule(id, source) {
             w: loadWebAssembly,
             u: loadWebAssemblyModule,
             g: globalThis,
-            p: resolveAbsolutePath,
+            P: resolveAbsolutePath,
             U: relativeURL,
             R: createResolvePathFromModule(r),
             __dirname: module1.id.replace(/(^|\/)[\/]+$/, "")
