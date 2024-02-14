@@ -644,9 +644,8 @@ impl swc_core::css::visit::Visit for CssModuleValidator {
             }
             swc_core::css::ast::ComplexSelectorChildren::Combinator(_) => true,
         }) {
-            let file = self.file.clone();
             ParsingIssue {
-                file,
+                file: self.file,
                 msg: Vc::cell(CSS_MODULE_ERROR.to_string()),
             }
             .cell()
@@ -673,9 +672,8 @@ impl lightningcss::visitor::Visitor<'_> for CssModuleValidator {
                     | parcel_selectors::parser::Component::Class(_)
             )
         }) {
-            let file = self.file.clone();
             ParsingIssue {
-                file,
+                file: self.file,
                 msg: Vc::cell(CSS_MODULE_ERROR.to_string()),
             }
             .cell()
