@@ -32,7 +32,7 @@ use turbo_tasks_fs::{FileContent, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::ChunkingContext,
-    issue::{Issue, IssueExt, OptionStyledString, StyledString},
+    issue::{Issue, IssueExt, IssueSource, OptionIssueSource, OptionStyledString, StyledString},
     reference::ModuleReferences,
     reference_type::ImportContext,
     resolve::origin::ResolveOrigin,
@@ -838,6 +838,7 @@ impl TransformConfig for ModuleTransformConfig {
 struct ParsingIssue {
     msg: Vc<String>,
     file: Vc<FileSystemPath>,
+    source: Vc<OptionIssueSource>,
 }
 
 #[turbo_tasks::value_impl]
@@ -850,6 +851,11 @@ impl Issue for ParsingIssue {
     #[turbo_tasks::function]
     fn title(&self) -> Vc<StyledString> {
         StyledString::Text("Parsing css source code failed".to_string()).cell()
+    }
+
+    #[turbo_tasks::function]
+    fn source(&self) -> Vc<OptionIssueSource> {
+        self.source
     }
 
     #[turbo_tasks::function]
