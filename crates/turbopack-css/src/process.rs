@@ -519,7 +519,7 @@ async fn process_content(
     let stylesheet = if use_lightningcss {
         StyleSheetLike::LightningCss(match StyleSheet::parse(&code, config.clone()) {
             Ok(mut ss) => {
-                ss.visit(&mut CssModuleValdator { file: fs_path });
+                ss.visit(&mut CssModuleValidator { file: fs_path });
 
                 stylesheet_into_static(&ss, without_warnings(config.clone()))
             }
@@ -626,13 +626,13 @@ async fn process_content(
 /// ```
 ///
 /// is wrong for a css module because it doesn't have a class name.
-struct CssModuleValdator {
+struct CssModuleValidator {
     file: Vc<FileSystemPath>,
 }
 
-impl swc_core::css::visit::Visit for CssModuleValdator {}
+impl swc_core::css::visit::Visit for CssModuleValidator {}
 
-impl lightningcss::visitor::Visitor<'_> for CssModuleValdator {
+impl lightningcss::visitor::Visitor<'_> for CssModuleValidator {
     type Error = ();
 
     fn visit_types(&self) -> lightningcss::visitor::VisitTypes {
