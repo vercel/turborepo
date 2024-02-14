@@ -392,6 +392,12 @@ impl<'a> Visitor<'a> {
                 (vendor_behavior.group_suffix)(&group_name),
             );
             logger.with_header_footer(Some(header), Some(footer));
+
+            let (error_header, error_footer) = (
+                vendor_behavior.error_group_prefix.map(|f| f(&group_name)),
+                vendor_behavior.error_group_suffix.map(|f| f(&group_name)),
+            );
+            logger.with_error_header_footer(error_header, error_footer);
         }
         logger
     }
@@ -692,8 +698,8 @@ impl ExecContext {
 
         // If the task resulted in an error, do not group in order to better highlight
         // the error.
-        let keep_group = matches!(result, ExecOutcome::Success(_));
-        let logs = match output_client.finish(keep_group) {
+        let is_error = matches!(result, ExecOutcome::Task { .. });
+        let logs = match output_client.finish(is_error) {
             Ok(logs) => logs,
             Err(e) => {
                 telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);

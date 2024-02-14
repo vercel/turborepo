@@ -56,6 +56,7 @@ Verify that errors are grouped properly
   \xe2\x80\xa2 Packages in scope: my-app, util (esc)
   \xe2\x80\xa2 Running fail in 2 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
+  \x1b[;31mutil:fail\x1b[;0m (esc)
   cache miss, executing 122cca10fdcda4f0
   
   \> fail (re)

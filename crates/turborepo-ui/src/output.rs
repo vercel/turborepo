@@ -22,6 +22,12 @@ pub struct OutputClient<W> {
     // Any locals held across an await must implement Sync and RwLock lets us achieve this
     buffer: Option<RwLock<Vec<SinkBytes<'static>>>>,
     writers: Arc<Mutex<SinkWriters<W>>>,
+    primary: Marginals,
+    error: Marginals,
+}
+
+#[derive(Default)]
+struct Marginals {
     header: Option<String>,
     footer: Option<String>,
 }
@@ -82,16 +88,19 @@ impl<W: Write> OutputSink<W> {
             behavior,
             buffer,
             writers,
-            header: None,
-            footer: None,
+            primary: Default::default(),
+            error: Default::default(),
         }
     }
 }
 
 impl<W: Write> OutputClient<W> {
     pub fn with_header_footer(&mut self, header: Option<String>, footer: Option<String>) {
-        self.header = header;
-        self.footer = footer;
+        self.primary = Marginals { header, footer };
+    }
+
+    pub fn with_error_header_footer(&mut self, header: Option<String>, footer: Option<String>) {
+        self.error = Marginals { header, footer };
     }
 
     /// A writer that will write to the underlying sink's out writer according
@@ -116,15 +125,23 @@ impl<W: Write> OutputClient<W> {
 
     /// Consume the client and flush any bytes to the underlying sink if
     /// necessary
-    pub fn finish(self, keep_group: bool) -> io::Result<Option<Vec<u8>>> {
+    pub fn finish(self, use_error: bool) -> io::Result<Option<Vec<u8>>> {
         let Self {
             behavior,
             buffer,
             writers,
-            header,
-            footer,
+            primary,
+            error,
         } = self;
         let buffers = buffer.map(|cell| cell.into_inner().expect("lock poisoned"));
+        let header = use_error
+            .then_some(error.header)
+            .flatten()
+            .or(primary.header);
+        let footer = use_error
+            .then_some(error.footer)
+            .flatten()
+            .or(primary.footer);
 
         if matches!(behavior, OutputClientBehavior::Grouped) {
             let buffers = buffers
@@ -133,7 +150,7 @@ impl<W: Write> OutputClient<W> {
             // We hold the mutex until we write all of the bytes associated for the client
             // to ensure that the bytes aren't interspersed.
             let mut writers = writers.lock().expect("lock poisoned");
-            if let Some(prefix) = keep_group.then_some(header).flatten() {
+            if let Some(prefix) = header {
                 writers.out.write_all(prefix.as_bytes())?;
             }
             for SinkBytes {
@@ -147,7 +164,7 @@ impl<W: Write> OutputClient<W> {
                 };
                 writer.write_all(buffer)?;
             }
-            if let Some(suffix) = keep_group.then_some(footer).flatten() {
+            if let Some(suffix) = footer {
                 writers.out.write_all(suffix.as_bytes())?;
             }
         }
