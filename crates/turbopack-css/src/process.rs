@@ -23,7 +23,7 @@ use swc_core::{
         ast::UrlValue,
         codegen::{writer::basic::BasicCssWriter, CodeGenerator},
         modules::{CssClassName, TransformConfig},
-        visit::{VisitMut, VisitMutWith},
+        visit::{VisitMut, VisitMutWith, VisitWith},
     },
 };
 use tracing::Instrument;
@@ -472,7 +472,7 @@ pub async fn parse_css(
 
 async fn process_content(
     code: String,
-    fs_path: Vc<FileSystemPath>,
+    fs_path_vc: Vc<FileSystemPath>,
     ident_str: &str,
     source: Vc<Box<dyn Source>>,
     origin: Vc<Box<dyn ResolveOrigin>>,
@@ -519,13 +519,13 @@ async fn process_content(
     let stylesheet = if use_lightningcss {
         StyleSheetLike::LightningCss(match StyleSheet::parse(&code, config.clone()) {
             Ok(mut ss) => {
-                ss.visit(&mut CssModuleValidator { file: fs_path });
+                ss.visit(&mut CssModuleValidator { file: fs_path_vc });
 
                 stylesheet_into_static(&ss, without_warnings(config.clone()))
             }
             Err(e) => {
                 ParsingIssue {
-                    file: fs_path,
+                    file: fs_path_vc,
                     msg: Vc::cell(e.to_string()),
                 }
                 .cell()
@@ -534,7 +534,7 @@ async fn process_content(
             }
         })
     } else {
-        let fs_path = &*fs_path.await?;
+        let fs_path = &*fs_path_vc.await?;
 
         let handler = swc_core::common::errors::Handler::with_emitter(
             true,
@@ -564,7 +564,7 @@ async fn process_content(
             err.to_diagnostics(&handler).emit();
         }
 
-        let ss = match ss {
+        let ss: swc_core::css::ast::Stylesheet = match ss {
             Ok(v) => v,
             Err(err) => {
                 err.to_diagnostics(&handler).emit();
@@ -577,7 +577,7 @@ async fn process_content(
         }
 
         if matches!(ty, CssModuleAssetType::Module) {
-            ss.visit_with(&mut CssModuleValidator { file: fs_path });
+            ss.visit_with(&mut CssModuleValidator { file: fs_path_vc });
         }
 
         StyleSheetLike::Swc {
