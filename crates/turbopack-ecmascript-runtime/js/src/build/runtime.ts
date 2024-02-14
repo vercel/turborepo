@@ -30,7 +30,7 @@ type ExternalImport = (id: ModuleId) => Promise<Exports | EsmNamespaceObject>;
 type ResolveAbsolutePath = (modulePath?: string) => string;
 
 interface TurbopackNodeBuildContext extends TurbopackBaseContext {
-  p: ResolveAbsolutePath;
+  P: ResolveAbsolutePath;
   R: ResolvePathFromModule;
   x: ExternalRequire;
   y: ExternalImport;
