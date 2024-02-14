@@ -409,7 +409,7 @@ mod test {
         // provided
         assert_eq!(
             out,
-            b"bad header\noutput for 1\nbad footer\ngood header\noutput for 2\ngood header\n"
+            b"bad header\noutput for 1\nbad footer\ngood header\noutput for 2\ngood footer\n"
         );
 
         Ok(())
