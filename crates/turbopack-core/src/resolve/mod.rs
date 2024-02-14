@@ -1426,7 +1426,6 @@ fn resolve_internal_boxed(
     Box::pin(resolve_internal_inline(lookup_path, request, options))
 }
 
-#[tracing::instrument(level = Level::TRACE, skip_all)]
 async fn resolve_internal_inline(
     lookup_path: Vc<FileSystemPath>,
     request: Vc<Request>,
