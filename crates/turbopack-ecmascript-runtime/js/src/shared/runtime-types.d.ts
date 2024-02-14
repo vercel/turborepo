@@ -31,7 +31,7 @@ type DynamicExport = (object: Record<string, any>) => void;
 type ModuleLookup = (
   object: Record<string, any>,
   name: string,
-  flags?: number
+  returnPromise?: boolean
 ) => any;
 
 type LoadChunk = (chunkPath: ChunkPath) => Promise<any> | undefined;
