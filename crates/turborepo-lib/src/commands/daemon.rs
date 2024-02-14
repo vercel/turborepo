@@ -7,7 +7,7 @@ use serde_json::json;
 use time::{format_description, OffsetDateTime};
 use tokio::signal::ctrl_c;
 use tracing::{trace, warn};
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turbopath::AbsoluteSystemPath;
 use turborepo_ui::{color, BOLD_GREEN, BOLD_RED, GREY};
 use which::which;
 
@@ -16,6 +16,7 @@ use crate::{
     cli::DaemonCommand,
     daemon::{
         endpoint::SocketOpenError, CloseReason, DaemonConnector, DaemonConnectorError, DaemonError,
+        Paths,
     },
     tracing::TurboSubscriber,
 };
@@ -32,15 +33,7 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
         DaemonCommand::Clean => (false, true),
     };
 
-    let pid_file = base.daemon_file_root().join_component("turbod.pid");
-    let sock_file = base.daemon_file_root().join_component("turbod.sock");
-
-    let connector = DaemonConnector {
-        can_start_server,
-        can_kill_server,
-        pid_file: pid_file.clone(),
-        sock_file: sock_file.clone(),
-    };
+    let connector = DaemonConnector::new(can_start_server, can_kill_server, &base.repo_root);
 
     match command {
         DaemonCommand::Restart => {
@@ -52,7 +45,7 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
             if let Err(e) = result {
                 tracing::debug!("failed to restart the daemon: {:?}", e);
                 tracing::debug!("falling back to clean");
-                clean(&pid_file, &sock_file).await?;
+                clean(&connector.paths.pid_file, &connector.paths.sock_file).await?;
                 tracing::debug!("connecting for second time");
                 let _ = connector.connect().await?;
             }
@@ -100,11 +93,12 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
             };
             let status = client.status().await?;
             let log_file = log_filename(&status.log_file)?;
+            let paths = client.paths();
             let status = DaemonStatus {
                 uptime_ms: status.uptime_msec,
                 log_file: log_file.into(),
-                pid_file: client.pid_file().to_owned(),
-                sock_file: client.sock_file().to_owned(),
+                pid_file: paths.pid_file.to_owned(),
+                sock_file: paths.sock_file.to_owned(),
             };
 
             if *json {
@@ -141,6 +135,7 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
         }
         DaemonCommand::Clean => {
             // try to connect and shutdown the daemon
+            let paths = connector.paths.clone();
             let client = connector.connect().await;
             match client {
                 Ok(client) => match client.stop().await {
@@ -155,7 +150,7 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
                     tracing::trace!("unable to connect to the daemon: {:?}", e);
                 }
             }
-            clean(&pid_file, &sock_file).await?;
+            clean(&paths.pid_file, &paths.sock_file).await?;
             println!("Done");
         }
     };
@@ -214,25 +209,12 @@ pub async fn daemon_server(
     idle_time: &String,
     logging: &TurboSubscriber,
 ) -> Result<(), DaemonError> {
-    let (log_folder, log_file) = {
-        let directories = directories::ProjectDirs::from("com", "turborepo", "turborepo")
-            .expect("user has a home dir");
+    let paths = Paths::from_repo_root(&base.repo_root);
 
-        let folder =
-            AbsoluteSystemPathBuf::new(directories.data_dir().to_str().expect("UTF-8 path"))
-                .expect("absolute");
-
-        let log_folder = folder.join_component("logs");
-        let log_file =
-            log_folder.join_component(format!("{}-turbo.log", base.repo_hash()).as_str());
-
-        (log_folder, log_file)
-    };
-
-    tracing::trace!("logging to file: {:?}", log_file);
+    tracing::trace!("logging to file: {:?}", paths.log_file);
     if let Err(e) = logging.set_daemon_logger(tracing_appender::rolling::daily(
-        log_folder,
-        log_file.clone(),
+        &paths.log_folder,
+        &paths.log_file,
     )) {
         // error here is not fatal, just log it
         tracing::error!("failed to set file logger: {}", e);
@@ -242,20 +224,14 @@ pub async fn daemon_server(
         .map_err(|_| DaemonError::InvalidTimeout(idle_time.to_owned()))
         .map(|d| Duration::from_nanos(d as u64))?;
 
-    let daemon_root = base.daemon_file_root();
     let exit_signal = ctrl_c().map(|result| {
         if let Err(e) = result {
             tracing::error!("Error with signal handling: {}", e);
         }
         CloseReason::Interrupt
     });
-    let server = crate::daemon::TurboGrpcService::new(
-        base.repo_root.clone(),
-        daemon_root,
-        log_file,
-        timeout,
-        exit_signal,
-    );
+    let server =
+        crate::daemon::TurboGrpcService::new(base.repo_root.clone(), paths, timeout, exit_signal);
 
     let reason = server.serve().await?;
 

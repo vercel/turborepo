@@ -39,7 +39,11 @@ pub struct SpacesJson {
 // turbo.json files into a single definition. Therefore we keep the
 // `RawTaskDefinition` type so we can determine which fields are actually
 // set when we resolve the configuration.
-#[derive(Debug, Default, Clone, PartialEq, Serialize)]
+//
+// Note that the values here are limited to pipeline configuration.
+// Configuration that needs to account for flags, env vars, etc. is
+// handled via layered config.
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct TurboJson {
     text: Option<Arc<str>>,
     path: Option<Arc<str>>,
@@ -49,11 +53,47 @@ pub struct TurboJson {
     pub(crate) global_env: Vec<String>,
     pub(crate) global_pass_through_env: Option<Vec<String>>,
     pub(crate) pipeline: Pipeline,
-    pub(crate) remote_cache: Option<ConfigurationOptions>,
-    pub(crate) space_id: Option<String>,
 }
 
-#[derive(Serialize, Default, Debug, PartialEq, Clone, Iterable)]
+// Iterable is required to enumerate allowed keys
+#[derive(Clone, Debug, Default, Iterable, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RawRemoteCacheOptions {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    api_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    login_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    team_slug: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    team_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    signature: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    preflight: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    timeout: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    enabled: Option<bool>,
+}
+
+impl From<&RawRemoteCacheOptions> for ConfigurationOptions {
+    fn from(remote_cache_opts: &RawRemoteCacheOptions) -> Self {
+        Self {
+            api_url: remote_cache_opts.api_url.clone(),
+            login_url: remote_cache_opts.login_url.clone(),
+            team_slug: remote_cache_opts.team_slug.clone(),
+            team_id: remote_cache_opts.team_id.clone(),
+            signature: remote_cache_opts.signature,
+            preflight: remote_cache_opts.preflight,
+            timeout: remote_cache_opts.timeout,
+            enabled: remote_cache_opts.enabled,
+            ..Self::default()
+        }
+    }
+}
+
+#[derive(Serialize, Default, Debug, Clone, Iterable)]
 #[serde(rename_all = "camelCase")]
 // The raw deserialized turbo.json file.
 pub struct RawTurboJson {
@@ -86,7 +126,7 @@ pub struct RawTurboJson {
     pub pipeline: Option<Pipeline>,
     // Configuration options when interfacing with the remote cache
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) remote_cache: Option<ConfigurationOptions>,
+    pub(crate) remote_cache: Option<RawRemoteCacheOptions>,
 }
 
 #[derive(Serialize, Default, Debug, PartialEq, Clone)]
@@ -460,16 +500,11 @@ impl TryFrom<RawTurboJson> for TurboJson {
                 .transpose()?,
             pipeline: raw_turbo.pipeline.unwrap_or_default(),
             // copy these over, we don't need any changes here.
-            remote_cache: raw_turbo.remote_cache,
             extends: raw_turbo
                 .extends
                 .unwrap_or_default()
                 .map(|s| s.into_iter().map(|s| s.into()).collect()),
-            // Directly to space_id, we don't need to keep the struct
-            space_id: raw_turbo
-                .experimental_spaces
-                .and_then(|s| s.id)
-                .map(|s| s.into()),
+            // Spaces and Remote Cache config is handled through layered config
         })
     }
 }

@@ -1,20 +1,23 @@
 {
-  "name": "@turbo/repository-darwin-x64",
+  "name": "@turbo/repository-linux-x64-musl",
   "version": "0.0.1-canary.6",
   "repository": {
     "type": "git",
     "url": "https://github.com/vercel/turbo",
-    "directory": "packages/turbo-repository/npm/darwin-x64"
+    "directory": "packages/turbo-repository/npm/linux-x64-musl"
   },
   "os": [
-    "darwin"
+    "linux"
   ],
   "cpu": [
     "x64"
   ],
-  "main": "repository.darwin-x64.node",
+  "libc": [
+    "musl"
+  ],
+  "main": "repository.linux-x64-musl.node",
   "files": [
-    "repository.darwin-x64.node"
+    "repository.linux-x64-musl.node"
   ],
   "license": "MPL-2.0",
   "engines": {

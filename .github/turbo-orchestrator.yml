@@ -79,6 +79,9 @@ labeler:
     - label: "pkg: turbo-workspaces"
       when:
         isAnyFilePathMatch: '^packages\/turbo-workspaces\/.*$'
+    - label: "pkg: turbo-repository"
+      when:
+        isAnyFilePathMatch: '^packages\/turbo-repository\/.*$'
 events:
   onPublish:
     turbo:

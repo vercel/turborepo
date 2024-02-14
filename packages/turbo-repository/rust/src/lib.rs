@@ -1,11 +1,15 @@
-use std::{collections::HashMap, hash::Hash};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+};
 
 use napi::Error;
 use napi_derive::napi;
-use turbopath::AbsoluteSystemPath;
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
+    change_mapper::{ChangeMapper, PackageChanges},
     inference::RepoState as WorkspaceState,
-    package_graph::{PackageGraph, WorkspaceName, WorkspaceNode},
+    package_graph::{PackageGraph, PackageName, PackageNode, WorkspacePackage, ROOT_PKG_NAME},
 };
 mod internal;
 
@@ -68,7 +72,7 @@ impl Package {
         graph: &PackageGraph,
         workspace_path: &AbsoluteSystemPath,
     ) -> Vec<Package> {
-        let node = WorkspaceNode::Workspace(WorkspaceName::Other(self.name.clone()));
+        let node = PackageNode::Workspace(PackageName::Other(self.name.clone()));
         let ancestors = match graph.immediate_ancestors(&node) {
             Some(ancestors) => ancestors,
             None => return vec![],
@@ -77,7 +81,7 @@ impl Package {
         ancestors
             .iter()
             .filter_map(|node| {
-                let info = graph.workspace_info(node.as_workspace())?;
+                let info = graph.package_info(node.as_package_name())?;
                 // If we don't get a package name back, we'll just skip it.
                 let name = info.package_name()?;
                 let anchored_package_path = info.package_path();
@@ -130,5 +134,61 @@ impl Workspace {
             .collect();
 
         Ok(map)
+    }
+
+    /// Given a set of "changed" files, returns a set of packages that are
+    /// "affected" by the changes. The `files` argument is expected to be a list
+    /// of strings relative to the monorepo root and use the current system's
+    /// path separator.
+    #[napi]
+    pub async fn affected_packages(&self, files: Vec<String>) -> Result<Vec<Package>, Error> {
+        let workspace_root = match AbsoluteSystemPath::new(&self.absolute_path) {
+            Ok(path) => path,
+            Err(e) => return Err(Error::from_reason(e.to_string())),
+        };
+
+        let hash_set_of_paths: HashSet<AnchoredSystemPathBuf> = files
+            .into_iter()
+            .filter_map(|path| {
+                let path_components = path.split(std::path::MAIN_SEPARATOR).collect::<Vec<&str>>();
+                let absolute_path = workspace_root.join_components(&path_components);
+                workspace_root.anchor(&absolute_path).ok()
+            })
+            .collect();
+
+        // Create a ChangeMapper with no custom global deps or ignore patterns
+        let mapper = ChangeMapper::new(&self.graph, vec![], vec![]);
+        let package_changes = match mapper.changed_packages(hash_set_of_paths, None) {
+            Ok(changes) => changes,
+            Err(e) => return Err(Error::from_reason(e.to_string())),
+        };
+
+        let packages = match package_changes {
+            PackageChanges::All => self
+                .graph
+                .packages()
+                .map(|(name, info)| WorkspacePackage {
+                    name: name.to_owned(),
+                    path: info.package_path().to_owned(),
+                })
+                .collect::<Vec<WorkspacePackage>>(),
+            PackageChanges::Some(packages) => packages.into_iter().collect(),
+        };
+
+        let mut serializable_packages: Vec<Package> = packages
+            .into_iter()
+            .filter(|p| match &p.name {
+                PackageName::Root => false,
+                PackageName::Other(name) => name != ROOT_PKG_NAME,
+            })
+            .map(|p| {
+                let package_path = workspace_root.resolve(&p.path);
+                Package::new(p.name.to_string(), &workspace_root, &package_path)
+            })
+            .collect();
+
+        serializable_packages.sort_by_key(|p| p.name.clone());
+
+        Ok(serializable_packages)
     }
 }

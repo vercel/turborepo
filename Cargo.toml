@@ -94,19 +94,19 @@ strip = true
 [workspace.dependencies]
 async-recursion = "1.0.2"
 # Keep consistent with preset_env_base through swc_core
-browserslist-rs = { version = "0.14.0" }
+browserslist-rs = { version = "0.15.0" }
 miette = { version = "5.10.0", features = ["fancy"] }
-mdxjs = "0.1.22"
-modularize_imports = { version = "0.68.2" }
-styled_components = { version = "0.96.3" }
-styled_jsx = { version = "0.73.4" }
-swc_core = { version = "0.89.6", features = [
+mdxjs = "0.1.23"
+modularize_imports = { version = "0.68.5" }
+styled_components = { version = "0.96.6" }
+styled_jsx = { version = "0.73.7" }
+swc_core = { version = "0.90.7", features = [
   "ecma_loader_lru",
   "ecma_loader_parking_lot",
 ] }
-swc_emotion = { version = "0.72.2" }
-swc_relay = { version = "0.44.2" }
-testing = { version = "0.35.16" }
+swc_emotion = { version = "0.72.6" }
+swc_relay = { version = "0.44.5" }
+testing = { version = "0.35.18" }
 
 auto-hash-map = { path = "crates/turbo-tasks-auto-hash-map" }
 node-file-trace = { path = "crates/node-file-trace", default-features = false }
@@ -256,7 +256,7 @@ serde_qs = "0.11.0"
 serde_with = "2.3.2"
 serde_yaml = "0.9.17"
 sha2 = "0.10.6"
-smallvec = { version = "1.11.1", features = [
+smallvec = { version = "1.13.1", features = [
   "serde",
   "const_generics",
   "union",
@@ -278,3 +278,4 @@ urlencoding = "2.1.2"
 webbrowser = "0.8.7"
 which = "4.4.0"
 unicode-segmentation = "1.10.1"
+notify-debouncer-full = "0.3.1"

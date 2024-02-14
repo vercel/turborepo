@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
     change_mapper::{ChangeMapError, ChangeMapper, LockfileChange, PackageChanges},
-    package_graph::{PackageGraph, WorkspaceName},
+    package_graph::{PackageGraph, PackageName},
 };
 use turborepo_scm::SCM;
 
@@ -13,7 +13,7 @@ pub trait GitChangeDetector {
         &self,
         from_ref: &str,
         to_ref: &str,
-    ) -> Result<HashSet<WorkspaceName>, ChangeMapError>;
+    ) -> Result<HashSet<PackageName>, ChangeMapError>;
 }
 
 pub struct ScopeChangeDetector<'a> {
@@ -76,7 +76,7 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
         &self,
         from_ref: &str,
         to_ref: &str,
-    ) -> Result<HashSet<WorkspaceName>, ChangeMapError> {
+    ) -> Result<HashSet<PackageName>, ChangeMapError> {
         let mut changed_files = HashSet::new();
         if !from_ref.is_empty() {
             changed_files = self
@@ -92,10 +92,13 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
         {
             PackageChanges::All => Ok(self
                 .pkg_graph
-                .workspaces()
+                .packages()
                 .map(|(name, _)| name.to_owned())
                 .collect()),
-            PackageChanges::Some(packages) => Ok(packages),
+            PackageChanges::Some(packages) => Ok(packages
+                .iter()
+                .map(|package| package.name.to_owned())
+                .collect()),
         }
     }
 }
