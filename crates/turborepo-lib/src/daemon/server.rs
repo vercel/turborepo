@@ -279,10 +279,6 @@ where
         let _ = exit_root_watch.send(());
         let _ = watch_root_handle.await;
         trace!("root watching exited");
-        // Clean up the filewatching handle in the event that we never even got
-        // started with filewatching. Again, we don't care about the error here.
-        // let _ = fw_handle.await;
-        trace!("filewatching handle joined");
         Ok(close_reason)
     }
 }
