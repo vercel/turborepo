@@ -53,10 +53,10 @@ jobs:
               echo /usr/local/cargo/bin/rustup >> ${GITHUB_PATH}
               echo /aarch64-linux-musl-cross/bin >> ${GITHUB_PATH}
               export PATH=/aarch64-linux-musl-cross/bin:/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
+            setup: |
               rustup default $(cat ./rust-toolchain)-aarch64-unknown-linux-musl
               rustup target add aarch64-unknown-linux-musl
               rustup toolchain install $(cat ./rust-toolchain)
-            setup: |
               pnpm install
             target: "aarch64-unknown-linux-musl"
             rust_env: CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc RUSTFLAGS="-Ctarget-feature=-crt-static"
