@@ -43,8 +43,8 @@ use turborepo_repository::discovery::{
     LocalPackageDiscoveryBuilder, PackageDiscovery, PackageDiscoveryBuilder,
 };
 
-use super::{bump_timeout::BumpTimeout, endpoint::SocketOpenError, proto, Paths};
-use crate::daemon::{bump_timeout_layer::BumpTimeoutLayer, endpoint::listen_socket};
+use super::{bump_timeout::BumpTimeout, endpoint::SocketOpenError, proto};
+use crate::daemon::{bump_timeout_layer::BumpTimeoutLayer, endpoint::listen_socket, Paths};
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -196,9 +196,6 @@ where
 
     pub async fn serve(self) -> Result<CloseReason, PDB::Error> {
         let Self {
-            watcher_tx,
-            watcher_rx,
-            daemon_root,
             external_shutdown,
             paths,
             repo_root,
@@ -216,7 +213,7 @@ where
             package_discovery_backup,
             repo_root.clone(),
             trigger_shutdown,
-            log_file,
+            paths.log_file,
         );
 
         let running = Arc::new(AtomicBool::new(true));
@@ -240,16 +237,6 @@ where
             };
         };
 
-        // Run the actual service. It takes ownership of the struct given to it,
-        // so we use a private struct with just the pieces of state needed to handle
-        // RPCs.
-        let service = TurboGrpcServiceInner {
-            shutdown: trigger_shutdown,
-            watcher_rx,
-            times_saved: Arc::new(Mutex::new(HashMap::new())),
-            start_time: Instant::now(),
-            log_file: paths.log_file.clone(),
-        };
         let server_fut = {
             let service = ServiceBuilder::new()
                 .layer(BumpTimeoutLayer::new(bump_timeout.clone()))
