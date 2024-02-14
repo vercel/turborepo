@@ -48,7 +48,7 @@ Use our custom turbo config with an invalid env var
   $ . ${TESTDIR}/../../helpers/replace_turbo_json.sh $(pwd) "invalid-env-var.json"
 
 Run build with invalid env var
-  $ EXPERIMENTAL_RUST_CODEPATH=true ${TURBO} build
+  $ ${TURBO} build
   invalid_env_prefix (https://turbo.build/messages/invalid-env-prefix)
   
     x Environment variables should not be prefixed with "$"

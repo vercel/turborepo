@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use wax::Program;
 
-use crate::package_graph::{ChangedPackagesError, PackageGraph, WorkspaceName, WorkspacePackage};
+use crate::package_graph::{ChangedPackagesError, PackageGraph, PackageName, WorkspacePackage};
 
 // We may not be able to load the lockfile contents, but we
 // still want to be able to express a generic change.
@@ -106,8 +106,8 @@ impl<'a> ChangeMapper<'a> {
         let mut changed_packages = HashSet::new();
         for file in files {
             let mut found = false;
-            for (name, entry) in graph.workspaces() {
-                if name == &WorkspaceName::Root {
+            for (name, entry) in graph.packages() {
+                if name == &PackageName::Root {
                     continue;
                 }
                 if let Some(package_path) = entry.package_json_path.parent() {

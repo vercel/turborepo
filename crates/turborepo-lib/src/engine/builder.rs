@@ -4,9 +4,7 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use turbopath::AbsoluteSystemPath;
 use turborepo_graph_utils as graph;
-use turborepo_repository::package_graph::{
-    PackageGraph, PackageNode, WorkspaceName, ROOT_PKG_NAME,
-};
+use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode, ROOT_PKG_NAME};
 
 use super::Engine;
 use crate::{
@@ -21,7 +19,7 @@ pub enum Error {
     #[error("Could not find the following tasks in project: {0}")]
     MissingTasks(String),
     #[error("No package.json for {workspace}")]
-    MissingPackageJson { workspace: WorkspaceName },
+    MissingPackageJson { workspace: PackageName },
     #[error(
         "{task_id} needs an entry in turbo.json before it can be depended on because it is a task \
          run from the root package"
@@ -49,8 +47,8 @@ pub struct EngineBuilder<'a> {
     repo_root: &'a AbsoluteSystemPath,
     package_graph: &'a PackageGraph,
     is_single: bool,
-    turbo_jsons: Option<HashMap<WorkspaceName, TurboJson>>,
-    workspaces: Vec<WorkspaceName>,
+    turbo_jsons: Option<HashMap<PackageName, TurboJson>>,
+    workspaces: Vec<PackageName>,
     tasks: Vec<TaskName<'static>>,
     root_enabled_tasks: HashSet<TaskName<'static>>,
     tasks_only: bool,
@@ -76,7 +74,7 @@ impl<'a> EngineBuilder<'a> {
 
     pub fn with_turbo_jsons(
         mut self,
-        turbo_jsons: Option<HashMap<WorkspaceName, TurboJson>>,
+        turbo_jsons: Option<HashMap<PackageName, TurboJson>>,
     ) -> Self {
         self.turbo_jsons = turbo_jsons;
         self
@@ -96,7 +94,7 @@ impl<'a> EngineBuilder<'a> {
         self
     }
 
-    pub fn with_workspaces(mut self, workspaces: Vec<WorkspaceName>) -> Self {
+    pub fn with_workspaces(mut self, workspaces: Vec<PackageName>) -> Self {
         self.workspaces = workspaces;
         self
     }
@@ -132,8 +130,7 @@ impl<'a> EngineBuilder<'a> {
                 // - A task from the non-root workspace (i.e. tasks from every other workspace)
                 // - A task that we *know* is rootEnabled task (in which case, the root
                 //   workspace is acceptable)
-                if !matches!(workspace, WorkspaceName::Root)
-                    || self.root_enabled_tasks.contains(task)
+                if !matches!(workspace, PackageName::Root) || self.root_enabled_tasks.contains(task)
                 {
                     traversal_queue.push_back(task_id);
                 }
@@ -170,7 +167,7 @@ impl<'a> EngineBuilder<'a> {
             if task_id.package() != ROOT_PKG_NAME
                 && self
                     .package_graph
-                    .package_json(&WorkspaceName::from(task_id.package()))
+                    .package_json(&PackageName::from(task_id.package()))
                     .is_none()
             {
                 // If we have a pkg it should be in PackageGraph.
@@ -271,8 +268,8 @@ impl<'a> EngineBuilder<'a> {
 
     fn has_task_definition(
         &self,
-        turbo_jsons: &mut HashMap<WorkspaceName, TurboJson>,
-        workspace: &WorkspaceName,
+        turbo_jsons: &mut HashMap<PackageName, TurboJson>,
+        workspace: &PackageName,
         task_name: &TaskName<'static>,
         task_id: &TaskId,
     ) -> Result<bool, Error> {
@@ -280,7 +277,7 @@ impl<'a> EngineBuilder<'a> {
             .turbo_json(turbo_jsons, workspace)
             // If there was no turbo.json in the workspace, fallback to the root turbo.json
             .or_else(|e| {
-                if e.is_missing_turbo_json() && !matches!(workspace, WorkspaceName::Root) {
+                if e.is_missing_turbo_json() && !matches!(workspace, PackageName::Root) {
                     Ok(None)
                 } else {
                     Err(e)
@@ -288,7 +285,7 @@ impl<'a> EngineBuilder<'a> {
             })?;
 
         let Some(turbo_json) = turbo_json else {
-            return self.has_task_definition(turbo_jsons, &WorkspaceName::Root, task_name, task_id);
+            return self.has_task_definition(turbo_jsons, &PackageName::Root, task_name, task_id);
         };
 
         let task_id_as_name = task_id.as_task_name();
@@ -296,8 +293,8 @@ impl<'a> EngineBuilder<'a> {
             || turbo_json.pipeline.contains_key(task_name)
         {
             Ok(true)
-        } else if !matches!(workspace, WorkspaceName::Root) {
-            self.has_task_definition(turbo_jsons, &WorkspaceName::Root, task_name, task_id)
+        } else if !matches!(workspace, PackageName::Root) {
+            self.has_task_definition(turbo_jsons, &PackageName::Root, task_name, task_id)
         } else {
             Ok(false)
         }
@@ -305,14 +302,14 @@ impl<'a> EngineBuilder<'a> {
 
     fn task_definition_chain(
         &self,
-        turbo_jsons: &mut HashMap<WorkspaceName, TurboJson>,
+        turbo_jsons: &mut HashMap<PackageName, TurboJson>,
         task_id: &TaskId,
         task_name: &TaskName,
     ) -> Result<Vec<RawTaskDefinition>, Error> {
         let mut task_definitions = Vec::new();
 
         let root_turbo_json = self
-            .turbo_json(turbo_jsons, &WorkspaceName::Root)?
+            .turbo_json(turbo_jsons, &PackageName::Root)?
             .ok_or(Error::Config(crate::config::Error::NoTurboJSON))?;
 
         if let Some(root_definition) = root_turbo_json.task(task_id, task_name) {
@@ -329,7 +326,7 @@ impl<'a> EngineBuilder<'a> {
         }
 
         if task_id.package() != ROOT_PKG_NAME {
-            match self.turbo_json(turbo_jsons, &WorkspaceName::from(task_id.package())) {
+            match self.turbo_json(turbo_jsons, &PackageName::from(task_id.package())) {
                 Ok(Some(workspace_json)) => {
                     let validation_errors = workspace_json
                         .validate(&[validate_no_package_task_syntax, validate_extends]);
@@ -364,8 +361,8 @@ impl<'a> EngineBuilder<'a> {
 
     fn turbo_json<'b>(
         &self,
-        turbo_jsons: &'b mut HashMap<WorkspaceName, TurboJson>,
-        workspace: &WorkspaceName,
+        turbo_jsons: &'b mut HashMap<PackageName, TurboJson>,
+        workspace: &PackageName,
     ) -> Result<Option<&'b TurboJson>, Error> {
         if turbo_jsons.get(workspace).is_none() {
             let json = self.load_turbo_json(workspace)?;
@@ -374,17 +371,18 @@ impl<'a> EngineBuilder<'a> {
         Ok(turbo_jsons.get(workspace))
     }
 
-    fn load_turbo_json(&self, workspace: &WorkspaceName) -> Result<TurboJson, Error> {
+    fn load_turbo_json(&self, workspace: &PackageName) -> Result<TurboJson, Error> {
         let package_json = self.package_graph.package_json(workspace).ok_or_else(|| {
             Error::MissingPackageJson {
                 workspace: workspace.clone(),
             }
         })?;
-        let workspace_dir = self.package_graph.workspace_dir(workspace).ok_or_else(|| {
-            Error::MissingPackageJson {
-                workspace: workspace.clone(),
-            }
-        })?;
+        let workspace_dir =
+            self.package_graph
+                .package_dir(workspace)
+                .ok_or_else(|| Error::MissingPackageJson {
+                    workspace: workspace.clone(),
+                })?;
         Ok(TurboJson::load(
             self.repo_root,
             workspace_dir,
@@ -540,7 +538,7 @@ mod test {
         let a_turbo_json = repo_root.join_components(&["packages", "a", "turbo.json"]);
         a_turbo_json.ensure_dir().unwrap();
 
-        let result = engine_builder.load_turbo_json(&WorkspaceName::from("a"));
+        let result = engine_builder.load_turbo_json(&PackageName::from("a"));
         assert!(
             result.is_err() && result.unwrap_err().is_missing_turbo_json(),
             "expected parsing to fail with missing turbo.json"
@@ -551,7 +549,7 @@ mod test {
             .unwrap();
 
         let turbo_json = engine_builder
-            .load_turbo_json(&WorkspaceName::from("a"))
+            .load_turbo_json(&PackageName::from("a"))
             .unwrap();
         assert_eq!(turbo_json.pipeline.len(), 1);
     }
@@ -562,13 +560,13 @@ mod test {
         TurboJson::try_from(raw).unwrap()
     }
 
-    #[test_case(WorkspaceName::Root, "build", "//#build", true ; "root task")]
-    #[test_case(WorkspaceName::from("a"), "build", "a#build", true ; "workspace task in root")]
-    #[test_case(WorkspaceName::from("b"), "build", "b#build", true ; "workspace task in workspace")]
-    #[test_case(WorkspaceName::from("b"), "test", "b#test", true ; "task missing from workspace")]
-    #[test_case(WorkspaceName::from("c"), "missing", "c#missing", false ; "task missing")]
+    #[test_case(PackageName::Root, "build", "//#build", true ; "root task")]
+    #[test_case(PackageName::from("a"), "build", "a#build", true ; "workspace task in root")]
+    #[test_case(PackageName::from("b"), "build", "b#build", true ; "workspace task in workspace")]
+    #[test_case(PackageName::from("b"), "test", "b#test", true ; "task missing from workspace")]
+    #[test_case(PackageName::from("c"), "missing", "c#missing", false ; "task missing")]
     fn test_task_definition(
-        workspace: WorkspaceName,
+        workspace: PackageName,
         task_name: &'static str,
         task_id: &'static str,
         expected: bool,
@@ -586,7 +584,7 @@ mod test {
         );
         let mut turbo_jsons = vec![
             (
-                WorkspaceName::Root,
+                PackageName::Root,
                 turbo_json(json!({
                     "pipeline": {
                         "test": { "inputs": ["testing"] },
@@ -596,7 +594,7 @@ mod test {
                 })),
             ),
             (
-                WorkspaceName::from("b"),
+                PackageName::from("b"),
                 turbo_json(json!({
                     "pipeline": {
                         "build": { "inputs": ["outer"]},
@@ -664,7 +662,7 @@ mod test {
             },
         );
         let turbo_jsons = vec![(
-            WorkspaceName::Root,
+            PackageName::Root,
             turbo_json(json!({
                 "pipeline": {
                     "test": { "dependsOn": ["^build", "prepare"] },
@@ -680,9 +678,9 @@ mod test {
             .with_turbo_jsons(Some(turbo_jsons))
             .with_tasks(Some(TaskName::from("test")))
             .with_workspaces(vec![
-                WorkspaceName::from("a"),
-                WorkspaceName::from("b"),
-                WorkspaceName::from("c"),
+                PackageName::from("a"),
+                PackageName::from("b"),
+                PackageName::from("c"),
             ])
             .build()
             .unwrap();
@@ -723,7 +721,7 @@ mod test {
             },
         );
         let turbo_jsons = vec![(
-            WorkspaceName::Root,
+            PackageName::Root,
             turbo_json(json!({
                 "pipeline": {
                     "test": { "dependsOn": ["^build"] },
@@ -736,7 +734,7 @@ mod test {
         let engine = EngineBuilder::new(&repo_root, &package_graph, false)
             .with_turbo_jsons(Some(turbo_jsons))
             .with_tasks(Some(TaskName::from("test")))
-            .with_workspaces(vec![WorkspaceName::from("app2")])
+            .with_workspaces(vec![PackageName::from("app2")])
             .build()
             .unwrap();
 
@@ -762,7 +760,7 @@ mod test {
             },
         );
         let turbo_jsons = vec![(
-            WorkspaceName::Root,
+            PackageName::Root,
             turbo_json(json!({
                 "pipeline": {
                     "build": { "dependsOn": ["^build"] },
@@ -775,10 +773,7 @@ mod test {
         let engine = EngineBuilder::new(&repo_root, &package_graph, false)
             .with_turbo_jsons(Some(turbo_jsons))
             .with_tasks(Some(TaskName::from("special")))
-            .with_workspaces(vec![
-                WorkspaceName::from("app1"),
-                WorkspaceName::from("libA"),
-            ])
+            .with_workspaces(vec![PackageName::from("app1"), PackageName::from("libA")])
             .build()
             .unwrap();
 
@@ -802,7 +797,7 @@ mod test {
             },
         );
         let turbo_jsons = vec![(
-            WorkspaceName::Root,
+            PackageName::Root,
             turbo_json(json!({
                 "pipeline": {
                     "build": { "dependsOn": ["^build"] },
@@ -817,9 +812,9 @@ mod test {
             .with_turbo_jsons(Some(turbo_jsons))
             .with_tasks(vec![TaskName::from("build"), TaskName::from("test")])
             .with_workspaces(vec![
-                WorkspaceName::Root,
-                WorkspaceName::from("app1"),
-                WorkspaceName::from("libA"),
+                PackageName::Root,
+                PackageName::from("app1"),
+                PackageName::from("libA"),
             ])
             .with_root_tasks(vec![
                 TaskName::from("//#test"),
@@ -852,7 +847,7 @@ mod test {
             },
         );
         let turbo_jsons = vec![(
-            WorkspaceName::Root,
+            PackageName::Root,
             turbo_json(json!({
                 "pipeline": {
                     "build": { "dependsOn": ["^build"] },
@@ -866,7 +861,7 @@ mod test {
         let engine = EngineBuilder::new(&repo_root, &package_graph, false)
             .with_turbo_jsons(Some(turbo_jsons))
             .with_tasks(Some(TaskName::from("build")))
-            .with_workspaces(vec![WorkspaceName::from("app1")])
+            .with_workspaces(vec![PackageName::from("app1")])
             .with_root_tasks(vec![
                 TaskName::from("//#root-task"),
                 TaskName::from("libA#build"),
@@ -896,7 +891,7 @@ mod test {
             },
         );
         let turbo_jsons = vec![(
-            WorkspaceName::Root,
+            PackageName::Root,
             turbo_json(json!({
                 "pipeline": {
                     "build": { "dependsOn": ["^build"] },
@@ -909,7 +904,7 @@ mod test {
         let engine = EngineBuilder::new(&repo_root, &package_graph, false)
             .with_turbo_jsons(Some(turbo_jsons))
             .with_tasks(Some(TaskName::from("build")))
-            .with_workspaces(vec![WorkspaceName::from("app1")])
+            .with_workspaces(vec![PackageName::from("app1")])
             .with_root_tasks(vec![TaskName::from("libA#build"), TaskName::from("build")])
             .build();
 
@@ -929,7 +924,7 @@ mod test {
             },
         );
         let turbo_jsons = vec![(
-            WorkspaceName::Root,
+            PackageName::Root,
             turbo_json(json!({
                 "pipeline": {
                     "libA#build": { "dependsOn": ["app1#compile", "app1#test"] },
@@ -944,7 +939,7 @@ mod test {
         let engine = EngineBuilder::new(&repo_root, &package_graph, false)
             .with_turbo_jsons(Some(turbo_jsons))
             .with_tasks(Some(TaskName::from("build")))
-            .with_workspaces(vec![WorkspaceName::from("app1")])
+            .with_workspaces(vec![PackageName::from("app1")])
             .with_root_tasks(vec![
                 TaskName::from("libA#build"),
                 TaskName::from("build"),
@@ -975,7 +970,7 @@ mod test {
             },
         );
         let turbo_jsons = vec![(
-            WorkspaceName::Root,
+            PackageName::Root,
             turbo_json(json!({
                 "pipeline": {
                     "build": { "dependsOn": ["^build"] },
@@ -989,7 +984,7 @@ mod test {
         let engine = EngineBuilder::new(&repo_root, &package_graph, false)
             .with_turbo_jsons(Some(turbo_jsons))
             .with_tasks(Some(TaskName::from("build")))
-            .with_workspaces(vec![WorkspaceName::from("app1")])
+            .with_workspaces(vec![PackageName::from("app1")])
             .with_root_tasks(vec![
                 TaskName::from("libA#build"),
                 TaskName::from("build"),
@@ -1014,7 +1009,7 @@ mod test {
             },
         );
         let turbo_jsons = vec![(
-            WorkspaceName::Root,
+            PackageName::Root,
             turbo_json(json!({
                 "pipeline": {
                     "build": { "dependsOn": ["^build", "prepare"] },
@@ -1030,9 +1025,9 @@ mod test {
             .with_tasks_only(true)
             .with_tasks(Some(TaskName::from("test")))
             .with_workspaces(vec![
-                WorkspaceName::from("a"),
-                WorkspaceName::from("b"),
-                WorkspaceName::from("c"),
+                PackageName::from("a"),
+                PackageName::from("b"),
+                PackageName::from("c"),
             ])
             .with_root_tasks(vec![
                 TaskName::from("build"),
