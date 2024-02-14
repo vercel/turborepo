@@ -54,6 +54,7 @@ jobs:
               echo /aarch64-linux-musl-cross/bin >> ${GITHUB_PATH}
               export PATH=/aarch64-linux-musl-cross/bin:/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
             setup: |
+              export PATH=/aarch64-linux-musl-cross/bin:/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
               rustup default $(cat ./rust-toolchain)-aarch64-unknown-linux-musl
               rustup target add aarch64-unknown-linux-musl
               rustup toolchain install $(cat ./rust-toolchain)
