@@ -42,7 +42,8 @@ jobs:
             container: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2023-09-17-alpine
             install: |
               apk add libc6-compat curl
-              pnpm i
+            setup: |
+              pnpm install
             target: "x86_64-unknown-linux-musl"
           - host: ubuntu-latest
             container: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2023-09-17-alpine
@@ -55,7 +56,8 @@ jobs:
               rustup target add aarch64-unknown-linux-musl
               rustup default $(cat ./rust-toolchain)-aarch64-unknown-linux-musl
               rustup toolchain install $(cat ./rust-toolchain)
-              pnpm i
+            setup: |
+              pnpm install
             target: "aarch64-unknown-linux-musl"
             rust_env: CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc RUSTFLAGS="-Ctarget-feature=-crt-static"
           - host: windows-latest
@@ -67,14 +69,14 @@ jobs:
     container:
       image: ${{ matrix.settings.container }}
     steps:
+      - name: Install Packages
+        run: ${{ matrix.settings.install }}
+        if: ${{ matrix.settings.install }}
+
       - name: Checkout
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-
-      - name: Install Packages
-        run: ${{ matrix.settings.install }}
-        if: ${{ matrix.settings.install }}
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
