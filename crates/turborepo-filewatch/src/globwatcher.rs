@@ -116,7 +116,7 @@ impl From<oneshot::error::RecvError> for Error {
 }
 
 pub struct GlobWatcher {
-    cookie_jar: CookieWriter,
+    cookie_writer: CookieWriter,
     // _exit_ch exists to trigger a close on the receiver when an instance
     // of this struct is dropped. The task that is receiving events will exit,
     // dropping the other sender for the broadcast channel, causing all receivers
@@ -171,7 +171,7 @@ impl GlobWatcher {
             GlobTracker::new(root.to_owned(), cookie_root, exit_signal, recv, query_recv).watch(),
         );
         Self {
-            cookie_jar,
+            cookie_writer: cookie_jar,
             _exit_ch: exit_ch,
             query_ch,
         }
@@ -189,7 +189,7 @@ impl GlobWatcher {
             glob_set: globs,
             resp: tx,
         };
-        let cookied_request = self.cookie_jar.cookie_request(req).await?;
+        let cookied_request = self.cookie_writer.cookie_request(req).await?;
         self.query_ch.send(cookied_request).await?;
         tokio::time::timeout(timeout, rx).await??
     }
@@ -206,7 +206,7 @@ impl GlobWatcher {
             candidates,
             resp: tx,
         };
-        let cookied_request = self.cookie_jar.cookie_request(req).await?;
+        let cookied_request = self.cookie_writer.cookie_request(req).await?;
         self.query_ch.send(cookied_request).await?;
         tokio::time::timeout(timeout, rx).await??
     }

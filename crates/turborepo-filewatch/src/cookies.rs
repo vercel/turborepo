@@ -1,3 +1,38 @@
+//! Cookies are the file watcher's way of synchronizing file system events. They
+//! are files that are added to the file system that are named with the format
+//! `[id].cookie`, where `[id]` is an increasing serial number, e.g.
+//! `1.cookie`, `2.cookie`, and so on. The daemon can then watch for the
+//! file creation event for this cookie file. Once it sees this event,
+//! the daemon knows that the file system events are up to date and we
+//! won't get any stale events.
+//!
+//! Here's the `CookieWriter` flow:
+//! - `CookieWriter` spins up a `watch_for_cookie_requests` task and creates a
+//!   `cookie_requests` mpsc channel to send a cookie request to that task. The
+//!   cookie request consists of a oneshot `Sender` that the task can use to
+//!   send back the serial number.
+//! - The `watch_for_cookie_requests` task watches for cookie requests on
+//!   `cookie_requests_rx`. When one occurs, it creates the cookie file and
+//!   bumps the serial. It then sends the serial back using the `Sender`
+//! - When `CookieWriter::cookie_request` is called, it sends the cookie request
+//!   to the `watch_for_cookie_request` channel and then waits for the serial as
+//!   a response (with a timeout). Upon getting the serial, a `CookiedRequest`
+//!   gets returned with the serial number attached.
+//!
+//! And here's the `CookieWatcher` flow:
+//! - `GlobWatcher` creates a `CookieWatcher`.
+//! - `GlobWatcher` gets queries about globs that are wrapped in
+//!   `CookiedRequest`. It passes these requests to
+//!   `CookieWatcher::check_request`
+//! - If the serial number attached to `CookiedRequest` has already been seen,
+//!   `CookieWatcher::check_request` returns the inner query immediately.
+//!   Otherwise, it gets stored in `CookieWatcher`.
+//! - `GlobWatcher` waits for file system events on `recv`. When it gets an
+//!   event, it passes the event to `CookieWatcher::pop_ready_requests`. If this
+//!   event is indeed a cookie event, we return all of the requests that are now
+//!   allowed to be processed (i.e. their serial number is now less than or
+//!   equal to the latest seen serial).
+
 use std::{collections::BinaryHeap, fs::OpenOptions, time::Duration};
 
 use notify::EventKind;
@@ -38,6 +73,8 @@ pub struct CookieWriter {
     _exit_ch: mpsc::Sender<()>,
 }
 
+/// A request that can only be processed after the `serial` has been seen by the
+/// `CookieWatcher`.
 #[derive(Debug)]
 pub struct CookiedRequest<T> {
     request: T,
@@ -63,6 +100,85 @@ impl<T> Ord for CookiedRequest<T> {
         // Lower serials should be sorted higher, since the heap pops the highest values
         // first
         other.serial.cmp(&self.serial)
+    }
+}
+
+impl CookieWriter {
+    pub fn new(root: &AbsoluteSystemPath, timeout: Duration) -> Self {
+        let (exit_ch, exit_signal) = mpsc::channel(16);
+        let (cookie_requests_tx, cookie_requests_rx) = mpsc::channel(16);
+        tokio::spawn(watch_for_cookie_file_requests(
+            root.to_owned(),
+            cookie_requests_rx,
+            exit_signal,
+        ));
+        Self {
+            root: root.to_owned(),
+            timeout,
+            cookie_request_tx: cookie_requests_tx,
+            _exit_ch: exit_ch,
+        }
+    }
+
+    pub(crate) fn root(&self) -> &AbsoluteSystemPath {
+        &self.root
+    }
+
+    /// Sends a request to make a cookie file to the
+    /// `watch_for_cookie_file_requests` task. Waits on a response from the
+    /// task, and returns a `CookiedRequest` with the expected serial
+    /// number.
+    pub(crate) async fn cookie_request<T>(
+        &self,
+        request: T,
+    ) -> Result<CookiedRequest<T>, CookieError> {
+        // we need to write the cookie from a single task so as to serialize them
+        let (serial_tx, serial_rx) = oneshot::channel();
+        self.cookie_request_tx.clone().send(serial_tx).await?;
+        let serial = tokio::time::timeout(self.timeout, serial_rx).await???;
+        Ok(CookiedRequest { request, serial })
+    }
+}
+
+async fn watch_for_cookie_file_requests(
+    root: AbsoluteSystemPathBuf,
+    mut cookie_requests: mpsc::Receiver<oneshot::Sender<Result<usize, CookieError>>>,
+    mut exit_signal: mpsc::Receiver<()>,
+) {
+    let mut serial: usize = 0;
+    loop {
+        tokio::select! {
+            biased;
+            _ = exit_signal.recv() => return,
+            req = cookie_requests.recv() => handle_cookie_file_request(&root, &mut serial, req),
+        }
+    }
+}
+
+fn handle_cookie_file_request(
+    root: &AbsoluteSystemPath,
+    serial: &mut usize,
+    req: Option<oneshot::Sender<Result<usize, CookieError>>>,
+) {
+    if let Some(req) = req {
+        *serial += 1;
+        let cookie_path = root.join_component(&format!("{}.cookie", serial));
+        let mut opts = OpenOptions::new();
+        opts.truncate(true).create(true).write(true);
+        let result = {
+            // dropping the resulting file closes the handle
+            trace!("writing cookie {}", cookie_path);
+            cookie_path
+                .ensure_dir()
+                .and_then(|_| cookie_path.open_with_options(opts))
+                .map_err(|io_err| CookieError::IO {
+                    io_err,
+                    path: cookie_path.clone(),
+                })
+        };
+        let result = result.map(|_| *serial);
+        // We don't care if the client has timed out and gone away
+        let _ = req.send(result);
     }
 }
 
@@ -134,81 +250,6 @@ impl<T> CookieWatcher<T> {
         } else {
             None
         }
-    }
-}
-
-impl CookieWriter {
-    pub fn new(root: &AbsoluteSystemPath, timeout: Duration) -> Self {
-        let (exit_ch, exit_signal) = mpsc::channel(16);
-        let (cookie_requests_tx, cookie_requests_rx) = mpsc::channel(16);
-        tokio::spawn(watch_cookies(
-            root.to_owned(),
-            cookie_requests_rx,
-            exit_signal,
-        ));
-        Self {
-            root: root.to_owned(),
-            timeout,
-            cookie_request_tx: cookie_requests_tx,
-            _exit_ch: exit_ch,
-        }
-    }
-
-    pub(crate) fn root(&self) -> &AbsoluteSystemPath {
-        &self.root
-    }
-
-    pub(crate) async fn cookie_request<T>(
-        &self,
-        request: T,
-    ) -> Result<CookiedRequest<T>, CookieError> {
-        // we need to write the cookie from a single task so as to serialize them
-        let (resp_tx, resp_rx) = oneshot::channel();
-        self.cookie_request_tx.clone().send(resp_tx).await?;
-        let serial = tokio::time::timeout(self.timeout, resp_rx).await???;
-        Ok(CookiedRequest { request, serial })
-    }
-}
-
-async fn watch_cookies(
-    root: AbsoluteSystemPathBuf,
-    mut cookie_requests: mpsc::Receiver<oneshot::Sender<Result<usize, CookieError>>>,
-    mut exit_signal: mpsc::Receiver<()>,
-) {
-    let mut serial: usize = 0;
-    loop {
-        tokio::select! {
-            biased;
-            _ = exit_signal.recv() => return,
-            req = cookie_requests.recv() => handle_cookie_request(&root, &mut serial, req),
-        }
-    }
-}
-
-fn handle_cookie_request(
-    root: &AbsoluteSystemPath,
-    serial: &mut usize,
-    req: Option<oneshot::Sender<Result<usize, CookieError>>>,
-) {
-    if let Some(req) = req {
-        *serial += 1;
-        let cookie_path = root.join_component(&format!("{}.cookie", serial));
-        let mut opts = OpenOptions::new();
-        opts.truncate(true).create(true).write(true);
-        let result = {
-            // dropping the resulting file closes the handle
-            trace!("writing cookie {}", cookie_path);
-            cookie_path
-                .ensure_dir()
-                .and_then(|_| cookie_path.open_with_options(opts))
-                .map_err(|io_err| CookieError::IO {
-                    io_err,
-                    path: cookie_path.clone(),
-                })
-        };
-        let result = result.map(|_| *serial);
-        // We don't care if the client has timed out and gone away
-        let _ = req.send(result);
     }
 }
 

@@ -1,16 +1,7 @@
 //! Daemon Server
 //!
-//! This module houses the daemon server, some implementation notes for which
-//! are below.
-//!
-//! ## Implementation Notes
-//!
-//! The basic goals of the daemon are to watch for, and be able to provide
-//! details about, filesystem changes. It is organised as an async server, which
-//! holds a `HashGlobWatcher` which holds data about hashes, globs to watch for
-//! that hash, and files that have been updated for that hash. In addition, this
-//! server can be interrogated over grpc to register interest in particular
-//! globs, and to query for changes for those globs.
+//! This module houses the daemon server. For more information, go to the
+//! [daemon module](std::daemon).
 
 use std::{
     collections::{HashMap, HashSet},
