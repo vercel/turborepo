@@ -640,7 +640,7 @@ impl swc_core::css::visit::Visit for CssModuleValidator {
 
         if n.children.iter().all(|sel| match sel {
             swc_core::css::ast::ComplexSelectorChildren::CompoundSelector(sel) => {
-                sel.subclass_selectors.is_empty()
+                sel.type_selector.is_some() && sel.subclass_selectors.is_empty()
             }
             swc_core::css::ast::ComplexSelectorChildren::Combinator(_) => true,
         }) {
