@@ -6,7 +6,7 @@ use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
 use turborepo_cache::{AsyncCache, CacheError, CacheHitMetadata, CacheSource};
-use turborepo_repository::package_graph::WorkspaceInfo;
+use turborepo_repository::package_graph::PackageInfo;
 use turborepo_scm::SCM;
 use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
 use turborepo_ui::{
@@ -84,7 +84,7 @@ impl RunCache {
         self: &Arc<Self>,
         // TODO: Group these in a struct
         task_definition: &TaskDefinition,
-        workspace_info: &WorkspaceInfo,
+        workspace_info: &PackageInfo,
         task_id: TaskId<'static>,
         hash: &str,
     ) -> TaskCache {
@@ -116,8 +116,9 @@ impl RunCache {
         }
     }
 
-    pub async fn wait_for_cache(&self) {
-        self.cache.wait().await
+    pub async fn shutdown_cache(&self) {
+        // Ignore errors coming from cache already shutting down
+        self.cache.shutdown().await.ok();
     }
 }
 
@@ -203,12 +204,11 @@ impl TaskCache {
             return Ok(None);
         }
 
+        let validated_inclusions = self.repo_relative_globs.validated_inclusions()?;
+
         let changed_output_count = if let Some(daemon_client) = &mut self.daemon_client {
             match daemon_client
-                .get_changed_outputs(
-                    self.hash.to_string(),
-                    self.repo_relative_globs.inclusions.clone(),
-                )
+                .get_changed_outputs(self.hash.to_string(), &validated_inclusions)
                 .await
             {
                 Ok(changed_output_globs) => changed_output_globs.len(),
@@ -255,11 +255,14 @@ impl TaskCache {
             self.expanded_outputs = restored_files;
 
             if let Some(daemon_client) = &mut self.daemon_client {
+                // Do we want to error the process if we can't parse the globs? We probably
+                // won't have even gotten this far if this fails...
+                let validated_exclusions = self.repo_relative_globs.validated_exclusions()?;
                 if let Err(err) = daemon_client
                     .notify_outputs_written(
                         self.hash.clone(),
-                        self.repo_relative_globs.inclusions.clone(),
-                        self.repo_relative_globs.exclusions.clone(),
+                        &validated_inclusions,
+                        &validated_exclusions,
                         cache_hit_metadata.time_saved,
                     )
                     .await
@@ -322,10 +325,12 @@ impl TaskCache {
 
         debug!("caching outputs: outputs: {:?}", &self.repo_relative_globs);
 
+        let validated_inclusions = self.repo_relative_globs.validated_inclusions()?;
+        let validated_exclusions = self.repo_relative_globs.validated_exclusions()?;
         let files_to_be_cached = globwalk::globwalk(
             &self.run_cache.repo_root,
-            &self.repo_relative_globs.validated_inclusions()?,
-            &self.repo_relative_globs.validated_exclusions()?,
+            &validated_inclusions,
+            &validated_exclusions,
             globwalk::WalkType::All,
         )?;
 
@@ -350,8 +355,8 @@ impl TaskCache {
             let notify_result = daemon_client
                 .notify_outputs_written(
                     self.hash.to_string(),
-                    self.repo_relative_globs.inclusions.clone(),
-                    self.repo_relative_globs.exclusions.clone(),
+                    &validated_inclusions,
+                    &validated_exclusions,
                     duration.as_millis() as u64,
                 )
                 .await

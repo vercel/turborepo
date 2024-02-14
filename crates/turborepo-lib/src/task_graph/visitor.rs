@@ -12,10 +12,10 @@ use regex::Regex;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, Instrument, Span};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
-use turborepo_ci::github_header_footer;
+use turborepo_ci::{Vendor, VendorBehavior};
 use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
 use turborepo_repository::{
-    package_graph::{PackageGraph, WorkspaceName, ROOT_PKG_NAME},
+    package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME},
     package_manager::PackageManager,
 };
 use turborepo_telemetry::events::{
@@ -64,7 +64,7 @@ pub struct Visitor<'a> {
 pub enum Error {
     #[error("cannot find package {package_name} for task {task_id}")]
     MissingPackage {
-        package_name: WorkspaceName,
+        package_name: PackageName,
         task_id: TaskId<'static>,
     },
     #[error(
@@ -151,15 +151,15 @@ impl<'a> Visitor<'a> {
             let span = tracing::debug_span!(parent: &span, "queue_task", task = %message.info);
             let _enter = span.enter();
             let crate::engine::Message { info, callback } = message;
-            let package_name = WorkspaceName::from(info.package());
+            let package_name = PackageName::from(info.package());
 
-            let workspace_info = self
-                .package_graph
-                .workspace_info(&package_name)
-                .ok_or_else(|| Error::MissingPackage {
-                    package_name: package_name.clone(),
-                    task_id: info.clone(),
-                })?;
+            let workspace_info =
+                self.package_graph
+                    .package_info(&package_name)
+                    .ok_or_else(|| Error::MissingPackage {
+                        package_name: package_name.clone(),
+                        task_id: info.clone(),
+                    })?;
 
             let package_task_event =
                 PackageTaskEventBuilder::new(info.package(), info.task()).with_parent(telemetry);
@@ -261,7 +261,10 @@ impl<'a> Visitor<'a> {
                         self.task_access.clone(),
                     );
 
-                    let output_client = self.output_client(&info);
+                    let vendor_behavior =
+                        Vendor::infer().and_then(|vendor| vendor.behavior.as_ref());
+
+                    let output_client = self.output_client(&info, vendor_behavior);
                     let tracker = self.run_tracker.track_task(info.clone().into_owned());
                     let spaces_client = self.run_tracker.spaces_task_client();
                     let parent_span = Span::current();
@@ -314,7 +317,7 @@ impl<'a> Visitor<'a> {
     pub(crate) async fn finish(
         self,
         exit_code: i32,
-        packages: HashSet<WorkspaceName>,
+        packages: HashSet<PackageName>,
         global_hash_inputs: GlobalHashableInputs<'_>,
         engine: &Engine,
         env_at_execution_start: &EnvironmentVariableMap,
@@ -362,7 +365,11 @@ impl<'a> Visitor<'a> {
         OutputSink::new(out, err)
     }
 
-    fn output_client(&self, task_id: &TaskId) -> OutputClient<impl std::io::Write> {
+    fn output_client(
+        &self,
+        task_id: &TaskId,
+        vendor_behavior: Option<&VendorBehavior>,
+    ) -> OutputClient<impl std::io::Write> {
         let behavior = match self.run_opts.log_order {
             crate::opts::ResolvedLogOrder::Stream if self.run_tracker.spaces_enabled() => {
                 turborepo_ui::OutputClientBehavior::InMemoryBuffer
@@ -374,14 +381,23 @@ impl<'a> Visitor<'a> {
         };
 
         let mut logger = self.sink.logger(behavior);
-        if self.run_opts.is_github_actions {
-            let package = if self.run_opts.single_package {
-                None
+        if let Some(vendor_behavior) = vendor_behavior {
+            let group_name = if self.run_opts.single_package {
+                task_id.task().to_string()
             } else {
-                Some(task_id.package())
+                format!("{}:{}", task_id.package(), task_id.task())
             };
-            let (header, footer) = github_header_footer(package, task_id.task());
+            let (header, footer) = (
+                (vendor_behavior.group_prefix)(&group_name),
+                (vendor_behavior.group_suffix)(&group_name),
+            );
             logger.with_header_footer(Some(header), Some(footer));
+
+            let (error_header, error_footer) = (
+                vendor_behavior.error_group_prefix.map(|f| f(&group_name)),
+                vendor_behavior.error_group_suffix.map(|f| f(&group_name)),
+            );
+            logger.with_error_header_footer(error_header, error_footer);
         }
         logger
     }
@@ -680,7 +696,10 @@ impl ExecContext {
             .instrument(span)
             .await;
 
-        let logs = match output_client.finish() {
+        // If the task resulted in an error, do not group in order to better highlight
+        // the error.
+        let is_error = matches!(result, ExecOutcome::Task { .. });
+        let logs = match output_client.finish(is_error) {
             Ok(logs) => logs,
             Err(e) => {
                 telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);

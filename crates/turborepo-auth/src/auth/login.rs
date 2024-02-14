@@ -4,11 +4,11 @@ pub use error::Error;
 use reqwest::Url;
 use tokio::sync::OnceCell;
 use tracing::warn;
-use turborepo_api_client::Client;
-use turborepo_ui::{start_spinner, BOLD};
+use turborepo_api_client::{Client, TokenClient};
+use turborepo_ui::start_spinner;
 
 use crate::{
-    auth::{check_token, extract_vercel_token},
+    auth::{check_user_token, extract_vercel_token},
     error, ui, LoginOptions, Token,
 };
 
@@ -21,35 +21,32 @@ const DEFAULT_PORT: u16 = 9789;
 ///
 /// First checks if an existing option has been passed in, then if the login is
 /// to Vercel, checks if the user has a Vercel CLI token on disk.
-pub async fn login<T: Client>(options: &LoginOptions<'_, T>) -> Result<Token, Error> {
+pub async fn login<T: Client + TokenClient>(options: &LoginOptions<'_, T>) -> Result<Token, Error> {
     let LoginOptions {
         api_client,
         ui,
         login_url: login_url_configuration,
         login_server,
         sso_team: _,
-        existing_token: _,
+        existing_token,
     } = *options; // Deref or we get double references for each of these
 
     // Check if passed in token exists first.
-    if let Some(token) = options.existing_token {
-        return check_token(token, ui, api_client, "Existing token found!").await;
+    if let Some(token) = existing_token {
+        if Token::existing(token.to_string())
+            .is_valid(api_client)
+            .await?
+        {
+            return check_user_token(token, ui, api_client, "Existing token found!").await;
+        }
     }
 
     // If the user is logging into Vercel, check for an existing `vc` token.
     if login_url_configuration.contains("vercel.com") {
-        match extract_vercel_token() {
-            Ok(token) => {
-                println!(
-                    "{}",
-                    ui.apply(BOLD.apply_to("Existing Vercel token found!"))
-                );
-                return Ok(Token::Existing(token));
-            }
-            Err(error) => {
-                // Only send the warning if we're debugging.
-                dbg!("Failed to extract Vercel token: ", error);
-            }
+        // The extraction can return an error, but we don't want to fail the login if
+        // the token is not found.
+        if let Ok(token) = extract_vercel_token() {
+            return check_user_token(&token, ui, api_client, "Existing Vercel token found!").await;
         }
     }
 
@@ -99,7 +96,7 @@ pub async fn login<T: Client>(options: &LoginOptions<'_, T>) -> Result<Token, Er
 
     ui::print_cli_authorized(&user_response.user.email, ui);
 
-    Ok(Token::New(token.into()))
+    Ok(Token::new(token.into()))
 }
 
 #[cfg(test)]
@@ -283,6 +280,35 @@ mod tests {
         fn make_url(&self, endpoint: &str) -> turborepo_api_client::Result<Url> {
             let url = format!("{}{}", self.base_url, endpoint);
             Url::parse(&url).map_err(|err| turborepo_api_client::Error::InvalidUrl { url, err })
+        }
+    }
+
+    #[async_trait]
+    impl TokenClient for MockApiClient {
+        async fn get_metadata(
+            &self,
+            token: &str,
+        ) -> turborepo_api_client::Result<turborepo_vercel_api::token::ResponseTokenMetadata>
+        {
+            if token.is_empty() {
+                return Err(MockApiError::EmptyToken.into());
+            }
+
+            Ok(turborepo_vercel_api::token::ResponseTokenMetadata {
+                id: "id".to_string(),
+                name: "name".to_string(),
+                token_type: "token".to_string(),
+                origin: "github".to_string(),
+                scopes: vec![turborepo_vercel_api::token::Scope {
+                    scope_type: "user".to_string(),
+                    origin: "github".to_string(),
+                    team_id: None,
+                    expires_at: None,
+                    created_at: 1111111111111,
+                }],
+                active_at: 0,
+                created_at: 123456,
+            })
         }
     }
 

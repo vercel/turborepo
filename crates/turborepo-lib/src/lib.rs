@@ -19,6 +19,7 @@ mod daemon;
 mod engine;
 
 mod framework;
+mod gitignore;
 pub(crate) mod globwatcher;
 mod hash;
 mod opts;
@@ -36,8 +37,7 @@ mod unescape;
 pub use crate::{
     child::spawn_child,
     cli::Args,
-    commands::DaemonRootHasher,
-    daemon::{DaemonClient, DaemonConnector},
+    daemon::{DaemonClient, DaemonConnector, Paths as DaemonPaths},
     run::package_discovery::DaemonPackageDiscovery,
 };
 

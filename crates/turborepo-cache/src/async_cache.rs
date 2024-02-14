@@ -25,6 +25,7 @@ enum WorkerRequest {
         files: Vec<AnchoredSystemPathBuf>,
     },
     Flush(tokio::sync::oneshot::Sender<()>),
+    Shutdown(tokio::sync::oneshot::Sender<()>),
 }
 
 impl AsyncCache {
@@ -53,6 +54,7 @@ impl AsyncCache {
             let real_cache = worker_real_cache;
             let warnings = Arc::new(AtomicU8::new(0));
 
+            let mut shutdown_callback = None;
             while let Some(request) = write_consumer.recv().await {
                 match request {
                     WorkerRequest::WriteRequest {
@@ -93,12 +95,21 @@ impl AsyncCache {
                         }
                         drop(callback);
                     }
+                    WorkerRequest::Shutdown(callback) => {
+                        shutdown_callback = Some(callback);
+                        break;
+                    }
                 };
             }
+            // Drop write consumer to immediately notify callers that cache is shutting down
+            drop(write_consumer);
 
             // wait for all writers to finish
             while let Some(worker) = workers.next().await {
                 let _ = worker;
+            }
+            if let Some(callback) = shutdown_callback {
+                callback.send(()).ok();
             }
         });
 
@@ -150,14 +161,26 @@ impl AsyncCache {
     // Used for testing to ensure that the workers resolve
     // before checking the cache.
     #[tracing::instrument(skip_all)]
-    pub async fn wait(&self) {
+    pub async fn wait(&self) -> Result<(), CacheError> {
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.writer_sender
             .send(WorkerRequest::Flush(tx))
             .await
-            .expect("cache can only be shut down by consuming cache");
+            .map_err(|_| CacheError::CacheShuttingDown)?;
         // Wait until flush callback is finished
         rx.await.ok();
+        Ok(())
+    }
+
+    #[tracing::instrument(skip_all)]
+    pub async fn shutdown(&self) -> Result<(), CacheError> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.writer_sender
+            .send(WorkerRequest::Shutdown(tx))
+            .await
+            .map_err(|_| CacheError::CacheShuttingDown)?;
+        rx.await.ok();
+        Ok(())
     }
 }
 
@@ -241,7 +264,7 @@ mod tests {
             .unwrap();
 
         // Wait for async cache to process
-        async_cache.wait().await;
+        async_cache.wait().await.unwrap();
 
         let fs_cache_path = repo_root_path.join_components(&[
             "node_modules",
@@ -262,6 +285,12 @@ mod tests {
                 source: CacheSource::Remote,
                 time_saved: test_case.duration
             })
+        );
+
+        async_cache.shutdown().await.unwrap();
+        assert!(
+            async_cache.shutdown().await.is_err(),
+            "second shutdown should error"
         );
 
         Ok(())
@@ -317,7 +346,7 @@ mod tests {
             .unwrap();
 
         // Wait for async cache to process
-        async_cache.wait().await;
+        async_cache.wait().await.unwrap();
 
         let fs_cache_path = repo_root_path.join_components(&[
             "node_modules",
@@ -347,6 +376,12 @@ mod tests {
 
         // Confirm that we get a cache miss
         assert!(response.is_none());
+
+        async_cache.shutdown().await.unwrap();
+        assert!(
+            async_cache.shutdown().await.is_err(),
+            "second shutdown should error"
+        );
 
         Ok(())
     }
@@ -399,7 +434,7 @@ mod tests {
             .unwrap();
 
         // Wait for async cache to process
-        async_cache.wait().await;
+        async_cache.wait().await.unwrap();
 
         let fs_cache_path = repo_root_path.join_components(&[
             "node_modules",
@@ -434,6 +469,12 @@ mod tests {
                 source: CacheSource::Remote,
                 time_saved: test_case.duration
             })
+        );
+
+        async_cache.shutdown().await.unwrap();
+        assert!(
+            async_cache.shutdown().await.is_err(),
+            "second shutdown should error"
         );
 
         Ok(())

@@ -28,5 +28,16 @@ export class Workspace {
   static find(path?: string | undefined | null): Promise<Workspace>;
   /** Finds and returns packages within the workspace. */
   findPackages(): Promise<Array<Package>>;
+  /**
+   * Finds and returns a map of packages within the workspace and its
+   * dependents (i.e. the packages that depend on each of those packages).
+   */
   findPackagesAndDependents(): Promise<Record<string, Array<string>>>;
+  /**
+   * Given a set of "changed" files, returns a set of packages that are
+   * "affected" by the changes. The `files` argument is expected to be a list
+   * of strings relative to the monorepo root and use the current system's
+   * path separator.
+   */
+  affectedPackages(files: Array<string>): Promise<Array<Package>>;
 }

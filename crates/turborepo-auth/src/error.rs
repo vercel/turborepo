@@ -30,4 +30,8 @@ pub enum Error {
     ConfigDirNotFound,
     #[error("sso team cannot be empty for login")]
     EmptySSOTeam,
+    #[error("sso team not found: {0}")]
+    SSOTeamNotFound(String),
+    #[error("sso token expired for team: {0}")]
+    SSOTokenExpired(String),
 }

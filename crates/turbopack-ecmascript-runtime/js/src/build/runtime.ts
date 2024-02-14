@@ -30,7 +30,7 @@ type ExternalImport = (id: ModuleId) => Promise<Exports | EsmNamespaceObject>;
 type ResolveAbsolutePath = (modulePath?: string) => string;
 
 interface TurbopackNodeBuildContext extends TurbopackBaseContext {
-  p: ResolveAbsolutePath;
+  P: ResolveAbsolutePath;
   R: ResolvePathFromModule;
   x: ExternalRequire;
   y: ExternalImport;
@@ -179,15 +179,17 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
       i: esmImport.bind(null, module),
       s: esmExport.bind(null, module, module.exports),
       j: dynamicExport.bind(null, module, module.exports),
+      p: moduleLookup,
       v: exportValue.bind(null, module),
       n: exportNamespace.bind(null, module),
       m: module,
       c: moduleCache,
+      M: moduleFactories,
       l: loadChunkAsync.bind(null, { type: SourceType.Parent, parentId: id }),
       w: loadWebAssembly,
       u: loadWebAssemblyModule,
       g: globalThis,
-      p: resolveAbsolutePath,
+      P: resolveAbsolutePath,
       U: relativeURL,
       R: createResolvePathFromModule(r),
       __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),

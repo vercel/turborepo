@@ -104,7 +104,7 @@ fn echo_task(
     }
     process.wait()?;
 
-    client.finish()?;
+    client.finish(true)?;
 
     Ok(())
 }

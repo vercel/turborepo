@@ -42,7 +42,7 @@ use swc_core::{
     ecma::{
         ast::*,
         visit::{
-            fields::{AssignExprField, ExprField, PatField, PatOrExprField},
+            fields::{AssignExprField, AssignTargetField, SimpleAssignTargetField},
             AstParentKind, AstParentNodeRef, VisitAstPath, VisitWithPath,
         },
     },
@@ -1329,7 +1329,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                         ),
                     )
                 }
-                analysis.add_reference(FileSourceReference::new(source, pat.into()));
+                analysis.add_reference(FileSourceReference::new(source, Pattern::new(pat)));
                 return Ok(());
             }
             let (args, hints) = explain_args(&args);
@@ -1369,11 +1369,16 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                     ),
                 )
             }
-            analysis.add_reference(FileSourceReference::new(source, pat.into()));
+            analysis.add_reference(FileSourceReference::new(source, Pattern::new(pat)));
             return Ok(());
         }
 
         JsValue::WellKnownFunction(WellKnownFunctionKind::PathJoin) => {
+            let context_path = source.ident().path().await?;
+            // ignore path.join in `node-gyp`, it will includes too many files
+            if context_path.path.contains("node_modules/node-gyp") {
+                return Ok(());
+            }
             let args = linked_args(args).await?;
             let linked_func_call = state
                 .link_value(
@@ -1395,7 +1400,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                     ),
                 )
             }
-            analysis.add_reference(DirAssetReference::new(source, pat.into()));
+            analysis.add_reference(DirAssetReference::new(source, Pattern::new(pat)));
             return Ok(());
         }
         JsValue::WellKnownFunction(WellKnownFunctionKind::ChildProcessSpawnMethod(name)) => {
@@ -1434,7 +1439,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                         ),
                     );
                 }
-                analysis.add_reference(FileSourceReference::new(source, pat.into()));
+                analysis.add_reference(FileSourceReference::new(source, Pattern::new(pat)));
                 return Ok(());
             }
             let (args, hints) = explain_args(&args);
@@ -1498,7 +1503,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                 }
                 analysis.add_reference(NodePreGypConfigReference::new(
                     origin.origin_path().parent(),
-                    pat.into(),
+                    Pattern::new(pat),
                     compile_time_info.environment().compile_target(),
                 ));
                 return Ok(());
@@ -1609,7 +1614,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                                 };
                                 analysis.add_reference(DirAssetReference::new(
                                     source,
-                                    abs_pattern.into(),
+                                    Pattern::new(abs_pattern),
                                 ));
                                 return Ok(());
                             }
@@ -1664,7 +1669,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                         .await?;
                     js_value_to_pattern(&linked_func_call)
                 };
-                analysis.add_reference(DirAssetReference::new(source, abs_pattern.into()));
+                analysis.add_reference(DirAssetReference::new(source, Pattern::new(abs_pattern)));
                 return Ok(());
             }
             let (args, hints) = explain_args(&args);
@@ -1724,7 +1729,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                     {
                         analysis.add_reference(DirAssetReference::new(
                             source,
-                            Pattern::Constant(dir).into(),
+                            Pattern::new(Pattern::Constant(dir)),
                         ));
                     }
                     return Ok(());
@@ -1839,9 +1844,8 @@ async fn handle_free_var_reference(
         [
             ..,
             AstParentKind::AssignExpr(AssignExprField::Left),
-            AstParentKind::PatOrExpr(PatOrExprField::Pat),
-            AstParentKind::Pat(PatField::Expr),
-            AstParentKind::Expr(ExprField::Member),
+            AstParentKind::AssignTarget(AssignTargetField::Simple),
+            AstParentKind::SimpleAssignTarget(SimpleAssignTargetField::Member),
         ]
     ) {
         return Ok(false);
@@ -2051,7 +2055,10 @@ fn analyze_amd_define_with_deps(
                         issue_source(source, span),
                         in_try,
                     );
-                    requests.push(AmdDefineDependencyElement::Request(request));
+                    requests.push(AmdDefineDependencyElement::Request {
+                        request,
+                        request_str: dep.to_string(),
+                    });
                     analysis.add_reference(reference);
                 }
             }

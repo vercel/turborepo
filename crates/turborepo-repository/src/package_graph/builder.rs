@@ -13,13 +13,12 @@ use turbopath::{
 use turborepo_graph_utils as graph;
 use turborepo_lockfiles::Lockfile;
 
-use super::{PackageGraph, WorkspaceInfo, WorkspaceName, WorkspaceNode};
+use super::{PackageGraph, PackageInfo, PackageName, PackageNode};
 use crate::{
     discovery::{
         self, CachingPackageDiscovery, LocalPackageDiscoveryBuilder, PackageDiscovery,
         PackageDiscoveryBuilder,
     },
-    package_graph::{PackageName, PackageVersion},
     package_json::PackageJson,
 };
 
@@ -144,9 +143,9 @@ where
 struct BuildState<'a, S, T> {
     repo_root: &'a AbsoluteSystemPath,
     single: bool,
-    workspaces: HashMap<WorkspaceName, WorkspaceInfo>,
-    workspace_graph: Graph<WorkspaceNode, ()>,
-    node_lookup: HashMap<WorkspaceNode, NodeIndex>,
+    workspaces: HashMap<PackageName, PackageInfo>,
+    workspace_graph: Graph<PackageNode, ()>,
+    node_lookup: HashMap<PackageNode, NodeIndex>,
     lockfile: Option<Box<dyn Lockfile>>,
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
     state: std::marker::PhantomData<S>,
@@ -163,15 +162,15 @@ enum ResolvedWorkspaces {}
 enum ResolvedLockfile {}
 
 impl<'a, S, T> BuildState<'a, S, T> {
-    fn add_node(&mut self, node: WorkspaceNode) -> NodeIndex {
+    fn add_node(&mut self, node: PackageNode) -> NodeIndex {
         let idx = self.workspace_graph.add_node(node.clone());
         self.node_lookup.insert(node, idx);
         idx
     }
 
     fn add_root_workspace(&mut self) {
-        let root_index = self.add_node(WorkspaceNode::Root);
-        let root_workspace = self.add_node(WorkspaceNode::Workspace(WorkspaceName::Root));
+        let root_index = self.add_node(PackageNode::Root);
+        let root_workspace = self.add_node(PackageNode::Workspace(PackageName::Root));
         self.workspace_graph
             .add_edge(root_workspace, root_index, ());
     }
@@ -200,8 +199,8 @@ where
         } = builder;
         let mut workspaces = HashMap::new();
         workspaces.insert(
-            WorkspaceName::Root,
-            WorkspaceInfo {
+            PackageName::Root,
+            PackageInfo {
                 package_json: root_package_json,
                 package_json_path: AnchoredSystemPathBuf::from_raw("package.json").unwrap(),
                 ..Default::default()
@@ -233,12 +232,12 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
     ) -> Result<(), Error> {
         let relative_json_path =
             AnchoredSystemPathBuf::relative_path_between(self.repo_root, &package_json_path);
-        let name = WorkspaceName::Other(
+        let name = PackageName::Other(
             json.name
                 .clone()
                 .ok_or(Error::PackageJsonMissingName(package_json_path))?,
         );
-        let entry = WorkspaceInfo {
+        let entry = PackageInfo {
             package_json: json,
             package_json_path: relative_json_path,
             ..Default::default()
@@ -256,7 +255,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
                 existing_path: existing.package_json_path.to_string(),
             });
         }
-        self.add_node(WorkspaceNode::Workspace(name));
+        self.add_node(PackageNode::Workspace(name));
         Ok(())
     }
 
@@ -333,9 +332,9 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
 
         debug_assert!(single, "expected single package graph");
         Ok(PackageGraph {
-            workspace_graph,
+            graph: workspace_graph,
             node_lookup,
-            workspaces,
+            packages: workspaces,
             lockfile,
             package_manager,
         })
@@ -369,19 +368,19 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
             let Dependencies { internal, external } = deps;
             let node_idx = self
                 .node_lookup
-                .get(&WorkspaceNode::Workspace(name))
+                .get(&PackageNode::Workspace(name))
                 .expect("unable to find workspace node index");
             if internal.is_empty() {
                 let root_idx = self
                     .node_lookup
-                    .get(&WorkspaceNode::Root)
+                    .get(&PackageNode::Root)
                     .expect("root node should have index");
                 self.workspace_graph.add_edge(*node_idx, *root_idx, ());
             }
             for dependency in internal {
                 let dependency_idx = self
                     .node_lookup
-                    .get(&WorkspaceNode::Workspace(dependency))
+                    .get(&PackageNode::Workspace(dependency))
                     .expect("unable to find workspace node index");
                 self.workspace_graph
                     .add_edge(*node_idx, *dependency_idx, ());
@@ -406,7 +405,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
                 let lockfile = package_manager.read_lockfile(
                     self.repo_root,
                     self.workspaces
-                        .get(&WorkspaceName::Root)
+                        .get(&PackageName::Root)
                         .as_ref()
                         .map(|e| &e.package_json)
                         .expect("root workspace should have json"),
@@ -515,9 +514,9 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedLockfile, T> {
             ..
         } = self;
         Ok(PackageGraph {
-            workspace_graph,
+            graph: workspace_graph,
             node_lookup,
-            workspaces,
+            packages: workspaces,
             package_manager,
             lockfile,
         })
@@ -525,15 +524,15 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedLockfile, T> {
 }
 
 struct Dependencies {
-    internal: HashSet<WorkspaceName>,
-    external: BTreeMap<PackageName, PackageVersion>,
+    internal: HashSet<PackageName>,
+    external: BTreeMap<String, String>, // Package name and version
 }
 
 impl Dependencies {
     pub fn new<'a, I: IntoIterator<Item = (&'a String, &'a String)>>(
         repo_root: &AbsoluteSystemPath,
         workspace_json_path: &AnchoredSystemPathBuf,
-        workspaces: &HashMap<WorkspaceName, WorkspaceInfo>,
+        workspaces: &HashMap<PackageName, PackageInfo>,
         dependencies: I,
     ) -> Self {
         let resolved_workspace_json_path = repo_root.resolve(workspace_json_path);
@@ -561,13 +560,13 @@ impl Dependencies {
 struct DependencySplitter<'a, 'b, 'c> {
     repo_root: &'a AbsoluteSystemPath,
     workspace_dir: &'b AbsoluteSystemPath,
-    workspaces: &'c HashMap<WorkspaceName, WorkspaceInfo>,
+    workspaces: &'c HashMap<PackageName, PackageInfo>,
 }
 
 impl<'a, 'b, 'c> DependencySplitter<'a, 'b, 'c> {
-    fn is_internal(&self, name: &str, version: &str) -> Option<WorkspaceName> {
+    fn is_internal(&self, name: &str, version: &str) -> Option<PackageName> {
         // TODO implement borrowing for workspaces to allow for zero copy queries
-        let workspace_name = WorkspaceName::Other(
+        let workspace_name = PackageName::Other(
             version
                 .strip_prefix("workspace:")
                 .and_then(|version| version.rsplit_once('@'))
@@ -680,7 +679,7 @@ impl<'a> fmt::Display for DependencyVersion<'a> {
     }
 }
 
-impl WorkspaceInfo {
+impl PackageInfo {
     fn unix_dir_str(&self) -> Result<String, Error> {
         let unix = self
             .package_json_path
@@ -738,8 +737,8 @@ mod test {
         let workspaces = {
             let mut map = HashMap::new();
             map.insert(
-                WorkspaceName::Other("@scope/foo".to_string()),
-                WorkspaceInfo {
+                PackageName::Other("@scope/foo".to_string()),
+                PackageInfo {
                     package_json: PackageJson {
                         version: Some(package_version.to_string()),
                         ..Default::default()
@@ -760,7 +759,7 @@ mod test {
 
         assert_eq!(
             splitter.is_internal(dependency_name.unwrap_or("@scope/foo"), range),
-            expected.map(WorkspaceName::from)
+            expected.map(PackageName::from)
         );
     }
 
