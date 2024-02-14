@@ -9,6 +9,8 @@ use lightningcss::{
     stylesheet::{ParserOptions, PrinterOptions, StyleSheet, ToCssResult},
     targets::{Features, Targets},
     values::url::Url,
+    visit_types,
+    visitor::Visit,
 };
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -516,7 +518,11 @@ async fn process_content(
 
     let stylesheet = if use_lightningcss {
         StyleSheetLike::LightningCss(match StyleSheet::parse(&code, config.clone()) {
-            Ok(stylesheet) => stylesheet_into_static(&stylesheet, without_warnings(config.clone())),
+            Ok(mut ss) => {
+                ss.visit(&mut CssModuleValdator { file: fs_path });
+
+                stylesheet_into_static(&ss, without_warnings(config.clone()))
+            }
             Err(e) => {
                 ParsingIssue {
                     file: fs_path,
@@ -570,6 +576,10 @@ async fn process_content(
             return Ok(ParseCssResult::Unparseable.into());
         }
 
+        if matches!(ty, CssModuleAssetType::Module) {
+            ss.visit_with(&mut CssModuleValidator { file: fs_path });
+        }
+
         StyleSheetLike::Swc {
             stylesheet: ss,
             css_modules: if matches!(ty, CssModuleAssetType::Module) {
@@ -606,6 +616,28 @@ async fn process_content(
         options: config,
     }
     .into())
+}
+
+/// Visitor that lints wrong css module usage.
+///
+/// ```css
+/// button {
+/// }
+/// ```
+///
+/// is wrong for a css module because it doesn't have a class name.
+struct CssModuleValdator {
+    file: Vc<FileSystemPath>,
+}
+
+impl swc_core::css::visit::Visit for CssModuleValdator {}
+
+impl lightningcss::visitor::Visitor<'_> for CssModuleValdator {
+    type Error = ();
+
+    fn visit_types(&self) -> lightningcss::visitor::VisitTypes {
+        visit_types!(SELECTORS)
+    }
 }
 
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
