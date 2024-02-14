@@ -7,17 +7,17 @@
 //! won't get any stale events.
 //!
 //! Here's the `CookieWriter` flow:
-//! - `CookieWriter` spins up a `watch_for_cookie_requests` task and creates a
+//! - `CookieWriter` spins up a `watch_cookies` task and creates a
 //!   `cookie_requests` mpsc channel to send a cookie request to that task. The
 //!   cookie request consists of a oneshot `Sender` that the task can use to
 //!   send back the serial number.
-//! - The `watch_for_cookie_requests` task watches for cookie requests on
+//! - The `watch_cookies` task watches for cookie requests on
 //!   `cookie_requests_rx`. When one occurs, it creates the cookie file and
 //!   bumps the serial. It then sends the serial back using the `Sender`
 //! - When `CookieWriter::cookie_request` is called, it sends the cookie request
-//!   to the `watch_for_cookie_request` channel and then waits for the serial as
-//!   a response (with a timeout). Upon getting the serial, a `CookiedRequest`
-//!   gets returned with the serial number attached.
+//!   to the `watch_cookies` channel and then waits for the serial as a response
+//!   (with a timeout). Upon getting the serial, a `CookiedRequest` gets
+//!   returned with the serial number attached.
 //!
 //! And here's the `CookieWatcher` flow:
 //! - `GlobWatcher` creates a `CookieWatcher`.
