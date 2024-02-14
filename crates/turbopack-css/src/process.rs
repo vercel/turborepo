@@ -519,8 +519,11 @@ async fn process_content(
     let stylesheet = if use_lightningcss {
         StyleSheetLike::LightningCss(match StyleSheet::parse(&code, config.clone()) {
             Ok(mut ss) => {
-                ss.visit(&mut CssModuleValidator { file: fs_path_vc })
-                    .unwrap();
+                ss.visit(&mut CssModuleValidator {
+                    source,
+                    file: fs_path_vc,
+                })
+                .unwrap();
 
                 stylesheet_into_static(&ss, without_warnings(config.clone()))
             }
@@ -578,7 +581,10 @@ async fn process_content(
         }
 
         if matches!(ty, CssModuleAssetType::Module) {
-            ss.visit_with(&mut CssModuleValidator { file: fs_path_vc });
+            ss.visit_with(&mut CssModuleValidator {
+                source,
+                file: fs_path_vc,
+            });
         }
 
         StyleSheetLike::Swc {
@@ -628,6 +634,7 @@ async fn process_content(
 ///
 /// is wrong for a css module because it doesn't have a class name.
 struct CssModuleValidator {
+    source: Vc<Box<dyn Source>>,
     file: Vc<FileSystemPath>,
 }
 
@@ -647,6 +654,11 @@ impl swc_core::css::visit::Visit for CssModuleValidator {
             ParsingIssue {
                 file: self.file,
                 msg: Vc::cell(CSS_MODULE_ERROR.to_string()),
+                source: Vc::cell(Some(IssueSource::from_swc_offsets(
+                    self.source,
+                    n.span.lo.0 as _,
+                    n.span.hi.0 as _,
+                ))),
             }
             .cell()
             .emit();
