@@ -137,6 +137,6 @@ module.exports = {
 }
 ```
 
-This overwrites the original resolve extensions with the provided list. Make sure to include the default extensions.
+This overwrites the original resolve extensions with the provided list. Make sure to include the default extensions listed in the above config.
 
 Turbopack also supports conditional aliasing through this field, similar to Node.js's [conditional exports](https://nodejs.org/docs/latest-v18.x/api/packages.html#conditional-exports). At the moment only the `browser` condition is supported. In the case above, imports of the `mocha` module will be aliased to `mocha/browser-entry.js` when Turbopack targets browser environments.
