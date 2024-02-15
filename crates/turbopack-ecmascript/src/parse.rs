@@ -7,7 +7,7 @@ use swc_core::{
         errors::{Handler, HANDLER},
         input::StringInput,
         source_map::SourceMapGenConfig,
-        BytePos, FileName, Globals, LineCol, Mark, GLOBALS,
+        BytePos, FileName, Globals, LineCol, Mark, SyntaxContext, GLOBALS,
     },
     ecma::{
         ast::{EsVersion, Program},
@@ -16,9 +16,10 @@ use swc_core::{
             helpers::{Helpers, HELPERS},
             resolver,
         },
-        visit::VisitMutWith,
+        visit::{FoldWith, VisitMutWith},
     },
 };
+use swc_ecma_lints::{config::LintConfig, rules::LintParams};
 use tracing::Instrument;
 use turbo_tasks::{util::WrapFuture, Value, ValueToString, Vc};
 use turbo_tasks_fs::{FileContent, FileSystemPath};
@@ -337,6 +338,18 @@ async fn parse_content(
                 top_level_mark,
                 is_typescript,
             ));
+
+            let lint_config = LintConfig::default();
+            let rules = swc_ecma_lints::rules::all(LintParams {
+                program: &parsed_program,
+                lint_config: &lint_config,
+                unresolved_ctxt: SyntaxContext::empty().apply_mark(unresolved_mark),
+                top_level_ctxt: SyntaxContext::empty().apply_mark(top_level_mark),
+                es_version: EsVersion::latest(),
+                source_map: source_map.clone(),
+            });
+            parsed_program =
+                parsed_program.fold_with(&mut swc_ecma_lints::rules::lint_to_fold(rules));
 
             let transform_context = TransformContext {
                 comments: &comments,
