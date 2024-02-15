@@ -1170,6 +1170,38 @@ mod test {
         assert_matches!(exit, Some(ChildExit::Killed));
     }
 
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_orphan_process() {
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", "echo hello; sleep 120; echo done"]);
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, false).unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        let child_pid = child.pid().unwrap() as i32;
+        // We don't kill the process group to simulate what an external program might do
+        unsafe {
+            libc::kill(child_pid, libc::SIGKILL);
+        }
+
+        let exit = child.wait().await;
+        assert_matches!(exit, Some(ChildExit::KilledExternal));
+
+        let mut output = Vec::new();
+        match tokio::time::timeout(
+            Duration::from_millis(500),
+            child.wait_with_piped_outputs(&mut output),
+        )
+        .await
+        {
+            Ok(exit_status) => {
+                assert_matches!(exit_status, Ok(Some(ChildExit::KilledExternal)));
+            }
+            Err(_) => panic!("expected wait_with_piped_outputs to exit after it was killed"),
+        }
+    }
+
     #[test_case(false)]
     #[test_case(TEST_PTY)]
     #[tokio::test]
