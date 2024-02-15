@@ -367,6 +367,10 @@ async fn parse_content(
                     .await?;
             }
 
+            if handler.has_errors() {
+                return Ok(ParseResult::Unparseable);
+            }
+
             parsed_program.visit_mut_with(
                 &mut swc_core::ecma::transforms::base::helpers::inject_helpers(unresolved_mark),
             );
