@@ -662,7 +662,7 @@ impl swc_core::css::visit::Visit for CssModuleValidator {
         }) {
             ParsingIssue {
                 file: self.file,
-                msg: Vc::cell(format!("swc_css: {CSS_MODULE_ERROR}")),
+                msg: Vc::cell(CSS_MODULE_ERROR.to_string()),
                 source: Vc::cell(Some(IssueSource::from_swc_offsets(
                     self.source,
                     n.span.lo.0 as _,
