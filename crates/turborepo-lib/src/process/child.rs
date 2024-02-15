@@ -672,6 +672,7 @@ impl Child {
         let mut stdout_buffer = Vec::new();
         let mut stderr_buffer = Vec::new();
 
+        let mut is_exited = false;
         loop {
             tokio::select! {
                 Some(result) = next_line(&mut stdout_lines, &mut stdout_buffer) => {
@@ -685,6 +686,14 @@ impl Child {
                     add_trailing_newline(&mut stderr_buffer);
                     stdout_pipe.write_all(&stderr_buffer)?;
                     stderr_buffer.clear();
+                }
+                status = self.wait(), if !is_exited => {
+                    is_exited = true;
+                    // We don't abort in the cases of a zero exit code as we could be
+                    // caching this task and should read all the logs it produces.
+                    if status != Some(ChildExit::Finished(Some(0))) {
+                        return Ok(status);
+                    }
                 }
                 else => {
                     // In the case that both futures read a complete line
