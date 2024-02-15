@@ -42,7 +42,7 @@ pub struct MultipleCwd {
     flag2: Option<SourceSpan>,
     #[label("and here")]
     flag3: Option<SourceSpan>,
-    // The user should get the idea after the first 4 examples
+    // The user should get the idea after the first 4 examples.
     #[label("and here")]
     flag4: Option<SourceSpan>,
 }
