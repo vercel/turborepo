@@ -62,6 +62,8 @@ swc_core = { workspace = true, features = [
   "testing",
   "base",
 ] }
+# TODO: Use swc_core once the new version is released
+swc_ecma_lints = "0.92.4"
 
 [dev-dependencies]
 criterion = { workspace = true, features = ["async_tokio"] }
