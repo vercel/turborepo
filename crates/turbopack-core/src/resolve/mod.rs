@@ -1512,8 +1512,11 @@ async fn resolve_internal_inline(
                                 .await?,
                             );
                         }
-                        PatternMatch::Directory(_, path) => {
-                            results.push(resolve_into_folder(*path, options, *query));
+                        PatternMatch::Directory(matched_pattern, path) => {
+                            results.push(
+                                resolve_into_folder(*path, options, *query)
+                                    .with_request(matched_pattern.clone()),
+                            );
                         }
                     }
                 }
@@ -1833,8 +1836,11 @@ async fn resolve_relative_request(
                     );
                 }
             }
-            PatternMatch::Directory(_, path) => {
-                results.push(resolve_into_folder(*path, options, query));
+            PatternMatch::Directory(matched_pattern, path) => {
+                results.push(
+                    resolve_into_folder(*path, options, query)
+                        .with_request(matched_pattern.clone()),
+                );
             }
         }
     }
@@ -2266,16 +2272,17 @@ async fn handle_exports_imports_field(
         }
     }
 
-    {
+    if results.len() > 1 {
         let mut duplicates_set = HashSet::new();
         results.retain(|item| duplicates_set.insert(*item));
     }
 
     let mut resolved_results = Vec::new();
-    for path in results {
-        if let Some(path) = normalize_path(path) {
-            let request = Request::parse(Value::new(format!("./{}", path).into()));
-            resolved_results.push(resolve_internal_boxed(package_path, request, options).await?);
+    for result_path in results {
+        if let Some(result_path) = normalize_path(result_path) {
+            let request = Request::parse(Value::new(format!("./{}", result_path).into()));
+            let resolve_result = resolve_internal_boxed(package_path, request, options).await?;
+            resolved_results.push(resolve_result.with_request(path.to_string()));
         }
     }
 
