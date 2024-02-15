@@ -1810,33 +1810,16 @@ async fn resolve_relative_request(
     .await?;
 
     for m in matches.iter() {
-        match m {
-            PatternMatch::File(matched_pattern, path) => {
-                let mut matches_without_extension = false;
-                for ext in options_value.extensions.iter() {
-                    let Some(matched_pattern) = matched_pattern.strip_suffix(ext) else {
-                        continue;
-                    };
-                    if path_pattern.is_match(matched_pattern) {
-                        results.push(
-                            resolved(
-                                RequestKey::new(matched_pattern.to_string()),
-                                *path,
-                                lookup_path,
-                                request,
-                                options_value,
-                                options,
-                                query,
-                            )
-                            .await?,
-                        );
-                        matches_without_extension = true;
-                    }
-                }
-                if !matches_without_extension || path_pattern.is_match(matched_pattern) {
+        if let PatternMatch::File(matched_pattern, path) = m {
+            let mut matches_without_extension = false;
+            for ext in options_value.extensions.iter() {
+                let Some(matched_pattern) = matched_pattern.strip_suffix(ext) else {
+                    continue;
+                };
+                if path_pattern.is_match(matched_pattern) {
                     results.push(
                         resolved(
-                            RequestKey::new(matched_pattern.clone()),
+                            RequestKey::new(matched_pattern.to_string()),
                             *path,
                             lookup_path,
                             request,
@@ -1846,14 +1829,31 @@ async fn resolve_relative_request(
                         )
                         .await?,
                     );
+                    matches_without_extension = true;
                 }
             }
-            PatternMatch::Directory(matched_pattern, path) => {
+            if !matches_without_extension || path_pattern.is_match(matched_pattern) {
                 results.push(
-                    resolve_into_folder(*path, options, query)
-                        .with_request(matched_pattern.clone()),
+                    resolved(
+                        RequestKey::new(matched_pattern.clone()),
+                        *path,
+                        lookup_path,
+                        request,
+                        options_value,
+                        options,
+                        query,
+                    )
+                    .await?,
                 );
             }
+        }
+    }
+    // Directory matches must be resolved AFTER file matches
+    for m in matches.iter() {
+        if let PatternMatch::Directory(matched_pattern, path) = m {
+            results.push(
+                resolve_into_folder(*path, options, query).with_request(matched_pattern.clone()),
+            );
         }
     }
 
