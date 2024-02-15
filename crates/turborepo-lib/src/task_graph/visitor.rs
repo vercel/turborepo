@@ -15,7 +15,7 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_ci::{Vendor, VendorBehavior};
 use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
 use turborepo_repository::{
-    package_graph::{PackageGraph, WorkspaceName, ROOT_PKG_NAME},
+    package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME},
     package_manager::PackageManager,
 };
 use turborepo_telemetry::events::{
@@ -64,7 +64,7 @@ pub struct Visitor<'a> {
 pub enum Error {
     #[error("cannot find package {package_name} for task {task_id}")]
     MissingPackage {
-        package_name: WorkspaceName,
+        package_name: PackageName,
         task_id: TaskId<'static>,
     },
     #[error(
@@ -151,15 +151,15 @@ impl<'a> Visitor<'a> {
             let span = tracing::debug_span!(parent: &span, "queue_task", task = %message.info);
             let _enter = span.enter();
             let crate::engine::Message { info, callback } = message;
-            let package_name = WorkspaceName::from(info.package());
+            let package_name = PackageName::from(info.package());
 
-            let workspace_info = self
-                .package_graph
-                .workspace_info(&package_name)
-                .ok_or_else(|| Error::MissingPackage {
-                    package_name: package_name.clone(),
-                    task_id: info.clone(),
-                })?;
+            let workspace_info =
+                self.package_graph
+                    .package_info(&package_name)
+                    .ok_or_else(|| Error::MissingPackage {
+                        package_name: package_name.clone(),
+                        task_id: info.clone(),
+                    })?;
 
             let package_task_event =
                 PackageTaskEventBuilder::new(info.package(), info.task()).with_parent(telemetry);
@@ -317,7 +317,7 @@ impl<'a> Visitor<'a> {
     pub(crate) async fn finish(
         self,
         exit_code: i32,
-        packages: HashSet<WorkspaceName>,
+        packages: HashSet<PackageName>,
         global_hash_inputs: GlobalHashableInputs<'_>,
         engine: &Engine,
         env_at_execution_start: &EnvironmentVariableMap,
@@ -392,6 +392,12 @@ impl<'a> Visitor<'a> {
                 (vendor_behavior.group_suffix)(&group_name),
             );
             logger.with_header_footer(Some(header), Some(footer));
+
+            let (error_header, error_footer) = (
+                vendor_behavior.error_group_prefix.map(|f| f(&group_name)),
+                vendor_behavior.error_group_suffix.map(|f| f(&group_name)),
+            );
+            logger.with_error_header_footer(error_header, error_footer);
         }
         logger
     }
@@ -690,7 +696,10 @@ impl ExecContext {
             .instrument(span)
             .await;
 
-        let logs = match output_client.finish() {
+        // If the task resulted in an error, do not group in order to better highlight
+        // the error.
+        let is_error = matches!(result, ExecOutcome::Task { .. });
+        let logs = match output_client.finish(is_error) {
             Ok(logs) => logs,
             Err(e) => {
                 telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);

@@ -1,9 +1,0 @@
-services:
-  cacher:
-    build:
-      context: .
-      dockerfile: Dockerfile.cacher
-    volumes:
-      - ./cacher_root:/var/www/cache
-    ports:
-      - "7070:7070"

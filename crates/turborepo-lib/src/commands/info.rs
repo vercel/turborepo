@@ -6,7 +6,7 @@
 use serde::Serialize;
 use turbopath::AnchoredSystemPath;
 use turborepo_repository::{
-    package_graph::{PackageGraph, PackageNode, WorkspaceName},
+    package_graph::{PackageGraph, PackageName, PackageNode},
     package_json::PackageJson,
     package_manager::PackageManager,
 };
@@ -51,7 +51,7 @@ impl<'a> From<&'a ConfigurationOptions> for InfoConfig {
 struct RepositoryDetails<'a> {
     config: InfoConfig,
     package_manager: &'a PackageManager,
-    workspaces: Vec<(&'a WorkspaceName, RepositoryWorkspaceDetails<'a>)>,
+    workspaces: Vec<(&'a PackageName, RepositoryWorkspaceDetails<'a>)>,
 }
 
 #[derive(Serialize)]
@@ -101,7 +101,7 @@ pub async fn run(
 impl<'a> RepositoryDetails<'a> {
     fn new(package_graph: &'a PackageGraph, config: &'a ConfigurationOptions) -> Self {
         let mut workspaces: Vec<_> = package_graph
-            .workspaces()
+            .packages()
             .map(|(workspace_name, workspace_info)| {
                 let workspace_details = RepositoryWorkspaceDetails {
                     path: workspace_info.package_path(),
@@ -137,7 +137,7 @@ impl<'a> RepositoryDetails<'a> {
         );
 
         for (workspace_name, entry) in &self.workspaces {
-            if matches!(workspace_name, WorkspaceName::Root) {
+            if matches!(workspace_name, PackageName::Root) {
                 continue;
             }
             println!("- {} {}", workspace_name, GREY.apply_to(entry.path));
@@ -151,7 +151,7 @@ impl<'a> WorkspaceDetails<'a> {
     fn new(package_graph: &'a PackageGraph, workspace_name: &'a str) -> Self {
         let workspace_node = match workspace_name {
             "//" => PackageNode::Root,
-            name => PackageNode::Workspace(WorkspaceName::Other(name.to_string())),
+            name => PackageNode::Workspace(PackageName::Other(name.to_string())),
         };
 
         let transitive_dependencies = package_graph.transitive_closure(Some(&workspace_node));
@@ -159,13 +159,13 @@ impl<'a> WorkspaceDetails<'a> {
         let mut workspace_dep_names: Vec<&str> = transitive_dependencies
             .into_iter()
             .filter_map(|dependency| match dependency {
-                PackageNode::Root | PackageNode::Workspace(WorkspaceName::Root) => Some("root"),
-                PackageNode::Workspace(WorkspaceName::Other(dep_name))
+                PackageNode::Root | PackageNode::Workspace(PackageName::Root) => Some("root"),
+                PackageNode::Workspace(PackageName::Other(dep_name))
                     if dep_name == workspace_name =>
                 {
                     None
                 }
-                PackageNode::Workspace(WorkspaceName::Other(dep_name)) => Some(dep_name.as_str()),
+                PackageNode::Workspace(PackageName::Other(dep_name)) => Some(dep_name.as_str()),
             })
             .collect();
         workspace_dep_names.sort();

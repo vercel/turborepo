@@ -75,7 +75,7 @@ mod tests {
         let repo_root_tmp = tempdir()?;
         let repo_root = AbsoluteSystemPath::from_std_path(repo_root_tmp.path())?;
 
-        ensure_turbo_is_gitignored(&repo_root).expect("Failed to ensure turbo is gitignored");
+        ensure_turbo_is_gitignored(repo_root).expect("Failed to ensure turbo is gitignored");
 
         // Verify that the .gitignore file exists and contains the expected entry
         let gitignore_path = repo_root.join_component(GITIGNORE_FILE);
@@ -97,14 +97,14 @@ mod tests {
 
         // create gitignore with no turbo entry
         let gitignore_path = repo_root.join_component(GITIGNORE_FILE);
-        gitignore_path.create_with_contents(format!("{}", "node_modules/\n"))?;
+        gitignore_path.create_with_contents("node_modules/\n")?;
         #[cfg(unix)]
         {
             gitignore_path.set_mode(0o0644)?;
         }
         assert_eq!(get_gitignore_size(&gitignore_path), 1);
 
-        ensure_turbo_is_gitignored(&repo_root).expect("Failed to ensure turbo is gitignored");
+        ensure_turbo_is_gitignored(repo_root).expect("Failed to ensure turbo is gitignored");
 
         // Verify that the .gitignore file exists and contains the expected entry
         let gitignore_path = repo_root.join_component(GITIGNORE_FILE);
@@ -129,10 +129,10 @@ mod tests {
 
         // create gitignore with no turbo entry
         let gitignore_path = repo_root.join_component(GITIGNORE_FILE);
-        gitignore_path.create_with_contents(format!("{}", "node_modules/\n.turbo\n"))?;
+        gitignore_path.create_with_contents("node_modules/\n.turbo\n")?;
         assert_eq!(get_gitignore_size(&gitignore_path), 2);
 
-        ensure_turbo_is_gitignored(&repo_root).expect("Failed to ensure turbo is gitignored");
+        ensure_turbo_is_gitignored(repo_root).expect("Failed to ensure turbo is gitignored");
 
         // Verify that the .gitignore file exists and contains the expected entry
         let gitignore_path = repo_root.join_component(GITIGNORE_FILE);
@@ -155,10 +155,10 @@ mod tests {
 
         // create gitignore with no turbo entry
         let gitignore_path = repo_root.join_component(GITIGNORE_FILE);
-        gitignore_path.create_with_contents(format!("{}", "node_modules/\n# Turborepo\n.turbo"))?;
+        gitignore_path.create_with_contents("node_modules/\n# Turborepo\n.turbo")?;
         assert_eq!(get_gitignore_size(&gitignore_path), 3);
 
-        ensure_turbo_is_gitignored(&repo_root).expect("Failed to ensure turbo is gitignored");
+        ensure_turbo_is_gitignored(repo_root).expect("Failed to ensure turbo is gitignored");
 
         // Verify that the .gitignore file exists and contains the expected entry
         let gitignore_path = repo_root.join_component(GITIGNORE_FILE);
@@ -182,10 +182,10 @@ mod tests {
 
         // create gitignore with no turbo entry
         let gitignore_path = repo_root.join_component(GITIGNORE_FILE);
-        gitignore_path.create_with_contents(format!("{}", "node_modules/"))?;
+        gitignore_path.create_with_contents("node_modules/")?;
         assert_eq!(get_gitignore_size(&gitignore_path), 1);
 
-        ensure_turbo_is_gitignored(&repo_root).expect("Failed to ensure turbo is gitignored");
+        ensure_turbo_is_gitignored(repo_root).expect("Failed to ensure turbo is gitignored");
 
         // Verify that the .gitignore file exists and contains the expected entry
         let gitignore_path = repo_root.join_component(GITIGNORE_FILE);

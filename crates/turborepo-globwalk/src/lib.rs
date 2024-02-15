@@ -13,6 +13,7 @@ use camino::Utf8PathBuf;
 use itertools::Itertools;
 use path_clean::PathClean;
 use path_slash::PathExt;
+use rayon::prelude::*;
 use regex::Regex;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
 use wax::{walk::FileIterator, BuildError, Glob};
@@ -308,37 +309,38 @@ pub fn globwalk_internal(
     let (base_path_new, include_paths, exclude_paths) =
         preprocess_paths_and_globs(base_path, include, exclude)?;
 
-    let ex_patterns = exclude_paths
+    let ex_patterns: Vec<_> = exclude_paths
         .into_iter()
         .map(glob_with_contextual_error)
         .collect::<Result<_, _>>()?;
 
-    include_paths
-        .into_iter()
+    let include_patterns = include_paths
+        .into_par_iter()
         .map(glob_with_contextual_error)
-        .map_ok(|glob| walk_glob(walk_type, &base_path_new, &ex_patterns, glob))
-        // flat map to bring the results in the vec to the same level as the potential outer err
-        // this is the same as a flat_map_ok
-        .flat_map(|s| s.unwrap_or_else(|e| vec![Err(e)]))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    include_patterns
+        .into_par_iter()
+        // Use flat_map_iter as we only want parallelism for walking the globs and not iterating
+        // over the results.
+        // See https://docs.rs/rayon/latest/rayon/iter/trait.ParallelIterator.html#method.flat_map_iter
+        .flat_map_iter(|glob| walk_glob(walk_type, &base_path_new, ex_patterns.clone(), glob))
         .collect()
 }
 
 #[tracing::instrument(skip(ex_patterns), fields(glob=glob.to_string().as_str()))]
 fn walk_glob(
     walk_type: WalkType,
-    base_path_new: &PathBuf,
-    ex_patterns: &Vec<Glob>,
+    base_path_new: &Path,
+    ex_patterns: Vec<Glob>,
     glob: Glob,
 ) -> Vec<Result<AbsoluteSystemPathBuf, WalkError>> {
-    glob.walk(&base_path_new)
-        .not(ex_patterns.clone())
+    glob.walk(base_path_new)
+        .not(ex_patterns)
         .unwrap_or_else(|e| {
             // Per docs, only fails if exclusion list is too large, since we're using
             // pre-compiled globs
-            panic!(
-                "Failed to compile exclusion globs: {:?}: {}",
-                ex_patterns, e,
-            )
+            panic!("Failed to compile exclusion globs: {}", e,)
         })
         .filter_map(|entry| visit_file(walk_type, entry))
         .collect::<Vec<_>>()

@@ -1,23 +1,23 @@
 {
-  "name": "@turbo/repository-linux-x64-gnu",
+  "name": "@turbo/repository-linux-arm64-musl",
   "version": "0.0.1-canary.7",
   "repository": {
     "type": "git",
     "url": "https://github.com/vercel/turbo",
-    "directory": "packages/turbo-repository/npm/linux-x64-gnu"
+    "directory": "packages/turbo-repository/npm/linux-arm64-musl"
   },
   "os": [
     "linux"
   ],
   "cpu": [
-    "x64"
+    "arm64"
   ],
   "libc": [
-    "glibc"
+    "musl"
   ],
-  "main": "repository.linux-x64-gnu.node",
+  "main": "repository.linux-arm64-musl.node",
   "files": [
-    "repository.linux-x64-gnu.node"
+    "repository.linux-arm64-musl.node"
   ],
   "license": "MPL-2.0",
   "engines": {
