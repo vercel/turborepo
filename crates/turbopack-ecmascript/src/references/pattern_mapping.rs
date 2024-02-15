@@ -160,6 +160,7 @@ impl SinglePatternMapping {
                     type_args: None,
                 })
             }
+            Self::Unresolveable(_) => self.create_id(key_expr),
             Self::External(_, ExternalType::EcmaScriptModule | ExternalType::OriginalReference) => {
                 if import_externals {
                     Expr::Call(CallExpr {
@@ -205,7 +206,10 @@ impl SinglePatternMapping {
                 span: DUMMY_SP,
                 type_args: None,
             }),
-            _ => Expr::Call(CallExpr {
+            Self::Ignored => {
+                quote!("Promise.resolve(undefined)" as Expr)
+            }
+            Self::Module(_) => Expr::Call(CallExpr {
                 callee: Callee::Expr(quote_expr!("Promise.resolve().then")),
                 args: vec![ExprOrSpread {
                     spread: None,

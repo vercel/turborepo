@@ -117,7 +117,7 @@ impl Environment {
                 Vc::cell(true)
             }
             ExecutionEnvironment::Browser(_) => Vc::cell(false),
-            ExecutionEnvironment::EdgeWorker(_) => Vc::cell(true),
+            ExecutionEnvironment::EdgeWorker(_) => Vc::cell(false),
             ExecutionEnvironment::Custom(_) => todo!(),
         })
     }
