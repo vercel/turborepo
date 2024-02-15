@@ -38,11 +38,13 @@ use std::{collections::BinaryHeap, fs::OpenOptions, time::Duration};
 use notify::EventKind;
 use thiserror::Error;
 use tokio::{
-    sync::{mpsc, oneshot},
+    sync::{broadcast, mpsc, oneshot},
     time::error::Elapsed,
 };
 use tracing::trace;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathRelation};
+
+use crate::{NotifyError, OptionalWatch};
 
 #[derive(Debug, Error)]
 pub enum CookieError {
@@ -57,6 +59,8 @@ pub enum CookieError {
         io_err: std::io::Error,
         path: AbsoluteSystemPathBuf,
     },
+    #[error("cookie queue is not available")]
+    Unavailable,
 }
 
 /// CookieWriter is responsible for assigning filesystem cookies to a request
@@ -65,7 +69,8 @@ pub enum CookieError {
 pub struct CookieWriter {
     root: AbsoluteSystemPathBuf,
     timeout: Duration,
-    cookie_request_tx: mpsc::Sender<oneshot::Sender<Result<usize, CookieError>>>,
+    cookie_request_sender_lazy:
+        OptionalWatch<mpsc::Sender<oneshot::Sender<Result<usize, CookieError>>>>,
     // _exit_ch exists to trigger a close on the receiver when all instances
     // of this struct are dropped. The task that is receiving events will exit,
     // dropping the other sender for the broadcast channel, causing all receivers
@@ -175,18 +180,40 @@ impl<T> CookieWatcher<T> {
 }
 
 impl CookieWriter {
-    pub fn new(root: &AbsoluteSystemPath, timeout: Duration) -> Self {
+    pub fn new(
+        root: &AbsoluteSystemPath,
+        timeout: Duration,
+        mut recv: OptionalWatch<broadcast::Receiver<Result<notify::Event, NotifyError>>>,
+    ) -> Self {
+        let (cookie_request_sender_tx, cookie_request_sender_lazy) = OptionalWatch::new();
         let (exit_ch, exit_signal) = mpsc::channel(16);
-        let (cookie_requests_tx, cookie_requests_rx) = mpsc::channel(16);
-        tokio::spawn(watch_cookies(
-            root.to_owned(),
-            cookie_requests_rx,
-            exit_signal,
-        ));
+        tokio::spawn({
+            let root = root.to_owned();
+            async move {
+                if recv.get().await.is_err() {
+                    // here we need to wait for confirmation that the watching end is ready
+                    // before we start sending requests. this has the side effect of not
+                    // enabling the cookie writing mechanism until the watcher is ready
+                    return;
+                }
+
+                let (cookie_requests_tx, cookie_requests_rx) = mpsc::channel(16);
+
+                if cookie_request_sender_tx
+                    .send(Some(cookie_requests_tx))
+                    .is_err()
+                {
+                    // the receiver has already been dropped
+                    tracing::debug!("nobody listening for cookie requests, exiting");
+                    return;
+                };
+                watch_cookies(root.to_owned(), cookie_requests_rx, exit_signal).await;
+            }
+        });
         Self {
             root: root.to_owned(),
             timeout,
-            cookie_request_tx: cookie_requests_tx,
+            cookie_request_sender_lazy,
             _exit_ch: exit_ch,
         }
     }
@@ -204,9 +231,18 @@ impl CookieWriter {
         request: T,
     ) -> Result<CookiedRequest<T>, CookieError> {
         // we need to write the cookie from a single task so as to serialize them
+        tokio::time::timeout(self.timeout, self.cookie_request_inner(request)).await?
+    }
+
+    async fn cookie_request_inner<T>(&self, request: T) -> Result<CookiedRequest<T>, CookieError> {
         let (resp_tx, resp_rx) = oneshot::channel();
-        self.cookie_request_tx.clone().send(resp_tx).await?;
-        let serial = tokio::time::timeout(self.timeout, resp_rx).await???;
+        let mut cookie_request_tx = self.cookie_request_sender_lazy.clone();
+        let Ok(cookie_request_tx) = cookie_request_tx.get().await.map(|s| s.to_owned()) else {
+            // the cookie queue is not ready and will never be ready
+            return Err(CookieError::Unavailable);
+        };
+        cookie_request_tx.send(resp_tx).await?;
+        let serial = resp_rx.await??;
         Ok(CookiedRequest { request, serial })
     }
 }
@@ -265,7 +301,7 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::{CookieWatcher, CookiedRequest};
-    use crate::{cookies::CookieWriter, NotifyError};
+    use crate::{cookies::CookieWriter, NotifyError, OptionalWatch};
 
     struct TestQuery {
         resp: oneshot::Sender<()>,
@@ -329,8 +365,9 @@ mod test {
             .unwrap();
 
         let (send_file_events, file_events) = broadcast::channel(16);
+        let recv = OptionalWatch::once(file_events.resubscribe());
         let (reqs_tx, reqs_rx) = mpsc::channel(16);
-        let cookie_writer = CookieWriter::new(&path, Duration::from_secs(2));
+        let cookie_writer = CookieWriter::new(&path, Duration::from_secs(2), recv);
         let (exit_tx, exit_rx) = oneshot::channel();
 
         let service = TestService {
@@ -392,8 +429,9 @@ mod test {
             .unwrap();
 
         let (send_file_events, file_events) = broadcast::channel(16);
+        let recv = OptionalWatch::once(file_events.resubscribe());
         let (reqs_tx, reqs_rx) = mpsc::channel(16);
-        let cookie_writer = CookieWriter::new(&path, Duration::from_secs(2));
+        let cookie_writer = CookieWriter::new(&path, Duration::from_secs(2), recv);
         let (exit_tx, exit_rx) = oneshot::channel();
 
         let service = TestService {

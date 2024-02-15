@@ -304,7 +304,7 @@ impl Run {
                     )
                 };
                 let fallback_discovery = FallbackPackageDiscovery::new(
-                    daemon.as_mut().map(DaemonPackageDiscovery::new),
+                    daemon.clone().map(DaemonPackageDiscovery::new),
                     fallback,
                     duration,
                 );
