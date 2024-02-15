@@ -17,7 +17,7 @@ use dirs_next::home_dir;
 #[cfg(test)]
 use rand::Rng;
 use thiserror::Error;
-use turborepo_api_client::Client;
+use turborepo_api_client::{CacheClient, Client};
 #[cfg(not(test))]
 use turborepo_ui::CYAN;
 use turborepo_ui::{BOLD, GREY, UNDERLINE};
@@ -109,7 +109,7 @@ pub(crate) const SPACES_URL: &str = "https://vercel.com/docs/workflow-collaborat
 ///
 /// returns: Result<(), Error>
 pub(crate) async fn verify_caching_enabled<'a>(
-    api_client: &impl Client,
+    api_client: &(impl Client + CacheClient),
     team_id: &str,
     token: &str,
     selected_team: Option<SelectedTeam<'a>>,

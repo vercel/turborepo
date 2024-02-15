@@ -121,12 +121,11 @@ mod tests {
     use std::sync::atomic::AtomicUsize;
 
     use async_trait::async_trait;
-    use reqwest::{Method, RequestBuilder, Response};
+    use reqwest::{RequestBuilder, Response};
     use turborepo_api_client::Client;
     use turborepo_ui::UI;
     use turborepo_vercel_api::{
-        CachingStatusResponse, Membership, Role, SpacesResponse, Team, TeamsResponse, User,
-        UserResponse, VerifiedSsoUser,
+        Membership, Role, SpacesResponse, Team, TeamsResponse, User, UserResponse, VerifiedSsoUser,
     };
     use turborepo_vercel_api_mock::start_test_server;
 
@@ -215,14 +214,6 @@ mod tests {
         fn add_ci_header(_request_builder: RequestBuilder) -> RequestBuilder {
             unimplemented!("add_ci_header")
         }
-        async fn get_caching_status(
-            &self,
-            _token: &str,
-            _team_id: Option<&str>,
-            _team_slug: Option<&str>,
-        ) -> turborepo_api_client::Result<CachingStatusResponse> {
-            unimplemented!("get_caching_status")
-        }
         async fn get_spaces(
             &self,
             _token: &str,
@@ -240,48 +231,8 @@ mod tests {
                 team_id: Some("team_id".to_string()),
             })
         }
-        async fn put_artifact(
-            &self,
-            _hash: &str,
-            _artifact_body: &[u8],
-            _duration: u64,
-            _tag: Option<&str>,
-            _token: &str,
-            _team_id: Option<&str>,
-            _team_slug: Option<&str>,
-        ) -> turborepo_api_client::Result<()> {
-            unimplemented!("put_artifact")
-        }
         async fn handle_403(_response: Response) -> turborepo_api_client::Error {
             unimplemented!("handle_403")
-        }
-        async fn fetch_artifact(
-            &self,
-            _hash: &str,
-            _token: &str,
-            _team_id: Option<&str>,
-            _team_slug: Option<&str>,
-        ) -> turborepo_api_client::Result<Option<Response>> {
-            unimplemented!("fetch_artifact")
-        }
-        async fn artifact_exists(
-            &self,
-            _hash: &str,
-            _token: &str,
-            _team_id: Option<&str>,
-            _team_slug: Option<&str>,
-        ) -> turborepo_api_client::Result<Option<Response>> {
-            unimplemented!("artifact_exists")
-        }
-        async fn get_artifact(
-            &self,
-            _hash: &str,
-            _token: &str,
-            _team_id: Option<&str>,
-            _team_slug: Option<&str>,
-            _method: Method,
-        ) -> turborepo_api_client::Result<Option<Response>> {
-            unimplemented!("get_artifact")
         }
         fn make_url(&self, endpoint: &str) -> turborepo_api_client::Result<Url> {
             let url = format!("{}{}", self.base_url, endpoint);
