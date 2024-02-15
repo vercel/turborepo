@@ -110,9 +110,6 @@ importers:
 
   crates/turbopack-cli/js:
     dependencies:
-      '@next/react-refresh-utils':
-        specifier: ^13.0.6
-        version: 13.0.6(react-refresh@0.12.0)
       '@vercel/turbopack-ecmascript-runtime':
         specifier: '*'
         version: link:../../turbopack-ecmascript-runtime/js
@@ -123,13 +120,13 @@ importers:
 
   crates/turbopack-ecmascript-runtime/js:
     dependencies:
-      '@next/react-refresh-utils':
-        specifier: ^13.0.6
-        version: 13.0.6(react-refresh@0.12.0)
       '@types/node':
         specifier: ^18.11.11
         version: 18.17.4
     devDependencies:
+      '@next/react-refresh-utils':
+        specifier: ^14.1.0
+        version: 14.1.0(react-refresh@0.12.0)
       npm-run-all:
         specifier: ^4.1.5
         version: 4.1.5
@@ -2983,8 +2980,8 @@ packages:
       glob: 7.1.7
     dev: true
 
-  /@next/react-refresh-utils@13.0.6(react-refresh@0.12.0):
-    resolution: {integrity: sha512-ycQmpFDxdbrW17kVEsXhk6wpZ1JWDzkFuAHG/sjvXlC8U7/9VC/f+YJxhPbLut0Kd4XdeGjLfJ6jT2AnTkpx6g==}
+  /@next/react-refresh-utils@14.1.0(react-refresh@0.12.0):
+    resolution: {integrity: sha512-l8+N/nfNSLpjet7UHbs8C4N/vghNIuMyMfKvsrbZWBJ7j6Xb/x3bSziHAt9OxxNrU4CK7a6jaALqBzrlPTqwhw==}
     peerDependencies:
       react-refresh: 0.12.0
       webpack: ^4 || ^5
@@ -2993,7 +2990,7 @@ packages:
         optional: true
     dependencies:
       react-refresh: 0.12.0
-    dev: false
+    dev: true
 
   /@next/swc-darwin-arm64@13.4.12:
     resolution: {integrity: sha512-deUrbCXTMZ6ZhbOoloqecnUeNpUOupi8SE2tx4jPfNS9uyUR9zK4iXBvH65opVcA/9F5I/p8vDXSYbUlbmBjZg==}
@@ -13613,7 +13610,7 @@ packages:
   /react-refresh@0.12.0:
     resolution: {integrity: sha512-suLIhrU2IHKL5JEKR/fAwJv7bbeq4kJ+pJopf77jHwuR+HmJS/HbrPIGsTBUVfw7tXPOmYv7UJ7PCaN49e8x4A==}
     engines: {node: '>=0.10.0'}
-    dev: false
+    dev: true
 
   /react-shallow-renderer@16.15.0(react@18.2.0):
     resolution: {integrity: sha512-oScf2FqQ9LFVQgA73vr86xl2NaOIX73rh+YFqcOp68CWj56tSfgtGKrEbyhCj0rSijyG9M1CYprTh39fBi5hzA==}
