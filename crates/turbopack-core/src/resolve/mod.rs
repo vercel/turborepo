@@ -677,6 +677,18 @@ impl ResolveResult {
             affecting_sources: self.affecting_sources.clone(),
         }
     }
+
+    pub fn add_conditions<'a>(&mut self, conditions: impl IntoIterator<Item = (&'a str, bool)>) {
+        let mut primary = self.primary.drain(..).collect::<Vec<_>>();
+        for (k, v) in conditions {
+            for (key, _) in primary.iter_mut() {
+                key.conditions.insert(k.to_string(), v);
+            }
+        }
+        for (k, v) in primary {
+            self.primary.insert(k, v);
+        }
+    }
 }
 
 #[turbo_tasks::value_impl]
@@ -2272,17 +2284,18 @@ async fn handle_exports_imports_field(
         }
     }
 
-    if results.len() > 1 {
-        let mut duplicates_set = HashSet::new();
-        results.retain(|item| duplicates_set.insert(*item));
-    }
-
     let mut resolved_results = Vec::new();
-    for result_path in results {
+    for (result_path, conditions) in results {
         if let Some(result_path) = normalize_path(result_path) {
             let request = Request::parse(Value::new(format!("./{}", result_path).into()));
             let resolve_result = resolve_internal_boxed(package_path, request, options).await?;
-            resolved_results.push(resolve_result.with_request(path.to_string()));
+            if conditions.is_empty() {
+                resolved_results.push(resolve_result.with_request(path.to_string()));
+            } else {
+                let mut resolve_result = resolve_result.await?.with_request_ref(path.to_string());
+                resolve_result.add_conditions(conditions);
+                resolved_results.push(resolve_result.cell());
+            }
         }
     }
 
