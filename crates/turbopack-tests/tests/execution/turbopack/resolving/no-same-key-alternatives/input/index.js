@@ -1,5 +1,5 @@
 import "./dir";
-import "package-with-exports/entry";
+import "package-with-exports/entry1";
 
 it("should not bundle the root level package", () => {
   const modules = Object.keys(__turbopack_modules__);
@@ -13,7 +13,6 @@ it("should not bundle the root level package", () => {
 
 it("should not bundle the other exports conditions", () => {
   require("package-with-exports/entry2");
-  require("package-with-exports/entry3");
   const modules = Object.keys(__turbopack_modules__);
   expect(modules).toContainEqual(
     expect.stringMatching(/input\/node_modules\/package-with-exports\/a/)
@@ -28,7 +27,7 @@ it("should not bundle the other exports conditions", () => {
     expect.stringMatching(/input\/node_modules\/package-with-exports\/c/)
   );
   expect(modules).not.toContainEqual(
-    expect.stringMatching(/input\/node_modules\/package-with-exports\/entry/)
+    expect.stringMatching(/input\/node_modules\/package-with-exports\/entry1/)
   );
   expect(modules).not.toContainEqual(
     expect.stringMatching(/input\/node_modules\/package-with-exports\/entry2/)
