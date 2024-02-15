@@ -1,3 +1,38 @@
+//! Cookies are the file watcher's way of synchronizing file system events. They
+//! are files that are added to the file system that are named with the format
+//! `[id].cookie`, where `[id]` is an increasing serial number, e.g.
+//! `1.cookie`, `2.cookie`, and so on. The daemon can then watch for the
+//! file creation event for this cookie file. Once it sees this event,
+//! the daemon knows that the file system events are up to date and we
+//! won't get any stale events.
+//!
+//! Here's the `CookieWriter` flow:
+//! - `CookieWriter` spins up a `watch_cookies` task and creates a
+//!   `cookie_requests` mpsc channel to send a cookie request to that task. The
+//!   cookie request consists of a oneshot `Sender` that the task can use to
+//!   send back the serial number.
+//! - The `watch_cookies` task watches for cookie requests on
+//!   `cookie_requests_rx`. When one occurs, it creates the cookie file and
+//!   bumps the serial. It then sends the serial back using the `Sender`
+//! - When `CookieWriter::cookie_request` is called, it sends the cookie request
+//!   to the `watch_cookies` channel and then waits for the serial as a response
+//!   (with a timeout). Upon getting the serial, a `CookiedRequest` gets
+//!   returned with the serial number attached.
+//!
+//! And here's the `CookieWatcher` flow:
+//! - `GlobWatcher` creates a `CookieWatcher`.
+//! - `GlobWatcher` gets queries about globs that are wrapped in
+//!   `CookiedRequest`. It passes these requests to
+//!   `CookieWatcher::check_request`
+//! - If the serial number attached to `CookiedRequest` has already been seen,
+//!   `CookieWatcher::check_request` returns the inner query immediately.
+//!   Otherwise, it gets stored in `CookieWatcher`.
+//! - `GlobWatcher` waits for file system events on `recv`. When it gets an
+//!   event, it passes the event to `CookieWatcher::pop_ready_requests`. If this
+//!   event is indeed a cookie event, we return all of the requests that are now
+//!   allowed to be processed (i.e. their serial number is now less than or
+//!   equal to the latest seen serial).
+
 use std::{collections::BinaryHeap, fs::OpenOptions, time::Duration};
 
 use notify::EventKind;
@@ -38,6 +73,8 @@ pub struct CookieWriter {
     _exit_ch: mpsc::Sender<()>,
 }
 
+/// A request that can only be processed after the `serial` has been seen by the
+/// `CookieWatcher`.
 #[derive(Debug)]
 pub struct CookiedRequest<T> {
     request: T,
@@ -158,6 +195,10 @@ impl CookieWriter {
         &self.root
     }
 
+    /// Sends a request to make a cookie file to the
+    /// `watch_for_cookie_file_requests` task. Waits on a response from the
+    /// task, and returns a `CookiedRequest` with the expected serial
+    /// number.
     pub(crate) async fn cookie_request<T>(
         &self,
         request: T,
