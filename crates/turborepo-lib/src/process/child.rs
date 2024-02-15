@@ -500,7 +500,8 @@ impl Child {
 
     /// Wait for the `Child` to exit, returning the exit code.
     pub async fn wait(&mut self) -> Option<ChildExit> {
-        self.exit_channel.changed().await.ok()?;
+        // If sending end of exit channel closed, then return last value in the channel
+        self.exit_channel.changed().await.ok();
         *self.exit_channel.borrow()
     }
 
@@ -825,6 +826,21 @@ mod test {
 
         let state = child.state.read().await;
         assert_matches!(&*state, ChildState::Exited(ChildExit::Killed));
+    }
+
+    #[test_case(false)]
+    #[test_case(TEST_PTY)]
+    #[tokio::test]
+    async fn test_wait(use_pty: bool) {
+        let script = find_script_dir().join_component("hello_world.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
+
+        let exit1 = child.wait().await;
+        let exit2 = child.wait().await;
+        assert_matches!(exit1, Some(ChildExit::Finished(Some(0))));
+        assert_matches!(exit2, Some(ChildExit::Finished(Some(0))));
     }
 
     #[test_case(false)]
