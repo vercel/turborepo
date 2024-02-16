@@ -580,7 +580,7 @@ impl Backend {
     }
 
     pub async fn package_discovery(&self) -> Result<DiscoveryResponse, discovery::Error> {
-        let mut daemon = {
+        let daemon = {
             let mut daemon = self.daemon.clone();
             let daemon = daemon.wait_for(|d| d.is_some()).await;
             let daemon = daemon.as_ref().expect("only fails if self is dropped");
@@ -590,7 +590,7 @@ impl Backend {
                 .clone()
         };
 
-        DaemonPackageDiscovery::new(&mut daemon)
+        DaemonPackageDiscovery::new(daemon)
             .discover_packages()
             .await
     }

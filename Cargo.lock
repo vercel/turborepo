@@ -373,6 +373,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-once-cell"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9338790e78aa95a416786ec8389546c4b6a1dfc3dc36071ed9518a9413a542eb"
+
+[[package]]
 name = "async-process"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11770,6 +11776,7 @@ name = "turborepo-repository"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-once-cell",
  "globwalk",
  "itertools 0.10.5",
  "lazy-regex",
