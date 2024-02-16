@@ -20,7 +20,7 @@ use swc_core::{
     base::sourcemap::SourceMapBuilder,
     common::{BytePos, FileName, LineCol},
     css::{
-        ast::UrlValue,
+        ast::{TypeSelector, UrlValue, WqName},
         codegen::{writer::basic::BasicCssWriter, CodeGenerator},
         modules::{CssClassName, TransformConfig},
         visit::{VisitMut, VisitMutWith, VisitWith},
@@ -653,10 +653,22 @@ const CSS_MODULE_ERROR: &str =
 
 /// We only vist top-level selectors.
 impl swc_core::css::visit::Visit for CssModuleValidator {
+    // TODO: SKip some
     fn visit_complex_selector(&mut self, n: &swc_core::css::ast::ComplexSelector) {
         if n.children.iter().all(|sel| match sel {
             swc_core::css::ast::ComplexSelectorChildren::CompoundSelector(sel) => {
-                sel.type_selector.is_some() && sel.subclass_selectors.is_empty()
+                sel.subclass_selectors.is_empty()
+                    && match &sel.type_selector.as_deref() {
+                        Some(TypeSelector::TagName(tag)) => {
+                            if let "html" | "body" = &*tag.name.value.value {
+                                false
+                            } else {
+                                true
+                            }
+                        }
+                        Some(..) => true,
+                        None => false,
+                    }
             }
             swc_core::css::ast::ComplexSelectorChildren::Combinator(_) => true,
         }) {
@@ -681,6 +693,8 @@ impl swc_core::css::visit::Visit for CssModuleValidator {
 impl lightningcss::visitor::Visitor<'_> for CssModuleValidator {
     type Error = ();
 
+    // TODO: Skip some
+
     fn visit_types(&self) -> lightningcss::visitor::VisitTypes {
         visit_types!(SELECTORS)
     }
@@ -689,12 +703,17 @@ impl lightningcss::visitor::Visitor<'_> for CssModuleValidator {
         &mut self,
         selector: &mut lightningcss::selector::Selector<'_>,
     ) -> Result<(), Self::Error> {
-        if selector.iter().all(|component| {
-            !matches!(
-                component,
-                parcel_selectors::parser::Component::ID(_)
-                    | parcel_selectors::parser::Component::Class(_)
-            )
+        if selector.iter().all(|component| !match component {
+            parcel_selectors::parser::Component::ID(_)
+            | parcel_selectors::parser::Component::Class(_) => true,
+            parcel_selectors::parser::Component::LocalName(local) => {
+                if let "html" | "body" = &*local.name {
+                    false
+                } else {
+                    true
+                }
+            }
+            _ => false,
         }) {
             ParsingIssue {
                 file: self.file,
