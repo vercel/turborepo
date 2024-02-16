@@ -24,6 +24,7 @@ where
 
     pub sso_team: Option<&'a str>,
     pub existing_token: Option<&'a str>,
+    pub force: bool,
 }
 impl<'a, T> LoginOptions<'a, T>
 where
@@ -42,6 +43,7 @@ where
             login_server,
             sso_team: None,
             existing_token: None,
+            force: false,
         }
     }
 }

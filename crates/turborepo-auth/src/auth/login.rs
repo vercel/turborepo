@@ -27,26 +27,30 @@ pub async fn login<T: Client + TokenClient>(options: &LoginOptions<'_, T>) -> Re
         ui,
         login_url: login_url_configuration,
         login_server,
-        sso_team: _,
         existing_token,
+        force,
+        sso_team: _,
     } = *options; // Deref or we get double references for each of these
 
     // Check if passed in token exists first.
-    if let Some(token) = existing_token {
-        if Token::existing(token.to_string())
-            .is_valid(api_client)
-            .await?
-        {
-            return check_user_token(token, ui, api_client, "Existing token found!").await;
+    if !force {
+        if let Some(token) = existing_token {
+            if Token::existing(token.to_string())
+                .is_valid(api_client)
+                .await?
+            {
+                return check_user_token(token, ui, api_client, "Existing token found!").await;
+            }
         }
-    }
 
-    // If the user is logging into Vercel, check for an existing `vc` token.
-    if login_url_configuration.contains("vercel.com") {
-        // The extraction can return an error, but we don't want to fail the login if
-        // the token is not found.
-        if let Ok(token) = extract_vercel_token() {
-            return check_user_token(&token, ui, api_client, "Existing Vercel token found!").await;
+        // If the user is logging into Vercel, check for an existing `vc` token.
+        if login_url_configuration.contains("vercel.com") {
+            // The extraction can return an error, but we don't want to fail the login if
+            // the token is not found.
+            if let Ok(token) = extract_vercel_token() {
+                return check_user_token(&token, ui, api_client, "Existing Vercel token found!")
+                    .await;
+            }
         }
     }
 
