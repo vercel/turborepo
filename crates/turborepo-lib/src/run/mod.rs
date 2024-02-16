@@ -12,7 +12,7 @@ pub mod task_id;
 
 use std::{
     collections::HashSet,
-    io::{IsTerminal, Write},
+    io::{ErrorKind, IsTerminal, Write},
     sync::Arc,
     time::SystemTime,
 };
@@ -29,15 +29,15 @@ use turborepo_cache::{AsyncCache, RemoteCacheOpts};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::{
-    package_graph::{PackageGraph, PackageName},
-    package_json::PackageJson,
+    package_graph::{self, PackageGraph, PackageName},
+    package_json::{self, PackageJson},
 };
 use turborepo_scm::SCM;
 use turborepo_telemetry::events::{
     command::CommandEventBuilder,
     generic::{DaemonInitStatus, GenericEventBuilder},
     repo::{RepoEventBuilder, RepoType},
-    EventBuilder,
+    EventBuilder, TrackedErrors,
 };
 use turborepo_ui::{cprint, cprintln, ColorSelector, BOLD_GREY, GREY, UI};
 #[cfg(feature = "daemon-package-discovery")]
@@ -311,7 +311,23 @@ impl Run {
                 builder.with_package_discovery(fallback_discovery)
             };
 
-            builder.build().await?
+            match builder.build().await {
+                Ok(graph) => graph,
+                // if we can't find the package.json, it is a bug, and we should report it.
+                // likely cause is that package discovery watching is not up to date.
+                // note: there _is_ a false positive from a race condition that can occur
+                //       from toctou if the package.json is deleted, but we'd like to know
+                Err(package_graph::builder::Error::PackageJson(package_json::Error::Io(io)))
+                    if io.kind() == ErrorKind::NotFound =>
+                {
+                    run_telemetry.track_error(TrackedErrors::InvalidPackageDiscovery);
+                    return Err(package_graph::builder::Error::PackageJson(
+                        package_json::Error::Io(io),
+                    )
+                    .into());
+                }
+                Err(e) => return Err(e.into()),
+            }
         };
 
         repo_telemetry.track_package_manager(pkg_dep_graph.package_manager().to_string());
