@@ -703,7 +703,7 @@ impl lightningcss::visitor::Visitor<'_> for CssModuleValidator {
             parcel_selectors::parser::Component::ID(_)
             | parcel_selectors::parser::Component::Class(_) => true,
             parcel_selectors::parser::Component::LocalName(local) => {
-                !matches!(local.name, "html" | "body")
+                !matches!(&*local.name.0, "html" | "body")
             }
             _ => false,
         }) {
