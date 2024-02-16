@@ -187,6 +187,19 @@ impl SinglePatternMapping {
                     })
                 }
             }
+            Self::External(_, ExternalType::CommonJs | ExternalType::Url) => Expr::Call(CallExpr {
+                callee: Callee::Expr(quote_expr!("Promise.resolve().then")),
+                args: vec![ExprOrSpread {
+                    spread: None,
+                    expr: quote_expr!(
+                        "() => __turbopack_external_require__($arg, true)",
+                        arg: Expr = key_expr.into_owned()
+                    ),
+                }],
+                span: DUMMY_SP,
+                type_args: None,
+            }),
+            #[allow(unreachable_patterns)]
             Self::External(request, ty) => throw_module_not_found_error_expr(
                 request,
                 &format!(
