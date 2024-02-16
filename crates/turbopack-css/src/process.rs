@@ -660,11 +660,7 @@ impl swc_core::css::visit::Visit for CssModuleValidator {
                 sel.subclass_selectors.is_empty()
                     && match &sel.type_selector.as_deref() {
                         Some(TypeSelector::TagName(tag)) => {
-                            if let "html" | "body" = &*tag.name.value.value {
-                                false
-                            } else {
-                                true
-                            }
+                            !matches!(&*tag.name.value.value, "html" | "body")
                         }
                         Some(..) => true,
                         None => false,
@@ -707,11 +703,7 @@ impl lightningcss::visitor::Visitor<'_> for CssModuleValidator {
             parcel_selectors::parser::Component::ID(_)
             | parcel_selectors::parser::Component::Class(_) => true,
             parcel_selectors::parser::Component::LocalName(local) => {
-                if let "html" | "body" = &*local.name {
-                    false
-                } else {
-                    true
-                }
+                !matches!(local.name, "html" | "body")
             }
             _ => false,
         }) {
