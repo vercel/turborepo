@@ -459,6 +459,21 @@ impl<T, U: CookieReady + Clone> CookiedOptionalWatch<T, U> {
         self.get_inner().now_or_never()
     }
 
+    /// Please do not use this data from a user-facing query. It should only
+    /// really be used for internal state management. Equivalent to
+    /// `OptionalWatch::get`
+    ///
+    /// For an example as to why we need this, sometimes file event processing
+    /// needs to access data but issuing a cookie request would deadlock.
+    ///
+    /// `_reason` is purely for documentation purposes and is not used.
+    pub async fn get_immediate_raw(
+        &mut self,
+        reason: &str,
+    ) -> Option<Result<SomeRef<'_, T>, watch::error::RecvError>> {
+        self.get_raw(reason).now_or_never()
+    }
+
     async fn get_inner(&mut self) -> Result<SomeRef<'_, T>, watch::error::RecvError> {
         self.value.wait_for(|f| f.is_some()).await?;
         Ok(SomeRef(self.value.borrow()))

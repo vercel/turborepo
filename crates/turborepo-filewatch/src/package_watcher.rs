@@ -288,6 +288,8 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
                 // if we have no listeners for either, we should just exit
                 if manager_listeners || package_data_listeners {
                     _ = recv_tx.send(Some(recv));
+                } else {
+                    tracing::debug!("no listeners for file events, exiting");
                 }
             }
         });
@@ -308,6 +310,7 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
 
     async fn watch(mut self, exit_rx: oneshot::Receiver<()>) {
         let process = async move {
+            tracing::debug!("starting package watcher");
             let Ok(mut recv) = self
                 .file_event_receiver_lazy
                 .get()
@@ -396,7 +399,6 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
 
         let out = match self.have_workspace_globs_changed(file_event).await {
             Ok(true) => {
-                //
                 self.rediscover_packages().await;
                 Ok(())
             }
@@ -406,6 +408,8 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
             }
             Err(()) => Err(()),
         };
+
+        tracing::trace!("updating the cookies");
 
         // now that we have updated the state, we should bump the cookies so that
         // people waiting on downstream cookie watchers can get the new state
@@ -423,7 +427,12 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
     /// Returns Err(()) if the package manager channel is closed, indicating
     /// that the entire watching task should exit.
     async fn handle_package_json_change(&mut self, file_event: &Event) -> Result<(), ()> {
-        let Ok(state) = self.package_manager_lazy.get().await.map(|x| x.to_owned()) else {
+        let Ok(state) = self
+            .package_manager_lazy
+            .get_raw("this is called from the file event loop")
+            .await
+            .map(|x| x.to_owned())
+        else {
             // the channel is closed, so there is no state to write into, return
             return Err(());
         };
@@ -512,7 +521,12 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
     /// that the entire watching task should exit.
     async fn have_workspace_globs_changed(&mut self, file_event: &Event) -> Result<bool, ()> {
         // here, we can only update if we have a valid package state
-        let Ok(state) = self.package_manager_lazy.get().await.map(|s| s.to_owned()) else {
+        let Ok(state) = self
+            .package_manager_lazy
+            .get_raw("this is called from the file event loop")
+            .await
+            .map(|s| s.to_owned())
+        else {
             // we can only fail receiving if the channel is closed,
             // which indicated that the entire watching task should exit
             return Err(());
@@ -648,7 +662,7 @@ mod test {
     use std::sync::{Arc, Mutex};
 
     use itertools::Itertools;
-    use tokio::sync::broadcast;
+    use tokio::{join, sync::broadcast};
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_repository::{
         discovery::{self, DiscoveryResponse, WorkspaceData},
@@ -732,13 +746,25 @@ mod test {
             ..Default::default()
         }))
         .unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        let (data, _) = join! {
+                package_data.get(),
+                async {
+                    // simulate fs round trip
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+                    let path = root.join_component("1.cookie").as_std_path().to_owned();
+                    tracing::info!("writing cookie at {}", path.to_string_lossy());
+                    tx.send(Ok(notify::Event {
+                        kind: notify::EventKind::Create(notify::event::CreateKind::File),
+                        paths: vec![path],
+                        ..Default::default()
+                    })).unwrap();
+                }
+        };
 
         assert_eq!(
-            package_data
-                .get()
-                .await
-                .unwrap()
+            data.unwrap()
                 .values()
                 .cloned()
                 .sorted_by_key(|f| f.package_json.clone())
@@ -781,16 +807,24 @@ mod test {
         }))
         .unwrap();
 
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        let (data, _) = join! {
+                package_data.get(),
+                async {
+                    // simulate fs round trip
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+                    let path = root.join_component("2.cookie").as_std_path().to_owned();
+                    tracing::info!("writing cookie at {}", path.to_string_lossy());
+                    tx.send(Ok(notify::Event {
+                        kind: notify::EventKind::Create(notify::event::CreateKind::File),
+                        paths: vec![path],
+                        ..Default::default()
+                    })).unwrap();
+                }
+        };
 
         assert_eq!(
-            package_data
-                .get()
-                .await
-                .unwrap()
-                .values()
-                .cloned()
-                .collect::<Vec<_>>(),
+            data.unwrap().values().cloned().collect::<Vec<_>>(),
             vec![WorkspaceData {
                 package_json: root.join_component("package.json"),
                 turbo_json: None,
@@ -860,13 +894,24 @@ mod test {
 
         let _handle = tokio::spawn(subscriber.watch(exit_rx));
 
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        let (data, _) = join! {
+                package_data.get(),
+                async {
+                    // simulate fs round trip
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+                    let path = root.join_component("1.cookie").as_std_path().to_owned();
+                    tracing::info!("writing cookie at {}", path.to_string_lossy());
+                    tx.send(Ok(notify::Event {
+                        kind: notify::EventKind::Create(notify::event::CreateKind::File),
+                        paths: vec![path],
+                        ..Default::default()
+                    })).unwrap();
+                }
+        };
 
         assert_eq!(
-            package_data
-                .get()
-                .await
-                .unwrap()
+            data.unwrap()
                 .values()
                 .cloned()
                 .sorted_by_key(|f| f.package_json.clone())
@@ -922,13 +967,24 @@ mod test {
         }))
         .unwrap();
 
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        let (data, _) = join! {
+                package_data.get(),
+                async {
+                    // simulate fs round trip
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+                    let path = root.join_component("2.cookie").as_std_path().to_owned();
+                    tracing::info!("writing cookie at {}", path.to_string_lossy());
+                    tx.send(Ok(notify::Event {
+                        kind: notify::EventKind::Create(notify::event::CreateKind::File),
+                        paths: vec![path],
+                        ..Default::default()
+                    })).unwrap();
+                }
+        };
 
         assert_eq!(
-            package_data
-                .get()
-                .await
-                .unwrap()
+            data.unwrap()
                 .values()
                 .cloned()
                 .sorted_by_key(|f| f.package_json.clone())
