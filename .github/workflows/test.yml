@@ -372,8 +372,11 @@ jobs:
 
       - name: Run tests
         # We manually set TURBO_API to an empty string to override Hetzner env
+        # We filter out turborepo-repository because it's a native package and needs
+        # to run when turbo core changes. This job (`js_packages`) does not run on turborpeo core
+        # changes, and we don't want to enable that beahvior for _all_ our JS packages.
         run: |
-          TURBO_API= turbo run check-types test --filter=docs --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
+          TURBO_API= turbo run check-types test --filter=docs --filter="!turborepo-repository" --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
 
   turbopack_typescript:
     name: Turbopack TypeScript files

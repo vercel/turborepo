@@ -4,22 +4,24 @@ use turborepo_repository::discovery::{DiscoveryResponse, Error, PackageDiscovery
 use crate::daemon::{proto::PackageManager, DaemonClient};
 
 #[derive(Debug)]
-pub struct DaemonPackageDiscovery<'a, C: Clone> {
-    daemon: &'a mut DaemonClient<C>,
+pub struct DaemonPackageDiscovery<C> {
+    daemon: DaemonClient<C>,
 }
 
-impl<'a, C: Clone> DaemonPackageDiscovery<'a, C> {
-    pub fn new(daemon: &'a mut DaemonClient<C>) -> Self {
+impl<C> DaemonPackageDiscovery<C> {
+    pub fn new(daemon: DaemonClient<C>) -> Self {
         Self { daemon }
     }
 }
 
-impl<'a, C: Clone + Send> PackageDiscovery for DaemonPackageDiscovery<'a, C> {
-    async fn discover_packages(&mut self) -> Result<DiscoveryResponse, Error> {
+impl<C: Clone + Send + Sync> PackageDiscovery for DaemonPackageDiscovery<C> {
+    async fn discover_packages(&self) -> Result<DiscoveryResponse, Error> {
         tracing::debug!("discovering packages using daemon");
 
-        let response = self
-            .daemon
+        // clone here so we can make concurrent requests
+        let mut daemon = self.daemon.clone();
+
+        let response = daemon
             .discover_packages()
             .await
             .map_err(|e| Error::Failed(Box::new(e)))?;

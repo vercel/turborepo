@@ -294,7 +294,7 @@ mod test {
 
     impl<'a> PackageDiscovery for DummyDiscovery<'a> {
         async fn discover_packages(
-            &mut self,
+            &self,
         ) -> Result<
             turborepo_repository::discovery::DiscoveryResponse,
             turborepo_repository::discovery::Error,
