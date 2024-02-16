@@ -8,9 +8,11 @@ For instance, `app` may use `react@18.0.0`, but `web` may use `react@17.0.0`. Th
 
 Mis-matched dependencies in different repositories can mean that code runs unexpectedly. React, for instance, will error if there is more than one version installed.
 
+Therefore it can be very useful to integrate a tool that can check and fix these issues. Our recommended tools for this are `@manypkg/cli` and `sherif`.
+
 #### `@manypkg/cli`
 
-Our recommended method for handling this problem is with [`@manypkg/cli`](https://www.npmjs.com/package/@manypkg/cli) - a CLI which can ensure that your dependencies match across your repositories.
+One recommended method for handling this problem is with [`@manypkg/cli`](https://www.npmjs.com/package/@manypkg/cli) - a CLI which can ensure that your dependencies match across your repositories.
 
 Here's a quick example. At the root of your `package.json`, add a `postinstall` script.
 
@@ -28,4 +30,20 @@ Here's a quick example. At the root of your `package.json`, add a `postinstall` 
 }
 ```
 
-You can also run `manypkg fix` to automatically update them throughout your repository.
+You can also run `manypkg fix` to automatically update them throughout your repository. Read more about this in the [manypkg documentation](https://github.com/Thinkmill/manypkg#readme).
+
+#### `sherif`
+
+Another recommended method for linting a monorepo is [`sherif`](https://www.npmjs.com/package/sherif) - an opinionated, zero-config linter for JavaScript monorepos written in Rust.
+
+```bash
+pnpm dlx sherif@latest
+```
+
+```bash
+npx sherif@latest
+```
+
+Most issues can be automatically fixed by using the `--fix` flag. Note that autofix is disabled in CI environments (when $CI is set). You can read more about this in the [sherif documentation](https://github.com/QuiiBz/sherif#readme).
+
+It is generally a good idea to run these tools in your CI pipeline to ensure that your dependencies are always in sync. Run the tools by specifying a specific version instead of `latest` to prevent regressions.
