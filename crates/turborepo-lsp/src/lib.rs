@@ -638,7 +638,7 @@ impl Backend {
                 p.workspaces.into_iter(),
                 iter::once(WorkspaceData {
                     package_json: repo_root.join_component("package.json"),
-                    turbo_json: root_turbo_json.exists().then(|| root_turbo_json),
+                    turbo_json: root_turbo_json.exists().then_some(root_turbo_json),
                 }),
             )
         });
@@ -877,12 +877,12 @@ fn collapse_string_range(range: jsonc_parser::common::Range) -> jsonc_parser::co
     }
 }
 
-fn report_invalid_packages_and_tasks<'a>(
+fn report_invalid_packages_and_tasks(
     tasks: &HashMap<String, Vec<Option<String>>>,
     packages: &HashSet<&str>,
     rope: &crop::Rope,
     diagnostics: &mut Vec<Diagnostic>,
-    package_task: &StringLit<'a>,
+    package_task: &StringLit,
 ) {
     let (package, task) = package_task
         .value
