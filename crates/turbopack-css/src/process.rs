@@ -20,7 +20,7 @@ use swc_core::{
     base::sourcemap::SourceMapBuilder,
     common::{BytePos, FileName, LineCol},
     css::{
-        ast::{TypeSelector, UrlValue, WqName},
+        ast::{TypeSelector, UrlValue},
         codegen::{writer::basic::BasicCssWriter, CodeGenerator},
         modules::{CssClassName, TransformConfig},
         visit::{VisitMut, VisitMutWith, VisitWith},
