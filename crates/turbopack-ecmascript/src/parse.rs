@@ -11,6 +11,7 @@ use swc_core::{
     },
     ecma::{
         ast::{EsVersion, Program},
+        lints::{config::LintConfig, rules::LintParams},
         parser::{lexer::Lexer, EsConfig, Parser, Syntax, TsConfig},
         transforms::base::{
             helpers::{Helpers, HELPERS},
@@ -19,7 +20,6 @@ use swc_core::{
         visit::{FoldWith, VisitMutWith},
     },
 };
-use swc_ecma_lints::{config::LintConfig, rules::LintParams};
 use tracing::Instrument;
 use turbo_tasks::{util::WrapFuture, Value, ValueToString, Vc};
 use turbo_tasks_fs::{FileContent, FileSystemPath};
@@ -340,7 +340,7 @@ async fn parse_content(
             ));
 
             let lint_config = LintConfig::default();
-            let rules = swc_ecma_lints::rules::all(LintParams {
+            let rules = swc_core::ecma::lints::rules::all(LintParams {
                 program: &parsed_program,
                 lint_config: &lint_config,
                 unresolved_ctxt: SyntaxContext::empty().apply_mark(unresolved_mark),
@@ -349,7 +349,7 @@ async fn parse_content(
                 source_map: source_map.clone(),
             });
             parsed_program =
-                parsed_program.fold_with(&mut swc_ecma_lints::rules::lint_to_fold(rules));
+                parsed_program.fold_with(&mut swc_core::ecma::lints::rules::lint_to_fold(rules));
 
             let transform_context = TransformContext {
                 comments: &comments,
