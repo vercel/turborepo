@@ -1,9 +1,8 @@
 //! This module hosts the `PackageWatcher` type, which is used to watch the
 //! filesystem for changes to packages.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use futures::FutureExt;
 use notify::Event;
 use tokio::{
     join,
@@ -18,7 +17,11 @@ use turborepo_repository::{
     package_manager::{self, Error, PackageManager, WorkspaceGlobs},
 };
 
-use crate::{optional_watch::OptionalWatch, NotifyError};
+use crate::{
+    cookies::{CookieError, CookieRegister, CookieWriter, CookiedOptionalWatch},
+    optional_watch::OptionalWatch,
+    NotifyError,
+};
 
 /// A package discovery strategy that watches the file system for changes. Basic
 /// idea:
@@ -48,11 +51,13 @@ impl PackageDiscovery for WatchingPackageDiscovery {
         let package_manager = self
             .watcher
             .get_package_manager()
+            .await
             .and_then(Result::ok)
             .ok_or(discovery::Error::Unavailable)?;
         let workspaces = self
             .watcher
             .get_package_data()
+            .await
             .and_then(Result::ok)
             .ok_or(discovery::Error::Unavailable)?;
 
@@ -73,10 +78,10 @@ pub struct PackageWatcher {
     _handle: tokio::task::JoinHandle<()>,
 
     /// The current package data, if available.
-    package_data: OptionalWatch<HashMap<AbsoluteSystemPathBuf, WorkspaceData>>,
+    package_data: CookiedOptionalWatch<HashMap<AbsoluteSystemPathBuf, WorkspaceData>, ()>,
 
     /// The current package manager, if available.
-    package_manager_lazy: OptionalWatch<PackageManagerState>,
+    package_manager_lazy: CookiedOptionalWatch<PackageManagerState, ()>,
 }
 
 impl PackageWatcher {
@@ -103,18 +108,18 @@ impl PackageWatcher {
 
     /// Get the package data. If the package data is not available, this will
     /// block until it is.
-    pub async fn wait_for_package_data(
-        &self,
-    ) -> Result<Vec<WorkspaceData>, watch::error::RecvError> {
+    pub async fn wait_for_package_data(&self) -> Result<Vec<WorkspaceData>, CookieError> {
         let mut recv = self.package_data.clone();
         recv.get().await.map(|v| v.values().cloned().collect())
     }
 
     /// A convenience wrapper around `FutureExt::now_or_never` to let you get
     /// the package data if it is immediately available.
-    pub fn get_package_data(&self) -> Option<Result<Vec<WorkspaceData>, watch::error::RecvError>> {
+    pub async fn get_package_data(
+        &self,
+    ) -> Option<Result<Vec<WorkspaceData>, watch::error::RecvError>> {
         let mut recv = self.package_data.clone();
-        let data = if let Some(Ok(inner)) = recv.get().now_or_never() {
+        let data = if let Some(Ok(inner)) = recv.get_immediate().await {
             Some(Ok(inner.values().cloned().collect()))
         } else {
             None
@@ -124,19 +129,18 @@ impl PackageWatcher {
 
     /// Get the package manager. If the package manager is not available, this
     /// will block until it is.
-    pub async fn wait_for_package_manager(
-        &self,
-    ) -> Result<PackageManager, watch::error::RecvError> {
+    pub async fn wait_for_package_manager(&self) -> Result<PackageManager, CookieError> {
         let mut recv = self.package_manager_lazy.clone();
         recv.get().await.map(|s| s.manager)
     }
 
     /// A convenience wrapper around `FutureExt::now_or_never` to let you get
     /// the package manager if it is immediately available.
-    pub fn get_package_manager(&self) -> Option<Result<PackageManager, watch::error::RecvError>> {
+    pub async fn get_package_manager(&self) -> Option<Result<PackageManager, CookieError>> {
         let mut recv = self.package_manager_lazy.clone();
         // the borrow checker doesn't like returning immediately here so assign to a var
-        let data = if let Some(Ok(inner)) = recv.get().now_or_never() {
+        #[allow(clippy::let_and_return)]
+        let data = if let Some(Ok(inner)) = recv.get_immediate().await {
             Some(Ok(inner.manager))
         } else {
             None
@@ -144,7 +148,7 @@ impl PackageWatcher {
         data
     }
 
-    pub fn watch(&self) -> OptionalWatch<HashMap<AbsoluteSystemPathBuf, WorkspaceData>> {
+    pub fn watch(&self) -> CookiedOptionalWatch<HashMap<AbsoluteSystemPathBuf, WorkspaceData>, ()> {
         self.package_data.clone()
     }
 }
@@ -167,9 +171,10 @@ struct Subscriber<T: PackageDiscovery> {
 
     // package manager data
     package_manager_tx: Arc<watch::Sender<Option<PackageManagerState>>>,
-    package_manager_lazy: OptionalWatch<PackageManagerState>,
+    package_manager_lazy: CookiedOptionalWatch<PackageManagerState, ()>,
     package_data_tx: Arc<watch::Sender<Option<HashMap<AbsoluteSystemPathBuf, WorkspaceData>>>>,
-    package_data_lazy: OptionalWatch<HashMap<AbsoluteSystemPathBuf, WorkspaceData>>,
+    package_data_lazy: CookiedOptionalWatch<HashMap<AbsoluteSystemPathBuf, WorkspaceData>, ()>,
+    cookie_tx: CookieRegister,
 }
 
 /// A collection of state inferred from a package manager. All this data will
@@ -192,9 +197,10 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
         mut recv: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
         backup_discovery: T,
     ) -> Result<Self, Error> {
-        let (package_data_tx, package_data_lazy) = OptionalWatch::new();
+        let writer = CookieWriter::new(&repo_root, Duration::from_secs(1), recv.clone());
+        let (package_data_tx, cookie_tx, package_data_lazy) = CookiedOptionalWatch::new(writer);
         let package_data_tx = Arc::new(package_data_tx);
-        let (package_manager_tx, package_manager_lazy) = OptionalWatch::new();
+        let (package_manager_tx, package_manager_lazy) = package_data_lazy.new_sibling();
         let package_manager_tx = Arc::new(package_manager_tx);
 
         // we create a second optional watch here so that we can ensure it is ready and
@@ -282,6 +288,8 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
                 // if we have no listeners for either, we should just exit
                 if manager_listeners || package_data_listeners {
                     _ = recv_tx.send(Some(recv));
+                } else {
+                    tracing::debug!("no listeners for file events, exiting");
                 }
             }
         });
@@ -296,14 +304,13 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
             package_data_tx,
             package_manager_lazy,
             package_manager_tx,
+            cookie_tx,
         })
     }
 
     async fn watch(mut self, exit_rx: oneshot::Receiver<()>) {
-        // initialize the contents
-        self.rediscover_packages().await;
-
         let process = async move {
+            tracing::debug!("starting package watcher");
             let Ok(mut recv) = self
                 .file_event_receiver_lazy
                 .get()
@@ -365,11 +372,13 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
         Ok((workspace_config_path, filter))
     }
 
-    pub fn manager_receiver(&self) -> OptionalWatch<PackageManagerState> {
+    pub fn manager_receiver(&self) -> CookiedOptionalWatch<PackageManagerState, ()> {
         self.package_manager_lazy.clone()
     }
 
-    pub fn package_data(&self) -> OptionalWatch<HashMap<AbsoluteSystemPathBuf, WorkspaceData>> {
+    pub fn package_data(
+        &self,
+    ) -> CookiedOptionalWatch<HashMap<AbsoluteSystemPathBuf, WorkspaceData>, ()> {
         self.package_data_lazy.clone()
     }
 
@@ -388,9 +397,8 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
             }
         }
 
-        match self.have_workspace_globs_changed(file_event).await {
+        let out = match self.have_workspace_globs_changed(file_event).await {
             Ok(true) => {
-                //
                 self.rediscover_packages().await;
                 Ok(())
             }
@@ -399,13 +407,32 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
                 self.handle_package_json_change(file_event).await
             }
             Err(()) => Err(()),
-        }
+        };
+
+        tracing::trace!("updating the cookies");
+
+        // now that we have updated the state, we should bump the cookies so that
+        // people waiting on downstream cookie watchers can get the new state
+        self.cookie_tx.register(
+            &file_event
+                .paths
+                .iter()
+                .map(|p| AbsoluteSystemPath::from_std_path(p).expect("these paths are absolute"))
+                .collect::<Vec<_>>(),
+        );
+
+        out
     }
 
     /// Returns Err(()) if the package manager channel is closed, indicating
     /// that the entire watching task should exit.
     async fn handle_package_json_change(&mut self, file_event: &Event) -> Result<(), ()> {
-        let Ok(state) = self.package_manager_lazy.get().await.map(|x| x.to_owned()) else {
+        let Ok(state) = self
+            .package_manager_lazy
+            .get_raw("this is called from the file event loop")
+            .await
+            .map(|x| x.to_owned())
+        else {
             // the channel is closed, so there is no state to write into, return
             return Err(());
         };
@@ -494,7 +521,12 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
     /// that the entire watching task should exit.
     async fn have_workspace_globs_changed(&mut self, file_event: &Event) -> Result<bool, ()> {
         // here, we can only update if we have a valid package state
-        let Ok(state) = self.package_manager_lazy.get().await.map(|s| s.to_owned()) else {
+        let Ok(state) = self
+            .package_manager_lazy
+            .get_raw("this is called from the file event loop")
+            .await
+            .map(|s| s.to_owned())
+        else {
             // we can only fail receiving if the channel is closed,
             // which indicated that the entire watching task should exit
             return Err(());
@@ -630,7 +662,7 @@ mod test {
     use std::sync::{Arc, Mutex};
 
     use itertools::Itertools;
-    use tokio::sync::broadcast;
+    use tokio::{join, sync::broadcast};
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_repository::{
         discovery::{self, DiscoveryResponse, WorkspaceData},
@@ -714,13 +746,25 @@ mod test {
             ..Default::default()
         }))
         .unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        let (data, _) = join! {
+                package_data.get(),
+                async {
+                    // simulate fs round trip
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+                    let path = root.join_component("1.cookie").as_std_path().to_owned();
+                    tracing::info!("writing cookie at {}", path.to_string_lossy());
+                    tx.send(Ok(notify::Event {
+                        kind: notify::EventKind::Create(notify::event::CreateKind::File),
+                        paths: vec![path],
+                        ..Default::default()
+                    })).unwrap();
+                }
+        };
 
         assert_eq!(
-            package_data
-                .get()
-                .await
-                .unwrap()
+            data.unwrap()
                 .values()
                 .cloned()
                 .sorted_by_key(|f| f.package_json.clone())
@@ -763,16 +807,24 @@ mod test {
         }))
         .unwrap();
 
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        let (data, _) = join! {
+                package_data.get(),
+                async {
+                    // simulate fs round trip
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+                    let path = root.join_component("2.cookie").as_std_path().to_owned();
+                    tracing::info!("writing cookie at {}", path.to_string_lossy());
+                    tx.send(Ok(notify::Event {
+                        kind: notify::EventKind::Create(notify::event::CreateKind::File),
+                        paths: vec![path],
+                        ..Default::default()
+                    })).unwrap();
+                }
+        };
 
         assert_eq!(
-            package_data
-                .get()
-                .await
-                .unwrap()
-                .values()
-                .cloned()
-                .collect::<Vec<_>>(),
+            data.unwrap().values().cloned().collect::<Vec<_>>(),
             vec![WorkspaceData {
                 package_json: root.join_component("package.json"),
                 turbo_json: None,
@@ -842,13 +894,24 @@ mod test {
 
         let _handle = tokio::spawn(subscriber.watch(exit_rx));
 
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        let (data, _) = join! {
+                package_data.get(),
+                async {
+                    // simulate fs round trip
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+                    let path = root.join_component("1.cookie").as_std_path().to_owned();
+                    tracing::info!("writing cookie at {}", path.to_string_lossy());
+                    tx.send(Ok(notify::Event {
+                        kind: notify::EventKind::Create(notify::event::CreateKind::File),
+                        paths: vec![path],
+                        ..Default::default()
+                    })).unwrap();
+                }
+        };
 
         assert_eq!(
-            package_data
-                .get()
-                .await
-                .unwrap()
+            data.unwrap()
                 .values()
                 .cloned()
                 .sorted_by_key(|f| f.package_json.clone())
@@ -904,13 +967,24 @@ mod test {
         }))
         .unwrap();
 
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        let (data, _) = join! {
+                package_data.get(),
+                async {
+                    // simulate fs round trip
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+                    let path = root.join_component("2.cookie").as_std_path().to_owned();
+                    tracing::info!("writing cookie at {}", path.to_string_lossy());
+                    tx.send(Ok(notify::Event {
+                        kind: notify::EventKind::Create(notify::event::CreateKind::File),
+                        paths: vec![path],
+                        ..Default::default()
+                    })).unwrap();
+                }
+        };
 
         assert_eq!(
-            package_data
-                .get()
-                .await
-                .unwrap()
+            data.unwrap()
                 .values()
                 .cloned()
                 .sorted_by_key(|f| f.package_json.clone())

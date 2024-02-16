@@ -46,7 +46,7 @@ impl<T> OptionalWatch<T> {
     }
 }
 
-pub struct SomeRef<'a, T>(Ref<'a, Option<T>>);
+pub struct SomeRef<'a, T>(pub(crate) Ref<'a, Option<T>>);
 
 impl<'a, T> std::ops::Deref for SomeRef<'a, T> {
     type Target = T;
