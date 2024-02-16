@@ -295,7 +295,7 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
             depends_on.push(task_dependency.to_string());
         }
         for topological_dependency in topological_dependencies {
-            depends_on.push(format!("^{topological_dependency}"));
+            depends_on.push(format!("^{}", topological_dependency.as_inner()));
         }
 
         // These _should_ already be sorted when the TaskDefinition struct was

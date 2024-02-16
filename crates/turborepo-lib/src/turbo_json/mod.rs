@@ -164,7 +164,7 @@ pub struct RawTaskDefinition {
     #[serde(skip_serializing_if = "Spanned::is_none")]
     cache: Spanned<Option<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    depends_on: Option<Spanned<Vec<UnescapedString>>>,
+    depends_on: Option<Spanned<Vec<Spanned<UnescapedString>>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     dot_env: Option<Spanned<Vec<UnescapedString>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -263,10 +263,11 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
         let cache = raw_task.cache;
 
         let mut env_var_dependencies = HashSet::new();
-        let mut topological_dependencies = Vec::new();
-        let mut task_dependencies = Vec::new();
+        let mut topological_dependencies: Vec<Spanned<TaskName>> = Vec::new();
+        let mut task_dependencies: Vec<Spanned<TaskName>> = Vec::new();
         if let Some(depends_on) = raw_task.depends_on {
             for dependency in depends_on.into_inner() {
+                let (dependency, span) = dependency.split();
                 let dependency: String = dependency.into();
                 if let Some(dependency) = dependency.strip_prefix(ENV_PIPELINE_DELIMITER) {
                     println!(
@@ -279,15 +280,15 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
                 } else if let Some(topo_dependency) =
                     dependency.strip_prefix(TOPOLOGICAL_PIPELINE_DELIMITER)
                 {
-                    topological_dependencies.push(topo_dependency.to_string().into());
+                    topological_dependencies.push(span.to(topo_dependency.to_string().into()));
                 } else {
-                    task_dependencies.push(dependency.into());
+                    task_dependencies.push(span.to(dependency.into()));
                 }
             }
         }
 
-        task_dependencies.sort();
-        topological_dependencies.sort();
+        task_dependencies.sort_by(|a, b| a.value.cmp(&b.value));
+        topological_dependencies.sort_by(|a, b| a.value.cmp(&b.value));
 
         let env = raw_task
             .env

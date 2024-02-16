@@ -2,9 +2,9 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use convert_case::{Case, Casing};
 use itertools::Itertools;
-use miette::Diagnostic;
+use miette::{Diagnostic, NamedSource, SourceSpan};
 use turbopath::AbsoluteSystemPath;
-use turborepo_errors::TURBO_SITE;
+use turborepo_errors::{Spanned, TURBO_SITE};
 use turborepo_graph_utils as graph;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode, ROOT_PKG_NAME};
 
@@ -17,23 +17,39 @@ use crate::{
 };
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
+#[error("could not find task `{name}` in project")]
+pub struct MissingTaskError {
+    name: String,
+    #[label]
+    span: Option<SourceSpan>,
+    #[source_code]
+    text: NamedSource,
+}
+
+#[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum Error {
-    #[error("Could not find the following tasks in project: {0}")]
-    MissingTasks(String),
+    #[error("missing tasks in project")]
+    MissingTasks(#[related] Vec<MissingTaskError>),
     #[error("No package.json for {workspace}")]
     MissingPackageJson { workspace: PackageName },
     #[error(
         "{task_id} needs an entry in turbo.json before it can be depended on because it is a task \
-         run from the root package"
+         declared in the root package.json"
     )]
     #[diagnostic(
-        code(missing_task_for_root),
+        code(missing_root_task_in_turbo_json),
         url(
             "{}/messages/{}",
             TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab)
         )
     )]
-    MissingTaskForRoot { task_id: String },
+    MissingRootTaskInTurboJson {
+        task_id: String,
+        #[label("add an entry in turbo.json for this task")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+    },
     #[error("Could not find workspace \"{package}\" from task \"{task_id}\" in project")]
     MissingWorkspaceFromTask { package: String, task_id: String },
     #[error("Could not find \"{task_id}\" in root turbo.json or \"{task_name}\" in workspace")]
@@ -58,7 +74,7 @@ pub struct EngineBuilder<'a> {
     is_single: bool,
     turbo_jsons: Option<HashMap<PackageName, TurboJson>>,
     workspaces: Vec<PackageName>,
-    tasks: Vec<TaskName<'static>>,
+    tasks: Vec<Spanned<TaskName<'static>>>,
     root_enabled_tasks: HashSet<TaskName<'static>>,
     tasks_only: bool,
 }
@@ -108,7 +124,10 @@ impl<'a> EngineBuilder<'a> {
         self
     }
 
-    pub fn with_tasks<I: IntoIterator<Item = TaskName<'static>>>(mut self, tasks: I) -> Self {
+    pub fn with_tasks<I: IntoIterator<Item = Spanned<TaskName<'static>>>>(
+        mut self,
+        tasks: I,
+    ) -> Self {
         self.tasks = tasks.into_iter().collect();
         self
     }
@@ -122,8 +141,8 @@ impl<'a> EngineBuilder<'a> {
         }
 
         let mut turbo_jsons = self.turbo_jsons.take().unwrap_or_default();
-        let mut missing_tasks: HashSet<&TaskName<'_>, std::collections::hash_map::RandomState> =
-            HashSet::from_iter(self.tasks.iter());
+        let mut missing_tasks: HashMap<&TaskName<'_>, Spanned<()>> =
+            HashMap::from_iter(self.tasks.iter().map(|spanned| spanned.as_ref().split()));
         let mut traversal_queue = VecDeque::with_capacity(1);
         for (workspace, task) in self.workspaces.iter().cartesian_product(self.tasks.iter()) {
             let task_id = task
@@ -131,7 +150,7 @@ impl<'a> EngineBuilder<'a> {
                 .unwrap_or_else(|| TaskId::new(workspace.as_ref(), task.task()));
 
             if self.has_task_definition(&mut turbo_jsons, workspace, task, &task_id)? {
-                missing_tasks.remove(task);
+                missing_tasks.remove(task.as_inner());
 
                 // Even if a task definition was found, we _only_ want to add it as an entry
                 // point to the task graph (i.e. the traversalQueue), if
@@ -141,7 +160,7 @@ impl<'a> EngineBuilder<'a> {
                 //   workspace is acceptable)
                 if !matches!(workspace, PackageName::Root) || self.root_enabled_tasks.contains(task)
                 {
-                    traversal_queue.push_back(task_id);
+                    traversal_queue.push_back(task.to(task_id));
                 }
             }
         }
@@ -149,12 +168,19 @@ impl<'a> EngineBuilder<'a> {
         if !missing_tasks.is_empty() {
             let mut missing_tasks = missing_tasks
                 .into_iter()
-                .map(|task_name| task_name.to_string())
+                .map(|(task_name, span)| (task_name.to_string(), span))
                 .collect::<Vec<_>>();
             // We sort the tasks mostly to keep it deterministic for our tests
-            missing_tasks.sort();
+            missing_tasks.sort_by(|a, b| a.0.cmp(&b.0));
+            let errors = missing_tasks
+                .into_iter()
+                .map(|(name, span)| {
+                    let (span, text) = span.span_and_text("turbo.json");
+                    MissingTaskError { name, span, text }
+                })
+                .collect();
 
-            return Err(Error::MissingTasks(missing_tasks.into_iter().join(", ")));
+            return Err(Error::MissingTasks(errors));
         }
 
         let mut visited = HashSet::new();
@@ -166,7 +192,10 @@ impl<'a> EngineBuilder<'a> {
                     .root_enabled_tasks
                     .contains(&task_id.as_non_workspace_task_name())
             {
-                return Err(Error::MissingTaskForRoot {
+                let (span, text) = task_id.span_and_text("turbo.json");
+                return Err(Error::MissingRootTaskInTurboJson {
+                    span,
+                    text,
                     task_id: task_id.to_string(),
                 });
             }
@@ -197,11 +226,11 @@ impl<'a> EngineBuilder<'a> {
             let task_definition = TaskDefinition::try_from(raw_task_definition)?;
 
             // Skip this iteration of the loop if we've already seen this taskID
-            if visited.contains(&task_id) {
+            if visited.contains(task_id.as_inner()) {
                 continue;
             }
 
-            visited.insert(task_id.clone());
+            visited.insert(task_id.as_inner().clone());
 
             // Note that the Go code has a whole if/else statement for putting stuff into
             // deps or calling e.AddDep the bool is cannot be true so we skip to
@@ -209,20 +238,22 @@ impl<'a> EngineBuilder<'a> {
             let mut deps = task_definition
                 .task_dependencies
                 .iter()
-                .collect::<HashSet<_>>();
+                .map(|spanned| spanned.as_ref().split())
+                .collect::<HashMap<_, _>>();
             let mut topo_deps = task_definition
                 .topological_dependencies
                 .iter()
-                .collect::<HashSet<_>>();
+                .map(|spanned| spanned.as_ref().split())
+                .collect::<HashMap<_, _>>();
 
             if self.tasks_only {
-                deps.retain(|task_name| self.tasks.contains(*task_name));
-                topo_deps.retain(|task_name| self.tasks.contains(*task_name))
+                deps.retain(|task_name, _| self.tasks.iter().any(|t| &t.value == *task_name));
+                topo_deps.retain(|task_name, _| self.tasks.iter().any(|t| &t.value == *task_name));
             }
 
             // Don't ask why, but for some reason we refer to the source as "to"
             // and the target node as "from"
-            let to_task_id = task_id.clone().into_owned();
+            let to_task_id = task_id.as_inner().clone().into_owned();
             let to_task_index = engine.get_index(&to_task_id);
 
             let dep_pkgs = self
@@ -235,7 +266,7 @@ impl<'a> EngineBuilder<'a> {
             topo_deps
                 .iter()
                 .cartesian_product(dep_pkgs.iter().flatten())
-                .for_each(|(from, dependency_workspace)| {
+                .for_each(|((from, span), dependency_workspace)| {
                     // We don't need to add an edge from the root node if we're in this branch
                     if let PackageNode::Workspace(dependency_workspace) = dependency_workspace {
                         has_topo_deps = true;
@@ -244,11 +275,11 @@ impl<'a> EngineBuilder<'a> {
                         engine
                             .task_graph
                             .add_edge(to_task_index, from_task_index, ());
-                        traversal_queue.push_back(from_task_id);
+                        traversal_queue.push_back(span.to(from_task_id));
                     }
                 });
 
-            for dep in deps {
+            for (dep, span) in deps {
                 has_deps = true;
                 let from_task_id = dep
                     .task_id()
@@ -258,10 +289,10 @@ impl<'a> EngineBuilder<'a> {
                 engine
                     .task_graph
                     .add_edge(to_task_index, from_task_index, ());
-                traversal_queue.push_back(from_task_id);
+                traversal_queue.push_back(span.to(from_task_id));
             }
 
-            engine.add_definition(task_id.clone().into_owned(), task_definition);
+            engine.add_definition(task_id.as_inner().clone().into_owned(), task_definition);
 
             if !has_deps && !has_topo_deps {
                 engine.connect_to_root(&to_task_id);
@@ -312,7 +343,7 @@ impl<'a> EngineBuilder<'a> {
     fn task_definition_chain(
         &self,
         turbo_jsons: &mut HashMap<PackageName, TurboJson>,
-        task_id: &TaskId,
+        task_id: &Spanned<TaskId>,
         task_name: &TaskName,
     ) -> Result<Vec<RawTaskDefinition>, Error> {
         let mut task_definitions = Vec::new();
@@ -327,9 +358,14 @@ impl<'a> EngineBuilder<'a> {
 
         if self.is_single {
             return match task_definitions.is_empty() {
-                true => Err(Error::MissingTaskForRoot {
-                    task_id: task_id.to_string(),
-                }),
+                true => {
+                    let (span, text) = task_id.span_and_text("turbo.json");
+                    Err(Error::MissingRootTaskInTurboJson {
+                        span,
+                        text,
+                        task_id: task_id.to_string(),
+                    })
+                }
                 false => Ok(task_definitions),
             };
         }
@@ -926,7 +962,7 @@ mod test {
             .with_root_tasks(vec![TaskName::from("libA#build"), TaskName::from("build")])
             .build();
 
-        assert_matches!(engine, Err(Error::MissingTaskForRoot { .. }));
+        assert_matches!(engine, Err(Error::MissingRootTaskInTurboJson { .. }));
     }
 
     #[test]
@@ -1010,7 +1046,7 @@ mod test {
             ])
             .build();
 
-        assert_matches!(engine, Err(Error::MissingTaskForRoot { .. }));
+        assert_matches!(engine, Err(Error::MissingRootTaskInTurboJson { .. }));
     }
 
     #[test]

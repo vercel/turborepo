@@ -1,0 +1,57 @@
+---
+title: Missing root task in turbo.json
+description: Missing root task in turbo.json error
+---
+
+# Missing root task in turbo.json
+
+## Why This Error Occurred
+
+Scripts defined in the monorepo's root `package.json`, i.e. root tasks, often call `turbo` themselves.
+For example:
+
+```json package.json
+{
+  "scripts": {
+    "build": "turbo run build"
+  }
+}
+```
+
+This creates a problem when we declare task dependencies with `^`. A quick recap, `^<task>` declares that the
+task depends on the same task in the package's dependencies, e.g. if package `a` depends on packages `b` and `c`,
+and `a#build` depends on `^build`, then its dependencies will be `b#build` and `c#build`. We call these topological
+dependencies.
+
+However, this creates a problem, because the root package is an implicit dependency for all the packages
+inside the monorepo.
+
+```json turbo.json
+{
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"]
+    }
+  }
+}
+```
+
+Therefore, by default, Turborepo does not include root tasks in its task dependency graph.
+
+## Solution
+
+As long as the root task does _not_ call `turbo`, you can add it to the `pipeline` field in `turbo.json`:
+
+```json
+{
+  "pipeline": {
+    "//#build": {}
+  }
+}
+```
+
+This will allow other tasks to depend on `//#build`.
+
+However, if the root task does call `turbo`, this can cause infinite recursion. In this case, we don't recommend depending
+on the root task. Instead, you can determine the tasks that this root task depends on, and depend on those directly.
+For instance, if `//#build` depends on `app#lint` and `docs#lint`, then you can declare those as dependencies
