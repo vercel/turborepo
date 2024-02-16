@@ -11,6 +11,7 @@
 
 use std::sync::Arc;
 
+use tokio::time::error::Elapsed;
 use tokio_stream::{iter, StreamExt};
 use turbopath::AbsoluteSystemPathBuf;
 
@@ -270,7 +271,7 @@ impl<A: PackageDiscovery + Send + Sync, B: PackageDiscovery + Send + Sync> Packa
                     Err(err2) => Err(err2),
                 }
             }
-            Err(_) => {
+            Err(Elapsed { .. }) => {
                 tracing::debug!("primary strategy timed out, attempting fallback strategy");
                 self.fallback.discover_packages_blocking().await
             }
