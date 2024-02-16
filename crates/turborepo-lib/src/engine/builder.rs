@@ -1,8 +1,10 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
+use convert_case::{Case, Casing};
 use itertools::Itertools;
 use miette::Diagnostic;
 use turbopath::AbsoluteSystemPath;
+use turborepo_errors::TURBO_SITE;
 use turborepo_graph_utils as graph;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode, ROOT_PKG_NAME};
 
@@ -23,6 +25,13 @@ pub enum Error {
     #[error(
         "{task_id} needs an entry in turbo.json before it can be depended on because it is a task \
          run from the root package"
+    )]
+    #[diagnostic(
+        code(missing_task_for_root),
+        url(
+            "{}/messages/{}",
+            TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab)
+        )
     )]
     MissingTaskForRoot { task_id: String },
     #[error("Could not find workspace \"{package}\" from task \"{task_id}\" in project")]

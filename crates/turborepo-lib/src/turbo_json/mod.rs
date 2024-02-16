@@ -5,6 +5,7 @@ use std::{
 };
 
 use camino::Utf8Path;
+use miette::{NamedSource, SourceSpan};
 use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
 use tracing::debug;
@@ -220,7 +221,7 @@ impl TryFrom<Vec<Spanned<UnescapedString>>> for TaskOutputs {
         for glob in outputs {
             if let Some(stripped_glob) = glob.value.strip_prefix('!') {
                 if Utf8Path::new(stripped_glob).is_absolute() {
-                    let (span, text) = glob.span_and_text();
+                    let (span, text) = glob.span_and_text("turbo.json");
                     return Err(Error::AbsolutePathInConfig {
                         field: "outputs",
                         span,
@@ -231,7 +232,7 @@ impl TryFrom<Vec<Spanned<UnescapedString>>> for TaskOutputs {
                 exclusions.push(stripped_glob.to_string());
             } else {
                 if Utf8Path::new(&glob.value).is_absolute() {
-                    let (span, text) = glob.span_and_text();
+                    let (span, text) = glob.span_and_text("turbo.json");
                     return Err(Error::AbsolutePathInConfig {
                         field: "outputs",
                         span,
@@ -306,7 +307,7 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
             .into_iter()
             .map(|input| {
                 if Utf8Path::new(&input.value).is_absolute() {
-                    let (span, text) = input.span_and_text();
+                    let (span, text) = input.span_and_text("turbo.json");
                     Err(Error::AbsolutePathInConfig {
                         field: "inputs",
                         span,
@@ -448,7 +449,7 @@ impl TryFrom<RawTurboJson> for TurboJson {
                 global_env.insert(env_var.to_string());
             } else {
                 if Utf8Path::new(&global_dep.value).is_absolute() {
-                    let (span, text) = global_dep.span_and_text();
+                    let (span, text) = global_dep.span_and_text("turbo.json");
                     return Err(Error::AbsolutePathInConfig {
                         field: "globalDependencies",
                         span,
@@ -558,7 +559,7 @@ impl TurboJson {
                 let mut pipeline = Pipeline::default();
                 for (task_name, task_definition) in turbo_from_files.pipeline {
                     if task_name.is_package_task() {
-                        let (span, text) = task_definition.span_and_text();
+                        let (span, text) = task_definition.span_and_text("turbo.json");
 
                         return Err(Error::PackageTaskInSinglePackageMode {
                             task_id: task_name.to_string(),
@@ -644,7 +645,7 @@ pub fn validate_no_package_task_syntax(turbo_json: &TurboJson) -> Vec<Error> {
         .iter()
         .filter(|(task_name, _)| task_name.is_package_task())
         .map(|(task_name, entry)| {
-            let (span, text) = entry.span_and_text();
+            let (span, text) = entry.span_and_text("turbo.json");
             Error::UnnecessaryPackageTaskSyntax {
                 actual: task_name.to_string(),
                 wanted: task_name.task().to_string(),
@@ -658,15 +659,29 @@ pub fn validate_no_package_task_syntax(turbo_json: &TurboJson) -> Vec<Error> {
 pub fn validate_extends(turbo_json: &TurboJson) -> Vec<Error> {
     match turbo_json.extends.first() {
         Some(package_name) if package_name != ROOT_PKG_NAME || turbo_json.extends.len() > 1 => {
-            let (span, text) = turbo_json.extends.span_and_text();
+            let (span, text) = turbo_json.extends.span_and_text("turbo.json");
             vec![Error::ExtendFromNonRoot { span, text }]
         }
-        None => vec![Error::NoExtends {
-            path: turbo_json
+        None => {
+            let path = turbo_json
                 .path
                 .as_ref()
-                .map_or_else(|| "turbo.json".to_string(), |p| p.to_string()),
-        }],
+                .map_or("turbo.json", |p| p.as_ref());
+
+            let (span, text) = match turbo_json.text {
+                Some(ref text) => {
+                    let len = text.len();
+                    let span: SourceSpan = (0, len - 1).into();
+                    (Some(span), text.to_string())
+                }
+                None => (None, String::new()),
+            };
+
+            vec![Error::NoExtends {
+                span,
+                text: NamedSource::new(path, text),
+            }]
+        }
         _ => vec![],
     }
 }
@@ -679,14 +694,18 @@ fn gather_env_vars(
     for value in vars {
         let value: Spanned<String> = value.map(|v| v.into());
         if value.starts_with(ENV_PIPELINE_DELIMITER) {
-            let (span, text) = value.span_and_text();
+            let (span, text) = value.span_and_text("turbo.json");
             // Hard error to help people specify this correctly during migration.
             // TODO: Remove this error after we have run summary.
+            let path = value
+                .path
+                .as_ref()
+                .map_or_else(|| "turbo.json".to_string(), |p| p.to_string());
             return Err(Error::InvalidEnvPrefix {
                 key: key.to_string(),
                 value: value.into_inner(),
                 span,
-                text,
+                text: NamedSource::new(path, text),
                 env_pipeline_delimiter: ENV_PIPELINE_DELIMITER,
             });
         }

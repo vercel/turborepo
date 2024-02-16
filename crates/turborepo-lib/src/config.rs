@@ -1,7 +1,7 @@
 use std::{collections::HashMap, ffi::OsString, io};
 
 use convert_case::{Case, Casing};
-use miette::{Diagnostic, SourceSpan};
+use miette::{Diagnostic, NamedSource, SourceSpan};
 use serde::Deserialize;
 use struct_iterable::Iterable;
 use thiserror::Error;
@@ -55,7 +55,7 @@ pub enum Error {
     PackageTaskInSinglePackageMode {
         task_id: String,
         #[source_code]
-        text: String,
+        text: NamedSource,
         #[label("package task found here")]
         span: Option<SourceSpan>,
     },
@@ -68,7 +68,7 @@ pub enum Error {
         value: String,
         key: String,
         #[source_code]
-        text: String,
+        text: NamedSource,
         #[label("variable with invalid prefix declared here")]
         span: Option<SourceSpan>,
         env_pipeline_delimiter: &'static str,
@@ -86,14 +86,14 @@ pub enum Error {
         #[label("unnecessary package syntax found here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: String,
+        text: NamedSource,
     },
     #[error("You can only extend from the root workspace")]
     ExtendFromNonRoot {
         #[label("non-root workspace found here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: String,
+        text: NamedSource,
     },
     #[error("`{field}` cannot contain an absolute path")]
     AbsolutePathInConfig {
@@ -101,10 +101,15 @@ pub enum Error {
         #[label("absolute path found here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: String,
+        text: NamedSource,
     },
-    #[error("No \"extends\" key found in {path}")]
-    NoExtends { path: String },
+    #[error("No \"extends\" key found")]
+    NoExtends {
+        #[label("add extends key here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+    },
     #[error("Failed to create APIClient: {0}")]
     ApiClient(#[source] turborepo_api_client::Error),
     #[error("{0} is not UTF8.")]
