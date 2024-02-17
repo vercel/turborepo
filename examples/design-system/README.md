@@ -43,7 +43,6 @@ This Turborepo includes the following packages and applications:
 
 - `apps/docs`: Component documentation site with Storybook
 - `packages/ui`: Core React components
-- `packages/utils`: Shared React utilities
 - `packages/typescript-config`: Shared `tsconfig.json`s used throughout the Turborepo
 - `packages/eslint-config`: ESLint preset
 
@@ -57,17 +56,17 @@ To make the core library code work across all browsers, we need to compile the r
 
 Running `pnpm build` from the root of the Turborepo will run the `build` command defined in each package's `package.json` file. Turborepo runs each `build` in parallel and caches & hashes the output to speed up future builds.
 
-For `acme-core`, the `build` command is the following:
+For `acme-ui`, the `build` command is the following:
 
 ```bash
 tsup src/index.tsx --format esm,cjs --dts --external react
 ```
 
-`tsup` compiles `src/index.tsx`, which exports all of the components in the design system, into both ES Modules and CommonJS formats as well as their TypeScript types. The `package.json` for `acme-core` then instructs the consumer to select the correct format:
+`tsup` compiles `src/index.tsx`, which exports all of the components in the design system, into both ES Modules and CommonJS formats as well as their TypeScript types. The `package.json` for `acme-ui` then instructs the consumer to select the correct format:
 
-```json:acme-core/package.json
+```json:@acme/ui/package.json
 {
-  "name": "@acme/core",
+  "name": "@acme/ui",
   "version": "0.0.0",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -76,10 +75,10 @@ tsup src/index.tsx --format esm,cjs --dts --external react
 }
 ```
 
-Run `pnpm build` to confirm compilation is working correctly. You should see a folder `acme-core/dist` which contains the compiled output.
+Run `pnpm build` to confirm compilation is working correctly. You should see a folder `acme-ui/dist` which contains the compiled output.
 
 ```bash
-acme-core
+acme-ui
 └── dist
     ├── index.d.ts  <-- Types
     ├── index.js    <-- CommonJS version
@@ -88,9 +87,9 @@ acme-core
 
 ## Components
 
-Each file inside of `acme-core/src` is a component inside our design system. For example:
+Each file inside of `acme-ui/src` is a component inside our design system. For example:
 
-```tsx:acme-core/src/Button.tsx
+```tsx:acme-ui/src/Button.tsx
 import * as React from 'react';
 
 export interface ButtonProps {
@@ -106,7 +105,7 @@ Button.displayName = 'Button';
 
 When adding a new file, ensure the component is also exported from the entry `index.tsx` file:
 
-```tsx:acme-core/src/index.tsx
+```tsx:acme-ui/src/index.tsx
 import * as React from "react";
 export { Button, type ButtonProps } from "./Button";
 // Add new component exports here
@@ -118,13 +117,13 @@ Storybook provides us with an interactive UI playground for our components. This
 
 - Use Vite to bundle stories instantly (in milliseconds)
 - Automatically find any stories inside the `stories/` folder
-- Support using module path aliases like `@acme-core` for imports
+- Support using module path aliases like `@acme/ui` for imports
 - Write MDX for component documentation pages
 
 For example, here's the included Story for our `Button` component:
 
 ```js:apps/docs/stories/button.stories.mdx
-import { Button } from '@acme-core/src';
+import { Button } from '@acme-ui/src';
 import { Meta, Story, Preview, Props } from '@storybook/addon-docs/blocks';
 
 <Meta title="Components/Button" component={Button} />
