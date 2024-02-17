@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../../helpers/setup.sh
-  $ . ${TESTDIR}/_helpers/logged_in.sh
+  $ . ${TESTDIR}/../../helpers/mock_turbo_config.sh
 
 Logout while logged in
   $ ${TURBO} logout
@@ -8,4 +8,5 @@ Logout while logged in
 
 Logout while logged out
   $ ${TURBO} logout
-  No tokens to remove
+  >>> Logged out
+

@@ -2,34 +2,76 @@
 
 set -eo pipefail
 
-FIXTURE_NAME=$1
-PACKAGE_MANAGER=$2 # e.g. yarn@1.22.17
+export TURBO_TELEMETRY_MESSAGE_DISABLED=1
 
-THIS_DIR=$(dirname "${BASH_SOURCE[0]}")
-MONOREPO_ROOT_DIR="$THIS_DIR/../.."
-TURBOREPO_TESTS_DIR="${MONOREPO_ROOT_DIR}/turborepo-tests"
+# Start by figuring out which example we're testing and its package manager
+example_path=$1
+package_manager=$2
 
-TARGET_DIR="$(pwd)"
-
-"${TURBOREPO_TESTS_DIR}/helpers/copy_fixture.sh" "${TARGET_DIR}" "${FIXTURE_NAME}" "${MONOREPO_ROOT_DIR}/examples"
-"${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" "${TARGET_DIR}"
-"${TURBOREPO_TESTS_DIR}/helpers/setup_package_manager.sh" "${TARGET_DIR}" "$PACKAGE_MANAGER"
-"${TURBOREPO_TESTS_DIR}/helpers/install_deps.sh" "$PACKAGE_MANAGER"
-
-# Set the TURBO_BINARY_PATH env var. The examples themselves invoke the locally installed turbo,
-# but turbo has an internal feature that will look for this environment variable and use it if it's set.
-# This is our way of running a locally built turbo version in our examples/ instead of the version
-# that is installed in the example's node_modules.
-if [ "${OSTYPE}" == "msys" ]; then
-  EXT=".exe"
-else
-  EXT=""
+if [ -z "$example_path" ]; then
+  echo "No example path was provided"
+  exit 1
 fi
-export TURBO_BINARY_PATH=${MONOREPO_ROOT_DIR}/target/debug/turbo${EXT}
 
-# Undo the set -eo pipefail at the top of this script
-# This script is called with a leading ".", which means that it does not run
-# in a new child process, so the set -eo pipefail would affect the calling script.
-# Some of our tests actually assert non-zero exit codes, and we don't want to
-# abort the test in those cases. So we undo the set -eo pipefail here.
-set +eo pipefail
+if [ -z "$package_manager" ]; then
+  echo "No package manager was provided"
+  exit 1
+fi
+
+# Use the right command for each package manager
+if [ "$package_manager" == "npm" ]; then
+  package_manager_command="npm install"
+elif [ "$package_manager" == "pnpm" ]; then
+  package_manager_command="pnpm install"
+elif [ "$package_manager" == "yarn" ]; then
+  package_manager_command="yarn"
+fi
+
+# All examples implement these two tasks
+# and it's reasonable to assume that they will continue to do so
+turbo_command="turbo build lint"
+
+# Head into a temporary directory
+mkdir -p ../../examples-tests-tmp
+cd ../../examples-tests-tmp
+
+# Start up a fresh directory for the test
+rm -rf "$example_path" || true
+rsync -avq \
+--exclude='node_modules' \
+--exclude="dist" \
+--exclude=".turbo" \
+--exclude=".expo" \
+--exclude=".cache" \
+--exclude=".next" \
+"../examples/$example_path" "."
+
+cd "$example_path"
+"../../turborepo-tests/helpers/setup_git.sh" .
+
+# Make /tmp dir for writing dump logs
+mkdir -p ./tmp
+echo "/tmp/" >> ".gitignore"
+
+# Simulating the user's first run and dumping logs to a file
+$package_manager_command >./tmp/install.txt 2>&1
+$turbo_command >./tmp/grep-me-for-miss.txt
+
+# We don't want to hit cache on first run because we're acting like a user.
+# A user would never hit cache on first run. Why should we?
+if grep -q ">>> FULL TURBO" ./tmp/grep-me-for-miss.txt; then
+  echo "A FULL TURBO was found. This test is misconfigured (since it can hit a cache)."
+  echo "Dumping logs:"
+  cat ./tmp/grep-me-for-miss.txt >&2
+  exit 1
+fi
+
+# Simulating the user's second run
+$turbo_command >./tmp/grep-me-for-hit.txt
+
+# Make sure the user hits FULL TURBO on the second go
+if ! grep -q ">>> FULL TURBO" ./tmp/grep-me-for-hit.txt; then
+  echo "No FULL TURBO was found. Dumping logs:"
+  cat ./tmp/grep-me-for-hit.txt >&2
+  exit 1
+fi

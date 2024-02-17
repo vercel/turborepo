@@ -15,7 +15,9 @@ use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::BOLD;
 
 use super::CommandBase;
-use crate::config::RawTurboJson;
+use crate::turbo_json::RawTurboJson;
+
+pub const DEFAULT_OUTPUT_DIR: &str = "out";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -27,6 +29,8 @@ pub enum Error {
     Json(#[from] serde_json::Error),
     #[error("path error while pruning: {0}")]
     Path(#[from] turbopath::PathError),
+    #[error(transparent)]
+    TurboJsonParser(#[from] crate::turbo_json::parser::Error),
     #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(transparent)]
@@ -87,7 +91,9 @@ pub async fn prune(
     output_dir: &str,
     telemetry: CommandEventBuilder,
 ) -> Result<(), Error> {
-    telemetry.track_prune_method(docker);
+    telemetry.track_arg_usage("docker", docker);
+    telemetry.track_arg_usage("out-dir", output_dir != DEFAULT_OUTPUT_DIR);
+
     let prune = Prune::new(base, scope, docker, output_dir).await?;
 
     if matches!(
@@ -417,11 +423,11 @@ impl<'a> Prune<'a> {
     }
 
     fn copy_turbo_json(&self, workspaces: &[String]) -> Result<(), Error> {
-        let original_turbo_path = self.root.resolve(turbo_json());
+        let anchored_turbo_path = turbo_json();
+        let original_turbo_path = self.root.resolve(anchored_turbo_path);
+        let new_turbo_path = self.full_directory.resolve(anchored_turbo_path);
 
-        let new_turbo_path = self.full_directory.resolve(turbo_json());
-
-        let turbo_json_contents = match original_turbo_path.read() {
+        let turbo_json_contents = match original_turbo_path.read_to_string() {
             Ok(contents) => contents,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 // If turbo.json doesn't exist skip copying
@@ -429,9 +435,8 @@ impl<'a> Prune<'a> {
             }
             Err(e) => return Err(e.into()),
         };
-        let turbo_json: RawTurboJson = serde_json::from_reader(json_comments::StripComments::new(
-            turbo_json_contents.as_slice(),
-        ))?;
+
+        let turbo_json = RawTurboJson::parse(&turbo_json_contents, anchored_turbo_path)?;
 
         let pruned_turbo_json = turbo_json.prune_tasks(workspaces);
         new_turbo_path.create_with_contents(serde_json::to_string_pretty(&pruned_turbo_json)?)?;

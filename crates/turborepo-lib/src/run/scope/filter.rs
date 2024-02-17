@@ -8,7 +8,7 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::package_graph::{self, PackageGraph, WorkspaceName};
 use turborepo_scm::SCM;
-use wax::Pattern;
+use wax::Program;
 
 use super::{
     change_detector::{ChangeDetectError, PackageChangeDetector, SCMChangeDetector},
@@ -411,7 +411,11 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
         let mut selector_valid = false;
 
         let path = selector.parent_dir.to_unix();
-        let parent_dir_globber = wax::Glob::new(path.as_str()).unwrap();
+        let parent_dir_globber =
+            wax::Glob::new(path.as_str()).map_err(|err| ResolutionError::InvalidDirectoryGlob {
+                glob: path.as_str().to_string(),
+                err: Box::new(err),
+            })?;
 
         if !selector.from_ref.is_empty() {
             selector_valid = true;
@@ -568,6 +572,11 @@ pub enum ResolutionError {
     Scm(#[from] turborepo_scm::Error),
     #[error("Unable to calculate changes: {0}")]
     ChangeDetectError(#[from] ChangeDetectError),
+    #[error("'Invalid directory filter '{glob}': {err}")]
+    InvalidDirectoryGlob {
+        glob: String,
+        err: Box<wax::BuildError>,
+    },
 }
 
 #[cfg(test)]

@@ -1,8 +1,9 @@
-use tracing::{debug, error};
+use tracing::debug;
+use turborepo_telemetry::events::command::CommandEventBuilder;
 
 use crate::{commands::CommandBase, run, run::Run, signal::SignalHandler};
 
-pub async fn run(base: CommandBase) -> Result<i32, run::Error> {
+pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i32, run::Error> {
     #[cfg(windows)]
     let signal = {
         let mut ctrl_c = tokio::signal::windows::ctrl_c().map_err(run::Error::SignalHandler)?;
@@ -29,10 +30,11 @@ pub async fn run(base: CommandBase) -> Result<i32, run::Error> {
 
     let handler = SignalHandler::new(signal);
 
-    let mut run = Run::new(&base);
+    let api_auth = base.api_auth()?;
+    let api_client = base.api_client()?;
+    let mut run = Run::new(base, api_auth)?;
     debug!("using the experimental rust codepath");
-    debug!("configured run struct: {:?}", run);
-    let run_fut = run.run(&handler);
+    let run_fut = run.run(&handler, telemetry, api_client);
     let handler_fut = handler.done();
     tokio::select! {
         biased;
@@ -45,18 +47,7 @@ pub async fn run(base: CommandBase) -> Result<i32, run::Error> {
         result = run_fut => {
             // Run finished so close the signal handler
             handler.close().await;
-            match result {
-                Ok(code) => {
-                    if code != 0 {
-                        error!("run failed: command  exited ({code})")
-                    }
-                    Ok(code)
-                },
-                Err(err) => {
-                    error!("run failed: {}", err);
-                    Err(err)
-                }
-            }
+            result
         },
     }
 }

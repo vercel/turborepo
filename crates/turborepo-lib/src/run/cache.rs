@@ -1,10 +1,11 @@
 use std::{io::Write, sync::Arc, time::Duration};
 
 use console::StyledObject;
-use tracing::{debug, log::warn};
+use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_cache::{AsyncCache, CacheError, CacheHitMetadata, CacheSource};
 use turborepo_repository::package_graph::WorkspaceInfo;
+use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
 use turborepo_ui::{
     color, replay_logs, ColorSelector, LogWriter, PrefixedUI, PrefixedWriter, GREY, UI,
 };
@@ -25,6 +26,8 @@ pub enum Error {
     Cache(#[from] turborepo_cache::CacheError),
     #[error("Error finding outputs to save: {0}")]
     Globwalk(#[from] globwalk::WalkError),
+    #[error("Invalid globwalk pattern: {0}")]
+    Glob(#[from] globwalk::GlobError),
     #[error("Error with daemon: {0}")]
     Daemon(#[from] crate::daemon::DaemonError),
     #[error("no connection to daemon")]
@@ -176,6 +179,7 @@ impl TaskCache {
     pub async fn restore_outputs(
         &mut self,
         prefixed_ui: &mut PrefixedUI<impl Write>,
+        telemetry: &PackageTaskEventBuilder,
     ) -> Result<Option<CacheHitMetadata>, Error> {
         if self.caching_disabled || self.run_cache.reads_disabled {
             if !matches!(
@@ -201,9 +205,10 @@ impl TaskCache {
             {
                 Ok(changed_output_globs) => changed_output_globs.len(),
                 Err(err) => {
-                    warn!(
-                        "Failed to check if we can skip restoring outputs for {}: {:?}. \
-                         Proceeding to check cache",
+                    telemetry.track_error(TrackedErrors::DaemonSkipOutputRestoreCheckFailed);
+                    debug!(
+                        "Failed to check if we can skip restoring outputs for {}: {}. Proceeding \
+                         to check cache",
                         self.task_id, err
                     );
                     self.repo_relative_globs.inclusions.len()
@@ -253,13 +258,9 @@ impl TaskCache {
                 {
                     // Don't fail the whole operation just because we failed to
                     // watch the outputs
-                    prefixed_ui.warn(color!(
-                        self.ui,
-                        GREY,
-                        "Failed to mark outputs as cached for {}: {:?}",
-                        self.task_id,
-                        err
-                    ))
+                    telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);
+                    let task_id = &self.task_id;
+                    debug!("Failed to mark outputs as cached for {task_id}: {err}");
                 }
             }
 
@@ -304,8 +305,8 @@ impl TaskCache {
 
     pub async fn save_outputs(
         &mut self,
-        prefixed_ui: &mut PrefixedUI<impl Write>,
         duration: Duration,
+        telemetry: &PackageTaskEventBuilder,
     ) -> Result<(), Error> {
         if self.caching_disabled || self.run_cache.writes_disabled {
             return Ok(());
@@ -315,8 +316,8 @@ impl TaskCache {
 
         let files_to_be_cached = globwalk::globwalk(
             &self.run_cache.repo_root,
-            &self.repo_relative_globs.inclusions,
-            &self.repo_relative_globs.exclusions,
+            &self.repo_relative_globs.validated_inclusions()?,
+            &self.repo_relative_globs.validated_exclusions()?,
             globwalk::WalkType::All,
         )?;
 
@@ -349,11 +350,9 @@ impl TaskCache {
                 .map_err(Error::from);
 
             if let Err(err) = notify_result {
+                telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);
                 let task_id = &self.task_id;
-                warn!("Failed to mark outputs as cached for {task_id}: {err}");
-                prefixed_ui.warn(format!(
-                    "Failed to mark outputs as cached for {task_id}: {err}",
-                ));
+                debug!("Failed to mark outputs as cached for {task_id}: {err}");
             }
         }
 

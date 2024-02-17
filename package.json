@@ -42,9 +42,6 @@
     "*.{md,mdx,mjs,yml,yaml,css}": [
       "prettier --write"
     ],
-    "*.go": [
-      "pnpm --filter cli format"
-    ],
     "*.toml": [
       "taplo format"
     ],
@@ -57,7 +54,7 @@
       "next": "^13.4.12"
     }
   },
-  "packageManager": "pnpm@8.9.0",
+  "packageManager": "pnpm@8.14.0",
   "engines": {
     "node": "20.x"
   }

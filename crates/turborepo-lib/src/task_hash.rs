@@ -12,13 +12,15 @@ use turborepo_cache::CacheHitMetadata;
 use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap, ResolvedEnvMode};
 use turborepo_repository::package_graph::{WorkspaceInfo, WorkspaceName};
 use turborepo_scm::SCM;
-use turborepo_telemetry::events::task::PackageTaskEventBuilder;
+use turborepo_telemetry::events::{
+    generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder,
+};
 
 use crate::{
     engine::TaskNode,
     framework::infer_framework,
     hash::{FileHashes, LockFilePackages, TaskHashable, TurboHash},
-    opts::Opts,
+    opts::RunOpts,
     run::task_id::TaskId,
     task_graph::TaskDefinition,
 };
@@ -71,6 +73,7 @@ impl PackageInputsHashes {
         workspaces: HashMap<&WorkspaceName, &WorkspaceInfo>,
         task_definitions: &HashMap<TaskId<'static>, TaskDefinition>,
         repo_root: &AbsoluteSystemPath,
+        telemetry: &GenericEventBuilder,
     ) -> Result<PackageInputsHashes, Error> {
         tracing::trace!(scm_manual=%scm.is_manual(), "scm running in {} mode", if scm.is_manual() { "manual" } else { "git" });
 
@@ -91,7 +94,11 @@ impl PackageInputsHashes {
                     Ok(def) => def,
                     Err(err) => return Some(Err(err)),
                 };
+                let package_task_event =
+                    PackageTaskEventBuilder::new(task_id.package(), task_id.task())
+                        .with_parent(telemetry);
 
+                package_task_event.track_scm_mode(if scm.is_manual() { "manual" } else { "git" });
                 let workspace_name = task_id.to_workspace_name();
 
                 let pkg = match workspaces
@@ -107,10 +114,12 @@ impl PackageInputsHashes {
                     .parent()
                     .unwrap_or_else(|| AnchoredSystemPath::new("").unwrap());
 
+                let scm_telemetry = package_task_event.child();
                 let mut hash_object = match scm.get_package_file_hashes(
                     repo_root,
                     package_path,
                     &task_definition.inputs,
+                    Some(scm_telemetry),
                 ) {
                     Ok(hash_object) => hash_object,
                     Err(err) => return Some(Err(err.into())),
@@ -172,7 +181,7 @@ pub struct TaskHashTrackerState {
 /// Caches package-inputs hashes, and package-task hashes.
 pub struct TaskHasher<'a> {
     hashes: HashMap<TaskId<'static>, String>,
-    opts: &'a Opts<'a>,
+    run_opts: &'a RunOpts,
     env_at_execution_start: &'a EnvironmentVariableMap,
     global_hash: &'a str,
     task_hash_tracker: TaskHashTracker,
@@ -181,7 +190,7 @@ pub struct TaskHasher<'a> {
 impl<'a> TaskHasher<'a> {
     pub fn new(
         package_inputs_hashes: PackageInputsHashes,
-        opts: &'a Opts,
+        run_opts: &'a RunOpts,
         env_at_execution_start: &'a EnvironmentVariableMap,
         global_hash: &'a str,
     ) -> Self {
@@ -191,7 +200,7 @@ impl<'a> TaskHasher<'a> {
         } = package_inputs_hashes;
         Self {
             hashes,
-            opts,
+            run_opts,
             env_at_execution_start,
             global_hash,
             task_hash_tracker: TaskHashTracker::new(expanded_hashes),
@@ -208,8 +217,8 @@ impl<'a> TaskHasher<'a> {
         dependency_set: HashSet<&TaskNode>,
         telemetry: PackageTaskEventBuilder,
     ) -> Result<String, Error> {
-        let do_framework_inference = self.opts.run_opts.framework_inference;
-        let is_monorepo = !self.opts.run_opts.single_package;
+        let do_framework_inference = self.run_opts.framework_inference;
+        let is_monorepo = !self.run_opts.single_package;
 
         let hash_of_files = self
             .hashes
@@ -318,7 +327,7 @@ impl<'a> TaskHasher<'a> {
             task: task_id.task(),
             outputs,
 
-            pass_through_args: self.opts.run_opts.pass_through_args,
+            pass_through_args: &self.run_opts.pass_through_args,
             env: &task_definition.env,
             resolved_env_vars: hashable_env_pairs,
             pass_through_env: task_definition

@@ -182,7 +182,7 @@ pub async fn daemon_server(
         exit_signal,
     );
 
-    let reason = server.serve().await;
+    let reason = server.serve().await?;
 
     match reason {
         CloseReason::SocketOpenError(SocketOpenError::LockError(AlreadyOwned)) => {

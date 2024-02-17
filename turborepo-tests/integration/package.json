@@ -3,7 +3,6 @@
   "scripts": {
     "test": "cross-env ./node_modules/.bin/prysk tests",
     "test:interactive": "cross-env PRYSK_INTERACTIVE=true ./node_modules/.bin/prysk tests",
-    "test:go-fallback": "cross-env EXPERIMENTAL_RUST_CODEPATH=false ./node_modules/.bin/prysk tests",
     "test:parallel": ".cram_env/bin/pytest -n auto tests --prysk-shell=`which bash`",
     "pretest:parallel": ".cram_env/bin/pip3 install --quiet pytest \"prysk[pytest-plugin]\" pytest-xdist"
   },
