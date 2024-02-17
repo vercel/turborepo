@@ -8,9 +8,6 @@ inputs:
   targets:
     description: "Comma-separated list of target triples to install for this toolchain"
     required: false
-  components:
-    description: "Comma-separated list of components to be additionally installed"
-    required: false
   github-token:
     description: "GitHub token. You can pass secrets.GITHUB_TOKEN"
     required: true
@@ -28,27 +25,14 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: "Get toolchain version from file"
-      id: file
-      shell: bash
-      run: echo "toolchain=$(cat ./rust-toolchain)" >> $GITHUB_OUTPUT
-
-    - name: "Set rust default environment"
-      shell: bash
-      run: |
-        echo "CARGO_INCREMENTAL=0" >> $GITHUB_ENV
-        echo "CARGO_TERM_COLOR=always" >> $GITHUB_ENV
-        echo "RUST_BACKTRACE=short" >> $GITHUB_ENV
-        # Enable faster sparse index on nightly
-        # https://internals.rust-lang.org/t/call-for-testing-cargo-sparse-registry/16862
-        echo "CARGO_UNSTABLE_SPARSE_REGISTRY=true" >> $GITHUB_ENV
-
     - name: "Setup Rust toolchain"
-      uses: dtolnay/rust-toolchain@master
+      uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
-        toolchain: ${{ steps.file.outputs.toolchain }}
         targets: ${{ inputs.targets }}
-        components: ${{ inputs.components }}
+        # needed to not make it override the defaults
+        rustflags: ""
+        # we want more specific settings
+        cache: false
 
     - name: "Set Windows default host to MinGW"
       if: ${{ inputs.windows == 'true' }}
