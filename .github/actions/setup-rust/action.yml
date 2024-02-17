@@ -28,7 +28,7 @@ runs:
     - name: "Setup Rust toolchain"
       uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
-        targets: ${{ inputs.targets }}
+        target: ${{ inputs.targets }}
         # needed to not make it override the defaults
         rustflags: ""
         # we want more specific settings
