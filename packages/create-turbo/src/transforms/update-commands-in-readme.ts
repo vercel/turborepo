@@ -1,11 +1,14 @@
 import path from "node:path";
 import fs from "node:fs/promises";
 import { TransformError } from "./errors";
-import type { TransformInput, TransformResult} from "./types";
+import type { TransformInput, TransformResult } from "./types";
 
 const meta = {
   name: "update-commands-in-readme",
 };
+
+// an array of all the possible replacement strings.
+const PACKAGE_MANAGER_REPLACEMENTS = ['pnpm run', 'npm run', 'yarn run', 'bun run', 'pnpm', 'npm', 'yarn', 'bun'];
 
 export async function transform(args: TransformInput): TransformResult {
   const { prompts, example } = args;
@@ -31,20 +34,17 @@ export async function transform(args: TransformInput): TransformResult {
   return { result: "success", ...meta };
 }
 
-function replacePackageManager(packageManager, text) {
-  // an array of all the possible replacement strings.
-  const replacements = ['pnpm run', 'npm run', 'yarn run', 'bun run', 'pnpm', 'npm', 'yarn', 'bun'];
-  
+function replacePackageManager(packageManager: { name: string }, text: string): string {
   // regex to search for a pattern enclosed in single backticks (` `), double backticks (`` ``) or
   // triple backticks (``` ```) considering there might be newlines in between backticks and commands.
-  const searchRegex = new RegExp(`\`\`\`[\\s\\S]*?\\b(?:${replacements.join('|')})\\b[\\s\\S]*?\`\`\`|\`\`[\\s\\S]*?\\b(?:${replacements.join('|')})\\b[\\s\\S]*?\`\`|\`[\\s\\S]*?\\b(?:${replacements.join('|')})\\b[\\s\\S]*?\``, 'g');
+  const searchRegex = new RegExp(`\`\`\`[\\s\\S]*?\\b(?:${PACKAGE_MANAGER_REPLACEMENTS.join('|')})\\b[\\s\\S]*?\`\`\`|\`\`[\\s\\S]*?\\b(?:${PACKAGE_MANAGER_REPLACEMENTS.join('|')})\\b[\\s\\S]*?\`\`|\`[\\s\\S]*?\\b(?:${PACKAGE_MANAGER_REPLACEMENTS.join('|')})\\b[\\s\\S]*?\``, 'g');
 
   // Replace all occurrences of regex with selectedPackageManager
-  text = text.replace(searchRegex, (match) => {
-      // replacement regex => the regex required to replace the package manager.
-      const replacementRegex = new RegExp(`\\b(?:${replacements.join('|')})\\b`, 'g');
-      const updatedText = match.replace(replacementRegex, `${packageManager} run`);
-      return updatedText;
+  const finalText = text.replace(searchRegex, (match) => {
+    // replacement regex => the regex required to replace the package manager.
+    const replacementRegex = new RegExp(`\\b(?:${PACKAGE_MANAGER_REPLACEMENTS.join('|')})\\b`, 'g');
+    const updatedText = match.replace(replacementRegex, `${packageManager.name} run`);
+    return updatedText;
   });
-  return text;
+  return finalText;
 }
