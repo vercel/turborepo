@@ -416,11 +416,15 @@ mod test {
         select,
         sync::{oneshot::Sender, Mutex},
     };
+    use tower::ServiceBuilder;
     use tracing::info;
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
-    use crate::daemon::proto;
+    use crate::daemon::{
+        default_timeout_layer::DefaultTimeoutLayer,
+        proto::{self, turbod_client::TurbodClient},
+    };
 
     #[cfg(not(target_os = "windows"))]
     const NODE_EXE: &str = "node";
@@ -650,10 +654,14 @@ mod test {
             }
         };
 
-        let server_fut = tonic::transport::Server::builder()
-            .add_service(proto::turbod_server::TurbodServer::new(DummyServer {
+        let service = ServiceBuilder::new().layer(DefaultTimeoutLayer).service(
+            proto::turbod_server::TurbodServer::new(DummyServer {
                 shutdown: Mutex::new(Some(shutdown_tx)),
-            }))
+            }),
+        );
+
+        let server_fut = tonic::transport::Server::builder()
+            .add_service(service)
             .serve_with_incoming(stream);
 
         let tmp_dir = tempfile::tempdir().unwrap();

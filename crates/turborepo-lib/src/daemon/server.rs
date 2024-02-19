@@ -13,6 +13,7 @@ use std::{
 };
 
 use futures::Future;
+use prost::DecodeError;
 use semver::Version;
 use thiserror::Error;
 use tokio::{
@@ -20,7 +21,7 @@ use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
 };
-use tonic::transport::{NamedService, Server};
+use tonic::{server::NamedService, transport::Server};
 use tower::ServiceBuilder;
 use tracing::{error, info, trace, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
@@ -35,7 +36,10 @@ use turborepo_repository::discovery::{
 };
 
 use super::{bump_timeout::BumpTimeout, endpoint::SocketOpenError, proto};
-use crate::daemon::{bump_timeout_layer::BumpTimeoutLayer, endpoint::listen_socket, Paths};
+use crate::daemon::{
+    bump_timeout_layer::BumpTimeoutLayer, default_timeout_layer::DefaultTimeoutLayer,
+    endpoint::listen_socket, Paths,
+};
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -121,7 +125,7 @@ impl FileWatching {
 }
 
 /// Timeout for every RPC the server handles
-const REQUEST_TIMEOUT: Duration = Duration::from_millis(100);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct TurboGrpcService<S, PDB> {
     repo_root: AbsoluteSystemPathBuf,
@@ -231,12 +235,17 @@ where
         let server_fut = {
             let service = ServiceBuilder::new()
                 .layer(BumpTimeoutLayer::new(bump_timeout.clone()))
+                .layer(DefaultTimeoutLayer)
                 .service(crate::daemon::proto::turbod_server::TurbodServer::new(
                     service,
                 ));
 
             Server::builder()
-                // set a max timeout for RPCs
+                // we respect the timeout specified by the client if it is set, but
+                // have a default timeout for non-blocking calls of 100ms, courtesy of
+                // `DefaultTimeoutLayer`. the REQUEST_TIMEOUT, however, is the
+                // maximum time we will wait for a response, regardless of the client's
+                // preferences. it cannot be exceeded.
                 .timeout(REQUEST_TIMEOUT)
                 .add_service(service)
                 .serve_with_incoming_shutdown(stream, shutdown_fut)
