@@ -37,7 +37,7 @@ impl<C: Clone + Send + Sync> PackageDiscovery for DaemonPackageDiscovery<C> {
                         .map(|t| AbsoluteSystemPathBuf::new(t).expect("absolute")),
                 })
                 .collect(),
-            package_manager: PackageManager::from_i32(response.package_manager)
+            package_manager: PackageManager::try_from(response.package_manager)
                 .expect("valid")
                 .into(),
         })
@@ -65,7 +65,7 @@ impl<C: Clone + Send + Sync> PackageDiscovery for DaemonPackageDiscovery<C> {
                         .map(|t| AbsoluteSystemPathBuf::new(t).expect("absolute")),
                 })
                 .collect(),
-            package_manager: PackageManager::from_i32(response.package_manager)
+            package_manager: PackageManager::try_from(response.package_manager)
                 .expect("valid")
                 .into(),
         })

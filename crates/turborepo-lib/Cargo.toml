@@ -67,7 +67,7 @@ path-clean = "1.0.1"
 petgraph = { workspace = true }
 pidlock = { path = "../turborepo-pidlock" }
 portable-pty = "0.8.1"
-prost = "0.11.6"
+prost = "0.12.3"
 rand = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["json"] }
 rustc_version_runtime = "0.2.1"
@@ -84,8 +84,8 @@ tiny-gradient = { workspace = true }
 tokio = { workspace = true, features = ["full", "time"] }
 tokio-stream = { version = "0.1.12", features = ["net"] }
 tokio-util = { version = "0.7.7", features = ["compat"] }
-tonic = { version = "0.8.3", features = ["transport"] }
-tonic-reflection = { version = "0.6.0", optional = true }
+tonic = { version = "0.11.0", features = ["transport"] }
+tonic-reflection = { version = "0.11.0", optional = true }
 tower = "0.4.13"
 turborepo-analytics = { path = "../turborepo-analytics" }
 turborepo-auth = { path = "../turborepo-auth" }

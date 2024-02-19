@@ -425,13 +425,13 @@ impl<PD: PackageDiscovery + Send + Sync + 'static> proto::turbod_server::Turbod
         let server_version = proto::VERSION;
 
         let passes_version_check = match (
-            proto::VersionRange::from_i32(request.supported_version_range),
+            proto::VersionRange::try_from(request.supported_version_range),
             Version::parse(&client_version),
             Version::parse(server_version),
         ) {
             // if we fail to parse, or the constraint is invalid, we have a version mismatch
-            (_, Err(_), _) | (_, _, Err(_)) | (None, _, _) => false,
-            (Some(range), Ok(client), Ok(server)) => compare_versions(client, server, range),
+            (_, Err(_), _) | (_, _, Err(_)) | (Err(DecodeError { .. }), _, _) => false,
+            (Ok(range), Ok(client), Ok(server)) => compare_versions(client, server, range),
         };
 
         if passes_version_check {
