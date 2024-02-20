@@ -510,7 +510,6 @@ impl<'a> TryFrom<&'a Path> for &'a AbsoluteSystemPath {
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
-    use tempdir::TempDir;
     use test_case::test_case;
 
     use super::*;
@@ -606,7 +605,7 @@ mod tests {
             mode: Option<Permissions>,
             expected: Permissions,
         ) -> Result<()> {
-            let test_dir = TempDir::new("mkdir-all")?;
+            let test_dir = tempdir::TempDir::new("mkdir-all")?;
 
             let test_path = test_dir.path().join("foo");
 
