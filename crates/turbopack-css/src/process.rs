@@ -520,11 +520,13 @@ async fn process_content(
     let stylesheet = if use_lightningcss {
         StyleSheetLike::LightningCss(match StyleSheet::parse(&code, config.clone()) {
             Ok(mut ss) => {
-                ss.visit(&mut CssModuleValidator {
-                    source,
-                    file: fs_path_vc,
-                })
-                .unwrap();
+                if matches!(ty, CssModuleAssetType::Module) {
+                    ss.visit(&mut CssModuleValidator {
+                        source,
+                        file: fs_path_vc,
+                    })
+                    .unwrap();
+                }
 
                 stylesheet_into_static(&ss, without_warnings(config.clone()))
             }
