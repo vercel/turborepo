@@ -19,7 +19,7 @@ const Page = () => {
       {posts.map((post) => (
         <Link
           href={post.url}
-          className="mb-10 hover:underline block font-semibold mt-8 text-2xl"
+          className="mb-10 hover:underline block font-semibold text-2xl"
         >
           <h2>{post.data.title}</h2>
           <p className="opacity-80 mt-2 font-normal text-base">

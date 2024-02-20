@@ -5,39 +5,27 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment --  Lots of SWR and local storage. Not worth fixing so we'll ignore. */
 /* eslint-disable react/function-component-definition --  Lots of SWR and local storage. Not worth fixing so we'll ignore. */
 
+"use client";
 import type { FC, ReactElement } from "react";
-import { Tabs as NextraTabs, Tab } from "fumadocs-ui/components/tabs";
-import useSWR from "swr";
+import { Tabs as FumaTabs, Tab } from "fumadocs-ui/components/tabs";
+import { CodeBlock } from "fumadocs-ui/components/codeblock";
 
 export { Tab };
+
+export const Thing = () => {
+  return <CodeBlock lang="bash">npm install fumadocs-ui</CodeBlock>;
+};
 
 export const Tabs: FC<{
   storageKey?: string;
   items: string[];
   children: ReactElement;
 }> = function ({ storageKey = "tab-index", items, children = null, ...props }) {
-  // Use SWR so all tabs with the same key can sync their states.
-  const { data, mutate } = useSWR(storageKey, (key) => {
-    try {
-      return JSON.parse(localStorage.getItem(key)!);
-    } catch (e) {
-      return null;
-    }
-  });
-
-  const selectedIndex = items.indexOf(data);
+  console.log(storageKey);
 
   return (
-    <NextraTabs
-      items={items}
-      onChange={(index) => {
-        localStorage.setItem(storageKey, JSON.stringify(items[index]));
-        mutate(items[index], false);
-      }}
-      selectedIndex={selectedIndex === -1 ? undefined : selectedIndex}
-      {...props}
-    >
+    <FumaTabs id={storageKey} items={items} {...props}>
       {children}
-    </NextraTabs>
+    </FumaTabs>
   );
 };

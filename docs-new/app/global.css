@@ -86,3 +86,12 @@ html[class~="dark"] .dark\:nx-text-neutral-500.dark\:nx-text-neutral-500 {
 thead th:empty {
   display: none;
 }
+
+.prose > h2 > a > code {
+  color: var(--tw-prose-code);
+  font-weight: 400;
+  font-size: 0.875em;
+  padding: 4px;
+  border-radius: 5px;
+  background: hsl(var(--muted) / 1);
+}

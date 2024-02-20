@@ -7,7 +7,8 @@ export const date = "2022/10/21";
 export const tag = "web development";
 export const ogImage = "/images/blog/turbo-1-6-0/x-card.png";
 
-import { Tabs, Tab } from "../../components/Tabs";
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { CodeBlock } from "fumadocs-ui/components/codeblock";
 
 <h1>Turborepo 1.6</h1>
 
@@ -54,17 +55,32 @@ Try it out now by [starting from the example](https://github.com/vercel/turbo/tr
 
 1. **Install `turbo`:**
 
-<Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
-  <Tab>```bash npm install turbo --save-dev ```</Tab>
-  <Tab>```bash yarn add turbo --dev ```</Tab>
-  <Tab>```bash pnpm install turbo --save-dev ```</Tab>
+<Tabs items={["npm", "yarn", "pnpm"]} id="selected-pkg-manager">
+  <Tab value="npm">
+  ```bash title="Terminal"
+  npm install turbo --save-dev
+  ```
+
+  </Tab>
+  <Tab value="yarn">
+  ```bash title="Terminal"
+  yarn add turbo --dev
+  ```
+
+   </Tab>
+  <Tab value="pnpm">
+  ```bash title="Terminal"
+   pnpm install turbo --save-dev
+   ```
+
+  </Tab>
 </Tabs>
 
 2. **Add a `turbo.json` file at the base of your new repository:**
 
-<Tabs items={['Next.js', 'Vite']} storageKey="selected-framework">
-  <Tab>
-```json filename="turbo.json"
+<Tabs items={['Next.js', 'Vite']} id="selected-framework">
+  <Tab value="Next.js">
+```json title="turbo.json"
 {
   "pipeline": {
     "build": {
@@ -77,8 +93,8 @@ Try it out now by [starting from the example](https://github.com/vercel/turbo/tr
 }
 ```
   </Tab>
-  <Tab>
-```json filename="turbo.json"
+  <Tab value="Vite">
+```json title="turbo.json"
 {
   "pipeline": {
     "build": {
