@@ -3,10 +3,13 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use convert_case::{Case, Casing};
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, SourceSpan};
-use turbopath::AbsoluteSystemPath;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_errors::{Spanned, TURBO_SITE};
 use turborepo_graph_utils as graph;
-use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode, ROOT_PKG_NAME};
+use turborepo_repository::{
+    package_graph::{PackageGraph, PackageName, PackageNode, ROOT_PKG_NAME},
+    package_json::PackageJson,
+};
 
 use super::Engine;
 use crate::{
@@ -161,6 +164,12 @@ impl<'a> EngineBuilder<'a> {
             return Ok(Engine::default().seal());
         }
 
+        let mut task_definitions = TaskDefinitionBuilder::new(
+            self.repo_root.to_owned(),
+            self.package_graph,
+            self.is_single,
+        );
+
         let mut turbo_jsons = self.turbo_jsons.take().unwrap_or_default();
         let mut missing_tasks: HashMap<&TaskName<'_>, Spanned<()>> =
             HashMap::from_iter(self.tasks.iter().map(|spanned| spanned.as_ref().split()));
@@ -168,9 +177,9 @@ impl<'a> EngineBuilder<'a> {
         for (workspace, task) in self.workspaces.iter().cartesian_product(self.tasks.iter()) {
             let task_id = task
                 .task_id()
-                .unwrap_or_else(|| TaskId::new(workspace.as_ref(), task.task()));
+                .unwrap_or_else(|| TaskId::new(workspace.as_ref(), task.task()).into_owned());
 
-            if self.has_task_definition(&mut turbo_jsons, workspace, task, &task_id)? {
+            if task_definitions.has_task_definition(&mut turbo_jsons, workspace, task, &task_id)? {
                 missing_tasks.remove(task.as_inner());
 
                 // Even if a task definition was found, we _only_ want to add it as an entry
@@ -181,8 +190,7 @@ impl<'a> EngineBuilder<'a> {
                 //   workspace is acceptable)
                 if !matches!(workspace, PackageName::Root) || self.root_enabled_tasks.contains(task)
                 {
-                    let task_id = task.to(task_id);
-                    traversal_queue.push_back(task_id);
+                    traversal_queue.push_back(task.to(task_id.into_owned()));
                 }
             }
         }
@@ -205,7 +213,6 @@ impl<'a> EngineBuilder<'a> {
             return Err(Error::MissingTasks(errors));
         }
 
-        let mut visited = HashSet::new();
         let mut engine = Engine::default();
 
         while let Some(task_id) = traversal_queue.pop_front() {
@@ -227,7 +234,12 @@ impl<'a> EngineBuilder<'a> {
                 });
             }
 
-            validate_task_name(task_id.to(task_id.task()))?;
+            if task_definitions.contains(&task_id) {
+                // Skip this iteration of the loop if we've already seen this taskID
+                continue;
+            }
+
+            validate_task_name(task_id.task())?;
 
             if task_id.package() != ROOT_PKG_NAME
                 && self
@@ -247,20 +259,9 @@ impl<'a> EngineBuilder<'a> {
                     task_id: task_id.to_string(),
                 });
             }
-            let raw_task_definition = RawTaskDefinition::from_iter(self.task_definition_chain(
-                &mut turbo_jsons,
-                &task_id,
-                &task_id.as_non_workspace_task_name(),
-            )?);
 
-            let task_definition = TaskDefinition::try_from(raw_task_definition)?;
-
-            // Skip this iteration of the loop if we've already seen this taskID
-            if visited.contains(task_id.as_inner()) {
-                continue;
-            }
-
-            visited.insert(task_id.as_inner().clone());
+            let task_definition =
+                task_definitions.add_task_definition_from(&mut turbo_jsons, &task_id)?;
 
             // Note that the Go code has a whole if/else statement for putting stuff into
             // deps or calling e.AddDep the bool is cannot be true so we skip to
@@ -300,7 +301,7 @@ impl<'a> EngineBuilder<'a> {
                     // We don't need to add an edge from the root node if we're in this branch
                     if let PackageNode::Workspace(dependency_workspace) = dependency_workspace {
                         has_topo_deps = true;
-                        let from_task_id = TaskId::from_graph(dependency_workspace, from);
+                        let from_task_id = TaskId::from_graph(&dependency_workspace, from);
                         let from_task_index = engine.get_index(&from_task_id);
                         engine
                             .task_graph
@@ -324,7 +325,6 @@ impl<'a> EngineBuilder<'a> {
                 traversal_queue.push_back(from_task_id);
             }
 
-            engine.add_definition(task_id.as_inner().clone().into_owned(), task_definition);
             if !has_deps && !has_topo_deps {
                 engine.connect_to_root(&to_task_id);
             }
@@ -332,11 +332,68 @@ impl<'a> EngineBuilder<'a> {
 
         graph::validate_graph(&engine.task_graph)?;
 
+        engine.task_definitions = task_definitions.definitions;
+
         Ok(engine.seal())
     }
+}
 
-    // Helper methods used when building the engine
+pub trait PackageLookup {
+    fn package_json(&self, package: &PackageName) -> Option<&PackageJson>;
+    fn package_dir(&self, package: &PackageName) -> Option<&AnchoredSystemPath>;
+}
 
+impl PackageLookup for &PackageGraph {
+    fn package_json(&self, package: &PackageName) -> Option<&PackageJson> {
+        (*self).package_json(package)
+    }
+
+    fn package_dir(&self, package: &PackageName) -> Option<&AnchoredSystemPath> {
+        (*self).package_dir(package)
+    }
+}
+
+pub struct TaskDefinitionBuilder<PL> {
+    is_single: bool,
+    lookup: PL,
+    repo_root: AbsoluteSystemPathBuf,
+
+    definitions: HashMap<TaskId<'static>, TaskDefinition>,
+}
+
+impl<PL: PackageLookup> TaskDefinitionBuilder<PL> {
+    pub fn new(repo_root: AbsoluteSystemPathBuf, package_lookup: PL, is_single: bool) -> Self {
+        Self {
+            is_single,
+            lookup: package_lookup,
+            repo_root,
+            definitions: HashMap::new(),
+        }
+    }
+
+    pub fn build(self) -> HashMap<TaskId<'static>, TaskDefinition> {
+        self.definitions
+    }
+
+    /// Add a task definition to the builder, from the given config
+    pub fn add_task_definition_from(
+        &mut self,
+        turbo_jsons: &mut HashMap<PackageName, TurboJson>,
+        task_id: &Spanned<TaskId<'static>>,
+    ) -> Result<&TaskDefinition, Error> {
+        let raw = self.task_definition_chain(turbo_jsons, task_id)?;
+        let task_definition = TaskDefinition::try_from(raw)?;
+        self.definitions
+            .insert(task_id.as_inner().clone(), task_definition);
+        Ok(self.definitions.get(&task_id).expect("above"))
+    }
+
+    /// Check if we have a task definition for the given task_id
+    fn contains(&self, task_id: &TaskId) -> bool {
+        self.definitions.contains_key(task_id)
+    }
+
+    /// Check if there is a possible task definition for the given task_id
     fn has_task_definition(
         &self,
         turbo_jsons: &mut HashMap<PackageName, TurboJson>,
@@ -375,15 +432,16 @@ impl<'a> EngineBuilder<'a> {
         &self,
         turbo_jsons: &mut HashMap<PackageName, TurboJson>,
         task_id: &Spanned<TaskId>,
-        task_name: &TaskName,
-    ) -> Result<Vec<RawTaskDefinition>, Error> {
+    ) -> Result<RawTaskDefinition, Error> {
+        let task_name = task_id.as_non_workspace_task_name();
+
         let mut task_definitions = Vec::new();
 
         let root_turbo_json = self
             .turbo_json(turbo_jsons, &PackageName::Root)?
             .ok_or(Error::Config(crate::config::Error::NoTurboJSON))?;
 
-        if let Some(root_definition) = root_turbo_json.task(task_id, task_name) {
+        if let Some(root_definition) = root_turbo_json.task(task_id, &task_name) {
             task_definitions.push(root_definition)
         }
 
@@ -397,7 +455,7 @@ impl<'a> EngineBuilder<'a> {
                         task_id: task_id.to_string(),
                     })
                 }
-                false => Ok(task_definitions),
+                false => Ok(RawTaskDefinition::from_iter(task_definitions)),
             };
         }
 
@@ -412,7 +470,7 @@ impl<'a> EngineBuilder<'a> {
                         });
                     }
 
-                    if let Some(workspace_def) = workspace_json.pipeline.get(task_name) {
+                    if let Some(workspace_def) = workspace_json.pipeline.get(&task_name) {
                         task_definitions.push(workspace_def.value.clone());
                     }
                 }
@@ -435,7 +493,7 @@ impl<'a> EngineBuilder<'a> {
             });
         }
 
-        Ok(task_definitions)
+        Ok(RawTaskDefinition::from_iter(task_definitions))
     }
 
     fn turbo_json<'b>(
@@ -451,29 +509,24 @@ impl<'a> EngineBuilder<'a> {
     }
 
     fn load_turbo_json(&self, workspace: &PackageName) -> Result<TurboJson, Error> {
-        let package_json = self.package_graph.package_json(workspace).ok_or_else(|| {
-            Error::MissingPackageJson {
-                workspace: workspace.clone(),
-            }
-        })?;
+        let package_json =
+            self.lookup
+                .package_json(workspace)
+                .ok_or_else(|| Error::MissingPackageJson {
+                    workspace: workspace.clone(),
+                })?;
         let workspace_dir =
-            self.package_graph
+            self.lookup
                 .package_dir(workspace)
                 .ok_or_else(|| Error::MissingPackageJson {
                     workspace: workspace.clone(),
                 })?;
         Ok(TurboJson::load(
-            self.repo_root,
+            &self.repo_root,
             workspace_dir,
             package_json,
             self.is_single,
         )?)
-    }
-}
-
-impl Error {
-    fn is_missing_turbo_json(&self) -> bool {
-        matches!(self, Self::Config(crate::config::Error::NoTurboJSON))
     }
 }
 
@@ -495,6 +548,12 @@ fn validate_task_name(task: Spanned<&str>) -> Result<(), Error> {
             })
         })
         .unwrap_or(Ok(()))
+}
+
+impl Error {
+    fn is_missing_turbo_json(&self) -> bool {
+        matches!(self, Self::Config(crate::config::Error::NoTurboJSON))
+    }
 }
 
 #[cfg(test)]
@@ -623,8 +682,7 @@ mod test {
                 "c" => ["a", "b"]
             },
         );
-        let engine_builder = EngineBuilder::new(&repo_root, &package_graph, false)
-            .with_turbo_jsons(Some(vec![].into_iter().collect()));
+        let engine_builder = TaskDefinitionBuilder::new(repo_root.clone(), &package_graph, false);
 
         let a_turbo_json = repo_root.join_components(&["packages", "a", "turbo.json"]);
         a_turbo_json.ensure_dir().unwrap();
@@ -695,7 +753,7 @@ mod test {
         ]
         .into_iter()
         .collect();
-        let engine_builder = EngineBuilder::new(&repo_root, &package_graph, false);
+        let engine_builder = TaskDefinitionBuilder::new(repo_root, &package_graph, false);
         let task_name = TaskName::from(task_name);
         let task_id = TaskId::try_from(task_id).unwrap();
 
