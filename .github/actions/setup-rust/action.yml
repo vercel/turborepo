@@ -1,10 +1,6 @@
 name: "Turbo Rust Setup"
 description: "Sets up the Rust toolchain for CI"
 inputs:
-  windows:
-    description: 'Set to "true" if setting up for Windows'
-    required: false
-    default: "false"
   targets:
     description: "Comma-separated list of target triples to install for this toolchain"
     required: false
@@ -12,7 +8,7 @@ inputs:
     description: "Comma-separated list of components to be additionally installed"
     required: false
   github-token:
-    description: "GitHub token. You can pass secrets.GITHUB_TOKEN"
+    description: "GitHub token to get around rate limits."
     required: false
     default: ${{ github.token }}
   shared-cache-key:
@@ -52,7 +48,7 @@ runs:
         components: ${{ inputs.components }}
 
     - name: "Set Windows default host to MinGW"
-      if: ${{ inputs.windows == 'true' }}
+      if: ${{ runner.os == 'Windows' }}
       shell: bash
       run: rustup set default-host x86_64-pc-windows-gnu && rustup show
 

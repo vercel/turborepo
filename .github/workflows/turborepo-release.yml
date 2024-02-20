@@ -71,8 +71,6 @@ jobs:
           ref: ${{ needs.stage.outputs.stage-branch }}
       - name: Build turborepo CLI from source
         uses: ./.github/actions/setup-turborepo-environment
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
       - name: Run Rust Unit Tests
         run: cargo groups test turborepo
 
@@ -88,8 +86,6 @@ jobs:
           ref: ${{ needs.stage.outputs.stage-branch }}
       - name: Build turborepo CLI from source
         uses: ./.github/actions/setup-turborepo-environment
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
       - name: Run JS Package Tests
         run: turbo run check-types test --filter="./packages/*" --color
 
@@ -127,7 +123,6 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           targets: ${{ matrix.settings.target }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup capnproto
         uses: ./.github/actions/setup-capnproto
@@ -166,8 +161,6 @@ jobs:
 
       - name: Setup turborepo environment
         uses: ./.github/actions/setup-turborepo-environment
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Install GoReleaser
         uses: goreleaser/goreleaser-action@v5

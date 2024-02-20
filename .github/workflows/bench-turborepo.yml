@@ -26,8 +26,6 @@ jobs:
       - uses: ./.github/actions/setup-node
 
       - uses: ./.github/actions/setup-turborepo-environment
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Build
         run: cd cli && make turbo-prod
@@ -79,9 +77,6 @@ jobs:
         run: rustup target add x86_64-pc-windows-gnu
 
       - uses: ./.github/actions/setup-turborepo-environment
-        with:
-          windows: ${{ matrix.os.name == 'windows' }}
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Build Turborepo from source
         run: cd cli && make turbo-prod

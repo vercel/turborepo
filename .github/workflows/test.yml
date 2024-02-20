@@ -205,9 +205,6 @@ jobs:
         uses: mozilla-actions/sccache-action@v0.0.4
 
       - uses: ./.github/actions/setup-turborepo-environment
-        with:
-          windows: ${{ matrix.os.name == 'windows' }}
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       # We explicitly unset RUSTC_WRAPPER if it is an empty string as causes build issues
       - run: |
@@ -256,9 +253,6 @@ jobs:
         run: git config --global core.autocrlf input
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-turborepo-environment
-        with:
-          windows: ${{ matrix.os.runner == 'windows-latest' }}
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Setup Graphviz
         uses: ts-graphviz/setup-graphviz@v2
@@ -295,9 +289,6 @@ jobs:
         run: corepack disable
 
       - uses: ./.github/actions/setup-turborepo-environment
-        with:
-          windows: ${{ matrix.os.runner == 'windows-latest' }}
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Check examples
         shell: bash
@@ -352,9 +343,6 @@ jobs:
 
       - name: Build turborepo CLI from source
         uses: ./.github/actions/setup-turborepo-environment
-        with:
-          windows: ${{ matrix.os.name == 'windows' }}
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Run tests
         # We manually set TURBO_API to an empty string to override Hetzner env
@@ -412,7 +400,6 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           components: rustfmt
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run cargo fmt check
         run: |
@@ -445,9 +432,6 @@ jobs:
 
       - name: Setup Turborepo Environment
         uses: ./.github/actions/setup-turborepo-environment
-        with:
-          windows: ${{ matrix.os.name == 'windows' }}
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Run cargo check
         run: |
@@ -467,9 +451,6 @@ jobs:
 
       - name: Setup Turborepo Environment
         uses: ./.github/actions/setup-turborepo-environment
-        with:
-          windows: ${{ matrix.os.name == 'windows' }}
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Run cargo clippy
         run: |
@@ -501,7 +482,6 @@ jobs:
         with:
           components: clippy
           targets: wasm32-unknown-unknown,wasm32-wasi-preview1-threads
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run cargo check release
         run: |
@@ -528,7 +508,6 @@ jobs:
         with:
           components: clippy
           targets: wasm32-unknown-unknown
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run cargo clippy
         run: |
@@ -557,8 +536,6 @@ jobs:
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build next-swc
         run: |
@@ -652,9 +629,6 @@ jobs:
 
       - name: Setup Turborepo Environment
         uses: ./.github/actions/setup-turborepo-environment
-        with:
-          windows: ${{ matrix.os.name == 'windows' }}
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Run tests
         timeout-minutes: 120
@@ -677,7 +651,6 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           save-cache: true
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
@@ -744,7 +717,6 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           save-cache: true
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
@@ -838,8 +810,6 @@ jobs:
         uses: actions/checkout@v4
 
       - uses: ./.github/actions/setup-turborepo-environment
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Lint
         # Filters some workspaces out:
