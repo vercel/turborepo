@@ -18,7 +18,7 @@ export default async function Page({
   const MDX = page.data.exports.default;
 
   return (
-    <article className="prose max-w-prose mx-auto mb-10">
+    <article className="prose mx-auto w-full min-w-0 max-w-5xl px-6 pt-4 md:px-12 mb-10">
       <div className="my-4">
         <Link
           href="/blog"

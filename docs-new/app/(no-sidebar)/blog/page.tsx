@@ -18,7 +18,10 @@ const Page = () => {
       </div>
       {posts.map((post) => (
         <Link
-          href={post.url}
+          target={post.data.exports.isExternal ? "_blank" : undefined}
+          href={
+            post.data.exports.isExternal ? post.data.exports.href : post.url
+          }
           className="mb-10 hover:underline block font-semibold text-2xl"
         >
           <h2>{post.data.title}</h2>
@@ -30,7 +33,6 @@ const Page = () => {
           <p className="opacity-50 mt-2 text-sm font-normal">
             {post.data.exports.date}
           </p>
-          {/* <div key={post.file.path}>{post}</div> */}
         </Link>
       ))}
     </main>
