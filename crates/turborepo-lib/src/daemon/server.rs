@@ -13,6 +13,7 @@ use std::{
 };
 
 use futures::Future;
+use itertools::Itertools;
 use prost::DecodeError;
 use semver::Version;
 use thiserror::Error;
@@ -36,9 +37,16 @@ use turborepo_repository::discovery::{
 };
 
 use super::{bump_timeout::BumpTimeout, endpoint::SocketOpenError, proto};
-use crate::daemon::{
-    bump_timeout_layer::BumpTimeoutLayer, default_timeout_layer::DefaultTimeoutLayer,
-    endpoint::listen_socket, Paths,
+use crate::{
+    daemon::{
+        bump_timeout_layer::BumpTimeoutLayer, default_timeout_layer::DefaultTimeoutLayer,
+        endpoint::listen_socket, Paths,
+    },
+    engine::TaskNode,
+    run::{
+        package_hashes::{LocalPackageHashes, PackageHasher},
+        task_id::TaskId,
+    },
 };
 
 #[derive(Debug)]
@@ -270,19 +278,20 @@ where
     }
 }
 
-struct TurboGrpcServiceInner<PD> {
+struct TurboGrpcServiceInner<PD, PH> {
     shutdown: mpsc::Sender<()>,
     file_watching: FileWatching,
     times_saved: Arc<Mutex<HashMap<String, u64>>>,
     start_time: Instant,
     log_file: AbsoluteSystemPathBuf,
     package_discovery: PD,
+    package_hasher: PH,
 }
 
 // we have a grpc service that uses watching package discovery, and where the
 // watching package hasher also uses watching package discovery as well as
 // falling back to a local package hasher
-impl TurboGrpcServiceInner<Arc<WatchingPackageDiscovery>> {
+impl TurboGrpcServiceInner<Arc<WatchingPackageDiscovery>, Option<LocalPackageHashes>> {
     pub fn new<PD: Sync + PackageDiscovery + Send + 'static>(
         package_discovery_backup: PD,
         repo_root: AbsoluteSystemPathBuf,
@@ -314,6 +323,7 @@ impl TurboGrpcServiceInner<Arc<WatchingPackageDiscovery>> {
         (
             TurboGrpcServiceInner {
                 package_discovery,
+                package_hasher: None,
                 shutdown: trigger_shutdown,
                 file_watching,
                 times_saved: Arc::new(Mutex::new(HashMap::new())),
@@ -326,9 +336,10 @@ impl TurboGrpcServiceInner<Arc<WatchingPackageDiscovery>> {
     }
 }
 
-impl<PD> TurboGrpcServiceInner<PD>
+impl<PD, PH> TurboGrpcServiceInner<PD, PH>
 where
     PD: PackageDiscovery + Send + Sync + 'static,
+    PH: PackageHasher + Send + Sync + 'static,
 {
     async fn trigger_shutdown(&self) {
         info!("triggering shutdown");
@@ -421,8 +432,8 @@ async fn watch_root(
 }
 
 #[tonic::async_trait]
-impl<PD: PackageDiscovery + Send + Sync + 'static> proto::turbod_server::Turbod
-    for TurboGrpcServiceInner<PD>
+impl<PD: PackageDiscovery + Send + Sync + 'static, PH: PackageHasher + Send + Sync + 'static>
+    proto::turbod_server::Turbod for TurboGrpcServiceInner<PD, PH>
 {
     async fn hello(
         &self,
@@ -566,6 +577,67 @@ impl<PD: PackageDiscovery + Send + Sync + 'static> proto::turbod_server::Turbod
                 }
             })
     }
+
+    async fn discover_package_hashes(
+        &self,
+        request: tonic::Request<proto::DiscoverPackageHashesRequest>,
+    ) -> Result<tonic::Response<proto::DiscoverPackageHashesResponse>, tonic::Status> {
+        let inner = request.into_inner();
+        let hashes = self
+            .package_hasher
+            .calculate_hashes(
+                Default::default(),
+                inner
+                    .tasks
+                    .into_iter()
+                    .map(|t| match t.inner {
+                        Some(proto::task_node::Inner::Root(_)) => TaskNode::Root,
+                        Some(proto::task_node::Inner::TaskId(proto::TaskId { package, task })) => {
+                            TaskNode::Task(TaskId::from_owned(package, task))
+                        }
+                        None => unreachable!(),
+                    })
+                    .collect(),
+            )
+            .await
+            .unwrap();
+
+        Ok(tonic::Response::new(proto::DiscoverPackageHashesResponse {
+            package_hashes: hashes
+                .hashes
+                .into_iter()
+                .map(|(task, hash)| {
+                    (
+                        hash,
+                        hashes
+                            .expanded_hashes
+                            .get(&task)
+                            .map(|h| h.0.keys().collect::<Vec<_>>())
+                            .unwrap_or_default(),
+                        task.into_parts(),
+                    )
+                })
+                .map(|(hash, files, (package, task))| proto::PackageTaskHash {
+                    task_id: Some(proto::TaskId {
+                        package: package.to_string(),
+                        task: task.to_string(),
+                    }),
+                    hash,
+                    files: files.into_iter().map(|p| p.to_string()).collect(),
+                })
+                .collect(),
+            file_hashes: hashes
+                .expanded_hashes
+                .into_iter()
+                .flat_map(|(_, v)| v.0)
+                .unique()
+                .map(|(path, hash)| proto::FileHash {
+                    relative_path: path.to_string(),
+                    hash,
+                })
+                .collect(),
+        }))
+    }
 }
 
 /// Determine whether a server can serve a client's request based on its
@@ -591,7 +663,7 @@ fn compare_versions(client: Version, server: Version, constraint: proto::Version
     }
 }
 
-impl<PD> NamedService for TurboGrpcServiceInner<PD> {
+impl<PD, PH> NamedService for TurboGrpcServiceInner<PD, PH> {
     const NAME: &'static str = "turborepo.Daemon";
 }
 

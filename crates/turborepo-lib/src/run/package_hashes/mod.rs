@@ -1,7 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use rayon::prelude::*;
-use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
+use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath, RelativeUnixPathBuf};
+use turborepo_errors::Spanned;
 use turborepo_repository::{
     discovery::PackageDiscoveryBuilder,
     package_graph::{self, PackageGraph, PackageInfo, PackageName},
@@ -15,9 +16,11 @@ use super::task_id::TaskId;
 use crate::{
     config,
     engine::{EngineBuilder, TaskNode},
+    hash::FileHashes,
     run::error::Error,
     task_hash::{FileHashInputs, PackageInputsHashes},
     turbo_json::TurboJson,
+    DaemonClient,
 };
 
 pub trait PackageHasher {
@@ -107,7 +110,12 @@ where
 
         let engine = EngineBuilder::new(&self.repo_root, &pkg_dep_graph, false)
             .with_root_tasks(root_turbo_json.pipeline.keys().cloned())
-            .with_tasks(root_turbo_json.pipeline.keys().cloned())
+            .with_tasks(
+                root_turbo_json
+                    .pipeline
+                    .keys()
+                    .map(|name| Spanned::new(name.clone())),
+            )
             .with_turbo_jsons(Some(
                 [(PackageName::Root, root_turbo_json)].into_iter().collect(),
             ))
@@ -254,5 +262,69 @@ impl<A: PackageHasher + Send + Sync, B: PackageHasher + Send + Sync> PackageHash
                 self.fallback.calculate_hashes(run_telemetry, tasks).await
             }
         }
+    }
+}
+
+pub struct DaemonPackageHasher<C> {
+    daemon: DaemonClient<C>,
+}
+
+impl<C: Clone + Send + Sync> PackageHasher for DaemonPackageHasher<C> {
+    async fn calculate_hashes(
+        &self,
+        _run_telemetry: GenericEventBuilder,
+        tasks: Vec<TaskNode>,
+    ) -> Result<PackageInputsHashes, Error> {
+        // clone to avoid using a mutex or a mutable reference
+        let mut daemon = self.daemon.clone();
+        let package_hashes = daemon.discover_package_hashes(tasks).await;
+
+        package_hashes
+            .map(|resp| {
+                let file_hashes: HashMap<_, _> = resp
+                    .file_hashes
+                    .into_iter()
+                    .map(|fh| (fh.relative_path, fh.hash))
+                    .collect();
+
+                let (expanded_hashes, hashes) = resp
+                    .package_hashes
+                    .into_iter()
+                    .filter_map(|ph| Some((ph.task_id?, ph.hash, ph.files)))
+                    .map(|(task_id, hash, files)| {
+                        (
+                            (
+                                TaskId::new(&task_id.package, &task_id.task).into_owned(),
+                                FileHashes(
+                                    files
+                                        .into_iter()
+                                        .filter_map(|f| {
+                                            file_hashes.get(&f).map(|hash| {
+                                                (
+                                                    RelativeUnixPathBuf::new(f).unwrap(),
+                                                    hash.to_owned(),
+                                                )
+                                            })
+                                        })
+                                        .collect(),
+                                ),
+                            ),
+                            (TaskId::from_owned(task_id.package, task_id.task), hash),
+                        )
+                    })
+                    .unzip();
+
+                PackageInputsHashes {
+                    expanded_hashes,
+                    hashes,
+                }
+            })
+            .map_err(|_| Error::PackageHashingUnavailable)
+    }
+}
+
+impl<C> DaemonPackageHasher<C> {
+    pub fn new(daemon: DaemonClient<C>) -> Self {
+        Self { daemon }
     }
 }

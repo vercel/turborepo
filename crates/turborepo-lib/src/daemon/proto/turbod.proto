@@ -25,6 +25,9 @@ service Turbod {
   //
   // Since 1.12.0
   rpc DiscoverPackagesBlocking (DiscoverPackagesRequest) returns (DiscoverPackagesResponse);
+
+  // Request the list of package hashes the daemon is aware of.
+  rpc DiscoverPackageHashes (DiscoverPackageHashesRequest) returns (DiscoverPackageHashesResponse);
 }
 
 message HelloRequest {
@@ -110,4 +113,44 @@ enum PackageManager {
   Pnpm6 = 3;
   Yarn = 4;
   Bun = 5;
+}
+
+
+// Discover all package hashes for the given package names and task names.
+// This will return an answer for the cartesian product of package names and task names,
+// plus the specific package_tasks that are provided.
+message DiscoverPackageHashesRequest {
+  repeated TaskNode tasks = 1;
+}
+
+message DiscoverPackageHashesResponse {
+  repeated PackageTaskHash package_hashes = 1;
+  repeated FileHash file_hashes = 2;
+}
+
+message TaskNode {
+  oneof inner {
+    TaskId task_id = 1;
+    Root root = 2;
+  }
+}
+
+message Root {}
+
+message TaskId {
+  string package = 1;
+  string task = 2;
+}
+
+message PackageTaskHash {
+  TaskId task_id = 1;
+  string hash = 2;
+  // The files that went into producing this hash.
+  repeated string files = 3;
+}
+
+message FileHash {
+  // The root-relative unix path to the file.
+  string relative_path = 1;
+  string hash = 2;
 }

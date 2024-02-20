@@ -61,8 +61,8 @@ impl TaskHashable<'_> {
 
 #[derive(Debug, Default)]
 pub struct PackageInputsHashes {
-    hashes: HashMap<TaskId<'static>, String>,
-    expanded_hashes: HashMap<TaskId<'static>, FileHashes>,
+    pub hashes: HashMap<TaskId<'static>, String>,
+    pub expanded_hashes: HashMap<TaskId<'static>, FileHashes>,
 }
 
 /// The set of data required from the TaskDefinition to calculate the hash of a

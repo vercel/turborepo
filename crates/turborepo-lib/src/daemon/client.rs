@@ -12,7 +12,7 @@ use super::{
     proto::DiscoverPackagesResponse,
     Paths,
 };
-use crate::{daemon::proto, globwatcher::HashGlobSetupError};
+use crate::{daemon::proto, engine::TaskNode, globwatcher::HashGlobSetupError};
 
 #[derive(Debug, Clone)]
 pub struct DaemonClient<T> {
@@ -140,6 +140,35 @@ impl<T> DaemonClient<T> {
         let response = self
             .client
             .discover_packages_blocking(proto::DiscoverPackagesRequest {})
+            .await?
+            .into_inner();
+
+        Ok(response)
+    }
+
+    pub async fn discover_package_hashes<'a>(
+        &mut self,
+        tasks: Vec<TaskNode>,
+    ) -> Result<proto::DiscoverPackageHashesResponse, DaemonError> {
+        let tasks = tasks
+            .into_iter()
+            .map(|id| proto::TaskNode {
+                inner: Some(match id {
+                    TaskNode::Root => proto::task_node::Inner::Root(proto::Root {}),
+                    TaskNode::Task(task) => {
+                        let (package, task) = task.into_parts();
+                        proto::task_node::Inner::TaskId(proto::TaskId {
+                            package: package.into(),
+                            task: task.into(),
+                        })
+                    }
+                }),
+            })
+            .collect::<Vec<_>>();
+
+        let response = self
+            .client
+            .discover_package_hashes(proto::DiscoverPackageHashesRequest { tasks })
             .await?
             .into_inner();
 

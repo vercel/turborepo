@@ -639,6 +639,13 @@ mod test {
         ) -> Result<tonic::Response<proto::DiscoverPackagesResponse>, tonic::Status> {
             unimplemented!()
         }
+
+        async fn discover_package_hashes(
+            &self,
+            _req: tonic::Request<proto::DiscoverPackageHashesRequest>,
+        ) -> Result<tonic::Response<proto::DiscoverPackageHashesResponse>, tonic::Status> {
+            unimplemented!()
+        }
     }
 
     #[tokio::test]
