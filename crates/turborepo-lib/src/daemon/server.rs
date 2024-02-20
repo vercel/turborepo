@@ -44,7 +44,7 @@ use crate::{
     },
     engine::TaskNode,
     run::{
-        package_hashes::{LocalPackageHashes, PackageHasher},
+        package_hashes::{PackageHashWatcher, PackageHasher, WatchingPackageHasher},
         task_id::TaskId,
     },
 };
@@ -68,6 +68,7 @@ pub struct FileWatching {
     watcher: Arc<FileSystemWatcher>,
     pub glob_watcher: Arc<GlobWatcher>,
     pub package_watcher: Arc<PackageWatcher>,
+    pub package_hash_watcher: Arc<PackageHashWatcher>,
 }
 
 #[derive(Debug, Error)]
@@ -107,27 +108,38 @@ impl FileWatching {
         backup_discovery: PD,
     ) -> Result<FileWatching, WatchError> {
         let watcher = Arc::new(FileSystemWatcher::new_with_default_cookie_dir(&repo_root)?);
-        let recv = watcher.watch();
+        let file_events_lazy = watcher.watch();
 
-        let cookie_watcher = CookieWriter::new(
+        let cookie_writer = CookieWriter::new(
             watcher.cookie_dir(),
             Duration::from_millis(100),
-            recv.clone(),
+            file_events_lazy.clone(),
         );
         let glob_watcher = Arc::new(GlobWatcher::new(
             repo_root.clone(),
-            cookie_watcher,
-            recv.clone(),
+            cookie_writer.clone(),
+            file_events_lazy.clone(),
         ));
         let package_watcher = Arc::new(
-            PackageWatcher::new(repo_root.clone(), recv.clone(), backup_discovery)
-                .map_err(|e| WatchError::Setup(format!("{:?}", e)))?,
+            PackageWatcher::new(
+                repo_root.clone(),
+                file_events_lazy.clone(),
+                backup_discovery,
+            )
+            .map_err(|e| WatchError::Setup(format!("{:?}", e)))?,
         );
+
+        let package_hash_watcher = Arc::new(PackageHashWatcher::new(
+            repo_root,
+            file_events_lazy,
+            package_watcher.clone(),
+        ));
 
         Ok(FileWatching {
             watcher,
             glob_watcher,
             package_watcher,
+            package_hash_watcher,
         })
     }
 }
@@ -291,7 +303,12 @@ struct TurboGrpcServiceInner<PD, PH> {
 // we have a grpc service that uses watching package discovery, and where the
 // watching package hasher also uses watching package discovery as well as
 // falling back to a local package hasher
-impl TurboGrpcServiceInner<Arc<WatchingPackageDiscovery>, Option<LocalPackageHashes>> {
+impl
+    TurboGrpcServiceInner<
+        Arc<WatchingPackageDiscovery>,
+        WatchingPackageHasher<Arc<WatchingPackageDiscovery>>,
+    >
+{
     pub fn new<PD: Sync + PackageDiscovery + Send + 'static>(
         package_discovery_backup: PD,
         repo_root: AbsoluteSystemPathBuf,
@@ -309,6 +326,12 @@ impl TurboGrpcServiceInner<Arc<WatchingPackageDiscovery>, Option<LocalPackageHas
             file_watching.package_watcher.clone(),
         ));
 
+        let package_hasher = WatchingPackageHasher::new(
+            package_discovery.clone(),
+            Duration::from_secs(5),
+            file_watching.clone(),
+        );
+
         // exit_root_watch delivers a signal to the root watch loop to exit.
         // In the event that the server shuts down via some other mechanism, this
         // cleans up root watching task.
@@ -323,7 +346,7 @@ impl TurboGrpcServiceInner<Arc<WatchingPackageDiscovery>, Option<LocalPackageHas
         (
             TurboGrpcServiceInner {
                 package_discovery,
-                package_hasher: None,
+                package_hasher,
                 shutdown: trigger_shutdown,
                 file_watching,
                 times_saved: Arc::new(Mutex::new(HashMap::new())),
@@ -407,7 +430,7 @@ async fn watch_root(
                 let Ok(event) = event else {
                     break;
                 };
-                tracing::debug!("root watcher received event: {:?}", event);
+                tracing::trace!("root watcher received event: {:?}", event);
                 let should_trigger_shutdown = match event {
                     // filewatching can throw some weird events, so check that the root is actually gone
                     // before triggering a shutdown
@@ -600,7 +623,7 @@ impl<PD: PackageDiscovery + Send + Sync + 'static, PH: PackageHasher + Send + Sy
                     .collect(),
             )
             .await
-            .unwrap();
+            .map_err(|_| tonic::Status::unavailable("package hasher unavailable"))?;
 
         Ok(tonic::Response::new(proto::DiscoverPackageHashesResponse {
             package_hashes: hashes

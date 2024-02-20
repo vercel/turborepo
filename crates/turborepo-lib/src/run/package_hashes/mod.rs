@@ -1,4 +1,5 @@
 mod package_hash_watcher;
+mod watch;
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -14,6 +15,7 @@ use turborepo_repository::{
 };
 use turborepo_scm::SCM;
 use turborepo_telemetry::events::generic::GenericEventBuilder;
+pub use watch::WatchingPackageHasher;
 
 use super::task_id::TaskId;
 use crate::{
