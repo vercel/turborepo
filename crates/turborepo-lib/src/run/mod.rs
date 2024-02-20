@@ -5,6 +5,7 @@ mod error;
 pub(crate) mod global_hash;
 mod graph_visualizer;
 pub(crate) mod package_discovery;
+pub(crate) mod package_hashes;
 mod scope;
 pub(crate) mod summary;
 pub mod task_access;
@@ -446,12 +447,19 @@ impl Run {
             global_env_mode = EnvMode::Strict;
         }
 
-        let workspaces = pkg_dep_graph.packages().collect();
+        let workspaces = pkg_dep_graph
+            .packages()
+            .map(|(k, v)| (k.to_owned(), v.to_owned()))
+            .collect();
         let package_inputs_hashes = PackageInputsHashes::calculate_file_hashes(
             &scm,
             engine.tasks().par_bridge(),
-            workspaces,
-            engine.task_definitions(),
+            &workspaces,
+            &engine
+                .task_definitions()
+                .iter()
+                .map(|(k, v)| (k.to_owned(), v.to_owned().into()))
+                .collect(),
             &self.repo_root,
             &run_telemetry,
         )?;

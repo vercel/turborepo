@@ -65,13 +65,30 @@ pub struct PackageInputsHashes {
     expanded_hashes: HashMap<TaskId<'static>, FileHashes>,
 }
 
+/// The set of data required from the TaskDefinition to calculate the hash of a
+/// task's inputs. This is guaranteed to be free of runtime config.
+#[derive(Debug, Serialize, Clone)]
+pub struct FileHashInputs {
+    inputs: Vec<String>,
+    dot_env: Option<Vec<turbopath::RelativeUnixPathBuf>>,
+}
+
+impl From<TaskDefinition> for FileHashInputs {
+    fn from(task_definition: TaskDefinition) -> Self {
+        Self {
+            inputs: task_definition.inputs,
+            dot_env: task_definition.dot_env,
+        }
+    }
+}
+
 impl PackageInputsHashes {
     #[tracing::instrument(skip(all_tasks, workspaces, task_definitions, repo_root, scm))]
     pub fn calculate_file_hashes<'a>(
         scm: &SCM,
         all_tasks: impl ParallelIterator<Item = &'a TaskNode>,
-        workspaces: HashMap<&PackageName, &PackageInfo>,
-        task_definitions: &HashMap<TaskId<'static>, TaskDefinition>,
+        workspaces: &HashMap<PackageName, PackageInfo>,
+        task_definitions: &HashMap<TaskId<'static>, FileHashInputs>,
         repo_root: &AbsoluteSystemPath,
         telemetry: &GenericEventBuilder,
     ) -> Result<PackageInputsHashes, Error> {
