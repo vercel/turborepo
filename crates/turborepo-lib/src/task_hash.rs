@@ -7,7 +7,9 @@ use rayon::prelude::*;
 use serde::Serialize;
 use thiserror::Error;
 use tracing::{debug, Span};
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
+use turbopath::{
+    AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf,
+};
 use turborepo_cache::CacheHitMetadata;
 use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap, ResolvedEnvMode};
 use turborepo_repository::package_graph::{PackageInfo, PackageName};
@@ -158,8 +160,7 @@ impl PackageInputsHashes {
                     }
                 }
 
-                let file_hashes = FileHashes(hash_object);
-                let hash = file_hashes.clone().hash();
+                let (hash, file_hashes) = PackageInputsHashes::calculate_file_hash(hash_object);
 
                 Some(Ok((
                     (task_id.clone(), hash),
@@ -172,6 +173,19 @@ impl PackageInputsHashes {
             hashes,
             expanded_hashes,
         })
+    }
+
+    /// Calculate the hashes of the inputs for a single task.
+    ///
+    /// This method requires that you know the hashes for all the inputs ahead
+    /// of time. If you need to calculate the hashes for all the inputs, use
+    /// `calculate_file_hashes`.
+    pub fn calculate_file_hash(
+        hashes: HashMap<RelativeUnixPathBuf, String>,
+    ) -> (String, FileHashes) {
+        let file_hashes = FileHashes(hashes);
+        let hash = file_hashes.clone().hash();
+        (hash, file_hashes)
     }
 }
 

@@ -14,6 +14,7 @@ use std::{
 };
 
 use bstr::io::BufReadExt;
+pub use hash_object::hash_file;
 use thiserror::Error;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPathBuf};
