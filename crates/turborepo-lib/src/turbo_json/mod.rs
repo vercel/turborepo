@@ -910,7 +910,7 @@ mod tests {
           "persistent": true
         }"#,
         RawTaskDefinition {
-            depends_on: Some(Spanned::new(vec!["cli#build".into()]).with_range(25..38)),
+            depends_on: Some(Spanned::new(vec![Spanned::<UnescapedString>::new("cli#build".into()).with_range(26..37)]).with_range(25..38)),
             dot_env: Some(Spanned::new(vec!["package/a/.env".into()]).with_range(60..78)),
             env: Some(vec![Spanned::<UnescapedString>::new("OS".into()).with_range(98..102)]),
             pass_through_env: Some(vec![Spanned::<UnescapedString>::new("AWS_SECRET_KEY".into()).with_range(134..150)]),
@@ -931,7 +931,7 @@ mod tests {
           inputs: vec!["package/a/src/**".to_string()],
           output_mode: OutputLogsMode::Full,
           pass_through_env: Some(vec!["AWS_SECRET_KEY".to_string()]),
-          task_dependencies: vec!["cli#build".into()],
+          task_dependencies: vec![Spanned::<TaskName<'_>>::new("cli#build".into()).with_range(26..37)],
           topological_dependencies: vec![],
           persistent: true,
         }
@@ -950,7 +950,7 @@ mod tests {
               "persistent": true
             }"#,
         RawTaskDefinition {
-            depends_on: Some(Spanned::new(vec!["cli#build".into()]).with_range(29..42)),
+            depends_on: Some(Spanned::new(vec![Spanned::<UnescapedString>::new("cli#build".into()).with_range(30..41)]).with_range(29..42)),
             dot_env: Some(Spanned::new(vec!["package\\a\\.env".into()]).with_range(68..88)),
             env: Some(vec![Spanned::<UnescapedString>::new("OS".into()).with_range(112..116)]),
             pass_through_env: Some(vec![Spanned::<UnescapedString>::new("AWS_SECRET_KEY".into()).with_range(152..168)]),
@@ -971,7 +971,7 @@ mod tests {
             inputs: vec!["package\\a\\src\\**".to_string()],
             output_mode: OutputLogsMode::Full,
             pass_through_env: Some(vec!["AWS_SECRET_KEY".to_string()]),
-            task_dependencies: vec!["cli#build".into()],
+            task_dependencies: vec![Spanned::<TaskName<'_>>::new("cli#build".into()).with_range(30..41)],
             topological_dependencies: vec![],
             persistent: true,
         }

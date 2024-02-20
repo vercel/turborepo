@@ -730,7 +730,7 @@ mod test {
         .collect();
         let engine = EngineBuilder::new(&repo_root, &package_graph, false)
             .with_turbo_jsons(Some(turbo_jsons))
-            .with_tasks(Some(TaskName::from("test")))
+            .with_tasks(Some(Spanned::new(TaskName::from("test"))))
             .with_workspaces(vec![
                 PackageName::from("a"),
                 PackageName::from("b"),
@@ -787,7 +787,7 @@ mod test {
         .collect();
         let engine = EngineBuilder::new(&repo_root, &package_graph, false)
             .with_turbo_jsons(Some(turbo_jsons))
-            .with_tasks(Some(TaskName::from("test")))
+            .with_tasks(Some(Spanned::new(TaskName::from("test"))))
             .with_workspaces(vec![PackageName::from("app2")])
             .build()
             .unwrap();
@@ -826,7 +826,7 @@ mod test {
         .collect();
         let engine = EngineBuilder::new(&repo_root, &package_graph, false)
             .with_turbo_jsons(Some(turbo_jsons))
-            .with_tasks(Some(TaskName::from("special")))
+            .with_tasks(Some(Spanned::new(TaskName::from("special"))))
             .with_workspaces(vec![PackageName::from("app1"), PackageName::from("libA")])
             .build()
             .unwrap();
@@ -864,7 +864,10 @@ mod test {
         .collect();
         let engine = EngineBuilder::new(&repo_root, &package_graph, false)
             .with_turbo_jsons(Some(turbo_jsons))
-            .with_tasks(vec![TaskName::from("build"), TaskName::from("test")])
+            .with_tasks(vec![
+                Spanned::new(TaskName::from("build")),
+                Spanned::new(TaskName::from("test")),
+            ])
             .with_workspaces(vec![
                 PackageName::Root,
                 PackageName::from("app1"),
@@ -914,7 +917,7 @@ mod test {
         .collect();
         let engine = EngineBuilder::new(&repo_root, &package_graph, false)
             .with_turbo_jsons(Some(turbo_jsons))
-            .with_tasks(Some(TaskName::from("build")))
+            .with_tasks(Some(Spanned::new(TaskName::from("build"))))
             .with_workspaces(vec![PackageName::from("app1")])
             .with_root_tasks(vec![
                 TaskName::from("//#root-task"),
@@ -957,7 +960,7 @@ mod test {
         .collect();
         let engine = EngineBuilder::new(&repo_root, &package_graph, false)
             .with_turbo_jsons(Some(turbo_jsons))
-            .with_tasks(Some(TaskName::from("build")))
+            .with_tasks(Some(Spanned::new(TaskName::from("build"))))
             .with_workspaces(vec![PackageName::from("app1")])
             .with_root_tasks(vec![TaskName::from("libA#build"), TaskName::from("build")])
             .build();
@@ -992,7 +995,7 @@ mod test {
         .collect();
         let engine = EngineBuilder::new(&repo_root, &package_graph, false)
             .with_turbo_jsons(Some(turbo_jsons))
-            .with_tasks(Some(TaskName::from("build")))
+            .with_tasks(Some(Spanned::new(TaskName::from("build"))))
             .with_workspaces(vec![PackageName::from("app1")])
             .with_root_tasks(vec![
                 TaskName::from("libA#build"),
@@ -1037,7 +1040,7 @@ mod test {
         .collect();
         let engine = EngineBuilder::new(&repo_root, &package_graph, false)
             .with_turbo_jsons(Some(turbo_jsons))
-            .with_tasks(Some(TaskName::from("build")))
+            .with_tasks(Some(Spanned::new(TaskName::from("build"))))
             .with_workspaces(vec![PackageName::from("app1")])
             .with_root_tasks(vec![
                 TaskName::from("libA#build"),
@@ -1077,7 +1080,7 @@ mod test {
         let engine = EngineBuilder::new(&repo_root, &package_graph, false)
             .with_turbo_jsons(Some(turbo_jsons))
             .with_tasks_only(true)
-            .with_tasks(Some(TaskName::from("test")))
+            .with_tasks(Some(Spanned::new(TaskName::from("test"))))
             .with_workspaces(vec![
                 PackageName::from("a"),
                 PackageName::from("b"),
