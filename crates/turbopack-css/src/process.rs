@@ -689,8 +689,6 @@ impl swc_core::css::visit::Visit for CssModuleValidator {
 impl lightningcss::visitor::Visitor<'_> for CssModuleValidator {
     type Error = ();
 
-    // TODO: Skip some
-
     fn visit_types(&self) -> lightningcss::visitor::VisitTypes {
         visit_types!(SELECTORS)
     }
@@ -699,9 +697,7 @@ impl lightningcss::visitor::Visitor<'_> for CssModuleValidator {
         &mut self,
         selector: &mut lightningcss::selector::Selector<'_>,
     ) -> Result<(), Self::Error> {
-        if selector.iter().all(|component| !match component {
-            parcel_selectors::parser::Component::ID(_)
-            | parcel_selectors::parser::Component::Class(_) => true,
+        if selector.iter().all(|component| match component {
             parcel_selectors::parser::Component::LocalName(local) => {
                 !matches!(&*local.name.0, "html" | "body")
             }
@@ -709,7 +705,7 @@ impl lightningcss::visitor::Visitor<'_> for CssModuleValidator {
         }) {
             ParsingIssue {
                 file: self.file,
-                msg: Vc::cell(CSS_MODULE_ERROR.to_string()),
+                msg: Vc::cell(format!("{CSS_MODULE_ERROR} (lightningcss, {:?})", selector)),
                 source: Vc::cell(None),
             }
             .cell()
