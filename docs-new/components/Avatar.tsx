@@ -3,7 +3,7 @@ import type { AuthorDetails } from "./team";
 
 export function Avatar({ name, picture, xUsername }: AuthorDetails) {
   return (
-    <div className="flex items-center flex-shrink-0 md:justify-start">
+    <div className="flex items-center flex-shrink-0 md:justify-start not-prose">
       <div className="w-[32px] h-[32px]">
         <Image
           alt={name}
