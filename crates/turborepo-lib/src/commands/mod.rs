@@ -1,8 +1,8 @@
 use std::cell::OnceCell;
 
-use dirs_next::config_dir;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::{APIAuth, APIClient};
+use turborepo_dirs::config_dir;
 use turborepo_ui::UI;
 
 use crate::{
