@@ -1415,8 +1415,12 @@ impl VisitAstPath for Analyzer<'_> {
         n: &'ast ForOfStmt,
         ast_path: &mut swc_core::ecma::visit::AstNodePath<'r>,
     ) {
-        let array = self.eval_context.eval(&n.right);
-        dbg!(&array);
+        let mut array = self.eval_context.eval(&n.right);
+        if let JsValue::Variable(id) = &array {
+            if let Some(value) = self.data.values.get(id) {
+                array = value.clone();
+            }
+        }
 
         if let JsValue::Array { items, .. } = array {
             for item in items {
