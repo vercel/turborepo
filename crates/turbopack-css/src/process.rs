@@ -698,12 +698,13 @@ impl lightningcss::visitor::Visitor<'_> for CssModuleValidator {
         selector: &mut lightningcss::selector::SelectorList<'_>,
     ) -> Result<(), Self::Error> {
         if selector.0.iter().all(|sel| {
-            sel.iter().all(|component| match component {
-                parcel_selectors::parser::Component::LocalName(local) => {
-                    !matches!(&*local.name.0, "html" | "body")
-                }
-                _ => false,
-            })
+            sel.iter_raw_parse_order_from(0)
+                .all(|component| match component {
+                    parcel_selectors::parser::Component::LocalName(local) => {
+                        !matches!(&*local.name.0, "html" | "body")
+                    }
+                    _ => false,
+                })
         }) {
             ParsingIssue {
                 file: self.file,
