@@ -66,9 +66,24 @@ Rather than throwing away your entire topological dependency graph, it's much mo
 You can now run your Turborepo tasks from anywhere in your project once you've installed `turbo` globally. To do so, use:
 
 <Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
-  <Tab>```bash npm install turbo --global ```</Tab>
-  <Tab>```bash yarn global add turbo ```</Tab>
-  <Tab>```bash pnpm install turbo --global ```</Tab>
+  <Tab value="npm">
+  ```bash title="Terminal"
+  npm install turbo --global
+  ```
+
+</Tab>
+<Tab value="yarn">
+```bash title="Terminal"
+yarn global add turbo
+```
+
+</Tab>
+<Tab value="pnpm">
+```bash title="Terminal"
+pnpm install turbo --global
+```
+
+</Tab>
 </Tabs>
 
 `turbo` will now work in any project. To find your local `turbo` version, `turbo` will walk through a few steps, always looking upward from your current directory:
