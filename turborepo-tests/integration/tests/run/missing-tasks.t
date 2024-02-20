@@ -3,19 +3,26 @@ Setup
 
 # Running non-existent tasks errors
   $ ${TURBO} run doesnotexist
-    x Could not find the following tasks in project: doesnotexist
+    x missing tasks in project
+  
+  Error:   x could not find task `doesnotexist` in project
   
   [1]
 
 # Multiple non-existent tasks also error
   $ ${TURBO} run doesnotexist alsono
-    x Could not find the following tasks in project: alsono, doesnotexist
+    x missing tasks in project
+  
+  Error:   x could not find task `alsono` in project
+  Error:   x could not find task `doesnotexist` in project
   
   [1]
 
 # One good and one bad task does not error
   $ ${TURBO} run build doesnotexist
-    x Could not find the following tasks in project: doesnotexist
+    x missing tasks in project
+  
+  Error:   x could not find task `doesnotexist` in project
   
   [1]
 

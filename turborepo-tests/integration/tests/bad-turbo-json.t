@@ -11,7 +11,7 @@ Run build with package task in non-root turbo.json
   Error: unnecessary_package_task_syntax (https://turbo.build/messages/unnecessary-package-task-syntax)
   
     x "my-app#build". Use "build" instead
-      ,-[7:1]
+      ,-[apps/my-app/turbo.json:7:1]
     7 |         // this comment verifies that turbo can read .json files with comments
     8 | ,->     "my-app#build": {
     9 | |         "outputs": ["banana.txt", "apple.json"],
@@ -37,7 +37,7 @@ Run build with invalid env var
   invalid_env_prefix (https://turbo.build/messages/invalid-env-prefix)
   
     x Environment variables should not be prefixed with "$"
-     ,-[6:1]
+     ,-[turbo.json:6:1]
    6 |     "build": {
    7 |       "env": ["NODE_ENV", "$FOOBAR"],
      :                           ^^^^|^^^^
@@ -55,7 +55,7 @@ Run in single package mode even though we have a task with package syntax
   
     x Package tasks (<package>#<task>) are not allowed in single-package
     | repositories: found //#something
-      ,-[16:1]
+      ,-[turbo.json:16:1]
    16 |     "something": {},
    17 |     "//#something": {},
       :                     ^|
