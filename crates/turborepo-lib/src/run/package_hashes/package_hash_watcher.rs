@@ -38,6 +38,9 @@ use crate::{
     turbo_json::TurboJson,
 };
 
+/// Part of `FileWatching`, but in `turborepo_lib` because we need access to
+/// task graph and hashing internals and because having it in
+/// `turborepo_filewatch` would cause circular dependencies
 pub struct PackageHashWatcher {
     repo_root: AbsoluteSystemPathBuf,
     package_watcher: Arc<PackageWatcher>,
