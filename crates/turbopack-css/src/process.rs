@@ -700,7 +700,7 @@ impl lightningcss::visitor::Visitor<'_> for CssModuleValidator {
         if selector.0.iter().all(|sel| {
             sel.iter().all(|component| match component {
                 parcel_selectors::parser::Component::LocalName(local) => {
-                    matches!(&*local.name.0, "html" | "body")
+                    !matches!(&*local.name.0, "html" | "body")
                 }
                 _ => false,
             })
