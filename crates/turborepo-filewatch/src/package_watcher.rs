@@ -66,6 +66,27 @@ impl PackageDiscovery for WatchingPackageDiscovery {
             package_manager,
         })
     }
+
+    // if the event that either of the dependencies will never resolve,
+    // this will still return unavailable
+    async fn discover_packages_blocking(&self) -> Result<DiscoveryResponse, discovery::Error> {
+        let package_manager = self
+            .watcher
+            .wait_for_package_manager()
+            .await
+            .map_err(|_| discovery::Error::Unavailable)?;
+
+        let workspaces = self
+            .watcher
+            .wait_for_package_data()
+            .await
+            .map_err(|_| discovery::Error::Unavailable)?;
+
+        Ok(DiscoveryResponse {
+            workspaces,
+            package_manager,
+        })
+    }
 }
 
 /// Watches the filesystem for changes to packages and package managers.
@@ -684,6 +705,10 @@ mod test {
                 package_manager: self.manager,
                 workspaces: self.package_data.lock().unwrap().clone(),
             })
+        }
+
+        async fn discover_packages_blocking(&self) -> Result<DiscoveryResponse, discovery::Error> {
+            self.discover_packages().await
         }
     }
 

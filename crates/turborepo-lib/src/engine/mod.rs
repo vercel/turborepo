@@ -335,6 +335,15 @@ mod test {
                 workspaces,
             })
         }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<
+            turborepo_repository::discovery::DiscoveryResponse,
+            turborepo_repository::discovery::Error,
+        > {
+            self.discover_packages().await
+        }
     }
 
     #[tokio::test]
