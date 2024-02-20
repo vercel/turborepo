@@ -1,6 +1,6 @@
-import { Breadcrumb } from "./_components/Breadcrumb";
 import { getBlogPage, blogPageTree, getBlogPages } from "@/app/source";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 export default async function Page({
@@ -16,11 +16,16 @@ export default async function Page({
 
   const MDX = page.data.exports.default;
 
-  console.log(blogPageTree);
-
   return (
-    <article className="prose container">
-      <Breadcrumb tree={blogPageTree} />
+    <article className="prose container w-full min-w-0 max-w-6xl mx-auto">
+      <div className="my-4">
+        <Link
+          href="/blog"
+          className="text-gray-500 dark:text-gray-400  hover:text-foreground transition-all"
+        >
+          ← Back to blog
+        </Link>
+      </div>
       <MDX />
     </article>
   );
