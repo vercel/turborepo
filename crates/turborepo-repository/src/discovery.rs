@@ -11,6 +11,7 @@
 
 use std::sync::Arc;
 
+use tokio::time::error::Elapsed;
 use tokio_stream::{iter, StreamExt};
 use turbopath::AbsoluteSystemPathBuf;
 
@@ -42,7 +43,15 @@ pub enum Error {
 /// Defines a strategy for discovering packages on the filesystem.
 pub trait PackageDiscovery {
     // desugar to assert that the future is Send
+    /// Discover packages on the filesystem. In the event that this would block,
+    /// some strategies may return `Err(Error::Unavailable)`. If you want to
+    /// wait, use `discover_packages_blocking` which will wait for the result.
     fn discover_packages(
+        &self,
+    ) -> impl std::future::Future<Output = Result<DiscoveryResponse, Error>> + Send;
+
+    /// Discover packages on the filesystem, blocking until the result is ready.
+    fn discover_packages_blocking(
         &self,
     ) -> impl std::future::Future<Output = Result<DiscoveryResponse, Error>> + Send;
 }
@@ -71,11 +80,27 @@ impl<T: PackageDiscovery + Send + Sync> PackageDiscovery for Option<T> {
             }
         }
     }
+
+    async fn discover_packages_blocking(&self) -> Result<DiscoveryResponse, Error> {
+        tracing::debug!("discovering packages using optional strategy");
+
+        match self {
+            Some(d) => d.discover_packages_blocking().await,
+            None => {
+                tracing::debug!("no strategy available");
+                Err(Error::Unavailable)
+            }
+        }
+    }
 }
 
 impl<T: PackageDiscovery + Send + Sync> PackageDiscovery for Arc<T> {
     async fn discover_packages(&self) -> Result<DiscoveryResponse, Error> {
         self.as_ref().discover_packages().await
+    }
+
+    async fn discover_packages_blocking(&self) -> Result<DiscoveryResponse, Error> {
+        self.as_ref().discover_packages_blocking().await
     }
 }
 
@@ -171,6 +196,12 @@ impl PackageDiscovery for LocalPackageDiscovery {
                 package_manager: self.package_manager,
             })
     }
+
+    // there is no notion of waiting for upstream deps here, so this is the same as
+    // the non-blocking
+    async fn discover_packages_blocking(&self) -> Result<DiscoveryResponse, Error> {
+        self.discover_packages().await
+    }
 }
 
 /// Attempts to run the `primary` strategy for an amount of time
@@ -224,6 +255,28 @@ impl<A: PackageDiscovery + Send + Sync, B: PackageDiscovery + Send + Sync> Packa
             }
         }
     }
+
+    async fn discover_packages_blocking(&self) -> Result<DiscoveryResponse, Error> {
+        tracing::debug!("discovering packages using fallback strategy");
+
+        tracing::debug!("attempting primary strategy");
+        match tokio::time::timeout(self.timeout, self.primary.discover_packages_blocking()).await {
+            Ok(Ok(packages)) => Ok(packages),
+            Ok(Err(err1)) => {
+                tracing::debug!("primary strategy failed, attempting fallback strategy");
+                match self.fallback.discover_packages_blocking().await {
+                    Ok(packages) => Ok(packages),
+                    // if the backup is unavailable, return the original error
+                    Err(Error::Unavailable) => Err(err1),
+                    Err(err2) => Err(err2),
+                }
+            }
+            Err(Elapsed { .. }) => {
+                tracing::debug!("primary strategy timed out, attempting fallback strategy");
+                self.fallback.discover_packages_blocking().await
+            }
+        }
+    }
 }
 
 pub struct CachingPackageDiscovery<P: PackageDiscovery> {
@@ -247,6 +300,17 @@ impl<P: PackageDiscovery + Send + Sync> PackageDiscovery for CachingPackageDisco
             .get_or_try_init(async {
                 tracing::debug!("discovering packages using primary strategy");
                 self.primary.discover_packages().await
+            })
+            .await
+            .map(ToOwned::to_owned)
+    }
+
+    async fn discover_packages_blocking(&self) -> Result<DiscoveryResponse, Error> {
+        tracing::debug!("discovering packages using caching strategy");
+        self.data
+            .get_or_try_init(async {
+                tracing::debug!("discovering packages using primary strategy");
+                self.primary.discover_packages_blocking().await
             })
             .await
             .map(ToOwned::to_owned)
@@ -294,6 +358,12 @@ mod fallback_tests {
                     workspaces: vec![],
                 })
             }
+        }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<crate::discovery::DiscoveryResponse, crate::discovery::Error> {
+            self.discover_packages().await
         }
     }
 
@@ -362,6 +432,12 @@ mod caching_tests {
                 package_manager: PackageManager::Npm,
                 workspaces: vec![],
             })
+        }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<crate::discovery::DiscoveryResponse, crate::discovery::Error> {
+            self.discover_packages().await
         }
     }
 
