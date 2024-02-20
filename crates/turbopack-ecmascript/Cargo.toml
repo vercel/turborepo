@@ -48,6 +48,7 @@ swc_core = { workspace = true, features = [
   "common_concurrent",
   "common_sourcemap",
   "ecma_codegen",
+  "ecma_lints",
   "ecma_parser",
   "ecma_preset_env",
   "ecma_transforms",
@@ -62,8 +63,6 @@ swc_core = { workspace = true, features = [
   "testing",
   "base",
 ] }
-# TODO: Use swc_core once the new version is released
-swc_ecma_lints = "0.92.4"
 
 [dev-dependencies]
 criterion = { workspace = true, features = ["async_tokio"] }
