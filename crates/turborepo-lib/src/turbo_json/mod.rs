@@ -15,7 +15,7 @@ use turborepo_repository::{package_graph::ROOT_PKG_NAME, package_json::PackageJs
 
 use crate::{
     cli::OutputLogsMode,
-    config::{ConfigurationOptions, Error},
+    config::{ConfigurationOptions, Error, InvalidEnvPrefixError},
     run::{
         task_access::{TaskAccessTraceFile, TASK_ACCESS_CONFIG_PATH},
         task_id::{TaskId, TaskName},
@@ -702,13 +702,13 @@ fn gather_env_vars(
                 .path
                 .as_ref()
                 .map_or_else(|| "turbo.json".to_string(), |p| p.to_string());
-            return Err(Error::InvalidEnvPrefix {
+            return Err(Error::InvalidEnvPrefix(Box::new(InvalidEnvPrefixError {
                 key: key.to_string(),
                 value: value.into_inner(),
                 span,
                 text: NamedSource::new(path, text),
                 env_pipeline_delimiter: ENV_PIPELINE_DELIMITER,
-            });
+            })));
         }
 
         into.insert(value.into_inner());
