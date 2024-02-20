@@ -44,6 +44,12 @@ impl<T> OptionalWatch<T> {
     pub fn get_immediate(&mut self) -> Option<Result<SomeRef<'_, T>, RecvError>> {
         self.get().now_or_never()
     }
+
+    /// Get the first, changed, Some value.
+    pub async fn get_change(&mut self) -> Result<SomeRef<'_, T>, RecvError> {
+        self.0.changed().await?;
+        self.get().await
+    }
 }
 
 pub struct SomeRef<'a, T>(pub(crate) Ref<'a, Option<T>>);

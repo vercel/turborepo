@@ -30,7 +30,7 @@ mod server;
 
 pub use client::{DaemonClient, DaemonError};
 pub use connector::{DaemonConnector, DaemonConnectorError};
-pub use server::{CloseReason, TurboGrpcService};
+pub use server::{CloseReason, FileWatching, TurboGrpcService};
 use sha2::{Digest, Sha256};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 

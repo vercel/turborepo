@@ -1,5 +1,8 @@
+mod package_hash_watcher;
+
 use std::{collections::HashMap, sync::Arc};
 
+pub use package_hash_watcher::PackageHashWatcher;
 use rayon::prelude::*;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath, RelativeUnixPathBuf};
 use turborepo_errors::Spanned;

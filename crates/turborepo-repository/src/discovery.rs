@@ -317,6 +317,31 @@ impl<P: PackageDiscovery + Send + Sync> PackageDiscovery for CachingPackageDisco
     }
 }
 
+/// A package discovery that returns a static set of workspaces, for the case
+/// where we already have this data available.
+pub struct StaticPackageDiscovery(Vec<WorkspaceData>, PackageManager);
+
+impl StaticPackageDiscovery {
+    pub fn new(workspaces: Vec<WorkspaceData>, package_manager: PackageManager) -> Self {
+        Self(workspaces, package_manager)
+    }
+}
+
+impl PackageDiscovery for StaticPackageDiscovery {
+    async fn discover_packages(&self) -> Result<DiscoveryResponse, Error> {
+        Ok(DiscoveryResponse {
+            workspaces: self.0.clone(),
+            package_manager: self.1,
+        })
+    }
+
+    fn discover_packages_blocking(
+        &self,
+    ) -> impl std::future::Future<Output = Result<DiscoveryResponse, Error>> + Send {
+        self.discover_packages()
+    }
+}
+
 #[cfg(test)]
 mod fallback_tests {
     use std::{

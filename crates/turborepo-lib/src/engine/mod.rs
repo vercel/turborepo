@@ -9,7 +9,7 @@ use std::{
     fmt,
 };
 
-pub use builder::{EngineBuilder, Error as BuilderError};
+pub use builder::{EngineBuilder, Error as BuilderError, PackageLookup, TaskDefinitionBuilder};
 pub use execute::{ExecuteError, ExecutionOptions, Message, StopExecution};
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use petgraph::Graph;
