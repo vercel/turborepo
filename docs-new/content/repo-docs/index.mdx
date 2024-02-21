@@ -1,0 +1,40 @@
+---
+title: Introduction
+description: Welcome to the Turborepo documentation!
+---
+
+Welcome to the Turborepo documentation!
+
+---
+
+## What is Turborepo?
+
+Turborepo is a high-performance build system for JavaScript and TypeScript codebases. It is designed to be used with monorepos, but can also be [used with single-package workspaces](/TODO-LINK).
+
+From individual developers to the largest enterprise engineering organizations in the world, Turborepo is saving years of engineering time and millions of dollars in compute costs through a lightweight approach to optimizing the tasks you need to run in your repository.
+
+## The monorepo problem
+
+![](/images/docs/why-turborepo-problem.png)
+
+Monorepos have many advantages - but **they struggle to scale**. Each workspace has its own test suite, its own linting, and its own build process. A single monorepo might have **hundreds of tasks to execute**.
+
+## The monorepo solution
+
+![](/images/docs/why-turborepo-solution.png)
+
+**Turborepo solves your monorepo's scaling problem**. Our Remote Cache stores the result of all your tasks, meaning that **your CI never needs to do the same work twice**.
+
+Additionally, task scheduling can be difficult in a monorepo. You may need to build, _then_ test, _then_ lint...Turborepo **can schedule your tasks for maximum speed**, parallelizing work across all available cores.
+
+Turborepo can be **adopted incrementally** and you can **add it to any repository in just a few minutes**. It uses the `package.json` scripts you've already written, the dependencies you've already declared, and a single `turbo.json` file. You can **use it with any package manager**, like `npm`, `yarn` or `pnpm` since Turborepo leans on the conventions of the npm ecosystem.
+
+## How to use these docs
+
+On the left side of your screen, you'll find the navigation menu. The pages of the docs are organized sequentially, from basic to most advanced, so you can follow them step-by-step when creating your repository. Additionally, if you're looking for something specific, you can use the search bar at the top of the page to find what you need.
+
+We will do our best to keep jargon to a minimum - but there are some need-to-know words that will be important to understand as you read through the docs. We've created [a glossary page](https://vercel.com/docs/vercel-platform/glossary) to help you out in case you're learning about these terms.
+
+## Join the community
+
+If you have questions about anything related to Turborepo, you're always welcome to ask our community on [GitHub Discussions](https://github.com/vercel/turbo/discussions), [Discord](https://turbo.build/discord), and [Twitter](https://twitter.com/turborepo).

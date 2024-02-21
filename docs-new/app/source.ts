@@ -4,7 +4,7 @@ import { loader } from "fumadocs-core/source";
 
 export const { getPage, getPages, pageTree } = loader({
   baseUrl: "/repo/docs",
-  rootDir: "docs",
+  rootDir: "repo-docs",
   source: createMDXSource(map),
 });
 
