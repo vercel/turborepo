@@ -5,8 +5,7 @@ Add turbo.json with unnecessary package task syntax to a package
   $ . ${TESTDIR}/../../helpers/replace_turbo_json.sh $(pwd)/apps/my-app "package-task.json"
 
 Run build with package task in non-root turbo.json
-  $ EXPERIMENTAL_RUST_CODEPATH=true ${TURBO} build
-   ERROR  run failed: invalid turbo json
+  $ ${TURBO} build
     x invalid turbo json
   
   Error: unnecessary_package_task_syntax (https://turbo.build/messages/unnecessary-package-task-syntax)
@@ -34,8 +33,7 @@ Use our custom turbo config with an invalid env var
   $ . ${TESTDIR}/../../helpers/replace_turbo_json.sh $(pwd) "invalid-env-var.json"
 
 Run build with invalid env var
-  $ EXPERIMENTAL_RUST_CODEPATH=true ${TURBO} build
-   ERROR  run failed: Environment variables should not be prefixed with "$"
+  $ ${TURBO} build
   invalid_env_prefix (https://turbo.build/messages/invalid-env-prefix)
   
     x Environment variables should not be prefixed with "$"
@@ -52,8 +50,7 @@ Run build with invalid env var
 
 
 Run in single package mode even though we have a task with package syntax
-  $ EXPERIMENTAL_RUST_CODEPATH=true ${TURBO} build --single-package
-   ERROR  run failed: Package tasks (<package>#<task>) are not allowed in single-package repositories: found //#something
+  $ ${TURBO} build --single-package
   package_task_in_single_package_mode (https://turbo.build/messages/package-task-in-single-package-mode)
   
     x Package tasks (<package>#<task>) are not allowed in single-package
@@ -74,8 +71,7 @@ Use our custom turbo config with syntax errors
   $ . ${TESTDIR}/../../helpers/replace_turbo_json.sh $(pwd) "syntax-error.json"
 
 Run build with syntax errors in turbo.json
-  $ EXPERIMENTAL_RUST_CODEPATH=true ${TURBO} build
-   ERROR  run failed: failed to parse turbo json
+  $ ${TURBO} build
   turbo_json_parse_error
   
     x failed to parse turbo json
@@ -109,10 +105,3 @@ Run build with syntax errors in turbo.json
       `----
   
   [1]
-
-
-
-
-
-
-[1]

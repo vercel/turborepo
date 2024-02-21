@@ -9,7 +9,15 @@ use miette::Diagnostic;
 use regex::{Error as RegexError, Regex};
 use thiserror::Error;
 
-use crate::{token::Token, PositionExt as _};
+use crate::token::Token;
+
+/// A regular expression that never matches.
+///
+/// This expression is formed from a character class that intersects completely
+/// disjoint characters. Unlike an empty regular expression, which always
+/// matches, this yields an empty character class, which never matches (even
+/// against empty strings).
+const NEVER_EXPRESSION: &str = "[a&&b]";
 
 #[cfg(windows)]
 const SEPARATOR_CLASS_EXPRESSION: &str = "/\\\\";
@@ -20,9 +28,9 @@ const SEPARATOR_CLASS_EXPRESSION: &str = "/";
 // will be missed. It may be better to have explicit platform support and invoke
 // `compile_error!` on unsupported platforms, as this could cause very aberrant
 // behavior. Then again, it seems that platforms using more than one separator
-// are rare. GS/OS, OS/2, and Windows are likely the best known examples and of
-// those only Windows is a supported Rust target at the time of writing (and is
-// already supported by Wax).
+// are rare. GS/OS, OS/2, and Windows are likely the best known examples
+// and of those only Windows is a supported Rust target at the time of writing
+// (and is already supported by Wax).
 #[cfg(not(any(windows, unix)))]
 const SEPARATOR_CLASS_EXPRESSION: &str = main_separator_class_expression();
 
@@ -30,8 +38,8 @@ const SEPARATOR_CLASS_EXPRESSION: &str = main_separator_class_expression();
 const fn main_separator_class_expression() -> &'static str {
     use std::path::MAIN_SEPARATOR;
 
-    // TODO: This is based upon `regex_syntax::is_meta_character`, but that
-    //       function is not `const`. Perhaps that can be changed upstream.
+    // TODO: This is based upon `regex_syntax::is_meta_character`, but that function
+    // is not       `const`. Perhaps that can be changed upstream.
     const fn escape(x: char) -> &'static str {
         match x {
             '\\' | '.' | '+' | '*' | '?' | '(' | ')' | '|' | '[' | ']' | '{' | '}' | '^' | '$'
@@ -154,7 +162,7 @@ where
 #[allow(clippy::double_parens)]
 fn encode<'t, A, T>(
     grouping: Grouping,
-    superposition: Option<Position<()>>,
+    superposition: Option<Position>,
     pattern: &mut String,
     tokens: impl IntoIterator<Item = T>,
 ) where
@@ -169,19 +177,16 @@ fn encode<'t, A, T>(
         Wildcard::{One, Tree, ZeroOrMore},
     };
 
-    // This assumes that `NUL` is not allowed in paths and matches nothing.
-    const NULL_CHARACTER_CLASS: &str = nsepexpr!("[\\x00&&{0}]");
-
     fn encode_intermediate_tree(grouping: Grouping, pattern: &mut String) {
         pattern.push_str(sepexpr!("(?:{0}|{0}"));
         grouping.push_str(pattern, sepexpr!(".*{0}"));
         pattern.push(')');
     }
 
-    // TODO: Use `Grouping` everywhere a group is encoded. For invariant groups
-    //       that ignore `grouping`, construct a local `Grouping` instead.
-    for token in tokens.into_iter().with_position() {
-        match token.interior_borrow().map(Token::kind).as_tuple() {
+    // TODO: Use `Grouping` everywhere a group is encoded. For invariant groups that
+    // ignore       `grouping`, construct a local `Grouping` instead.
+    for (position, token) in tokens.into_iter().with_position() {
+        match (position, token.borrow().kind()) {
             (_, Literal(literal)) => {
                 // TODO: Only encode changes to casing flags.
                 // TODO: Should Unicode support also be toggled by casing flags?
@@ -234,46 +239,52 @@ fn encode<'t, A, T>(
             }
             (_, Class(class)) => {
                 grouping.push_with(pattern, || {
+                    use crate::token::Class as ClassToken;
+
+                    fn encode_class_archetypes(class: &ClassToken, pattern: &mut String) {
+                        for archetype in class.archetypes() {
+                            match archetype {
+                                Character(literal) => pattern.push_str(&literal.escaped()),
+                                Range(left, right) => {
+                                    pattern.push_str(&left.escaped());
+                                    pattern.push('-');
+                                    pattern.push_str(&right.escaped());
+                                }
+                            }
+                        }
+                    }
+
                     let mut pattern = String::new();
                     pattern.push('[');
                     if class.is_negated() {
                         pattern.push('^');
-                    }
-                    for archetype in class.archetypes() {
-                        match archetype {
-                            Character(literal) => pattern.push_str(&literal.escaped()),
-                            Range(left, right) => {
-                                pattern.push_str(&left.escaped());
-                                pattern.push('-');
-                                pattern.push_str(&right.escaped());
-                            }
-                        }
-                    }
-                    if class.is_negated() {
+                        encode_class_archetypes(class, &mut pattern);
                         pattern.push_str(SEPARATOR_CLASS_EXPRESSION);
                     } else {
+                        encode_class_archetypes(class, &mut pattern);
                         pattern.push_str(nsepexpr!("&&{0}"));
                     }
                     pattern.push(']');
-                    // Compile the character class sub-expression. This may fail
-                    // if the subtraction of the separator pattern yields an
-                    // empty character class (meaning that the glob expression
-                    // matches only separator characters on the target
-                    // platform). If compilation fails, then use the null
-                    // character class, which matches nothing on supported
-                    // platforms.
+                    // TODO: The compiled `Regex` is discarded. Is there a way to check the
+                    //       correctness of the expression but do less work (i.e., don't build a
+                    //       complete `Regex`)?
+                    // Compile the character class sub-expression. This may fail if the subtraction
+                    // of the separator pattern yields an empty character class (meaning that the
+                    // glob expression matches only separator characters on the target platform).
                     if Regex::new(&pattern).is_ok() {
                         pattern.into()
                     } else {
-                        NULL_CHARACTER_CLASS.into()
+                        // If compilation fails, then use `NEVER_EXPRESSION`, which matches
+                        // nothing.
+                        NEVER_EXPRESSION.into()
                     }
                 });
             }
             (_, Wildcard(One)) => grouping.push_str(pattern, nsepexpr!("{0}")),
             (_, Wildcard(ZeroOrMore(Eager))) => grouping.push_str(pattern, nsepexpr!("{0}*")),
             (_, Wildcard(ZeroOrMore(Lazy))) => grouping.push_str(pattern, nsepexpr!("{0}*?")),
-            (First(_), Wildcard(Tree { has_root })) => {
-                if let Some(Middle(_) | Last(_)) = superposition {
+            (First, Wildcard(Tree { has_root })) => {
+                if let Some(Middle | Last) = superposition {
                     encode_intermediate_tree(grouping, pattern);
                 } else if *has_root {
                     grouping.push_str(pattern, sepexpr!("{0}.*{0}?"));
@@ -283,11 +294,11 @@ fn encode<'t, A, T>(
                     pattern.push(')');
                 }
             }
-            (Middle(_), Wildcard(Tree { .. })) => {
+            (Middle, Wildcard(Tree { .. })) => {
                 encode_intermediate_tree(grouping, pattern);
             }
-            (Last(_), Wildcard(Tree { .. })) => {
-                if let Some(First(_) | Middle(_)) = superposition {
+            (Last, Wildcard(Tree { .. })) => {
+                if let Some(First | Middle) = superposition {
                     encode_intermediate_tree(grouping, pattern);
                 } else {
                     pattern.push_str(sepexpr!("(?:{0}?|{0}"));
@@ -295,7 +306,7 @@ fn encode<'t, A, T>(
                     pattern.push(')');
                 }
             }
-            (Only(_), Wildcard(Tree { .. })) => grouping.push_str(pattern, ".*"),
+            (Only, Wildcard(Tree { .. })) => grouping.push_str(pattern, ".*"),
         }
     }
 }

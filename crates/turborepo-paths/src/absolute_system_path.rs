@@ -401,6 +401,10 @@ impl AbsoluteSystemPath {
         self.0.parent().map(Self::new_unchecked)
     }
 
+    pub fn file_name(&self) -> Option<&str> {
+        self.0.file_name()
+    }
+
     /// Opens file and sets the `FILE_FLAG_SEQUENTIAL_SCAN` flag on Windows to
     /// help with performance
     pub fn open(&self) -> Result<File, io::Error> {
@@ -506,7 +510,6 @@ impl<'a> TryFrom<&'a Path> for &'a AbsoluteSystemPath {
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
-    use tempdir::TempDir;
     use test_case::test_case;
 
     use super::*;
@@ -602,7 +605,7 @@ mod tests {
             mode: Option<Permissions>,
             expected: Permissions,
         ) -> Result<()> {
-            let test_dir = TempDir::new("mkdir-all")?;
+            let test_dir = tempdir::TempDir::new("mkdir-all")?;
 
             let test_path = test_dir.path().join("foo");
 

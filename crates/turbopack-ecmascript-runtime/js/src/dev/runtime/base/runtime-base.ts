@@ -330,10 +330,12 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
           i: esmImport.bind(null, module),
           s: esmExport.bind(null, module, module.exports),
           j: dynamicExport.bind(null, module, module.exports),
+          p: moduleLookup,
           v: exportValue.bind(null, module),
           n: exportNamespace.bind(null, module),
           m: module,
           c: moduleCache,
+          M: moduleFactories,
           l: loadChunk.bind(null, sourceInfo),
           w: loadWebAssembly.bind(null, sourceInfo),
           u: loadWebAssemblyModule.bind(null, sourceInfo),
@@ -464,8 +466,8 @@ function registerExportsAndSetupBoundaryForReactRefresh(
       // function, we want to invalidate the boundary.
       if (
         helpers.shouldInvalidateReactRefreshBoundary(
-          prevExports,
-          currentExports
+          helpers.getRefreshBoundarySignature(prevExports),
+          helpers.getRefreshBoundarySignature(currentExports)
         )
       ) {
         module.hot.invalidate();

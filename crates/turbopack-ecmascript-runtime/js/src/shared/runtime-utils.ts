@@ -142,6 +142,28 @@ function dynamicExport(
   }
 }
 
+/**
+ * Access one entry from a mapping from name to functor.
+ */
+function moduleLookup(
+  map: Record<string, () => any>,
+  name: string,
+  returnPromise: boolean = false
+) {
+  if (hasOwnProperty.call(map, name)) {
+    return map[name]();
+  }
+  const e = new Error(`Cannot find module '${name}'`);
+  (e as any).code = "MODULE_NOT_FOUND";
+  if (returnPromise) {
+    return Promise.resolve().then(() => {
+      throw e;
+    });
+  } else {
+    throw e;
+  }
+}
+
 function exportValue(module: Module, value: any) {
   module.exports = value;
 }
@@ -213,7 +235,7 @@ function esmImport(
   return (module.namespaceObject = interopEsm(
     raw,
     {},
-    (raw as any).__esModule
+    raw && (raw as any).__esModule
   ));
 }
 

@@ -1,7 +1,6 @@
 use std::cell::OnceCell;
 
 use dirs_next::config_dir;
-use sha2::{Digest, Sha256};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_ui::UI;
@@ -134,89 +133,7 @@ impl CommandBase {
         &self.repo_root
     }
 
-    pub fn daemon_file_root(&self) -> AbsoluteSystemPathBuf {
-        DaemonRootHasher(&self.repo_root).daemon_file_root()
-    }
-
-    fn repo_hash(&self) -> String {
-        DaemonRootHasher(&self.repo_root).repo_hash()
-    }
-
     pub fn version(&self) -> &'static str {
         self.version
-    }
-}
-
-pub struct DaemonRootHasher<'a>(&'a AbsoluteSystemPath);
-
-impl<'a> DaemonRootHasher<'a> {
-    pub fn new(repo_root: &'a AbsoluteSystemPath) -> Self {
-        Self(repo_root)
-    }
-
-    pub fn daemon_file_root(&self) -> AbsoluteSystemPathBuf {
-        AbsoluteSystemPathBuf::new(std::env::temp_dir().to_str().expect("UTF-8 path"))
-            .expect("temp dir is valid")
-            .join_component("turbod")
-            .join_component(self.repo_hash().as_str())
-    }
-
-    pub fn sock_path(&self) -> AbsoluteSystemPathBuf {
-        self.daemon_file_root().join_component("turbod.sock")
-    }
-
-    pub fn lock_path(&self) -> AbsoluteSystemPathBuf {
-        self.daemon_file_root().join_component("turbod.pid")
-    }
-
-    pub fn lsp_path(&self) -> AbsoluteSystemPathBuf {
-        self.daemon_file_root().join_component("lsp.pid")
-    }
-
-    fn repo_hash(&self) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(self.0.as_bytes());
-        hex::encode(&hasher.finalize()[..8])
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use test_case::test_case;
-    use turbopath::AbsoluteSystemPathBuf;
-    use turborepo_ui::UI;
-
-    use crate::get_version;
-
-    #[cfg(not(target_os = "windows"))]
-    #[test_case("/tmp/turborepo", "6e0cfa616f75a61c"; "basic example")]
-    fn test_repo_hash(path: &str, expected_hash: &str) {
-        use super::CommandBase;
-        use crate::Args;
-
-        let args = Args::default();
-        let repo_root = AbsoluteSystemPathBuf::new(path).unwrap();
-        let command_base = CommandBase::new(args, repo_root, get_version(), UI::new(true));
-
-        let hash = command_base.repo_hash();
-
-        assert_eq!(hash, expected_hash);
-        assert_eq!(hash.len(), 16);
-    }
-
-    #[cfg(target_os = "windows")]
-    #[test_case("C:\\\\tmp\\turborepo", "0103736e6883e35f"; "basic example")]
-    fn test_repo_hash_win(path: &str, expected_hash: &str) {
-        use super::CommandBase;
-        use crate::Args;
-
-        let args = Args::default();
-        let repo_root = AbsoluteSystemPathBuf::new(path).unwrap();
-        let command_base = CommandBase::new(args, repo_root, get_version(), UI::new(true));
-
-        let hash = command_base.repo_hash();
-
-        assert_eq!(hash, expected_hash);
-        assert_eq!(hash.len(), 16);
     }
 }

@@ -1,8 +1,8 @@
-use std::{collections::HashMap, fmt::Write};
+use std::{collections::HashMap, fmt::Write, mem::take};
 
 use anyhow::Result;
 use serde_json::Value as JsonValue;
-use turbo_tasks::{Value, ValueDefault, ValueToString, Vc};
+use turbo_tasks::{Value, ValueDefault, Vc};
 use turbo_tasks_fs::{FileContent, FileJsonContent, FileSystemPath};
 use turbopack_core::{
     asset::Asset,
@@ -10,7 +10,6 @@ use turbopack_core::{
     file_source::FileSource,
     ident::AssetIdent,
     issue::{Issue, IssueExt, IssueSeverity, OptionStyledString, StyledString},
-    reference::ModuleReference,
     reference_type::{ReferenceType, TypeScriptReferenceSubType},
     resolve::{
         handle_resolve_error,
@@ -414,9 +413,11 @@ pub async fn type_resolve(
             options,
         )
     };
-    let result = origin
-        .asset_context()
-        .process_resolve_result(result, ty.clone());
+    let result = as_typings_result(
+        origin
+            .asset_context()
+            .process_resolve_result(result, ty.clone()),
+    );
     handle_resolve_error(
         result,
         ty,
@@ -429,35 +430,17 @@ pub async fn type_resolve(
     .await
 }
 
-#[turbo_tasks::value]
-pub struct TypescriptTypesAssetReference {
-    pub origin: Vc<Box<dyn ResolveOrigin>>,
-    pub request: Vc<Request>,
-}
-
-#[turbo_tasks::value_impl]
-impl ModuleReference for TypescriptTypesAssetReference {
-    #[turbo_tasks::function]
-    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
-        type_resolve(self.origin, self.request)
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl ValueToString for TypescriptTypesAssetReference {
-    #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
-        Ok(Vc::cell(format!(
-            "typescript types {}",
-            self.request.to_string().await?,
-        )))
-    }
-}
-
-impl TypescriptTypesAssetReference {
-    pub fn new(origin: Vc<Box<dyn ResolveOrigin>>, request: Vc<Request>) -> Vc<Self> {
-        Self::cell(TypescriptTypesAssetReference { origin, request })
-    }
+#[turbo_tasks::function]
+pub async fn as_typings_result(result: Vc<ModuleResolveResult>) -> Result<Vc<ModuleResolveResult>> {
+    let mut result = result.await?.clone_value();
+    result.primary = take(&mut result.primary)
+        .into_iter()
+        .map(|(mut k, v)| {
+            k.conditions.insert("types".to_string(), true);
+            (k, v)
+        })
+        .collect();
+    Ok(result.cell())
 }
 
 #[turbo_tasks::function]

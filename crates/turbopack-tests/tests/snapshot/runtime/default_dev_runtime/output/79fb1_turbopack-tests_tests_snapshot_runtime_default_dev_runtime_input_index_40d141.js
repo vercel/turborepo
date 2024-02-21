@@ -80,6 +80,22 @@ function ensureDynamicExports(module, exports) {
         module[REEXPORTED_OBJECTS].push(object);
     }
 }
+/**
+ * Access one entry from a mapping from name to functor.
+ */ function moduleLookup(map, name, returnPromise = false) {
+    if (hasOwnProperty.call(map, name)) {
+        return map[name]();
+    }
+    const e = new Error(`Cannot find module '${name}'`);
+    e.code = "MODULE_NOT_FOUND";
+    if (returnPromise) {
+        return Promise.resolve().then(()=>{
+            throw e;
+        });
+    } else {
+        throw e;
+    }
+}
 function exportValue(module, value) {
     module.exports = value;
 }
@@ -126,7 +142,7 @@ function esmImport(sourceModule, id) {
     if (module.namespaceObject) return module.namespaceObject;
     // only ESM can be an async module, so we don't need to worry about exports being a promise here.
     const raw = module.exports;
-    return module.namespaceObject = interopEsm(raw, {}, raw.__esModule);
+    return module.namespaceObject = interopEsm(raw, {}, raw && raw.__esModule);
 }
 // Add a simple runtime require so that environments without one can still pass
 // `typeof require` CommonJS checks so that exports are correctly registered.
@@ -507,10 +523,12 @@ function instantiateModule(id, source) {
                 i: esmImport.bind(null, module),
                 s: esmExport.bind(null, module, module.exports),
                 j: dynamicExport.bind(null, module, module.exports),
+                p: moduleLookup,
                 v: exportValue.bind(null, module),
                 n: exportNamespace.bind(null, module),
                 m: module,
                 c: moduleCache,
+                M: moduleFactories,
                 l: loadChunk.bind(null, sourceInfo),
                 w: loadWebAssembly.bind(null, sourceInfo),
                 u: loadWebAssemblyModule.bind(null, sourceInfo),
@@ -603,7 +621,7 @@ function instantiateModule(id, source) {
             // re-execute the importing modules, and force those components to
             // re-render. Similarly, if you convert a class component to a
             // function, we want to invalidate the boundary.
-            if (helpers.shouldInvalidateReactRefreshBoundary(prevExports, currentExports)) {
+            if (helpers.shouldInvalidateReactRefreshBoundary(helpers.getRefreshBoundarySignature(prevExports), helpers.getRefreshBoundarySignature(currentExports))) {
                 module.hot.invalidate();
             } else {
                 helpers.scheduleUpdate();

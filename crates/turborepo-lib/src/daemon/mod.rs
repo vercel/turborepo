@@ -1,13 +1,90 @@
+//! The Turborepo daemon watches files and pre-computes data to speed up turbo's
+//! execution. Each repository has a separate daemon instance.
+//!
+//! # Architecture
+//! The daemon consists of a gRPC server that can be queried by a client.
+
+//! The server spins up a `FileWatching` struct, which contains a struct
+//! responsible for watching the repository (`FileSystemWatcher`), and the
+//! various consumers of that file change data such as `GlobWatcher` and
+//! `PackageWatcher`.
+//!
+//! We use cookie files to ensure proper event synchronization, i.e.
+//! that we don't get stale file system events while handling queries.
+//!
+//! # Naming Conventions
+//! `recv` is a receiver of file system events. Structs such as `GlobWatcher`
+//! or `PackageWatcher` consume these file system events and either derive state
+//! or produce new events.
+//!
+//! `_tx`/`_rx` suffixes indicate that this variable is respectively a `Sender`
+//! or `Receiver`.
+
 mod bump_timeout;
 mod bump_timeout_layer;
 mod client;
 mod connector;
+mod default_timeout_layer;
 pub(crate) mod endpoint;
 mod server;
 
 pub use client::{DaemonClient, DaemonError};
 pub use connector::{DaemonConnector, DaemonConnectorError};
-pub use server::{CloseReason, FileWatching, TurboGrpcService};
+pub use server::{CloseReason, TurboGrpcService};
+use sha2::{Digest, Sha256};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+
+#[derive(Clone, Debug)]
+pub struct Paths {
+    pub pid_file: AbsoluteSystemPathBuf,
+    pub lock_file: AbsoluteSystemPathBuf,
+    pub sock_file: AbsoluteSystemPathBuf,
+    pub lsp_pid_file: AbsoluteSystemPathBuf,
+    pub log_file: AbsoluteSystemPathBuf,
+    pub log_folder: AbsoluteSystemPathBuf,
+}
+
+fn repo_hash(repo_root: &AbsoluteSystemPath) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(repo_root.to_string().as_bytes());
+    hex::encode(&hasher.finalize()[..8])
+}
+
+fn daemon_file_root(repo_hash: &str) -> AbsoluteSystemPathBuf {
+    AbsoluteSystemPathBuf::new(std::env::temp_dir().to_str().expect("UTF-8 path"))
+        .expect("temp dir is valid")
+        .join_component("turbod")
+        .join_component(repo_hash)
+}
+
+fn daemon_log_file_and_folder(repo_hash: &str) -> (AbsoluteSystemPathBuf, AbsoluteSystemPathBuf) {
+    let directories = directories::ProjectDirs::from("com", "turborepo", "turborepo")
+        .expect("user has a home dir");
+
+    let folder = AbsoluteSystemPathBuf::new(directories.data_dir().to_str().expect("UTF-8 path"))
+        .expect("absolute");
+
+    let log_folder = folder.join_component("logs");
+    let log_file = log_folder.join_component(format!("{}-turbo.log", repo_hash).as_str());
+
+    (log_file, log_folder)
+}
+
+impl Paths {
+    pub fn from_repo_root(repo_root: &AbsoluteSystemPath) -> Self {
+        let repo_hash = repo_hash(repo_root);
+        let daemon_root = daemon_file_root(&repo_hash);
+        let (log_file, log_folder) = daemon_log_file_and_folder(&repo_hash);
+        Self {
+            pid_file: daemon_root.join_component("turbod.pid"),
+            lock_file: daemon_root.join_component("turbod.lock"),
+            sock_file: daemon_root.join_component("turbod.sock"),
+            lsp_pid_file: daemon_root.join_component("lsp.pid"),
+            log_file,
+            log_folder,
+        }
+    }
+}
 
 pub(crate) mod proto {
 
@@ -52,5 +129,25 @@ pub(crate) mod proto {
                 turborepo_repository::package_manager::PackageManager::Bun => Self::Bun,
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use turbopath::AbsoluteSystemPathBuf;
+
+    use super::repo_hash;
+
+    #[test]
+    fn test_repo_hash() {
+        #[cfg(not(target_os = "windows"))]
+        let (path, expected_hash) = ("/tmp/turborepo", "6e0cfa616f75a61c");
+        #[cfg(target_os = "windows")]
+        let (path, expected_hash) = ("C:\\\\tmp\\turborepo", "0103736e6883e35f");
+        let repo_root = AbsoluteSystemPathBuf::new(path).unwrap();
+        let hash = repo_hash(&repo_root);
+
+        assert_eq!(hash, expected_hash);
+        assert_eq!(hash.len(), 16);
     }
 }

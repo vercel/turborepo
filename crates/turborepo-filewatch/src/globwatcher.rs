@@ -3,26 +3,36 @@ use std::{
     fmt::Display,
     future::IntoFuture,
     str::FromStr,
+    time::Duration,
 };
 
 use notify::Event;
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc, oneshot};
-use tracing::warn;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
-use wax::{Any, Glob, Pattern};
+use tracing::{debug, warn};
+use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPath};
+use wax::{Any, Glob, Program};
 
 use crate::{
-    cookie_jar::{CookieError, CookieJar},
-    NotifyError,
+    cookies::{CookieError, CookieWatcher, CookieWriter, CookiedRequest},
+    NotifyError, OptionalWatch,
 };
 
 type Hash = String;
 
-#[derive(Debug)]
 pub struct GlobSet {
     include: HashMap<String, wax::Glob<'static>>,
     exclude: Any<'static>,
+    exclude_raw: Vec<String>,
+}
+
+impl std::fmt::Debug for GlobSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GlobSet")
+            .field("include", &self.include.keys())
+            .field("exclude", &self.exclude_raw)
+            .finish()
+    }
 }
 
 #[derive(Debug, Error)]
@@ -60,6 +70,7 @@ impl GlobSet {
             })
             .collect::<Result<HashMap<_, _>, GlobError>>()?;
         let excludes = raw_excludes
+            .clone()
             .iter()
             .map(|raw_glob| {
                 let glob = compile_glob(raw_glob)?;
@@ -72,7 +83,11 @@ impl GlobSet {
                 raw_glob: format!("{{{}}}", raw_excludes.join(",")),
             })?
             .to_owned();
-        Ok(Self { include, exclude })
+        Ok(Self {
+            include,
+            exclude,
+            exclude_raw: raw_excludes,
+        })
     }
 }
 
@@ -80,8 +95,14 @@ impl GlobSet {
 pub enum Error {
     #[error(transparent)]
     CookieError(#[from] CookieError),
+    #[error("failed to send query to globwatcher: {0}")]
+    SendError(#[from] mpsc::error::SendError<CookiedRequest<Query>>),
     #[error("globwatcher has closed")]
     Closed,
+    #[error("globwatcher request timed out")]
+    Timeout(#[from] tokio::time::error::Elapsed),
+    #[error("glob watching is unavailable")]
+    Unavailable,
 }
 
 impl From<mpsc::error::SendError<Query>> for Error {
@@ -97,13 +118,13 @@ impl From<oneshot::error::RecvError> for Error {
 }
 
 pub struct GlobWatcher {
-    cookie_jar: CookieJar,
+    cookie_writer: CookieWriter,
     // _exit_ch exists to trigger a close on the receiver when an instance
     // of this struct is dropped. The task that is receiving events will exit,
     // dropping the other sender for the broadcast channel, causing all receivers
     // to be notified of a close.
     _exit_ch: oneshot::Sender<()>,
-    query_ch: mpsc::Sender<Query>,
+    query_ch_lazy: OptionalWatch<mpsc::Sender<CookiedRequest<Query>>>,
 }
 
 #[derive(Debug)]
@@ -134,55 +155,98 @@ struct GlobTracker {
 
     recv: broadcast::Receiver<Result<Event, NotifyError>>,
 
-    query_recv: mpsc::Receiver<Query>,
+    query_recv: mpsc::Receiver<CookiedRequest<Query>>,
+
+    cookie_watcher: CookieWatcher<Query>,
 }
 
 impl GlobWatcher {
     pub fn new(
-        root: &AbsoluteSystemPath,
-        cookie_jar: CookieJar,
-        recv: broadcast::Receiver<Result<Event, NotifyError>>,
+        root: AbsoluteSystemPathBuf,
+        cookie_writer: CookieWriter,
+        mut recv: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
     ) -> Self {
         let (exit_ch, exit_signal) = tokio::sync::oneshot::channel();
-        let (query_ch, query_recv) = mpsc::channel(256);
-        tokio::task::spawn(
-            GlobTracker::new(root.to_owned(), exit_signal, recv, query_recv).watch(),
-        );
+        let (query_ch_tx, query_ch_lazy) = OptionalWatch::new();
+        let cookie_root = cookie_writer.root().to_owned();
+        tokio::task::spawn(async move {
+            let Ok(recv) = recv.get().await.map(|r| r.resubscribe()) else {
+                // if this fails, it means that the filewatcher is not available
+                // so starting the glob tracker is pointless
+                return;
+            };
+
+            // if the receiver is closed, it means the glob watcher is closed and we
+            // probably don't want to start the glob tracker
+            let (query_ch, query_recv) = mpsc::channel(128);
+            if query_ch_tx.send(Some(query_ch)).is_err() {
+                tracing::debug!("no queryers for glob watcher, exiting");
+                return;
+            }
+
+            GlobTracker::new(root, cookie_root, exit_signal, recv, query_recv)
+                .watch()
+                .await
+        });
         Self {
-            cookie_jar,
+            cookie_writer,
             _exit_ch: exit_ch,
-            query_ch,
+            query_ch_lazy,
         }
     }
 
-    pub async fn watch_globs(&self, hash: Hash, globs: GlobSet) -> Result<(), Error> {
-        self.cookie_jar.wait_for_cookie().await?;
+    /// Watch a set of globs for a given hash.
+    ///
+    /// This function will return `Error::Unavailable` if the globwatcher is not
+    /// yet available.
+    pub async fn watch_globs(
+        &self,
+        hash: Hash,
+        globs: GlobSet,
+        timeout: Duration,
+    ) -> Result<(), Error> {
         let (tx, rx) = oneshot::channel();
-        self.query_ch
-            .send(Query::WatchGlobs {
-                hash,
-                glob_set: globs,
-                resp: tx,
-            })
-            .await?;
-        rx.await?
+        let req = Query::WatchGlobs {
+            hash,
+            glob_set: globs,
+            resp: tx,
+        };
+        self.send_request(req).await?;
+        tokio::time::timeout(timeout, rx).await??
     }
 
+    /// Get the globs that have changed for a given hash.
+    ///
+    /// This function will return `Error::Unavailable` if the globwatcher is not
+    /// yet available.
     pub async fn get_changed_globs(
         &self,
         hash: Hash,
         candidates: HashSet<String>,
+        timeout: Duration,
     ) -> Result<HashSet<String>, Error> {
-        self.cookie_jar.wait_for_cookie().await?;
         let (tx, rx) = oneshot::channel();
-        self.query_ch
-            .send(Query::GetChangedGlobs {
-                hash,
-                candidates,
-                resp: tx,
-            })
-            .await?;
-        rx.await?
+        let req = Query::GetChangedGlobs {
+            hash,
+            candidates,
+            resp: tx,
+        };
+
+        self.send_request(req).await?;
+        tokio::time::timeout(timeout, rx).await??
+    }
+
+    async fn send_request(&self, req: Query) -> Result<(), Error> {
+        let cookied_request = self.cookie_writer.cookie_request(req).await?;
+        let mut query_ch = self.query_ch_lazy.clone();
+        let query_ch = query_ch
+            .get_immediate()
+            .ok_or(Error::Unavailable)?
+            .map(|ch| ch.clone())
+            .map_err(|_| Error::Unavailable)?;
+
+        query_ch.send(cookied_request).await?;
+        Ok(())
     }
 }
 
@@ -197,9 +261,10 @@ enum WatchError {
 impl GlobTracker {
     fn new(
         root: AbsoluteSystemPathBuf,
+        cookie_root: AbsoluteSystemPathBuf,
         exit_signal: oneshot::Receiver<()>,
         recv: broadcast::Receiver<Result<Event, NotifyError>>,
-        query_recv: mpsc::Receiver<Query>,
+        query_recv: mpsc::Receiver<CookiedRequest<Query>>,
     ) -> Self {
         Self {
             root,
@@ -208,6 +273,13 @@ impl GlobTracker {
             exit_signal,
             recv,
             query_recv,
+            cookie_watcher: CookieWatcher::new(cookie_root),
+        }
+    }
+
+    fn handle_cookied_query(&mut self, cookied_query: CookiedRequest<Query>) {
+        if let Some(request) = self.cookie_watcher.check_request(cookied_query) {
+            self.handle_query(request);
         }
     }
 
@@ -218,6 +290,7 @@ impl GlobTracker {
                 glob_set,
                 resp,
             } => {
+                debug!("watching globs {:?} for hash {}", glob_set, hash);
                 // Assume cookie handling has happened external to this component.
                 // Other tasks _could_ write to the
                 // same output directories, however we are relying on task
@@ -267,6 +340,15 @@ impl GlobTracker {
                 for path in file_event.paths {
                     let path = AbsoluteSystemPathBuf::try_from(path)
                         .expect("filewatching should produce absolute paths");
+                    if let Some(queries) = self
+                        .cookie_watcher
+                        .pop_ready_requests(file_event.kind, &path)
+                    {
+                        for query in queries {
+                            self.handle_query(query);
+                        }
+                        return;
+                    }
                     let Ok(to_match) = self.root.anchor(path) else {
                         // irrelevant filesystem update
                         return;
@@ -281,7 +363,7 @@ impl GlobTracker {
         loop {
             tokio::select! {
                 _ = &mut self.exit_signal => return,
-                Some(query) = self.query_recv.recv().into_future() => self.handle_query(query),
+                Some(query) = self.query_recv.recv().into_future() => self.handle_cookied_query(query),
                 file_event = self.recv.recv().into_future() => self.handle_file_event(file_event)
             }
         }
@@ -324,6 +406,7 @@ impl GlobTracker {
                         return true;
                     }
                     // We didn't match an exclusion, we can remove this glob
+                    debug!("file change at {} invalidated glob {}", path, glob_str);
                     glob_set.include.remove(glob_str);
 
                     // We removed the last include, we can stop tracking this hash
@@ -350,7 +433,7 @@ mod test {
     use wax::{any, Glob};
 
     use crate::{
-        cookie_jar::CookieJar,
+        cookies::CookieWriter,
         globwatcher::{GlobSet, GlobWatcher},
         FileSystemWatcher,
     };
@@ -418,16 +501,15 @@ mod test {
 
     #[tokio::test]
     async fn test_track_outputs() {
+        let timeout = Duration::from_secs(2);
         let (repo_root, _tmp_dir) = temp_dir();
         setup(&repo_root);
         let cookie_dir = repo_root.join_component(".git");
 
-        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)
-            .await
-            .unwrap();
-        let cookie_jar = CookieJar::new(&cookie_dir, Duration::from_secs(2), watcher.subscribe());
-
-        let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let recv = watcher.watch();
+        let cookie_writer = CookieWriter::new(&cookie_dir, Duration::from_secs(2), recv.clone());
+        let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, recv);
 
         let raw_includes = &["my-pkg/dist/**", "my-pkg/.next/**"];
         let raw_excludes = ["my-pkg/.next/cache/**"];
@@ -435,15 +517,19 @@ mod test {
         let globs = GlobSet {
             include: make_includes(raw_includes),
             exclude,
+            exclude_raw: raw_excludes.iter().map(|s| s.to_string()).collect(),
         };
 
         let hash = "the-hash".to_string();
 
-        glob_watcher.watch_globs(hash.clone(), globs).await.unwrap();
+        glob_watcher
+            .watch_globs(hash.clone(), globs, timeout)
+            .await
+            .unwrap();
 
         let candidates = HashSet::from_iter(raw_includes.iter().map(|s| s.to_string()));
         let results = glob_watcher
-            .get_changed_globs(hash.clone(), candidates.clone())
+            .get_changed_globs(hash.clone(), candidates.clone(), timeout)
             .await
             .unwrap();
         assert!(results.is_empty());
@@ -454,7 +540,7 @@ mod test {
             .create_with_contents("some bytes")
             .unwrap();
         let results = glob_watcher
-            .get_changed_globs(hash.clone(), candidates.clone())
+            .get_changed_globs(hash.clone(), candidates.clone(), timeout)
             .await
             .unwrap();
         assert!(results.is_empty());
@@ -465,7 +551,7 @@ mod test {
             .create_with_contents("some bytes")
             .unwrap();
         let results = glob_watcher
-            .get_changed_globs(hash.clone(), candidates.clone())
+            .get_changed_globs(hash.clone(), candidates.clone(), timeout)
             .await
             .unwrap();
         assert!(results.is_empty());
@@ -476,7 +562,7 @@ mod test {
             .create_with_contents("some bytes")
             .unwrap();
         let results = glob_watcher
-            .get_changed_globs(hash.clone(), candidates.clone())
+            .get_changed_globs(hash.clone(), candidates.clone(), timeout)
             .await
             .unwrap();
         let expected = HashSet::from_iter(["my-pkg/dist/**".to_string()]);
@@ -488,7 +574,7 @@ mod test {
             .create_with_contents("some bytes")
             .unwrap();
         let results = glob_watcher
-            .get_changed_globs(hash.clone(), candidates.clone())
+            .get_changed_globs(hash.clone(), candidates.clone(), timeout)
             .await
             .unwrap();
         let expected =
@@ -498,31 +584,35 @@ mod test {
 
     #[tokio::test]
     async fn test_track_multiple_hashes() {
+        let timeout = Duration::from_secs(2);
         let (repo_root, _tmp_dir) = temp_dir();
         setup(&repo_root);
         let cookie_dir = repo_root.join_component(".git");
 
-        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)
-            .await
-            .unwrap();
-        let cookie_jar = CookieJar::new(&cookie_dir, Duration::from_secs(2), watcher.subscribe());
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let recv = watcher.watch();
+        let cookie_writer = CookieWriter::new(&cookie_dir, Duration::from_secs(2), recv.clone());
 
-        let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());
+        let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, recv);
 
         let raw_includes = &["my-pkg/dist/**", "my-pkg/.next/**"];
         let raw_excludes: [&str; 0] = [];
         let globs = GlobSet {
             include: make_includes(raw_includes),
             exclude: any(raw_excludes).unwrap(),
+            exclude_raw: raw_excludes.iter().map(|s| s.to_string()).collect(),
         };
 
         let hash = "the-hash".to_string();
 
-        glob_watcher.watch_globs(hash.clone(), globs).await.unwrap();
+        glob_watcher
+            .watch_globs(hash.clone(), globs, timeout)
+            .await
+            .unwrap();
 
         let candidates = HashSet::from_iter(raw_includes.iter().map(|s| s.to_string()));
         let results = glob_watcher
-            .get_changed_globs(hash.clone(), candidates.clone())
+            .get_changed_globs(hash.clone(), candidates.clone(), timeout)
             .await
             .unwrap();
         assert!(results.is_empty());
@@ -532,23 +622,24 @@ mod test {
         let second_globs = GlobSet {
             include: make_includes(second_raw_includes),
             exclude: any(second_raw_excludes).unwrap(),
+            exclude_raw: second_raw_excludes.iter().map(|s| s.to_string()).collect(),
         };
         let second_hash = "the-second-hash".to_string();
         glob_watcher
-            .watch_globs(second_hash.clone(), second_globs)
+            .watch_globs(second_hash.clone(), second_globs, timeout)
             .await
             .unwrap();
 
         let second_candidates =
             HashSet::from_iter(second_raw_includes.iter().map(|s| s.to_string()));
         let results = glob_watcher
-            .get_changed_globs(hash.clone(), candidates.clone())
+            .get_changed_globs(hash.clone(), candidates.clone(), timeout)
             .await
             .unwrap();
         assert!(results.is_empty());
 
         let results = glob_watcher
-            .get_changed_globs(second_hash.clone(), second_candidates.clone())
+            .get_changed_globs(second_hash.clone(), second_candidates.clone(), timeout)
             .await
             .unwrap();
         assert!(results.is_empty());
@@ -560,7 +651,7 @@ mod test {
             .unwrap();
         // expect one changed glob for the first hash
         let results = glob_watcher
-            .get_changed_globs(hash.clone(), candidates.clone())
+            .get_changed_globs(hash.clone(), candidates.clone(), timeout)
             .await
             .unwrap();
         let expected = HashSet::from_iter(["my-pkg/.next/**".to_string()]);
@@ -569,7 +660,7 @@ mod test {
         // The second hash which excludes the change should still not have any changed
         // globs
         let results = glob_watcher
-            .get_changed_globs(second_hash.clone(), second_candidates.clone())
+            .get_changed_globs(second_hash.clone(), second_candidates.clone(), timeout)
             .await
             .unwrap();
         assert!(results.is_empty());
@@ -580,7 +671,7 @@ mod test {
             .create_with_contents("hello")
             .unwrap();
         let results = glob_watcher
-            .get_changed_globs(second_hash.clone(), second_candidates.clone())
+            .get_changed_globs(second_hash.clone(), second_candidates.clone(), timeout)
             .await
             .unwrap();
         assert_eq!(results, second_candidates);
@@ -588,16 +679,16 @@ mod test {
 
     #[tokio::test]
     async fn test_watch_single_file() {
+        let timeout = Duration::from_secs(2);
         let (repo_root, _tmp_dir) = temp_dir();
         setup(&repo_root);
         let cookie_dir = repo_root.join_component(".git");
 
-        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)
-            .await
-            .unwrap();
-        let cookie_jar = CookieJar::new(&cookie_dir, Duration::from_secs(2), watcher.subscribe());
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let recv = watcher.watch();
+        let cookie_writer = CookieWriter::new(&cookie_dir, Duration::from_secs(2), recv.clone());
 
-        let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());
+        let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, recv);
 
         // On windows, we expect different sanitization before the
         // globs are passed in, due to alternative data streams in files.
@@ -609,11 +700,15 @@ mod test {
         let globs = GlobSet {
             include: make_includes(raw_includes),
             exclude: any(raw_excludes).unwrap(),
+            exclude_raw: raw_excludes.iter().map(|s| s.to_string()).collect(),
         };
 
         let hash = "the-hash".to_string();
 
-        glob_watcher.watch_globs(hash.clone(), globs).await.unwrap();
+        glob_watcher
+            .watch_globs(hash.clone(), globs, timeout)
+            .await
+            .unwrap();
 
         // A change to an irrelevant file
         repo_root
@@ -623,7 +718,7 @@ mod test {
 
         let candidates = HashSet::from_iter(raw_includes.iter().map(|s| s.to_string()));
         let results = glob_watcher
-            .get_changed_globs(hash.clone(), candidates.clone())
+            .get_changed_globs(hash.clone(), candidates.clone(), timeout)
             .await
             .unwrap();
         assert!(results.is_empty());
@@ -632,7 +727,7 @@ mod test {
         let watched_file = repo_root.join_components(&["my-pkg", ".next", "next-file:build"]);
         watched_file.create_with_contents("hello").unwrap();
         let results = glob_watcher
-            .get_changed_globs(hash.clone(), candidates.clone())
+            .get_changed_globs(hash.clone(), candidates.clone(), timeout)
             .await
             .unwrap();
         assert_eq!(results, candidates);

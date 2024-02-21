@@ -1,9 +1,18 @@
 {
   "$schema": "../../docs/public/schema.json",
-  "extends": ["//"],
+  "extends": [
+    "//"
+  ],
   "pipeline": {
+    "build": {
+      "dependsOn": [
+        "cli#build"
+      ]
+    },
     "test": {
-      "dependsOn": ["build"]
+      "dependsOn": [
+        "build"
+      ]
     }
   }
 }

@@ -4,7 +4,8 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{
-    analytics, analytics::AnalyticsEvent, APIAuth, APIClient, Client, Response,
+    analytics::{self, AnalyticsEvent},
+    APIAuth, APIClient, CacheClient, Response,
 };
 
 use crate::{

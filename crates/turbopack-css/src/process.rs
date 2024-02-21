@@ -4,11 +4,13 @@ use anyhow::{Context, Result};
 use indexmap::IndexMap;
 use lightningcss::{
     css_modules::{CssModuleExport, CssModuleExports, CssModuleReference, Pattern, Segment},
-    dependencies::{Dependency, DependencyOptions, ImportDependency, Location, SourceRange},
+    dependencies::{Dependency, ImportDependency, Location, SourceRange},
     error::PrinterErrorKind,
     stylesheet::{ParserOptions, PrinterOptions, StyleSheet, ToCssResult},
     targets::{Features, Targets},
     values::url::Url,
+    visit_types,
+    visitor::Visit,
 };
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -18,10 +20,10 @@ use swc_core::{
     base::sourcemap::SourceMapBuilder,
     common::{BytePos, FileName, LineCol},
     css::{
-        ast::UrlValue,
+        ast::{TypeSelector, UrlValue},
         codegen::{writer::basic::BasicCssWriter, CodeGenerator},
         modules::{CssClassName, TransformConfig},
-        visit::{VisitMut, VisitMutWith},
+        visit::{VisitMut, VisitMutWith, VisitWith},
     },
 };
 use tracing::Instrument;
@@ -30,11 +32,13 @@ use turbo_tasks_fs::{FileContent, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::ChunkingContext,
+    issue::{Issue, IssueExt, IssueSource, OptionIssueSource, OptionStyledString, StyledString},
     reference::ModuleReferences,
     reference_type::ImportContext,
     resolve::origin::ResolveOrigin,
     source::Source,
     source_map::{GenerateSourceMap, OptionSourceMap},
+    source_pos::SourcePos,
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
 
@@ -119,7 +123,7 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
                     } else {
                         Default::default()
                     },
-                    analyze_dependencies: Some(DependencyOptions { remove_imports }),
+                    analyze_dependencies: None,
                     ..Default::default()
                 })?;
 
@@ -438,7 +442,7 @@ pub async fn parse_css(
     };
     async move {
         let content = source.content();
-        let fs_path = &*source.ident().path().await?;
+        let fs_path = source.ident().path();
         let ident_str = &*source.ident().to_string().await?;
         Ok(match &*content.await? {
             AssetContent::Redirect { .. } => ParseCssResult::Unparseable.cell(),
@@ -469,7 +473,7 @@ pub async fn parse_css(
 
 async fn process_content(
     code: String,
-    fs_path: &FileSystemPath,
+    fs_path_vc: Vc<FileSystemPath>,
     ident_str: &str,
     source: Vc<Box<dyn Source>>,
     origin: Vc<Box<dyn ResolveOrigin>>,
@@ -507,6 +511,7 @@ async fn process_content(
             _ => None,
         },
         filename: ident_str.to_string(),
+        error_recovery: true,
         ..Default::default()
     };
 
@@ -514,14 +519,39 @@ async fn process_content(
 
     let stylesheet = if use_lightningcss {
         StyleSheetLike::LightningCss(match StyleSheet::parse(&code, config.clone()) {
-            Ok(stylesheet) => stylesheet_into_static(&stylesheet, without_warnings(config.clone())),
-            Err(_e) => {
-                // TODO(kdy1): Report errors
-                // e.to_diagnostics(&handler).emit();
+            Ok(mut ss) => {
+                if matches!(ty, CssModuleAssetType::Module) {
+                    ss.visit(&mut CssModuleValidator {
+                        source,
+                        file: fs_path_vc,
+                    })
+                    .unwrap();
+                }
+
+                stylesheet_into_static(&ss, without_warnings(config.clone()))
+            }
+            Err(e) => {
+                let source = e.loc.as_ref().map(|loc| {
+                    let pos = SourcePos {
+                        line: loc.line as _,
+                        column: loc.column as _,
+                    };
+                    IssueSource::from_line_col(source, pos, pos)
+                });
+
+                ParsingIssue {
+                    file: fs_path_vc,
+                    msg: Vc::cell(e.to_string()),
+                    source: Vc::cell(source),
+                }
+                .cell()
+                .emit();
                 return Ok(ParseCssResult::Unparseable.into());
             }
         })
     } else {
+        let fs_path = &*fs_path_vc.await?;
+
         let handler = swc_core::common::errors::Handler::with_emitter(
             true,
             false,
@@ -550,7 +580,7 @@ async fn process_content(
             err.to_diagnostics(&handler).emit();
         }
 
-        let ss = match ss {
+        let ss: swc_core::css::ast::Stylesheet = match ss {
             Ok(v) => v,
             Err(err) => {
                 err.to_diagnostics(&handler).emit();
@@ -560,6 +590,13 @@ async fn process_content(
 
         if handler.has_errors() {
             return Ok(ParseCssResult::Unparseable.into());
+        }
+
+        if matches!(ty, CssModuleAssetType::Module) {
+            ss.visit_with(&mut CssModuleValidator {
+                source,
+                file: fs_path_vc,
+            });
         }
 
         StyleSheetLike::Swc {
@@ -598,6 +635,90 @@ async fn process_content(
         options: config,
     }
     .into())
+}
+
+/// Visitor that lints wrong css module usage.
+///
+/// ```css
+/// button {
+/// }
+/// ```
+///
+/// is wrong for a css module because it doesn't have a class name.
+struct CssModuleValidator {
+    source: Vc<Box<dyn Source>>,
+    file: Vc<FileSystemPath>,
+}
+
+const CSS_MODULE_ERROR: &str =
+    "Selector is not pure (pure selectors must contain at least one local class or id)";
+
+/// We only vist top-level selectors.
+impl swc_core::css::visit::Visit for CssModuleValidator {
+    // TODO: SKip some
+    fn visit_complex_selector(&mut self, n: &swc_core::css::ast::ComplexSelector) {
+        if n.children.iter().all(|sel| match sel {
+            swc_core::css::ast::ComplexSelectorChildren::CompoundSelector(sel) => {
+                sel.subclass_selectors.is_empty()
+                    && match &sel.type_selector.as_deref() {
+                        Some(TypeSelector::TagName(tag)) => {
+                            !matches!(&*tag.name.value.value, "html" | "body")
+                        }
+                        Some(..) => true,
+                        None => false,
+                    }
+            }
+            swc_core::css::ast::ComplexSelectorChildren::Combinator(_) => true,
+        }) {
+            ParsingIssue {
+                file: self.file,
+                msg: Vc::cell(CSS_MODULE_ERROR.to_string()),
+                source: Vc::cell(Some(IssueSource::from_swc_offsets(
+                    self.source,
+                    n.span.lo.0 as _,
+                    n.span.hi.0 as _,
+                ))),
+            }
+            .cell()
+            .emit();
+        }
+    }
+
+    fn visit_simple_block(&mut self, _: &swc_core::css::ast::SimpleBlock) {}
+}
+
+/// We only vist top-level selectors.
+impl lightningcss::visitor::Visitor<'_> for CssModuleValidator {
+    type Error = ();
+
+    fn visit_types(&self) -> lightningcss::visitor::VisitTypes {
+        visit_types!(SELECTORS)
+    }
+
+    fn visit_selector(
+        &mut self,
+        selector: &mut lightningcss::selector::Selector<'_>,
+    ) -> Result<(), Self::Error> {
+        if selector
+            .iter_raw_parse_order_from(0)
+            .all(|component| match component {
+                parcel_selectors::parser::Component::LocalName(local) => {
+                    !matches!(&*local.name.0, "html" | "body")
+                }
+                _ => false,
+            })
+        {
+            ParsingIssue {
+                file: self.file,
+                msg: Vc::cell(format!("{CSS_MODULE_ERROR} (lightningcss, {:?})", selector)),
+                source: Vc::cell(None),
+            }
+            .cell()
+            .emit();
+        }
+
+        Ok(())
+    }
 }
 
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
@@ -747,5 +868,37 @@ struct ModuleTransformConfig {
 impl TransformConfig for ModuleTransformConfig {
     fn new_name_for(&self, local: &Atom) -> Atom {
         format!("{}{}", *local, self.suffix).into()
+    }
+}
+
+#[turbo_tasks::value]
+struct ParsingIssue {
+    msg: Vc<String>,
+    file: Vc<FileSystemPath>,
+    source: Vc<OptionIssueSource>,
+}
+
+#[turbo_tasks::value_impl]
+impl Issue for ParsingIssue {
+    #[turbo_tasks::function]
+    fn file_path(&self) -> Vc<FileSystemPath> {
+        self.file
+    }
+
+    #[turbo_tasks::function]
+    fn title(&self) -> Vc<StyledString> {
+        StyledString::Text("Parsing css source code failed".to_string()).cell()
+    }
+
+    #[turbo_tasks::function]
+    fn source(&self) -> Vc<OptionIssueSource> {
+        self.source
+    }
+
+    #[turbo_tasks::function]
+    async fn description(&self) -> Result<Vc<OptionStyledString>> {
+        Ok(Vc::cell(Some(
+            StyledString::Text(self.msg.await?.clone_value()).cell(),
+        )))
     }
 }

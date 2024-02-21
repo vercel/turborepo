@@ -12,8 +12,9 @@ use reqwest::{Method, RequestBuilder, StatusCode};
 use serde::Deserialize;
 use turborepo_ci::{is_ci, Vendor};
 use turborepo_vercel_api::{
-    APIError, CachingStatus, CachingStatusResponse, PreflightResponse, SpacesResponse, Team,
-    TeamsResponse, UserResponse, VerificationResponse, VerifiedSsoUser,
+    token::ResponseTokenMetadata, APIError, CachingStatus, CachingStatusResponse,
+    PreflightResponse, SpacesResponse, Team, TeamsResponse, UserResponse, VerificationResponse,
+    VerifiedSsoUser,
 };
 use url::Url;
 
@@ -36,14 +37,29 @@ pub trait Client {
     async fn get_teams(&self, token: &str) -> Result<TeamsResponse>;
     async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>>;
     fn add_ci_header(request_builder: RequestBuilder) -> RequestBuilder;
-    async fn get_caching_status(
+    async fn get_spaces(&self, token: &str, team_id: Option<&str>) -> Result<SpacesResponse>;
+    async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser>;
+    async fn handle_403(response: Response) -> Error;
+    fn make_url(&self, endpoint: &str) -> Result<Url>;
+}
+
+#[async_trait]
+pub trait CacheClient {
+    async fn get_artifact(
         &self,
+        hash: &str,
         token: &str,
         team_id: Option<&str>,
         team_slug: Option<&str>,
-    ) -> Result<CachingStatusResponse>;
-    async fn get_spaces(&self, token: &str, team_id: Option<&str>) -> Result<SpacesResponse>;
-    async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser>;
+        method: Method,
+    ) -> Result<Option<Response>>;
+    async fn fetch_artifact(
+        &self,
+        hash: &str,
+        token: &str,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
+    ) -> Result<Option<Response>>;
     #[allow(clippy::too_many_arguments)]
     async fn put_artifact(
         &self,
@@ -55,14 +71,6 @@ pub trait Client {
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> Result<()>;
-    async fn handle_403(response: Response) -> Error;
-    async fn fetch_artifact(
-        &self,
-        hash: &str,
-        token: &str,
-        team_id: Option<&str>,
-        team_slug: Option<&str>,
-    ) -> Result<Option<Response>>;
     async fn artifact_exists(
         &self,
         hash: &str,
@@ -70,15 +78,17 @@ pub trait Client {
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> Result<Option<Response>>;
-    async fn get_artifact(
+    async fn get_caching_status(
         &self,
-        hash: &str,
         token: &str,
         team_id: Option<&str>,
         team_slug: Option<&str>,
-        method: Method,
-    ) -> Result<Option<Response>>;
-    fn make_url(&self, endpoint: &str) -> Result<Url>;
+    ) -> Result<CachingStatusResponse>;
+}
+
+#[async_trait]
+pub trait TokenClient {
+    async fn get_metadata(&self, token: &str) -> Result<ResponseTokenMetadata>;
 }
 
 #[derive(Clone)]
@@ -158,28 +168,6 @@ impl Client for APIClient {
         request_builder
     }
 
-    async fn get_caching_status(
-        &self,
-        token: &str,
-        team_id: Option<&str>,
-        team_slug: Option<&str>,
-    ) -> Result<CachingStatusResponse> {
-        let request_builder = self
-            .client
-            .get(self.make_url("/v8/artifacts/status")?)
-            .header("User-Agent", self.user_agent.clone())
-            .header("Content-Type", "application/json")
-            .header("Authorization", format!("Bearer {}", token));
-
-        let request_builder = Self::add_team_params(request_builder, team_id, team_slug);
-
-        let response = retry::make_retryable_request(request_builder)
-            .await?
-            .error_for_status()?;
-
-        Ok(response.json().await?)
-    }
-
     async fn get_spaces(&self, token: &str, team_id: Option<&str>) -> Result<SpacesResponse> {
         // create url with teamId if provided
         let endpoint = match team_id {
@@ -218,6 +206,130 @@ impl Client for APIClient {
             token: verification_response.token,
             team_id: verification_response.team_id,
         })
+    }
+
+    async fn handle_403(response: Response) -> Error {
+        #[derive(Deserialize)]
+        struct WrappedAPIError {
+            error: APIError,
+        }
+        let body = match response.text().await {
+            Ok(body) => body,
+            Err(e) => return Error::ReqwestError(e),
+        };
+
+        let WrappedAPIError { error: api_error } = match serde_json::from_str(&body) {
+            Ok(api_error) => api_error,
+            Err(err) => {
+                return Error::InvalidJson {
+                    err,
+                    text: body.clone(),
+                }
+            }
+        };
+
+        if let Some(status_string) = api_error.code.strip_prefix("remote_caching_") {
+            let status = match status_string {
+                "disabled" => CachingStatus::Disabled,
+                "enabled" => CachingStatus::Enabled,
+                "over_limit" => CachingStatus::OverLimit,
+                "paused" => CachingStatus::Paused,
+                _ => {
+                    return Error::UnknownCachingStatus(
+                        status_string.to_string(),
+                        Backtrace::capture(),
+                    )
+                }
+            };
+
+            Error::CacheDisabled {
+                status,
+                message: api_error.message,
+            }
+        } else {
+            Error::UnknownStatus {
+                code: api_error.code,
+                message: api_error.message,
+                backtrace: Backtrace::capture(),
+            }
+        }
+    }
+
+    fn make_url(&self, endpoint: &str) -> Result<Url> {
+        let url = format!("{}{}", self.base_url, endpoint);
+        Url::parse(&url).map_err(|err| Error::InvalidUrl { url, err })
+    }
+}
+
+#[async_trait]
+impl CacheClient for APIClient {
+    async fn get_artifact(
+        &self,
+        hash: &str,
+        token: &str,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
+        method: Method,
+    ) -> Result<Option<Response>> {
+        let mut request_url = self.make_url(&format!("/v8/artifacts/{}", hash))?;
+        let mut allow_auth = true;
+
+        if self.use_preflight {
+            let preflight_response = self
+                .do_preflight(
+                    token,
+                    request_url.clone(),
+                    "GET",
+                    "Authorization, User-Agent",
+                )
+                .await?;
+
+            allow_auth = preflight_response.allow_authorization_header;
+            request_url = preflight_response.location;
+        };
+
+        let mut request_builder = self
+            .client
+            .request(method, request_url)
+            .header("User-Agent", self.user_agent.clone());
+
+        if allow_auth {
+            request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
+        }
+
+        request_builder = Self::add_team_params(request_builder, team_id, team_slug);
+
+        let response = retry::make_retryable_request(request_builder).await?;
+
+        match response.status() {
+            StatusCode::FORBIDDEN => Err(Self::handle_403(response).await),
+            StatusCode::NOT_FOUND => Ok(None),
+            _ => Ok(Some(response.error_for_status()?)),
+        }
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn artifact_exists(
+        &self,
+        hash: &str,
+        token: &str,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
+    ) -> Result<Option<Response>> {
+        self.get_artifact(hash, token, team_id, team_slug, Method::HEAD)
+            .await
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn fetch_artifact(
+        &self,
+        hash: &str,
+        token: &str,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
+    ) -> Result<Option<Response>> {
+        self.get_artifact(hash, token, team_id, team_slug, Method::GET)
+            .await
     }
 
     #[tracing::instrument(skip_all)]
@@ -278,125 +390,48 @@ impl Client for APIClient {
         Ok(())
     }
 
-    async fn handle_403(response: Response) -> Error {
-        #[derive(Deserialize)]
-        struct WrappedAPIError {
-            error: APIError,
-        }
-        let body = match response.text().await {
-            Ok(body) => body,
-            Err(e) => return Error::ReqwestError(e),
-        };
-
-        let WrappedAPIError { error: api_error } = match serde_json::from_str(&body) {
-            Ok(api_error) => api_error,
-            Err(err) => {
-                return Error::InvalidJson {
-                    err,
-                    text: body.clone(),
-                }
-            }
-        };
-
-        if let Some(status_string) = api_error.code.strip_prefix("remote_caching_") {
-            let status = match status_string {
-                "disabled" => CachingStatus::Disabled,
-                "enabled" => CachingStatus::Enabled,
-                "over_limit" => CachingStatus::OverLimit,
-                "paused" => CachingStatus::Paused,
-                _ => {
-                    return Error::UnknownCachingStatus(
-                        status_string.to_string(),
-                        Backtrace::capture(),
-                    )
-                }
-            };
-
-            Error::CacheDisabled {
-                status,
-                message: api_error.message,
-            }
-        } else {
-            Error::UnknownStatus {
-                code: api_error.code,
-                message: api_error.message,
-                backtrace: Backtrace::capture(),
-            }
-        }
-    }
-
-    #[tracing::instrument(skip_all)]
-    async fn fetch_artifact(
+    async fn get_caching_status(
         &self,
-        hash: &str,
         token: &str,
         team_id: Option<&str>,
         team_slug: Option<&str>,
-    ) -> Result<Option<Response>> {
-        self.get_artifact(hash, token, team_id, team_slug, Method::GET)
-            .await
-    }
-
-    #[tracing::instrument(skip_all)]
-    async fn artifact_exists(
-        &self,
-        hash: &str,
-        token: &str,
-        team_id: Option<&str>,
-        team_slug: Option<&str>,
-    ) -> Result<Option<Response>> {
-        self.get_artifact(hash, token, team_id, team_slug, Method::HEAD)
-            .await
-    }
-
-    async fn get_artifact(
-        &self,
-        hash: &str,
-        token: &str,
-        team_id: Option<&str>,
-        team_slug: Option<&str>,
-        method: Method,
-    ) -> Result<Option<Response>> {
-        let mut request_url = self.make_url(&format!("/v8/artifacts/{}", hash))?;
-        let mut allow_auth = true;
-
-        if self.use_preflight {
-            let preflight_response = self
-                .do_preflight(
-                    token,
-                    request_url.clone(),
-                    "GET",
-                    "Authorization, User-Agent",
-                )
-                .await?;
-
-            allow_auth = preflight_response.allow_authorization_header;
-            request_url = preflight_response.location;
-        };
-
-        let mut request_builder = self
+    ) -> Result<CachingStatusResponse> {
+        let request_builder = self
             .client
-            .request(method, request_url)
-            .header("User-Agent", self.user_agent.clone());
+            .get(self.make_url("/v8/artifacts/status")?)
+            .header("User-Agent", self.user_agent.clone())
+            .header("Content-Type", "application/json")
+            .header("Authorization", format!("Bearer {}", token));
 
-        if allow_auth {
-            request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
-        }
+        let request_builder = Self::add_team_params(request_builder, team_id, team_slug);
 
-        request_builder = Self::add_team_params(request_builder, team_id, team_slug);
+        let response = retry::make_retryable_request(request_builder)
+            .await?
+            .error_for_status()?;
 
+        Ok(response.json().await?)
+    }
+}
+
+#[async_trait]
+impl TokenClient for APIClient {
+    async fn get_metadata(&self, token: &str) -> Result<ResponseTokenMetadata> {
+        let url = self.make_url("/v5/user/tokens/current")?;
+        let request_builder = self
+            .client
+            .get(url)
+            .header("User-Agent", self.user_agent.clone())
+            .header("Authorization", format!("Bearer {}", token))
+            .header("Content-Type", "application/json");
         let response = retry::make_retryable_request(request_builder).await?;
 
-        match response.status() {
-            StatusCode::FORBIDDEN => Err(Self::handle_403(response).await),
-            StatusCode::NOT_FOUND => Ok(None),
-            _ => Ok(Some(response.error_for_status()?)),
+        #[derive(Deserialize, Debug)]
+        struct Response {
+            #[serde(rename = "token")]
+            metadata: ResponseTokenMetadata,
         }
-    }
-
-    fn make_url(&self, endpoint: &str) -> Result<Url> {
-        let url = format!("{}{}", self.base_url, endpoint);
-        Url::parse(&url).map_err(|err| Error::InvalidUrl { url, err })
+        let body = response.json::<Response>().await?;
+        Ok(body.metadata)
     }
 }
 

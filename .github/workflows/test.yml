@@ -223,8 +223,13 @@ jobs:
         with:
           windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - run: turbo run build --filter=cli --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+      # We explicitly unset RUSTC_WRAPPER if it is an empty string as causes build issues
+      - run: |
+          if [ -z "${RUSTC_WRAPPER}" ]; then
+            unset RUSTC_WRAPPER
+          fi
+          turbo run build --filter=cli --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+        shell: bash
         env:
           SCCACHE_BUCKET: turborepo-sccache
           SCCACHE_REGION: us-east-2
@@ -233,7 +238,6 @@ jobs:
           CARGO_INCREMENTAL: 0
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          EXPERIMENTAL_RUST_CODEPATH: true
 
       - name: Run sccache stat for check
         shell: bash
@@ -245,6 +249,7 @@ jobs:
     needs: [determine_jobs, build_turborepo]
     if: needs.determine_jobs.outputs.turborepo_integration == 'true'
     runs-on: ${{ matrix.os.runner }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -284,9 +289,7 @@ jobs:
           key: prysk-venv-${{ matrix.os.runner }}
 
       - name: Integration Tests
-        run: turbo run test --filter=turborepo-tests-integration-rust --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
-        env:
-          EXPERIMENTAL_RUST_CODEPATH: true
+        run: turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
 
   turborepo_examples:
     name: Turborepo Examples
@@ -368,10 +371,12 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Run tests
+        # We manually set TURBO_API to an empty string to override Hetzner env
+        # We filter out turborepo-repository because it's a native package and needs
+        # to run when turbo core changes. This job (`js_packages`) does not run on turborpeo core
+        # changes, and we don't want to enable that beahvior for _all_ our JS packages.
         run: |
-          turbo run check-types test --filter=docs --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
-        env:
-          EXPERIMENTAL_RUST_CODEPATH: true
+          TURBO_API= turbo run check-types test --filter=docs --filter="!turborepo-repository" --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
 
   turbopack_typescript:
     name: Turbopack TypeScript files
@@ -428,7 +433,7 @@ jobs:
           cargo fmt --check
 
       - name: Check Cargo.toml formatting (taplo)
-        run: npx @taplo/cli format --check
+        run: npx @taplo/cli@0.5.2 format --check
 
       - name: Check licenses
         uses: EmbarkStudios/cargo-deny-action@v1
@@ -509,11 +514,15 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           components: clippy
-          targets: wasm32-unknown-unknown
+          targets: wasm32-unknown-unknown,wasm32-wasi-preview1-threads
 
       - name: Run cargo check release
         run: |
           RUSTFLAGS="-D warnings -A deprecated" cargo groups check turbopack --features rustls-tls --release
+
+      - name: Run cargo check for the wasi targets
+        run: |
+          RUSTFLAGS="-D warnings -A deprecated" cargo groups check turbopack-wasi --release
 
   turbopack_rust_clippy:
     needs: [turbopack_rust_check]
@@ -846,11 +855,8 @@ jobs:
 
       - name: Lint
         # Filters some workspaces out:
-        # - `cli` because it runs golangci-lint and this Job doesn't have all the dependencies for that.
         # - Other `@vercel/*` packages because ??
-        run: turbo run lint --filter=!cli --filter=!@vercel/devlow-bench --filter=!@vercel/experimental-nft-next-plugin --filter=!@vercel/experimental-nft-next-plugin --filter=!turbopack-bump-action --filter=!next-integration-stat --env-mode=strict
-        env:
-          EXPERIMENTAL_RUST_CODEPATH: true
+        run: turbo run lint --filter=!@vercel/devlow-bench --filter=!@vercel/experimental-nft-next-plugin --filter=!@vercel/experimental-nft-next-plugin --filter=!turbopack-bump-action --filter=!next-integration-stat --env-mode=strict
 
   final:
     name: Ok

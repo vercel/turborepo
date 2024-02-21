@@ -326,6 +326,9 @@ impl ShutdownStyle {
     /// channel when the child process exits.
     async fn process(&self, child: &mut ChildHandle) -> ChildState {
         match self {
+            // Windows doesn't give the ability to send a signal to a process so we
+            // can't make use of the graceful shutdown timeout.
+            #[allow(unused)]
             ShutdownStyle::Graceful(timeout) => {
                 // try ro run the command for the given timeout
                 #[cfg(unix)]
@@ -497,7 +500,8 @@ impl Child {
 
     /// Wait for the `Child` to exit, returning the exit code.
     pub async fn wait(&mut self) -> Option<ChildExit> {
-        self.exit_channel.changed().await.ok()?;
+        // If sending end of exit channel closed, then return last value in the channel
+        self.exit_channel.changed().await.ok();
         *self.exit_channel.borrow()
     }
 
@@ -668,6 +672,7 @@ impl Child {
         let mut stdout_buffer = Vec::new();
         let mut stderr_buffer = Vec::new();
 
+        let mut is_exited = false;
         loop {
             tokio::select! {
                 Some(result) = next_line(&mut stdout_lines, &mut stdout_buffer) => {
@@ -681,6 +686,14 @@ impl Child {
                     add_trailing_newline(&mut stderr_buffer);
                     stdout_pipe.write_all(&stderr_buffer)?;
                     stderr_buffer.clear();
+                }
+                status = self.wait(), if !is_exited => {
+                    is_exited = true;
+                    // We don't abort in the cases of a zero exit code as we could be
+                    // caching this task and should read all the logs it produces.
+                    if status != Some(ChildExit::Finished(Some(0))) {
+                        return Ok(status);
+                    }
                 }
                 else => {
                     // In the case that both futures read a complete line
@@ -822,6 +835,21 @@ mod test {
 
         let state = child.state.read().await;
         assert_matches!(&*state, ChildState::Exited(ChildExit::Killed));
+    }
+
+    #[test_case(false)]
+    #[test_case(TEST_PTY)]
+    #[tokio::test]
+    async fn test_wait(use_pty: bool) {
+        let script = find_script_dir().join_component("hello_world.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
+
+        let exit1 = child.wait().await;
+        let exit2 = child.wait().await;
+        assert_matches!(exit1, Some(ChildExit::Finished(Some(0))));
+        assert_matches!(exit2, Some(ChildExit::Finished(Some(0))));
     }
 
     #[test_case(false)]
@@ -1165,6 +1193,38 @@ mod test {
         let exit = child.stop().await;
 
         assert_matches!(exit, Some(ChildExit::Killed));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_orphan_process() {
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", "echo hello; sleep 120; echo done"]);
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, false).unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        let child_pid = child.pid().unwrap() as i32;
+        // We don't kill the process group to simulate what an external program might do
+        unsafe {
+            libc::kill(child_pid, libc::SIGKILL);
+        }
+
+        let exit = child.wait().await;
+        assert_matches!(exit, Some(ChildExit::KilledExternal));
+
+        let mut output = Vec::new();
+        match tokio::time::timeout(
+            Duration::from_millis(500),
+            child.wait_with_piped_outputs(&mut output),
+        )
+        .await
+        {
+            Ok(exit_status) => {
+                assert_matches!(exit_status, Ok(Some(ChildExit::KilledExternal)));
+            }
+            Err(_) => panic!("expected wait_with_piped_outputs to exit after it was killed"),
+        }
     }
 
     #[test_case(false)]

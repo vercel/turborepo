@@ -19,6 +19,7 @@
 // 		 └── workspace-c#build
 // 		 		 └── workspace-z#dev	// this one is persistent
   $ ${TURBO} run build
-   ERROR  run failed: error preparing engine: Invalid persistent task configuration:
-  "pkg-z#dev" is a persistent task, "pkg-b#build" cannot depend on it
+    x error preparing engine: Invalid persistent task configuration:
+    | "pkg-z#dev" is a persistent task, "pkg-b#build" cannot depend on it
+  
   [1]

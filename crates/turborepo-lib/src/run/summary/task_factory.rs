@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use turborepo_env::EnvironmentVariableMap;
-use turborepo_repository::package_graph::{PackageGraph, WorkspaceInfo, WorkspaceName};
+use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName};
 
 use super::{
     execution::TaskExecutionSummary,
@@ -106,7 +106,7 @@ impl<'a> TaskSummaryFactory<'a> {
         &self,
         task_id: &TaskId<'static>,
         execution: Option<TaskExecutionSummary>,
-        workspace_info: &WorkspaceInfo,
+        workspace_info: &PackageInfo,
         display_task: impl Fn(&TaskNode) -> Option<T> + Copy,
     ) -> Result<SharedTaskSummary<T>, Error> {
         // TODO: command should be optional
@@ -202,10 +202,10 @@ impl<'a> TaskSummaryFactory<'a> {
         })
     }
 
-    fn workspace_info(&self, task_id: &TaskId) -> Result<&WorkspaceInfo, Error> {
-        let workspace_name = WorkspaceName::from(task_id.package());
+    fn workspace_info(&self, task_id: &TaskId) -> Result<&PackageInfo, Error> {
+        let workspace_name = PackageName::from(task_id.package());
         self.package_graph
-            .workspace_info(&workspace_name)
+            .package_info(&workspace_name)
             .ok_or_else(|| Error::MissingWorkspace(workspace_name.to_string()))
     }
 
