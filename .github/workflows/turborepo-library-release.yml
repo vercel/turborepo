@@ -79,15 +79,6 @@ jobs:
         run: ${{ matrix.settings.setup }}
         if: ${{ matrix.settings.setup }}
 
-      - name: Print Rust toolchain
-        shell: bash
-        run: |
-          rustup show
-          which cargo
-          cargo --version --verbose
-          which rustc
-          rustc --version --verbose
-
       - name: Build native library
         shell: bash
         run: |
