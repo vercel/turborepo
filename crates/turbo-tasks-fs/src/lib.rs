@@ -111,7 +111,6 @@ pub struct DiskFileSystem {
     #[serde(skip)]
     invalidation_lock: Arc<RwLock<()>>,
     #[turbo_tasks(debug_ignore, trace_ignore)]
-    #[serde(skip)]
     watcher: Arc<DiskWatcher>,
 }
 

@@ -15,6 +15,7 @@ use notify::{
     EventKind, RecommendedWatcher, RecursiveMode, Watcher,
 };
 use notify_debouncer_full::{DebounceEventResult, DebouncedEvent, Debouncer, FileIdMap};
+use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use tracing::instrument;
 use turbo_tasks::{spawn_thread, Invalidator};
@@ -26,8 +27,9 @@ use crate::{
     path_to_key,
 };
 
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 pub(crate) struct DiskWatcher {
+    #[serde(skip)]
     watcher: Mutex<Option<Debouncer<RecommendedWatcher, FileIdMap>>>,
 
     /// Array of paths that should not notify invalidations.
@@ -39,6 +41,7 @@ pub(crate) struct DiskWatcher {
     /// Keeps track of which directories are currently watched. This is only
     /// used on OSs that doesn't support recursive watching.
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    #[serde(skip)]
     watching: dashmap::DashSet<PathBuf>,
 }
 
