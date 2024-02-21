@@ -7,8 +7,7 @@ description: Missing root task in turbo.json error
 
 ## Why This Error Occurred
 
-We call the scripts defined in the monorepo's root `package.json` the root tasks. These tasks often call `turbo`
-themselves. For example:
+Root tasks are the scripts defined in the monorepo's root `package.json`. These tasks often call `turbo`. For example:
 
 ```json package.json
 {
@@ -18,11 +17,8 @@ themselves. For example:
 }
 ```
 
-This creates a problem when we declare task dependencies with `^`. A quick recap, `^<task>` means all of the `<task>`
-entries in the package's dependencies, e.g. if package `a` depends on packages `b` and `c`, and `a#build` depends on
-`^build`, then its dependencies will be `b#build` and `c#build`. We call these topological dependencies. Topological
-dependencies work well for many common situations, such as when you want to build your dependencies before building
-your own package.
+This creates a problem when we declare [topological dependencies](/repo/docs/reference/configuration#dependson). Topological
+dependencies specify that your package's dependencies should execute their tasks before your package executes its own task.
 
 ```json turbo.json
 {
@@ -34,14 +30,8 @@ your own package.
 }
 ```
 
-However, following package dependency relations is slightly problematic because the root package is an implicit dependency
-for all the packages inside the monorepo. If you're wondering why that is, well, it wasn't our choice. This is just
-how JavaScript monorepos work. If you define a dependency in the root `package.json`, it becomes available to all
-packages in the monorepo.
-
-Therefore, if we were to follow `^build` literally, it'd cause an infinite loop, because we'd execute the root `build`
-task, which would execute `turbo`, which would execute `^build`...and so on. Instead of wasting everybody's time,
-we decided that `turbo` would not execute root tasks by default.
+Because the root package is a dependency for all packages inside your workspace, its task would get executed first.
+But since its task calls `turbo`, this would cause an infinite loop.
 
 ## Solution
 
