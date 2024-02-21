@@ -473,7 +473,7 @@ mod test {
     struct MockDiscovery;
     impl PackageDiscovery for MockDiscovery {
         async fn discover_packages(
-            &mut self,
+            &self,
         ) -> Result<
             turborepo_repository::discovery::DiscoveryResponse,
             turborepo_repository::discovery::Error,
@@ -482,6 +482,15 @@ mod test {
                 package_manager: PackageManager::Npm,
                 workspaces: vec![], // we don't care about this
             })
+        }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<
+            turborepo_repository::discovery::DiscoveryResponse,
+            turborepo_repository::discovery::Error,
+        > {
+            self.discover_packages().await
         }
     }
 

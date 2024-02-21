@@ -9,6 +9,9 @@
 //! these strategies will implement some sort of monad-style composition so that
 //! we can track areas of run that are performing sub-optimally.
 
+use std::sync::Arc;
+
+use tokio::time::error::Elapsed;
 use tokio_stream::{iter, StreamExt};
 use turbopath::AbsoluteSystemPathBuf;
 
@@ -40,8 +43,16 @@ pub enum Error {
 /// Defines a strategy for discovering packages on the filesystem.
 pub trait PackageDiscovery {
     // desugar to assert that the future is Send
+    /// Discover packages on the filesystem. In the event that this would block,
+    /// some strategies may return `Err(Error::Unavailable)`. If you want to
+    /// wait, use `discover_packages_blocking` which will wait for the result.
     fn discover_packages(
-        &mut self,
+        &self,
+    ) -> impl std::future::Future<Output = Result<DiscoveryResponse, Error>> + Send;
+
+    /// Discover packages on the filesystem, blocking until the result is ready.
+    fn discover_packages_blocking(
+        &self,
     ) -> impl std::future::Future<Output = Result<DiscoveryResponse, Error>> + Send;
 }
 
@@ -57,8 +68,8 @@ pub trait PackageDiscoveryBuilder {
     fn build(self) -> Result<Self::Output, Self::Error>;
 }
 
-impl<T: PackageDiscovery + Send> PackageDiscovery for Option<T> {
-    async fn discover_packages(&mut self) -> Result<DiscoveryResponse, Error> {
+impl<T: PackageDiscovery + Send + Sync> PackageDiscovery for Option<T> {
+    async fn discover_packages(&self) -> Result<DiscoveryResponse, Error> {
         tracing::debug!("discovering packages using optional strategy");
 
         match self {
@@ -68,6 +79,28 @@ impl<T: PackageDiscovery + Send> PackageDiscovery for Option<T> {
                 Err(Error::Unavailable)
             }
         }
+    }
+
+    async fn discover_packages_blocking(&self) -> Result<DiscoveryResponse, Error> {
+        tracing::debug!("discovering packages using optional strategy");
+
+        match self {
+            Some(d) => d.discover_packages_blocking().await,
+            None => {
+                tracing::debug!("no strategy available");
+                Err(Error::Unavailable)
+            }
+        }
+    }
+}
+
+impl<T: PackageDiscovery + Send + Sync> PackageDiscovery for Arc<T> {
+    async fn discover_packages(&self) -> Result<DiscoveryResponse, Error> {
+        self.as_ref().discover_packages().await
+    }
+
+    async fn discover_packages_blocking(&self) -> Result<DiscoveryResponse, Error> {
+        self.as_ref().discover_packages_blocking().await
     }
 }
 
@@ -125,7 +158,7 @@ impl PackageDiscoveryBuilder for LocalPackageDiscoveryBuilder {
 }
 
 impl PackageDiscovery for LocalPackageDiscovery {
-    async fn discover_packages(&mut self) -> Result<DiscoveryResponse, Error> {
+    async fn discover_packages(&self) -> Result<DiscoveryResponse, Error> {
         tracing::debug!("discovering packages using local strategy");
 
         let package_paths = match self.package_manager.get_package_jsons(&self.repo_root) {
@@ -163,6 +196,12 @@ impl PackageDiscovery for LocalPackageDiscovery {
                 package_manager: self.package_manager,
             })
     }
+
+    // there is no notion of waiting for upstream deps here, so this is the same as
+    // the non-blocking
+    async fn discover_packages_blocking(&self) -> Result<DiscoveryResponse, Error> {
+        self.discover_packages().await
+    }
 }
 
 /// Attempts to run the `primary` strategy for an amount of time
@@ -192,10 +231,10 @@ impl<T: PackageDiscovery> PackageDiscoveryBuilder for T {
     }
 }
 
-impl<A: PackageDiscovery + Send, B: PackageDiscovery + Send> PackageDiscovery
+impl<A: PackageDiscovery + Send + Sync, B: PackageDiscovery + Send + Sync> PackageDiscovery
     for FallbackPackageDiscovery<A, B>
 {
-    async fn discover_packages(&mut self) -> Result<DiscoveryResponse, Error> {
+    async fn discover_packages(&self) -> Result<DiscoveryResponse, Error> {
         tracing::debug!("discovering packages using fallback strategy");
 
         tracing::debug!("attempting primary strategy");
@@ -216,40 +255,74 @@ impl<A: PackageDiscovery + Send, B: PackageDiscovery + Send> PackageDiscovery
             }
         }
     }
+
+    async fn discover_packages_blocking(&self) -> Result<DiscoveryResponse, Error> {
+        tracing::debug!("discovering packages using fallback strategy");
+
+        tracing::debug!("attempting primary strategy");
+        match tokio::time::timeout(self.timeout, self.primary.discover_packages_blocking()).await {
+            Ok(Ok(packages)) => Ok(packages),
+            Ok(Err(err1)) => {
+                tracing::debug!("primary strategy failed, attempting fallback strategy");
+                match self.fallback.discover_packages_blocking().await {
+                    Ok(packages) => Ok(packages),
+                    // if the backup is unavailable, return the original error
+                    Err(Error::Unavailable) => Err(err1),
+                    Err(err2) => Err(err2),
+                }
+            }
+            Err(Elapsed { .. }) => {
+                tracing::debug!("primary strategy timed out, attempting fallback strategy");
+                self.fallback.discover_packages_blocking().await
+            }
+        }
+    }
 }
 
 pub struct CachingPackageDiscovery<P: PackageDiscovery> {
     primary: P,
-    data: Option<DiscoveryResponse>,
+    data: async_once_cell::OnceCell<DiscoveryResponse>,
 }
 
 impl<P: PackageDiscovery> CachingPackageDiscovery<P> {
     pub fn new(primary: P) -> Self {
         Self {
             primary,
-            data: None,
+            data: Default::default(),
         }
     }
 }
 
-impl<P: PackageDiscovery + Send> PackageDiscovery for CachingPackageDiscovery<P> {
-    async fn discover_packages(&mut self) -> Result<DiscoveryResponse, Error> {
+impl<P: PackageDiscovery + Send + Sync> PackageDiscovery for CachingPackageDiscovery<P> {
+    async fn discover_packages(&self) -> Result<DiscoveryResponse, Error> {
         tracing::debug!("discovering packages using caching strategy");
-        match self.data.clone() {
-            Some(data) => Ok(data),
-            None => {
-                tracing::debug!("no cached data, running primary strategy");
-                let data = self.primary.discover_packages().await?;
-                self.data = Some(data.clone());
-                Ok(data)
-            }
-        }
+        self.data
+            .get_or_try_init(async {
+                tracing::debug!("discovering packages using primary strategy");
+                self.primary.discover_packages().await
+            })
+            .await
+            .map(ToOwned::to_owned)
+    }
+
+    async fn discover_packages_blocking(&self) -> Result<DiscoveryResponse, Error> {
+        tracing::debug!("discovering packages using caching strategy");
+        self.data
+            .get_or_try_init(async {
+                tracing::debug!("discovering packages using primary strategy");
+                self.primary.discover_packages_blocking().await
+            })
+            .await
+            .map(ToOwned::to_owned)
     }
 }
 
 #[cfg(test)]
 mod fallback_tests {
-    use std::time::Duration;
+    use std::{
+        sync::atomic::{AtomicUsize, Ordering},
+        time::Duration,
+    };
 
     use tokio::runtime::Runtime;
 
@@ -257,20 +330,20 @@ mod fallback_tests {
 
     struct MockDiscovery {
         should_fail: bool,
-        calls: usize,
+        calls: AtomicUsize,
     }
 
     impl MockDiscovery {
         fn new(should_fail: bool) -> Self {
             Self {
                 should_fail,
-                calls: 0,
+                calls: Default::default(),
             }
         }
     }
 
     impl PackageDiscovery for MockDiscovery {
-        async fn discover_packages(&mut self) -> Result<DiscoveryResponse, Error> {
+        async fn discover_packages(&self) -> Result<DiscoveryResponse, Error> {
             if self.should_fail {
                 Err(Error::Failed(Box::new(std::io::Error::new(
                     std::io::ErrorKind::Other,
@@ -278,13 +351,19 @@ mod fallback_tests {
                 ))))
             } else {
                 tokio::time::sleep(Duration::from_millis(100)).await;
-                self.calls += 1;
+                self.calls.fetch_add(1, Ordering::SeqCst);
                 // Simulate successful package discovery
                 Ok(DiscoveryResponse {
                     package_manager: PackageManager::Npm,
                     workspaces: vec![],
                 })
             }
+        }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<crate::discovery::DiscoveryResponse, crate::discovery::Error> {
+            self.discover_packages().await
         }
     }
 
@@ -305,8 +384,8 @@ mod fallback_tests {
             assert!(result.is_ok());
 
             // Assert that the fallback was used
-            assert_eq!(discovery.primary.calls, 0);
-            assert_eq!(discovery.fallback.calls, 1);
+            assert_eq!(*discovery.primary.calls.get_mut(), 0);
+            assert_eq!(*discovery.fallback.calls.get_mut(), 1);
         });
     }
 
@@ -327,30 +406,38 @@ mod fallback_tests {
             assert!(result.is_ok());
 
             // Assert that the fallback was used
-            assert_eq!(discovery.primary.calls, 0);
-            assert_eq!(discovery.fallback.calls, 1);
+            assert_eq!(*discovery.primary.calls.get_mut(), 0);
+            assert_eq!(*discovery.fallback.calls.get_mut(), 1);
         });
     }
 }
 
 #[cfg(test)]
 mod caching_tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
     use tokio::runtime::Runtime;
 
     use super::*;
 
     struct MockPackageDiscovery {
-        call_count: usize,
+        call_count: AtomicUsize,
     }
 
     impl PackageDiscovery for MockPackageDiscovery {
-        async fn discover_packages(&mut self) -> Result<DiscoveryResponse, Error> {
-            self.call_count += 1;
+        async fn discover_packages(&self) -> Result<DiscoveryResponse, Error> {
+            self.call_count.fetch_add(1, Ordering::SeqCst);
             // Simulate successful package discovery
             Ok(DiscoveryResponse {
                 package_manager: PackageManager::Npm,
                 workspaces: vec![],
             })
+        }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<crate::discovery::DiscoveryResponse, crate::discovery::Error> {
+            self.discover_packages().await
         }
     }
 
@@ -358,16 +445,18 @@ mod caching_tests {
     fn test_caching_package_discovery() {
         let rt = Runtime::new().unwrap();
         rt.block_on(async {
-            let primary = MockPackageDiscovery { call_count: 0 };
+            let primary = MockPackageDiscovery {
+                call_count: Default::default(),
+            };
             let mut discovery = CachingPackageDiscovery::new(primary);
 
             // First call should use primary discovery
             let _first_result = discovery.discover_packages().await.unwrap();
-            assert_eq!(discovery.primary.call_count, 1);
+            assert_eq!(*discovery.primary.call_count.get_mut(), 1);
 
             // Second call should use cached data and not increase call count
             let _second_result = discovery.discover_packages().await.unwrap();
-            assert_eq!(discovery.primary.call_count, 1);
+            assert_eq!(*discovery.primary.call_count.get_mut(), 1);
         });
     }
 }

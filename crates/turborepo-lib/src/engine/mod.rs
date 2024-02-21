@@ -294,7 +294,7 @@ mod test {
 
     impl<'a> PackageDiscovery for DummyDiscovery<'a> {
         async fn discover_packages(
-            &mut self,
+            &self,
         ) -> Result<
             turborepo_repository::discovery::DiscoveryResponse,
             turborepo_repository::discovery::Error,
@@ -334,6 +334,15 @@ mod test {
                 package_manager: turborepo_repository::package_manager::PackageManager::Pnpm,
                 workspaces,
             })
+        }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<
+            turborepo_repository::discovery::DiscoveryResponse,
+            turborepo_repository::discovery::Error,
+        > {
+            self.discover_packages().await
         }
     }
 

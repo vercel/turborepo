@@ -183,7 +183,7 @@ impl Workspace {
             })
             .map(|p| {
                 let package_path = workspace_root.resolve(&p.path);
-                Package::new(p.name.to_string(), &workspace_root, &package_path)
+                Package::new(p.name.to_string(), workspace_root, &package_path)
             })
             .collect();
 

@@ -115,7 +115,10 @@ impl TurboSubscriber {
             let filter = EnvFilter::builder()
                 .with_default_directive(LevelFilter::WARN.into())
                 .with_env_var("TURBO_LOG_VERBOSITY")
-                .from_env_lossy();
+                .from_env_lossy()
+                .add_directive("reqwest=error".parse().unwrap())
+                .add_directive("hyper=warn".parse().unwrap())
+                .add_directive("h2=warn".parse().unwrap());
 
             if let Some(max_level) = level_override {
                 filter.add_directive(max_level.into())

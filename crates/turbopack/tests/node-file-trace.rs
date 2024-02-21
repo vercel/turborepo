@@ -403,6 +403,7 @@ fn node_file_trace<B: Backend + 'static>(
                 let workspace_fs: Vc<Box<dyn FileSystem>> = Vc::upcast(DiskFileSystem::new(
                     "workspace".to_string(),
                     package_root.clone(),
+                    vec![],
                 ));
                 let input_dir = workspace_fs.root();
                 let input = input_dir.join(format!("tests/{input_string}"));
@@ -410,7 +411,8 @@ fn node_file_trace<B: Backend + 'static>(
                 #[cfg(not(feature = "bench_against_node_nft"))]
                 let original_output = exec_node(package_root, input);
 
-                let output_fs = DiskFileSystem::new("output".to_string(), directory.clone());
+                let output_fs =
+                    DiskFileSystem::new("output".to_string(), directory.clone(), vec![]);
                 let output_dir = output_fs.root();
 
                 let source = FileSource::new(input);
@@ -738,7 +740,7 @@ impl std::str::FromStr for CaseInput {
 async fn print_graph(asset: Vc<Box<dyn OutputAsset>>) -> Result<()> {
     let mut visited = HashSet::new();
     let mut queue = Vec::new();
-    queue.push((0, asset.clone()));
+    queue.push((0, asset));
     while let Some((depth, asset)) = queue.pop() {
         let references = asset.references().await?;
         let mut indent = String::new();

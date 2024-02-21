@@ -455,12 +455,18 @@ mod test {
     struct MockDiscovery;
     impl PackageDiscovery for MockDiscovery {
         async fn discover_packages(
-            &mut self,
+            &self,
         ) -> Result<crate::discovery::DiscoveryResponse, crate::discovery::Error> {
             Ok(crate::discovery::DiscoveryResponse {
                 package_manager: PackageManager::Npm,
                 workspaces: vec![],
             })
+        }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<crate::discovery::DiscoveryResponse, crate::discovery::Error> {
+            self.discover_packages().await
         }
     }
 
