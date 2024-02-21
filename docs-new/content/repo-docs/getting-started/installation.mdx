@@ -1,23 +1,36 @@
 ---
-title: Installing Turborepo
+title: Installation
 description: Learn how to install Turborepo for use with your repository
 ---
 
 import { Callout } from "../../../components/Callout";
 import { Tabs, Tab } from "../../../components/Tabs";
 
-# Installation
-
-`turbo` can be installed both globally and in your repository. We highly recommend installing both ways so you can take advantage of fast, convenient workflows with a stable version of `turbo` for all developers working in your repository.
+`turbo` can be installed both globally and in your repository. We highly recommend installing both ways so you can take advantage of fast, convenient workflows _and_ a stable version of `turbo` for all developers working in your repository.
 
 ## Installing globally
 
-A global install of `turbo` can be used in any [workspace](https://vercel.com/docs/vercel-platform/glossary#workspace) that follows the conventions of the Node.js ecosystem, [single-package](https://vercel.com/docs/vercel-platform/glossary#single-package-workspace) or [multi-package](https://vercel.com/docs/vercel-platform/glossary#multi-package-workspace).
+A global install of `turbo` can be used in any [single-package](https://vercel.com/docs/vercel-platform/glossary#single-package-workspace) or [multi-package](https://vercel.com/docs/vercel-platform/glossary#multi-package-workspace) that follows the conventions of the Node.js ecosystem and package manager workspaces.
 
 <Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
-  <Tab>```bash npm install turbo --global ```</Tab>
-  <Tab>```bash yarn global add turbo ```</Tab>
-  <Tab>```bash pnpm install turbo --global ```</Tab>
+  <Tab value="npm">
+  ```bash
+  npm install turbo --global
+  ```
+
+  </Tab>
+  <Tab value="yarn">
+  ```bash
+  yarn global add turbo
+  ```
+
+  </Tab>
+  <Tab value="pnpm">
+  ```bash
+  pnpm install turbo --global
+  ```
+
+  </Tab>
 </Tabs>
 
 Once installed globally, you can run your scripts through `turbo` from your terminal, quickly running ad-hoc commands to use within your repository. For example:
@@ -34,9 +47,25 @@ The last command is an example of Automatic Package Scoping. `turbo` will detect
   manager as your existing installation to avoid unexpected behaviors. You can
   quickly check which package manager you previously used with:
   <Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
-    <Tab>```bash npm install turbo --global ```</Tab>
-    <Tab>```bash yarn global add turbo ```</Tab>
-    <Tab>```bash pnpm install turbo --global ```</Tab>
+    <Tab value="npm">
+    ```bash
+    npm install turbo --global
+    ```
+
+    </Tab>
+    <Tab value="yarn">
+    ```bash
+    yarn global add turbo
+    ```
+
+    </Tab>
+    <Tab value="pnpm">
+    ```bash
+    pnpm install turbo --global
+    ```
+
+    </Tab>
+
   </Tabs>
 </Callout>
 
@@ -45,9 +74,24 @@ The last command is an example of Automatic Package Scoping. `turbo` will detect
 When collaborating with other developers in a repository, it's a good idea to pin versions of dependencies. You can do this with `turbo` by adding it as a `devDependency` in the root of your repository:
 
 <Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
-  <Tab>```bash npm install turbo --save-dev ```</Tab>
-  <Tab>```bash yarn add turbo --dev --ignore-workspace-root-check ```</Tab>
-  <Tab>```bash pnpm add turbo --save-dev --ignore-workspace-root-check ```</Tab>
+  <Tab value="npm">
+  ```bash
+  npm install turbo --save-dev
+  ```
+
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add turbo --dev --ignore-workspace-root-check
+    ```
+
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add turbo --save-dev --ignore-workspace-root-check
+    ```
+
+  </Tab>
 </Tabs>
 
 You can continue to use your global installation of `turbo` to run commands. Global `turbo` will defer to the local version of your repsitory if it exists. This allows you to get the best of both worlds: easy scoping to the directory you're working in while maintaining a pinned version for consistent usage amongst your entire team.

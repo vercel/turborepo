@@ -1,11 +1,25 @@
 import { map } from "@/.map";
-import { createMDXSource } from "fumadocs-mdx";
+import { createMDXSource, defaultSchemas } from "fumadocs-mdx";
 import { loader } from "fumadocs-core/source";
+import { z } from "zod";
+
+const docFrontmatterSchema = defaultSchemas.frontmatter.extend({
+  searchable: z.boolean().default(true),
+});
 
 export const { getPage, getPages, pageTree } = loader({
   baseUrl: "/repo/docs",
   rootDir: "repo-docs",
-  source: createMDXSource(map),
+  source: createMDXSource(map, {
+    schema: { frontmatter: docFrontmatterSchema },
+  }),
+});
+
+const blogFrontmatterSchema = defaultSchemas.frontmatter.extend({
+  date: z.date(),
+  tag: z.string(),
+  ogImage: z.string().startsWith("/images/blog/turbo").endsWith("x-card.png"),
+  href: z.string().optional(),
 });
 
 export const {
@@ -16,5 +30,7 @@ export const {
 } = loader({
   baseUrl: "/blog",
   rootDir: "blog",
-  source: createMDXSource(map),
+  source: createMDXSource(map, {
+    schema: { frontmatter: blogFrontmatterSchema },
+  }),
 });
