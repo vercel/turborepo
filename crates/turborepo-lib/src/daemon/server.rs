@@ -24,7 +24,7 @@ use tokio::{
 };
 use tonic::{server::NamedService, transport::Server};
 use tower::ServiceBuilder;
-use tracing::{error, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_filewatch::{
     cookies::CookieWriter,
@@ -605,6 +605,7 @@ impl<PD: PackageDiscovery + Send + Sync + 'static, PH: PackageHasher + Send + Sy
         &self,
         request: tonic::Request<proto::DiscoverPackageHashesRequest>,
     ) -> Result<tonic::Response<proto::DiscoverPackageHashesResponse>, tonic::Status> {
+        debug!("111111111111");
         let inner = request.into_inner();
         let hashes = self
             .package_hasher
@@ -624,7 +625,7 @@ impl<PD: PackageDiscovery + Send + Sync + 'static, PH: PackageHasher + Send + Sy
             )
             .await
             .map_err(|_| tonic::Status::unavailable("package hasher unavailable"))?;
-
+        debug!("22222222222222");
         Ok(tonic::Response::new(proto::DiscoverPackageHashesResponse {
             package_hashes: hashes
                 .hashes

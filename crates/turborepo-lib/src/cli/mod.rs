@@ -236,7 +236,7 @@ impl From<Verbosity> for u8 {
     }
 }
 
-#[derive(Subcommand, Copy, Clone, Debug, Serialize, PartialEq)]
+#[derive(Subcommand, Clone, Debug, Serialize, PartialEq)]
 #[serde(tag = "command")]
 pub enum DaemonCommand {
     /// Restarts the turbo daemon
@@ -256,6 +256,9 @@ pub enum DaemonCommand {
     Clean,
     /// Shows the daemon logs
     Logs,
+    /// Tests out hashing
+    #[command(hide = true)]
+    Hash { tasks: Vec<String> },
 }
 
 #[derive(Subcommand, Copy, Clone, Debug, Serialize, PartialEq)]

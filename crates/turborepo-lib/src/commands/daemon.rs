@@ -18,6 +18,8 @@ use crate::{
         endpoint::SocketOpenError, CloseReason, DaemonConnector, DaemonConnectorError, DaemonError,
         Paths,
     },
+    engine::TaskNode,
+    run::task_id::TaskId,
     tracing::TurboSubscriber,
 };
 
@@ -27,7 +29,9 @@ const DAEMON_NOT_RUNNING_MESSAGE: &str =
 /// Runs the daemon command.
 pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Result<(), DaemonError> {
     let (can_start_server, can_kill_server) = match command {
-        DaemonCommand::Status { .. } | DaemonCommand::Logs => (false, false),
+        DaemonCommand::Status { .. } | DaemonCommand::Logs | DaemonCommand::Hash { .. } => {
+            (false, false)
+        }
         DaemonCommand::Stop => (false, true),
         DaemonCommand::Restart | DaemonCommand::Start => (true, true),
         DaemonCommand::Clean => (false, true),
@@ -136,6 +140,20 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
                 .arg(log_file)
                 .status()
                 .expect("failed to execute tail");
+        }
+        DaemonCommand::Hash { tasks } => {
+            let mut client = connector.connect().await?;
+            let mut task_nodes = Vec::new();
+            for task in tasks {
+                let task_id = TaskId::try_from(task.as_str())
+                    .map_err(|_| DaemonError::TaskNode(task.clone()))?
+                    .into_owned();
+
+                task_nodes.push(TaskNode::from(task_id));
+            }
+
+            let hashes = client.discover_package_hashes(task_nodes).await?;
+            println!("{:?}", hashes);
         }
         DaemonCommand::Clean => {
             // try to connect and shutdown the daemon

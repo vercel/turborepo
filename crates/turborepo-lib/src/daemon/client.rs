@@ -250,6 +250,9 @@ pub enum DaemonError {
 
     #[error("could not find log file")]
     LogFileNotFound,
+
+    #[error("invalid task: {0} ")]
+    TaskNode(String),
 }
 
 impl From<Status> for DaemonError {

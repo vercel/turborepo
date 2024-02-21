@@ -13,6 +13,7 @@ use tokio::{
     select,
     sync::{broadcast, oneshot, watch},
 };
+use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_filewatch::{
     cookies::{CookieError, CookieRegister, CookiedOptionalWatch},
@@ -115,6 +116,7 @@ impl PackageHashWatcher {
         packages.get().await.map(|i| i.to_owned())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn track(&self, tasks: Vec<TaskNode>) -> Result<PackageInputsHashes, TrackError> {
         // in here we add the tasks to the file watcher
         let start = Instant::now();
@@ -122,6 +124,7 @@ impl PackageHashWatcher {
             .send(SubscriberCommand::Update(tasks))
             .await
             .map_err(|_| TrackError::Send)?;
+
         let mut packages = self.packages.clone();
         let packages = packages.get_change().await.map_err(|_| TrackError::Recv)?;
         tracing::debug!(
@@ -129,7 +132,10 @@ impl PackageHashWatcher {
             (*packages).0.len(),
             Instant::now().duration_since(start).as_millis()
         );
-        Ok(PackageInputsHashes::default())
+        Ok(PackageInputsHashes {
+            hashes: (*packages).0.clone(),
+            expanded_hashes: HashMap::new(),
+        })
     }
 }
 
@@ -686,7 +692,7 @@ async fn handle_file_event(
     }
 }
 
-/// When the list of packages changes, or the root package json chagnes, we need
+/// When the list of packages changes, or the root package json changes, we need
 /// to update the package hasher so that it knows the correct globs and task
 /// definitions. Additionally, we need to replace all the task ids that we are
 /// tracking with the new ones.
