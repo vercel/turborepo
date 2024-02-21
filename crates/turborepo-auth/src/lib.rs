@@ -12,11 +12,18 @@ mod ui;
 pub use auth::*;
 pub use error::Error;
 pub use login_server::*;
-use turborepo_api_client::TokenClient;
-use turborepo_vercel_api::token::ResponseTokenMetadata;
+use turborepo_api_client::{CacheClient, Client, TokenClient};
+use turborepo_vercel_api::{token::ResponseTokenMetadata, User};
 
-/// Token is the result of a successful login. It contains the token string and
-/// potentially metadata about the token.
+pub struct TeamInfo<'a> {
+    pub id: &'a str,
+    pub slug: &'a str,
+}
+
+/// Token is the result of a successful login or an existing token. This acts as
+/// a wrapper for a bunch of token operations, like validation. We explicitly do
+/// not store any information about the underlying token for a few reasons, like
+/// having a token invalidated on the web but not locally.
 #[derive(Debug, Clone)]
 pub enum Token {
     /// An existing token on the filesystem
@@ -31,15 +38,141 @@ impl Token {
     pub fn existing(token: String) -> Self {
         Self::Existing(token)
     }
-    /// Checks if the token is valid. We do a few checks:
+    /// Checks if the token is still valid. The checks ran are:
+    /// 1. If the token is active.
+    /// 2. If the token has access to the cache.
+    ///     - If the token is forbidden from accessing the cache, we consider it
+    ///       invalid.
+    /// 3. We are able to fetch the user associated with the token.
+    ///
+    /// ## Arguments
+    /// * `client` - The client to use for API calls.
+    /// * `valid_message_fn` - An optional callback that gets called if the
+    ///   token is valid. It will be passed the user's email.
+    // TODO(voz): This should do a `get_user` or `get_teams` instead of the caller
+    // doing it. The reason we don't do it here is becuase the caller
+    // needs to do printing and requires the user struct, which we don't want to
+    // return here.
+    pub async fn is_valid<T: Client + TokenClient + CacheClient>(
+        &self,
+        client: &T,
+        // Making this optional since there are cases where we don't want to do anything after
+        // validation.
+        // A callback that gets called if the token is valid. This will be
+        // passed in a user's email if the token is valid.
+        valid_message_fn: Option<impl FnOnce(&str)>,
+    ) -> Result<bool, Error> {
+        let is_active = self.is_active(client).await?;
+        let has_cache_access = self.has_cache_access(client, None).await?;
+        if !is_active || !has_cache_access {
+            return Ok(false);
+        }
+
+        if let Some(message_callback) = valid_message_fn {
+            let user = self.user(client).await?;
+            message_callback(&user.email);
+        }
+        Ok(true)
+    }
+    /// This is the same as `is_valid`, but also checks if the token is valid
+    /// for SSO.
+    ///
+    /// ## Arguments
+    /// * `client` - The client to use for API calls.
+    /// * `sso_team` - The team to validate the token against.
+    /// * `valid_message_fn` - An optional callback that gets called if the
+    ///   token is valid. It will be passed the user's email.
+    pub async fn is_valid_sso<T: Client + TokenClient + CacheClient>(
+        &self,
+        client: &T,
+        sso_team: &str,
+        // Making this optional since there are cases where we don't want to do anything after
+        // validation.
+        // A callback that gets called if the token is valid. This will be
+        // passed in a user's email if the token is valid.
+        valid_message_fn: Option<impl FnOnce(&str)>,
+    ) -> Result<bool, Error> {
+        let is_active = self.is_active(client).await?;
+        let (result_user, result_team) = tokio::join!(
+            client.get_user(self.into_inner()),
+            client.get_team(self.into_inner(), sso_team)
+        );
+
+        match (result_user, result_team) {
+            (Ok(response_user), Ok(response_team)) => {
+                let team =
+                    response_team.ok_or_else(|| Error::SSOTeamNotFound(sso_team.to_owned()))?;
+                let info = TeamInfo {
+                    id: &team.id,
+                    slug: &team.slug,
+                };
+                if info.slug != sso_team {
+                    return Err(Error::SSOTeamNotFound(sso_team.to_owned()));
+                }
+
+                let has_cache_access = self.has_cache_access(client, Some(info)).await?;
+                if !is_active || !has_cache_access {
+                    return Ok(false);
+                }
+
+                if let Some(message_callback) = valid_message_fn {
+                    message_callback(&response_user.user.email);
+                };
+
+                Ok(true)
+            }
+            (Err(e), _) | (_, Err(e)) => Err(Error::APIError(e)),
+        }
+    }
+    /// Checks if the token is active. We do a few checks:
     /// 1. Fetch the token metadata.
     /// 2. From the metadata, check if the token is active.
     /// 3. If the token is a SAML SSO token, check if it's expired.
-    pub async fn is_valid(&self, client: &impl TokenClient) -> Result<bool, Error> {
+    pub async fn is_active<T: TokenClient>(&self, client: &T) -> Result<bool, Error> {
         let metadata = self.fetch_metadata(client).await?;
         let current_time = current_unix_time();
         let active = is_token_active(&metadata, current_time);
         Ok(active)
+    }
+
+    /// Checks if the token has access to the cache. This is a separate check
+    /// from `is_active` because it's possible for a token to be active but not
+    /// have access to the cache.
+    pub async fn has_cache_access<'a, T: CacheClient>(
+        &self,
+        client: &T,
+        team_info: Option<TeamInfo<'a>>,
+    ) -> Result<bool, Error> {
+        let (team_id, team_slug) = match team_info {
+            Some(TeamInfo { id, slug }) => (Some(id), Some(slug)),
+            None => (None, None),
+        };
+
+        match client
+            .get_caching_status(self.into_inner(), team_id, team_slug)
+            .await
+        {
+            // If we get a successful response, we have cache access and therefore consider it good.
+            // TODO: In the future this response should include something that tells us what actions
+            // this token can perform.
+            Ok(_) => Ok(true),
+            // An error can mean that we were unable to fetch the cache status, or that the token is
+            // forbidden from accessing the cache. A forbidden means we should return a `false`,
+            // otherwise we return an actual error.
+            Err(e) => match e {
+                // Check to make sure the code is "forbidden" before returning a `false`.
+                turborepo_api_client::Error::UnknownStatus { code, .. } if code == "forbidden" => {
+                    Ok(false)
+                }
+                _ => Err(e.into()),
+            },
+        }
+    }
+
+    /// Fetches the user associated with the token.
+    pub async fn user(&self, client: &impl Client) -> Result<User, Error> {
+        let user_response = client.get_user(self.into_inner()).await?;
+        Ok(user_response.user)
     }
 
     async fn fetch_metadata(
