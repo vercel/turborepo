@@ -3,7 +3,7 @@ title: Installation
 description: Learn how to install Turborepo for use with your repository
 ---
 
-import { Callout } from "../../../components/Callout";
+import { Callout } from "fumadocs-ui/components/Callout";
 import { Tabs, Tab } from "../../../components/Tabs";
 
 `turbo` can be installed both globally and in your repository. We highly recommend installing both ways so you can take advantage of fast, convenient workflows _and_ a stable version of `turbo` for all developers working in your repository.
@@ -33,16 +33,16 @@ A global install of `turbo` can be used in any [single-package](https://vercel.c
   </Tab>
 </Tabs>
 
-Once installed globally, you can run your scripts through `turbo` from your terminal, quickly running ad-hoc commands to use within your repository. For example:
+Once installed globally, you can run your scripts through `turbo` from your terminal, quickly running one-off commands to use within your repository. For example:
 
 - `turbo build`: Run `build` scripts following your repository's dependency graph
-- `turbo build --filter=docs --dry`: Quickly print an outline of the `build` task for your `docs` package without running it
+- `turbo build --filter=docs --dry`: Quickly print an outline of the `build` task for your `docs` package (without running it)
 - `turbo generate`: Run [Generators](/TODO-LINK) to quickly add new code to your repository
 - `cd apps/docs && turbo build`: Run the `build` script in the `docs` package and its dependencies
 
-The last command is an example of Automatic Package Scoping. `turbo` will detect that you're in a package's directory and automatically scope your commands to that package and its dependency graph.
+The last command is an example of Automatic Package Scoping. `turbo` will detect that you're in a package's directory and automatically scope your commands to that package.
 
-<Callout type="error">
+<Callout type="error" title="Avoid multiple global installations" className="bg-red-400/10">
   If you've installed global `turbo` before, make sure you use the same package
   manager as your existing installation to avoid unexpected behaviors. You can
   quickly check which package manager you previously used with:
