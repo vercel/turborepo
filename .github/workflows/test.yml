@@ -205,6 +205,8 @@ jobs:
         uses: mozilla-actions/sccache-action@v0.0.4
 
       - uses: ./.github/actions/setup-turborepo-environment
+        with:
+          windows: ${{ matrix.os.name == 'windows' }}
 
       # We explicitly unset RUSTC_WRAPPER if it is an empty string as causes build issues
       - run: |
@@ -253,6 +255,8 @@ jobs:
         run: git config --global core.autocrlf input
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-turborepo-environment
+        with:
+          windows: ${{ matrix.os.runner == 'windows-latest' }}
 
       - name: Setup Graphviz
         uses: ts-graphviz/setup-graphviz@v2
@@ -289,6 +293,8 @@ jobs:
         run: corepack disable
 
       - uses: ./.github/actions/setup-turborepo-environment
+        with:
+          windows: ${{ matrix.os.runner == 'windows-latest' }}
 
       - name: Check examples
         shell: bash
@@ -343,6 +349,8 @@ jobs:
 
       - name: Build turborepo CLI from source
         uses: ./.github/actions/setup-turborepo-environment
+        with:
+          windows: ${{ matrix.os.name == 'windows' }}
 
       - name: Run tests
         # We manually set TURBO_API to an empty string to override Hetzner env
@@ -432,6 +440,8 @@ jobs:
 
       - name: Setup Turborepo Environment
         uses: ./.github/actions/setup-turborepo-environment
+        with:
+          windows: ${{ matrix.os.name == 'windows' }}
 
       - name: Run cargo check
         run: |
@@ -451,6 +461,8 @@ jobs:
 
       - name: Setup Turborepo Environment
         uses: ./.github/actions/setup-turborepo-environment
+        with:
+          windows: ${{ matrix.os.name == 'windows' }}
 
       - name: Run cargo clippy
         run: |
@@ -629,6 +641,8 @@ jobs:
 
       - name: Setup Turborepo Environment
         uses: ./.github/actions/setup-turborepo-environment
+        with:
+          windows: ${{ matrix.os.name == 'windows' }}
 
       - name: Run tests
         timeout-minutes: 120

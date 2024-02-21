@@ -77,6 +77,8 @@ jobs:
         run: rustup target add x86_64-pc-windows-gnu
 
       - uses: ./.github/actions/setup-turborepo-environment
+        with:
+          windows: ${{ matrix.os.name == 'windows' }}
 
       - name: Build Turborepo from source
         run: cd cli && make turbo-prod
