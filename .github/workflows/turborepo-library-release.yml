@@ -79,6 +79,10 @@ jobs:
         run: ${{ matrix.settings.setup }}
         if: ${{ matrix.settings.setup }}
 
+      - name: Print Rust toolchain
+        shell: bash
+        run: rustup show
+
       - name: Build native library
         shell: bash
         run: |
