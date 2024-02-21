@@ -154,10 +154,6 @@ impl DiskWatcher {
             debounced_watcher
                 .watcher()
                 .watch(&root_path, RecursiveMode::Recursive)?;
-
-            debounced_watcher
-                .cache()
-                .add_root(&root_path, RecursiveMode::Recursive);
         }
 
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -165,10 +161,6 @@ impl DiskWatcher {
             debounced_watcher
                 .watcher()
                 .watch(&dir_path, RecursiveMode::NonRecursive)?;
-
-            debounced_watcher
-                .cache()
-                .add_root(&root_path, RecursiveMode::Recursive);
         }
 
         // We need to invalidate all reads that happened before watching
@@ -340,14 +332,13 @@ impl DiskWatcher {
                                             );
                                         }
                                     }
-                                    // We expect RenameMode::Both covers most of the case we need to
-                                    // invalidate,
-                                    // but also checks RenameMode::To just in case to avoid edge
-                                    // cases.
+                                    // We expect `RenameMode::Both` to cover most of the cases we
+                                    // need to invalidate,
+                                    // but we also check other RenameModes
+                                    // to cover cases where notify couldn't match the two rename
+                                    // events.
                                     EventKind::Any
-                                    | EventKind::Modify(
-                                        ModifyKind::Any | ModifyKind::Name(RenameMode::To),
-                                    ) => {
+                                    | EventKind::Modify(ModifyKind::Any | ModifyKind::Name(..)) => {
                                         batched_invalidate_path.extend(paths.clone());
                                         batched_invalidate_path_and_children.extend(paths.clone());
                                         batched_invalidate_path_and_children_dir
@@ -359,9 +350,7 @@ impl DiskWatcher {
                                         }
                                     }
                                     EventKind::Modify(
-                                        ModifyKind::Metadata(..)
-                                        | ModifyKind::Other
-                                        | ModifyKind::Name(..),
+                                        ModifyKind::Metadata(..) | ModifyKind::Other,
                                     )
                                     | EventKind::Access(_)
                                     | EventKind::Other => {
