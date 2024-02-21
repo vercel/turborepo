@@ -288,6 +288,7 @@ Test help flag for logout command
   Usage: turbo(\.exe)? logout \[OPTIONS\] (re)
   
   Options:
+        --invalidate                      Invalidate the token on the server
         --version                         
         --skip-infer                      Skip any attempts to infer which version of Turbo the project is configured to use
         --no-update-notifier              Disable the turbo update notification
