@@ -13,7 +13,7 @@ use tokio::{
     select,
     sync::{broadcast, oneshot, watch},
 };
-use tracing::debug;
+use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_filewatch::{
     cookies::{CookieError, CookieRegister, CookiedOptionalWatch},
@@ -124,9 +124,11 @@ impl PackageHashWatcher {
             .send(SubscriberCommand::Update(tasks))
             .await
             .map_err(|_| TrackError::Send)?;
-
         let mut packages = self.packages.clone();
-        let packages = packages.get_change().await.map_err(|_| TrackError::Recv)?;
+        let packages = packages.get_change().await.map_err(|err| {
+            debug!("failed to get change: {}", err);
+            TrackError::Recv
+        })?;
         tracing::debug!(
             "calculated {} in {}ms",
             (*packages).0.len(),
@@ -212,8 +214,7 @@ impl Subscriber {
         let (package_hasher_tx, mut package_hasher_rx) = OptionalWatch::new();
         let package_hasher_tx = Arc::new(package_hasher_tx);
 
-        let (task_hashes_tx, mut task_hashes_rx) = OptionalWatch::new();
-        let task_hashes_tx = Arc::new(task_hashes_tx);
+        let task_hashes_tx = Arc::new(self.map_tx);
 
         let (file_hashes_tx, mut file_hashes_rx) = OptionalWatch::new();
         let file_hashes_tx = Arc::new(file_hashes_tx);
@@ -240,7 +241,7 @@ impl Subscriber {
                 repo_root,
                 root_turbo_json_rx.clone(),
                 package_graph_rx.clone(),
-                task_hashes_rx.clone(),
+                self.map_rx.clone(),
                 task_hashes_tx.clone(),
                 package_hasher_tx.clone(),
             )
@@ -281,7 +282,7 @@ impl Subscriber {
                     Either::Left(Ok(Ok(event))) => {
                         handle_file_event(
                             event,
-                            &mut task_hashes_rx,
+                            &mut self.map_rx,
                             &mut file_hashes_rx,
                             &mut package_graph_rx,
                             &mut root_package_json_rx,
@@ -307,10 +308,14 @@ impl Subscriber {
                             }
                         };
 
-                        let existing_keys = match task_hashes_rx.get_immediate() {
+                        debug!("got hasher");
+
+                        let existing_keys = match self.map_rx.get_immediate().await {
                             Some(Ok(hashes)) => hashes.0.keys().cloned().collect(),
                             None | Some(Err(_)) => HashSet::new(),
                         };
+
+                        debug!("got existing keys");
 
                         let hashes = hasher
                             .calculate_hashes(
@@ -328,7 +333,10 @@ impl Subscriber {
                             .await
                             .unwrap();
 
+                        debug!("got package inputs hashes");
+
                         task_hashes_tx.send_if_modified(|map| {
+                            debug!("sending if modified");
                             if hashes.hashes.is_empty() {
                                 return false;
                             }
@@ -484,7 +492,10 @@ async fn update_package_graph(
 #[allow(clippy::too_many_arguments)]
 async fn handle_file_event(
     event: Event,
-    task_hashes_rx: &mut OptionalWatch<TaskHashes>,
+    task_hashes_rx: &mut CookiedOptionalWatch<
+        TaskHashes,
+        CookiedOptionalWatch<HashMap<PackageName, WorkspaceData>, ()>,
+    >,
     file_hashes_rx: &mut OptionalWatch<FileHashes>,
     package_graph_rx: &mut OptionalWatch<PackageGraph>,
     root_package_json_rx: &mut OptionalWatch<PackageJson>,
@@ -607,7 +618,7 @@ async fn handle_file_event(
                     .unwrap()
             };
 
-            let existing_tasks = match task_hashes_rx.get_immediate() {
+            let existing_tasks = match task_hashes_rx.get_immediate().await {
                 Some(Ok(hashes)) => hashes.0.keys().cloned().collect(),
                 None | Some(Err(_)) => HashSet::new(),
             };
@@ -636,9 +647,10 @@ async fn handle_file_event(
             let mut package_hashes = HashMap::new();
             for task in changed_tasks {
                 tracing::debug!("recalculating hash for task: {}", task);
+                let file_hashes = file_hashes_rx.get().await?;
                 // TODO: get list of file hashes from file_hashes_rx
                 // TODO: handle dotenv from `calculate_file_hashes`
-                let (hash, _) = PackageInputsHashes::calculate_file_hash(Default::default());
+                let (hash, _) = PackageInputsHashes::calculate_file_hash((*file_hashes).0.clone());
                 package_hashes.insert(task, hash);
             }
 
@@ -702,7 +714,10 @@ async fn update_package_hasher(
     repo_root: AbsoluteSystemPathBuf,
     mut root_turbo_json_rx: OptionalWatch<TurboJson>,
     mut package_graph_rx: OptionalWatch<PackageGraph>,
-    mut task_hashes_rx: OptionalWatch<TaskHashes>,
+    mut task_hashes_rx: CookiedOptionalWatch<
+        TaskHashes,
+        CookiedOptionalWatch<HashMap<PackageName, WorkspaceData>, ()>,
+    >,
     task_hashes_tx: Arc<watch::Sender<Option<TaskHashes>>>,
     package_hasher_tx: Arc<watch::Sender<Option<LocalPackageHashes>>>,
 ) {
@@ -792,7 +807,7 @@ async fn update_package_hasher(
         };
 
         // here, if the task_hashes_rx is empty, we can just populate it
-        let task_hashes = match task_hashes_rx.get_immediate() {
+        let task_hashes = match task_hashes_rx.get_immediate().await {
             Some(Ok(task_hashes)) => {
                 Some(task_hashes.0.keys().cloned().map(TaskNode::Task).collect())
             }

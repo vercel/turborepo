@@ -46,7 +46,6 @@ impl<PD: PackageDiscovery + Send + Sync> PackageHasher for WatchingPackageHasher
         _run_telemetry: GenericEventBuilder,
         tasks: Vec<TaskNode>,
     ) -> Result<PackageInputsHashes, Error> {
-        debug!("calculating hashes in watching package hasher");
         self.file_watching
             .package_hash_watcher
             .track(tasks)
