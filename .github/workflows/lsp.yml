@@ -48,6 +48,15 @@ jobs:
         if: ${{ matrix.settings.setup }}
         run: ${{ matrix.settings.setup }}
 
+      - name: Print Rust toolchain
+        shell: bash
+        run: |
+          rustup show
+          which cargo
+          cargo --version --verbose
+          which rustc
+          rustc --version --verbose
+
       - name: Build
         shell: bash
         run: ${{ matrix.settings.rust-build-env }} cargo build --profile release-turborepo-lsp -p turborepo-lsp --target ${{ matrix.settings.target }}
