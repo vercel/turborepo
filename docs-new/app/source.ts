@@ -15,12 +15,13 @@ export const { getPage, getPages, pageTree } = loader({
   }),
 });
 
-const blogFrontmatterSchema = defaultSchemas.frontmatter.extend({
-  date: z.date(),
-  tag: z.string(),
-  ogImage: z.string().startsWith("/images/blog/turbo").endsWith("x-card.png"),
-  href: z.string().optional(),
-});
+const blogPostFrontmatterSchema = defaultSchemas.frontmatter
+  .extend({
+    date: z.string(),
+    tag: z.string(),
+    ogImage: z.string().startsWith("/images/blog/").endsWith("x-card.png"),
+  })
+  .strict();
 
 export const {
   getPage: getBlogPage,
@@ -31,6 +32,29 @@ export const {
   baseUrl: "/blog",
   rootDir: "blog",
   source: createMDXSource(map, {
-    schema: { frontmatter: blogFrontmatterSchema },
+    // @ts-expect-error -- Doesn't like the usage of strict.
+    schema: { frontmatter: blogPostFrontmatterSchema },
+  }),
+});
+
+const externalBlogPostFrontmatterSchema = defaultSchemas.frontmatter
+  .extend({
+    date: z.string().optional(),
+    isExternal: z.literal(true),
+    href: z.string(),
+  })
+  .strict();
+
+export const {
+  getPage: getExternalBlogPage,
+  getPages: getExternalBlogPages,
+  pageTree: blogExternalPageTree,
+  files: blogExternalFiles,
+} = loader({
+  baseUrl: "/blog",
+  rootDir: "external-blog",
+  source: createMDXSource(map, {
+    // @ts-expect-error -- Doesn't like the usage of strict.
+    schema: { frontmatter: externalBlogPostFrontmatterSchema },
   }),
 });

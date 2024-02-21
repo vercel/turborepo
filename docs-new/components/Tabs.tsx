@@ -21,8 +21,6 @@ export const Tabs: FC<{
   items: string[];
   children: ReactElement;
 }> = function ({ storageKey = "tab-index", items, children = null, ...props }) {
-  console.log(storageKey);
-
   return (
     <FumaTabs id={storageKey} items={items} {...props}>
       {children}
