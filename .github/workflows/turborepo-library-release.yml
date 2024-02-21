@@ -66,13 +66,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
+
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
         with:
           targets: ${{ matrix.settings.target }}
-
-      - name: Setup Node
-        uses: ./.github/actions/setup-node
 
       - name: Setup toolchain
         shell: bash

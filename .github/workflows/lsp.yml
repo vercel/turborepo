@@ -49,6 +49,7 @@ jobs:
         run: ${{ matrix.settings.setup }}
 
       - name: Build
+        shell: bash
         run: ${{ matrix.settings.rust-build-env }} cargo build --profile release-turborepo-lsp -p turborepo-lsp --target ${{ matrix.settings.target }}
 
       - name: Upload Artifacts
