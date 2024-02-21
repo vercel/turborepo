@@ -12,6 +12,22 @@ pub struct TaskDuration {
 }
 
 impl TaskDuration {
+    pub fn new(
+        width: u16,
+        run_start: Instant,
+        current: Instant,
+        task_start: Instant,
+        task_end: Option<Instant>,
+    ) -> Self {
+        Self {
+            width,
+            run_start,
+            current,
+            task_start,
+            task_end,
+        }
+    }
+
     fn run_duration_ms(&self) -> u128 {
         self.current.duration_since(self.run_start).as_millis()
     }
