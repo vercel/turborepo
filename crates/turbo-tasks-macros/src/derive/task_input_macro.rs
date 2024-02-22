@@ -110,7 +110,7 @@ pub fn derive_task_input(input: TokenStream) -> TokenStream {
                         turbo_tasks::ConcreteTaskInput::List(value) => {
                             let mut #inputs_list_ident = value.iter();
 
-                            let discriminant = #inputs_list_ident.next().ok_or_else(|| anyhow::anyhow!(concat!("missing discriminant for ", stringify!(#ident))))?;
+                            let discriminant = #inputs_list_ident.next().ok_or_else(|| ::anyhow::anyhow!(concat!("missing discriminant for ", stringify!(#ident))))?;
                             let discriminant: #repr = turbo_tasks::TaskInput::try_from_concrete(discriminant)?;
 
                             Ok(match discriminant {
@@ -120,10 +120,10 @@ pub fn derive_task_input(input: TokenStream) -> TokenStream {
                                         #ident::#variants_idents #variants_fields_destructuring
                                     },
                                 )*
-                                _ => return Err(anyhow::anyhow!("invalid discriminant for {}", stringify!(#ident))),
+                                _ => return Err(::anyhow::anyhow!("invalid discriminant for {}", stringify!(#ident))),
                             })
                         },
-                        _ => Err(anyhow::anyhow!("invalid task input type, expected list")),
+                        _ => Err(::anyhow::anyhow!("invalid task input type, expected list")),
                     }
                 },
                 quote! {
@@ -155,7 +155,7 @@ pub fn derive_task_input(input: TokenStream) -> TokenStream {
                             #try_from_expansion
                             Ok(#ident #destructuring)
                         },
-                        _ => Err(anyhow::anyhow!("invalid task input type, expected list")),
+                        _ => Err(::anyhow::anyhow!("invalid task input type, expected list")),
                     }
                 },
                 quote! {
@@ -220,7 +220,7 @@ fn expand_named(
         destructuring,
         quote! {
             #(
-                let #fields_idents = #inputs_list_ident.next().ok_or_else(|| anyhow::anyhow!(concat!("missing element for ", stringify!(#fields_idents))))?;
+                let #fields_idents = #inputs_list_ident.next().ok_or_else(|| ::anyhow::anyhow!(concat!("missing element for ", stringify!(#fields_idents))))?;
                 let #fields_idents = turbo_tasks::TaskInput::try_from_concrete(#fields_idents)?;
             )*
         },
@@ -243,7 +243,7 @@ fn expand_unnamed(
         destructuring,
         quote! {
             #(
-                let #fields_idents = #inputs_list_ident.next().ok_or_else(|| anyhow::anyhow!(concat!("missing element for ", stringify!(#fields_idents))))?;
+                let #fields_idents = #inputs_list_ident.next().ok_or_else(|| ::anyhow::anyhow!(concat!("missing element for ", stringify!(#fields_idents))))?;
                 let #fields_idents = turbo_tasks::TaskInput::try_from_concrete(#fields_idents)?;
             )*
         },
