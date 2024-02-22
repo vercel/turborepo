@@ -317,6 +317,8 @@ impl<'a> EngineBuilder<'a> {
             }
 
             engine.add_definition(task_id.as_inner().clone().into_owned(), task_definition);
+            let (task_id, span) = task_id.split();
+            engine.add_task_location(task_id.into_owned(), span);
 
             if !has_deps && !has_topo_deps {
                 engine.connect_to_root(&to_task_id);
