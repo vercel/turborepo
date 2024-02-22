@@ -251,7 +251,7 @@ async fn parse_content(
         Box::new(IssueEmitter {
             source,
             source_map: source_map.clone(),
-            title: Some("Input ecmascript file had an error".to_string()),
+            title: Some("Ecmascript file had an error".to_string()),
         }),
     );
     let globals = Arc::new(Globals::new());
