@@ -605,7 +605,6 @@ impl<PD: PackageDiscovery + Send + Sync + 'static, PH: PackageHasher + Send + Sy
         &self,
         request: tonic::Request<proto::DiscoverPackageHashesRequest>,
     ) -> Result<tonic::Response<proto::DiscoverPackageHashesResponse>, tonic::Status> {
-        debug!("111111111111");
         let inner = request.into_inner();
         let hashes = self
             .package_hasher

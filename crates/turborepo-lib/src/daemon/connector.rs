@@ -83,9 +83,9 @@ impl DaemonConnector {
     }
 
     const CONNECT_RETRY_MAX: usize = 3;
-    const CONNECT_TIMEOUT: Duration = Duration::from_secs(1);
-    const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(1);
-    const SOCKET_TIMEOUT: Duration = Duration::from_secs(1);
+    const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+    const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
+    const SOCKET_TIMEOUT: Duration = Duration::from_secs(10);
     const SOCKET_ERROR_WAIT: Duration = Duration::from_millis(50);
 
     /// Attempt, with retries, to:

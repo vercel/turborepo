@@ -14,7 +14,9 @@ use tokio::{
     sync::{broadcast, oneshot, watch},
 };
 use tracing::{debug, warn};
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
+use turbopath::{
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, RelativeUnixPathBuf,
+};
 use turborepo_filewatch::{
     cookies::{CookieError, CookieRegister, CookiedOptionalWatch},
     package_watcher::{PackageManagerState, PackageWatcher},
@@ -75,7 +77,7 @@ enum SubscriberCommand {
 #[derive(Debug, Clone, Default)]
 pub struct TaskHashes(pub HashMap<TaskId<'static>, String>);
 #[derive(Debug, Clone, Default)]
-pub struct FileHashes(pub HashMap<AbsoluteSystemPathBuf, String>);
+pub struct FileHashes(pub HashMap<RelativeUnixPathBuf, String>);
 
 impl PackageHashWatcher {
     pub fn new(
@@ -118,6 +120,7 @@ impl PackageHashWatcher {
 
     #[tracing::instrument(skip(self))]
     pub async fn track(&self, tasks: Vec<TaskNode>) -> Result<PackageInputsHashes, TrackError> {
+        debug!("tracking {:?}", tasks);
         // in here we add the tasks to the file watcher
         let start = Instant::now();
         self.sub_tx
@@ -236,6 +239,7 @@ impl Subscriber {
         let update_package_hasher_fut = {
             let repo_root = self.repo_root.clone();
             // new unknown tasks need to be hashed the first time
+
             update_package_hasher(
                 scm.clone(),
                 repo_root,
@@ -276,11 +280,11 @@ impl Subscriber {
                     update = self.sub_rx.recv() => Either::Right(update),
                 };
 
-                tracing::trace!("package hash watcher event: {:?}", incoming);
+                tracing::debug!("package hash watcher event: {:?}", incoming);
 
                 match incoming {
                     Either::Left(Ok(Ok(event))) => {
-                        handle_file_event(
+                        handle_file_event_for_hasher(
                             event,
                             &mut self.map_rx,
                             &mut file_hashes_rx,
@@ -308,14 +312,10 @@ impl Subscriber {
                             }
                         };
 
-                        debug!("got hasher");
-
-                        let existing_keys = match self.map_rx.get_immediate().await {
+                        let existing_keys = match self.map_rx.get_immediate_raw("deadlock").await {
                             Some(Ok(hashes)) => hashes.0.keys().cloned().collect(),
                             None | Some(Err(_)) => HashSet::new(),
                         };
-
-                        debug!("got existing keys");
 
                         let hashes = hasher
                             .calculate_hashes(
@@ -385,7 +385,7 @@ impl Subscriber {
     }
 }
 
-/// When the list of packages changes, or the root package json chagnes, we need
+/// When the list of packages changes, or the root package json changes, we need
 /// to update the package graph so that the change detector can detect the
 /// correct changes
 #[tracing::instrument(skip_all)]
@@ -466,7 +466,10 @@ async fn update_package_graph(
             .build()
             .await
         {
-            Ok(package_graph) => package_graph_tx.send(Some(package_graph)),
+            Ok(package_graph) => {
+                debug!("sending package graph");
+                package_graph_tx.send(Some(package_graph))
+            }
             Err(e) => {
                 tracing::warn!("unable to build package graph: {}, disabling for now", e);
                 package_graph_tx.send(None)
@@ -490,7 +493,7 @@ async fn update_package_graph(
 ///   tasks, using the new turbo json
 #[tracing::instrument(skip_all)]
 #[allow(clippy::too_many_arguments)]
-async fn handle_file_event(
+async fn handle_file_event_for_hasher(
     event: Event,
     task_hashes_rx: &mut CookiedOptionalWatch<
         TaskHashes,
@@ -513,9 +516,16 @@ async fn handle_file_event(
         }
         EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_) => {
             tracing::trace!("file event: {:?} {:?}", event.kind, event.paths);
+            // start by updating cookies so we don't deadlock on cookie requests after this
+            cookie_tx.register(
+                &event
+                    .paths
+                    .iter()
+                    .map(|p| AbsoluteSystemPath::from_std_path(p).expect("absolute"))
+                    .collect::<Vec<_>>(),
+            );
 
             let turbo_json_changed = event.paths.iter().any(|p| p.ends_with("turbo.json"));
-
             if turbo_json_changed {
                 // no use in updating the turbo json if there are no listeners
                 if root_turbo_json_tx.send(None).is_ok() {
@@ -581,7 +591,13 @@ async fn handle_file_event(
                     .paths
                     .iter()
                     .cloned()
-                    .map(|p| AbsoluteSystemPathBuf::try_from(p).expect("absolute"))
+                    .map(|p| {
+                        let abs_path = AbsoluteSystemPathBuf::try_from(p).expect("absolute");
+                        repo_root
+                            .anchor(&abs_path)
+                            .expect("inside repository")
+                            .to_unix()
+                    })
                     .filter(|p| file_hashes.0.contains_key(p))
                     .collect::<Vec<_>>();
 
@@ -590,10 +606,13 @@ async fn handle_file_event(
                 vec![]
             };
 
-            let Ok(changed_files): Result<Vec<_>, _> = changed_files
+            let Ok(changed_files_with_hashes): Result<Vec<_>, _> = changed_files
                 .into_iter()
                 // we get None if the file is a symlink, so ignore it
-                .flat_map(|p| hash_file(&p).transpose().map(|h| h.map(|h| (p, h))))
+                .flat_map(|p| {
+                    let path = repo_root.join_unix_path(&p).expect("utf-8");
+                    hash_file(&path).transpose().map(|h| h.map(|h| (p, h)))
+                })
                 .collect()
             else {
                 // there was an issue hashing a file, so we can't continue
@@ -609,20 +628,22 @@ async fn handle_file_event(
                 let change_mapper = ChangeMapper::new(&package_graph, vec![], vec![]);
                 change_mapper
                     .changed_packages(
-                        changed_files
+                        changed_files_with_hashes
                             .iter()
-                            .map(|(p, _)| repo_root.anchor(&p).expect("relative to root"))
+                            .map(|(p, _)| p.to_anchored_system_path_buf())
                             .collect(),
                         None,
                     )
                     .unwrap()
             };
 
-            let existing_tasks = match task_hashes_rx.get_immediate().await {
+            debug!("got changed packages");
+
+            let existing_tasks = match task_hashes_rx.get_immediate_raw("avoid deadlock").await {
                 Some(Ok(hashes)) => hashes.0.keys().cloned().collect(),
                 None | Some(Err(_)) => HashSet::new(),
             };
-
+            debug!("got existing tasks: {:?}", existing_tasks);
             let changed_tasks = match changed_packages {
                 PackageChanges::All => existing_tasks,
                 PackageChanges::Some(data) => existing_tasks
@@ -647,7 +668,10 @@ async fn handle_file_event(
             let mut package_hashes = HashMap::new();
             for task in changed_tasks {
                 tracing::debug!("recalculating hash for task: {}", task);
-                let file_hashes = file_hashes_rx.get().await?;
+                let Ok(file_hashes) = file_hashes_rx.get().await else {
+                    return;
+                };
+
                 // TODO: get list of file hashes from file_hashes_rx
                 // TODO: handle dotenv from `calculate_file_hashes`
                 let (hash, _) = PackageInputsHashes::calculate_file_hash((*file_hashes).0.clone());
@@ -674,7 +698,7 @@ async fn handle_file_event(
             });
 
             file_hashes_tx.send_if_modified(|map| {
-                if changed_files.is_empty() {
+                if changed_files_with_hashes.is_empty() {
                     return false;
                 }
 
@@ -685,19 +709,10 @@ async fn handle_file_event(
                     map.as_mut().unwrap()
                 };
 
-                map.0.extend(changed_files);
+                map.0.extend(changed_files_with_hashes);
 
                 return true;
             });
-
-            // finally update the cookie
-            cookie_tx.register(
-                &event
-                    .paths
-                    .iter()
-                    .map(|p| AbsoluteSystemPath::from_std_path(p).expect("absolute"))
-                    .collect::<Vec<_>>(),
-            );
 
             tracing::debug!("updated task hashes");
         }
@@ -838,12 +853,11 @@ async fn update_package_hasher(
                     return;
                 }
             }
-        };
+        }
 
         // if either of these fail, then the thing that is processing hash updates
         // has stopped, or the thing that is serving the task hashes has stopped,
         // so we can just exit
-
         if package_hasher_tx.send(Some(package_hasher)).is_err() {
             tracing::debug!("nobody needing a package hasher, exiting");
             return;
