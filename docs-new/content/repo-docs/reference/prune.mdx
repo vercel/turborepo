@@ -5,12 +5,11 @@ description: API reference for the `turbo prune` command.
 
 import { File, Folder, Files } from "fumadocs-ui/components/files";
 
-Generate a partial monorepo with a pruned lockfile for a target workspace into a
-directory named `out` containg the following:
+Generate a partial monorepo for a target workspace. The output will be placed into a directory named `out` containing the following:
 
-- The full source code of all internal packages that are needed to build the target
-- A pruned lockfile that only contains the subset of the original root lockfile. Only the dependencies used by the packages in the pruned workspace will be present.
-- A copy of the root `package.json`
+- The full source code of all internal packages needed to build the target.
+- A pruned lockfile containing the subset of the original lockfile needed to build the target.
+- A copy of the root `package.json`.
 
 ### Example
 
@@ -18,7 +17,7 @@ Starting with a repository with the following structure:
 
 <Files>
   <File name="package.json" />
-  <File name="yarn.lock" />
+  <File name="pnpm-lock.yaml" />
   <Folder name="apps" defaultOpen>
     <Folder name="admin">
       <File name="package.json" />
@@ -84,7 +83,7 @@ Run `turbo prune frontend` to generate a pruned workspace for the `frontend` app
 
 <Files>
   <File name="package.json" />
-  <File name="yarn.lock" />
+  <File name="pnpm-lock.yaml (partial)" />
   <Folder name="apps" defaultOpen>
     <Folder name="frontend">
       <File name="package.json" />
@@ -125,57 +124,74 @@ Run `turbo prune frontend` to generate a pruned workspace for the `frontend` app
 
 #### `--docker`
 
-`type: boolean`
+Defaults to `false`.
 
-Default to `false`. Passing this flag will alter the outputted folder with the pruned workspace to make it easier to use with [Docker best practices / layer caching](https://docs.docker.com/develop/develop-images/dockerfile_best-practices/).
+Alter the output directory to make it easier to use with [Docker best practices and layer caching](https://docs.docker.com/develop/develop-images/dockerfile_best-practices/). The directory will contain:
 
-With the `--docker` flag. The `prune` command will generate folder called `out` with the following inside of it:
+- A folder named `json` with the pruned workspace's `package.json` files.
+- A folder named `full` with the pruned workspace's full source code for the internal packages needed to build the target.
+- A pruned lockfile containing the subset of the original lockfile needed to build the target.
 
-- A folder `json` with the pruned workspace's `package.json`s
-- A folder `full` with the pruned workspace's full source code, but only including the internal packages that are needed to build the target.
-- A new pruned lockfile that only contains the pruned subset of the original root lockfile with the dependencies that are actually used by the packages in the pruned workspace.
+Using the same example from above, running `turbo prune frontend --docker` will generate the following:
 
-```
-.
-├── full                                # Folder full source code for all package needed to build the target
-│   ├── package.json
-│   └── packages
-│       ├── ui
-│       │   ├── package.json
-│       │   ├── src
-│       │   │   └── index.tsx
-│       │   └── tsconfig.json
-│       ├── shared
-│       │   ├── package.json
-│       │   ├── src
-│       │   │   ├── __tests__
-│       │   │   │   ├── sum.test.ts
-│       │   │   │   └── tsconfig.json
-│       │   │   ├── index.ts
-│       │   │   └── sum.ts
-│       │   └── tsconfig.json
-│       └── frontend
-│           ├── next-env.d.ts
-│           ├── next.config.js
-│           ├── package.json
-│           ├── src
-│           │   └── pages
-│           │       └── index.tsx
-│           └── tsconfig.json
-├── json                                # Folder containing just package.jsons for all targets in the subworkspace
-│   ├── package.json
-│   └── packages
-│       ├── ui
-│       │   └── package.json
-│       ├── shared
-│       │   └── package.json
-│       └── frontend
-│           └── package.json
-└── yarn.lock                           # The pruned lockfile for all targets in the subworkspace
-```
+<Files>
+  <File name="pnpm-lock.yaml (partial)" />
+  <Folder name="full" defaultOpen>
+    <File name="package.json (from repo root)" />
+    <Folder name="apps">
+      <Folder name="frontend">
+        <File name="package.json" />
+        <File name="next-env.d.ts" />
+        <File name="next.config.js" />
+        <Folder name="src">
+          <Folder name="app">
+            <File name="page.tsx" />
+          </Folder>
+        </Folder>
+        <File name="tsconfig.json" />
+      </Folder>
+    </Folder>
+    <Folder name="packages">
+      <Folder name="shared">
+        <File name="package.json" />
+        <Folder name="src">
+          <Folder name="__tests__">
+            <File name="sum.test.ts" />
+            <File name="tsconfig.json" />
+          </Folder>
+          <File name="index.ts" />
+          <File name="sum.ts" />
+        </Folder>
+        <File name="tsconfig.json" />
+      </Folder>
+      <Folder name="ui">
+        <File name="package.json" />
+        <Folder name="src">
+          <File name="index.tsx" />
+        </Folder>
+        <File name="tsconfig.json" />
+      </Folder>
+    </Folder>
+  </Folder>
+  <Folder name="json" defaultOpen>
+    <File name="package.json (from repo root)" />
+    <Folder name="packages" defaultOpen>
+      <Folder name="ui" defaultOpen>
+        <File name="package.json" />
+      </Folder>
+      <Folder name="shared" defaultOpen>
+        <File name="package.json" />
+      </Folder>
+      <Folder name="frontend" defaultOpen>
+        <File name="package.json" />
+      </Folder>
+    </Folder>
 
-#### `--out-dir`
+  </Folder>
+</Files>
 
-**Default**: `./out`
+#### `--out-dir <path>`
+
+Defaults to `./out`.
 
 Customize the directory the pruned output is generated in.
