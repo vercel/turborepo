@@ -172,7 +172,6 @@ async fn get_log_file_from_folder(base: &CommandBase) -> Result<String, DaemonEr
     warn!("couldn't connect to daemon, looking for old log files");
     let log_folder = base.repo_root.join_components(&[".turbo", "daemon"]);
     let Ok(dir) = std::fs::read_dir(log_folder) else {
-        println!("could not find log file");
         return Err(DaemonError::LogFileNotFound);
     };
 
