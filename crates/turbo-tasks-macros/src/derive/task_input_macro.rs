@@ -132,7 +132,7 @@ pub fn derive_task_input(input: TokenStream) -> TokenStream {
                             #ident::#variants_idents #variants_fields_destructuring => {
                                 let mut #inputs_list_ident = Vec::with_capacity(1 + #variants_fields_len);
                                 let discriminant: #repr = #variants_discriminants;
-                                let discriminant = turbo_tasks::TaskInput::into_concrete(discriminant);
+                                let discriminant = <#repr as turbo_tasks::TaskInput>::into_concrete(discriminant);
                                 #inputs_list_ident.push(discriminant);
                                 #variants_from_expansion
                                 turbo_tasks::ConcreteTaskInput::List(#inputs_list_ident)
