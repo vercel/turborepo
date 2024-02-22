@@ -3,4 +3,12 @@ title: login
 description: API reference for the `turbo login` command.
 ---
 
-TODO
+Log in to your Remote Cache provider.
+
+The default provider is [Vercel](https://vercel.com/). To specify a different provider, use the `--url` and `--api` options.
+
+| Option     | Type   | Description                                                                                                 |
+| ---------- | ------ | ----------------------------------------------------------------------------------------------------------- |
+| --url      | string | Defaults to `https://vercel.com`                                                                            |
+| --api      | string | Defaults to `https://vercel.com/api`                                                                        |
+| --sso-team | string | Connect to an SSO-enabled Vercel team by providing your Team slug. (`turbo login --sso-team=slug-for-team`) |

@@ -3,4 +3,179 @@ title: prune
 description: API reference for the `turbo prune` command.
 ---
 
-TODO
+import { File, Folder, Files } from "fumadocs-ui/components/files";
+
+Generate a partial monorepo with a pruned lockfile for a target workspace into a
+directory named `out` containg the following:
+
+- The full source code of all internal packages that are needed to build the target
+- A pruned lockfile that only contains the subset of the original root lockfile. Only the dependencies used by the packages in the pruned workspace will be present.
+- A copy of the root `package.json`
+
+### Example
+
+Starting with a repository with the following structure:
+
+<Files>
+  <File name="package.json" />
+  <File name="yarn.lock" />
+  <Folder name="apps" defaultOpen>
+    <Folder name="admin">
+      <File name="package.json" />
+      <File name="next-env.d.ts" />
+      <File name="next.config.js" />
+      <Folder name="src">
+        <Folder name="app">
+          <File name="page.tsx" />
+        </Folder>
+      </Folder>
+      <File name="tsconfig.json" />
+    </Folder>
+    <Folder name="frontend">
+      <File name="package.json" />
+      <File name="next-env.d.ts" />
+      <File name="next.config.js" />
+      <Folder name="src">
+        <Folder name="app">
+          <File name="page.tsx" />
+        </Folder>
+      </Folder>
+      <File name="tsconfig.json" />
+    </Folder>
+  </Folder>
+  <Folder name="packages" defaultOpen>
+    <Folder name="scripts">
+      <File name="package.json" />
+      <Folder name="src">
+        <File name="index.tsx" />
+      </Folder>
+      <File name="tsconfig.json" />
+    </Folder>
+    <Folder name="shared">
+      <File name="package.json" />
+      <Folder name="src">
+        <Folder name="__tests__">
+          <File name="sum.test.ts" />
+          <File name="tsconfig.json" />
+        </Folder>
+        <File name="index.ts" />
+        <File name="sum.ts" />
+      </Folder>
+      <File name="tsconfig.json" />
+    </Folder>
+    <Folder name="ui">
+      <File name="package.json" />
+      <Folder name="src">
+        <File name="index.tsx" />
+      </Folder>
+      <File name="tsconfig.json" />
+    </Folder>
+    <Folder name="utils">
+      <File name="package.json" />
+      <Folder name="src">
+        <File name="index.tsx" />
+      </Folder>
+      <File name="tsconfig.json" />
+    </Folder>
+  </Folder>
+</Files>
+
+Run `turbo prune frontend` to generate a pruned workspace for the `frontend` application:
+
+<Files>
+  <File name="package.json" />
+  <File name="yarn.lock" />
+  <Folder name="apps" defaultOpen>
+    <Folder name="frontend">
+      <File name="package.json" />
+      <File name="next-env.d.ts" />
+      <File name="next.config.js" />
+      <Folder name="src">
+        <Folder name="app">
+          <File name="page.tsx" />
+        </Folder>
+      </Folder>
+      <File name="tsconfig.json" />
+    </Folder>
+  </Folder>
+  <Folder name="packages" defaultOpen>
+    <Folder name="shared">
+      <File name="package.json" />
+      <Folder name="src">
+        <Folder name="__tests__">
+          <File name="sum.test.ts" />
+          <File name="tsconfig.json" />
+        </Folder>
+        <File name="index.ts" />
+        <File name="sum.ts" />
+      </Folder>
+      <File name="tsconfig.json" />
+    </Folder>
+    <Folder name="ui">
+      <File name="package.json" />
+      <Folder name="src">
+        <File name="index.tsx" />
+      </Folder>
+      <File name="tsconfig.json" />
+    </Folder>
+  </Folder>
+</Files>
+
+### Options
+
+#### `--docker`
+
+`type: boolean`
+
+Default to `false`. Passing this flag will alter the outputted folder with the pruned workspace to make it easier to use with [Docker best practices / layer caching](https://docs.docker.com/develop/develop-images/dockerfile_best-practices/).
+
+With the `--docker` flag. The `prune` command will generate folder called `out` with the following inside of it:
+
+- A folder `json` with the pruned workspace's `package.json`s
+- A folder `full` with the pruned workspace's full source code, but only including the internal packages that are needed to build the target.
+- A new pruned lockfile that only contains the pruned subset of the original root lockfile with the dependencies that are actually used by the packages in the pruned workspace.
+
+```
+.
+├── full                                # Folder full source code for all package needed to build the target
+│   ├── package.json
+│   └── packages
+│       ├── ui
+│       │   ├── package.json
+│       │   ├── src
+│       │   │   └── index.tsx
+│       │   └── tsconfig.json
+│       ├── shared
+│       │   ├── package.json
+│       │   ├── src
+│       │   │   ├── __tests__
+│       │   │   │   ├── sum.test.ts
+│       │   │   │   └── tsconfig.json
+│       │   │   ├── index.ts
+│       │   │   └── sum.ts
+│       │   └── tsconfig.json
+│       └── frontend
+│           ├── next-env.d.ts
+│           ├── next.config.js
+│           ├── package.json
+│           ├── src
+│           │   └── pages
+│           │       └── index.tsx
+│           └── tsconfig.json
+├── json                                # Folder containing just package.jsons for all targets in the subworkspace
+│   ├── package.json
+│   └── packages
+│       ├── ui
+│       │   └── package.json
+│       ├── shared
+│       │   └── package.json
+│       └── frontend
+│           └── package.json
+└── yarn.lock                           # The pruned lockfile for all targets in the subworkspace
+```
+
+#### `--out-dir`
+
+**Default**: `./out`
+
+Customize the directory the pruned output is generated in.
