@@ -24,30 +24,35 @@ impl<'a> DependencySplitter<'a> {
     }
 
     pub fn is_internal(&self, name: &str, version: &str) -> Option<PackageName> {
-        // TODO implement borrowing for workspaces to allow for zero copy queries
-        let workspace_name = PackageName::Other(
-            WorkspacePackageSpecifier::new(version)
-                .map_or(name, |specifier| match specifier {
-                    WorkspacePackageSpecifier::Alias(alias) => alias,
-                })
-                .to_string(),
-        );
-        let is_internal = self
-            .workspaces
-            .get(&workspace_name)
+        let workspace_specifier = WorkspacePackageSpecifier::new(version)
+            .unwrap_or(WorkspacePackageSpecifier::Alias(name));
+        let (workspace_name, info) = self.find_package(workspace_specifier)?;
+        let is_internal = DependencyVersion::new(version).matches_workspace_package(
             // This is the current Go behavior, in the future we might not want to paper over a
             // missing version
-            .map(|e| e.package_json.version.as_deref().unwrap_or_default())
-            .map_or(false, |workspace_version| {
-                DependencyVersion::new(version).matches_workspace_package(
-                    workspace_version,
-                    self.workspace_dir,
-                    self.repo_root,
-                )
-            });
+            info.package_json.version.as_deref().unwrap_or_default(),
+            self.workspace_dir,
+            self.repo_root,
+        );
+
         match is_internal {
             true => Some(workspace_name),
             false => None,
+        }
+    }
+
+    // Find a package in workspace from a specifier
+    fn find_package(
+        &self,
+        specifier: WorkspacePackageSpecifier,
+    ) -> Option<(PackageName, &PackageInfo)> {
+        match specifier {
+            WorkspacePackageSpecifier::Alias(name) => {
+                // TODO implement borrowing for workspaces to allow for zero copy queries
+                let package_name = PackageName::Other(name.to_string());
+                let info = self.workspaces.get(&package_name)?;
+                Some((package_name, info))
+            }
         }
     }
 }
