@@ -52,7 +52,7 @@ Run build with invalid env var
   invalid_env_prefix (https://turbo.build/messages/invalid-env-prefix)
   
     x Environment variables should not be prefixed with "$"
-     ,-[6:1]
+     ,-[turbo.json:6:1]
    6 |     "build": {
    7 |       "env": ["NODE_ENV", "$FOOBAR"],
      :                           ^^^^|^^^^

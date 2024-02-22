@@ -4,12 +4,12 @@ use std::{
 };
 
 use biome_deserialize::{Deserializable, DeserializableValue, DeserializationDiagnostic};
-use miette::SourceSpan;
-use serde::Serialize;
+use miette::{NamedSource, SourceSpan};
+use serde::{Deserialize, Serialize};
 
 pub const TURBO_SITE: &str = "https://turbo.build";
 
-#[derive(Debug, Default, Clone, PartialEq, Serialize)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize, Eq)]
 #[serde(transparent)]
 pub struct Spanned<T> {
     pub value: T,
@@ -73,13 +73,51 @@ impl<T> Spanned<T> {
         self.value
     }
 
+    pub fn as_ref(&self) -> Spanned<&T> {
+        Spanned {
+            value: &self.value,
+            range: self.range.clone(),
+            path: self.path.clone(),
+            text: self.text.clone(),
+        }
+    }
+
+    /// Splits out the span info from the value.
+    pub fn split(self) -> (T, Spanned<()>) {
+        (
+            self.value,
+            Spanned {
+                value: (),
+                range: self.range,
+                path: self.path,
+                text: self.text,
+            },
+        )
+    }
+
+    /// Gets a ref to the inner value
+    pub fn as_inner(&self) -> &T {
+        &self.value
+    }
+
+    /// Replaces the old value with a new one
+    pub fn to<U>(&self, value: U) -> Spanned<U> {
+        Spanned {
+            value,
+            range: self.range.clone(),
+            path: self.path.clone(),
+            text: self.text.clone(),
+        }
+    }
+
     /// Gets the span and the text if both exist. If either doesn't exist, we
     /// return `None` for the span and an empty string for the text, since
     /// miette doesn't accept an `Option<String>` for `#[source_code]`
-    pub fn span_and_text(&self) -> (Option<SourceSpan>, String) {
+    pub fn span_and_text(&self, default_path: &str) -> (Option<SourceSpan>, NamedSource) {
+        let path = self.path.as_ref().map_or(default_path, |p| p.as_ref());
         match self.range.clone().zip(self.text.as_ref()) {
-            Some((range, text)) => (Some(range.into()), text.to_string()),
-            None => (None, String::new()),
+            Some((range, text)) => (Some(range.into()), NamedSource::new(path, text.to_string())),
+            None => (None, NamedSource::new(path, String::new())),
         }
     }
 
