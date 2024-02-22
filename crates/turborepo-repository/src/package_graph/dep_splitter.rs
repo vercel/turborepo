@@ -4,17 +4,17 @@ use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 
 use super::{PackageInfo, PackageName};
 
-pub struct DependencySplitter<'a, 'b, 'c> {
+pub struct DependencySplitter<'a> {
     repo_root: &'a AbsoluteSystemPath,
-    workspace_dir: &'b AbsoluteSystemPath,
-    workspaces: &'c HashMap<PackageName, PackageInfo>,
+    workspace_dir: &'a AbsoluteSystemPath,
+    workspaces: &'a HashMap<PackageName, PackageInfo>,
 }
 
-impl<'a, 'b, 'c> DependencySplitter<'a, 'b, 'c> {
+impl<'a> DependencySplitter<'a> {
     pub fn new(
         repo_root: &'a AbsoluteSystemPath,
-        workspace_dir: &'b AbsoluteSystemPath,
-        workspaces: &'c HashMap<PackageName, PackageInfo>,
+        workspace_dir: &'a AbsoluteSystemPath,
+        workspaces: &'a HashMap<PackageName, PackageInfo>,
     ) -> Self {
         Self {
             repo_root,
