@@ -7,6 +7,7 @@ const config = {
   reactStrictMode: true,
   experimental: {
     mdxRs: true,
+    useLightningcss: true,
   },
 };
 
