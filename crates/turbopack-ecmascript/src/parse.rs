@@ -254,6 +254,15 @@ async fn parse_content(
             title: Some("Ecmascript file had an error".to_string()),
         }),
     );
+    let parser_handler = Handler::with_emitter(
+        true,
+        false,
+        Box::new(IssueEmitter {
+            source,
+            source_map: source_map.clone(),
+            title: Some("Parsing ecmascript source code failed".to_string()),
+        }),
+    );
     let globals = Arc::new(Globals::new());
     let globals_ref = &globals;
     let helpers = GLOBALS.set(globals_ref, || Helpers::new(true));
@@ -305,16 +314,6 @@ async fn parse_content(
 
                 let mut parser = Parser::new_from(lexer);
                 let program_result = parser.parse_program();
-
-                let parser_handler = Handler::with_emitter(
-                    true,
-                    false,
-                    Box::new(IssueEmitter {
-                        source,
-                        source_map: source_map.clone(),
-                        title: Some("Parsing ecmascript source code failed".to_string()),
-                    }),
-                );
 
                 let mut has_errors = false;
                 for e in parser.take_errors() {
