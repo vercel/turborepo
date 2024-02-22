@@ -178,14 +178,12 @@ pub fn value_trait(args: TokenStream, input: TokenStream) -> TokenStream {
             impl turbo_tasks::debug::ValueDebug for Box<dyn #trait_ident> {
                 #[turbo_tasks::function]
                 pub fn dbg(self: turbo_tasks::Vc<Self>) -> turbo_tasks::Vc<turbo_tasks::debug::ValueDebugString> {
-                    use turbo_tasks::debug::ValueDebug;
-                    self.dbg_depth(usize::MAX)
+                    turbo_tasks::debug::ValueDebug::dbg_depth(self, usize::MAX)
                 }
 
                 #[turbo_tasks::function]
                 pub async fn dbg_depth(self: turbo_tasks::Vc<Self>, depth: usize) -> ::anyhow::Result<turbo_tasks::Vc<turbo_tasks::debug::ValueDebugString>> {
-                    use turbo_tasks::debug::ValueDebugFormat;
-                    let string = self.value_debug_format(depth).try_to_value_debug_string().await?.await?;
+                    let string = turbo_tasks::debug::ValueDebugFormat::value_debug_format(&self, depth).try_to_value_debug_string().await?.await?;
                     Ok(turbo_tasks::debug::ValueDebugString::new(format!(concat!(stringify!(#trait_ident), "({})"), string)))
                 }
             }
