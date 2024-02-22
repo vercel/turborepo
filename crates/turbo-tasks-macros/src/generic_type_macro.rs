@@ -37,7 +37,7 @@ pub fn generic_type(input: TokenStream) -> TokenStream {
 
     for param in &mut input.generics.params {
         if let GenericParam::Type(param) = param {
-            param.bounds.push(syn::parse_quote! { std::marker::Send });
+            param.bounds.push(syn::parse_quote! { ::std::marker::Send });
         }
     }
 
@@ -83,9 +83,9 @@ pub fn generic_type(input: TokenStream) -> TokenStream {
 
         impl #impl_generics Vc<#ty> #where_clause {
             /// Converts this `Vc` to a generic representation.
-            fn to_repr(vc: Self) -> Vc<#repr> {
+            fn to_repr(vc: Self) -> turbo_tasks::Vc<#repr> {
                 unsafe {
-                    turbo_tasks::Vc::from_raw(Vc::into_raw(vc))
+                    turbo_tasks::Vc::from_raw(turbo_tasks::Vc::into_raw(vc))
                 }
             }
 
@@ -94,9 +94,9 @@ pub fn generic_type(input: TokenStream) -> TokenStream {
             /// # Safety
             ///
             /// The caller must ensure that the `repr` is a valid representation of this `Vc`.
-            unsafe fn from_repr(vc: Vc<#repr>) -> Self {
+            unsafe fn from_repr(vc: turbo_tasks::Vc<#repr>) -> Self {
                 unsafe {
-                    turbo_tasks::Vc::from_raw(Vc::into_raw(vc))
+                    turbo_tasks::Vc::from_raw(turbo_tasks::Vc::into_raw(vc))
                 }
             }
         }

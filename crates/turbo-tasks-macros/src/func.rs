@@ -268,7 +268,7 @@ impl TurboFn {
         let signature = self.signature();
 
         parse_quote! {
-            #signature where Self: Sized
+            #signature where Self: ::std::marker::Sized
         }
     }
 
