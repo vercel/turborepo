@@ -64,8 +64,15 @@ pub enum Error {
     },
     #[error(transparent)]
     Graph(#[from] graph::Error),
-    #[error("Invalid task name {task_name}: {reason}")]
-    InvalidTaskName { task_name: String, reason: String },
+    #[error("invalid task name: {reason}")]
+    InvalidTaskName {
+        #[label]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+        task_name: String,
+        reason: String,
+    },
 }
 
 pub struct EngineBuilder<'a> {
@@ -200,7 +207,7 @@ impl<'a> EngineBuilder<'a> {
                 });
             }
 
-            validate_task_name(task_id.task())?;
+            validate_task_name(task_id.to(task_id.task()))?;
 
             if task_id.package() != ROOT_PKG_NAME
                 && self
@@ -447,12 +454,15 @@ impl Error {
 // we can expand the patterns here.
 const INVALID_TOKENS: &[&str] = &["$colon$"];
 
-fn validate_task_name(task: &str) -> Result<(), Error> {
+fn validate_task_name(task: Spanned<&str>) -> Result<(), Error> {
     INVALID_TOKENS
         .iter()
         .find(|token| task.contains(**token))
         .map(|found_token| {
+            let (span, text) = task.span_and_text("turbo.json");
             Err(Error::InvalidTaskName {
+                span,
+                text,
                 task_name: task.to_string(),
                 reason: format!("task contains invalid string '{found_token}'"),
             })
@@ -1106,7 +1116,7 @@ mod test {
     #[test_case("build:prod", None)]
     #[test_case("build$colon$prod", Some("task contains invalid string '$colon$'"))]
     fn test_validate_task_name(task_name: &str, reason: Option<&str>) {
-        let result = validate_task_name(task_name)
+        let result = validate_task_name(Spanned::new(task_name))
             .map_err(|e| {
                 if let Error::InvalidTaskName { reason, .. } = e {
                     reason
