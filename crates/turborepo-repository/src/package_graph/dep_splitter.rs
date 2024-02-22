@@ -26,11 +26,10 @@ impl<'a> DependencySplitter<'a> {
     pub fn is_internal(&self, name: &str, version: &str) -> Option<PackageName> {
         // TODO implement borrowing for workspaces to allow for zero copy queries
         let workspace_name = PackageName::Other(
-            version
-                .strip_prefix("workspace:")
-                .and_then(|version| version.rsplit_once('@'))
-                .filter(|(_, version)| *version == "*" || *version == "^" || *version == "~")
-                .map_or(name, |(actual_name, _)| actual_name)
+            WorkspacePackageSpecifier::new(version)
+                .map_or(name, |specifier| match specifier {
+                    WorkspacePackageSpecifier::Alias(alias) => alias,
+                })
                 .to_string(),
         );
         let is_internal = self
@@ -49,6 +48,26 @@ impl<'a> DependencySplitter<'a> {
         match is_internal {
             true => Some(workspace_name),
             false => None,
+        }
+    }
+}
+
+// A parsed variant of a package dependency that uses the workspace protocol
+// The specifier can either be a package name or a relative path
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WorkspacePackageSpecifier<'a> {
+    Alias(&'a str),
+    // Path(&'a str),
+}
+
+impl<'a> WorkspacePackageSpecifier<'a> {
+    fn new(version: &'a str) -> Option<Self> {
+        let version = version.strip_prefix("workspace:")?;
+        let (name, version) = version.rsplit_once('@')?;
+        if version == "*" || version == "^" || version == "~" {
+            Some(Self::Alias(name))
+        } else {
+            None
         }
     }
 }
@@ -241,5 +260,16 @@ mod test {
             splitter.is_internal(dependency_name.unwrap_or("@scope/foo"), range),
             expected.map(PackageName::from)
         );
+    }
+
+    #[test_case("1.2.3", None ; "non-workspace")]
+    #[test_case("workspace:1.2.3", None ; "workspace version")]
+    #[test_case("workspace:*", None ; "workspace any")]
+    #[test_case("workspace:foo@*", Some(WorkspacePackageSpecifier::Alias("foo")) ; "star")]
+    #[test_case("workspace:foo@~", Some(WorkspacePackageSpecifier::Alias("foo")) ; "tilde")]
+    #[test_case("workspace:foo@^", Some(WorkspacePackageSpecifier::Alias("foo")) ; "caret")]
+    #[test_case("workspace:@scope/foo@*", Some(WorkspacePackageSpecifier::Alias("@scope/foo")) ; "package with scope")]
+    fn test_workspace_specifier(input: &str, expected: Option<WorkspacePackageSpecifier>) {
+        assert_eq!(WorkspacePackageSpecifier::new(input), expected);
     }
 }
