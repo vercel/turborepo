@@ -3,8 +3,14 @@ title: link
 description: API reference for the `turbo link` command.
 ---
 
-Link the repository to Remote Cache. The selected owner (either a user or an organization) will be able to share [cache artifacts](/repo/docs/core-concepts/caching) through [Remote Caching](/repo/docs/core-concepts/remote-caching).
+Link the repository to a Remote Cache provider. The selected owner (either a user or an organization) will be able to share [cache artifacts](/repo/docs/core-concepts/caching) through [Remote Caching](/repo/docs/core-concepts/remote-caching).
 
-| Option | Type   | Default                  |
-| ------ | ------ | ------------------------ |
-| --api  | string | `https://api.vercel.com` |
+## Flag options
+
+### `--api`
+
+Specifies the URL to logout of your Remote Cache provider.
+
+```bash
+turbo logout --api https://acme.com
+```
