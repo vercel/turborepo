@@ -377,7 +377,7 @@ async fn parse_content(
                     .await?;
             }
 
-            if handler.has_errors() {
+            if parser_handler.has_errors() {
                 return Ok(ParseResult::Unparseable);
             }
 
