@@ -96,7 +96,7 @@ thead th:empty {
   background: hsl(var(--muted) / 1);
 }
 
-/* .prose :where(table):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+.prose :where(table):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
   tr {
     td:first-child {
       text-wrap: nowrap;
@@ -107,4 +107,4 @@ thead th:empty {
 
 .prose :where(code):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
   text-wrap: nowrap;
-} */
+}
