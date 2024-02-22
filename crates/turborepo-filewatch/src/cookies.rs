@@ -7,17 +7,17 @@
 //! won't get any stale events.
 //!
 //! Here's the `CookieWriter` flow:
-//! - `CookieWriter` spins up a `watch_cookies` task and creates a
+//! - `CookieWriter` spins up a `watch_for_cookie_requests` task and creates a
 //!   `cookie_requests` mpsc channel to send a cookie request to that task. The
 //!   cookie request consists of a oneshot `Sender` that the task can use to
 //!   send back the serial number.
-//! - The `watch_cookies` task watches for cookie requests on
+//! - The `watch_for_cookie_requests` task watches for cookie requests on
 //!   `cookie_requests_rx`. When one occurs, it creates the cookie file and
 //!   bumps the serial. It then sends the serial back using the `Sender`
 //! - When `CookieWriter::cookie_request` is called, it sends the cookie request
-//!   to the `watch_cookies` channel and then waits for the serial as a response
-//!   (with a timeout). Upon getting the serial, a `CookiedRequest` gets
-//!   returned with the serial number attached.
+//!   to the `watch_for_cookie_request` channel and then waits for the serial as
+//!   a response (with a timeout). Upon getting the serial, a `CookiedRequest`
+//!   gets returned with the serial number attached.
 //!
 //! And here's the `CookieWatcher` flow:
 //! - `GlobWatcher` creates a `CookieWatcher`.
@@ -208,7 +208,8 @@ impl CookieWriter {
                     tracing::debug!("nobody listening for cookie requests, exiting");
                     return;
                 };
-                watch_cookies(root.to_owned(), cookie_requests_rx, exit_signal).await;
+                watch_for_cookie_file_requests(root.to_owned(), cookie_requests_rx, exit_signal)
+                    .await;
             }
         });
         Self {
@@ -268,7 +269,7 @@ impl CookieWriter {
     }
 }
 
-async fn watch_cookies(
+async fn watch_for_cookie_file_requests(
     root: AbsoluteSystemPathBuf,
     mut cookie_requests: mpsc::Receiver<oneshot::Sender<Result<usize, CookieError>>>,
     mut exit_signal: mpsc::Receiver<()>,
@@ -278,12 +279,12 @@ async fn watch_cookies(
         tokio::select! {
             biased;
             _ = exit_signal.recv() => return,
-            req = cookie_requests.recv() => handle_cookie_request(&root, &mut serial, req),
+            req = cookie_requests.recv() => handle_cookie_file_request(&root, &mut serial, req),
         }
     }
 }
 
-fn handle_cookie_request(
+fn handle_cookie_file_request(
     root: &AbsoluteSystemPath,
     serial: &mut usize,
     req: Option<oneshot::Sender<Result<usize, CookieError>>>,
