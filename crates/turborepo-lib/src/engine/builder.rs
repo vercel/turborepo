@@ -60,7 +60,14 @@ pub enum Error {
         task_id: String,
     },
     #[error("Could not find \"{task_id}\" in root turbo.json or \"{task_name}\" in workspace")]
-    MissingWorkspaceTask { task_id: String, task_name: String },
+    MissingWorkspaceTask {
+        #[label]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+        task_id: String,
+        task_name: String,
+    },
     #[error(transparent)]
     #[diagnostic(transparent)]
     Config(#[from] crate::config::Error),
@@ -412,7 +419,10 @@ impl<'a> EngineBuilder<'a> {
         }
 
         if task_definitions.is_empty() {
+            let (span, text) = task_id.span_and_text("turbo.json");
             return Err(Error::MissingWorkspaceTask {
+                span,
+                text,
                 task_id: task_id.to_string(),
                 task_name: task_name.to_string(),
             });
