@@ -41,7 +41,7 @@ fn hash_named(_ident: &Ident, fields: &FieldsNamed) -> (TokenStream2, TokenStrea
         captures,
         quote! {
             {#(
-                #fields_idents.deterministic_hash(__state__);
+                turbo_tasks_hash::DeterministicHash::deterministic_hash(&#fields_idents, __state__);
             )*}
         },
     )
@@ -55,7 +55,7 @@ fn hash_unnamed(_ident: &Ident, fields: &FieldsUnnamed) -> (TokenStream2, TokenS
         captures,
         quote! {
             {#(
-                #fields_idents.deterministic_hash(__state__);
+                turbo_tasks_hash::DeterministicHash::deterministic_hash(&#fields_idents, __state__);
             )*}
         },
     )
