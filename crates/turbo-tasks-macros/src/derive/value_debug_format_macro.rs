@@ -25,8 +25,12 @@ pub fn derive_value_debug_format(input: TokenStream) -> TokenStream {
             .bounds
             .push(syn::parse_quote!(turbo_tasks::debug::ValueDebugFormat));
         type_param.bounds.push(syn::parse_quote!(std::fmt::Debug));
-        type_param.bounds.push(syn::parse_quote!(std::marker::Send));
-        type_param.bounds.push(syn::parse_quote!(std::marker::Sync));
+        type_param
+            .bounds
+            .push(syn::parse_quote!(::std::marker::Send));
+        type_param
+            .bounds
+            .push(syn::parse_quote!(::std::marker::Sync));
     }
     let (impl_generics, ty_generics, where_clause) = derive_input.generics.split_for_impl();
 
