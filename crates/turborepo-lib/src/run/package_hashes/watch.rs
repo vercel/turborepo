@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use tokio::{sync::watch::error::RecvError, time::error::Elapsed};
-use tracing::debug;
 use turborepo_repository::discovery::PackageDiscovery;
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 

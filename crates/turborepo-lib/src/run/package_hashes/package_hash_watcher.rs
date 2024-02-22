@@ -13,7 +13,7 @@ use tokio::{
     select,
     sync::{broadcast, oneshot, watch},
 };
-use tracing::{debug, warn};
+use tracing::debug;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, RelativeUnixPathBuf,
 };

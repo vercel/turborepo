@@ -153,7 +153,13 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
             }
 
             let hashes = client.discover_package_hashes(task_nodes).await?;
-            println!("{:?}", hashes);
+            for hash in hashes.package_hashes {
+                if let Some(task_id) = hash.task_id {
+                    println!("{}#{}: {}", task_id.package, task_id.task, hash.hash);
+                } else {
+                    println!("{}", hash.hash)
+                }
+            }
         }
         DaemonCommand::Clean => {
             // try to connect and shutdown the daemon
