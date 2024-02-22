@@ -177,6 +177,7 @@ mod test {
     #[test_case("1.2.3", None, "workspace:*", Some("@scope/foo") ; "handles workspace protocol with no version")]
     #[test_case("1.2.3", Some("bar"), "workspace:../bar/", Some("bar") ; "handles workspace protocol with relative path")]
     #[test_case("1.2.3", None, "workspace:../@scope/foo", Some("@scope/foo") ; "handles workspace protocol with scoped relative path")]
+    #[test_case("1.2.3", Some("bar"), "workspace:../baz", Some("baz") ; "handles workspace protocol with path to differing package")]
     #[test_case("1.2.3", None, "npm:^1.2.3", Some("@scope/foo") ; "handles npm protocol with satisfied semver range")]
     #[test_case("2.3.4", None, "npm:^1.2.3", None ; "handles npm protocol with not satisfied semver range")]
     #[test_case("1.2.3", None, "1.2.2-alpha-123abcd.0", None ; "handles pre-release versions")]
