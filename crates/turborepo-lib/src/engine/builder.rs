@@ -50,8 +50,15 @@ pub enum Error {
         #[source_code]
         text: NamedSource,
     },
-    #[error("Could not find workspace \"{package}\" from task \"{task_id}\" in project")]
-    MissingWorkspaceFromTask { package: String, task_id: String },
+    #[error("Could not find package \"{package}\" from task \"{task_id}\" in project")]
+    MissingPackageFromTask {
+        #[label]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+        package: String,
+        task_id: String,
+    },
     #[error("Could not find \"{task_id}\" in root turbo.json or \"{task_name}\" in workspace")]
     MissingWorkspaceTask { task_id: String, task_name: String },
     #[error(transparent)]
@@ -219,7 +226,10 @@ impl<'a> EngineBuilder<'a> {
                 // If we're hitting this error something has gone wrong earlier when building
                 // PackageGraph or the workspace really doesn't exist and
                 // turbo.json is misconfigured.
-                return Err(Error::MissingWorkspaceFromTask {
+                let (span, text) = task_id.span_and_text("turbo.json");
+                return Err(Error::MissingPackageFromTask {
+                    span,
+                    text,
                     package: task_id.package().to_string(),
                     task_id: task_id.to_string(),
                 });
