@@ -151,7 +151,7 @@ mod test {
     #[test_case("2.3.4", None, "^1.0.0", None ; "handles semver range not satisfied")]
     #[test_case("1.2.3", None, "workspace:1.2.3", Some("@scope/foo") ; "handles workspace protocol with version")]
     #[test_case("1.2.3", None, "workspace:*", Some("@scope/foo") ; "handles workspace protocol with no version")]
-    #[test_case("1.2.3", None, "workspace:../other-packages/", Some("@scope/foo") ; "handles workspace protocol with relative path")]
+    #[test_case("1.2.3", Some("bar"), "workspace:../bar/", Some("bar") ; "handles workspace protocol with relative path")]
     #[test_case("1.2.3", None, "workspace:../@scope/foo", Some("@scope/foo") ; "handles workspace protocol with scoped relative path")]
     #[test_case("1.2.3", None, "npm:^1.2.3", Some("@scope/foo") ; "handles npm protocol with satisfied semver range")]
     #[test_case("2.3.4", None, "npm:^1.2.3", None ; "handles npm protocol with not satisfied semver range")]
@@ -190,7 +190,40 @@ mod test {
                         version: Some(package_version.to_string()),
                         ..Default::default()
                     },
-                    package_json_path: AnchoredSystemPathBuf::from_raw("unused").unwrap(),
+                    package_json_path: AnchoredSystemPathBuf::from_raw(
+                        ["packages", "@scope", "foo"].join(std::path::MAIN_SEPARATOR_STR),
+                    )
+                    .unwrap(),
+                    unresolved_external_dependencies: None,
+                    transitive_dependencies: None,
+                },
+            );
+            map.insert(
+                PackageName::Other("bar".to_string()),
+                PackageInfo {
+                    package_json: PackageJson {
+                        version: Some("1.0.0".to_string()),
+                        ..Default::default()
+                    },
+                    package_json_path: AnchoredSystemPathBuf::from_raw(
+                        ["packages", "bar"].join(std::path::MAIN_SEPARATOR_STR),
+                    )
+                    .unwrap(),
+                    unresolved_external_dependencies: None,
+                    transitive_dependencies: None,
+                },
+            );
+            map.insert(
+                PackageName::Other("baz".to_string()),
+                PackageInfo {
+                    package_json: PackageJson {
+                        version: Some("1.0.0".to_string()),
+                        ..Default::default()
+                    },
+                    package_json_path: AnchoredSystemPathBuf::from_raw(
+                        ["packages", "baz"].join(std::path::MAIN_SEPARATOR_STR),
+                    )
+                    .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
                 },
