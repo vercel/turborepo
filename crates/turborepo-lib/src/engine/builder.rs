@@ -59,8 +59,8 @@ pub enum Error {
         package: String,
         task_id: String,
     },
-    #[error("Could not find \"{task_id}\" in root turbo.json or \"{task_name}\" in workspace")]
-    MissingWorkspaceTask {
+    #[error("Could not find \"{task_id}\" in root turbo.json or \"{task_name}\" in package")]
+    MissingPackageTask {
         #[label]
         span: Option<SourceSpan>,
         #[source_code]
@@ -422,7 +422,7 @@ impl<'a> EngineBuilder<'a> {
 
         if task_definitions.is_empty() {
             let (span, text) = task_id.span_and_text("turbo.json");
-            return Err(Error::MissingWorkspaceTask {
+            return Err(Error::MissingPackageTask {
                 span,
                 text,
                 task_id: task_id.to_string(),
