@@ -57,7 +57,7 @@ pub async fn module_references(
             });
             Ok(Vc::cell(references))
         }
-        ParseResult::Unparseable | ParseResult::NotFound => Ok(Vc::cell(Vec::new())),
+        ParseResult::Unparseable { .. } | ParseResult::NotFound => Ok(Vc::cell(Vec::new())),
     }
 }
 

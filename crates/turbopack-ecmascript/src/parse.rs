@@ -57,7 +57,9 @@ pub enum ParseResult {
         #[turbo_tasks(debug_ignore, trace_ignore)]
         source_map: Arc<swc_core::common::SourceMap>,
     },
-    Unparseable,
+    Unparseable {
+        messages: Option<Vec<String>>,
+    },
     NotFound,
 }
 
@@ -183,13 +185,18 @@ async fn parse_internal(
     let content = match content.await {
         Ok(content) => content,
         Err(error) => {
+            let error = PrettyPrintError(&error).to_string();
             ReadSourceIssue {
                 source,
-                error: PrettyPrintError(&error).to_string(),
+                error: error.clone(),
             }
             .cell()
             .emit();
-            return Ok(ParseResult::Unparseable.cell());
+
+            return Ok(ParseResult::Unparseable {
+                messages: Some(vec![error]),
+            }
+            .cell());
         }
     };
     Ok(match &*content {
@@ -220,17 +227,21 @@ async fn parse_internal(
                     }
                 }
                 Err(error) => {
+                    let error = PrettyPrintError(&error).to_string();
                     ReadSourceIssue {
                         source,
-                        error: PrettyPrintError(&error).to_string(),
+                        error: error.clone(),
                     }
                     .cell()
                     .emit();
-                    ParseResult::Unparseable.cell()
+                    ParseResult::Unparseable {
+                        messages: Some(vec![error]),
+                    }
+                    .cell()
                 }
             },
         },
-        AssetContent::Redirect { .. } => ParseResult::Unparseable.cell(),
+        AssetContent::Redirect { .. } => ParseResult::Unparseable { messages: None }.cell(),
     })
 }
 
@@ -315,21 +326,31 @@ async fn parse_content(
                 let mut parser = Parser::new_from(lexer);
                 let program_result = parser.parse_program();
 
-                let mut has_errors = false;
+                //let mut has_errors = false;
+                let mut has_errors = vec![];
                 for e in parser.take_errors() {
-                    e.into_diagnostic(&parser_handler).emit();
-                    has_errors = true
+                    let mut e = e.into_diagnostic(&parser_handler);
+                    has_errors.extend(e.message.iter().map(|m| m.0.clone()));
+                    e.emit();
                 }
 
-                if has_errors {
-                    return Ok(ParseResult::Unparseable);
+                if !has_errors.is_empty() {
+                    return Ok(ParseResult::Unparseable {
+                        messages: Some(has_errors),
+                    });
                 }
 
                 match program_result {
                     Ok(parsed_program) => parsed_program,
                     Err(e) => {
-                        e.into_diagnostic(&parser_handler).emit();
-                        return Ok(ParseResult::Unparseable);
+                        let mut e = e.into_diagnostic(&parser_handler);
+                        let messages = e.message.iter().map(|m| m.0.clone()).collect();
+
+                        e.emit();
+
+                        return Ok(ParseResult::Unparseable {
+                            messages: Some(messages),
+                        });
                     }
                 }
             };
@@ -376,8 +397,9 @@ async fn parse_content(
                     .await?;
             }
 
+            // seems already emitted errors are not readable except the count?
             if parser_handler.has_errors() {
-                return Ok(ParseResult::Unparseable);
+                return Ok(ParseResult::Unparseable { messages: None });
             }
 
             parsed_program.visit_mut_with(
