@@ -436,6 +436,11 @@ pub enum JsValue {
     /// `(total_node_count, test, cons, alt)`
     Tenary(usize, Box<JsValue>, Box<JsValue>, Box<JsValue>),
 
+    /// A for-of loop
+    ///
+    /// `(total_node_count, iterable)`
+    Iterated(usize, Box<JsValue>),
+
     // PLACEHOLDERS
     // ----------------------------
     /// A reference to a variable.
