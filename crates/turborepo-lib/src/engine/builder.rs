@@ -181,7 +181,8 @@ impl<'a> EngineBuilder<'a> {
                 //   workspace is acceptable)
                 if !matches!(workspace, PackageName::Root) || self.root_enabled_tasks.contains(task)
                 {
-                    traversal_queue.push_back(task.to(task_id));
+                    let task_id = task.to(task_id);
+                    traversal_queue.push_back(task_id);
                 }
             }
         }
@@ -208,6 +209,11 @@ impl<'a> EngineBuilder<'a> {
         let mut engine = Engine::default();
 
         while let Some(task_id) = traversal_queue.pop_front() {
+            {
+                let (task_id, span) = task_id.clone().split();
+                engine.add_task_location(task_id.into_owned(), span);
+            }
+
             if task_id.package() == ROOT_PKG_NAME
                 && !self
                     .root_enabled_tasks
@@ -299,7 +305,8 @@ impl<'a> EngineBuilder<'a> {
                         engine
                             .task_graph
                             .add_edge(to_task_index, from_task_index, ());
-                        traversal_queue.push_back(span.to(from_task_id));
+                        let from_task_id = span.to(from_task_id);
+                        traversal_queue.push_back(from_task_id);
                     }
                 });
 
@@ -313,13 +320,11 @@ impl<'a> EngineBuilder<'a> {
                 engine
                     .task_graph
                     .add_edge(to_task_index, from_task_index, ());
-                traversal_queue.push_back(span.to(from_task_id));
+                let from_task_id = span.to(from_task_id);
+                traversal_queue.push_back(from_task_id);
             }
 
             engine.add_definition(task_id.as_inner().clone().into_owned(), task_definition);
-            let (task_id, span) = task_id.split();
-            engine.add_task_location(task_id.into_owned(), span);
-
             if !has_deps && !has_topo_deps {
                 engine.connect_to_root(&to_task_id);
             }

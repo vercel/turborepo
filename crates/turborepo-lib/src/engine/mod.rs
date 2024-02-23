@@ -81,12 +81,17 @@ impl Engine<Building> {
         self.task_definitions.insert(task_id, definition)
     }
 
-    pub fn add_task_location(
-        &mut self,
-        task_id: TaskId<'static>,
-        location: Spanned<()>,
-    ) -> Option<Spanned<()>> {
-        self.task_locations.insert(task_id, location)
+    pub fn add_task_location(&mut self, task_id: TaskId<'static>, location: Spanned<()>) {
+        // If we don't have the location stored,
+        // or if the location stored is empty, we add it to the map.
+        let has_location = self
+            .task_locations
+            .get(&task_id)
+            .map_or(false, |existing| existing.range.is_some());
+
+        if !has_location {
+            self.task_locations.insert(task_id, location);
+        }
     }
 
     // Seals the task graph from being mutated

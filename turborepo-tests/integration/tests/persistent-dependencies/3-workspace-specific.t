@@ -19,7 +19,7 @@
   $ ${TURBO} run build
     x invalid persistent task configuration
   
-  Error:   x "pkg-a#dev" is a persistent task, "pkg-a#build" cannot depend on it
+  Error:   x "pkg-a#dev" is a persistent task, "((pkg-a)|(app-a))#build" cannot depend on it (re)
      ,-[turbo.json:4:1]
    4 |     "build": {
    5 |       "dependsOn": ["pkg-a#dev"]
@@ -27,7 +27,7 @@
      :                          `-- persistent task
    6 |     },
      `----
-  Error:   x "pkg-a#dev" is a persistent task, "app-a#build" cannot depend on it
+  Error:   x "pkg-a#dev" is a persistent task, "((pkg-a)|(app-a))#build" cannot depend on it (re)
      ,-[turbo.json:4:1]
    4 |     "build": {
    5 |       "dependsOn": ["pkg-a#dev"]
