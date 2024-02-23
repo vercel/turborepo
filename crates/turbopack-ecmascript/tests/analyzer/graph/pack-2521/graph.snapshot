@@ -24,74 +24,14 @@
     ),
     (
         "path",
-        Alternatives(
-            11,
-            [
-                Concat(
-                    4,
-                    [
-                        Constant(
-                            Str(
-                                Atom(
-                                    "../src/build/Release/sharp-",
-                                ),
-                            ),
-                        ),
-                        Variable(
-                            (
-                                "runtimePlatform",
-                                #2,
-                            ),
-                        ),
-                        Constant(
-                            Str(
-                                Atom(
-                                    ".node",
-                                ),
-                            ),
-                        ),
-                    ],
+        Iterated(
+            2,
+            Variable(
+                (
+                    "paths",
+                    #2,
                 ),
-                Constant(
-                    Str(
-                        Word(
-                            "../src/build/Release/sharp-wasm32.node",
-                        ),
-                    ),
-                ),
-                Concat(
-                    4,
-                    [
-                        Constant(
-                            Str(
-                                Atom(
-                                    "@img/sharp-",
-                                ),
-                            ),
-                        ),
-                        Variable(
-                            (
-                                "runtimePlatform",
-                                #2,
-                            ),
-                        ),
-                        Constant(
-                            Str(
-                                Atom(
-                                    "/sharp.node",
-                                ),
-                            ),
-                        ),
-                    ],
-                ),
-                Constant(
-                    Str(
-                        Word(
-                            "@img/sharp-wasm32/sharp.node",
-                        ),
-                    ),
-                ),
-            ],
+            ),
         ),
     ),
     (

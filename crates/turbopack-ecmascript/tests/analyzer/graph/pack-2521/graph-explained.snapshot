@@ -4,12 +4,7 @@ err = ???*0*
 
 errors = []
 
-path = (
-  | `../src/build/Release/sharp-${runtimePlatform}.node`
-  | "../src/build/Release/sharp-wasm32.node"
-  | `@img/sharp-${runtimePlatform}/sharp.node`
-  | "@img/sharp-wasm32/sharp.node"
-)
+path = for (let _ of paths)
 
 paths = [
     `../src/build/Release/sharp-${runtimePlatform}.node`,
