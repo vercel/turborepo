@@ -104,13 +104,15 @@ pub fn derive_task_input(input: TokenStream) -> TokenStream {
                 .map(Literal::usize_unsuffixed)
                 .collect();
 
+            let ident_str = ident.to_string();
+
             (
                 quote! {
                     match value {
                         turbo_tasks::ConcreteTaskInput::List(value) => {
                             let mut #inputs_list_ident = value.iter();
 
-                            let discriminant = #inputs_list_ident.next().ok_or_else(|| ::anyhow::anyhow!(concat!("missing discriminant for ", stringify!(#ident))))?;
+                            let discriminant = turbo_tasks::macro_helpers::ok_or_else_for_missing_element(#inputs_list_ident.next(), #ident_str)?;
                             let discriminant: #repr = turbo_tasks::TaskInput::try_from_concrete(discriminant)?;
 
                             Ok(match discriminant {
@@ -220,7 +222,7 @@ fn expand_named(
         destructuring,
         quote! {
             #(
-                let #fields_idents = #inputs_list_ident.next().ok_or_else(|| ::anyhow::anyhow!(concat!("missing element for ", stringify!(#fields_idents))))?;
+                let #fields_idents = turbo_tasks::macro_helpers::ok_or_else_for_missing_element(#inputs_list_ident.next(), stringify!(#fields_idents))?;
                 let #fields_idents = turbo_tasks::TaskInput::try_from_concrete(#fields_idents)?;
             )*
         },
@@ -243,7 +245,7 @@ fn expand_unnamed(
         destructuring,
         quote! {
             #(
-                let #fields_idents = #inputs_list_ident.next().ok_or_else(|| ::anyhow::anyhow!(concat!("missing element for ", stringify!(#fields_idents))))?;
+                let #fields_idents = turbo_tasks::macro_helpers::ok_or_else_for_missing_element(#inputs_list_ident.next(), stringify!(#fields_idents))?;
                 let #fields_idents = turbo_tasks::TaskInput::try_from_concrete(#fields_idents)?;
             )*
         },
