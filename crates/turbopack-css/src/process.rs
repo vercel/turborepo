@@ -20,7 +20,7 @@ use swc_core::{
     base::sourcemap::SourceMapBuilder,
     common::{BytePos, FileName, LineCol, Span},
     css::{
-        ast::{TypeSelector, UrlValue},
+        ast::{SubclassSelector, TypeSelector, UrlValue},
         codegen::{writer::basic::BasicCssWriter, CodeGenerator},
         modules::{CssClassName, TransformConfig},
         visit::{VisitMut, VisitMutWith, VisitWith},
@@ -695,14 +695,16 @@ impl swc_core::css::visit::Visit for CssValidator {
     fn visit_complex_selector(&mut self, n: &swc_core::css::ast::ComplexSelector) {
         if n.children.iter().all(|sel| match sel {
             swc_core::css::ast::ComplexSelectorChildren::CompoundSelector(sel) => {
-                sel.subclass_selectors.is_empty()
-                    && match &sel.type_selector.as_deref() {
-                        Some(TypeSelector::TagName(tag)) => {
-                            !matches!(&*tag.name.value.value, "html" | "body")
-                        }
-                        Some(..) => true,
-                        None => false,
+                sel.subclass_selectors.iter().all(|sel| match sel {
+                    SubclassSelector::Attribute { .. } => true,
+                    _ => false,
+                }) && match &sel.type_selector.as_deref() {
+                    Some(TypeSelector::TagName(tag)) => {
+                        !matches!(&*tag.name.value.value, "html" | "body")
                     }
+                    Some(..) => true,
+                    None => false,
+                }
             }
             swc_core::css::ast::ComplexSelectorChildren::Combinator(_) => true,
         }) {
