@@ -37,13 +37,14 @@ pub fn derive_value_debug_format(input: TokenStream) -> TokenStream {
     let formatting_logic =
         match_expansion(&derive_input, &format_named, &format_unnamed, &format_unit);
 
+    let ident_str = ident.to_string();
     quote! {
         impl #impl_generics turbo_tasks::debug::ValueDebugFormat for #ident #ty_generics #where_clause {
             fn value_debug_format<'a>(&'a self, depth: usize) -> turbo_tasks::debug::ValueDebugFormatString<'a> {
                 turbo_tasks::debug::ValueDebugFormatString::Async(
                     Box::pin(async move {
                         if depth == 0 {
-                            return Ok(stringify!(#ident).to_string());
+                            return Ok(#ident_str.to_string());
                         }
 
                         use turbo_tasks::debug::internal::*;
@@ -67,13 +68,14 @@ fn format_field(value: TokenStream2) -> TokenStream2 {
 /// Formats a struct or enum variant with named fields (e.g. `struct Foo {
 /// bar: u32 }`, `Foo::Bar { baz: u32 }`).
 fn format_named(ident: &Ident, fields: &FieldsNamed) -> (TokenStream2, TokenStream2) {
+    let ident_str = ident.to_string();
     let (captures, fields_idents) = generate_destructuring(fields.named.iter(), &filter_field);
     let fields_values = fields_idents.iter().cloned().map(format_field);
     (
         captures,
         quote! {
             FormattingStruct::new_named(
-                stringify!(#ident),
+                #ident_str,
                 vec![#(
                     FormattingField::new(
                         stringify!(#fields_idents),

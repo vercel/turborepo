@@ -286,8 +286,9 @@ pub fn value_impl(args: TokenStream, input: TokenStream) -> TokenStream {
                     pub(crate) static #native_function_id_ident: #native_function_id_ty = <#ty as #inline_extension_trait_ident>::#native_function_id_ident;
                 });
 
+                let ident_str = ident.to_string();
                 trait_registers.push(quote! {
-                    value.register_trait_method(<Box<dyn #trait_path> as turbo_tasks::VcValueTrait>::get_trait_type_id(), stringify!(#ident).into(), *#native_function_id_ident);
+                    value.register_trait_method(<Box<dyn #trait_path> as turbo_tasks::VcValueTrait>::get_trait_type_id(), #ident_str.into(), *#native_function_id_ident);
                 });
             }
         }

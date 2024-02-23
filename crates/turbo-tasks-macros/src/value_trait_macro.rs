@@ -121,8 +121,9 @@ pub fn value_trait(args: TokenStream, input: TokenStream) -> TokenStream {
                 #native_function_ident
             });
 
+            let ident_str = ident.to_string();
             default_method_registers.push(quote! {
-                trait_type.register_default_trait_method(stringify!(#ident).into(), *#native_function_id_ident);
+                trait_type.register_default_trait_method(#ident_str.into(), *#native_function_id_ident);
             });
 
             native_functions.push(quote! {
@@ -194,6 +195,7 @@ pub fn value_trait(args: TokenStream, input: TokenStream) -> TokenStream {
         quote! {}
     };
 
+    let trait_ident_str = trait_ident.to_string();
     let expanded = quote! {
         #[must_use]
         #(#attrs)*
@@ -207,7 +209,7 @@ pub fn value_trait(args: TokenStream, input: TokenStream) -> TokenStream {
         #[doc(hidden)]
         pub(crate) static #trait_type_ident: turbo_tasks::macro_helpers::Lazy<turbo_tasks::TraitType> =
             turbo_tasks::macro_helpers::Lazy::new(|| {
-                let mut trait_type = turbo_tasks::TraitType::new(stringify!(#trait_ident).to_string());;
+                let mut trait_type = turbo_tasks::TraitType::new(#trait_ident_str.to_string());;
                 #(#default_method_registers)*
                 trait_type
             });

@@ -289,12 +289,14 @@ impl TurboFn {
         let ident = &self.ident;
         let output = &self.output;
         let converted_inputs = self.converted_inputs();
+
+        let ident_str = ident.to_string();
         parse_quote! {
             {
                 <#output as turbo_tasks::task::TaskOutput>::try_from_raw_vc(
                     turbo_tasks::trait_call(
                         *#trait_type_id_ident,
-                        std::borrow::Cow::Borrowed(stringify!(#ident)),
+                        std::borrow::Cow::Borrowed(#ident_str),
                         vec![#converted_inputs],
                     )
                 )
