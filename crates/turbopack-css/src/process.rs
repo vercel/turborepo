@@ -906,3 +906,38 @@ impl Issue for ParsingIssue {
         )))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use lightningcss::{
+        css_modules::Pattern,
+        stylesheet::{ParserOptions, StyleSheet},
+        visitor::Visit,
+    };
+
+    use super::CssModuleValidator;
+
+    fn assert_lightningcss_lint_success(code: &str) {
+        let mut ss = StyleSheet::parse(
+            code,
+            ParserOptions {
+                css_modules: Some(lightningcss::css_modules::Config {
+                    pattern: Pattern::default(),
+                    dashed_idents: false,
+                }),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let source;
+        let file;
+
+        ss.visit(&mut CssModuleValidator { source, file });
+    }
+
+    fn assert_lightningcss_lint_failure(code: &str) {}
+
+    #[test]
+    fn lightningcss_pure_lint() {}
+}
