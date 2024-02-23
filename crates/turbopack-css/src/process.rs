@@ -165,8 +165,6 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
 
                     let mut map = CssModuleExports::default();
 
-                    dbg!(&output.renamed);
-
                     for (class_name, export_class_names) in output.renamed {
                         for export_class_name in export_class_names {
                             // If the class name is already in the map, the first
@@ -217,8 +215,6 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
                             }
                         }
                     }
-
-                    dbg!(&map);
 
                     css_module_exports = Some(map);
                 }
@@ -507,8 +503,6 @@ async fn process_content(
             flags: config.flags,
         }
     }
-
-    dbg!(&*code);
 
     let config = ParserOptions {
         css_modules: match ty {
