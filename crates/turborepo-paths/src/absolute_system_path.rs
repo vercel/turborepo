@@ -232,14 +232,20 @@ impl AbsoluteSystemPath {
         self.0.as_str()
     }
 
-    pub fn join_unix_path(
-        &self,
-        unix_path: impl AsRef<RelativeUnixPath>,
-    ) -> Result<AbsoluteSystemPathBuf, PathError> {
+    pub fn join_unix_path(&self, unix_path: impl AsRef<RelativeUnixPath>) -> AbsoluteSystemPathBuf {
         let tail = unix_path.as_ref().to_system_path_buf();
-        Ok(AbsoluteSystemPathBuf(
-            self.0.join(tail).as_std_path().clean().try_into()?,
-        ))
+        AbsoluteSystemPathBuf(
+            self.0
+                .join(tail)
+                .as_std_path()
+                .clean()
+                // The unwrap here should never panic as `try_into` will only panic if
+                // - path isn't absolute: self is already absolute, appending to it won't change
+                //   that
+                // - path isn't valid utf8: self and unix_path are both utf8 already
+                .try_into()
+                .expect("joined path is absolute and valid utf8"),
+        )
     }
 
     pub fn anchor(&self, path: &AbsoluteSystemPath) -> Result<AnchoredSystemPathBuf, PathError> {
