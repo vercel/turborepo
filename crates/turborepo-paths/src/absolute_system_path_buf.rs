@@ -296,8 +296,7 @@ mod tests {
         assert_eq!(
             AbsoluteSystemPathBuf::new("C:\\some\\dir")
                 .unwrap()
-                .join_unix_path(&tail)
-                .unwrap(),
+                .join_unix_path(&tail),
             AbsoluteSystemPathBuf::new("C:\\some\\other").unwrap(),
         );
     }
