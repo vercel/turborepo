@@ -192,7 +192,7 @@ fn find_git_root(turbo_root: &AbsoluteSystemPath) -> Result<AbsoluteSystemPathBu
     if let Some(line) = lines.next() {
         let line = String::from_utf8(line?)?;
         let tail = RelativeUnixPathBuf::new(line)?;
-        turbo_root.join_unix_path(tail).map_err(|e| e.into())
+        Ok(turbo_root.join_unix_path(tail))
     } else {
         let stderr = String::from_utf8_lossy(&rev_parse.stderr);
         Err(Error::git_error(format!(

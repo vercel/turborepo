@@ -167,7 +167,7 @@ impl Git {
         turbo_root: &AbsoluteSystemPath,
         path: &RelativeUnixPath,
     ) -> Result<AnchoredSystemPathBuf, Error> {
-        let absolute_file_path = self.root.join_unix_path(path)?;
+        let absolute_file_path = self.root.join_unix_path(path);
         let anchored_to_turbo_root_file_path = turbo_root.anchor(&absolute_file_path)?;
         Ok(anchored_to_turbo_root_file_path)
     }
