@@ -692,7 +692,6 @@ const CSS_MODULE_ERROR: &str =
 
 /// We only vist top-level selectors.
 impl swc_core::css::visit::Visit for CssValidator {
-    // TODO: SKip some
     fn visit_complex_selector(&mut self, n: &swc_core::css::ast::ComplexSelector) {
         if n.children.iter().all(|sel| match sel {
             swc_core::css::ast::ComplexSelectorChildren::CompoundSelector(sel) => {
@@ -731,13 +730,13 @@ impl lightningcss::visitor::Visitor<'_> for CssValidator {
             .iter_raw_parse_order_from(0)
             .all(|component| match component {
                 parcel_selectors::parser::Component::ID(..)
-                | parcel_selectors::parser::Component::Class(..) => true,
+                | parcel_selectors::parser::Component::Class(..) => false,
 
                 parcel_selectors::parser::Component::LocalName(local) => {
                     // Allow html and body. They are not pure selectors but are allowed.
                     !matches!(&*local.name.0, "html" | "body")
                 }
-                _ => true,
+                _ => false,
             })
         {
             self.errors
@@ -942,7 +941,7 @@ mod tests {
 
     use super::CssValidator;
 
-    fn assert_lightningcss_lint_success(code: &str) {
+    fn assert_lint_success(code: &str) {
         let mut ss = StyleSheet::parse(
             code,
             ParserOptions {
@@ -961,8 +960,85 @@ mod tests {
         assert_eq!(validator.errors, vec![]);
     }
 
-    fn assert_lightningcss_lint_failure(code: &str) {}
+    fn assert_lint_failure(code: &str) {
+        let mut ss = StyleSheet::parse(
+            code,
+            ParserOptions {
+                css_modules: Some(lightningcss::css_modules::Config {
+                    pattern: Pattern::default(),
+                    dashed_idents: false,
+                }),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let mut validator = CssValidator { errors: Vec::new() };
+        ss.visit(&mut validator).unwrap();
+
+        assert_ne!(validator.errors, vec![]);
+    }
 
     #[test]
-    fn lightningcss_pure_lint() {}
+    fn lightningcss_pure_lint() {
+        assert_lint_success(
+            "html {
+            --foo: 1;
+        }",
+        );
+
+        assert_lint_success(
+            "#id {
+            color: red;
+        }",
+        );
+
+        assert_lint_success(
+            ".class {
+            color: red;
+        }",
+        );
+
+        assert_lint_success(
+            "html.class {
+            color: red;
+        }",
+        );
+
+        assert_lint_failure(
+            "div {
+            color: red;
+        }",
+        );
+
+        assert_lint_failure(
+            "div > span {
+            color: red;
+        }",
+        );
+
+        assert_lint_failure(
+            "div span {
+            color: red;
+        }",
+        );
+
+        assert_lint_failure(
+            "div[data-foo] {
+            color: red;
+        }",
+        );
+
+        assert_lint_failure(
+            "div[data-foo=\"bar\"] {
+            color: red;
+        }",
+        );
+
+        assert_lint_failure(
+            "div[data-foo=\"bar\"] span {
+            color: red;
+        }",
+        );
+    }
 }
