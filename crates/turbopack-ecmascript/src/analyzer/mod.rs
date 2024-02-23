@@ -1799,6 +1799,7 @@ impl JsValue {
                 has_side_effects, ..
             } => *has_side_effects,
             JsValue::Argument(_, _) => false,
+            JsValue::Iterated(_, iterable) => iterable.has_side_effects(),
         }
     }
 
@@ -2285,6 +2286,13 @@ macro_rules! for_each_children_async {
                 $value.update_total_nodes();
                 ($value, m1 || m2)
             }
+            JsValue::Iterated(_, box iterable) => {
+                let (new_iterable, modified) = $visit_fn(take(iterable), $($args),+).await?;
+                *iterable = new_iterable;
+
+                $value.update_total_nodes();
+                ($value, modified)
+            }
             JsValue::Constant(_)
             | JsValue::FreeVar(_)
             | JsValue::Variable(_)
@@ -2566,6 +2574,15 @@ impl JsValue {
                 }
                 modified
             }
+
+            JsValue::Iterated(_, iterable) => {
+                let modified = visitor(iterable);
+                if modified {
+                    self.update_total_nodes();
+                }
+                modified
+            }
+
             JsValue::Constant(_)
             | JsValue::FreeVar(_)
             | JsValue::Variable(_)
