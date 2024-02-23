@@ -702,10 +702,14 @@ impl lightningcss::visitor::Visitor<'_> for CssModuleValidator {
         if selector
             .iter_raw_parse_order_from(0)
             .all(|component| match component {
+                parcel_selectors::parser::Component::ID(..)
+                | parcel_selectors::parser::Component::Class(..) => true,
+
                 parcel_selectors::parser::Component::LocalName(local) => {
+                    // Allow html and body. They are not pure selectors but are allowed.
                     !matches!(&*local.name.0, "html" | "body")
                 }
-                _ => false,
+                _ => true,
             })
         {
             ParsingIssue {
