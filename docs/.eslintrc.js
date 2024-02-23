@@ -9,8 +9,9 @@ module.exports = {
   ignorePatterns: [
     // Ignore dotfiles
     ".*.js",
+    "postcss.config.js",
     "tailwind.config.js",
-    "next.config.js",
+    "next.config.mjs",
     "scripts/**",
   ],
   globals: {
@@ -20,7 +21,14 @@ module.exports = {
   },
   overrides: [
     {
-      files: ["./pages/**", "./turbo/generators/**", "theme.config.tsx"],
+      files: [
+        "./pages/**",
+        "./turbo/generators/**",
+        "theme.config.tsx",
+        "app/**/layout.tsx",
+        "app/**/page.tsx",
+        "/app/api/**",
+      ],
       rules: { "import/no-default-export": "off" },
     },
   ],

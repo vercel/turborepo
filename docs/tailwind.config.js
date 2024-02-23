@@ -1,44 +1,35 @@
-const colors = require("tailwindcss/colors");
+const { createPreset } = require("fumadocs-ui/tailwind-plugin");
 
+/** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
-    "./components/**/*.{js,tsx}",
-    "./nextra-theme-docs/**/*.{js,tsx}",
-    "./pages/**/*.{md,mdx,tsx}",
-    "./theme.config.js",
+    "./components/**/*.{ts,tsx}",
+    "./app/**/*.{ts,tsx}",
+    "./content/**/*.{md,mdx}",
+    "./mdx-components.{ts,tsx}",
+    "./node_modules/fumadocs-ui/dist/**/*.js",
   ],
   theme: {
     extend: {
-      fontFamily: {
-        sans: [`"Inter"`, "sans-serif"],
-        "space-grotesk": ["Space Grotesk", "monospace"],
-        mono: [
-          "Menlo",
-          "Monaco",
-          "Lucida Console",
-          "Liberation Mono",
-          "DejaVu Sans Mono",
-          "Bitstream Vera Sans Mono",
-          "Courier New",
-          "monospace",
-        ],
-      },
-      colors: {
-        dark: "#000",
-        gray: colors.neutral,
-        blue: colors.blue,
-        orange: colors.orange,
-        green: colors.green,
-        red: colors.red,
-        yellow: colors.yellow,
-      },
-      screens: {
-        sm: "640px",
-        md: "768px",
-        lg: "1024px",
-        betterhover: { raw: "(hover: hover)" },
+      typography: {
+        DEFAULT: {
+          css: {
+            a: {
+              textDecoration: "none",
+              color: "#008AEA",
+              "&:hover": {
+                color: "#1D4ED8",
+                textDecoration: "underline",
+              },
+            },
+            h1: {
+              textAlign: "center",
+            },
+          },
+        },
       },
     },
   },
-  darkMode: "class",
+  plugins: [require("@tailwindcss/typography")],
+  presets: [createPreset()],
 };

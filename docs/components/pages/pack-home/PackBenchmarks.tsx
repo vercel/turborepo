@@ -1,6 +1,11 @@
+"use client";
+
 import { useState } from "react";
-import { FadeIn } from "../home-shared/FadeIn";
-import { SectionHeader, SectionSubtext } from "../home-shared/Headings";
+import { FadeIn } from "@/app/_components/home-shared/FadeIn";
+import {
+  SectionHeader,
+  SectionSubtext,
+} from "@/app/_components/home-shared/Headings";
 import { BenchmarksGraph } from "./PackBenchmarksGraph";
 import { PackBenchmarksPicker } from "./PackBenchmarksPicker";
 import { PackBenchmarkTabs } from "./PackBenchmarkTabs";

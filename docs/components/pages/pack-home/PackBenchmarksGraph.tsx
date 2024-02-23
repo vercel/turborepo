@@ -3,8 +3,8 @@ import cn from "classnames";
 import type { AnimationPlaybackControls } from "framer-motion";
 import { animate, motion, useInView, useAnimation } from "framer-motion";
 import Image from "next/image";
-import { Gradient } from "../home-shared/Gradient";
-import gradients from "../home-shared/gradients.module.css";
+import { Gradient } from "@/app/_components/home-shared/Gradient";
+import gradients from "@/app/_components/home-shared/gradients.module.css";
 import benchmarkData from "./benchmark-data/data.json";
 import type {
   BenchmarkBar,

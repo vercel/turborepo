@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import classNames from "classnames";
-import gradients from "../home-shared/gradients.module.css";
+import gradients from "@/app/_components/home-shared/gradients.module.css";
 import type { BenchmarkCategory } from "./PackBenchmarks";
 
 const TABS: {

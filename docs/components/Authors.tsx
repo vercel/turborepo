@@ -1,6 +1,6 @@
 import cn from "classnames";
-import { TURBO_TEAM } from "../content/team";
-import type { Author } from "../content/team";
+import { TURBO_TEAM } from "./team";
+import type { Author } from "./team";
 import { Avatar } from "./Avatar";
 
 export function Authors({ authors }: { authors: Author[] }) {
