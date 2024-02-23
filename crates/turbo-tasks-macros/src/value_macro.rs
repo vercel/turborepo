@@ -405,6 +405,10 @@ pub fn value_type_and_register(
         (quote!(), quote!())
     };
 
+    let panic_msg = format!(
+        "{} has not been initialized (this should happen via the generated register function)",
+        value_type_ident
+    );
     quote! {
         #[doc(hidden)]
         static #value_type_init_ident: turbo_tasks::macro_helpers::OnceCell<
@@ -414,12 +418,7 @@ pub fn value_type_and_register(
         pub(crate) static #value_type_ident: turbo_tasks::macro_helpers::Lazy<&turbo_tasks::ValueType> =
             turbo_tasks::macro_helpers::Lazy::new(|| {
                 #value_type_init_ident.get_or_init(|| {
-                    panic!(
-                        concat!(
-                            stringify!(#value_type_ident),
-                            " has not been initialized (this should happen via the generated register function)"
-                        )
-                    )
+                    panic!(#panic_msg)
                 })
             });
         #[doc(hidden)]
