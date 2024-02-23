@@ -22,7 +22,7 @@ const THEMES = {
     text: "text-orange-900/80 dark:text-orange-100/80",
     border: "border border-orange-400/40",
   },
-  ["good-to-know"]: {
+  "good-to-know": {
     background: "bg-transparent",
     text: "text-foreground",
     border: "border border-foreground/40",
@@ -37,15 +37,15 @@ const ICONS = {
       className={`${THEMES.info.text} ${iconStyles}`}
       data-testid="geist-icon"
       height="14"
-      shape-rendering="geometricPrecision"
+      shapeRendering="geometricPrecision"
       stroke="currentColor"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      stroke-width="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.5"
       viewBox="0 0 24 24"
       width="14"
     >
-      <circle cx="12" cy="12" r="10" fill="var(--geist-fill)" />
+      <circle cx="12" cy="12" fill="var(--geist-fill)" r="10" />
       <path d="M12 16v-4" stroke="var(--geist-stroke)" />
       <path d="M12 8h.01" stroke="var(--geist-stroke)" />
     </svg>
@@ -75,11 +75,11 @@ const ICONS = {
       data-testid="geist-icon"
       fill="none"
       height="24"
-      shape-rendering="geometricPrecision"
+      shapeRendering="geometricPrecision"
       stroke="currentColor"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      stroke-width="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.5"
       viewBox="0 0 24 24"
       width="24"
     >
@@ -88,7 +88,7 @@ const ICONS = {
       <path d="M12 17h.01" />
     </svg>
   ),
-  ["good-to-know"]: (
+  "good-to-know": (
     <p className={`m-0 ${THEMES["good-to-know"].text} font-medium`}>
       Good to know:
     </p>
@@ -98,9 +98,9 @@ const ICONS = {
 export function Callout({ type, ...props }: FumaCalloutProps) {
   return (
     <FumaCallout
-      type={type}
-      className={Object.values(THEMES[type || "info"]).join(" ") + " leading-6"}
+      className={`${Object.values(THEMES[type || "info"]).join(" ")} leading-6`}
       icon={ICONS[type || "info"]}
+      type={type}
       {...props}
     />
   );

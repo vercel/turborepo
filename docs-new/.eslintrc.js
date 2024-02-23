@@ -9,8 +9,9 @@ module.exports = {
   ignorePatterns: [
     // Ignore dotfiles
     ".*.js",
+    "postcss.config.js",
     "tailwind.config.js",
-    "next.config.js",
+    "next.config.mjs",
     "scripts/**",
   ],
   globals: {

@@ -1,17 +1,17 @@
-import { readdirSync, lstatSync, readFileSync } from "fs";
-import path from "path";
+import { readdirSync, lstatSync, readFileSync } from "node:fs";
+import path from "node:path";
 
 export const getExamplesList = () => {
   // path to examples directory at the monorepo root.
-  const examplesDirectory = path.join(__dirname, "../../examples");
-  const examples: Array<{
+  const examplesDirectory = path.join(__dirname, "../../../../examples");
+  const examples: {
     slug: string;
     name: string;
     description: string;
     template: string;
     featured?: true;
     boost?: true;
-  }> = [];
+  }[] = [];
   const excludedExamples: string[] = [];
   readdirSync(examplesDirectory).forEach((file) => {
     if (lstatSync(path.join(examplesDirectory, file)).isDirectory()) {

@@ -1,9 +1,11 @@
-import { blogPageTree, blogFiles } from "@/app/source";
 import Link from "next/link";
+import { blogFiles } from "@/app/source";
 
-const Page = () => {
+function Page() {
   const posts = blogFiles.sort(
-    (a, b) => new Date(b.data.exports.date) - new Date(a.data.exports.date)
+    (a, b) =>
+      Number(new Date(b.data.exports.date)) -
+      Number(new Date(a.data.exports.date))
   );
 
   return (
@@ -18,11 +20,11 @@ const Page = () => {
       </div>
       {posts.map((post) => (
         <Link
-          target={post.data.exports.isExternal ? "_blank" : undefined}
+          className="mb-10 hover:underline block font-semibold text-2xl"
           href={
             post.data.exports.isExternal ? post.data.exports.href : post.url
           }
-          className="mb-10 hover:underline block font-semibold text-2xl"
+          target={post.data.exports.isExternal ? "_blank" : undefined}
         >
           <h2>{post.data.title}</h2>
           <p className="opacity-80 mt-2 font-normal text-base">
@@ -37,6 +39,6 @@ const Page = () => {
       ))}
     </main>
   );
-};
+}
 
 export default Page;
