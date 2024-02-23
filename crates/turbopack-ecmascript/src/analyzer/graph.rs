@@ -1415,6 +1415,13 @@ impl VisitAstPath for Analyzer<'_> {
         n: &'ast ForOfStmt,
         ast_path: &mut swc_core::ecma::visit::AstNodePath<'r>,
     ) {
+        {
+            let mut ast_path =
+                ast_path.with_guard(AstParentNodeRef::ForOfStmt(n, ForOfStmtField::Right));
+            self.current_value = None;
+            self.visit_expr(&n.right, &mut ast_path);
+        }
+
         let array = self.eval_context.eval(&n.right);
 
         {
