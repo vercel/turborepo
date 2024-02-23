@@ -631,7 +631,7 @@ impl Display for JsValue {
             JsValue::Argument(func_ident, index) => {
                 write!(f, "arguments[{}#{}]", index, func_ident)
             }
-            JsValue::Iterated(_, iterable) => write!(f, "for (let _ of {})", iterable),
+            JsValue::Iterated(_, iterable) => write!(f, "Iterated({})", iterable),
         }
     }
 }
