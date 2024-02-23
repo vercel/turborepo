@@ -631,6 +631,7 @@ impl Display for JsValue {
             JsValue::Argument(func_ident, index) => {
                 write!(f, "arguments[{}#{}]", index, func_ident)
             }
+            JsValue::Iterated(_, iterable) => write!(f, "for (let _ of {})", iterable),
         }
     }
 }
@@ -701,7 +702,8 @@ impl JsValue {
             | JsValue::Call(..)
             | JsValue::SuperCall(..)
             | JsValue::Tenary(..)
-            | JsValue::MemberCall(..) => JsValueMetaKind::Operation,
+            | JsValue::MemberCall(..)
+            | JsValue::Iterated(..) => JsValueMetaKind::Operation,
             JsValue::Variable(..)
             | JsValue::Argument(..)
             | JsValue::FreeVar(..)
@@ -906,7 +908,8 @@ impl JsValue {
             | JsValue::SuperCall(c, _)
             | JsValue::MemberCall(c, _, _, _)
             | JsValue::Member(c, _, _)
-            | JsValue::Function(c, _, _) => *c,
+            | JsValue::Function(c, _, _)
+            | JsValue::Iterated(c, ..) => *c,
         }
     }
 
@@ -971,6 +974,10 @@ impl JsValue {
             }
             JsValue::Function(c, _, r) => {
                 *c = 1 + r.total_nodes();
+            }
+
+            JsValue::Iterated(c, iterable) => {
+                *c = 1 + iterable.total_nodes();
             }
         }
     }
