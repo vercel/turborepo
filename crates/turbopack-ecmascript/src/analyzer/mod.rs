@@ -2013,7 +2013,8 @@ impl JsValue {
             | JsValue::MemberCall(..)
             | JsValue::Member(..)
             | JsValue::Tenary(..)
-            | JsValue::SuperCall(..) => None,
+            | JsValue::SuperCall(..)
+            | JsValue::Iterated(..) => None,
         }
     }
 
@@ -2739,6 +2740,11 @@ impl JsValue {
                 visitor(cons);
                 visitor(alt);
             }
+
+            JsValue::Iterated(_, iterable) => {
+                visitor(iterable);
+            }
+
             JsValue::Constant(_)
             | JsValue::FreeVar(_)
             | JsValue::Variable(_)
@@ -3089,6 +3095,9 @@ impl JsValue {
                 test.similar_hash(state, depth - 1);
                 cons.similar_hash(state, depth - 1);
                 alt.similar_hash(state, depth - 1);
+            }
+            JsValue::Iterated(_, iterable) => {
+                iterable.similar_hash(state, depth - 1);
             }
             JsValue::Module(ModuleValue {
                 module: v,
