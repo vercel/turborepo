@@ -943,11 +943,14 @@ mod tests {
         stylesheet::{ParserOptions, StyleSheet},
         visitor::Visit,
     };
+    use swc_core::{
+        common::{FileName, FilePathMapping},
+        css::{ast::Stylesheet, parser::parser::ParserConfig, visit::VisitWith},
+    };
 
-    use super::CssValidator;
+    use super::{CssError, CssValidator};
 
-    #[track_caller]
-    fn assert_lint_success(code: &str) {
+    fn lint_lightningcss(code: &str) -> Vec<CssError> {
         let mut ss = StyleSheet::parse(
             code,
             ParserOptions {
@@ -963,27 +966,41 @@ mod tests {
         let mut validator = CssValidator { errors: Vec::new() };
         ss.visit(&mut validator).unwrap();
 
-        assert_eq!(validator.errors, vec![]);
+        validator.errors
+    }
+
+    fn lint_swc(code: &str) -> Vec<CssError> {
+        let cm = swc_core::common::SourceMap::new(FilePathMapping::empty());
+
+        let fm = cm.new_source_file(FileName::Custom("test.css".to_string()), code.to_string());
+
+        let ss: Stylesheet = swc_core::css::parser::parse_file(
+            &fm,
+            None,
+            ParserConfig {
+                css_modules: true,
+                ..Default::default()
+            },
+            &mut vec![],
+        )
+        .unwrap();
+
+        let mut validator = CssValidator { errors: Vec::new() };
+        ss.visit_with(&mut validator);
+
+        validator.errors
+    }
+
+    #[track_caller]
+    fn assert_lint_success(code: &str) {
+        assert_eq!(lint_lightningcss(code), vec![]);
+        assert_eq!(lint_swc(code), vec![]);
     }
 
     #[track_caller]
     fn assert_lint_failure(code: &str) {
-        let mut ss = StyleSheet::parse(
-            code,
-            ParserOptions {
-                css_modules: Some(lightningcss::css_modules::Config {
-                    pattern: Pattern::default(),
-                    dashed_idents: false,
-                }),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-
-        let mut validator = CssValidator { errors: Vec::new() };
-        ss.visit(&mut validator).unwrap();
-
-        assert_ne!(validator.errors, vec![]);
+        assert_ne!(lint_lightningcss(code), vec![]);
+        assert_ne!(lint_swc(code), vec![]);
     }
 
     #[test]
