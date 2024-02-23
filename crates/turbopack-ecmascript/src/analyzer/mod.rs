@@ -1298,6 +1298,12 @@ impl JsValue {
                 "!({})",
                 value.explain_internal_inner(hints, indent_depth, depth, unknown_depth)
             ),
+            JsValue::Iterated(_, iterable) => {
+                format!(
+                    "for (let _ of {})",
+                    iterable.explain_internal_inner(hints, indent_depth, depth, unknown_depth)
+                )
+            }
             JsValue::Call(_, callee, list) => {
                 format!(
                     "{}({})",
