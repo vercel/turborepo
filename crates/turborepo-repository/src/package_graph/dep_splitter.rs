@@ -57,7 +57,7 @@ impl<'a> DependencySplitter<'a> {
                 Some((package_name, info))
             }
             WorkspacePackageSpecifier::Path(path) => {
-                let path = self.workspace_dir.join_unix_path(path).unwrap();
+                let path = self.workspace_dir.join_unix_path(path);
                 // There's a chance that the user provided path could escape the root, in which
                 // case we don't support packages outside of the workspace.
                 // Pnpm also doesn't support this so we defer to them to provide the error
@@ -143,7 +143,7 @@ impl<'a> DependencyVersion<'a> {
             Some("file") | Some("link") => {
                 // Default to internal if we have the package but somehow cannot get the path
                 RelativeUnixPathBuf::new(self.version)
-                    .and_then(|file_path| cwd.join_unix_path(file_path))
+                    .map(|file_path| cwd.join_unix_path(file_path))
                     .map_or(true, |dep_path| root.contains(&dep_path))
             }
             Some(_) if self.is_external() => {
