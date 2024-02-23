@@ -1073,6 +1073,9 @@ impl JsValue {
                     make_max_unknown([&mut **test, &mut **cons, &mut **alt].into_iter());
                     self.update_total_nodes();
                 }
+                JsValue::Iterated(_, iterable) => {
+                    iterable.make_unknown_without_content(false, "node limit reached");
+                }
                 JsValue::Member(_, o, p) => {
                     make_max_unknown([&mut **o, &mut **p].into_iter());
                     self.update_total_nodes();
