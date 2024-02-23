@@ -695,16 +695,16 @@ impl swc_core::css::visit::Visit for CssValidator {
     fn visit_complex_selector(&mut self, n: &swc_core::css::ast::ComplexSelector) {
         if n.children.iter().all(|sel| match sel {
             swc_core::css::ast::ComplexSelectorChildren::CompoundSelector(sel) => {
-                sel.subclass_selectors.iter().all(|sel| match sel {
-                    SubclassSelector::Attribute { .. } => true,
-                    _ => false,
-                }) && match &sel.type_selector.as_deref() {
-                    Some(TypeSelector::TagName(tag)) => {
-                        !matches!(&*tag.name.value.value, "html" | "body")
+                sel.subclass_selectors
+                    .iter()
+                    .all(|sel| matches!(sel, SubclassSelector::Attribute { .. }))
+                    && match &sel.type_selector.as_deref() {
+                        Some(TypeSelector::TagName(tag)) => {
+                            !matches!(&*tag.name.value.value, "html" | "body")
+                        }
+                        Some(..) => true,
+                        None => false,
                     }
-                    Some(..) => true,
-                    None => false,
-                }
             }
             swc_core::css::ast::ComplexSelectorChildren::Combinator(_) => true,
         }) {
