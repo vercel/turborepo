@@ -941,6 +941,7 @@ mod tests {
 
     use super::CssValidator;
 
+    #[track_caller]
     fn assert_lint_success(code: &str) {
         let mut ss = StyleSheet::parse(
             code,
@@ -960,6 +961,7 @@ mod tests {
         assert_eq!(validator.errors, vec![]);
     }
 
+    #[track_caller]
     fn assert_lint_failure(code: &str) {
         let mut ss = StyleSheet::parse(
             code,
