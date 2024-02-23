@@ -1415,30 +1415,19 @@ impl VisitAstPath for Analyzer<'_> {
         n: &'ast ForOfStmt,
         ast_path: &mut swc_core::ecma::visit::AstNodePath<'r>,
     ) {
-        let mut array = self.eval_context.eval(&n.right);
-        if let JsValue::Variable(id) = &array {
-            if let Some(value) = self.data.values.get(id) {
-                array = value.clone();
-            }
-        }
+        let array = self.eval_context.eval(&n.right);
 
-        if let JsValue::Array { items, .. } = array {
-            for item in items {
-                let mut ast_path =
-                    ast_path.with_guard(AstParentNodeRef::ForOfStmt(n, ForOfStmtField::Left));
-
-                self.current_value = Some(item);
-
-                self.visit_for_head(&n.left, &mut ast_path);
-            }
-
+        {
             let mut ast_path =
-                ast_path.with_guard(AstParentNodeRef::ForOfStmt(n, ForOfStmtField::Body));
-
-            self.visit_stmt(&n.body, &mut ast_path);
-        } else {
-            n.visit_children_with_path(self, ast_path);
+                ast_path.with_guard(AstParentNodeRef::ForOfStmt(n, ForOfStmtField::Left));
+            self.current_value = Some(JsValue::iterated(array));
+            self.visit_for_head(&n.left, &mut ast_path);
         }
+
+        let mut ast_path =
+            ast_path.with_guard(AstParentNodeRef::ForOfStmt(n, ForOfStmtField::Body));
+
+        self.visit_stmt(&n.body, &mut ast_path);
     }
 
     fn visit_simple_assign_target<'ast: 'r, 'r>(

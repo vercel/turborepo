@@ -751,6 +751,10 @@ impl JsValue {
         )
     }
 
+    pub fn iterated(iterable: JsValue) -> Self {
+        Self::Iterated(1 + iterable.total_nodes(), Box::new(iterable))
+    }
+
     pub fn equal(a: JsValue, b: JsValue) -> Self {
         Self::Binary(
             1 + a.total_nodes() + b.total_nodes(),
