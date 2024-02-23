@@ -732,6 +732,11 @@ impl lightningcss::visitor::Visitor<'_> for CssValidator {
                 parcel_selectors::parser::Component::ID(..)
                 | parcel_selectors::parser::Component::Class(..) => false,
 
+                parcel_selectors::parser::Component::Combinator(..)
+                | parcel_selectors::parser::Component::AttributeOther(..)
+                | parcel_selectors::parser::Component::AttributeInNoNamespaceExists { .. }
+                | parcel_selectors::parser::Component::AttributeInNoNamespace { .. } => true,
+
                 parcel_selectors::parser::Component::LocalName(local) => {
                     // Allow html and body. They are not pure selectors but are allowed.
                     !matches!(&*local.name.0, "html" | "body")
@@ -982,7 +987,7 @@ mod tests {
     }
 
     #[test]
-    fn lightningcss_pure_lint() {
+    fn css_module_pure_lint() {
         assert_lint_success(
             "html {
             --foo: 1;
