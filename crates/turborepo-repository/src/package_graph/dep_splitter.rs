@@ -1,6 +1,9 @@
 use std::{collections::HashMap, fmt};
 
-use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
+use turbopath::{
+    AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPath,
+    RelativeUnixPathBuf,
+};
 
 use super::{PackageInfo, PackageName};
 
@@ -53,6 +56,19 @@ impl<'a> DependencySplitter<'a> {
                 let info = self.workspaces.get(&package_name)?;
                 Some((package_name, info))
             }
+            WorkspacePackageSpecifier::Path(path) => {
+                let path = self.workspace_dir.join_unix_path(path).unwrap();
+                // There's a chance that the user provided path could escape the root, in which
+                // case we don't support packages outside of the workspace.
+                // Pnpm also doesn't support this so we defer to them to provide the error
+                // message.
+                let package_path = AnchoredSystemPathBuf::new(self.repo_root, path).ok()?;
+                let (name, info) = self
+                    .workspaces
+                    .iter()
+                    .find(|(_, info)| info.package_path() == &*package_path)?;
+                Some((name.clone(), info))
+            }
         }
     }
 }
@@ -62,17 +78,21 @@ impl<'a> DependencySplitter<'a> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum WorkspacePackageSpecifier<'a> {
     Alias(&'a str),
-    // Path(&'a str),
+    Path(&'a RelativeUnixPath),
 }
 
 impl<'a> WorkspacePackageSpecifier<'a> {
     fn new(version: &'a str) -> Option<Self> {
         let version = version.strip_prefix("workspace:")?;
-        let (name, version) = version.rsplit_once('@')?;
-        if version == "*" || version == "^" || version == "~" {
-            Some(Self::Alias(name))
-        } else {
-            None
+        match version.rsplit_once('@') {
+            Some((name, "*")) | Some((name, "^")) | Some((name, "~")) => Some(Self::Alias(name)),
+            // No indication of different name for the package
+            // We want to capture specifiers that have type "directory" by npa which boils down to
+            // checking for slashes: https://github.com/pnpm/npm-package-arg/blob/main/npa.js#L79
+            Some(_) | None if version.contains('/') => {
+                RelativeUnixPath::new(version).ok().map(Self::Path)
+            }
+            Some(_) | None => None,
         }
     }
 }
@@ -175,7 +195,6 @@ mod test {
     #[test_case("2.3.4", None, "^1.0.0", None ; "handles semver range not satisfied")]
     #[test_case("1.2.3", None, "workspace:1.2.3", Some("@scope/foo") ; "handles workspace protocol with version")]
     #[test_case("1.2.3", None, "workspace:*", Some("@scope/foo") ; "handles workspace protocol with no version")]
-    #[test_case("1.2.3", Some("bar"), "workspace:../bar/", Some("bar") ; "handles workspace protocol with relative path")]
     #[test_case("1.2.3", None, "workspace:../@scope/foo", Some("@scope/foo") ; "handles workspace protocol with scoped relative path")]
     #[test_case("1.2.3", Some("bar"), "workspace:../baz", Some("baz") ; "handles workspace protocol with path to differing package")]
     #[test_case("1.2.3", None, "npm:^1.2.3", Some("@scope/foo") ; "handles npm protocol with satisfied semver range")]
@@ -216,7 +235,8 @@ mod test {
                         ..Default::default()
                     },
                     package_json_path: AnchoredSystemPathBuf::from_raw(
-                        ["packages", "@scope", "foo"].join(std::path::MAIN_SEPARATOR_STR),
+                        ["packages", "@scope", "foo", "package.json"]
+                            .join(std::path::MAIN_SEPARATOR_STR),
                     )
                     .unwrap(),
                     unresolved_external_dependencies: None,
@@ -231,7 +251,7 @@ mod test {
                         ..Default::default()
                     },
                     package_json_path: AnchoredSystemPathBuf::from_raw(
-                        ["packages", "bar"].join(std::path::MAIN_SEPARATOR_STR),
+                        ["packages", "bar", "package.json"].join(std::path::MAIN_SEPARATOR_STR),
                     )
                     .unwrap(),
                     unresolved_external_dependencies: None,
@@ -246,7 +266,7 @@ mod test {
                         ..Default::default()
                     },
                     package_json_path: AnchoredSystemPathBuf::from_raw(
-                        ["packages", "baz"].join(std::path::MAIN_SEPARATOR_STR),
+                        ["packages", "baz", "package.json"].join(std::path::MAIN_SEPARATOR_STR),
                     )
                     .unwrap(),
                     unresolved_external_dependencies: None,
@@ -275,6 +295,9 @@ mod test {
     #[test_case("workspace:foo@~", Some(WorkspacePackageSpecifier::Alias("foo")) ; "tilde")]
     #[test_case("workspace:foo@^", Some(WorkspacePackageSpecifier::Alias("foo")) ; "caret")]
     #[test_case("workspace:@scope/foo@*", Some(WorkspacePackageSpecifier::Alias("@scope/foo")) ; "package with scope")]
+    #[test_case("workspace:../bar", Some(WorkspacePackageSpecifier::Path(RelativeUnixPath::new("../bar").unwrap())) ; "package with path")]
+    #[test_case("workspace:notpath", None ; "package with not a path")]
+    #[test_case("workspace:../@scope/foo", Some(WorkspacePackageSpecifier::Path(RelativeUnixPath::new("../@scope/foo").unwrap())) ; "scope in path")]
     fn test_workspace_specifier(input: &str, expected: Option<WorkspacePackageSpecifier>) {
         assert_eq!(WorkspacePackageSpecifier::new(input), expected);
     }
