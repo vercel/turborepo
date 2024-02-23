@@ -1307,7 +1307,7 @@ impl JsValue {
             ),
             JsValue::Iterated(_, iterable) => {
                 format!(
-                    "for (let _ of {})",
+                    "Iterated({})",
                     iterable.explain_internal_inner(hints, indent_depth, depth, unknown_depth)
                 )
             }
