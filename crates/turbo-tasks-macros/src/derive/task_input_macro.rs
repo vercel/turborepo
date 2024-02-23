@@ -122,7 +122,7 @@ pub fn derive_task_input(input: TokenStream) -> TokenStream {
                                         #ident::#variants_idents #variants_fields_destructuring
                                     },
                                 )*
-                                _ => return Err(::anyhow::anyhow!("invalid discriminant for {}", stringify!(#ident))),
+                                _ => return Err(::anyhow::anyhow!("invalid discriminant for {}", #ident_str)),
                             })
                         },
                         _ => Err(::anyhow::anyhow!("invalid task input type, expected list")),
