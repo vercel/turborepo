@@ -107,6 +107,17 @@ impl Store {
         id
     }
 
+    pub fn add_args(
+        &mut self,
+        span_index: SpanIndex,
+        args: Vec<(String, String)>,
+        outdated_spans: &mut HashSet<SpanIndex>,
+    ) {
+        let span = &mut self.spans[span_index.get()];
+        span.args.extend(args);
+        outdated_spans.insert(span_index);
+    }
+
     pub fn add_self_time(
         &mut self,
         span_index: SpanIndex,
