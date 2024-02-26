@@ -426,7 +426,21 @@ impl CapturedIssues {
             })
             .try_join()
             .await?;
-        list.sort_by(|a, b| {});
+        list.sort_by(|a, b| {
+            macro_rules! cmp {
+                ($a:expr, $b:expr) => {
+                    match $a.cmp(&$b) {
+                        Ordering::Equal => {}
+                        other => return other,
+                    }
+                };
+            }
+
+            cmp!(a.severity, b.severity);
+            cmp!(a.stage, b.stage);
+
+            a.title.cmp(b.title)
+        });
         Ok(list)
     }
 }
@@ -526,11 +540,13 @@ pub struct OptionIssueSource(Option<Vc<IssueSource>>);
 #[turbo_tasks::value(transparent)]
 pub struct OptionStyledString(Option<Vc<StyledString>>);
 
-#[turbo_tasks::value(serialization = "none")]
-#[derive(Clone, Debug)]
+#[turbo_tasks::value(shared, serialization = "none")]
+#[derive(Clone, Debug, PartialOrd, Ord)]
 pub enum IssueStage {
     Parse,
+    Analysis,
     Trasnsform(u32),
+    CodeGen,
 }
 
 #[turbo_tasks::value(serialization = "none")]
