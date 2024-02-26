@@ -611,7 +611,7 @@ async fn handle_file_event_for_hasher(
                 .into_iter()
                 // we get None if the file is a symlink, so ignore it
                 .flat_map(|p| {
-                    let path = repo_root.join_unix_path(&p).expect("utf-8");
+                    let path = repo_root.join_unix_path(&p);
                     hash_file(&path).transpose().map(|h| h.map(|h| (p, h)))
                 })
                 .collect()
