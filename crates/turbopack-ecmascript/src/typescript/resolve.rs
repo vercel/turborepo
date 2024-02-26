@@ -9,7 +9,7 @@ use turbopack_core::{
     context::AssetContext,
     file_source::FileSource,
     ident::AssetIdent,
-    issue::{Issue, IssueExt, IssueSeverity, OptionStyledString, StyledString},
+    issue::{Issue, IssueExt, IssueSeverity, IssueStage, OptionStyledString, StyledString},
     reference_type::{ReferenceType, TypeScriptReferenceSubType},
     resolve::{
         handle_resolve_error,
@@ -513,5 +513,10 @@ impl Issue for TsConfigIssue {
     #[turbo_tasks::function]
     fn description(&self) -> Vc<OptionStyledString> {
         Vc::cell(Some(StyledString::Text(self.message.clone()).cell()))
+    }
+
+    #[turbo_tasks::function]
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::Analysis.cell()
     }
 }
