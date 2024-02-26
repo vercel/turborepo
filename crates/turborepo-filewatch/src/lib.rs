@@ -35,7 +35,6 @@ use {
     walkdir::WalkDir,
 };
 
-mod broadcast_map;
 pub mod cookies;
 #[cfg(target_os = "macos")]
 mod fsevent;

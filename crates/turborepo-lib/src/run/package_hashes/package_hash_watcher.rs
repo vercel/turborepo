@@ -17,6 +17,7 @@ use tracing::debug;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, RelativeUnixPathBuf,
 };
+use turborepo_errors::Spanned;
 use turborepo_filewatch::{
     cookies::{CookieError, CookieRegister, CookiedOptionalWatch},
     package_watcher::{PackageManagerState, PackageWatcher},
@@ -870,7 +871,6 @@ async fn update_package_hasher(
 fn create_task_definitions(
     repo_root: AbsoluteSystemPathBuf,
     root_turbo_json: TurboJson,
-
     workspaces: &PackageGraph,
 ) -> Result<HashMap<TaskId<'static>, TaskDefinition>, engine::BuilderError> {
     let mut task_definitions = TaskDefinitionBuilder::new(repo_root.clone(), workspaces, false);
@@ -889,7 +889,7 @@ fn create_task_definitions(
         })
         .unique()
     {
-        task_definitions.add_task_definition_from(&mut turbo_jsons, &task_id)?;
+        task_definitions.add_task_definition_from(&mut turbo_jsons, &Spanned::new(task_id))?;
     }
 
     Ok(task_definitions.build())

@@ -624,7 +624,7 @@ impl<PD: PackageDiscovery + Send + Sync + 'static, PH: PackageHasher + Send + Sy
             )
             .await
             .map_err(|_| tonic::Status::unavailable("package hasher unavailable"))?;
-        debug!("22222222222222");
+
         Ok(tonic::Response::new(proto::DiscoverPackageHashesResponse {
             package_hashes: hashes
                 .hashes
