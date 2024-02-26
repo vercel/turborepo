@@ -702,8 +702,8 @@ impl swc_core::css::visit::Visit for CssValidator {
                         Some(TypeSelector::TagName(tag)) => {
                             !matches!(&*tag.name.value.value, "html" | "body")
                         }
-                        Some(TypeSelector::Universal(..)) => false,
-                        None => false,
+                        Some(TypeSelector::Universal(..)) => true,
+                        None => true,
                     }
             }
             swc_core::css::ast::ComplexSelectorChildren::Combinator(_) => true,
