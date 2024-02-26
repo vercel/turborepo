@@ -76,7 +76,7 @@ impl Display for IssueSeverity {
 /// Represents a section of structured styled text. This can be interpreted and
 /// rendered by various UIs as appropriate, e.g. HTML for display on the web,
 /// ANSI sequences in TTYs.
-#[derive(Clone, Debug, DeterministicHash)]
+#[derive(Clone, Debug, PartialOrd, Ord, DeterministicHash)]
 #[turbo_tasks::value(shared)]
 pub enum StyledString {
     /// Multiple [StyledString]s concatenated into a single line. Each item is
@@ -438,8 +438,9 @@ impl CapturedIssues {
 
             cmp!(a.severity, b.severity);
             cmp!(a.stage, b.stage);
+            cmp!(a.category, b.category);
 
-            a.title.cmp(b.title)
+            a.title.cmp(&b.title)
         });
         Ok(list)
     }
@@ -541,7 +542,7 @@ pub struct OptionIssueSource(Option<Vc<IssueSource>>);
 pub struct OptionStyledString(Option<Vc<StyledString>>);
 
 #[turbo_tasks::value(shared, serialization = "none")]
-#[derive(Clone, Debug, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialOrd, Ord, DeterministicHash)]
 pub enum IssueStage {
     Parse,
     Analysis,
