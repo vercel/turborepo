@@ -995,14 +995,14 @@ mod tests {
 
     #[track_caller]
     fn assert_lint_success(code: &str) {
-        assert_eq!(lint_lightningcss(code), vec![]);
-        assert_eq!(lint_swc(code), vec![]);
+        assert_eq!(lint_lightningcss(code), vec![], "lightningcss");
+        assert_eq!(lint_swc(code), vec![], "swc");
     }
 
     #[track_caller]
     fn assert_lint_failure(code: &str) {
-        assert_ne!(lint_lightningcss(code), vec![]);
-        assert_ne!(lint_swc(code), vec![]);
+        assert_ne!(lint_lightningcss(code), vec![], "lightningcss");
+        assert_ne!(lint_swc(code), vec![], "swc");
     }
 
     #[test]
