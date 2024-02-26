@@ -1031,6 +1031,18 @@ mod tests {
         }",
         );
 
+        assert_lint_success(
+            ".class > * {
+            color: red;
+        }",
+        );
+
+        assert_lint_success(
+            ".class * {
+            color: red;
+        }",
+        );
+
         assert_lint_failure(
             "div {
             color: red;
@@ -1064,6 +1076,30 @@ mod tests {
         assert_lint_failure(
             "div[data-foo=\"bar\"] span {
             color: red;
+        }",
+        );
+
+        assert_lint_failure(
+            "* {
+            --foo: 1;
+        }",
+        );
+
+        assert_lint_failure(
+            "[data-foo] {
+            --foo: 1;
+        }",
+        );
+
+        assert_lint_failure(
+            ":not(.class) {
+            --foo: 1;
+        }",
+        );
+
+        assert_lint_failure(
+            ":not(div) {
+            --foo: 1;
         }",
         );
     }
