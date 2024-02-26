@@ -551,6 +551,7 @@ pub enum IssueStage {
     /// TODO: Add index of the transform
     Transform,
     CodeGen,
+    Misc,
 }
 
 #[turbo_tasks::value(serialization = "none")]
