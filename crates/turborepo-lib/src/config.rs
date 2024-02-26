@@ -1,7 +1,7 @@
 use std::{collections::HashMap, ffi::OsString, io};
 
 use convert_case::{Case, Casing};
-use miette::{Diagnostic, SourceSpan};
+use miette::{Diagnostic, NamedSource, SourceSpan};
 use serde::Deserialize;
 use struct_iterable::Iterable;
 use thiserror::Error;
@@ -12,6 +12,22 @@ use turborepo_repository::package_json::{Error as PackageJsonError, PackageJson}
 
 pub use crate::turbo_json::RawTurboJson;
 use crate::{commands::CommandBase, turbo_json};
+
+#[derive(Debug, Error, Diagnostic)]
+#[error("Environment variables should not be prefixed with \"{env_pipeline_delimiter}\"")]
+#[diagnostic(
+    code(invalid_env_prefix),
+    url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
+)]
+pub struct InvalidEnvPrefixError {
+    pub value: String,
+    pub key: String,
+    #[source_code]
+    pub text: NamedSource,
+    #[label("variable with invalid prefix declared here")]
+    pub span: Option<SourceSpan>,
+    pub env_pipeline_delimiter: &'static str,
+}
 
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Error, Diagnostic)]
@@ -55,24 +71,13 @@ pub enum Error {
     PackageTaskInSinglePackageMode {
         task_id: String,
         #[source_code]
-        text: String,
+        text: NamedSource,
         #[label("package task found here")]
         span: Option<SourceSpan>,
     },
-    #[error("Environment variables should not be prefixed with \"{env_pipeline_delimiter}\"")]
-    #[diagnostic(
-        code(invalid_env_prefix),
-        url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
-    )]
-    InvalidEnvPrefix {
-        value: String,
-        key: String,
-        #[source_code]
-        text: String,
-        #[label("variable with invalid prefix declared here")]
-        span: Option<SourceSpan>,
-        env_pipeline_delimiter: &'static str,
-    },
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    InvalidEnvPrefix(Box<InvalidEnvPrefixError>),
     #[error(transparent)]
     PathError(#[from] turbopath::PathError),
     #[diagnostic(
@@ -86,14 +91,14 @@ pub enum Error {
         #[label("unnecessary package syntax found here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: String,
+        text: NamedSource,
     },
     #[error("You can only extend from the root workspace")]
     ExtendFromNonRoot {
         #[label("non-root workspace found here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: String,
+        text: NamedSource,
     },
     #[error("`{field}` cannot contain an absolute path")]
     AbsolutePathInConfig {
@@ -101,10 +106,15 @@ pub enum Error {
         #[label("absolute path found here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: String,
+        text: NamedSource,
     },
-    #[error("No \"extends\" key found in {path}")]
-    NoExtends { path: String },
+    #[error("No \"extends\" key found")]
+    NoExtends {
+        #[label("add extends key here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+    },
     #[error("Failed to create APIClient: {0}")]
     ApiClient(#[source] turborepo_api_client::Error),
     #[error("{0} is not UTF8.")]

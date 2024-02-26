@@ -395,7 +395,7 @@ mod tests {
         let mut expected = GitHashes::new();
         for (raw_unix_path, contents, expected_hash) in file_hash.iter() {
             let unix_path = RelativeUnixPath::new(raw_unix_path).unwrap();
-            let file_path = turbo_root.join_unix_path(unix_path).unwrap();
+            let file_path = turbo_root.join_unix_path(unix_path);
             file_path.ensure_dir().unwrap();
             file_path.create_with_contents(contents).unwrap();
             if let Some(hash) = expected_hash {
@@ -427,7 +427,7 @@ mod tests {
         expected = GitHashes::new();
         for (raw_unix_path, contents, expected_hash) in file_hash.iter() {
             let unix_path = RelativeUnixPath::new(raw_unix_path).unwrap();
-            let file_path = turbo_root.join_unix_path(unix_path).unwrap();
+            let file_path = turbo_root.join_unix_path(unix_path);
             file_path.ensure_dir().unwrap();
             file_path.create_with_contents(contents).unwrap();
             if let Some(hash) = expected_hash {

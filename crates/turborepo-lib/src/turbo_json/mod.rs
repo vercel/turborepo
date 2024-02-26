@@ -5,6 +5,7 @@ use std::{
 };
 
 use camino::Utf8Path;
+use miette::{NamedSource, SourceSpan};
 use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
 use tracing::debug;
@@ -14,7 +15,7 @@ use turborepo_repository::{package_graph::ROOT_PKG_NAME, package_json::PackageJs
 
 use crate::{
     cli::OutputLogsMode,
-    config::{ConfigurationOptions, Error},
+    config::{ConfigurationOptions, Error, InvalidEnvPrefixError},
     run::{
         task_access::{TaskAccessTraceFile, TASK_ACCESS_CONFIG_PATH},
         task_id::{TaskId, TaskName},
@@ -163,7 +164,7 @@ pub struct RawTaskDefinition {
     #[serde(skip_serializing_if = "Spanned::is_none")]
     cache: Spanned<Option<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    depends_on: Option<Spanned<Vec<UnescapedString>>>,
+    depends_on: Option<Spanned<Vec<Spanned<UnescapedString>>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     dot_env: Option<Spanned<Vec<UnescapedString>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -220,7 +221,7 @@ impl TryFrom<Vec<Spanned<UnescapedString>>> for TaskOutputs {
         for glob in outputs {
             if let Some(stripped_glob) = glob.value.strip_prefix('!') {
                 if Utf8Path::new(stripped_glob).is_absolute() {
-                    let (span, text) = glob.span_and_text();
+                    let (span, text) = glob.span_and_text("turbo.json");
                     return Err(Error::AbsolutePathInConfig {
                         field: "outputs",
                         span,
@@ -231,7 +232,7 @@ impl TryFrom<Vec<Spanned<UnescapedString>>> for TaskOutputs {
                 exclusions.push(stripped_glob.to_string());
             } else {
                 if Utf8Path::new(&glob.value).is_absolute() {
-                    let (span, text) = glob.span_and_text();
+                    let (span, text) = glob.span_and_text("turbo.json");
                     return Err(Error::AbsolutePathInConfig {
                         field: "outputs",
                         span,
@@ -262,10 +263,11 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
         let cache = raw_task.cache;
 
         let mut env_var_dependencies = HashSet::new();
-        let mut topological_dependencies = Vec::new();
-        let mut task_dependencies = Vec::new();
+        let mut topological_dependencies: Vec<Spanned<TaskName>> = Vec::new();
+        let mut task_dependencies: Vec<Spanned<TaskName>> = Vec::new();
         if let Some(depends_on) = raw_task.depends_on {
             for dependency in depends_on.into_inner() {
+                let (dependency, span) = dependency.split();
                 let dependency: String = dependency.into();
                 if let Some(dependency) = dependency.strip_prefix(ENV_PIPELINE_DELIMITER) {
                     println!(
@@ -278,15 +280,15 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
                 } else if let Some(topo_dependency) =
                     dependency.strip_prefix(TOPOLOGICAL_PIPELINE_DELIMITER)
                 {
-                    topological_dependencies.push(topo_dependency.to_string().into());
+                    topological_dependencies.push(span.to(topo_dependency.to_string().into()));
                 } else {
-                    task_dependencies.push(dependency.into());
+                    task_dependencies.push(span.to(dependency.into()));
                 }
             }
         }
 
-        task_dependencies.sort();
-        topological_dependencies.sort();
+        task_dependencies.sort_by(|a, b| a.value.cmp(&b.value));
+        topological_dependencies.sort_by(|a, b| a.value.cmp(&b.value));
 
         let env = raw_task
             .env
@@ -306,7 +308,7 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
             .into_iter()
             .map(|input| {
                 if Utf8Path::new(&input.value).is_absolute() {
-                    let (span, text) = input.span_and_text();
+                    let (span, text) = input.span_and_text("turbo.json");
                     Err(Error::AbsolutePathInConfig {
                         field: "inputs",
                         span,
@@ -448,7 +450,7 @@ impl TryFrom<RawTurboJson> for TurboJson {
                 global_env.insert(env_var.to_string());
             } else {
                 if Utf8Path::new(&global_dep.value).is_absolute() {
-                    let (span, text) = global_dep.span_and_text();
+                    let (span, text) = global_dep.span_and_text("turbo.json");
                     return Err(Error::AbsolutePathInConfig {
                         field: "globalDependencies",
                         span,
@@ -558,7 +560,7 @@ impl TurboJson {
                 let mut pipeline = Pipeline::default();
                 for (task_name, task_definition) in turbo_from_files.pipeline {
                     if task_name.is_package_task() {
-                        let (span, text) = task_definition.span_and_text();
+                        let (span, text) = task_definition.span_and_text("turbo.json");
 
                         return Err(Error::PackageTaskInSinglePackageMode {
                             task_id: task_name.to_string(),
@@ -644,7 +646,7 @@ pub fn validate_no_package_task_syntax(turbo_json: &TurboJson) -> Vec<Error> {
         .iter()
         .filter(|(task_name, _)| task_name.is_package_task())
         .map(|(task_name, entry)| {
-            let (span, text) = entry.span_and_text();
+            let (span, text) = entry.span_and_text("turbo.json");
             Error::UnnecessaryPackageTaskSyntax {
                 actual: task_name.to_string(),
                 wanted: task_name.task().to_string(),
@@ -658,15 +660,29 @@ pub fn validate_no_package_task_syntax(turbo_json: &TurboJson) -> Vec<Error> {
 pub fn validate_extends(turbo_json: &TurboJson) -> Vec<Error> {
     match turbo_json.extends.first() {
         Some(package_name) if package_name != ROOT_PKG_NAME || turbo_json.extends.len() > 1 => {
-            let (span, text) = turbo_json.extends.span_and_text();
+            let (span, text) = turbo_json.extends.span_and_text("turbo.json");
             vec![Error::ExtendFromNonRoot { span, text }]
         }
-        None => vec![Error::NoExtends {
-            path: turbo_json
+        None => {
+            let path = turbo_json
                 .path
                 .as_ref()
-                .map_or_else(|| "turbo.json".to_string(), |p| p.to_string()),
-        }],
+                .map_or("turbo.json", |p| p.as_ref());
+
+            let (span, text) = match turbo_json.text {
+                Some(ref text) => {
+                    let len = text.len();
+                    let span: SourceSpan = (0, len - 1).into();
+                    (Some(span), text.to_string())
+                }
+                None => (None, String::new()),
+            };
+
+            vec![Error::NoExtends {
+                span,
+                text: NamedSource::new(path, text),
+            }]
+        }
         _ => vec![],
     }
 }
@@ -679,16 +695,20 @@ fn gather_env_vars(
     for value in vars {
         let value: Spanned<String> = value.map(|v| v.into());
         if value.starts_with(ENV_PIPELINE_DELIMITER) {
-            let (span, text) = value.span_and_text();
+            let (span, text) = value.span_and_text("turbo.json");
             // Hard error to help people specify this correctly during migration.
             // TODO: Remove this error after we have run summary.
-            return Err(Error::InvalidEnvPrefix {
+            let path = value
+                .path
+                .as_ref()
+                .map_or_else(|| "turbo.json".to_string(), |p| p.to_string());
+            return Err(Error::InvalidEnvPrefix(Box::new(InvalidEnvPrefixError {
                 key: key.to_string(),
                 value: value.into_inner(),
                 span,
-                text,
+                text: NamedSource::new(path, text),
                 env_pipeline_delimiter: ENV_PIPELINE_DELIMITER,
-            });
+            })));
         }
 
         into.insert(value.into_inner());
@@ -890,7 +910,7 @@ mod tests {
           "persistent": true
         }"#,
         RawTaskDefinition {
-            depends_on: Some(Spanned::new(vec!["cli#build".into()]).with_range(25..38)),
+            depends_on: Some(Spanned::new(vec![Spanned::<UnescapedString>::new("cli#build".into()).with_range(26..37)]).with_range(25..38)),
             dot_env: Some(Spanned::new(vec!["package/a/.env".into()]).with_range(60..78)),
             env: Some(vec![Spanned::<UnescapedString>::new("OS".into()).with_range(98..102)]),
             pass_through_env: Some(vec![Spanned::<UnescapedString>::new("AWS_SECRET_KEY".into()).with_range(134..150)]),
@@ -911,7 +931,7 @@ mod tests {
           inputs: vec!["package/a/src/**".to_string()],
           output_mode: OutputLogsMode::Full,
           pass_through_env: Some(vec!["AWS_SECRET_KEY".to_string()]),
-          task_dependencies: vec!["cli#build".into()],
+          task_dependencies: vec![Spanned::<TaskName<'_>>::new("cli#build".into()).with_range(26..37)],
           topological_dependencies: vec![],
           persistent: true,
         }
@@ -930,7 +950,7 @@ mod tests {
               "persistent": true
             }"#,
         RawTaskDefinition {
-            depends_on: Some(Spanned::new(vec!["cli#build".into()]).with_range(29..42)),
+            depends_on: Some(Spanned::new(vec![Spanned::<UnescapedString>::new("cli#build".into()).with_range(30..41)]).with_range(29..42)),
             dot_env: Some(Spanned::new(vec!["package\\a\\.env".into()]).with_range(68..88)),
             env: Some(vec![Spanned::<UnescapedString>::new("OS".into()).with_range(112..116)]),
             pass_through_env: Some(vec![Spanned::<UnescapedString>::new("AWS_SECRET_KEY".into()).with_range(152..168)]),
@@ -951,7 +971,7 @@ mod tests {
             inputs: vec!["package\\a\\src\\**".to_string()],
             output_mode: OutputLogsMode::Full,
             pass_through_env: Some(vec!["AWS_SECRET_KEY".to_string()]),
-            task_dependencies: vec!["cli#build".into()],
+            task_dependencies: vec![Spanned::<TaskName<'_>>::new("cli#build".into()).with_range(30..41)],
             topological_dependencies: vec![],
             persistent: true,
         }

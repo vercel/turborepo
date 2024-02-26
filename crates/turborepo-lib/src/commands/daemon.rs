@@ -123,10 +123,14 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
             }
         }
         DaemonCommand::Logs => {
-            let mut client = connector.connect().await?;
-            let status = client.status().await?;
-            let log_file = log_filename(&status.log_file)?;
+            let log_file = if let Ok(log_file) = get_log_file_from_daemon(connector).await {
+                log_file
+            } else {
+                get_log_file_from_folder(base).await?
+            };
+
             let tail = which("tail").map_err(|_| DaemonError::TailNotInstalled)?;
+
             std::process::Command::new(tail)
                 .arg("-f")
                 .arg(log_file)
@@ -156,6 +160,35 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
     };
 
     Ok(())
+}
+
+async fn get_log_file_from_daemon(connector: DaemonConnector) -> Result<String, DaemonError> {
+    let mut client = connector.connect().await?;
+    let status = client.status().await?;
+    Ok(log_filename(&status.log_file)?)
+}
+
+async fn get_log_file_from_folder(base: &CommandBase) -> Result<String, DaemonError> {
+    warn!("couldn't connect to daemon, looking for old log files");
+    let log_folder = base.repo_root.join_components(&[".turbo", "daemon"]);
+    let Ok(dir) = std::fs::read_dir(log_folder) else {
+        return Err(DaemonError::LogFileNotFound);
+    };
+
+    let (latest_file, _) = dir
+        .flatten()
+        .filter_map(|entry| {
+            let modified_time = entry.metadata().ok()?.modified().ok()?;
+            Some((entry, modified_time))
+        })
+        .max_by(|(_, mt1), (_, mt2)| mt1.cmp(mt2))
+        .ok_or(DaemonError::LogFileNotFound)?;
+
+    Ok(latest_file
+        .path()
+        .to_str()
+        .expect("log file should be utf-8")
+        .to_string())
 }
 
 async fn clean(

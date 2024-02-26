@@ -28,6 +28,7 @@ use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::{AsyncCache, RemoteCacheOpts};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
+use turborepo_errors::Spanned;
 use turborepo_repository::{
     package_graph::{self, PackageGraph, PackageName},
     package_json::{self, PackageJson},
@@ -576,13 +577,10 @@ impl Run {
         ))
         .with_tasks_only(self.opts.run_opts.only)
         .with_workspaces(filtered_pkgs.clone().into_iter().collect())
-        .with_tasks(
-            self.opts
-                .run_opts
-                .tasks
-                .iter()
-                .map(|task| TaskName::from(task.as_str()).into_owned()),
-        )
+        .with_tasks(self.opts.run_opts.tasks.iter().map(|task| {
+            // TODO: Pull span info from command
+            Spanned::new(TaskName::from(task.as_str()).into_owned())
+        }))
         .build()?;
 
         if !self.opts.run_opts.parallel {

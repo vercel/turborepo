@@ -57,14 +57,11 @@ fn daemon_file_root(repo_hash: &str) -> AbsoluteSystemPathBuf {
         .join_component(repo_hash)
 }
 
-fn daemon_log_file_and_folder(repo_hash: &str) -> (AbsoluteSystemPathBuf, AbsoluteSystemPathBuf) {
-    let directories = directories::ProjectDirs::from("com", "turborepo", "turborepo")
-        .expect("user has a home dir");
-
-    let folder = AbsoluteSystemPathBuf::new(directories.data_dir().to_str().expect("UTF-8 path"))
-        .expect("absolute");
-
-    let log_folder = folder.join_component("logs");
+fn daemon_log_file_and_folder(
+    repo_root: &AbsoluteSystemPath,
+    repo_hash: &str,
+) -> (AbsoluteSystemPathBuf, AbsoluteSystemPathBuf) {
+    let log_folder = repo_root.join_components(&[".turbo", "daemon"]);
     let log_file = log_folder.join_component(format!("{}-turbo.log", repo_hash).as_str());
 
     (log_file, log_folder)
@@ -74,7 +71,7 @@ impl Paths {
     pub fn from_repo_root(repo_root: &AbsoluteSystemPath) -> Self {
         let repo_hash = repo_hash(repo_root);
         let daemon_root = daemon_file_root(&repo_hash);
-        let (log_file, log_folder) = daemon_log_file_and_folder(&repo_hash);
+        let (log_file, log_folder) = daemon_log_file_and_folder(repo_root, &repo_hash);
         Self {
             pid_file: daemon_root.join_component("turbod.pid"),
             lock_file: daemon_root.join_component("turbod.lock"),
