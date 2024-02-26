@@ -702,7 +702,7 @@ impl swc_core::css::visit::Visit for CssValidator {
                         Some(TypeSelector::TagName(tag)) => {
                             !matches!(&*tag.name.value.value, "html" | "body")
                         }
-                        Some(..) => true,
+                        Some(TypeSelector::Universal(..)) => false,
                         None => false,
                     }
             }
@@ -737,7 +737,8 @@ impl lightningcss::visitor::Visitor<'_> for CssValidator {
                 parcel_selectors::parser::Component::Combinator(..)
                 | parcel_selectors::parser::Component::AttributeOther(..)
                 | parcel_selectors::parser::Component::AttributeInNoNamespaceExists { .. }
-                | parcel_selectors::parser::Component::AttributeInNoNamespace { .. } => true,
+                | parcel_selectors::parser::Component::AttributeInNoNamespace { .. }
+                | parcel_selectors::parser::Component::ExplicitUniversalType => true,
 
                 parcel_selectors::parser::Component::LocalName(local) => {
                     // Allow html and body. They are not pure selectors but are allowed.
@@ -995,14 +996,14 @@ mod tests {
 
     #[track_caller]
     fn assert_lint_success(code: &str) {
-        assert_eq!(lint_lightningcss(code), vec![], "lightningcss");
-        assert_eq!(lint_swc(code), vec![], "swc");
+        assert_eq!(lint_lightningcss(code), vec![], "lightningcss: {code}");
+        assert_eq!(lint_swc(code), vec![], "swc: {code}");
     }
 
     #[track_caller]
     fn assert_lint_failure(code: &str) {
-        assert_ne!(lint_lightningcss(code), vec![], "lightningcss");
-        assert_ne!(lint_swc(code), vec![], "swc");
+        assert_ne!(lint_lightningcss(code), vec![], "lightningcss: {code}");
+        assert_ne!(lint_swc(code), vec![], "swc: {code}");
     }
 
     #[test]
