@@ -211,7 +211,11 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
         file_updates: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
         backup_discovery: T,
     ) -> Result<Self, Error> {
-        let writer = CookieWriter::new(&repo_root, Duration::from_secs(1), file_updates.clone());
+        let writer = CookieWriter::new_with_default_cookie_dir(
+            &repo_root,
+            Duration::from_secs(1),
+            file_updates.clone(),
+        );
         let (package_data_tx, cookie_tx, package_data_lazy) = CookiedOptionalWatch::new(writer);
         let package_data_tx = Arc::new(package_data_tx);
         let (package_manager_tx, package_manager_lazy) = package_data_lazy.new_sibling();
