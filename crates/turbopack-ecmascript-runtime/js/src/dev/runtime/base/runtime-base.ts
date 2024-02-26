@@ -326,11 +326,10 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
           e: module.exports,
           r: commonJsRequire.bind(null, module),
           t: runtimeRequire,
-          f: requireContext.bind(null, module),
+          f: moduleContext,
           i: esmImport.bind(null, module),
           s: esmExport.bind(null, module, module.exports),
           j: dynamicExport.bind(null, module, module.exports),
-          p: moduleLookup,
           v: exportValue.bind(null, module),
           n: exportNamespace.bind(null, module),
           m: module,
@@ -831,6 +830,7 @@ function applyInternal(
 
   // we want to continue on error and only throw the error after we tried applying all updates
   let error: any;
+
   function reportError(err: any) {
     if (!error) error = err;
   }

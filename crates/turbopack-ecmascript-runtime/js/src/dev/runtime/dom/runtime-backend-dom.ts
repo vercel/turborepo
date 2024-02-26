@@ -20,13 +20,6 @@ function augmentContext(context: TurbopackDevBaseContext): TurbopackDevContext {
   return context;
 }
 
-function commonJsRequireContext(
-  entry: RequireContextEntry,
-  sourceModule: Module
-): Exports {
-  return commonJsRequire(sourceModule, entry.id());
-}
-
 function fetchWebAssembly(wasmChunkPath: ChunkPath) {
   return fetch(getChunkRelativeUrl(wasmChunkPath));
 }

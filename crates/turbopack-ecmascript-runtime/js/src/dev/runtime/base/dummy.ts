@@ -13,7 +13,6 @@ declare var _eval: (code: EcmascriptModuleEntry) => any;
 declare var augmentContext: (
   context: TurbopackDevBaseContext
 ) => TurbopackDevContext;
-declare var commonJsRequireContext: CommonJsRequireContext;
 declare var loadWebAssembly: (
   source: SourceInfo,
   wasmChunkPath: ChunkPath,
