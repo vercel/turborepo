@@ -494,6 +494,10 @@ impl<T, U: CookieReady + Clone> CookiedOptionalWatch<T, U> {
 
 pub struct CookieRegister(watch::Sender<usize>, AbsoluteSystemPathBuf);
 impl CookieRegister {
+    pub fn cookie_dir(&self) -> &AbsoluteSystemPath {
+        &self.1
+    }
+
     pub fn register(&self, paths: &[&AbsoluteSystemPath]) {
         tracing::trace!("registering cookie for {:?}", paths);
         for path in paths {

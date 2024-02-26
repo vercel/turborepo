@@ -24,7 +24,7 @@ use tokio::{
 };
 use tonic::{server::NamedService, transport::Server};
 use tower::ServiceBuilder;
-use tracing::{debug, error, info, trace, warn};
+use tracing::{error, info, trace, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_filewatch::{
     cookies::CookieWriter,

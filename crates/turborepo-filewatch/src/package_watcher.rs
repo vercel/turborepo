@@ -413,6 +413,11 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
         self.package_data_lazy.clone()
     }
 
+    #[cfg(test)]
+    pub fn cookie_dir(&self) -> &AbsoluteSystemPath {
+        self.cookie_tx.cookie_dir()
+    }
+
     /// Returns Err(()) if the package manager channel is closed, indicating
     /// that the entire watching task should exit.
     async fn handle_file_event(&mut self, file_event: &Event) -> Result<(), ()> {
@@ -805,9 +810,9 @@ mod test {
         };
 
         let subscriber = Subscriber::new(root.clone(), rx, mock_discovery).unwrap();
+        let cookie_dir = subscriber.cookie_dir().to_owned();
 
         let mut package_data = subscriber.package_data();
-
         let _handle = tokio::spawn(subscriber.watch(exit_rx));
 
         tx.send(Ok(notify::Event {
@@ -823,7 +828,7 @@ mod test {
                     // simulate fs round trip
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-                    let path = root.join_component("1.cookie").as_std_path().to_owned();
+                    let path = cookie_dir.join_component("1.cookie").as_std_path().to_owned();
                     tracing::info!("writing cookie at {}", path.to_string_lossy());
                     tx.send(Ok(notify::Event {
                         kind: notify::EventKind::Create(notify::event::CreateKind::File),
@@ -883,7 +888,7 @@ mod test {
                     // simulate fs round trip
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-                    let path = root.join_component("2.cookie").as_std_path().to_owned();
+                    let path = cookie_dir.join_component("2.cookie").as_std_path().to_owned();
                     tracing::info!("writing cookie at {}", path.to_string_lossy());
                     tx.send(Ok(notify::Event {
                         kind: notify::EventKind::Create(notify::event::CreateKind::File),
@@ -976,7 +981,7 @@ mod test {
                     // simulate fs round trip
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-                    let path = root.join_component("1.cookie").as_std_path().to_owned();
+                    let path = root.join_components(&[".turbo", "cookies", "1.cookie"]).as_std_path().to_owned();
                     tracing::info!("writing cookie at {}", path.to_string_lossy());
                     tx.send(Ok(notify::Event {
                         kind: notify::EventKind::Create(notify::event::CreateKind::File),
