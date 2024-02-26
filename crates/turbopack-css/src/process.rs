@@ -695,16 +695,20 @@ impl swc_core::css::visit::Visit for CssValidator {
     fn visit_complex_selector(&mut self, n: &swc_core::css::ast::ComplexSelector) {
         if n.children.iter().all(|sel| match sel {
             swc_core::css::ast::ComplexSelectorChildren::CompoundSelector(sel) => {
-                sel.subclass_selectors
-                    .iter()
-                    .all(|sel| matches!(sel, SubclassSelector::Attribute { .. }))
-                    && match &sel.type_selector.as_deref() {
-                        Some(TypeSelector::TagName(tag)) => {
-                            !matches!(&*tag.name.value.value, "html" | "body")
-                        }
-                        Some(TypeSelector::Universal(..)) => true,
-                        None => true,
+                sel.subclass_selectors.iter().all(|sel| {
+                    matches!(
+                        sel,
+                        SubclassSelector::Attribute { .. }
+                            | SubclassSelector::PseudoClass(..)
+                            | SubclassSelector::PseudoElement(..)
+                    )
+                }) && match &sel.type_selector.as_deref() {
+                    Some(TypeSelector::TagName(tag)) => {
+                        !matches!(&*tag.name.value.value, "html" | "body")
                     }
+                    Some(TypeSelector::Universal(..)) => true,
+                    None => true,
+                }
             }
             swc_core::css::ast::ComplexSelectorChildren::Combinator(_) => true,
         }) {
@@ -738,7 +742,8 @@ impl lightningcss::visitor::Visitor<'_> for CssValidator {
                 | parcel_selectors::parser::Component::AttributeOther(..)
                 | parcel_selectors::parser::Component::AttributeInNoNamespaceExists { .. }
                 | parcel_selectors::parser::Component::AttributeInNoNamespace { .. }
-                | parcel_selectors::parser::Component::ExplicitUniversalType => true,
+                | parcel_selectors::parser::Component::ExplicitUniversalType
+                | parcel_selectors::parser::Component::Negation(..) => true,
 
                 parcel_selectors::parser::Component::LocalName(local) => {
                     // Allow html and body. They are not pure selectors but are allowed.
