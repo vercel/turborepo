@@ -507,7 +507,7 @@ impl Issue for ImageProcessingIssue {
 
     #[turbo_tasks::function]
     fn stage(&self) -> Vc<IssueStage> {
-        IssueStage::Transform(0).cell()
+        IssueStage::Transform.cell()
     }
 
     #[turbo_tasks::function]

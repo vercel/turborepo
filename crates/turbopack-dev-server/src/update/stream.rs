@@ -10,7 +10,7 @@ use turbo_tasks_fs::{FileSystem, FileSystemPath};
 use turbopack_core::{
     error::PrettyPrintError,
     issue::{
-        Issue, IssueDescriptionExt, IssueSeverity, OptionIssueProcessingPathItems,
+        Issue, IssueDescriptionExt, IssueSeverity, IssueStage, OptionIssueProcessingPathItems,
         OptionStyledString, PlainIssue, StyledString,
     },
     server_fs::ServerFileSystem,
@@ -289,6 +289,11 @@ impl Issue for FatalStreamIssue {
     #[turbo_tasks::function]
     fn severity(&self) -> Vc<IssueSeverity> {
         IssueSeverity::Fatal.into()
+    }
+
+    #[turbo_tasks::function]
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::CodeGen.cell()
     }
 
     #[turbo_tasks::function]

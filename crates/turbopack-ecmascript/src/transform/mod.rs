@@ -21,7 +21,7 @@ use turbo_tasks::{ValueDefault, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     environment::Environment,
-    issue::{Issue, IssueSeverity, StyledString},
+    issue::{Issue, IssueSeverity, IssueStage, StyledString},
 };
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
@@ -314,5 +314,10 @@ impl Issue for UnsupportedServerActionIssue {
     #[turbo_tasks::function]
     fn file_path(&self) -> Vc<FileSystemPath> {
         self.file_path
+    }
+
+    #[turbo_tasks::function]
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::Transform.cell()
     }
 }

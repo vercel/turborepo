@@ -548,7 +548,8 @@ pub enum IssueStage {
     Load,
     Parse,
     Analysis,
-    Transform(u32),
+    /// TODO: Add index of the transform
+    Transform,
     CodeGen,
 }
 

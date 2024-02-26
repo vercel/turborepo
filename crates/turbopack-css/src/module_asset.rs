@@ -12,7 +12,7 @@ use turbopack_core::{
     chunk::{ChunkItem, ChunkItemExt, ChunkType, ChunkableModule, ChunkingContext},
     context::{AssetContext, ProcessResult},
     ident::AssetIdent,
-    issue::{Issue, IssueExt, IssueSeverity, OptionStyledString, StyledString},
+    issue::{Issue, IssueExt, IssueSeverity, IssueStage, OptionStyledString, StyledString},
     module::Module,
     reference::{ModuleReference, ModuleReferences},
     reference_type::{CssReferenceSubType, ReferenceType},
@@ -454,6 +454,11 @@ impl Issue for CssModuleComposesIssue {
     #[turbo_tasks::function]
     fn category(&self) -> Vc<String> {
         Vc::cell("css".to_string())
+    }
+
+    #[turbo_tasks::function]
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::Transform.cell()
     }
 
     #[turbo_tasks::function]
