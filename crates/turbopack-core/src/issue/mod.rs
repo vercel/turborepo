@@ -113,6 +113,8 @@ pub trait Issue {
         Vc::<String>::default()
     }
 
+    fn stage(self: Vc<Self>) -> Vc<IssueStage>;
+
     /// The issue title should be descriptive of the issue, but should be a
     /// single line. This is displayed to the user directly under the issue
     /// header.
@@ -166,6 +168,7 @@ pub trait Issue {
             severity: *self.severity().await?,
             file_path: self.file_path().to_string().await?.clone_value(),
             category: self.category().await?.clone_value(),
+            stage: self.stage().await?.clone_value(),
             title: self.title().await?.clone_value(),
             description,
             detail,
@@ -525,10 +528,19 @@ pub struct OptionStyledString(Option<Vc<StyledString>>);
 
 #[turbo_tasks::value(serialization = "none")]
 #[derive(Clone, Debug)]
+pub enum IssueStage {
+    Parse,
+    Trasnsform(u32),
+}
+
+#[turbo_tasks::value(serialization = "none")]
+#[derive(Clone, Debug)]
 pub struct PlainIssue {
     pub severity: IssueSeverity,
     pub file_path: String,
     pub category: String,
+
+    pub stage: IssueStage,
 
     pub title: StyledString,
     pub description: Option<StyledString>,
@@ -544,6 +556,7 @@ fn hash_plain_issue(issue: &PlainIssue, hasher: &mut Xxh3Hash64Hasher, full: boo
     hasher.write_ref(&issue.severity);
     hasher.write_ref(&issue.file_path);
     hasher.write_ref(&issue.category);
+    hasher.write_ref(&issue.stage);
     hasher.write_ref(&issue.title);
     hasher.write_ref(&issue.description);
     hasher.write_ref(&issue.detail);
