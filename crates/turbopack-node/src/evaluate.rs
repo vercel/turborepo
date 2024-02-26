@@ -25,7 +25,7 @@ use turbopack_core::{
     context::AssetContext,
     file_source::FileSource,
     ident::AssetIdent,
-    issue::{Issue, IssueExt, IssueSeverity, OptionStyledString, StyledString},
+    issue::{Issue, IssueExt, IssueSeverity, IssueStage, OptionStyledString, StyledString},
     module::Module,
     reference_type::{InnerAssets, ReferenceType},
     virtual_source::VirtualSource,
@@ -503,6 +503,11 @@ impl Issue for EvaluationIssue {
     }
 
     #[turbo_tasks::function]
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::Transform.into()
+    }
+
+    #[turbo_tasks::function]
     fn file_path(&self) -> Vc<FileSystemPath> {
         self.context_ident.path()
     }
@@ -547,6 +552,11 @@ impl Issue for BuildDependencyIssue {
     #[turbo_tasks::function]
     fn category(&self) -> Vc<String> {
         Vc::cell("build".to_string())
+    }
+
+    #[turbo_tasks::function]
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::CodeGen.cell()
     }
 
     #[turbo_tasks::function]
@@ -619,6 +629,11 @@ impl Issue for EvaluateEmittedErrorIssue {
     #[turbo_tasks::function]
     fn file_path(&self) -> Vc<FileSystemPath> {
         self.file_path
+    }
+
+    #[turbo_tasks::function]
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::Transform.cell()
     }
 
     #[turbo_tasks::function]
