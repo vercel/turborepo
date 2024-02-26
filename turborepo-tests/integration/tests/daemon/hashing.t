@@ -13,6 +13,8 @@ Confirm daemon status
   pid file: .* (re)
   socket file: .* (re)
 
-Try hashing a package
+Subscribe to a package (we don't care about the output here
+because the daemon might not compute the hash in time for the deadline)
+  $ ${TURBO} daemon hash my-app#build > /dev/null
   $ ${TURBO} daemon hash my-app#build
   my-app#build: 1618c35ab3d16bfb
