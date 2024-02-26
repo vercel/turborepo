@@ -326,7 +326,7 @@ impl Subscriber {
                                     .filter(|t| match t {
                                         // we only want to hash tasks that we don't already have.
                                         // existing tasks will be kept up to date by the watcher
-                                        TaskNode::Task(t) => !existing_keys.contains(&t),
+                                        TaskNode::Task(t) => !existing_keys.contains(t),
                                         _ => false,
                                     })
                                     .collect::<Vec<_>>(),
@@ -353,7 +353,7 @@ impl Subscriber {
                                 map.0.insert(k, v);
                             }
 
-                            return true;
+                            true
                         });
                     }
                     Either::Left(Err(_) | Ok(Err(_))) => {
@@ -695,7 +695,7 @@ async fn handle_file_event_for_hasher(
                     map.0.insert(k, v);
                 }
 
-                return true;
+                true
             });
 
             file_hashes_tx.send_if_modified(|map| {
@@ -712,7 +712,7 @@ async fn handle_file_event_for_hasher(
 
                 map.0.extend(changed_files_with_hashes);
 
-                return true;
+                true
             });
 
             tracing::debug!("updated task hashes");

@@ -385,7 +385,7 @@ impl<PL: PackageLookup> TaskDefinitionBuilder<PL> {
         let task_definition = TaskDefinition::try_from(raw)?;
         self.definitions
             .insert(task_id.as_inner().clone(), task_definition);
-        Ok(self.definitions.get(&task_id).expect("above"))
+        Ok(self.definitions.get(task_id).expect("above"))
     }
 
     /// Check if we have a task definition for the given task_id
