@@ -175,7 +175,6 @@ impl TurboSubscriber {
         trace!("created non-blocking file writer");
 
         let layer: DaemonLog = tracing_subscriber::fmt::layer()
-            .with_span_events(FmtSpan::FULL)
             .with_writer(file_writer)
             .with_ansi(false);
 
