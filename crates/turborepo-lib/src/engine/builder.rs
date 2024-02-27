@@ -237,7 +237,7 @@ impl<'a> EngineBuilder<'a> {
             {
                 // If we have a pkg it should be in PackageGraph.
                 // If we're hitting this error something has gone wrong earlier when building
-                // PackageGraph or the workspace really doesn't exist and
+                // PackageGraph or the package really doesn't exist and
                 // turbo.json is misconfigured.
                 let (span, text) = task_id.span_and_text("turbo.json");
                 return Err(Error::MissingPackageFromTask {
