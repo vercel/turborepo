@@ -12,6 +12,7 @@ use std::{
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use auto_hash_map::AutoSet;
+use serde::Serialize;
 use turbo_tasks::{
     emit, CollectiblesSource, RawVc, ReadRef, TransientInstance, TransientValue, TryJoinIterExt,
     Upcast, ValueToString, Vc,
@@ -536,7 +537,7 @@ pub struct OptionIssueSource(Option<Vc<IssueSource>>);
 pub struct OptionStyledString(Option<Vc<StyledString>>);
 
 #[turbo_tasks::value(shared, serialization = "none")]
-#[derive(Clone, Debug, PartialOrd, Ord, DeterministicHash)]
+#[derive(Clone, Debug, PartialOrd, Ord, DeterministicHash, Serialize)]
 pub enum IssueStage {
     Config,
     Resolve,

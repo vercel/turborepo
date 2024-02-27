@@ -70,11 +70,6 @@ impl Issue for UnsupportedSwcEcmaTransformPluginsIssue {
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("transform".to_string())
-    }
-
-    #[turbo_tasks::function]
     async fn title(&self) -> Result<Vc<StyledString>> {
         Ok(StyledString::Text(
             "Unsupported SWC EcmaScript transform plugins on this platform.".to_string(),
