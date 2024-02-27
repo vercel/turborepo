@@ -55,7 +55,7 @@ impl Issue for ResolvingIssue {
 
     #[turbo_tasks::function]
     fn stage(&self) -> Vc<IssueStage> {
-        IssueStage::Analysis.cell()
+        IssueStage::Resolve.cell()
     }
 
     #[turbo_tasks::function]
