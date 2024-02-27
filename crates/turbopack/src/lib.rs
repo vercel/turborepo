@@ -78,11 +78,6 @@ struct ModuleIssue {
 #[turbo_tasks::value_impl]
 impl Issue for ModuleIssue {
     #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("other".to_string())
-    }
-
-    #[turbo_tasks::function]
     fn stage(&self) -> Vc<IssueStage> {
         IssueStage::ProcessModule.cell()
     }

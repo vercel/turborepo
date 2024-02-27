@@ -70,11 +70,6 @@ impl Issue for UnsupportedSassModuleIssue {
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("resolve".to_string())
-    }
-
-    #[turbo_tasks::function]
     async fn title(&self) -> Result<Vc<StyledString>> {
         Ok(StyledString::Text(format!(
             "Unsupported Sass request: {}",

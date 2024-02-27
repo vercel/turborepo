@@ -545,11 +545,6 @@ impl Issue for BuildDependencyIssue {
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("build".to_string())
-    }
-
-    #[turbo_tasks::function]
     fn stage(&self) -> Vc<IssueStage> {
         IssueStage::Unsupported.cell()
     }
@@ -634,11 +629,6 @@ impl Issue for EvaluateEmittedErrorIssue {
     #[turbo_tasks::function]
     fn severity(&self) -> Vc<IssueSeverity> {
         self.severity
-    }
-
-    #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("loaders".to_string())
     }
 
     #[turbo_tasks::function]
