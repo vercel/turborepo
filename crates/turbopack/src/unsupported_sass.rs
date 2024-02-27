@@ -100,6 +100,6 @@ impl Issue for UnsupportedSassModuleIssue {
 
     #[turbo_tasks::function]
     fn stage(&self) -> Vc<IssueStage> {
-        IssueStage::Load.cell()
+        IssueStage::Unsupported.cell()
     }
 }
