@@ -562,7 +562,8 @@ async fn process_content(
                     for err in warnings.read().unwrap().iter() {
                         match err.kind {
                             lightningcss::error::ParserError::UnexpectedToken(_)
-                            | lightningcss::error::ParserError::UnexpectedImportRule => {
+                            | lightningcss::error::ParserError::UnexpectedImportRule
+                            | lightningcss::error::ParserError::EndOfInput => {
                                 let source = err.loc.as_ref().map(|loc| {
                                     let pos = SourcePos {
                                         line: loc.line as _,
