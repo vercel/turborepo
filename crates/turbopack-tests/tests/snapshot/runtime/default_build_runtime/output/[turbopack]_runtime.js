@@ -390,6 +390,14 @@ let SourceType;
    * The module was instantiated because a parent module imported it.
    */ SourceType[SourceType["Parent"] = 1] = "Parent";
 })(SourceType || (SourceType = {}));
+function stringifySourceInfo(source) {
+    switch(source.type){
+        case 0:
+            return `runtime for chunk ${source.chunkPath}`;
+        case 1:
+            return `parent module ${source.parentId}`;
+    }
+}
 const url = require("url");
 const moduleFactories = Object.create(null);
 const moduleCache = Object.create(null);
@@ -407,31 +415,41 @@ const moduleCache = Object.create(null);
         return url.pathToFileURL(resolved);
     };
 }
-function loadChunk(chunkData) {
+function loadChunk(chunkData, source) {
     if (typeof chunkData === "string") {
-        return loadChunkPath(chunkData);
+        return loadChunkPath(chunkData, source);
     } else {
-        return loadChunkPath(chunkData.path);
+        return loadChunkPath(chunkData.path, source);
     }
 }
-function loadChunkPath(chunkPath) {
+function loadChunkPath(chunkPath, source) {
     if (!chunkPath.endsWith(".js")) {
         // We only support loading JS chunks in Node.js.
         // This branch can be hit when trying to load a CSS chunk.
         return;
     }
-    const resolved = path.resolve(RUNTIME_ROOT, chunkPath);
-    const chunkModules = require(resolved);
-    for (const [moduleId, moduleFactory] of Object.entries(chunkModules)){
-        if (!moduleFactories[moduleId]) {
-            moduleFactories[moduleId] = moduleFactory;
+    try {
+        const resolved = path.resolve(RUNTIME_ROOT, chunkPath);
+        const chunkModules = require(resolved);
+        for (const [moduleId, moduleFactory] of Object.entries(chunkModules)){
+            if (!moduleFactories[moduleId]) {
+                moduleFactories[moduleId] = moduleFactory;
+            }
         }
+    } catch (e) {
+        let errorMessage = `Failed to load chunk ${chunkPath}`;
+        if (source) {
+            errorMessage += ` from ${stringifySourceInfo(source)}`;
+        }
+        throw new Error(errorMessage, {
+            cause: e
+        });
     }
 }
-async function loadChunkAsync(chunkData) {
+async function loadChunkAsync(source, chunkData) {
     return new Promise((resolve, reject)=>{
         try {
-            loadChunk(chunkData);
+            loadChunk(chunkData, source);
         } catch (err) {
             reject(err);
             return;
@@ -506,7 +524,10 @@ function instantiateModule(id, source) {
             m: module1,
             c: moduleCache,
             M: moduleFactories,
-            l: loadChunkAsync,
+            l: loadChunkAsync.bind(null, {
+                type: 1,
+                parentId: id
+            }),
             w: loadWebAssembly,
             u: loadWebAssemblyModule,
             g: globalThis,
