@@ -540,6 +540,7 @@ pub struct OptionStyledString(Option<Vc<StyledString>>);
 #[derive(Clone, Debug, PartialOrd, Ord, DeterministicHash, Serialize)]
 pub enum IssueStage {
     Config,
+    AppStructure,
     Resolve,
     ProcessModule,
     /// Read file.
@@ -551,7 +552,6 @@ pub enum IssueStage {
     Analysis,
     CodeGen,
     Unsupported,
-    AppStructure,
     Misc,
     Other(String),
 }
