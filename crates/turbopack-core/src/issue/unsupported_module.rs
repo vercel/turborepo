@@ -25,7 +25,7 @@ impl Issue for UnsupportedModuleIssue {
 
     #[turbo_tasks::function]
     fn stage(&self) -> Vc<IssueStage> {
-        IssueStage::Load.into()
+        IssueStage::ProcessModule.into()
     }
 
     #[turbo_tasks::function]
