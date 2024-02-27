@@ -2003,7 +2003,7 @@ async fn resolve_module_request(
             let full_pattern = Pattern::concat([module.to_string().into(), path.clone()]);
             full_pattern.into_string()
         },
-        query.clone(),
+        query,
     )
     .await?
     {
@@ -2271,7 +2271,7 @@ async fn resolved(
         options,
         options_value,
         |package_path| package_path.get_relative_path_to(path_ref),
-        query.clone(),
+        query,
     )
     .await?
     {
