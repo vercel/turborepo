@@ -544,12 +544,15 @@ pub struct OptionStyledString(Option<Vc<StyledString>>);
 #[turbo_tasks::value(shared, serialization = "none")]
 #[derive(Clone, Debug, PartialOrd, Ord, DeterministicHash)]
 pub enum IssueStage {
+    Resolve,
+    ProcessModule,
     /// Read file.
     Load,
+    SourceTransform,
     Parse,
-    Analysis,
     /// TODO: Add index of the transform
     Transform,
+    Analysis,
     CodeGen,
     Misc,
 }
