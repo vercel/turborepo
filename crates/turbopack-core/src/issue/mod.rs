@@ -554,6 +554,8 @@ pub enum IssueStage {
     Transform,
     Analysis,
     CodeGen,
+    Unsupported,
+    AppStructure,
     Misc,
     Other(String),
 }
