@@ -557,6 +557,26 @@ pub enum IssueStage {
     Other(String),
 }
 
+impl Display for IssueStage {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            IssueStage::Config => write!(f, "config"),
+            IssueStage::Resolve => write!(f, "resolve"),
+            IssueStage::ProcessModule => write!(f, "process module"),
+            IssueStage::Load => write!(f, "load"),
+            IssueStage::SourceTransform => write!(f, "source transform"),
+            IssueStage::Parse => write!(f, "parse"),
+            IssueStage::Transform => write!(f, "transform"),
+            IssueStage::Analysis => write!(f, "analysis"),
+            IssueStage::CodeGen => write!(f, "code gen"),
+            IssueStage::Unsupported => write!(f, "unsupported"),
+            IssueStage::AppStructure => write!(f, "app structure"),
+            IssueStage::Misc => write!(f, "misc"),
+            IssueStage::Other(s) => write!(f, "{}", s),
+        }
+    }
+}
+
 #[turbo_tasks::value(serialization = "none")]
 #[derive(Clone, Debug)]
 pub struct PlainIssue {
