@@ -1822,6 +1822,25 @@ async fn resolve_relative_request(
     query: Vc<String>,
     force_in_lookup_dir: bool,
 ) -> Result<Vc<ResolveResult>> {
+    // Check alias field for aliases first
+    let lookup_path_ref = &*lookup_path.await?;
+    if let Some(result) = apply_in_package(
+        lookup_path,
+        options,
+        options_value,
+        |package_path| {
+            let request = path_pattern.as_string()?;
+            let prefix_path = package_path.get_path_to(lookup_path_ref)?;
+            let request = normalize_request(&format!("./{prefix_path}/{request}"));
+            Some(request)
+        },
+        query,
+    )
+    .await?
+    {
+        return Ok(result);
+    }
+
     let mut new_path = path_pattern.clone();
     // Add the extensions as alternatives to the path
     // read_matches keeps the order of alternatives intact
@@ -1935,7 +1954,14 @@ async fn apply_in_package(
             continue;
         };
 
-        let Some(value) = field_value.get(&request) else {
+        let value = if let Some(value) = field_value.get(&request) {
+            value
+        } else if let Some(request) = request.strip_prefix("./") {
+            let Some(value) = field_value.get(request) else {
+                continue;
+            };
+            value
+        } else {
             continue;
         };
 
