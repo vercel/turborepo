@@ -458,7 +458,7 @@ impl Issue for CssModuleComposesIssue {
 
     #[turbo_tasks::function]
     fn stage(&self) -> Vc<IssueStage> {
-        IssueStage::Transform.cell()
+        IssueStage::CodeGen.cell()
     }
 
     #[turbo_tasks::function]
