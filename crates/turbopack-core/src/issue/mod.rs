@@ -555,6 +555,7 @@ pub enum IssueStage {
     Analysis,
     CodeGen,
     Misc,
+    Other(String),
 }
 
 #[turbo_tasks::value(serialization = "none")]
