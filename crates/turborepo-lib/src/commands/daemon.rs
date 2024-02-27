@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{fs, io, path::Path, time::Duration};
 
 use camino::Utf8PathBuf;
 use futures::FutureExt;
@@ -30,7 +30,7 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
         DaemonCommand::Status { .. } | DaemonCommand::Logs => (false, false),
         DaemonCommand::Stop => (false, true),
         DaemonCommand::Restart | DaemonCommand::Start => (true, true),
-        DaemonCommand::Clean => (false, true),
+        DaemonCommand::Clean { .. } => (false, true),
     };
 
     let connector = DaemonConnector::new(can_start_server, can_kill_server, &base.repo_root);
@@ -137,7 +137,7 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
                 .status()
                 .expect("failed to execute tail");
         }
-        DaemonCommand::Clean => {
+        DaemonCommand::Clean { clean_logs: logs } => {
             // try to connect and shutdown the daemon
             let paths = connector.paths.clone();
             let client = connector.connect().await;
@@ -155,6 +155,9 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
                 }
             }
             clean(&paths.pid_file, &paths.sock_file).await?;
+            if *logs {
+                clean_logs(&paths.log_folder).await?;
+            }
             println!("Done");
         }
     };
@@ -217,6 +220,26 @@ async fn clean(
             success = false;
         }
     }
+
+    if success {
+        Ok(())
+    } else {
+        // return error
+        Err(DaemonError::CleanFailed)
+    }
+}
+
+async fn clean_logs(log_folder: &AbsoluteSystemPath) -> Result<(), DaemonError> {
+    let mut success = true;
+    trace!("cleaning up log files");
+    // clear all files in the log folder. we want to keep the
+    // folder just remove the contents
+    // `remove_dir_all_recursive` is lifted from `std`
+    if let Err(e) = fs::remove_dir_all(log_folder.as_std_path()) {
+        println!("Failed to remove log files: {}", e);
+        println!("Please remove manually: {}", log_folder);
+        success = false;
+    };
 
     if success {
         Ok(())
