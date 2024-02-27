@@ -40,6 +40,7 @@ pub mod cookies;
 mod fsevent;
 pub mod globwatcher;
 mod optional_watch;
+pub mod package_changes_watcher;
 pub mod package_watcher;
 
 pub use optional_watch::OptionalWatch;
