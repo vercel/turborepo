@@ -556,7 +556,7 @@ impl Issue for BuildDependencyIssue {
 
     #[turbo_tasks::function]
     fn stage(&self) -> Vc<IssueStage> {
-        IssueStage::CodeGen.cell()
+        IssueStage::Unsupported.cell()
     }
 
     #[turbo_tasks::function]
