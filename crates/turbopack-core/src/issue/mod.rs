@@ -107,12 +107,8 @@ pub trait Issue {
     /// header.
     fn file_path(self: Vc<Self>) -> Vc<FileSystemPath>;
 
-    /// A short identifier of the type of error (eg "parse", "analyze", or
-    /// "evaluate") displayed to the user as part of the message header.
-    fn category(self: Vc<Self>) -> Vc<String> {
-        Vc::<String>::default()
-    }
-
+    /// The stage of the compilation process at which the issue occurred. This
+    /// is used to sort issues.
     fn stage(self: Vc<Self>) -> Vc<IssueStage>;
 
     /// The issue title should be descriptive of the issue, but should be a
