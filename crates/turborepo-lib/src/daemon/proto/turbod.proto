@@ -25,6 +25,8 @@ service Turbod {
   //
   // Since 1.12.0
   rpc DiscoverPackagesBlocking (DiscoverPackagesRequest) returns (DiscoverPackagesResponse);
+
+  rpc PackageChanges (PackageChangesRequest) returns (stream PackageChangeEvent);
 }
 
 message HelloRequest {
@@ -90,6 +92,18 @@ message DaemonStatus {
 
 message DiscoverPackagesRequest {
 
+}
+
+message PackageChangesRequest {}
+
+message PackageChangeEvent {
+  PackageChangeType change_type = 1;
+  optional string package_name = 2;
+}
+
+enum PackageChangeType {
+  Package = 0;
+  Rediscover = 1;
 }
 
 message DiscoverPackagesResponse {

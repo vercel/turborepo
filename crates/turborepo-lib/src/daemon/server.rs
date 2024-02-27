@@ -21,6 +21,7 @@ use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
 };
+use tokio_stream::wrappers::ReceiverStream;
 use tonic::{server::NamedService, transport::Server};
 use tower::ServiceBuilder;
 use tracing::{error, info, trace, warn};
@@ -28,7 +29,7 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_filewatch::{
     cookies::CookieWriter,
     globwatcher::{Error as GlobWatcherError, GlobError, GlobSet, GlobWatcher},
-    package_changes_watcher::PackageChangesWatcher,
+    package_changes_watcher::{PackageChangeEvent, PackageChangesWatcher},
     package_watcher::{PackageWatcher, WatchingPackageDiscovery},
     FileSystemWatcher, WatchError,
 };
@@ -118,7 +119,8 @@ impl FileWatching {
                 .map_err(|e| WatchError::Setup(format!("{:?}", e)))?,
         );
 
-        let package_changes_watcher = Arc::new(PackageChangesWatcher::new(recv.clone()));
+        let package_changes_watcher =
+            Arc::new(PackageChangesWatcher::new(repo_root.clone(), recv.clone()));
 
         Ok(FileWatching {
             watcher,
@@ -570,6 +572,43 @@ impl<PD: PackageDiscovery + Send + Sync + 'static> proto::turbod_server::Turbod
                     tonic::Status::internal(format!("{}", e))
                 }
             })
+    }
+
+    type PackageChangesStream = ReceiverStream<Result<proto::PackageChangeEvent, tonic::Status>>;
+
+    async fn package_changes(
+        &self,
+        _request: tonic::Request<proto::PackageChangesRequest>,
+    ) -> Result<tonic::Response<Self::PackageChangesStream>, tonic::Status> {
+        let mut package_changes_rx = self.file_watching.package_changes_watcher.package_changes();
+        let (tx, rx) = mpsc::channel(1);
+
+        tokio::spawn(async move {
+            loop {
+                if let Err(err) = package_changes_rx.changed().await {
+                    error!("package changes stream closed: {}", err);
+                    break;
+                }
+
+                let event = match &*package_changes_rx.borrow() {
+                    PackageChangeEvent::Package { name } => proto::PackageChangeEvent {
+                        change_type: proto::PackageChangeType::Package as i32,
+                        package_name: Some(name.to_string()),
+                    },
+                    PackageChangeEvent::Rediscover => proto::PackageChangeEvent {
+                        change_type: proto::PackageChangeType::Rediscover as i32,
+                        package_name: None,
+                    },
+                };
+
+                if let Err(err) = tx.send(Ok(event)).await {
+                    error!("package changes stream closed: {}", err);
+                    break;
+                }
+            }
+        });
+
+        Ok(tonic::Response::new(ReceiverStream::new(rx)))
     }
 }
 
