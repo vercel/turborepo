@@ -91,7 +91,7 @@ impl Issue for ReactRefreshResolvingIssue {
 
     #[turbo_tasks::function]
     fn stage(&self) -> Vc<IssueStage> {
-        IssueStage::Misc.cell()
+        IssueStage::Resolve.cell()
     }
 
     #[turbo_tasks::function]
