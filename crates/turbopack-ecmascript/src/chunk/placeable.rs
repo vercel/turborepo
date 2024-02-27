@@ -127,7 +127,7 @@ impl Issue for SideEffectsInPackageJsonIssue {
 
     #[turbo_tasks::function]
     fn stage(&self) -> Vc<IssueStage> {
-        IssueStage::Analysis.into()
+        IssueStage::Parse.into()
     }
 
     #[turbo_tasks::function]
