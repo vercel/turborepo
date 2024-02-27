@@ -544,6 +544,7 @@ pub struct OptionStyledString(Option<Vc<StyledString>>);
 #[turbo_tasks::value(shared, serialization = "none")]
 #[derive(Clone, Debug, PartialOrd, Ord, DeterministicHash)]
 pub enum IssueStage {
+    Config,
     Resolve,
     ProcessModule,
     /// Read file.
