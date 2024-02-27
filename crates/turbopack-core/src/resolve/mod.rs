@@ -1898,15 +1898,13 @@ async fn resolve_relative_request(
 }
 
 #[tracing::instrument(level = Level::TRACE, skip_all)]
-async fn resolve_module_request(
+async fn apply_in_package(
     lookup_path: Vc<FileSystemPath>,
-    request: Vc<Request>,
     options: Vc<ResolveOptions>,
     options_value: &ResolveOptions,
-    module: &str,
-    path: &Pattern,
+    get_request: impl Fn(&FileSystemPath) -> Option<String>,
     query: Vc<String>,
-) -> Result<Vc<ResolveResult>> {
+) -> Result<Option<Vc<ResolveResult>>> {
     // Check alias field for module aliases first
     for in_package in options_value.in_package.iter() {
         // resolve_module_request is called when importing a node
@@ -1931,10 +1929,9 @@ async fn resolve_module_request(
             continue;
         };
 
-        let package_path = package_json_path.parent();
-        let full_pattern = Pattern::concat([module.to_string().into(), path.clone()]);
+        let package_path = package_json_path.parent().resolve().await?;
 
-        let Some(request) = full_pattern.into_string() else {
+        let Some(request) = get_request(&*package_path.await?) else {
             continue;
         };
 
@@ -1942,18 +1939,49 @@ async fn resolve_module_request(
             continue;
         };
 
-        return resolve_alias_field_result(
-            RequestKey::new(request.clone()),
-            value,
-            refs.clone(),
-            package_path,
-            options,
-            *package_json_path,
-            &request,
-            field,
-            query,
-        )
-        .await;
+        return Ok(Some(
+            resolve_alias_field_result(
+                RequestKey::new(request.clone()),
+                value,
+                refs.clone(),
+                package_path,
+                options,
+                *package_json_path,
+                &request,
+                field,
+                query,
+            )
+            .await?,
+        ));
+    }
+
+    Ok(None)
+}
+
+#[tracing::instrument(level = Level::TRACE, skip_all)]
+async fn resolve_module_request(
+    lookup_path: Vc<FileSystemPath>,
+    request: Vc<Request>,
+    options: Vc<ResolveOptions>,
+    options_value: &ResolveOptions,
+    module: &str,
+    path: &Pattern,
+    query: Vc<String>,
+) -> Result<Vc<ResolveResult>> {
+    // Check alias field for module aliases first
+    if let Some(result) = apply_in_package(
+        lookup_path,
+        options,
+        options_value,
+        |_| {
+            let full_pattern = Pattern::concat([module.to_string().into(), path.clone()]);
+            full_pattern.into_string()
+        },
+        query.clone(),
+    )
+    .await?
+    {
+        return Ok(result);
     }
 
     let result = find_package(
@@ -2204,61 +2232,27 @@ async fn resolved(
     fs_path: Vc<FileSystemPath>,
     original_context: Vc<FileSystemPath>,
     original_request: Vc<Request>,
-    ResolveOptions {
-        resolved_map,
-        in_package,
-        ..
-    }: &ResolveOptions,
+    options_value: &ResolveOptions,
     options: Vc<ResolveOptions>,
     query: Vc<String>,
 ) -> Result<Vc<ResolveResult>> {
     let RealPathResult { path, symlinks } = &*fs_path.realpath_with_links().await?;
 
-    for in_package in in_package.iter() {
-        // resolved is called when importing a relative path, not a
-        // PackageInternal one, so the imports field doesn't apply.
-        let ResolveInPackage::AliasField(field) = in_package else {
-            continue;
-        };
-
-        let FindContextFileResult::Found(package_json_path, refs) =
-            &*find_context_file(fs_path.parent(), package_json()).await?
-        else {
-            continue;
-        };
-
-        let package_json = &*read_package_json(*package_json_path).await?;
-        let Some(field_value) = package_json
-            .as_ref()
-            .and_then(|package_json| package_json[field].as_object())
-        else {
-            continue;
-        };
-
-        let package_path = package_json_path.parent();
-        let Some(rel_path) = package_path.await?.get_relative_path_to(&*fs_path.await?) else {
-            continue;
-        };
-
-        let Some(value) = field_value.get(&rel_path) else {
-            continue;
-        };
-
-        return resolve_alias_field_result(
-            request_key,
-            value,
-            refs.clone(),
-            package_path,
-            options,
-            *package_json_path,
-            &rel_path,
-            field,
-            query,
-        )
-        .await;
+    let path_ref = &*path.await?;
+    // Check alias field for path aliases first
+    if let Some(result) = apply_in_package(
+        path.parent().resolve().await?,
+        options,
+        options_value,
+        |package_path| package_path.get_relative_path_to(path_ref),
+        query.clone(),
+    )
+    .await?
+    {
+        return Ok(result);
     }
 
-    if let Some(resolved_map) = resolved_map {
+    if let Some(resolved_map) = options_value.resolved_map {
         let result = resolved_map
             .lookup(*path, original_context, original_request)
             .await?;
