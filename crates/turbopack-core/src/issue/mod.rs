@@ -163,7 +163,6 @@ pub trait Issue {
         Ok(PlainIssue {
             severity: *self.severity().await?,
             file_path: self.file_path().to_string().await?.clone_value(),
-            category: self.category().await?.clone_value(),
             stage: self.stage().await?.clone_value(),
             title: self.title().await?.clone_value(),
             description,
@@ -434,7 +433,6 @@ impl CapturedIssues {
 
             cmp!(a.severity, b.severity);
             cmp!(a.stage, b.stage);
-            cmp!(a.category, b.category);
 
             a.title.cmp(&b.title)
         });
@@ -582,7 +580,6 @@ impl Display for IssueStage {
 pub struct PlainIssue {
     pub severity: IssueSeverity,
     pub file_path: String,
-    pub category: String,
 
     pub stage: IssueStage,
 
@@ -599,7 +596,6 @@ pub struct PlainIssue {
 fn hash_plain_issue(issue: &PlainIssue, hasher: &mut Xxh3Hash64Hasher, full: bool) {
     hasher.write_ref(&issue.severity);
     hasher.write_ref(&issue.file_path);
-    hasher.write_ref(&issue.category);
     hasher.write_ref(&issue.stage);
     hasher.write_ref(&issue.title);
     hasher.write_ref(&issue.description);

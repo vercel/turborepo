@@ -14,7 +14,6 @@ pub struct AnalyzeIssue {
     pub source_ident: Vc<AssetIdent>,
     pub title: Vc<String>,
     pub message: Vc<StyledString>,
-    pub category: Vc<String>,
     pub code: Option<String>,
     pub source: Option<Vc<IssueSource>>,
 }
@@ -39,11 +38,6 @@ impl Issue for AnalyzeIssue {
             StyledString::Text(title.to_string())
         }
         .cell())
-    }
-
-    #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        self.category
     }
 
     #[turbo_tasks::function]
