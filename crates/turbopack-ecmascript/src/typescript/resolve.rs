@@ -501,11 +501,6 @@ impl Issue for TsConfigIssue {
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("typescript".to_string())
-    }
-
-    #[turbo_tasks::function]
     fn file_path(&self) -> Vc<FileSystemPath> {
         self.source_ident.path()
     }

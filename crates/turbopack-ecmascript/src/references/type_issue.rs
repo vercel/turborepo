@@ -80,11 +80,6 @@ impl Issue for SpecifiedModuleTypeIssue {
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("module type".to_string())
-    }
-
-    #[turbo_tasks::function]
     fn stage(&self) -> Vc<IssueStage> {
         IssueStage::Analysis.into()
     }

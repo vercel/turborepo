@@ -302,11 +302,6 @@ impl Issue for FatalStreamIssue {
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("websocket".to_string())
-    }
-
-    #[turbo_tasks::function]
     fn title(&self) -> Vc<StyledString> {
         StyledString::Text("Fatal error while getting content to stream".to_string()).cell()
     }

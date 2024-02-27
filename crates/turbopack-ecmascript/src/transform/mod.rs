@@ -299,11 +299,6 @@ impl Issue for UnsupportedServerActionIssue {
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("unsupported".to_string())
-    }
-
-    #[turbo_tasks::function]
     fn title(&self) -> Vc<StyledString> {
         StyledString::Text(
             "Server actions (\"use server\") are not yet supported in Turbopack".into(),
