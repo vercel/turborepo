@@ -84,7 +84,7 @@ impl Issue for ModuleIssue {
 
     #[turbo_tasks::function]
     fn stage(&self) -> Vc<IssueStage> {
-        IssueStage::Misc.cell()
+        IssueStage::ProcessModule.cell()
     }
 
     #[turbo_tasks::function]
