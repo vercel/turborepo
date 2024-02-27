@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 use anyhow::{Context, Result};
 use indexmap::IndexMap;
@@ -536,36 +539,74 @@ async fn process_content(
     let cm: Arc<swc_core::common::SourceMap> = Default::default();
 
     let stylesheet = if !use_swc_css_for_turbopack {
-        StyleSheetLike::LightningCss(match StyleSheet::parse(&code, config.clone()) {
-            Ok(mut ss) => {
-                if matches!(ty, CssModuleAssetType::Module) {
-                    let mut validator = CssValidator { errors: Vec::new() };
-                    ss.visit(&mut validator).unwrap();
+        StyleSheetLike::LightningCss({
+            let warnings: Arc<RwLock<_>> = Default::default();
 
-                    for err in validator.errors {
-                        err.report(source, fs_path_vc);
+            match StyleSheet::parse(
+                &code,
+                ParserOptions {
+                    warnings: Some(warnings.clone()),
+                    ..config.clone()
+                },
+            ) {
+                Ok(mut ss) => {
+                    if matches!(ty, CssModuleAssetType::Module) {
+                        let mut validator = CssValidator { errors: Vec::new() };
+                        ss.visit(&mut validator).unwrap();
+
+                        for err in validator.errors {
+                            err.report(source, fs_path_vc);
+                        }
                     }
-                }
 
-                stylesheet_into_static(&ss, without_warnings(config.clone()))
-            }
-            Err(e) => {
-                let source = e.loc.as_ref().map(|loc| {
-                    let pos = SourcePos {
-                        line: loc.line as _,
-                        column: loc.column as _,
-                    };
-                    IssueSource::from_line_col(source, pos, pos)
-                });
+                    for err in warnings.read().unwrap().iter() {
+                        match err.kind {
+                            lightningcss::error::ParserError::UnexpectedToken(_)
+                            | lightningcss::error::ParserError::UnexpectedImportRule => {
+                                let source = err.loc.as_ref().map(|loc| {
+                                    let pos = SourcePos {
+                                        line: loc.line as _,
+                                        column: loc.column as _,
+                                    };
+                                    IssueSource::from_line_col(source, pos, pos)
+                                });
 
-                ParsingIssue {
-                    file: fs_path_vc,
-                    msg: Vc::cell(e.to_string()),
-                    source: Vc::cell(source),
+                                ParsingIssue {
+                                    file: fs_path_vc,
+                                    msg: Vc::cell(err.to_string()),
+                                    source: Vc::cell(source),
+                                }
+                                .cell()
+                                .emit();
+                                return Ok(ParseCssResult::Unparseable.into());
+                            }
+
+                            _ => {
+                                // Ignore
+                            }
+                        }
+                    }
+
+                    stylesheet_into_static(&ss, without_warnings(config.clone()))
                 }
-                .cell()
-                .emit();
-                return Ok(ParseCssResult::Unparseable.into());
+                Err(e) => {
+                    let source = e.loc.as_ref().map(|loc| {
+                        let pos = SourcePos {
+                            line: loc.line as _,
+                            column: loc.column as _,
+                        };
+                        IssueSource::from_line_col(source, pos, pos)
+                    });
+
+                    ParsingIssue {
+                        file: fs_path_vc,
+                        msg: Vc::cell(e.to_string()),
+                        source: Vc::cell(source),
+                    }
+                    .cell()
+                    .emit();
+                    return Ok(ParseCssResult::Unparseable.into());
+                }
             }
         })
     } else {
