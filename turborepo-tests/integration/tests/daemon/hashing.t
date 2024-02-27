@@ -15,6 +15,6 @@ Confirm daemon status
 
 Subscribe to a package (we don't care about the output here
 because the daemon might not compute the hash in time for the deadline)
-  $ ${TURBO} daemon hash my-app#build > /dev/null
+  $ sleep 5
   $ ${TURBO} daemon hash my-app#build
   my-app#build: 1618c35ab3d16bfb
