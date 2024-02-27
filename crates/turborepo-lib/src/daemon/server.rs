@@ -58,6 +58,7 @@ pub struct FileWatching {
     watcher: Arc<FileSystemWatcher>,
     pub glob_watcher: Arc<GlobWatcher>,
     pub package_watcher: Arc<PackageWatcher>,
+    pub package_changes_watcher: Arc<PackageChangesWatcher>,
 }
 
 #[derive(Debug, Error)]
@@ -111,10 +112,13 @@ impl FileWatching {
                 .map_err(|e| WatchError::Setup(format!("{:?}", e)))?,
         );
 
+        let package_changes_watcher = Arc::new(PackageChangesWatcher::new(recv.clone()));
+
         Ok(FileWatching {
             watcher,
             glob_watcher,
             package_watcher,
+            package_changes_watcher,
         })
     }
 }
