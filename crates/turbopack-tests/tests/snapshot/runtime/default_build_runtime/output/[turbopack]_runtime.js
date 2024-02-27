@@ -428,7 +428,7 @@ function loadChunkPath(chunkPath) {
         }
     }
 }
-async function loadChunkAsync(source, chunkData) {
+async function loadChunkAsync(chunkData) {
     return new Promise((resolve, reject)=>{
         try {
             loadChunk(chunkData);
@@ -506,10 +506,7 @@ function instantiateModule(id, source) {
             m: module1,
             c: moduleCache,
             M: moduleFactories,
-            l: loadChunkAsync.bind(null, {
-                type: 1,
-                parentId: id
-            }),
+            l: loadChunkAsync,
             w: loadWebAssembly,
             u: loadWebAssemblyModule,
             g: globalThis,

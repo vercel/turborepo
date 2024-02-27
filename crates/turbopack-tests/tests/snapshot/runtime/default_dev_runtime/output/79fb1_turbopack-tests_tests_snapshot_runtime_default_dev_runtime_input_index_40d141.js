@@ -813,21 +813,21 @@ function applyPhase(outdatedSelfAcceptedModules, newModuleFactories, outdatedMod
  */ function invariant(never, computeMessage) {
     throw new Error(`Invariant: ${computeMessage(never)}`);
 }
-function applyUpdate(chunkListPath, update) {
+function applyUpdate(update) {
     switch(update.type){
         case "ChunkListUpdate":
-            applyChunkListUpdate(chunkListPath, update);
+            applyChunkListUpdate(update);
             break;
         default:
             invariant(update, (update)=>`Unknown update type: ${update.type}`);
     }
 }
-function applyChunkListUpdate(chunkListPath, update) {
+function applyChunkListUpdate(update) {
     if (update.merged != null) {
         for (const merged of update.merged){
             switch(merged.type){
                 case "EcmascriptMergedUpdate":
-                    applyEcmascriptMergedUpdate(chunkListPath, merged);
+                    applyEcmascriptMergedUpdate(merged);
                     break;
                 default:
                     invariant(merged, (merged)=>`Unknown merged type: ${merged.type}`);
@@ -856,7 +856,7 @@ function applyChunkListUpdate(chunkListPath, update) {
         }
     }
 }
-function applyEcmascriptMergedUpdate(chunkPath, update) {
+function applyEcmascriptMergedUpdate(update) {
     const { entries = {}, chunks = {} } = update;
     const { added, modified, chunksAdded, chunksDeleted } = computeChangedModules(entries, chunks);
     const { outdatedModules, newModuleFactories } = computeOutdatedModules(added, modified);
@@ -1033,7 +1033,7 @@ function handleApply(chunkListPath, update) {
         case "partial":
             {
                 // This indicates that the update is can be applied to the current state of the application.
-                applyUpdate(chunkListPath, update.instruction);
+                applyUpdate(update.instruction);
                 break;
             }
         case "restart":
@@ -1308,6 +1308,7 @@ globalThis.TURBOPACK_CHUNK_LISTS = {
  *
  * It will be appended to the base development runtime code.
  */ /// <reference path="../base/runtime-base.ts" />
+/// <reference path="../../../shared/require-type.d.ts" />
 let BACKEND;
 function augmentContext(context) {
     return context;

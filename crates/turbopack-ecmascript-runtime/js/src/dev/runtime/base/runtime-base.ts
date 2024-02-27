@@ -729,25 +729,22 @@ function invariant(never: never, computeMessage: (arg: any) => string): never {
   throw new Error(`Invariant: ${computeMessage(never)}`);
 }
 
-function applyUpdate(chunkListPath: ChunkPath, update: PartialUpdate) {
+function applyUpdate(update: PartialUpdate) {
   switch (update.type) {
     case "ChunkListUpdate":
-      applyChunkListUpdate(chunkListPath, update);
+      applyChunkListUpdate(update);
       break;
     default:
       invariant(update, (update) => `Unknown update type: ${update.type}`);
   }
 }
 
-function applyChunkListUpdate(
-  chunkListPath: ChunkPath,
-  update: ChunkListUpdate
-) {
+function applyChunkListUpdate(update: ChunkListUpdate) {
   if (update.merged != null) {
     for (const merged of update.merged) {
       switch (merged.type) {
         case "EcmascriptMergedUpdate":
-          applyEcmascriptMergedUpdate(chunkListPath, merged);
+          applyEcmascriptMergedUpdate(merged);
           break;
         default:
           invariant(merged, (merged) => `Unknown merged type: ${merged.type}`);
@@ -783,10 +780,7 @@ function applyChunkListUpdate(
   }
 }
 
-function applyEcmascriptMergedUpdate(
-  chunkPath: ChunkPath,
-  update: EcmascriptMergedUpdate
-) {
+function applyEcmascriptMergedUpdate(update: EcmascriptMergedUpdate) {
   const { entries = {}, chunks = {} } = update;
   const { added, modified, chunksAdded, chunksDeleted } = computeChangedModules(
     entries,
@@ -1034,7 +1028,7 @@ function handleApply(chunkListPath: ChunkPath, update: ServerMessage) {
   switch (update.type) {
     case "partial": {
       // This indicates that the update is can be applied to the current state of the application.
-      applyUpdate(chunkListPath, update.instruction);
+      applyUpdate(update.instruction);
       break;
     }
     case "restart": {
