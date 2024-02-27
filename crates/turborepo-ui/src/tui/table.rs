@@ -105,9 +105,7 @@ impl TaskTable {
         let running_idx = self
             .running
             .iter()
-            .enumerate()
-            .find(|(_, running)| running.name() == task)
-            .map(|(idx, _)| idx)
+            .position(|running| running.name() == task)
             .ok_or("no task found")?;
         let old_row_idx = self.finished.len() + running_idx;
         let new_row_idx = self.finished.len();
@@ -139,8 +137,7 @@ impl TaskTable {
     pub fn next(&mut self) {
         let num_rows = self.len();
         let i = match self.scroll.selected() {
-            Some(i) if i == num_rows - 1 => i,
-            Some(i) => i + 1,
+            Some(i) => (i + 1).clamp(0, num_rows - 1),
             None => 0,
         };
         self.scroll.select(Some(i));
