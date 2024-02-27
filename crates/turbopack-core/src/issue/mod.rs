@@ -422,21 +422,7 @@ impl CapturedIssues {
             })
             .try_join()
             .await?;
-        list.sort_by(|a, b| {
-            macro_rules! cmp {
-                ($a:expr, $b:expr) => {
-                    match $a.cmp(&$b) {
-                        Ordering::Equal => {}
-                        other => return other,
-                    }
-                };
-            }
-
-            cmp!(a.severity, b.severity);
-            cmp!(a.stage, b.stage);
-
-            a.title.cmp(&b.title)
-        });
+        list.sort();
         Ok(list)
     }
 }
@@ -592,6 +578,30 @@ pub struct PlainIssue {
     pub source: Option<ReadRef<PlainIssueSource>>,
     pub sub_issues: Vec<ReadRef<PlainIssue>>,
     pub processing_path: ReadRef<PlainIssueProcessingPath>,
+}
+
+impl Ord for PlainIssue {
+    fn cmp(&self, other: &Self) -> Ordering {
+        macro_rules! cmp {
+            ($a:expr, $b:expr) => {
+                match $a.cmp(&$b) {
+                    Ordering::Equal => {}
+                    other => return other,
+                }
+            };
+        }
+
+        cmp!(self.severity, other.severity);
+        cmp!(self.stage, other.stage);
+
+        self.title.cmp(&other.title)
+    }
+}
+
+impl PartialOrd for PlainIssue {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 fn hash_plain_issue(issue: &PlainIssue, hasher: &mut Xxh3Hash64Hasher, full: bool) {
