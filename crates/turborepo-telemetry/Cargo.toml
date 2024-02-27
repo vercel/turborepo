@@ -17,7 +17,7 @@ turborepo-vercel-api-mock = { workspace = true }
 [dependencies]
 async-trait = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
-config = "0.13.4"
+config = { version = "0.13.4", default-features = false, features = ["json"] }
 dirs-next = "2.0.0"
 futures = { workspace = true }
 hex = "0.4.3"
