@@ -229,12 +229,12 @@ async fn apply_module_type(
         )),
         ModuleType::Css {
             ty,
-            use_lightningcss,
+            use_swc_css_for_turbopack,
         } => Vc::upcast(CssModuleAsset::new(
             source,
             Vc::upcast(module_asset_context),
             *ty,
-            *use_lightningcss,
+            *use_swc_css_for_turbopack,
             if let ReferenceType::Css(CssReferenceSubType::AtImport(import)) =
                 reference_type.into_value()
             {

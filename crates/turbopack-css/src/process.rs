@@ -452,7 +452,7 @@ pub async fn parse_css(
     origin: Vc<Box<dyn ResolveOrigin>>,
     import_context: Vc<ImportContext>,
     ty: CssModuleAssetType,
-    use_lightningcss: bool,
+    use_swc_css_for_turbopack: bool,
 ) -> Result<Vc<ParseCssResult>> {
     let span = {
         let name = source.ident().to_string().await?;
@@ -477,7 +477,7 @@ pub async fn parse_css(
                             origin,
                             import_context,
                             ty,
-                            use_lightningcss,
+                            use_swc_css_for_turbopack,
                         )
                         .await?
                     }
@@ -497,7 +497,7 @@ async fn process_content(
     origin: Vc<Box<dyn ResolveOrigin>>,
     import_context: Vc<ImportContext>,
     ty: CssModuleAssetType,
-    use_lightningcss: bool,
+    use_swc_css_for_turbopack: bool,
 ) -> Result<Vc<ParseCssResult>> {
     #[allow(clippy::needless_lifetimes)]
     fn without_warnings<'o, 'i>(config: ParserOptions<'o, 'i>) -> ParserOptions<'o, 'static> {
@@ -535,7 +535,7 @@ async fn process_content(
 
     let cm: Arc<swc_core::common::SourceMap> = Default::default();
 
-    let stylesheet = if use_lightningcss {
+    let stylesheet = if !use_swc_css_for_turbopack {
         StyleSheetLike::LightningCss(match StyleSheet::parse(&code, config.clone()) {
             Ok(mut ss) => {
                 if matches!(ty, CssModuleAssetType::Module) {
