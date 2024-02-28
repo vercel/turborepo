@@ -500,7 +500,7 @@ async fn process_content(
     origin: Vc<Box<dyn ResolveOrigin>>,
     import_context: Vc<ImportContext>,
     ty: CssModuleAssetType,
-    use_swc_css_for_turbopack: bool,
+    use_swc_css: bool,
 ) -> Result<Vc<ParseCssResult>> {
     #[allow(clippy::needless_lifetimes)]
     fn without_warnings<'o, 'i>(config: ParserOptions<'o, 'i>) -> ParserOptions<'o, 'static> {
@@ -538,7 +538,7 @@ async fn process_content(
 
     let cm: Arc<swc_core::common::SourceMap> = Default::default();
 
-    let stylesheet = if !use_swc_css_for_turbopack {
+    let stylesheet = if !use_swc_css {
         StyleSheetLike::LightningCss({
             let warnings: Arc<RwLock<_>> = Default::default();
 
