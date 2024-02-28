@@ -6,6 +6,7 @@ use serde::Deserialize;
 use struct_iterable::Iterable;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
+use turborepo_auth::{TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE};
 use turborepo_dirs::config_dir;
 use turborepo_errors::TURBO_SITE;
 use turborepo_repository::package_json::{Error as PackageJsonError, PackageJson};
@@ -38,6 +39,8 @@ pub enum Error {
     NoGlobalConfigPath,
     #[error("Global auth file path not found")]
     NoGlobalAuthFilePath,
+    #[error("Global config directory not found")]
+    NoGlobalConfigDir,
     #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(
@@ -462,24 +465,16 @@ impl TurborepoConfigBuilder {
             return Ok(global_config_path);
         }
 
+        let config_dir = config_dir().ok_or(Error::NoGlobalConfigDir)?;
+
         // Check for both Vercel and Turbo paths. Vercel takes priority.
-        let vercel_path = config_dir()
-            .ok_or(Error::NoGlobalAuthFilePath)?
-            .join("com.vercel.cli")
-            .join("auth.json");
-        if let Ok(abs_path) = AbsoluteSystemPathBuf::try_from(vercel_path) {
-            return Ok(abs_path);
+        let vercel_path = config_dir.join(VERCEL_TOKEN_DIR).join(VERCEL_TOKEN_FILE);
+        if vercel_path.try_exists().is_ok_and(|exists| exists) {
+            return AbsoluteSystemPathBuf::try_from(vercel_path).map_err(Error::PathError);
         }
 
-        let turbo_path = config_dir()
-            .ok_or(Error::NoGlobalAuthFilePath)?
-            .join("turborepo")
-            .join("config.json");
-        if let Ok(abs_path) = AbsoluteSystemPathBuf::try_from(turbo_path) {
-            return Ok(abs_path);
-        }
-
-        Err(Error::NoGlobalAuthFilePath)
+        let turbo_path = config_dir.join(TURBO_TOKEN_DIR).join(TURBO_TOKEN_FILE);
+        AbsoluteSystemPathBuf::try_from(turbo_path).map_err(Error::PathError)
     }
     fn local_config_path(&self) -> AbsoluteSystemPathBuf {
         self.repo_root.join_components(&[".turbo", "config.json"])
@@ -536,16 +531,28 @@ impl TurborepoConfigBuilder {
 
     fn get_global_auth(&self) -> Result<ConfigurationOptions, Error> {
         let global_auth_path = self.global_auth_path()?;
-        let mut contents = global_auth_path
-            .read_existing_to_string_or(Ok("{}"))
-            .map_err(|error| Error::FailedToReadConfig {
-                config_path: global_auth_path.clone(),
-                error,
-            })?;
-        if contents.is_empty() {
-            contents = String::from("{}");
+        let token = match turborepo_auth::Token::from_file(global_auth_path) {
+            Ok(token) => token,
+            // Multiple ways this can go wrong. Don't error out if we can't find the token - it
+            // just might not be there.
+            Err(e) => {
+                if matches!(e, turborepo_auth::Error::TokenNotFound) {
+                    return Ok(ConfigurationOptions::default());
+                }
+
+                return Err(e.into());
+            }
+        };
+
+        // No auth token found in either Vercel or Turbo config.
+        if token.into_inner().is_empty() {
+            return Ok(ConfigurationOptions::default());
         }
-        let global_auth: ConfigurationOptions = serde_json::from_str(&contents)?;
+
+        let global_auth: ConfigurationOptions = ConfigurationOptions {
+            token: Some(token.into_inner().to_owned()),
+            ..Default::default()
+        };
         Ok(global_auth)
     }
 
