@@ -130,7 +130,7 @@ pub enum ModuleType {
     CssModule,
     Css {
         ty: CssModuleAssetType,
-        use_swc_css_for_turbopack: bool,
+        use_swc_css: bool,
     },
     Static,
     WebAssembly {

@@ -455,7 +455,7 @@ pub async fn parse_css(
     origin: Vc<Box<dyn ResolveOrigin>>,
     import_context: Vc<ImportContext>,
     ty: CssModuleAssetType,
-    use_swc_css_for_turbopack: bool,
+    use_swc_css: bool,
 ) -> Result<Vc<ParseCssResult>> {
     let span = {
         let name = source.ident().to_string().await?;
@@ -480,7 +480,7 @@ pub async fn parse_css(
                             origin,
                             import_context,
                             ty,
-                            use_swc_css_for_turbopack,
+                            use_swc_css,
                         )
                         .await?
                     }
