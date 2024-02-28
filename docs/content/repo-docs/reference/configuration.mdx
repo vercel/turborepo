@@ -3,22 +3,30 @@ title: Configuring turbo.json
 description: Learn how to configure Turborepo through `turbo.json`.
 ---
 
-import { Callout } from "../../../components/Callout";
+import { Callout } from "#/components/Callout";
+import { TypeTable } from 'fumadocs-ui/components/type-table'
 import Link from "next/link";
 
-# Configuration options (`turbo.json`)
+Configure the behavior of `turbo` by adding a `turbo.json` file in your workspace's root directory.
 
-You can configure the behavior of `turbo` by adding a `turbo.json` file in your monorepo's root directory.
-
-Changing your root `turbo.json` file will invalidate the cache for all tasks because it's considered in [the global hash](/TODO-LINK). If you'd like the flexibility to be able to change your pipelines without impacting the hash, you can use a [Package Configuration](/TODO-LINK).
+<Callout type="info">
+Changing your root `turbo.json` file will invalidate the cache for all tasks because it's considered in [the global hash](/TODO-LINK). If you'd like the flexibility to be able to change your pipelines without impacting the global hash, you can use [Package Configurations](/TODO-LINK).
+</Callout>
 
 ## Global options
 
 ### `extends`
 
-`type: string[]`
+Extend from the root `turbo.json` to create specific configuration for a package.
 
-The `extends` key is only valid in Workspace Configurations. It will be
+- Today, the only valid value for `extends` is `["//"]` to indicate inheriting configuration from the root `turbo.json`.
+- If `extends` is used in the root `turbo.json`, it will be ignored.
+
+```jsonc title="apps/web/turbo.json"
+{
+  "extends": ["//"]
+}
+```
 
 ### `globalDependencies`
 
