@@ -140,7 +140,10 @@ jobs:
 
   send-to-slack:
     name: Send to Slack
-    needs: [time-to-first-task]
+    # this is no longer concurrent with send-to-tinybird.
+    # We want to account for the latest datapoint in the 3 month
+    # aggregate graph.
+    needs: [send-to-tinybird]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
