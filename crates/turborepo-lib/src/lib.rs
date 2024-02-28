@@ -24,6 +24,7 @@ mod gitignore;
 pub(crate) mod globwatcher;
 mod hash;
 mod opts;
+mod package_detector;
 mod process;
 mod rewrite_json;
 mod run;

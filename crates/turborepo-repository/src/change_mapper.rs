@@ -8,6 +8,55 @@ use wax::Program;
 
 use crate::package_graph::{ChangedPackagesError, PackageGraph, PackageName, WorkspacePackage};
 
+/// Detects if a file is in a package. If no package is detected, returns `None`
+pub trait PackageDetector {
+    fn detect_package(&self, file: &AnchoredSystemPath) -> Option<WorkspacePackage>;
+}
+
+/// Detects package by checking if the file is inside the package.
+///
+/// NOTE: This strategy has some limitations. Since it doesn't
+/// check the inputs field in `turbo.json`, any inputs that
+/// are not contained in the package directory won't be mapped
+/// to the correct package. Also, since we don't have the global dependencies,
+/// any file that is not in any package will automatically return the root
+/// package. This is fine for Vercel builds, but less fine for situations like
+/// watch mode.
+pub struct DefaultPackageDetector<'a> {
+    pkg_dep_graph: &'a PackageGraph,
+}
+
+impl<'a> DefaultPackageDetector<'a> {
+    pub fn new(pkg_dep_graph: &'a PackageGraph) -> Self {
+        Self { pkg_dep_graph }
+    }
+    fn is_file_in_package(file: &AnchoredSystemPath, package_path: &AnchoredSystemPath) -> bool {
+        file.components()
+            .zip(package_path.components())
+            .all(|(a, b)| a == b)
+    }
+}
+
+impl<'a> PackageDetector for DefaultPackageDetector<'a> {
+    fn detect_package(&self, file: &AnchoredSystemPath) -> Option<WorkspacePackage> {
+        for (name, entry) in self.pkg_dep_graph.packages() {
+            if name == &PackageName::Root {
+                continue;
+            }
+            if let Some(package_path) = entry.package_json_path.parent() {
+                if Self::is_file_in_package(file, package_path) {
+                    return Some(WorkspacePackage {
+                        name: name.clone(),
+                        path: package_path.to_owned(),
+                    });
+                }
+            }
+        }
+
+        Some(WorkspacePackage::root())
+    }
+}
+
 // We may not be able to load the lockfile contents, but we
 // still want to be able to express a generic change.
 pub enum LockfileChange {
@@ -20,25 +69,28 @@ pub enum PackageChanges {
     Some(HashSet<WorkspacePackage>),
 }
 
-pub struct ChangeMapper<'a> {
+pub struct ChangeMapper<'a, PD> {
     pkg_graph: &'a PackageGraph,
 
     global_deps: Vec<String>,
     ignore_patterns: Vec<String>,
+    package_detector: PD,
 }
 
-impl<'a> ChangeMapper<'a> {
+impl<'a, PD: PackageDetector> ChangeMapper<'a, PD> {
     const DEFAULT_GLOBAL_DEPS: [&'static str; 2] = ["package.json", "turbo.json"];
 
     pub fn new(
         pkg_graph: &'a PackageGraph,
         global_deps: Vec<String>,
         ignore_patterns: Vec<String>,
+        package_detector: PD,
     ) -> Self {
         Self {
             pkg_graph,
             global_deps,
             ignore_patterns,
+            package_detector,
         }
     }
 
@@ -56,8 +108,7 @@ impl<'a> ChangeMapper<'a> {
 
         // get filtered files and add the packages that contain them
         let filtered_changed_files = self.filter_ignored_files(changed_files.iter())?;
-        let mut changed_pkgs =
-            self.get_changed_packages(filtered_changed_files.into_iter(), self.pkg_graph)?;
+        let mut changed_pkgs = self.get_changed_packages(filtered_changed_files.into_iter())?;
 
         match lockfile_change {
             Some(LockfileChange::WithContent(content)) => {
@@ -101,39 +152,15 @@ impl<'a> ChangeMapper<'a> {
     fn get_changed_packages<'b>(
         &self,
         files: impl Iterator<Item = &'b AnchoredSystemPathBuf>,
-        graph: &PackageGraph,
     ) -> Result<HashSet<WorkspacePackage>, turborepo_scm::Error> {
         let mut changed_packages = HashSet::new();
         for file in files {
-            let mut found = false;
-            for (name, entry) in graph.packages() {
-                if name == &PackageName::Root {
-                    continue;
-                }
-                if let Some(package_path) = entry.package_json_path.parent() {
-                    if Self::is_file_in_package(file, package_path) {
-                        changed_packages.insert(WorkspacePackage {
-                            name: name.clone(),
-                            path: entry.package_path().to_owned(),
-                        });
-                        found = true;
-                        break;
-                    }
-                }
-            }
-            if !found {
-                // if the file is not in any package, it must be in the root package
-                changed_packages.insert(WorkspacePackage::root());
+            if let Some(pkg) = self.package_detector.detect_package(file) {
+                changed_packages.insert(pkg);
             }
         }
 
         Ok(changed_packages)
-    }
-
-    fn is_file_in_package(file: &AnchoredSystemPath, package_path: &AnchoredSystemPath) -> bool {
-        file.components()
-            .zip(package_path.components())
-            .all(|(a, b)| a == b)
     }
 
     fn get_changed_packages_from_lockfile(

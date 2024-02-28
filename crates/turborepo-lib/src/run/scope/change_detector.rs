@@ -2,7 +2,9 @@ use std::collections::HashSet;
 
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
-    change_mapper::{ChangeMapError, ChangeMapper, LockfileChange, PackageChanges},
+    change_mapper::{
+        ChangeMapError, ChangeMapper, DefaultPackageDetector, LockfileChange, PackageChanges,
+    },
     package_graph::{PackageGraph, PackageName},
 };
 use turborepo_scm::SCM;
@@ -18,7 +20,7 @@ pub trait GitChangeDetector {
 
 pub struct ScopeChangeDetector<'a> {
     turbo_root: &'a AbsoluteSystemPath,
-    change_mapper: ChangeMapper<'a>,
+    change_mapper: ChangeMapper<'a, DefaultPackageDetector<'a>>,
     scm: &'a SCM,
     pkg_graph: &'a PackageGraph,
 }
@@ -31,7 +33,9 @@ impl<'a> ScopeChangeDetector<'a> {
         global_deps: Vec<String>,
         ignore_patterns: Vec<String>,
     ) -> Self {
-        let change_mapper = ChangeMapper::new(pkg_graph, global_deps, ignore_patterns);
+        let pkg_detector = DefaultPackageDetector::new(pkg_graph);
+        let change_mapper =
+            ChangeMapper::new(pkg_graph, global_deps, ignore_patterns, pkg_detector);
 
         Self {
             turbo_root,
@@ -54,7 +58,11 @@ impl<'a> ScopeChangeDetector<'a> {
             .package_manager()
             .lockfile_path(self.turbo_root);
 
-        if !ChangeMapper::lockfile_changed(self.turbo_root, changed_files, &lockfile_path) {
+        if !ChangeMapper::<DefaultPackageDetector>::lockfile_changed(
+            self.turbo_root,
+            changed_files,
+            &lockfile_path,
+        ) {
             return None;
         }
 
