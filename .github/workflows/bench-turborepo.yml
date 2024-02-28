@@ -168,6 +168,9 @@ jobs:
       # TODO: compare results to previous data and only post regressions
       - name: Create Slack payload
         shell: bash
+        env:
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+          TINYBIRD_TOKEN: ${{ secrets.TINYBIRD_TOKEN }}
         run: |
           cd packages/turbo-benchmark
           node -r esbuild-register ./src/ttft/slack.ts ${{github.run_id}}
