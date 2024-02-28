@@ -1092,6 +1092,9 @@ impl JsValue {
                 JsValue::Iterated(_, iterable) => {
                     iterable.make_unknown_without_content(false, "node limit reached");
                 }
+                JsValue::TypeOf(_, operand) => {
+                    operand.make_unknown_without_content(false, "node limit reached");
+                }
                 JsValue::Member(_, o, p) => {
                     make_max_unknown([&mut **o, &mut **p].into_iter());
                     self.update_total_nodes();
@@ -1992,7 +1995,9 @@ impl JsValue {
     /// don't know. Returns Some if we know if or if not the value is a string.
     pub fn is_string(&self) -> Option<bool> {
         match self {
-            JsValue::Constant(ConstantValue::Str(..)) | JsValue::Concat(..) => Some(true),
+            JsValue::Constant(ConstantValue::Str(..))
+            | JsValue::Concat(..)
+            | JsValue::TypeOf(..) => Some(true),
 
             // Objects are not strings
             JsValue::Constant(..)
@@ -2322,6 +2327,13 @@ macro_rules! for_each_children_async {
             JsValue::Iterated(_, box iterable) => {
                 let (new_iterable, modified) = $visit_fn(take(iterable), $($args),+).await?;
                 *iterable = new_iterable;
+
+                $value.update_total_nodes();
+                ($value, modified)
+            }
+            JsValue::TypeOf(_, box operand) => {
+                let (new_operand, modified) = $visit_fn(take(operand), $($args),+).await?;
+                *operand = new_operand;
 
                 $value.update_total_nodes();
                 ($value, modified)
