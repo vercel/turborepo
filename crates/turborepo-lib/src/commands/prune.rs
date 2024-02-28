@@ -3,6 +3,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::sync::OnceLock;
 
 use lazy_static::lazy_static;
+use miette::Diagnostic;
 use tracing::trace;
 use turbopath::{
     AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPath,
@@ -19,7 +20,7 @@ use crate::turbo_json::RawTurboJson;
 
 pub const DEFAULT_OUTPUT_DIR: &str = "out";
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum Error {
     #[error("io error while pruning: {0}")]
     Io(#[from] std::io::Error),
@@ -30,6 +31,7 @@ pub enum Error {
     #[error("path error while pruning: {0}")]
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     TurboJsonParser(#[from] crate::turbo_json::parser::Error),
     #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
