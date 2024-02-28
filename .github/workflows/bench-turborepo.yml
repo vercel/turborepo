@@ -140,9 +140,8 @@ jobs:
 
   send-to-slack:
     name: Send to Slack
-    # this is no longer concurrent with send-to-tinybird.
-    # We want to account for the latest datapoint in the 3 month
-    # aggregate graph.
+    # Wait for send-to-tinybird so we can get aggregate data points
+    # before sending to slack.
     needs: [send-to-tinybird]
     runs-on: ubuntu-latest
     steps:
