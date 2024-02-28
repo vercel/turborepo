@@ -2,20 +2,34 @@ import fetch from "node-fetch";
 import vega from "vega";
 import { put } from "@vercel/blob";
 import sharp from "sharp";
+import type { TTFTData } from "../helpers";
 
 const TINYBIRD_AGGREGATE =
   "https://api.us-east.tinybird.co/v0/pipes/turborepo_perf_ttft_all.json";
 
 const PNG_FILENAME = "aggregate.png";
 
-async function fetchAggregateFromTinybird() {
+async function fetchAggregateFromTinybird(): Promise<{
+  data: Array<TTFTData>;
+}> {
   const token = process.env.TINYBIRD_TOKEN;
   const resp = await fetch(`${TINYBIRD_AGGREGATE}?token=${token}`);
-  return resp.json();
+  return resp.json() as Promise<{ data: Array<TTFTData> }>;
 }
 
-async function generateVegaSpec(aggregateData: { data: any[] }): Promise<any> {
-  const vegaConfig = {
+function generateVegaSpec(aggregateData: { data: Array<TTFTData> }): vega.Spec {
+  const source0: vega.ValuesData = {
+    name: "source_0",
+    values: aggregateData.data,
+    transform: [
+      {
+        type: "formula",
+        expr: "datum.durationMicroseconds/1000",
+        as: "durationMs",
+      },
+    ],
+  };
+  const vegaConfig: vega.Spec = {
     $schema: "https://vega.github.io/schema/vega/v5.json",
     width: 600,
     height: 400,
@@ -177,17 +191,7 @@ async function generateVegaSpec(aggregateData: { data: any[] }): Promise<any> {
       },
     ],
     data: [
-      {
-        name: "source_0",
-        values: aggregateData.data,
-        transform: [
-          {
-            type: "formula",
-            expr: "datum.durationMicroseconds/1000",
-            as: "durationMs",
-          },
-        ],
-      },
+      source0,
       {
         name: "data_0",
         source: "source_0",
@@ -203,7 +207,7 @@ async function generateVegaSpec(aggregateData: { data: any[] }): Promise<any> {
   return vegaConfig;
 }
 
-async function generatePng(vegaConfig: any): Promise<Buffer> {
+async function generatePng(vegaConfig: vega.Spec): Promise<Buffer> {
   const view = new vega.View(vega.parse(vegaConfig), {
     renderer: "none",
   });
@@ -222,9 +226,9 @@ async function uploadBlob(buffer: Buffer): Promise<string> {
 }
 
 // uploadAggregate returns the URL of the uploaded image
-export function uploadAggregate(): Promise<string> {
-  return fetchAggregateFromTinybird()
-    .then(generateVegaSpec)
-    .then(generatePng)
-    .then(uploadBlob);
+export async function uploadAggregate(): Promise<string> {
+  const aggregateData = await fetchAggregateFromTinybird();
+  const vegaSpec = generateVegaSpec(aggregateData);
+  const pngBuffer = await generatePng(vegaSpec);
+  return uploadBlob(pngBuffer);
 }
