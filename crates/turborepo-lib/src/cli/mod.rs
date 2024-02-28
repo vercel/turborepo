@@ -28,6 +28,7 @@ use crate::{
         CommandBase,
     },
     get_version,
+    run::watch::WatchClient,
     shim::TurboState,
     tracing::TurboSubscriber,
 };
@@ -793,6 +794,9 @@ pub struct RunArgs {
     // Pass a string to enable posting Run Summaries to Vercel
     #[clap(long, hide = true)]
     pub experimental_space_id: Option<String>,
+
+    #[clap(long)]
+    pub watch: bool,
 }
 
 impl RunArgs {
@@ -1204,7 +1208,11 @@ pub async fn run(
                 let _ = logger.enable_chrome_tracing(file_path, include_args);
             }
             let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
+            if args.watch {
+                WatchClient::start(&base).await?;
 
+                return Ok(0);
+            }
             args.track(&event);
             event.track_run_code_path(CodePath::Rust);
             let exit_code = run::run(base, event).await.inspect(|code| {
