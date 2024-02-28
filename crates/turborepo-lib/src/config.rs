@@ -456,9 +456,35 @@ impl TurborepoConfigBuilder {
         let global_config_path = config_dir.join("turborepo").join("config.json");
         AbsoluteSystemPathBuf::try_from(global_config_path).map_err(Error::PathError)
     }
+    fn global_auth_path(&self) -> Result<AbsoluteSystemPathBuf, Error> {
+        #[cfg(test)]
+        if let Some(global_config_path) = self.global_config_path.clone() {
+            return Ok(global_config_path);
+        }
+
+        // Check for both Vercel and Turbo paths. Vercel takes priority.
+        let vercel_path = config_dir()
+            .ok_or(Error::NoGlobalAuthFilePath)?
+            .join("com.vercel.cli")
+            .join("auth.json");
+        if let Ok(abs_path) = AbsoluteSystemPathBuf::try_from(vercel_path) {
+            return Ok(abs_path);
+        }
+
+        let turbo_path = config_dir()
+            .ok_or(Error::NoGlobalAuthFilePath)?
+            .join("turborepo")
+            .join("config.json");
+        if let Ok(abs_path) = AbsoluteSystemPathBuf::try_from(turbo_path) {
+            return Ok(abs_path);
+        }
+
+        Err(Error::NoGlobalAuthFilePath)
+    }
     fn local_config_path(&self) -> AbsoluteSystemPathBuf {
         self.repo_root.join_components(&[".turbo", "config.json"])
     }
+
     #[allow(dead_code)]
     fn root_package_json_path(&self) -> AbsoluteSystemPathBuf {
         self.repo_root.join_component("package.json")
@@ -508,6 +534,21 @@ impl TurborepoConfigBuilder {
         Ok(local_config)
     }
 
+    fn get_global_auth(&self) -> Result<ConfigurationOptions, Error> {
+        let global_auth_path = self.global_auth_path()?;
+        let mut contents = global_auth_path
+            .read_existing_to_string_or(Ok("{}"))
+            .map_err(|error| Error::FailedToReadConfig {
+                config_path: global_auth_path.clone(),
+                error,
+            })?;
+        if contents.is_empty() {
+            contents = String::from("{}");
+        }
+        let global_auth: ConfigurationOptions = serde_json::from_str(&contents)?;
+        Ok(global_auth)
+    }
+
     create_builder!(with_api_url, api_url, Option<String>);
     create_builder!(with_login_url, login_url, Option<String>);
     create_builder!(with_team_slug, team_slug, Option<String>);
@@ -552,6 +593,7 @@ impl TurborepoConfigBuilder {
             Err(e)
         })?;
         let global_config = self.get_global_config()?;
+        let global_auth = self.get_global_auth()?;
         let local_config = self.get_local_config()?;
         let env_vars = self.get_environment();
         let env_var_config = get_env_var_config(&env_vars)?;
@@ -561,6 +603,7 @@ impl TurborepoConfigBuilder {
             root_package_json.get_configuration_options(),
             turbo_json.get_configuration_options(),
             global_config.get_configuration_options(),
+            global_auth.get_configuration_options(),
             local_config.get_configuration_options(),
             env_var_config.get_configuration_options(),
             Ok(self.override_config.clone()),
