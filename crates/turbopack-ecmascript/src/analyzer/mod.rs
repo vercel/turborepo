@@ -1323,6 +1323,12 @@ impl JsValue {
                     iterable.explain_internal_inner(hints, indent_depth, depth, unknown_depth)
                 )
             }
+            JsValue::TypeOf(_, operand) => {
+                format!(
+                    "typeof({})",
+                    operand.explain_internal_inner(hints, indent_depth, depth, unknown_depth)
+                )
+            }
             JsValue::Call(_, callee, list) => {
                 format!(
                     "{}({})",
@@ -1825,6 +1831,7 @@ impl JsValue {
             } => *has_side_effects,
             JsValue::Argument(_, _) => false,
             JsValue::Iterated(_, iterable) => iterable.has_side_effects(),
+            JsValue::TypeOf(_, operand) => operand.has_side_effects(),
         }
     }
 
@@ -2768,6 +2775,10 @@ impl JsValue {
 
             JsValue::Iterated(_, iterable) => {
                 visitor(iterable);
+            }
+
+            JsValue::TypeOf(_, operand) => {
+                visitor(operand);
             }
 
             JsValue::Constant(_)
