@@ -123,7 +123,7 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
                 };
 
                 let result = ss.to_css(PrinterOptions {
-                    minify: true,
+                    minify: false,
                     source_map: srcmap.as_mut(),
                     targets: if handle_nesting {
                         Targets {
