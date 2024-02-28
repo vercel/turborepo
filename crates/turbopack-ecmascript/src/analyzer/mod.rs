@@ -2616,6 +2616,14 @@ impl JsValue {
                 modified
             }
 
+            JsValue::TypeOf(_, operand) => {
+                let modified = visitor(operand);
+                if modified {
+                    self.update_total_nodes();
+                }
+                modified
+            }
+
             JsValue::Constant(_)
             | JsValue::FreeVar(_)
             | JsValue::Variable(_)
@@ -3134,6 +3142,9 @@ impl JsValue {
             }
             JsValue::Iterated(_, iterable) => {
                 iterable.similar_hash(state, depth - 1);
+            }
+            JsValue::TypeOf(_, operand) => {
+                operand.similar_hash(state, depth - 1);
             }
             JsValue::Module(ModuleValue {
                 module: v,
