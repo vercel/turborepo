@@ -1,6 +1,9 @@
+use std::{collections::HashSet, fs};
+
+use ignore::gitignore::Gitignore;
 use notify::Event;
 use tokio::sync::{broadcast, oneshot, watch};
-use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
     change_mapper::{ChangeMapper, PackageChanges},
     package_graph::{PackageGraphBuilder, PackageName},
@@ -51,6 +54,13 @@ struct Subscriber {
     package_change_events_tx: watch::Sender<PackageChangeEvent>,
 }
 
+fn ancestors_is_ignored(gitignore: &Gitignore, path: &AnchoredSystemPath) -> bool {
+    path.ancestors().enumerate().any(|(idx, p)| {
+        let is_dir = idx != 0;
+        gitignore.matched(p, is_dir).is_ignore()
+    })
+}
+
 impl Subscriber {
     fn new(
         repo_root: AbsoluteSystemPathBuf,
@@ -94,15 +104,21 @@ impl Subscriber {
             loop {
                 match file_events.recv().await {
                     Ok(Ok(Event { paths, .. })) => {
-                        let changed_files = paths
+                        // No point in raising an error for an invalid .gitignore
+                        let (root_gitignore, _) =
+                            Gitignore::new(&self.repo_root.join_component(".gitignore"));
+
+                        let changed_files: HashSet<_> = paths
                             .into_iter()
                             .filter_map(|p| {
                                 let p = AbsoluteSystemPathBuf::try_from(p).ok()?;
                                 self.repo_root.anchor(&p).ok()
                             })
+                            .filter(|p| !ancestors_is_ignored(&root_gitignore, p))
                             .collect();
 
-                        let changes = change_mapper.changed_packages(changed_files, None);
+                        let changes = change_mapper.changed_packages(changed_files.clone(), None);
+
                         match changes {
                             Ok(PackageChanges::All) => {
                                 let _ = self
@@ -110,6 +126,11 @@ impl Subscriber {
                                     .send(PackageChangeEvent::Rediscover);
                             }
                             Ok(PackageChanges::Some(changed_pkgs)) => {
+                                tracing::debug!(
+                                    "changed files: {:?} changed packages: {:?}",
+                                    changed_files,
+                                    changed_pkgs
+                                );
                                 for pkg in changed_pkgs {
                                     let _ = self.package_change_events_tx.send(
                                         PackageChangeEvent::Package {
@@ -119,18 +140,18 @@ impl Subscriber {
                                 }
                             }
                             Err(err) => {
-                                tracing::error!("PACKAGE WATCH error: {:?}", err);
+                                tracing::error!("error: {:?}", err);
                             }
                         }
                     }
                     Ok(Err(err)) => {
-                        tracing::error!("PACKAGE WATCH file event error: {:?}", err);
+                        tracing::error!("file event error: {:?}", err);
                     }
                     Err(broadcast::error::RecvError::Lagged(_)) => {
-                        tracing::warn!("PACKAGE WATCH file event lagged");
+                        tracing::warn!("file event lagged");
                     }
                     Err(broadcast::error::RecvError::Closed) => {
-                        tracing::debug!("PACKAGE WATCH file event channel closed");
+                        tracing::debug!("file event channel closed");
                         break;
                     }
                 }
