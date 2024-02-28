@@ -30,12 +30,10 @@ impl<'a> ScopeChangeDetector<'a> {
         turbo_root: &'a AbsoluteSystemPath,
         scm: &'a SCM,
         pkg_graph: &'a PackageGraph,
-        global_deps: Vec<String>,
         ignore_patterns: Vec<String>,
     ) -> Self {
         let pkg_detector = DefaultPackageDetector::new(pkg_graph);
-        let change_mapper =
-            ChangeMapper::new(pkg_graph, global_deps, ignore_patterns, pkg_detector);
+        let change_mapper = ChangeMapper::new(pkg_graph, ignore_patterns, pkg_detector);
 
         Self {
             turbo_root,

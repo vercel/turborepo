@@ -124,6 +124,7 @@ impl<'a> FilterResolver<'a, ScopeChangeDetector<'a>> {
             global_deps,
             opts.ignore_patterns.clone(),
         );
+
         Self::new_with_change_detector(pkg_graph, turbo_root, inference, scm, change_detector)
     }
 }

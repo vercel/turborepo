@@ -564,6 +564,23 @@ impl PackageInfo {
     }
 }
 
+#[allow(dead_code)]
+pub struct MockDiscovery;
+impl PackageDiscovery for MockDiscovery {
+    async fn discover_packages(&self) -> Result<discovery::DiscoveryResponse, discovery::Error> {
+        Ok(discovery::DiscoveryResponse {
+            package_manager: crate::package_manager::PackageManager::Npm,
+            workspaces: vec![],
+        })
+    }
+
+    async fn discover_packages_blocking(
+        &self,
+    ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
+        self.discover_packages().await
+    }
+}
+
 #[cfg(test)]
 mod test {
     use std::assert_matches::assert_matches;
@@ -571,6 +588,70 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
+
+    #[test_case("1.2.3", None, "1.2.3", Some("@scope/foo") ; "handles exact match")]
+    #[test_case("1.2.3", None, "^1.0.0", Some("@scope/foo") ; "handles semver range satisfied")]
+    #[test_case("2.3.4", None, "^1.0.0", None ; "handles semver range not satisfied")]
+    #[test_case("1.2.3", None, "workspace:1.2.3", Some("@scope/foo") ; "handles workspace protocol with version")]
+    #[test_case("1.2.3", None, "workspace:*", Some("@scope/foo") ; "handles workspace protocol with no version")]
+    #[test_case("1.2.3", None, "workspace:../other-packages/", Some("@scope/foo") ; "handles workspace protocol with relative path")]
+    #[test_case("1.2.3", None, "workspace:../@scope/foo", Some("@scope/foo") ; "handles workspace protocol with scoped relative path")]
+    #[test_case("1.2.3", None, "npm:^1.2.3", Some("@scope/foo") ; "handles npm protocol with satisfied semver range")]
+    #[test_case("2.3.4", None, "npm:^1.2.3", None ; "handles npm protocol with not satisfied semver range")]
+    #[test_case("1.2.3", None, "1.2.2-alpha-123abcd.0", None ; "handles pre-release versions")]
+    // for backwards compatability with the code before versions were verified
+    #[test_case("sometag", None, "1.2.3", Some("@scope/foo") ; "handles non-semver package version")]
+    // for backwards compatability with the code before versions were verified
+    #[test_case("1.2.3", None, "sometag", Some("@scope/foo") ; "handles non-semver dependency version")]
+    #[test_case("1.2.3", None, "file:../libB", Some("@scope/foo") ; "handles file:.. inside repo")]
+    #[test_case("1.2.3", None, "file:../../../otherproject", None ; "handles file:.. outside repo")]
+    #[test_case("1.2.3", None, "link:../libB", Some("@scope/foo") ; "handles link:.. inside repo")]
+    #[test_case("1.2.3", None, "link:../../../otherproject", None ; "handles link:.. outside repo")]
+    #[test_case("0.0.0-development", None, "*", Some("@scope/foo") ; "handles development versions")]
+    #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@*", Some("@scope/foo") ; "handles pnpm alias star")]
+    #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@~", Some("@scope/foo") ; "handles pnpm alias tilda")]
+    #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@^", Some("@scope/foo") ; "handles pnpm alias caret")]
+    fn test_matches_workspace_package(
+        package_version: &str,
+        dependency_name: Option<&str>,
+        range: &str,
+        expected: Option<&str>,
+    ) {
+        let root = AbsoluteSystemPathBuf::new(if cfg!(windows) {
+            "C:\\some\\repo"
+        } else {
+            "/some/repo"
+        })
+        .unwrap();
+        let pkg_dir = root.join_components(&["packages", "libA"]);
+        let workspaces = {
+            let mut map = HashMap::new();
+            map.insert(
+                PackageName::Other("@scope/foo".to_string()),
+                PackageInfo {
+                    package_json: PackageJson {
+                        version: Some(package_version.to_string()),
+                        ..Default::default()
+                    },
+                    package_json_path: AnchoredSystemPathBuf::from_raw("unused").unwrap(),
+                    unresolved_external_dependencies: None,
+                    transitive_dependencies: None,
+                },
+            );
+            map
+        };
+
+        let splitter = DependencySplitter {
+            repo_root: &root,
+            workspace_dir: &pkg_dir,
+            workspaces: &workspaces,
+        };
+
+        assert_eq!(
+            splitter.is_internal(dependency_name.unwrap_or("@scope/foo"), range),
+            expected.map(PackageName::from)
+        );
+    }
 
     struct MockDiscovery;
     impl PackageDiscovery for MockDiscovery {

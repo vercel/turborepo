@@ -64,6 +64,7 @@ pub enum LockfileChange {
     WithContent(Vec<u8>),
 }
 
+#[derive(Debug, PartialEq)]
 pub enum PackageChanges {
     All,
     Some(HashSet<WorkspacePackage>),
@@ -72,23 +73,18 @@ pub enum PackageChanges {
 pub struct ChangeMapper<'a, PD> {
     pkg_graph: &'a PackageGraph,
 
-    global_deps: Vec<String>,
     ignore_patterns: Vec<String>,
     package_detector: PD,
 }
 
 impl<'a, PD: PackageDetector> ChangeMapper<'a, PD> {
-    const DEFAULT_GLOBAL_DEPS: [&'static str; 2] = ["package.json", "turbo.json"];
-
     pub fn new(
         pkg_graph: &'a PackageGraph,
-        global_deps: Vec<String>,
         ignore_patterns: Vec<String>,
         package_detector: PD,
     ) -> Self {
         Self {
             pkg_graph,
-            global_deps,
             ignore_patterns,
             package_detector,
         }
@@ -99,13 +95,6 @@ impl<'a, PD: PackageDetector> ChangeMapper<'a, PD> {
         changed_files: HashSet<AnchoredSystemPathBuf>,
         lockfile_change: Option<LockfileChange>,
     ) -> Result<PackageChanges, ChangeMapError> {
-        let global_change =
-            self.repo_global_file_has_changed(&Self::DEFAULT_GLOBAL_DEPS, &changed_files)?;
-
-        if global_change {
-            return Ok(PackageChanges::All);
-        }
-
         // get filtered files and add the packages that contain them
         let filtered_changed_files = self.filter_ignored_files(changed_files.iter())?;
         let mut changed_pkgs = self.get_changed_packages(filtered_changed_files.into_iter())?;
@@ -125,17 +114,6 @@ impl<'a, PD: PackageDetector> ChangeMapper<'a, PD> {
             Some(LockfileChange::Empty) => Ok(PackageChanges::All),
             None => Ok(PackageChanges::Some(changed_pkgs)),
         }
-    }
-
-    fn repo_global_file_has_changed(
-        &self,
-        default_global_deps: &[&str],
-        changed_files: &HashSet<AnchoredSystemPathBuf>,
-    ) -> Result<bool, ChangeMapError> {
-        let global_deps = self.global_deps.iter().map(|s| s.as_str());
-        let filters = global_deps.chain(default_global_deps.iter().copied());
-        let matcher = wax::any(filters)?;
-        Ok(changed_files.iter().any(|f| matcher.is_match(f.as_path())))
     }
 
     fn filter_ignored_files<'b>(
