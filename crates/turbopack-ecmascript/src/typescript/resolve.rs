@@ -9,7 +9,7 @@ use turbopack_core::{
     context::AssetContext,
     file_source::FileSource,
     ident::AssetIdent,
-    issue::{Issue, IssueExt, IssueSeverity, OptionStyledString, StyledString},
+    issue::{Issue, IssueExt, IssueSeverity, IssueStage, OptionStyledString, StyledString},
     reference_type::{ReferenceType, TypeScriptReferenceSubType},
     resolve::{
         handle_resolve_error,
@@ -474,9 +474,6 @@ async fn apply_typescript_types_options(
             field: "types".to_string(),
             extensions: Some(vec![".d.ts".to_string(), ".ts".to_string()]),
         });
-    resolve_options
-        .into_package
-        .push(ResolveIntoPackage::Default("index".to_string()));
     for item in resolve_options.in_package.iter_mut() {
         if let ResolveInPackage::ImportsField { conditions, .. } = item {
             conditions.insert("types".to_string(), ConditionValue::Set);
@@ -501,11 +498,6 @@ impl Issue for TsConfigIssue {
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("typescript".to_string())
-    }
-
-    #[turbo_tasks::function]
     fn file_path(&self) -> Vc<FileSystemPath> {
         self.source_ident.path()
     }
@@ -513,5 +505,10 @@ impl Issue for TsConfigIssue {
     #[turbo_tasks::function]
     fn description(&self) -> Vc<OptionStyledString> {
         Vc::cell(Some(StyledString::Text(self.message.clone()).cell()))
+    }
+
+    #[turbo_tasks::function]
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::Analysis.cell()
     }
 }

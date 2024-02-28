@@ -32,7 +32,10 @@ use turbo_tasks_fs::{FileContent, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::ChunkingContext,
-    issue::{Issue, IssueExt, IssueSource, OptionIssueSource, OptionStyledString, StyledString},
+    issue::{
+        Issue, IssueExt, IssueSource, IssueStage, OptionIssueSource, OptionStyledString,
+        StyledString,
+    },
     reference::ModuleReferences,
     reference_type::ImportContext,
     resolve::origin::ResolveOrigin,
@@ -583,6 +586,7 @@ async fn process_content(
             swc_core::css::parser::parser::ParserConfig {
                 css_modules: true,
                 legacy_ie: true,
+                legacy_nesting: true,
                 ..Default::default()
             },
             &mut errors,
@@ -935,6 +939,11 @@ impl Issue for ParsingIssue {
     #[turbo_tasks::function]
     fn file_path(&self) -> Vc<FileSystemPath> {
         self.file
+    }
+
+    #[turbo_tasks::function]
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::Parse.cell()
     }
 
     #[turbo_tasks::function]
