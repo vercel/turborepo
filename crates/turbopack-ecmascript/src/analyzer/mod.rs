@@ -802,6 +802,10 @@ impl JsValue {
         Self::Not(1 + inner.total_nodes(), inner)
     }
 
+    pub fn type_of(operand: Box<JsValue>) -> Self {
+        Self::TypeOf(1 + operand.total_nodes(), operand)
+    }
+
     pub fn array(items: Vec<JsValue>) -> Self {
         Self::Array {
             total_nodes: 1 + total_nodes(&items),
