@@ -36,7 +36,7 @@ pub struct CssModuleAsset {
     asset_context: Vc<Box<dyn AssetContext>>,
     import_context: Option<Vc<ImportContext>>,
     ty: CssModuleAssetType,
-    use_swc_css_for_turbopack: bool,
+    use_swc_css: bool,
 }
 
 #[turbo_tasks::value_impl]
