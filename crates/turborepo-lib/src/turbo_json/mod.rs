@@ -759,6 +759,7 @@ mod tests {
             ..TurboJson::default()
         }
     )]
+    #[test_case(r#"{ "//": "A comment"}"#, TurboJson::default() ; "faux comment")]
     fn test_get_root_turbo_no_synthesizing(
         turbo_json_content: &str,
         expected_turbo_json: TurboJson,
