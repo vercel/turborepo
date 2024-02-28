@@ -47,7 +47,7 @@ impl CssModuleAsset {
         source: Vc<Box<dyn Source>>,
         asset_context: Vc<Box<dyn AssetContext>>,
         ty: CssModuleAssetType,
-        use_swc_css_for_turbopack: bool,
+        use_swc_css: bool,
         import_context: Option<Vc<ImportContext>>,
     ) -> Vc<Self> {
         Self::cell(CssModuleAsset {
@@ -55,7 +55,7 @@ impl CssModuleAsset {
             asset_context,
             import_context,
             ty,
-            use_swc_css_for_turbopack,
+            use_swc_css,
         })
     }
 
@@ -78,7 +78,7 @@ impl ParseCss for CssModuleAsset {
             this.import_context
                 .unwrap_or_else(|| ImportContext::new(vec![], vec![], vec![])),
             this.ty,
-            this.use_swc_css_for_turbopack,
+            this.use_swc_css,
         ))
     }
 }
