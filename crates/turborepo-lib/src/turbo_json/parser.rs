@@ -595,6 +595,8 @@ impl DeserializationVisitor for RawTurboJsonVisitor {
                         result.remote_cache = Some(remote_cache);
                     }
                 }
+                // Allow for faux-comments at the top level
+                "//" => {}
                 unknown_key => {
                     diagnostics.push(create_unknown_key_diagnostic_from_struct(
                         &result,
