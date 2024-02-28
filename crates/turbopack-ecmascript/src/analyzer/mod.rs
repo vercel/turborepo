@@ -441,6 +441,11 @@ pub enum JsValue {
     /// `(total_node_count, iterable)`
     Iterated(usize, Box<JsValue>),
 
+    /// A `typeof` expression.
+    ///
+    /// `(total_node_count, operand)`
+    TypeOf(usize, Box<JsValue>),
+
     // PLACEHOLDERS
     // ----------------------------
     /// A reference to a variable.
