@@ -1,8 +1,8 @@
-import React from "react";
+import React, { Children } from "react";
 import { Callout as FumaCallout } from "fumadocs-ui/components/callout";
 
 export type FumaCalloutProps =
-  | React.ComponentProps<typeof FumaCallout> & {
+  | Omit<React.ComponentProps<typeof FumaCallout>, "type"> & {
       type: React.ComponentProps<typeof FumaCallout>["type"] | "good-to-know";
     };
 
@@ -89,19 +89,31 @@ const ICONS = {
     </svg>
   ),
   "good-to-know": (
-    <p className={`m-0 ${THEMES["good-to-know"].text} font-medium`}>
-      Good to know:
-    </p>
+    <></>
+    // <p className={`m-0 ${THEMES["good-to-know"].text} font-medium`}>
+    //   Good to know:
+    // </p>
   ),
 };
 
 export function Callout({ type, ...props }: FumaCalloutProps) {
+  const childrenToArray = Children.toArray(props.children);
+  const goodToKnowChildren = [
+    <p className="inline font-medium" key="good-to-know">
+      Good to know:
+    </p>,
+    ...childrenToArray,
+  ];
+
   return (
     <FumaCallout
       className={`${Object.values(THEMES[type || "info"]).join(" ")} leading-6`}
       icon={ICONS[type || "info"]}
+      // @ts-expect-error -- Added the "good-to-know" type
       type={type}
       {...props}
-    />
+    >
+      {type === "good-to-know" ? goodToKnowChildren : props.children}
+    </FumaCallout>
   );
 }
