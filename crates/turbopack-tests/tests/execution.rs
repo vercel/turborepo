@@ -69,6 +69,7 @@ fn register() {
     turbopack_dev::register();
     turbopack_env::register();
     turbopack_ecmascript_plugins::register();
+    turbopack_resolve::register();
     include!(concat!(env!("OUT_DIR"), "/register_test_execution.rs"));
 }
 

@@ -799,6 +799,7 @@ pub fn register() {
     turbopack_env::register();
     turbopack_mdx::register();
     turbopack_json::register();
+    turbopack_resolve::register();
     turbopack_static::register();
     turbopack_wasm::register();
     include!(concat!(env!("OUT_DIR"), "/register.rs"));

@@ -695,5 +695,6 @@ fn register() {
     turbo_tasks_fs::register();
     turbopack::register();
     turbopack_cli_utils::register();
+    turbopack_resolve::register();
     include!(concat!(env!("OUT_DIR"), "/register.rs"));
 }
