@@ -1,9 +1,6 @@
 use std::{collections::HashMap, fmt};
 
-use turbopath::{
-    AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPath,
-    RelativeUnixPathBuf,
-};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPath, RelativeUnixPathBuf};
 
 use super::{PackageInfo, PackageName};
 
