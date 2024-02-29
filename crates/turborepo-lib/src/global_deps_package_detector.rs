@@ -2,7 +2,7 @@ use thiserror::Error;
 use turbopath::AnchoredSystemPath;
 use turborepo_repository::{
     change_mapper::{DefaultPackageDetector, PackageDetection, PackageDetector},
-    package_graph::PackageGraph,
+    package_graph::{PackageGraph, WorkspacePackage},
 };
 use wax::{BuildError, Program};
 
@@ -41,7 +41,8 @@ impl<'a> PackageDetector for GlobalDepsPackageDetector<'a> {
     fn detect_package(&self, path: &AnchoredSystemPath) -> PackageDetection {
         match DefaultPackageDetector::new(self.pkg_dep_graph).detect_package(path) {
             // Since `DefaultPackageDetector` is overly conservative, we can check here if
-            // the path is actually in globalDeps and if not, return it as PackageDetection::None.
+            // the path is actually in globalDeps and if not, return it as
+            // PackageDetection::Package(WorkspacePackage::root()).
             PackageDetection::All => {
                 let cleaned_path = path.clean();
                 let in_global_deps = self.global_deps_matcher.is_match(cleaned_path.as_str());
@@ -49,7 +50,7 @@ impl<'a> PackageDetector for GlobalDepsPackageDetector<'a> {
                 if in_global_deps {
                     PackageDetection::All
                 } else {
-                    PackageDetection::None
+                    PackageDetection::Package(WorkspacePackage::root())
                 }
             }
             result => result,
@@ -67,7 +68,7 @@ mod tests {
         change_mapper::{ChangeMapper, DefaultPackageDetector, PackageChanges},
         discovery,
         discovery::PackageDiscovery,
-        package_graph::PackageGraphBuilder,
+        package_graph::{PackageGraphBuilder, WorkspacePackage},
         package_json::PackageJson,
     };
 
@@ -135,9 +136,12 @@ mod tests {
             None,
         )?;
 
-        // We shouldn't get any changes since we have global deps specified and
+        // We only get a root workspace change since we have global deps specified and
         // README.md is not one of them
-        assert_eq!(package_changes, PackageChanges::Some(HashSet::new()));
+        assert_eq!(
+            package_changes,
+            PackageChanges::Some([WorkspacePackage::root()].into_iter().collect())
+        );
 
         Ok(())
     }
