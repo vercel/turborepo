@@ -1,6 +1,8 @@
 import createMDX from "fumadocs-mdx/config";
+import { withVercelToolbar } from "@vercel/toolbar/plugins/next";
 
 const withMDX = createMDX();
+const vercelToolbar = withVercelToolbar();
 
 /** @type {import('next').NextConfig} */
 const config = {
@@ -17,4 +19,5 @@ const config = {
   },
 };
 
-export default withMDX(config);
+export default withMDX(vercelToolbar(config));
+// export default withMDX(config);
