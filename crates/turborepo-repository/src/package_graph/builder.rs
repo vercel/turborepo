@@ -640,7 +640,7 @@ impl<'a> DependencyVersion<'a> {
             Some("file") | Some("link") => {
                 // Default to internal if we have the package but somehow cannot get the path
                 RelativeUnixPathBuf::new(self.version)
-                    .and_then(|file_path| cwd.join_unix_path(file_path))
+                    .map(|file_path| cwd.join_unix_path(file_path))
                     .map_or(true, |dep_path| root.contains(&dep_path))
             }
             Some(_) if self.is_external() => {

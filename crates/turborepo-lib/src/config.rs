@@ -1,17 +1,34 @@
 use std::{collections::HashMap, ffi::OsString, io};
 
 use convert_case::{Case, Casing};
-use miette::{Diagnostic, SourceSpan};
+use miette::{Diagnostic, NamedSource, SourceSpan};
 use serde::Deserialize;
 use struct_iterable::Iterable;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
+use turborepo_auth::{TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE};
 use turborepo_dirs::config_dir;
 use turborepo_errors::TURBO_SITE;
 use turborepo_repository::package_json::{Error as PackageJsonError, PackageJson};
 
 pub use crate::turbo_json::RawTurboJson;
 use crate::{commands::CommandBase, turbo_json};
+
+#[derive(Debug, Error, Diagnostic)]
+#[error("Environment variables should not be prefixed with \"{env_pipeline_delimiter}\"")]
+#[diagnostic(
+    code(invalid_env_prefix),
+    url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
+)]
+pub struct InvalidEnvPrefixError {
+    pub value: String,
+    pub key: String,
+    #[source_code]
+    pub text: NamedSource,
+    #[label("variable with invalid prefix declared here")]
+    pub span: Option<SourceSpan>,
+    pub env_pipeline_delimiter: &'static str,
+}
 
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Error, Diagnostic)]
@@ -22,6 +39,8 @@ pub enum Error {
     NoGlobalConfigPath,
     #[error("Global auth file path not found")]
     NoGlobalAuthFilePath,
+    #[error("Global config directory not found")]
+    NoGlobalConfigDir,
     #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(
@@ -55,24 +74,13 @@ pub enum Error {
     PackageTaskInSinglePackageMode {
         task_id: String,
         #[source_code]
-        text: String,
+        text: NamedSource,
         #[label("package task found here")]
         span: Option<SourceSpan>,
     },
-    #[error("Environment variables should not be prefixed with \"{env_pipeline_delimiter}\"")]
-    #[diagnostic(
-        code(invalid_env_prefix),
-        url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
-    )]
-    InvalidEnvPrefix {
-        value: String,
-        key: String,
-        #[source_code]
-        text: String,
-        #[label("variable with invalid prefix declared here")]
-        span: Option<SourceSpan>,
-        env_pipeline_delimiter: &'static str,
-    },
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    InvalidEnvPrefix(Box<InvalidEnvPrefixError>),
     #[error(transparent)]
     PathError(#[from] turbopath::PathError),
     #[diagnostic(
@@ -86,14 +94,14 @@ pub enum Error {
         #[label("unnecessary package syntax found here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: String,
+        text: NamedSource,
     },
     #[error("You can only extend from the root workspace")]
     ExtendFromNonRoot {
         #[label("non-root workspace found here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: String,
+        text: NamedSource,
     },
     #[error("`{field}` cannot contain an absolute path")]
     AbsolutePathInConfig {
@@ -101,10 +109,15 @@ pub enum Error {
         #[label("absolute path found here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: String,
+        text: NamedSource,
     },
-    #[error("No \"extends\" key found in {path}")]
-    NoExtends { path: String },
+    #[error("No \"extends\" key found")]
+    NoExtends {
+        #[label("add extends key here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+    },
     #[error("Failed to create APIClient: {0}")]
     ApiClient(#[source] turborepo_api_client::Error),
     #[error("{0} is not UTF8.")]
@@ -446,9 +459,27 @@ impl TurborepoConfigBuilder {
         let global_config_path = config_dir.join("turborepo").join("config.json");
         AbsoluteSystemPathBuf::try_from(global_config_path).map_err(Error::PathError)
     }
+    fn global_auth_path(&self) -> Result<AbsoluteSystemPathBuf, Error> {
+        #[cfg(test)]
+        if let Some(global_config_path) = self.global_config_path.clone() {
+            return Ok(global_config_path);
+        }
+
+        let config_dir = config_dir().ok_or(Error::NoGlobalConfigDir)?;
+
+        // Check for both Vercel and Turbo paths. Vercel takes priority.
+        let vercel_path = config_dir.join(VERCEL_TOKEN_DIR).join(VERCEL_TOKEN_FILE);
+        if vercel_path.try_exists().is_ok_and(|exists| exists) {
+            return AbsoluteSystemPathBuf::try_from(vercel_path).map_err(Error::PathError);
+        }
+
+        let turbo_path = config_dir.join(TURBO_TOKEN_DIR).join(TURBO_TOKEN_FILE);
+        AbsoluteSystemPathBuf::try_from(turbo_path).map_err(Error::PathError)
+    }
     fn local_config_path(&self) -> AbsoluteSystemPathBuf {
         self.repo_root.join_components(&[".turbo", "config.json"])
     }
+
     #[allow(dead_code)]
     fn root_package_json_path(&self) -> AbsoluteSystemPathBuf {
         self.repo_root.join_component("package.json")
@@ -498,6 +529,33 @@ impl TurborepoConfigBuilder {
         Ok(local_config)
     }
 
+    fn get_global_auth(&self) -> Result<ConfigurationOptions, Error> {
+        let global_auth_path = self.global_auth_path()?;
+        let token = match turborepo_auth::Token::from_file(global_auth_path) {
+            Ok(token) => token,
+            // Multiple ways this can go wrong. Don't error out if we can't find the token - it
+            // just might not be there.
+            Err(e) => {
+                if matches!(e, turborepo_auth::Error::TokenNotFound) {
+                    return Ok(ConfigurationOptions::default());
+                }
+
+                return Err(e.into());
+            }
+        };
+
+        // No auth token found in either Vercel or Turbo config.
+        if token.into_inner().is_empty() {
+            return Ok(ConfigurationOptions::default());
+        }
+
+        let global_auth: ConfigurationOptions = ConfigurationOptions {
+            token: Some(token.into_inner().to_owned()),
+            ..Default::default()
+        };
+        Ok(global_auth)
+    }
+
     create_builder!(with_api_url, api_url, Option<String>);
     create_builder!(with_login_url, login_url, Option<String>);
     create_builder!(with_team_slug, team_slug, Option<String>);
@@ -542,6 +600,7 @@ impl TurborepoConfigBuilder {
             Err(e)
         })?;
         let global_config = self.get_global_config()?;
+        let global_auth = self.get_global_auth()?;
         let local_config = self.get_local_config()?;
         let env_vars = self.get_environment();
         let env_var_config = get_env_var_config(&env_vars)?;
@@ -551,6 +610,7 @@ impl TurborepoConfigBuilder {
             root_package_json.get_configuration_options(),
             turbo_json.get_configuration_options(),
             global_config.get_configuration_options(),
+            global_auth.get_configuration_options(),
             local_config.get_configuration_options(),
             env_var_config.get_configuration_options(),
             Ok(self.override_config.clone()),

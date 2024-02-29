@@ -7,7 +7,7 @@ members = [
   "crates/turbo-tasks*",
   "crates/turbopack*",
   "crates/turborepo*",
-  "packages/turbo-repository/rust/",
+  "packages/turbo-repository/rust",
   "xtask",
 ]
 
@@ -42,6 +42,7 @@ default-members = [
   "crates/turbopack-json",
   "crates/turbopack-mdx",
   "crates/turbopack-node",
+  "crates/turbopack-resolve",
   "crates/turbopack-static",
   "crates/turbopack-swc-ast-explorer",
   "crates/turbopack-swc-utils",
@@ -97,16 +98,16 @@ async-recursion = "1.0.2"
 browserslist-rs = { version = "0.15.0" }
 miette = { version = "5.10.0", features = ["fancy"] }
 mdxjs = "0.1.23"
-modularize_imports = { version = "0.68.5" }
+modularize_imports = { version = "0.68.7" }
 styled_components = { version = "0.96.6" }
 styled_jsx = { version = "0.73.8" }
-swc_core = { version = "0.90.10", features = [
+swc_core = { version = "0.90.12", features = [
   "ecma_loader_lru",
   "ecma_loader_parking_lot",
 ] }
 swc_emotion = { version = "0.72.6" }
 swc_relay = { version = "0.44.5" }
-testing = { version = "0.35.18" }
+testing = { version = "0.35.19" }
 
 auto-hash-map = { path = "crates/turbo-tasks-auto-hash-map" }
 node-file-trace = { path = "crates/node-file-trace", default-features = false }
@@ -147,6 +148,7 @@ turbopack-image = { path = "crates/turbopack-image" }
 turbopack-json = { path = "crates/turbopack-json" }
 turbopack-mdx = { path = "crates/turbopack-mdx" }
 turbopack-node = { path = "crates/turbopack-node" }
+turbopack-resolve = { path = "crates/turbopack-resolve" }
 turbopack-static = { path = "crates/turbopack-static" }
 turbopack-swc-utils = { path = "crates/turbopack-swc-utils" }
 turbopack-test-utils = { path = "crates/turbopack-test-utils" }
@@ -230,6 +232,9 @@ lightningcss = { version = "1.0.0-alpha.50", features = [
 ] }
 mime = "0.3.16"
 nohash-hasher = "0.2.0"
+notify = "6.1.1"
+notify-debouncer-full = "0.3.1"
+notify-debouncer-mini = { version = "0.3.0", default-features = false }
 once_cell = "1.17.1"
 owo-colors = "3.5.0"
 parcel_selectors = "0.26.0"
@@ -278,4 +283,3 @@ urlencoding = "2.1.2"
 webbrowser = "0.8.7"
 which = "4.4.0"
 unicode-segmentation = "1.10.1"
-notify-debouncer-full = "0.3.1"

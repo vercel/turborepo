@@ -7,8 +7,8 @@ use std::{
     pin::Pin,
 };
 
-use anyhow::{anyhow, bail, Result};
-use indexmap::{indexmap, IndexMap};
+use anyhow::{bail, Result};
+use indexmap::{indexmap, IndexMap, IndexSet};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use tracing::{Instrument, Level};
@@ -325,10 +325,28 @@ impl ModuleResolveResult {
         )))
     }
 
+    /// Returns a set (no duplicates) of primary modules in the result. All
+    /// modules are already resolved Vc.
     #[turbo_tasks::function]
     pub async fn primary_modules(self: Vc<Self>) -> Result<Vc<Modules>> {
         let this = self.await?;
-        Ok(Vc::cell(this.primary_modules_iter().collect()))
+        let mut iter = this.primary_modules_iter();
+        let Some(first) = iter.next() else {
+            return Ok(Vc::cell(vec![]));
+        };
+        let first = first.resolve().await?;
+
+        let Some(second) = iter.next() else {
+            return Ok(Vc::cell(vec![first]));
+        };
+        let second = second.resolve().await?;
+
+        // We have at least two items, so we need to deduplicate them
+        let mut set = IndexSet::from([first, second]);
+        for module in this.primary_modules_iter() {
+            set.insert(module.resolve().await?);
+        }
+        Ok(Vc::cell(set.into_iter().collect()))
     }
 
     #[turbo_tasks::function]
@@ -1545,7 +1563,7 @@ async fn resolve_internal_inline(
                         }
                         PatternMatch::Directory(matched_pattern, path) => {
                             results.push(
-                                resolve_into_folder(*path, options, *query)
+                                resolve_into_folder(*path, options)
                                     .with_request(matched_pattern.clone()),
                             );
                         }
@@ -1709,29 +1727,12 @@ async fn resolve_internal_inline(
 async fn resolve_into_folder(
     package_path: Vc<FileSystemPath>,
     options: Vc<ResolveOptions>,
-    query: Vc<String>,
 ) -> Result<Vc<ResolveResult>> {
     let package_json_path = package_path.join("package.json".to_string());
     let options_value = options.await?;
+
     for resolve_into_package in options_value.into_package.iter() {
         match resolve_into_package {
-            ResolveIntoPackage::Default(req) => {
-                let str = "./".to_string()
-                    + &*normalize_path(req).ok_or_else(|| {
-                        anyhow!(
-                            "ResolveIntoPackage::Default can't be used with a request that \
-                             escapes the current directory"
-                        )
-                    })?;
-                let request = Request::parse(Value::new(str.into()));
-                return Ok(resolve_internal_inline(
-                    package_path,
-                    request.resolve().await?,
-                    options,
-                )
-                .await?
-                .with_request(".".to_string()));
-            }
             ResolveIntoPackage::MainField {
                 field: name,
                 extensions,
@@ -1768,30 +1769,19 @@ async fn resolve_into_folder(
                     }
                 };
             }
-            ResolveIntoPackage::ExportsField {
-                conditions,
-                unspecified_conditions,
-            } => {
-                if let ExportsFieldResult::Some(exports_field) =
-                    &*exports_field(package_json_path).await?
-                {
-                    // other options do not apply anymore when an exports field exist
-                    return handle_exports_imports_field(
-                        package_path,
-                        package_json_path,
-                        options,
-                        exports_field,
-                        ".",
-                        conditions,
-                        unspecified_conditions,
-                        query,
-                    )
-                    .await;
-                }
-            }
+            ResolveIntoPackage::ExportsField { .. } => {}
         }
     }
-    Ok(ResolveResult::unresolveable().into())
+
+    // fall back to dir/index.[js,ts,...]
+    let str = "./index".to_string();
+    let request = Request::parse(Value::new(str.into()));
+
+    Ok(
+        resolve_internal_inline(package_path, request.resolve().await?, options)
+            .await?
+            .with_request(".".to_string()),
+    )
 }
 
 #[tracing::instrument(level = Level::TRACE, skip_all)]
@@ -1804,6 +1794,25 @@ async fn resolve_relative_request(
     query: Vc<String>,
     force_in_lookup_dir: bool,
 ) -> Result<Vc<ResolveResult>> {
+    // Check alias field for aliases first
+    let lookup_path_ref = &*lookup_path.await?;
+    if let Some(result) = apply_in_package(
+        lookup_path,
+        options,
+        options_value,
+        |package_path| {
+            let request = path_pattern.as_string()?;
+            let prefix_path = package_path.get_path_to(lookup_path_ref)?;
+            let request = normalize_request(&format!("./{prefix_path}/{request}"));
+            Some(request)
+        },
+        query,
+    )
+    .await?
+    {
+        return Ok(result);
+    }
+
     let mut new_path = path_pattern.clone();
     // Add the extensions as alternatives to the path
     // read_matches keeps the order of alternatives intact
@@ -1870,9 +1879,7 @@ async fn resolve_relative_request(
     // Directory matches must be resolved AFTER file matches
     for m in matches.iter() {
         if let PatternMatch::Directory(matched_pattern, path) = m {
-            results.push(
-                resolve_into_folder(*path, options, query).with_request(matched_pattern.clone()),
-            );
+            results.push(resolve_into_folder(*path, options).with_request(matched_pattern.clone()));
         }
     }
 
@@ -1880,15 +1887,13 @@ async fn resolve_relative_request(
 }
 
 #[tracing::instrument(level = Level::TRACE, skip_all)]
-async fn resolve_module_request(
+async fn apply_in_package(
     lookup_path: Vc<FileSystemPath>,
-    request: Vc<Request>,
     options: Vc<ResolveOptions>,
     options_value: &ResolveOptions,
-    module: &str,
-    path: &Pattern,
+    get_request: impl Fn(&FileSystemPath) -> Option<String>,
     query: Vc<String>,
-) -> Result<Vc<ResolveResult>> {
+) -> Result<Option<Vc<ResolveResult>>> {
     // Check alias field for module aliases first
     for in_package in options_value.in_package.iter() {
         // resolve_module_request is called when importing a node
@@ -1913,29 +1918,66 @@ async fn resolve_module_request(
             continue;
         };
 
-        let package_path = package_json_path.parent();
-        let full_pattern = Pattern::concat([module.to_string().into(), path.clone()]);
+        let package_path = package_json_path.parent().resolve().await?;
 
-        let Some(request) = full_pattern.into_string() else {
+        let Some(request) = get_request(&*package_path.await?) else {
             continue;
         };
 
-        let Some(value) = field_value.get(&request) else {
+        let value = if let Some(value) = field_value.get(&request) {
+            value
+        } else if let Some(request) = request.strip_prefix("./") {
+            let Some(value) = field_value.get(request) else {
+                continue;
+            };
+            value
+        } else {
             continue;
         };
 
-        return resolve_alias_field_result(
-            RequestKey::new(request.clone()),
-            value,
-            refs.clone(),
-            package_path,
-            options,
-            *package_json_path,
-            &request,
-            field,
-            query,
-        )
-        .await;
+        return Ok(Some(
+            resolve_alias_field_result(
+                RequestKey::new(request.clone()),
+                value,
+                refs.clone(),
+                package_path,
+                options,
+                *package_json_path,
+                &request,
+                field,
+                query,
+            )
+            .await?,
+        ));
+    }
+
+    Ok(None)
+}
+
+#[tracing::instrument(level = Level::TRACE, skip_all)]
+async fn resolve_module_request(
+    lookup_path: Vc<FileSystemPath>,
+    request: Vc<Request>,
+    options: Vc<ResolveOptions>,
+    options_value: &ResolveOptions,
+    module: &str,
+    path: &Pattern,
+    query: Vc<String>,
+) -> Result<Vc<ResolveResult>> {
+    // Check alias field for module aliases first
+    if let Some(result) = apply_in_package(
+        lookup_path,
+        options,
+        options_value,
+        |_| {
+            let full_pattern = Pattern::concat([module.to_string().into(), path.clone()]);
+            full_pattern.into_string()
+        },
+        query,
+    )
+    .await?
+    {
+        return Ok(result);
     }
 
     let result = find_package(
@@ -2007,56 +2049,64 @@ async fn resolve_into_package(
     let options_value = options.await?;
     let mut results = Vec::new();
 
-    let is_match = path.is_match("");
+    let is_root_match = path.is_match("") || path.is_match("/");
     let could_match_others = path.could_match_others("");
-    if is_match {
-        results.push(resolve_into_folder(package_path, options, query));
-    }
-    if could_match_others {
-        for resolve_into_package in options_value.into_package.iter() {
-            match resolve_into_package {
-                ResolveIntoPackage::Default(_) | ResolveIntoPackage::MainField { .. } => {
-                    // doesn't affect packages with subpath
-                    if path.is_match("/") {
-                        results.push(resolve_into_folder(package_path, options, query));
-                    }
-                }
-                ResolveIntoPackage::ExportsField {
-                    conditions,
-                    unspecified_conditions,
-                } => {
-                    let package_json_path = package_path.join("package.json".to_string());
-                    let ExportsFieldResult::Some(exports_field) =
-                        &*exports_field(package_json_path).await?
-                    else {
-                        continue;
-                    };
 
-                    let Some(path) = path.clone().into_string() else {
-                        todo!("pattern into an exports field is not implemented yet");
-                    };
+    let mut has_match = false;
 
-                    results.push(
-                        handle_exports_imports_field(
-                            package_path,
-                            package_json_path,
-                            options,
-                            exports_field,
-                            &format!(".{path}"),
-                            conditions,
-                            unspecified_conditions,
-                            query,
-                        )
-                        .await?,
-                    );
+    for resolve_into_package in options_value.into_package.iter() {
+        match resolve_into_package {
+            // handled by the `resolve_into_folder` call below
+            ResolveIntoPackage::MainField { .. } => {}
+            ResolveIntoPackage::ExportsField {
+                conditions,
+                unspecified_conditions,
+            } => {
+                let package_json_path = package_path.join("package.json".to_string());
+                let ExportsFieldResult::Some(exports_field) =
+                    &*exports_field(package_json_path).await?
+                else {
+                    continue;
+                };
 
-                    // other options do not apply anymore when an exports
-                    // field exist
-                    break;
-                }
+                let Some(path) = path.clone().into_string() else {
+                    todo!("pattern into an exports field is not implemented yet");
+                };
+
+                let path = if path == "/" {
+                    ".".to_string()
+                } else {
+                    format!(".{path}")
+                };
+
+                results.push(
+                    handle_exports_imports_field(
+                        package_path,
+                        package_json_path,
+                        options,
+                        exports_field,
+                        &path,
+                        conditions,
+                        unspecified_conditions,
+                        query,
+                    )
+                    .await?,
+                );
+
+                // other options do not apply anymore when an exports
+                // field exist
+                has_match = true;
+                break;
             }
         }
+    }
 
+    // apply main field(s) or fallback to index.js if there's no subpath
+    if is_root_match && !has_match {
+        results.push(resolve_into_folder(package_path, options));
+    }
+
+    if could_match_others {
         let mut new_pat = path.clone();
         new_pat.push_front(".".to_string().into());
 
@@ -2064,6 +2114,7 @@ async fn resolve_into_package(
         results
             .push(resolve_internal_inline(package_path, relative.resolve().await?, options).await?);
     }
+
     Ok(merge_results(results))
 }
 
@@ -2186,61 +2237,27 @@ async fn resolved(
     fs_path: Vc<FileSystemPath>,
     original_context: Vc<FileSystemPath>,
     original_request: Vc<Request>,
-    ResolveOptions {
-        resolved_map,
-        in_package,
-        ..
-    }: &ResolveOptions,
+    options_value: &ResolveOptions,
     options: Vc<ResolveOptions>,
     query: Vc<String>,
 ) -> Result<Vc<ResolveResult>> {
     let RealPathResult { path, symlinks } = &*fs_path.realpath_with_links().await?;
 
-    for in_package in in_package.iter() {
-        // resolved is called when importing a relative path, not a
-        // PackageInternal one, so the imports field doesn't apply.
-        let ResolveInPackage::AliasField(field) = in_package else {
-            continue;
-        };
-
-        let FindContextFileResult::Found(package_json_path, refs) =
-            &*find_context_file(fs_path.parent(), package_json()).await?
-        else {
-            continue;
-        };
-
-        let package_json = &*read_package_json(*package_json_path).await?;
-        let Some(field_value) = package_json
-            .as_ref()
-            .and_then(|package_json| package_json[field].as_object())
-        else {
-            continue;
-        };
-
-        let package_path = package_json_path.parent();
-        let Some(rel_path) = package_path.await?.get_relative_path_to(&*fs_path.await?) else {
-            continue;
-        };
-
-        let Some(value) = field_value.get(&rel_path) else {
-            continue;
-        };
-
-        return resolve_alias_field_result(
-            request_key,
-            value,
-            refs.clone(),
-            package_path,
-            options,
-            *package_json_path,
-            &rel_path,
-            field,
-            query,
-        )
-        .await;
+    let path_ref = &*path.await?;
+    // Check alias field for path aliases first
+    if let Some(result) = apply_in_package(
+        path.parent().resolve().await?,
+        options,
+        options_value,
+        |package_path| package_path.get_relative_path_to(path_ref),
+        query,
+    )
+    .await?
+    {
+        return Ok(result);
     }
 
-    if let Some(resolved_map) = resolved_map {
+    if let Some(resolved_map) = options_value.resolved_map {
         let result = resolved_map
             .lookup(*path, original_context, original_request)
             .await?;

@@ -7,13 +7,10 @@
 #![recursion_limit = "256"]
 #![feature(arbitrary_self_types)]
 
-pub mod condition;
 pub mod evaluate_context;
 mod graph;
 pub mod module_options;
 pub mod rebase;
-pub mod resolve;
-pub mod resolve_options_context;
 pub mod transition;
 pub(crate) mod unsupported_sass;
 
@@ -28,21 +25,20 @@ use ecmascript::{
     chunk::EcmascriptChunkPlaceable,
     references::{follow_reexports, FollowExportsResult},
     side_effect_optimization::facade::module::EcmascriptModuleFacadeModule,
-    typescript::resolve::type_resolve,
     EcmascriptModuleAsset, EcmascriptModuleAssetType, TreeShakingMode,
 };
 use graph::{aggregate, AggregatedGraph, AggregatedGraphNodeContent};
 use module_options::{ModuleOptions, ModuleOptionsContext, ModuleRuleEffect, ModuleType};
-pub use resolve::resolve_options;
 use tracing::Instrument;
 use turbo_tasks::{Completion, Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
+pub use turbopack_core::condition;
 use turbopack_core::{
     asset::Asset,
     compile_time_info::CompileTimeInfo,
     context::{AssetContext, ProcessResult},
     ident::AssetIdent,
-    issue::{Issue, IssueExt, OptionStyledString, StyledString},
+    issue::{Issue, IssueExt, IssueStage, OptionStyledString, StyledString},
     module::Module,
     output::OutputAsset,
     raw_module::RawModule,
@@ -59,12 +55,13 @@ pub use turbopack_css as css;
 pub use turbopack_ecmascript as ecmascript;
 use turbopack_json::JsonModuleAsset;
 use turbopack_mdx::MdxModuleAsset;
+pub use turbopack_resolve::{resolve::resolve_options, resolve_options_context};
+use turbopack_resolve::{resolve_options_context::ResolveOptionsContext, typescript::type_resolve};
 use turbopack_static::StaticModuleAsset;
 use turbopack_wasm::{module_asset::WebAssemblyModuleAsset, source::WebAssemblySource};
 
 use self::{
     module_options::CustomModuleType,
-    resolve_options_context::ResolveOptionsContext,
     transition::{Transition, TransitionsByName},
 };
 
@@ -78,8 +75,8 @@ struct ModuleIssue {
 #[turbo_tasks::value_impl]
 impl Issue for ModuleIssue {
     #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("other".to_string())
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::ProcessModule.cell()
     }
 
     #[turbo_tasks::function]
@@ -802,6 +799,7 @@ pub fn register() {
     turbopack_env::register();
     turbopack_mdx::register();
     turbopack_json::register();
+    turbopack_resolve::register();
     turbopack_static::register();
     turbopack_wasm::register();
     include!(concat!(env!("OUT_DIR"), "/register.rs"));

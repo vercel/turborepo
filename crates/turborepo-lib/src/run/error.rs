@@ -4,15 +4,17 @@ use turborepo_repository::package_graph;
 
 use super::graph_visualizer;
 use crate::{
-    config, daemon, engine, opts,
+    config, daemon, engine,
+    engine::ValidateError,
+    opts,
     run::{global_hash, scope},
     task_graph, task_hash,
 };
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error("error preparing engine: Invalid persistent task configuration:\n{0}")]
-    EngineValidation(String),
+    #[error("invalid persistent task configuration")]
+    EngineValidation(#[related] Vec<ValidateError>),
     #[error(transparent)]
     Graph(#[from] graph_visualizer::Error),
     #[error(transparent)]

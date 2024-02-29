@@ -676,12 +676,9 @@ mod test {
             .map(|package_path| {
                 let (_, name) = get_name(package_path);
                 (
-                    turbo_root
-                        .join_unix_path(
-                            RelativeUnixPathBuf::new(format!("{package_path}/package.json"))
-                                .unwrap(),
-                        )
-                        .unwrap(),
+                    turbo_root.join_unix_path(
+                        RelativeUnixPathBuf::new(format!("{package_path}/package.json")).unwrap(),
+                    ),
                     PackageJson {
                         name: Some(name.to_string()),
                         dependencies: dependencies.get(name).map(|v| {
