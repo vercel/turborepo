@@ -188,7 +188,7 @@ const nextConfig = withNextra({
       {
         source: "/pack/docs/features/customizing-turbopack",
         destination:
-          "https://nextjs.org/docs/architecture/turbopack#supported-features",
+          "https://nextjs.org/docs/app/api-reference/next-config-js/turbo",
         permanent: true,
       },
       {
