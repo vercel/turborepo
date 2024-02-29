@@ -483,12 +483,18 @@ impl RunningNodeJsPoolProcess {
         let connection = &mut self.connection;
         async fn with_timeout<T, E: Into<anyhow::Error>>(
             debug: bool,
+            fast: bool,
             future: impl Future<Output = Result<T, E>> + Send,
         ) -> Result<T> {
             if debug {
                 future.await.map_err(Into::into)
             } else {
-                timeout(Duration::from_secs(60), future)
+                let time = if fast {
+                    Duration::from_secs(20)
+                } else {
+                    Duration::from_secs(5 * 60)
+                };
+                timeout(time, future)
                     .await
                     .context("timeout while receiving message from process")?
                     .map_err(Into::into)
@@ -496,13 +502,13 @@ impl RunningNodeJsPoolProcess {
         }
         let debug = self.debug;
         let recv_future = async move {
-            let packet_len = with_timeout(debug, connection.read_u32())
+            let packet_len = with_timeout(debug, false, connection.read_u32())
                 .await
                 .context("reading packet length")?
                 .try_into()
                 .context("storing packet length")?;
             let mut packet_data = vec![0; packet_len];
-            with_timeout(debug, connection.read_exact(&mut packet_data))
+            with_timeout(debug, true, connection.read_exact(&mut packet_data))
                 .await
                 .context("reading packet data")?;
             Ok::<_, anyhow::Error>(packet_data)
