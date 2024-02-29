@@ -49,20 +49,20 @@ impl Default for TelemetryConfigContents {
 
 #[derive(Debug)]
 pub struct TelemetryConfig {
-    config_path: String,
+    config_path: AbsoluteSystemPathBuf,
     config: TelemetryConfigContents,
 }
 
 impl TelemetryConfig {
     pub fn new() -> Result<TelemetryConfig, ConfigError> {
-        let file_path = &get_config_path()?;
-        debug!("Telemetry config path: {}", file_path);
-        if !file_path.exists() {
-            write_new_config(&file_path)?;
+        let config_path = get_config_path()?;
+        debug!("Telemetry config path: {}", config_path);
+        if !config_path.exists() {
+            write_new_config(&config_path)?;
         }
 
         let mut settings = Config::builder();
-        settings = settings.add_source(File::new(file_path.as_str(), FileFormat::Json));
+        settings = settings.add_source(File::new(config_path.as_str(), FileFormat::Json));
         let settings = settings.build();
 
         // If this is a FileParse error, we assume something corrupted the file or
@@ -72,10 +72,10 @@ impl TelemetryConfig {
         let config = match settings {
             Ok(settings) => settings.try_deserialize::<TelemetryConfigContents>()?,
             Err(ConfigError::FileParse { .. }) => {
-                file_path
+                config_path
                     .remove_file()
                     .map_err(|e| ConfigError::Message(e.to_string()))?;
-                write_new_config(&file_path)?;
+                write_new_config(&config_path)?;
                 return Err(settings.unwrap_err());
             }
             // Propagate other errors
@@ -83,7 +83,7 @@ impl TelemetryConfig {
         };
 
         let config = TelemetryConfig {
-            config_path: file_path.to_string(),
+            config_path,
             config,
         };
 
