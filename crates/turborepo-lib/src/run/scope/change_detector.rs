@@ -9,6 +9,8 @@ use turborepo_repository::{
 };
 use turborepo_scm::SCM;
 
+use crate::global_deps_package_detector::{Error, GlobalDepsPackageDetector};
+
 /// Given two git refs, determine which packages have changed between them.
 pub trait GitChangeDetector {
     fn changed_packages(
@@ -20,7 +22,7 @@ pub trait GitChangeDetector {
 
 pub struct ScopeChangeDetector<'a> {
     turbo_root: &'a AbsoluteSystemPath,
-    change_mapper: ChangeMapper<'a, DefaultPackageDetector<'a>>,
+    change_mapper: ChangeMapper<'a, GlobalDepsPackageDetector<'a>>,
     scm: &'a SCM,
     pkg_graph: &'a PackageGraph,
 }
@@ -30,19 +32,18 @@ impl<'a> ScopeChangeDetector<'a> {
         turbo_root: &'a AbsoluteSystemPath,
         scm: &'a SCM,
         pkg_graph: &'a PackageGraph,
-        global_deps: Vec<String>,
+        global_deps: impl Iterator<Item = &'a str>,
         ignore_patterns: Vec<String>,
-    ) -> Self {
-        let pkg_detector = DefaultPackageDetector::new(pkg_graph);
-        let change_mapper =
-            ChangeMapper::new(pkg_graph, global_deps, ignore_patterns, pkg_detector);
+    ) -> Result<Self, Error> {
+        let pkg_detector = GlobalDepsPackageDetector::new(pkg_graph, global_deps)?;
+        let change_mapper = ChangeMapper::new(pkg_graph, ignore_patterns, pkg_detector);
 
-        Self {
+        Ok(Self {
             turbo_root,
             change_mapper,
             scm,
             pkg_graph,
-        }
+        })
     }
 
     /// Gets the lockfile content from SCM if it has changed.

@@ -101,13 +101,12 @@ impl<'a, PD: PackageDetector> ChangeMapper<'a, PD> {
         }
     }
 
-    fn repo_global_file_has_changed(
-        &self,
+    fn default_global_file_changed(
         changed_files: &HashSet<AnchoredSystemPathBuf>,
     ) -> Result<bool, ChangeMapError> {
-        let filters = DEFAULT_GLOBAL_DEPS.iter().copied();
-        let matcher = wax::any(filters)?;
-        Ok(changed_files.iter().any(|f| matcher.is_match(f.as_path())))
+        Ok(changed_files
+            .iter()
+            .any(|f| DEFAULT_GLOBAL_DEPS.iter().any(|dep| *dep == f.as_str())))
     }
 
     pub fn changed_packages(
@@ -115,7 +114,7 @@ impl<'a, PD: PackageDetector> ChangeMapper<'a, PD> {
         changed_files: HashSet<AnchoredSystemPathBuf>,
         lockfile_change: Option<LockfileChange>,
     ) -> Result<PackageChanges, ChangeMapError> {
-        let global_change = self.repo_global_file_has_changed(&changed_files)?;
+        let global_change = Self::default_global_file_changed(&changed_files)?;
 
         if global_change {
             return Ok(PackageChanges::All);

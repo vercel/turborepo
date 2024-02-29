@@ -2,11 +2,9 @@ use thiserror::Error;
 use turbopath::AnchoredSystemPath;
 use turborepo_repository::{
     change_mapper::{DefaultPackageDetector, PackageDetection, PackageDetector},
-    package_graph::{PackageGraph, PackageName, WorkspacePackage},
+    package_graph::PackageGraph,
 };
-use wax::{Any, BuildError, Program};
-
-use crate::turbo_json::TurboJson;
+use wax::{BuildError, Program};
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -14,28 +12,36 @@ pub enum Error {
     InvalidFilter(#[from] BuildError),
 }
 
-pub struct TurboJsonPackageDetector<'a> {
+/// A package detector that uses a global deps list to determine
+/// if a file should cause all packages to be marked as changed.
+/// This is less conservative than the `DefaultPackageDetector`
+/// which assumes that any changed file that is not in a package
+/// is a root dependency. Since we have a list of global deps,
+/// we can check against that and avoid invalidating in unnecessary cases.
+pub struct GlobalDepsPackageDetector<'a> {
     pkg_dep_graph: &'a PackageGraph,
-    global_deps_matcher: Any<'a>,
-    turbo_json: &'a TurboJson,
+    global_deps_matcher: wax::Any<'a>,
 }
 
-impl<'a> TurboJsonPackageDetector<'a> {
-    pub fn new(pkg_dep_graph: &'a PackageGraph, turbo_json: &'a TurboJson) -> Result<Self, Error> {
-        let filters = turbo_json.global_deps.iter().map(|s| s.as_str());
-        let matcher = wax::any(filters)?;
+impl<'a> GlobalDepsPackageDetector<'a> {
+    pub fn new<S: wax::Pattern<'a>, I: Iterator<Item = S>>(
+        pkg_dep_graph: &'a PackageGraph,
+        global_deps: I,
+    ) -> Result<Self, Error> {
+        let global_deps_matcher = wax::any(global_deps)?;
 
         Ok(Self {
             pkg_dep_graph,
-            global_deps_matcher: matcher,
-            turbo_json,
+            global_deps_matcher,
         })
     }
 }
 
-impl<'a> PackageDetector for TurboJsonPackageDetector<'a> {
+impl<'a> PackageDetector for GlobalDepsPackageDetector<'a> {
     fn detect_package(&self, path: &AnchoredSystemPath) -> PackageDetection {
         match DefaultPackageDetector::new(self.pkg_dep_graph).detect_package(path) {
+            // Since `DefaultPackageDetector` is overly conservative, we can check here if
+            // the path is actually in globalDeps and if not, return it as PackageDetection::None.
             PackageDetection::All => {
                 let cleaned_path = path.clean();
                 let in_global_deps = self.global_deps_matcher.is_match(cleaned_path.as_str());
@@ -61,11 +67,11 @@ mod tests {
         change_mapper::{ChangeMapper, DefaultPackageDetector, PackageChanges},
         discovery,
         discovery::PackageDiscovery,
-        package_graph::{PackageGraphBuilder, WorkspacePackage},
+        package_graph::PackageGraphBuilder,
         package_json::PackageJson,
     };
 
-    use super::TurboJsonPackageDetector;
+    use super::GlobalDepsPackageDetector;
     use crate::turbo_json::TurboJson;
 
     #[allow(dead_code)]
@@ -102,7 +108,7 @@ mod tests {
         .await?;
 
         let default_package_detector = DefaultPackageDetector::new(&pkg_graph);
-        let change_mapper = ChangeMapper::new(&pkg_graph, vec![], vec![], default_package_detector);
+        let change_mapper = ChangeMapper::new(&pkg_graph, vec![], default_package_detector);
 
         let package_changes = change_mapper.changed_packages(
             [AnchoredSystemPathBuf::from_raw("README.md")?]
@@ -111,16 +117,16 @@ mod tests {
             None,
         )?;
 
-        // We should have a root package change since we don't have global deps and
+        // We should return All because we don't have global deps and
         // therefore must be conservative about changes
-        assert_eq!(
-            package_changes,
-            PackageChanges::Some([WorkspacePackage::root()].into_iter().collect())
-        );
+        assert_eq!(package_changes, PackageChanges::All);
 
         let turbo_json = TurboJson::default();
-        let turbo_package_detector = TurboJsonPackageDetector::new(&pkg_graph, &turbo_json)?;
-        let change_mapper = ChangeMapper::new(&pkg_graph, vec![], vec![], turbo_package_detector);
+        let turbo_package_detector = GlobalDepsPackageDetector::new(
+            &pkg_graph,
+            turbo_json.global_deps.iter().map(|s| s.as_str()),
+        )?;
+        let change_mapper = ChangeMapper::new(&pkg_graph, vec![], turbo_package_detector);
 
         let package_changes = change_mapper.changed_packages(
             [AnchoredSystemPathBuf::from_raw("README.md")?]

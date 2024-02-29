@@ -21,6 +21,7 @@ mod engine;
 
 mod framework;
 mod gitignore;
+mod global_deps_package_detector;
 pub(crate) mod globwatcher;
 mod hash;
 mod opts;
@@ -33,7 +34,6 @@ mod task_graph;
 mod task_hash;
 mod tracing;
 mod turbo_json;
-mod turbo_json_package_detector;
 mod unescape;
 
 pub use crate::{
