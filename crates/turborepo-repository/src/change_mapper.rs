@@ -13,6 +13,8 @@ pub trait PackageDetector {
     fn detect_package(&self, file: &AnchoredSystemPath) -> Option<WorkspacePackage>;
 }
 
+const DEFAULT_GLOBAL_DEPS: [&str; 2] = ["package.json", "turbo.json"];
+
 /// Detects package by checking if the file is inside the package.
 ///
 /// NOTE: This strategy has some limitations. Since it doesn't
@@ -75,19 +77,32 @@ pub struct ChangeMapper<'a, PD> {
 
     ignore_patterns: Vec<String>,
     package_detector: PD,
+    global_deps: Vec<String>,
 }
 
 impl<'a, PD: PackageDetector> ChangeMapper<'a, PD> {
     pub fn new(
         pkg_graph: &'a PackageGraph,
+        global_deps: Vec<String>,
         ignore_patterns: Vec<String>,
         package_detector: PD,
     ) -> Self {
         Self {
             pkg_graph,
             ignore_patterns,
+            global_deps,
             package_detector,
         }
+    }
+
+    fn repo_global_file_has_changed(
+        &self,
+        changed_files: &HashSet<AnchoredSystemPathBuf>,
+    ) -> Result<bool, ChangeMapError> {
+        let global_deps = self.global_deps.iter().map(|s| s.as_str());
+        let filters = global_deps.chain(DEFAULT_GLOBAL_DEPS.iter().copied());
+        let matcher = wax::any(filters)?;
+        Ok(changed_files.iter().any(|f| matcher.is_match(f.as_path())))
     }
 
     pub fn changed_packages(
@@ -95,6 +110,11 @@ impl<'a, PD: PackageDetector> ChangeMapper<'a, PD> {
         changed_files: HashSet<AnchoredSystemPathBuf>,
         lockfile_change: Option<LockfileChange>,
     ) -> Result<PackageChanges, ChangeMapError> {
+        let global_change = self.repo_global_file_has_changed(&changed_files)?;
+
+        if global_change {
+            return Ok(PackageChanges::All);
+        }
         // get filtered files and add the packages that contain them
         let filtered_changed_files = self.filter_ignored_files(changed_files.iter())?;
         let mut changed_pkgs = self.get_changed_packages(filtered_changed_files.into_iter())?;

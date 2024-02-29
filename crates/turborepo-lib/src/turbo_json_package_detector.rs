@@ -8,8 +8,6 @@ use wax::{Any, BuildError, Program};
 
 use crate::turbo_json::TurboJson;
 
-const DEFAULT_GLOBAL_DEPS: [&str; 2] = ["package.json", "turbo.json"];
-
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
@@ -24,8 +22,7 @@ pub struct TurboJsonPackageDetector<'a> {
 
 impl<'a> TurboJsonPackageDetector<'a> {
     pub fn new(pkg_dep_graph: &'a PackageGraph, turbo_json: &'a TurboJson) -> Result<Self, Error> {
-        let global_deps = turbo_json.global_deps.iter().map(|s| s.as_str());
-        let filters = global_deps.chain(DEFAULT_GLOBAL_DEPS.iter().copied());
+        let filters = turbo_json.global_deps.iter().map(|s| s.as_str());
         let matcher = wax::any(filters)?;
 
         Ok(Self {
@@ -65,12 +62,34 @@ mod tests {
     use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
     use turborepo_repository::{
         change_mapper::{ChangeMapper, DefaultPackageDetector, PackageChanges},
-        package_graph::{builder::MockDiscovery, PackageGraphBuilder, WorkspacePackage},
+        discovery,
+        discovery::PackageDiscovery,
+        package_graph::{PackageGraphBuilder, WorkspacePackage},
         package_json::PackageJson,
     };
 
     use super::TurboJsonPackageDetector;
     use crate::turbo_json::TurboJson;
+
+    #[allow(dead_code)]
+    pub struct MockDiscovery;
+
+    impl PackageDiscovery for MockDiscovery {
+        async fn discover_packages(
+            &self,
+        ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
+            Ok(discovery::DiscoveryResponse {
+                package_manager: turborepo_repository::package_manager::PackageManager::Npm,
+                workspaces: vec![],
+            })
+        }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
+            self.discover_packages().await
+        }
+    }
 
     #[tokio::test]
     async fn test_different_package_detectors() -> Result<(), anyhow::Error> {
@@ -86,7 +105,7 @@ mod tests {
         .await?;
 
         let default_package_detector = DefaultPackageDetector::new(&pkg_graph);
-        let change_mapper = ChangeMapper::new(&pkg_graph, vec![], default_package_detector);
+        let change_mapper = ChangeMapper::new(&pkg_graph, vec![], vec![], default_package_detector);
 
         let package_changes = change_mapper.changed_packages(
             [AnchoredSystemPathBuf::from_raw("README.md")?]
@@ -104,7 +123,7 @@ mod tests {
 
         let turbo_json = TurboJson::default();
         let turbo_package_detector = TurboJsonPackageDetector::new(&pkg_graph, &turbo_json)?;
-        let change_mapper = ChangeMapper::new(&pkg_graph, vec![], turbo_package_detector);
+        let change_mapper = ChangeMapper::new(&pkg_graph, vec![], vec![], turbo_package_detector);
 
         let package_changes = change_mapper.changed_packages(
             [AnchoredSystemPathBuf::from_raw("README.md")?]

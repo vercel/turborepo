@@ -564,24 +564,6 @@ impl PackageInfo {
     }
 }
 
-#[allow(dead_code)]
-#[cfg(test)]
-pub struct MockDiscovery;
-impl PackageDiscovery for MockDiscovery {
-    async fn discover_packages(&self) -> Result<discovery::DiscoveryResponse, discovery::Error> {
-        Ok(discovery::DiscoveryResponse {
-            package_manager: crate::package_manager::PackageManager::Npm,
-            workspaces: vec![],
-        })
-    }
-
-    async fn discover_packages_blocking(
-        &self,
-    ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
-        self.discover_packages().await
-    }
-}
-
 #[cfg(test)]
 mod test {
     use std::assert_matches::assert_matches;
