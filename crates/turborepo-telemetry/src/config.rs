@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use sha2::{Digest, Sha256};
 use tracing::{debug, error};
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_dirs::config_dir;
 use turborepo_ui::{color, BOLD, GREY, UI, UNDERLINE};
 use uuid::Uuid;
@@ -58,7 +58,7 @@ impl TelemetryConfig {
         let file_path = &get_config_path()?;
         debug!("Telemetry config path: {}", file_path);
         if !file_path.exists() {
-            write_new_config()?;
+            write_new_config(&file_path)?;
         }
 
         let mut settings = Config::builder();
@@ -72,8 +72,10 @@ impl TelemetryConfig {
         let config = match settings {
             Ok(settings) => settings.try_deserialize::<TelemetryConfigContents>()?,
             Err(ConfigError::FileParse { .. }) => {
-                fs::remove_file(file_path).map_err(|e| ConfigError::Message(e.to_string()))?;
-                write_new_config()?;
+                file_path
+                    .remove_file()
+                    .map_err(|e| ConfigError::Message(e.to_string()))?;
+                write_new_config(&file_path)?;
                 return Err(settings.unwrap_err());
             }
             // Propagate other errors
@@ -242,8 +244,7 @@ fn get_config_path() -> Result<AbsoluteSystemPathBuf, ConfigError> {
     }
 }
 
-fn write_new_config() -> Result<(), ConfigError> {
-    let file_path = get_config_path()?;
+fn write_new_config(file_path: &AbsoluteSystemPath) -> Result<(), ConfigError> {
     let serialized = serde_json::to_string_pretty(&TelemetryConfigContents::default())
         .map_err(|e| ConfigError::Message(e.to_string()))?;
 
