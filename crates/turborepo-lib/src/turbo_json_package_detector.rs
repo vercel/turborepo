@@ -1,7 +1,7 @@
 use thiserror::Error;
 use turbopath::AnchoredSystemPath;
 use turborepo_repository::{
-    change_mapper::{DefaultPackageDetector, PackageDetector},
+    change_mapper::{DefaultPackageDetector, PackageDetection, PackageDetector},
     package_graph::{PackageGraph, PackageName, WorkspacePackage},
 };
 use wax::{Any, BuildError, Program};
@@ -34,19 +34,16 @@ impl<'a> TurboJsonPackageDetector<'a> {
 }
 
 impl<'a> PackageDetector for TurboJsonPackageDetector<'a> {
-    fn detect_package(&self, path: &AnchoredSystemPath) -> Option<WorkspacePackage> {
+    fn detect_package(&self, path: &AnchoredSystemPath) -> PackageDetection {
         match DefaultPackageDetector::new(self.pkg_dep_graph).detect_package(path) {
-            root @ Some(WorkspacePackage {
-                name: PackageName::Root,
-                ..
-            }) => {
+            PackageDetection::All => {
                 let cleaned_path = path.clean();
                 let in_global_deps = self.global_deps_matcher.is_match(cleaned_path.as_str());
 
                 if in_global_deps {
-                    root
+                    PackageDetection::All
                 } else {
-                    None
+                    PackageDetection::None
                 }
             }
             result => result,

@@ -8,9 +8,18 @@ use wax::Program;
 
 use crate::package_graph::{ChangedPackagesError, PackageGraph, PackageName, WorkspacePackage};
 
-/// Detects if a file is in a package. If no package is detected, returns `None`
+pub enum PackageDetection {
+    /// We've hit a global file, so all packages have changed
+    All,
+    /// This change is meaningless, no packages have changed
+    None,
+    /// This change has affected one package
+    Package(WorkspacePackage),
+}
+
+/// Detects if a file is in a package. Can return the package
 pub trait PackageDetector {
-    fn detect_package(&self, file: &AnchoredSystemPath) -> Option<WorkspacePackage>;
+    fn detect_package(&self, file: &AnchoredSystemPath) -> PackageDetection;
 }
 
 const DEFAULT_GLOBAL_DEPS: [&str; 2] = ["package.json", "turbo.json"];
@@ -21,8 +30,8 @@ const DEFAULT_GLOBAL_DEPS: [&str; 2] = ["package.json", "turbo.json"];
 /// check the inputs field in `turbo.json`, any inputs that
 /// are not contained in the package directory won't be mapped
 /// to the correct package. Also, since we don't have the global dependencies,
-/// any file that is not in any package will automatically return the root
-/// package. This is fine for Vercel builds, but less fine for situations like
+/// any file that is not in any package will automatically invalidate all
+/// packages. This is fine for Vercel builds, but less fine for situations like
 /// watch mode.
 pub struct DefaultPackageDetector<'a> {
     pkg_dep_graph: &'a PackageGraph,
@@ -40,14 +49,14 @@ impl<'a> DefaultPackageDetector<'a> {
 }
 
 impl<'a> PackageDetector for DefaultPackageDetector<'a> {
-    fn detect_package(&self, file: &AnchoredSystemPath) -> Option<WorkspacePackage> {
+    fn detect_package(&self, file: &AnchoredSystemPath) -> PackageDetection {
         for (name, entry) in self.pkg_dep_graph.packages() {
             if name == &PackageName::Root {
                 continue;
             }
             if let Some(package_path) = entry.package_json_path.parent() {
                 if Self::is_file_in_package(file, package_path) {
-                    return Some(WorkspacePackage {
+                    return PackageDetection::Package(WorkspacePackage {
                         name: name.clone(),
                         path: package_path.to_owned(),
                     });
@@ -55,7 +64,7 @@ impl<'a> PackageDetector for DefaultPackageDetector<'a> {
             }
         }
 
-        Some(WorkspacePackage::root())
+        PackageDetection::All
     }
 }
 
@@ -77,20 +86,17 @@ pub struct ChangeMapper<'a, PD> {
 
     ignore_patterns: Vec<String>,
     package_detector: PD,
-    global_deps: Vec<String>,
 }
 
 impl<'a, PD: PackageDetector> ChangeMapper<'a, PD> {
     pub fn new(
         pkg_graph: &'a PackageGraph,
-        global_deps: Vec<String>,
         ignore_patterns: Vec<String>,
         package_detector: PD,
     ) -> Self {
         Self {
             pkg_graph,
             ignore_patterns,
-            global_deps,
             package_detector,
         }
     }
@@ -99,8 +105,7 @@ impl<'a, PD: PackageDetector> ChangeMapper<'a, PD> {
         &self,
         changed_files: &HashSet<AnchoredSystemPathBuf>,
     ) -> Result<bool, ChangeMapError> {
-        let global_deps = self.global_deps.iter().map(|s| s.as_str());
-        let filters = global_deps.chain(DEFAULT_GLOBAL_DEPS.iter().copied());
+        let filters = DEFAULT_GLOBAL_DEPS.iter().copied();
         let matcher = wax::any(filters)?;
         Ok(changed_files.iter().any(|f| matcher.is_match(f.as_path())))
     }
@@ -115,9 +120,14 @@ impl<'a, PD: PackageDetector> ChangeMapper<'a, PD> {
         if global_change {
             return Ok(PackageChanges::All);
         }
+
         // get filtered files and add the packages that contain them
         let filtered_changed_files = self.filter_ignored_files(changed_files.iter())?;
-        let mut changed_pkgs = self.get_changed_packages(filtered_changed_files.into_iter())?;
+        let PackageChanges::Some(mut changed_pkgs) =
+            self.get_changed_packages(filtered_changed_files.into_iter())?
+        else {
+            return Ok(PackageChanges::All);
+        };
 
         match lockfile_change {
             Some(LockfileChange::WithContent(content)) => {
@@ -150,15 +160,21 @@ impl<'a, PD: PackageDetector> ChangeMapper<'a, PD> {
     fn get_changed_packages<'b>(
         &self,
         files: impl Iterator<Item = &'b AnchoredSystemPathBuf>,
-    ) -> Result<HashSet<WorkspacePackage>, turborepo_scm::Error> {
+    ) -> Result<PackageChanges, turborepo_scm::Error> {
         let mut changed_packages = HashSet::new();
         for file in files {
-            if let Some(pkg) = self.package_detector.detect_package(file) {
-                changed_packages.insert(pkg);
+            match self.package_detector.detect_package(file) {
+                PackageDetection::Package(pkg) => {
+                    changed_packages.insert(pkg);
+                }
+                PackageDetection::All => {
+                    return Ok(PackageChanges::All);
+                }
+                PackageDetection::None => {}
             }
         }
 
-        Ok(changed_packages)
+        Ok(PackageChanges::Some(changed_packages))
     }
 
     fn get_changed_packages_from_lockfile(
