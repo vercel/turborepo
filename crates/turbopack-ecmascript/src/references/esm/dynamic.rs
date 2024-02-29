@@ -32,6 +32,7 @@ pub struct EsmAsyncAssetReference {
     pub issue_source: Vc<IssueSource>,
     pub in_try: bool,
     pub import_externals: bool,
+    pub strict: bool,
 }
 
 #[turbo_tasks::value_impl]
@@ -44,6 +45,7 @@ impl EsmAsyncAssetReference {
         issue_source: Vc<IssueSource>,
         in_try: bool,
         import_externals: bool,
+        strict: bool,
     ) -> Vc<Self> {
         Self::cell(EsmAsyncAssetReference {
             origin,
@@ -52,6 +54,7 @@ impl EsmAsyncAssetReference {
             issue_source,
             in_try,
             import_externals,
+            strict,
         })
     }
 }
@@ -63,7 +66,8 @@ impl ModuleReference for EsmAsyncAssetReference {
         esm_resolve(
             self.origin,
             self.request,
-            Default::default(),
+            Value::new(EcmaScriptModulesReferenceSubType::DynamicImport),
+            self.strict,
             try_to_severity(self.in_try),
             Some(self.issue_source),
         )
@@ -93,20 +97,15 @@ impl ChunkableModuleReference for EsmAsyncAssetReference {
 impl CodeGenerateable for EsmAsyncAssetReference {
     #[turbo_tasks::function]
     async fn code_generation(
-        &self,
+        self: Vc<Self>,
         chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
     ) -> Result<Vc<CodeGeneration>> {
+        let this = self.await?;
         let pm = PatternMapping::resolve_request(
-            self.request,
-            self.origin,
+            this.request,
+            this.origin,
             Vc::upcast(chunking_context),
-            esm_resolve(
-                self.origin,
-                self.request,
-                Value::new(EcmaScriptModulesReferenceSubType::DynamicImport),
-                try_to_severity(self.in_try),
-                Some(self.issue_source),
-            ),
+            self.resolve_reference(),
             if matches!(
                 *chunking_context.environment().chunk_loading().await?,
                 ChunkLoading::None
@@ -118,8 +117,8 @@ impl CodeGenerateable for EsmAsyncAssetReference {
         )
         .await?;
 
-        let path = &self.path.await?;
-        let import_externals = self.import_externals;
+        let path = &this.path.await?;
+        let import_externals = this.import_externals;
 
         let visitor = create_visitor!(path, visit_mut_expr(expr: &mut Expr) {
             let old_expr = expr.take();

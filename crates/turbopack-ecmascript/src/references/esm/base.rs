@@ -1,3 +1,5 @@
+use core::str;
+
 use anyhow::{anyhow, bail, Result};
 use lazy_static::lazy_static;
 use swc_core::{
@@ -95,6 +97,7 @@ pub struct EsmAssetReference {
     pub issue_source: Option<Vc<IssueSource>>,
     pub export_name: Option<Vc<ModulePart>>,
     pub import_externals: bool,
+    pub strict: bool,
 }
 
 /// A list of [EsmAssetReference]s
@@ -121,6 +124,7 @@ impl EsmAssetReference {
         annotations: Value<ImportAnnotations>,
         export_name: Option<Vc<ModulePart>>,
         import_externals: bool,
+        strict: bool,
     ) -> Vc<Self> {
         Self::cell(EsmAssetReference {
             origin,
@@ -129,6 +133,7 @@ impl EsmAssetReference {
             annotations: annotations.into_value(),
             export_name,
             import_externals,
+            strict,
         })
     }
 
@@ -151,6 +156,7 @@ impl ModuleReference for EsmAssetReference {
             self.get_origin().resolve().await?,
             self.request,
             ty,
+            self.strict,
             IssueSeverity::Error.cell(),
             self.issue_source,
         ))

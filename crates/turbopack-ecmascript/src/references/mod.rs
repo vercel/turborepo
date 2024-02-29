@@ -337,6 +337,7 @@ struct AnalysisState<'a> {
     first_import_meta: bool,
     tree_shaking_mode: Option<TreeShakingMode>,
     import_externals: bool,
+    strict_esm: bool,
 }
 
 impl<'a> AnalysisState<'a> {
@@ -411,6 +412,8 @@ pub(crate) async fn analyse_ecmascript_module_internal(
         module_type: specified_type,
         referenced_package_json,
     } = *module.determine_module_type().await?;
+
+    let strict_esm = matches!(specified_type, SpecifiedModuleType::EcmaScript);
 
     if let Some(package_json) = referenced_package_json {
         analysis.add_reference(PackageJsonReference::new(package_json));
@@ -552,6 +555,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
                 None => None,
             },
             import_externals,
+            strict_esm,
         );
         import_references.push(r);
     }
@@ -774,6 +778,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
         first_import_meta: true,
         tree_shaking_mode: options.tree_shaking_mode,
         import_externals: options.import_externals,
+        strict_esm,
     };
 
     enum Action {
@@ -1195,6 +1200,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                     issue_source(source, span),
                     in_try,
                     state.import_externals,
+                    state.strict_esm,
                 ));
                 return Ok(());
             }
@@ -1893,6 +1899,7 @@ async fn handle_free_var_reference(
                     None => None,
                 },
                 state.import_externals,
+                state.strict_esm,
             )
             .resolve()
             .await?;
