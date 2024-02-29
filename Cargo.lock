@@ -5211,6 +5211,7 @@ dependencies = [
  "turbopack",
  "turbopack-cli-utils",
  "turbopack-core",
+ "turbopack-resolve",
 ]
 
 [[package]]
@@ -10854,6 +10855,7 @@ dependencies = [
  "turbopack-json",
  "turbopack-mdx",
  "turbopack-node",
+ "turbopack-resolve",
  "turbopack-static",
  "turbopack-wasm",
 ]
@@ -11005,6 +11007,7 @@ dependencies = [
  "turbopack-ecmascript-runtime",
  "turbopack-env",
  "turbopack-node",
+ "turbopack-resolve",
  "turbopack-trace-utils",
  "webbrowser",
 ]
@@ -11024,6 +11027,7 @@ dependencies = [
  "turbo-tasks-fs",
  "turbopack-core",
  "turbopack-ecmascript",
+ "turbopack-resolve",
 ]
 
 [[package]]
@@ -11137,6 +11141,7 @@ dependencies = [
  "turbopack-css",
  "turbopack-ecmascript",
  "turbopack-ecmascript-runtime",
+ "turbopack-resolve",
  "urlencoding",
 ]
 
@@ -11211,6 +11216,7 @@ dependencies = [
  "turbo-tasks-memory",
  "turbo-tasks-testing",
  "turbopack-core",
+ "turbopack-resolve",
  "turbopack-swc-utils",
  "url 2.4.1",
 ]
@@ -11362,6 +11368,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "turbopack-resolve"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-recursion",
+ "futures 0.3.28",
+ "indexmap 1.9.3",
+ "lazy_static",
+ "regex",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-env",
+ "turbo-tasks-fs",
+ "turbopack-core",
+]
+
+[[package]]
 name = "turbopack-static"
 version = "0.1.0"
 dependencies = [
@@ -11430,6 +11457,7 @@ dependencies = [
  "turbopack-ecmascript-runtime",
  "turbopack-env",
  "turbopack-node",
+ "turbopack-resolve",
  "turbopack-test-utils",
 ]
 
@@ -11562,6 +11590,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+ "turbopath",
  "turborepo-api-client",
  "turborepo-dirs",
  "turborepo-ui",

@@ -12,6 +12,8 @@ mod ui;
 pub use auth::*;
 pub use error::Error;
 pub use login_server::*;
+use serde::Deserialize;
+use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::{CacheClient, Client, TokenClient};
 use turborepo_vercel_api::{token::ResponseTokenMetadata, User};
 
@@ -20,11 +22,16 @@ pub struct TeamInfo<'a> {
     pub slug: &'a str,
 }
 
+pub const VERCEL_TOKEN_DIR: &str = "com.vercel.cli";
+pub const VERCEL_TOKEN_FILE: &str = "auth.json";
+pub const TURBO_TOKEN_DIR: &str = "turborepo";
+pub const TURBO_TOKEN_FILE: &str = "config.json";
+
 /// Token is the result of a successful login or an existing token. This acts as
 /// a wrapper for a bunch of token operations, like validation. We explicitly do
 /// not store any information about the underlying token for a few reasons, like
 /// having a token invalidated on the web but not locally.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     /// An existing token on the filesystem
     Existing(String),
@@ -38,6 +45,29 @@ impl Token {
     pub fn existing(token: String) -> Self {
         Self::Existing(token)
     }
+    /// Reads a token from a file. If the file is a JSON object with a
+    /// `token` field, we read that in. If no such field exists, we error out.
+    ///
+    /// # Errors
+    /// * `Error::TokenNotFound` - If the file does not exist.
+    /// * `Error::InvalidTokenFileFormat` - If the file does not contain a
+    ///   properly formatted JSON object with a `token` field.
+    pub fn from_file(path: AbsoluteSystemPathBuf) -> Result<Self, Error> {
+        #[derive(Deserialize)]
+        struct TokenWrapper {
+            token: String,
+        }
+
+        match path.read_existing_to_string()? {
+            Some(content) => {
+                let wrapper = serde_json::from_str::<TokenWrapper>(&content)
+                    .map_err(Error::InvalidTokenFileFormat)?;
+                Ok(Self::Existing(wrapper.token))
+            }
+            None => Err(Error::TokenNotFound),
+        }
+    }
+
     /// Checks if the token is still valid. The checks ran are:
     /// 1. If the token is active.
     /// 2. If the token has access to the cache.
@@ -222,6 +252,7 @@ fn is_token_active(metadata: &ResponseTokenMetadata, current_time: u128) -> bool
 
 #[cfg(test)]
 mod tests {
+    use tempfile::tempdir;
     use turborepo_vercel_api::token::Scope;
 
     use super::*;
@@ -290,5 +321,48 @@ mod tests {
                 active_at
             );
         }
+    }
+
+    #[test]
+    fn test_from_file_with_valid_token() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("valid_token.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        file_path
+            .create_with_contents(r#"{"token": "valid_token_here"}"#)
+            .unwrap();
+
+        let result = Token::from_file(file_path).expect("Failed to read token from file");
+
+        assert!(matches!(result, Token::Existing(ref t) if t == "valid_token_here"));
+    }
+
+    #[test]
+    fn test_from_file_with_invalid_json() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("invalid_token.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        file_path.create_with_contents("not a valid json").unwrap();
+
+        let result = Token::from_file(file_path);
+        assert!(
+            matches!(result, Err(Error::InvalidTokenFileFormat(_))),
+            "Expected Err(Error::InvalidTokenFileFormat), got {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_from_file_with_no_file() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("nonexistent.json"); // No need to create this file
+
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        let result = Token::from_file(file_path);
+
+        assert!(matches!(result, Err(Error::TokenNotFound)));
     }
 }
