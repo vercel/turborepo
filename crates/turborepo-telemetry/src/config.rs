@@ -1,4 +1,4 @@
-use std::{env, fs, path::Path};
+use std::{env, fs};
 
 use chrono::{DateTime, Utc};
 pub use config::{Config, ConfigError, File, FileFormat};
@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use sha2::{Digest, Sha256};
 use tracing::{debug, error};
+use turbopath::AbsoluteSystemPathBuf;
 use turborepo_dirs::config_dir;
 use turborepo_ui::{color, BOLD, GREY, UI, UNDERLINE};
 use uuid::Uuid;
@@ -56,12 +57,12 @@ impl TelemetryConfig {
     pub fn new() -> Result<TelemetryConfig, ConfigError> {
         let file_path = &get_config_path()?;
         debug!("Telemetry config path: {}", file_path);
-        if !Path::new(file_path).try_exists().unwrap_or(false) {
+        if !file_path.exists() {
             write_new_config()?;
         }
 
         let mut settings = Config::builder();
-        settings = settings.add_source(File::new(file_path, FileFormat::Json));
+        settings = settings.add_source(File::new(file_path.as_str(), FileFormat::Json));
         let settings = settings.build();
 
         // If this is a FileParse error, we assume something corrupted the file or
@@ -219,18 +220,25 @@ impl TelemetryConfig {
     }
 }
 
-fn get_config_path() -> Result<String, ConfigError> {
+fn get_config_path() -> Result<AbsoluteSystemPathBuf, ConfigError> {
     if cfg!(test) {
-        let tmp_dir = env::temp_dir();
-        let config_path = tmp_dir.join("test-telemetry.json");
-        Ok(config_path.to_str().unwrap().to_string())
+        let tmp_dir = AbsoluteSystemPathBuf::try_from(env::temp_dir()).unwrap();
+        let config_path = tmp_dir.join_component("test-telemetry.json");
+        Ok(config_path)
     } else {
         let config_dir = config_dir().ok_or(ConfigError::Message(
             "Unable to find telemetry config directory".to_string(),
         ))?;
+        let abs_config_dir =
+            AbsoluteSystemPathBuf::try_from(config_dir.as_path()).map_err(|e| {
+                ConfigError::Message(format!(
+                    "Invalid config directory {}: {}",
+                    config_dir.display(),
+                    e
+                ))
+            })?;
         // stored as a sibling to the turbo global config
-        let config_path = config_dir.join("turborepo").join("telemetry.json");
-        Ok(config_path.to_str().unwrap().to_string())
+        Ok(abs_config_dir.join_components(&["turborepo", "telemetry.json"]))
     }
 }
 
@@ -239,24 +247,15 @@ fn write_new_config() -> Result<(), ConfigError> {
     let serialized = serde_json::to_string_pretty(&TelemetryConfigContents::default())
         .map_err(|e| ConfigError::Message(e.to_string()))?;
 
-    // Extract the directory path from the file path
-    let dir_path = Path::new(&file_path).parent().ok_or_else(|| {
-        ConfigError::Message("Failed to extract directory path from file path".to_string())
-    })?;
-
     // Create the directory if it doesn't exist
-    if !dir_path.try_exists().unwrap_or(false) {
-        fs::create_dir_all(dir_path).map_err(|e| {
-            ConfigError::Message(format!(
-                "Failed to create directory {}: {}",
-                dir_path.display(),
-                e
-            ))
-        })?;
-    }
+    file_path
+        .ensure_dir()
+        .map_err(|_| ConfigError::Message("Failed to create director".to_string()))?;
 
     // Write the file
-    fs::write(&file_path, serialized).map_err(|e| ConfigError::Message(e.to_string()))?;
+    file_path
+        .create_with_contents(serialized)
+        .map_err(|e| ConfigError::Message(e.to_string()))?;
     Ok(())
 }
 
