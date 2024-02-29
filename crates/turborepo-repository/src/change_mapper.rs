@@ -17,7 +17,9 @@ pub enum PackageDetection {
     Package(WorkspacePackage),
 }
 
-/// Detects if a file is in a package. Can return the package
+/// Detects which packages are affected by a file change. This can be a single
+/// package (`Package`), none of the packages (`None`), or all of the packages
+/// (`All`).
 pub trait PackageDetector {
     fn detect_package(&self, file: &AnchoredSystemPath) -> PackageDetection;
 }
@@ -72,7 +74,7 @@ pub enum LockfileChange {
     WithContent(Vec<u8>),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum PackageChanges {
     All,
     Some(HashSet<WorkspacePackage>),
