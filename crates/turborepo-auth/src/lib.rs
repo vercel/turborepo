@@ -55,14 +55,18 @@ impl Token {
     pub fn from_file(path: AbsoluteSystemPathBuf) -> Result<Self, Error> {
         #[derive(Deserialize)]
         struct TokenWrapper {
-            token: String,
+            token: Option<String>,
         }
 
         match path.read_existing_to_string()? {
             Some(content) => {
                 let wrapper = serde_json::from_str::<TokenWrapper>(&content)
                     .map_err(Error::InvalidTokenFileFormat)?;
-                Ok(Self::Existing(wrapper.token))
+                if let Some(token) = wrapper.token {
+                    Ok(Self::Existing(token))
+                } else {
+                    Err(Error::TokenNotFound)
+                }
             }
             None => Err(Error::TokenNotFound),
         }

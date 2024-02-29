@@ -48,7 +48,7 @@ where
     }
 }
 
-fn extract_vercel_token() -> Result<String, Error> {
+fn extract_vercel_token() -> Result<Option<String>, Error> {
     let vercel_config_dir =
         turborepo_dirs::vercel_config_dir().ok_or_else(|| Error::ConfigDirNotFound)?;
 
@@ -61,7 +61,7 @@ fn extract_vercel_token() -> Result<String, Error> {
     struct VercelToken {
         // This isn't actually dead code, it's used by serde to deserialize the JSON.
         #[allow(dead_code)]
-        token: String,
+        token: Option<String>,
     }
 
     Ok(serde_json::from_str::<VercelToken>(&contents)?.token)
