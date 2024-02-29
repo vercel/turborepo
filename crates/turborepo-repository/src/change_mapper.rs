@@ -198,6 +198,7 @@ mod test {
     use test_case::test_case;
 
     use super::ChangeMapper;
+    use crate::change_mapper::DefaultPackageDetector;
 
     #[cfg(unix)]
     #[test_case("/a/b/c", &["package.lock"], "/a/b/c/package.lock", true ; "simple")]
@@ -214,7 +215,11 @@ mod test {
             .iter()
             .map(|s| turbopath::AnchoredSystemPathBuf::from_raw(s).unwrap())
             .collect();
-        let changes = ChangeMapper::lockfile_changed(&turbo_root, &changed_files, &lockfile_path);
+        let changes = ChangeMapper::<DefaultPackageDetector>::lockfile_changed(
+            &turbo_root,
+            &changed_files,
+            &lockfile_path,
+        );
 
         assert_eq!(changes, expected);
     }

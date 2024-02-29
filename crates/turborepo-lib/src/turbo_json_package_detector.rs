@@ -8,7 +8,7 @@ use wax::{Any, BuildError, Program};
 
 use crate::turbo_json::TurboJson;
 
-const DEFAULT_GLOBAL_DEPS: [&'static str; 2] = ["package.json", "turbo.json"];
+const DEFAULT_GLOBAL_DEPS: [&str; 2] = ["package.json", "turbo.json"];
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -94,6 +94,7 @@ mod tests {
                 .collect(),
             None,
         )?;
+
         // We should have a root package change since we don't have global deps and
         // therefore must be conservative about changes
         assert_eq!(
@@ -102,8 +103,8 @@ mod tests {
         );
 
         let turbo_json = TurboJson::default();
-        let default_package_detector = TurboJsonPackageDetector::new(&pkg_graph, &turbo_json)?;
-        let change_mapper = ChangeMapper::new(&pkg_graph, vec![], default_package_detector);
+        let turbo_package_detector = TurboJsonPackageDetector::new(&pkg_graph, &turbo_json)?;
+        let change_mapper = ChangeMapper::new(&pkg_graph, vec![], turbo_package_detector);
 
         let package_changes = change_mapper.changed_packages(
             [AnchoredSystemPathBuf::from_raw("README.md")?]
@@ -111,6 +112,7 @@ mod tests {
                 .collect(),
             None,
         )?;
+
         // We shouldn't get any changes since we have global deps specified and
         // README.md is not one of them
         assert_eq!(package_changes, PackageChanges::Some(HashSet::new()));

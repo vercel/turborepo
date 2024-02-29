@@ -24,7 +24,6 @@ mod gitignore;
 pub(crate) mod globwatcher;
 mod hash;
 mod opts;
-mod package_detector;
 mod process;
 mod rewrite_json;
 mod run;
@@ -34,6 +33,7 @@ mod task_graph;
 mod task_hash;
 mod tracing;
 mod turbo_json;
+mod turbo_json_package_detector;
 mod unescape;
 
 pub use crate::{

@@ -565,6 +565,7 @@ impl PackageInfo {
 }
 
 #[allow(dead_code)]
+#[cfg(test)]
 pub struct MockDiscovery;
 impl PackageDiscovery for MockDiscovery {
     async fn discover_packages(&self) -> Result<discovery::DiscoveryResponse, discovery::Error> {
