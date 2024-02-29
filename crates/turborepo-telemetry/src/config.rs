@@ -1,4 +1,4 @@
-use std::{env, fs};
+use std::env;
 
 use chrono::{DateTime, Utc};
 pub use config::{Config, ConfigError, File, FileFormat};
@@ -93,7 +93,8 @@ impl TelemetryConfig {
     fn write(&self) -> Result<(), ConfigError> {
         let serialized = serde_json::to_string_pretty(&self.config)
             .map_err(|e| ConfigError::Message(e.to_string()))?;
-        fs::write(&self.config_path, serialized)
+        self.config_path
+            .create_with_contents(serialized)
             .map_err(|e| ConfigError::Message(e.to_string()))?;
         Ok(())
     }
