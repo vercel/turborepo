@@ -25,14 +25,11 @@ pub trait PackageDetector {
 const DEFAULT_GLOBAL_DEPS: [&str; 2] = ["package.json", "turbo.json"];
 
 /// Detects package by checking if the file is inside the package.
-///
-/// NOTE: This strategy has some limitations. Since it doesn't
-/// check the inputs field in `turbo.json`, any inputs that
-/// are not contained in the package directory won't be mapped
-/// to the correct package. Also, since we don't have the global dependencies,
-/// any file that is not in any package will automatically invalidate all
-/// packages. This is fine for Vercel builds, but less fine for situations like
-/// watch mode.
+/// Does *not* use the `globalDependencies` in turbo.json.
+/// Since we don't have these dependencies, any file that is
+/// not in any package will automatically invalidate all
+/// packages. This is fine for builds, but less fine
+/// for situations like watch mode.
 pub struct DefaultPackageDetector<'a> {
     pkg_dep_graph: &'a PackageGraph,
 }
