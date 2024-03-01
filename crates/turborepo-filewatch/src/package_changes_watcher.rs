@@ -1,12 +1,12 @@
-use std::{collections::HashSet, fs};
+use std::collections::HashSet;
 
 use ignore::gitignore::Gitignore;
 use notify::Event;
 use tokio::sync::{broadcast, oneshot, watch};
-use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf};
+use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_repository::{
     change_mapper::{ChangeMapper, DefaultPackageChangeMapper, PackageChanges},
-    package_graph::{PackageGraphBuilder, PackageName},
+    package_graph::{PackageGraph, PackageGraphBuilder, PackageName},
     package_json::PackageJson,
 };
 
@@ -54,11 +54,19 @@ struct Subscriber {
     package_change_events_tx: watch::Sender<PackageChangeEvent>,
 }
 
+// This is a workaround because `ignore` doesn't match against a path's
+// ancestors, i.e. if we have `foo/bar/baz` and the .gitignore has `foo/`, it
+// won't match.
 fn ancestors_is_ignored(gitignore: &Gitignore, path: &AnchoredSystemPath) -> bool {
     path.ancestors().enumerate().any(|(idx, p)| {
         let is_dir = idx != 0;
         gitignore.matched(p, is_dir).is_ignore()
     })
+}
+
+struct RepoState {
+    file_events: broadcast::Receiver<Result<Event, NotifyError>>,
+    pkg_dep_graph: PackageGraph,
 }
 
 impl Subscriber {
@@ -74,41 +82,53 @@ impl Subscriber {
         }
     }
 
+    async fn initialize_repo_state(&mut self) -> Option<RepoState> {
+        let Ok(file_events) = self.file_events_lazy.get().await.map(|r| r.resubscribe()) else {
+            // if we get here, it means that file watching has not started, so we should
+            // just report that the package watcher is not available
+            tracing::debug!("file watching shut down, package watcher not available");
+            return None;
+        };
+
+        let Ok(root_package_json) =
+            PackageJson::load(&self.repo_root.join_component("package.json"))
+        else {
+            tracing::debug!("no package.json found, package watcher not available");
+            return None;
+        };
+
+        let Ok(pkg_dep_graph) = PackageGraphBuilder::new(&self.repo_root, root_package_json)
+            .build()
+            .await
+        else {
+            tracing::debug!("package graph not available, package watcher not available");
+            return None;
+        };
+
+        Some(RepoState {
+            file_events,
+            pkg_dep_graph,
+        })
+    }
+
     async fn watch(mut self, exit_rx: oneshot::Receiver<()>) {
         let process = async {
-            let Ok(mut file_events) = self.file_events_lazy.get().await.map(|r| r.resubscribe())
-            else {
-                // if we get here, it means that file watching has not started, so we should
-                // just report that the package watcher is not available
-                tracing::debug!("file watching shut down, package watcher not available");
+            let Some(mut repo_state) = self.initialize_repo_state().await else {
                 return;
             };
-
-            let Ok(root_package_json) =
-                PackageJson::load(&self.repo_root.join_component("package.json"))
-            else {
-                tracing::debug!("no package.json found, package watcher not available");
-                return;
-            };
-            let Ok(pkg_dep_graph) = PackageGraphBuilder::new(&self.repo_root, root_package_json)
-                .build()
-                .await
-            else {
-                tracing::debug!("package graph not available, package watcher not available");
-                return;
-            };
-
             // TODO: Pass in global_deps and ignore_patterns
-            let change_mapper = ChangeMapper::new(
-                &pkg_dep_graph,
+            let mut change_mapper = ChangeMapper::new(
+                &repo_state.pkg_dep_graph,
                 vec![],
-                DefaultPackageChangeMapper::new(&pkg_dep_graph),
+                DefaultPackageChangeMapper::new(&repo_state.pkg_dep_graph),
             );
 
             loop {
-                match file_events.recv().await {
+                match repo_state.file_events.recv().await {
                     Ok(Ok(Event { paths, .. })) => {
                         // No point in raising an error for an invalid .gitignore
+                        // This is slightly incorrect because we should also search for the
+                        // .gitignore files in the workspaces.
                         let (root_gitignore, _) =
                             Gitignore::new(&self.repo_root.join_component(".gitignore"));
 
@@ -125,9 +145,26 @@ impl Subscriber {
 
                         match changes {
                             Ok(PackageChanges::All) => {
+                                // We tell the client that we need to rediscover the packages, i.e.
+                                // all bets are off, just re-run everything
                                 let _ = self
                                     .package_change_events_tx
                                     .send(PackageChangeEvent::Rediscover);
+                                match self.initialize_repo_state().await {
+                                    Some(new_repo_state) => {
+                                        repo_state = new_repo_state;
+                                        change_mapper = ChangeMapper::new(
+                                            &repo_state.pkg_dep_graph,
+                                            vec![],
+                                            DefaultPackageChangeMapper::new(
+                                                &repo_state.pkg_dep_graph,
+                                            ),
+                                        );
+                                    }
+                                    None => {
+                                        break;
+                                    }
+                                }
                             }
                             Ok(PackageChanges::Some(changed_pkgs)) => {
                                 tracing::debug!(
