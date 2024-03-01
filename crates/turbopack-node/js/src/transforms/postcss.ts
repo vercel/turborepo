@@ -73,7 +73,7 @@ export default async function transform(
   ipc: Ipc<IpcInfoMessage, IpcRequestMessage>,
   cssContent: string,
   name: string
-) => {
+) {
   const { css, map, messages } = await processor.process(cssContent, {
     from: name,
     to: name,
