@@ -5,13 +5,17 @@ use serde::{Deserialize, Serialize};
 use turbo_tasks::{
     debug::ValueDebugFormat, trace::TraceRawVcs, TryJoinIterExt, Value, ValueToString, Vc,
 };
-use turbo_tasks_fs::{glob::Glob, FileSystemPath};
+use turbo_tasks_fs::{glob::Glob, FileContent, FileSystemPath};
 
 use super::{
     alias_map::{AliasMap, AliasTemplate},
     AliasPattern, ExternalType, ResolveResult, ResolveResultItem,
 };
-use crate::resolve::{parse::Request, plugin::ResolvePlugin};
+use crate::{
+    asset::AssetContent,
+    resolve::{parse::Request, plugin::ResolvePlugin},
+    virtual_source::VirtualSource,
+};
 
 #[turbo_tasks::value(shared)]
 #[derive(Hash, Debug)]
@@ -101,6 +105,9 @@ pub enum ImportMapping {
     Empty,
     Alternatives(Vec<Vc<ImportMapping>>),
     Dynamic(Vc<Box<dyn ImportMappingReplacement>>),
+    /// A request maps to the string based source code, which will be resolved
+    /// into virtualasset with provided path as an ident.
+    Expression(Vc<FileSystemPath>, String),
 }
 
 impl ImportMapping {
@@ -139,9 +146,10 @@ impl AliasTemplate for Vc<ImportMapping> {
                 ImportMapping::PrimaryAlternative(name, context) => {
                     ImportMapping::PrimaryAlternative(name.clone().replace('*', capture), *context)
                 }
-                ImportMapping::Direct(_) | ImportMapping::Ignore | ImportMapping::Empty => {
-                    this.clone()
-                }
+                ImportMapping::Direct(_)
+                | ImportMapping::Ignore
+                | ImportMapping::Empty
+                | ImportMapping::Expression(_, _) => this.clone(),
                 ImportMapping::Alternatives(alternatives) => ImportMapping::Alternatives(
                     alternatives
                         .iter()
@@ -298,6 +306,13 @@ async fn import_mapping_to_result(
         ),
         ImportMapping::Dynamic(replacement) => {
             (*replacement.result(lookup_path, request).await?).clone()
+        }
+        ImportMapping::Expression(path, expression) => {
+            let virtual_source = VirtualSource::new(
+                *path,
+                AssetContent::file(FileContent::Content(expression.to_string().into()).into()),
+            );
+            ImportMapResult::Result(ResolveResult::source(Vc::upcast(virtual_source)).cell())
         }
     })
 }

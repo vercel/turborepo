@@ -40,6 +40,7 @@ type ResolveAbsolutePath = (modulePath?: string) => string;
 
 interface TurbopackNodeBuildContext extends TurbopackBaseContext {
   P: ResolveAbsolutePath;
+  p: ImportUnsupported;
   R: ResolvePathFromModule;
   x: ExternalRequire;
   y: ExternalImport;
@@ -212,6 +213,7 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
       P: resolveAbsolutePath,
       U: relativeURL,
       R: createResolvePathFromModule(r),
+      p: importUnsupported,
       __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
     });
   } catch (error) {

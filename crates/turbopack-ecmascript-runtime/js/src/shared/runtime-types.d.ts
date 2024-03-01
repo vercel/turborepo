@@ -43,6 +43,8 @@ type ModuleFactories = Record<ModuleId, ModuleFactory>;
 type RelativeURL = (inputUrl: string) => void;
 type ResolvePathFromModule = (moduleId: string) => string;
 
+type ImportUnsupported = (module: string) => any;
+
 type AsyncModule = (
   body: (
     handleAsyncDependencies: (
