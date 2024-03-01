@@ -77,11 +77,12 @@ export const run = async (
       await module.init();
     }
     getValue = module.default;
+   await ipc.sendReady();
   } catch (err) {
     await ipc.sendReady();
     await ipc.sendError(err as Error);
   }
-  await ipc.sendReady();
+
 
   // Queue handling
   let isRunning = false;
