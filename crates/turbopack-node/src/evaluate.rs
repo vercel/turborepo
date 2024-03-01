@@ -234,7 +234,7 @@ pub trait EvaluateContext {
     ) -> Result<Self::ResponseMessage>;
 }
 
-pub fn custom_evaluate(context: impl EvaluateContext) -> Vc<JavaScriptEvaluation> {
+pub fn custom_evaluate(evaluate_context: impl EvaluateContext) -> Vc<JavaScriptEvaluation> {
     // Note the following code uses some hacks to create a child task that produces
     // a stream that is returned by this task.
 
@@ -252,7 +252,7 @@ pub fn custom_evaluate(context: impl EvaluateContext) -> Vc<JavaScriptEvaluation
     let initial = Mutex::new(Some(sender));
 
     // run the evaluation as side effect
-    context.compute(
+    evaluate_context.compute(
         JavaScriptStreamSender {
             get: Box::new(move || {
                 if let Some(sender) = initial.lock().take() {
@@ -306,7 +306,7 @@ pub fn evaluate(
 }
 
 pub async fn compute(
-    context: impl EvaluateContext,
+    evaluate_context: impl EvaluateContext,
     sender: Vc<JavaScriptStreamSender>,
 ) -> Result<Vc<()>> {
     mark_finished();
@@ -316,13 +316,13 @@ pub async fn compute(
     };
 
     let stream = generator! {
-        let pool = context.pool();
+        let pool = evaluate_context.pool();
 
         // Read this strongly consistent, since we don't want to run inconsistent
         // node.js code.
         let pool = pool.strongly_consistent().await?;
 
-        let args = context.args().iter().try_join().await?;
+        let args = evaluate_context.args().iter().try_join().await?;
         // Assume this is a one-off operation, so we can kill the process
         // TODO use a better way to decide that.
         let kill = args.is_empty();
@@ -351,7 +351,7 @@ pub async fn compute(
         // need to spawn a new thread to continually pull data out of the process,
         // and ferry that along.
         loop {
-            let output = pull_operation(&mut operation, &pool, &context).await?;
+            let output = pull_operation(&mut operation, &pool, &evaluate_context).await?;
 
             match output {
                 LoopResult::Continue(data) => {
@@ -362,7 +362,7 @@ pub async fn compute(
                     break;
                 }
                 LoopResult::Break(Err(e)) => {
-                    let error = print_error(e, &pool, &context).await?;
+                    let error = print_error(e, &pool, &evaluate_context).await?;
                     Err(anyhow!("Node.js evaluation failed: {}", error))?;
                     break;
                 }
@@ -396,14 +396,14 @@ pub async fn compute(
 async fn pull_operation(
     operation: &mut NodeJsOperation,
     pool: &NodeJsPool,
-    context: &impl EvaluateContext,
+    evaluate_context: &impl EvaluateContext,
 ) -> Result<LoopResult> {
     let guard = duration_span!("Node.js evaluation");
 
     let output = loop {
         match operation.recv().await? {
             EvalJavaScriptIncomingMessage::Error(error) => {
-                context.emit_error(error, pool).await?;
+                evaluate_context.emit_error(error, pool).await?;
                 // Do not reuse the process in case of error
                 operation.disallow_reuse();
                 // Issue emitted, we want to break but don't want to return an error
@@ -411,10 +411,15 @@ async fn pull_operation(
             }
             EvalJavaScriptIncomingMessage::End { data } => break ControlFlow::Break(Ok(data)),
             EvalJavaScriptIncomingMessage::Info { data } => {
-                context.info(serde_json::from_value(data)?, pool).await?;
+                evaluate_context
+                    .info(serde_json::from_value(data)?, pool)
+                    .await?;
             }
             EvalJavaScriptIncomingMessage::Request { id, data } => {
-                match context.request(serde_json::from_value(data)?, pool).await {
+                match evaluate_context
+                    .request(serde_json::from_value(data)?, pool)
+                    .await
+                {
                     Ok(response) => {
                         operation
                             .send(EvalJavaScriptOutgoingMessage::Result {
@@ -444,10 +449,10 @@ async fn pull_operation(
 
 #[turbo_tasks::function]
 async fn basic_compute(
-    context: BasicEvaluateContext,
+    evaluate_context: BasicEvaluateContext,
     sender: Vc<JavaScriptStreamSender>,
 ) -> Result<Vc<()>> {
-    compute(context, sender).await
+    compute(evaluate_context, sender).await
 }
 
 #[derive(Clone, PartialEq, Eq, TaskInput)]
@@ -528,13 +533,13 @@ impl EvaluateContext for BasicEvaluateContext {
 async fn print_error(
     error: StructuredError,
     pool: &NodeJsPool,
-    context: &impl EvaluateContext,
+    evaluate_context: &impl EvaluateContext,
 ) -> Result<String> {
     error
         .print(
             pool.assets_for_source_mapping,
             pool.assets_root,
-            context.cwd(),
+            evaluate_context.cwd(),
             FormattingMode::Plain,
         )
         .await

@@ -40,7 +40,7 @@ export type IpcInfoMessage =
 export type IpcRequestMessage = {
   type: "resolve";
   options: any;
-  context: string;
+  lookupPath: string;
   request: string;
 };
 
@@ -290,7 +290,7 @@ const transform = (
               rustOptions.preferRelative = options.preferRelative;
             }
             return (
-              context: string,
+              lookupPath: string,
               request: string,
               callback?: (err?: Error, result?: string) => void
             ) => {
@@ -298,26 +298,19 @@ const transform = (
                 .sendRequest({
                   type: "resolve",
                   options: rustOptions,
-                  context: toPath(context),
+                  lookupPath: toPath(lookupPath),
                   request,
                 })
-                .then(
-                  (unknownResult) => {
-                    let result = unknownResult as { path: string };
-                    if (result && typeof result.path === "string") {
-                      console.log({ context, request, result: result.path });
-                      return fromPath(result.path);
-                    } else {
-                      throw Error(
-                        "Expected { path: string } from resolve request"
-                      );
-                    }
-                  },
-                  (e) => {
-                    console.log({ context, request, error: e });
-                    throw e;
+                .then((unknownResult) => {
+                  let result = unknownResult as { path: string };
+                  if (result && typeof result.path === "string") {
+                    return fromPath(result.path);
+                  } else {
+                    throw Error(
+                      "Expected { path: string } from resolve request"
+                    );
                   }
-                );
+                });
               if (callback) {
                 promise
                   .then(

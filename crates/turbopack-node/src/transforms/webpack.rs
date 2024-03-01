@@ -232,16 +232,18 @@ impl WebpackLoadersProcessedAsset {
 }
 
 #[turbo_tasks::function]
-fn evaluate_webpack_loader(context: WebpackLoaderContext) -> Vc<JavaScriptEvaluation> {
-    custom_evaluate(context)
+fn evaluate_webpack_loader(
+    webpack_loader_context: WebpackLoaderContext,
+) -> Vc<JavaScriptEvaluation> {
+    custom_evaluate(webpack_loader_context)
 }
 
 #[turbo_tasks::function]
 async fn compute_webpack_loader_evaluation(
-    context: WebpackLoaderContext,
+    webpack_loader_context: WebpackLoaderContext,
     sender: Vc<JavaScriptStreamSender>,
 ) -> Result<Vc<()>> {
-    compute(context, sender).await
+    compute(webpack_loader_context, sender).await
 }
 
 #[derive(Deserialize, Debug)]
@@ -284,7 +286,7 @@ pub struct WebpackResolveOptions {
 pub enum RequestMessage {
     Resolve {
         options: WebpackResolveOptions,
-        context: String,
+        lookup_path: String,
         request: String,
     },
 }
@@ -403,20 +405,20 @@ impl EvaluateContext for WebpackLoaderContext {
         match data {
             RequestMessage::Resolve {
                 options: webpack_options,
-                context,
+                lookup_path,
                 request,
             } => {
                 let Some(resolve_options_context) = self.resolve_options_context else {
                     bail!("Resolve options are not available in this context");
                 };
-                let context = self.cwd.join(context);
+                let lookup_path = self.cwd.join(lookup_path);
                 let request = Request::parse(Value::new(Pattern::Constant(request)));
-                let options = resolve_options(context, resolve_options_context);
+                let options = resolve_options(lookup_path, resolve_options_context);
 
                 let options = apply_webpack_resolve_options(options, webpack_options);
 
                 let resolved = resolve(
-                    context,
+                    lookup_path,
                     Value::new(ReferenceType::Undefined),
                     request,
                     options,
@@ -432,14 +434,14 @@ impl EvaluateContext for WebpackLoaderContext {
                         bail!(
                             "Resolving {} in {} ends up on a different filesystem",
                             request.to_string().await?,
-                            context.to_string().await?
+                            lookup_path.to_string().await?
                         );
                     }
                 } else {
                     bail!(
                         "Unable to resolve {} in {}",
                         request.to_string().await?,
-                        context.to_string().await?
+                        lookup_path.to_string().await?
                     );
                 }
             }
