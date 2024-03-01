@@ -181,15 +181,35 @@ impl Subscriber {
                                 }
                             }
                             Err(err) => {
+                                // Log the error, rediscover the packages and try again
                                 tracing::error!("error: {:?}", err);
+
+                                let _ = self
+                                    .package_change_events_tx
+                                    .send(PackageChangeEvent::Rediscover);
+                                match self.initialize_repo_state().await {
+                                    Some(new_repo_state) => {
+                                        repo_state = new_repo_state;
+                                        change_mapper = ChangeMapper::new(
+                                            &repo_state.pkg_dep_graph,
+                                            vec![],
+                                            vec![],
+                                        );
+                                    }
+                                    None => {
+                                        break;
+                                    }
+                                }
                             }
                         }
                     }
                     Ok(Err(err)) => {
                         tracing::error!("file event error: {:?}", err);
+                        break;
                     }
                     Err(broadcast::error::RecvError::Lagged(_)) => {
                         tracing::warn!("file event lagged");
+                        break;
                     }
                     Err(broadcast::error::RecvError::Closed) => {
                         tracing::debug!("file event channel closed");

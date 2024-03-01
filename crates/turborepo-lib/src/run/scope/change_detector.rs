@@ -9,7 +9,10 @@ use turborepo_repository::{
 };
 use turborepo_scm::SCM;
 
-use crate::global_deps_package_change_mapper::{Error, GlobalDepsPackageChangeMapper};
+use crate::{
+    global_deps_package_change_mapper::{Error, GlobalDepsPackageChangeMapper},
+    run::scope::ResolutionError,
+};
 
 /// Given two git refs, determine which packages have changed between them.
 pub trait GitChangeDetector {
@@ -17,7 +20,7 @@ pub trait GitChangeDetector {
         &self,
         from_ref: &str,
         to_ref: Option<&str>,
-    ) -> Result<HashSet<PackageName>, ChangeMapError>;
+    ) -> Result<HashSet<PackageName>, ResolutionError>;
 }
 
 pub struct ScopeChangeDetector<'a> {
@@ -85,7 +88,7 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
         &self,
         from_ref: &str,
         to_ref: Option<&str>,
-    ) -> Result<HashSet<PackageName>, ChangeMapError> {
+    ) -> Result<HashSet<PackageName>, ResolutionError> {
         let mut changed_files = HashSet::new();
         if !from_ref.is_empty() {
             changed_files = self.scm.changed_files(self.turbo_root, from_ref, to_ref)?;

@@ -150,8 +150,6 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
 
 #[derive(thiserror::Error, Debug)]
 pub enum ChangeMapError {
-    #[error("SCM error: {0}")]
-    Scm(#[from] turborepo_scm::Error),
     #[error(transparent)]
     Wax(#[from] wax::BuildError),
     #[error("Package manager error: {0}")]

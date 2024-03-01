@@ -440,6 +440,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         if let Some(git_range) = selector.git_range.as_ref() {
             selector_valid = true;
             let changed_packages = self.packages_changed_in_range(git_range)?;
+
             let package_path_lookup = self
                 .pkg_graph
                 .packages()
