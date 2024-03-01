@@ -322,7 +322,7 @@ pub async fn compute(
         // node.js code.
         let pool = pool.strongly_consistent().await?;
 
-        let args = context.args().into_iter().try_join().await?;
+        let args = context.args().iter().try_join().await?;
         // Assume this is a one-off operation, so we can kill the process
         // TODO use a better way to decide that.
         let kill = args.is_empty();
