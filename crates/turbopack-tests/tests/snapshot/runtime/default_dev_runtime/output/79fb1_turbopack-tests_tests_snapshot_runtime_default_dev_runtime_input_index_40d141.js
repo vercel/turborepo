@@ -283,6 +283,33 @@ function asyncModule(module, body, hasAwait) {
     }
 }
 /**
+ * A runtime function build a proxy throws at runtime with given error message.
+ * This is mainly used for replacing certain import into proxy object, so
+ * any named | default imports throws at runtime instead of build time.
+ *
+ */ function importUnsupported(error) {
+    const proxy = new Proxy(function() {}, {
+        get (_obj, prop) {
+            if (prop === "then") {
+                return {};
+            }
+            throw new Error(error);
+        },
+        construct () {
+            throw new Error(error);
+        },
+        apply (_target, _this, args) {
+            if (typeof args[0] === "function") {
+                return args[0](proxy);
+            }
+            throw new Error(error);
+        }
+    });
+    return new Proxy({}, {
+        get: ()=>proxy
+    });
+}
+/**
  * A pseudo "fake" URL object to resolve to its relative path.
  *
  * When UrlRewriteBehavior is set to relative, calls to the `new URL()` will construct url without base using this
