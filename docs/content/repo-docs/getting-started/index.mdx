@@ -3,4 +3,65 @@ title: Getting started
 description: Get started with Turborepo.
 ---
 
-TODO
+import { Card, Cards } from 'fumadocs-ui/components/card'
+import { Step, Steps} from 'fumadocs-ui/components/steps'
+import {Tab, Tabs} from 'fumadocs-ui/components/tabs'
+
+If you're new to Turborepo, you can follow these steps to get started.
+
+<Steps>
+<Step>
+## Install Turborepo
+
+Install `turbo` globally so you can conveniently run `turbo` commands from anywhere in your repository.
+
+<Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
+  <Tab value="npm">
+  ```bash
+  npm install turbo --global
+  ```
+
+  </Tab>
+  <Tab value="yarn">
+  ```bash
+  yarn global add turbo
+  ```
+
+  </Tab>
+  <Tab value="pnpm">
+  ```bash
+  pnpm install turbo --global
+  ```
+
+  </Tab>
+</Tabs>
+
+</Step>
+<Step>
+
+## Choose your path
+
+<Cards>
+  <Card
+    href="/repo/docs/getting-started/quickstart"
+    title="Use create-turbo"
+    description="Start with our template"
+  />
+  <Card
+    href="/repo/docs/getting-started/quickstart#start-with-an-example"
+    title="Use an example"
+    description="Start with a framework-specific example"
+  />
+  <Card
+    href="/repo/docs/crafting-your-repository"
+    title="Start from scratch"
+    description="From zero to monorepo"
+  />
+  <Card
+    href="/repo/docs/getting-started/add-to-an-existing-repository"
+    title="Add to an existing repository"
+    description="Make your repo fast"
+  />
+</Cards>
+</Step>
+</Steps>
