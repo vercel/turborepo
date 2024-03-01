@@ -1,0 +1,149 @@
+---
+title: Structuring a repo
+description: Start by creating a repository using the conventions of the ecosystem.
+---
+
+import {Callout} from '#/components/callout'
+import {PackageManagerTabs, Tab, Tabs} from '#/components/Tabs'
+import { File, Folder, Files } from 'fumadocs-ui/components/files';
+
+`turbo` is built on top of Workspaces, a feature of the major package managers in the JavaScript ecosystem. This allows you to quickly, incrementally adopt Turborepo into your existing codebase.
+
+## Anatomy of a workspace
+
+<Files>
+  <File name="package.json" />
+  <File name="turbo.json" />
+  <File name=".gitignore" />
+  <Folder name="apps">
+    <Folder name="docs">
+     <File name="package.json" />
+    </Folder>
+    <Folder name="web">
+      <File name="package.json" />
+    </Folder>
+  </Folder>
+  <Folder name="packages">
+    <Folder name="ui">
+      <File name="package.json" />
+    </Folder>
+  </Folder>
+</Files>
+
+The anatomy of your workspace is as follows:
+
+- [Packages as described by your package manager](#establishing-packages-in-your-monorepo)
+- [Root package.json](#root-packagejson)
+- [Root turbo.json](#root-turbojson)
+- [.gitignore](#gitignore)
+
+### Establishing packages in your monorepo
+
+First, your workspace needs to describe your packages so you can install them into other packages. This is done using the package manager's Workspace feature.
+
+<PackageManagerTabs>
+  <Tab>
+  ```json title="./package.json"
+  {
+    "workspaces": [
+      "apps/*"
+      "packages/*"
+    ]
+  }
+  ```
+
+  <small>[→ npm workspace documentation](https://docs.npmjs.com/cli/v7/using-npm/workspaces#defining-workspaces)</small>
+  </Tab>
+  <Tab >
+  ```json title="./package.json"
+  {
+    "workspaces": [
+      "apps/*"
+      "packages/*"
+    ]
+  }
+  ```
+
+  <small>[→ yarn workspace documentation](https://yarnpkg.com/features/workspaces#how-are-workspaces-declared)</small>
+   </Tab>
+  <Tab>
+  ```json title="pnpm-workspace.yml"
+ packages:
+    - "apps/*"
+    - "packages/*"
+  ```
+  <small>[→ pnpm workspace documentation](https://pnpm.io/pnpm-workspace_yaml)</small>
+
+  </Tab>
+</PackageManagerTabs>
+
+Using this configuration, every directory **with a `package.json`** in the `apps` or `packages` directories will be considered a package. The [requirements for the `package.json` of packages](#anatomy-of-a-package) are below.
+
+<Callout type="error">
+Turborepo does not support deeply nested workspaces like `apps/**` or `packages/**`.
+</Callout>
+
+### Root package.json
+
+The root package.json is the hub for your workspace. It should contain a `packageManager` field to specify which package manager should be used by the repository.
+
+<Callout type="good-to-know">
+ Changing the `packageManager` field will result in all of your tasks missing cache.
+</Callout>
+
+### Root turbo.json
+
+The `turbo.json` file is used to configure the behavior of `turbo`. To learn more about how to configure your pipelines and tasks, visit the [Configuring pipelines](/repo/docs/crafting-your-repository/configuring-pipelines) page.
+
+### .gitignore
+
+By default, Turborepo uses your `.gitignore` file to determine which files to automatically ignore as file inputs when running tasks.
+
+Usually, this is the behavior you'll want for a task. If you'd like to fine-tune the file inputs for your tasks, you can use [the `inputs` field](/repo/docs/reference/configuration#inputs).
+
+## Anatomy of a package
+
+Each package in your workspace needs a `package.json` file so that Turborepo can discover that package. The `package.json` file should contain the following fields.
+
+### `name`
+
+The `name` field is used to identify the package. It should be unique within your workspace.
+
+<Callout type="info">
+It's common to use a namespace prefix for your internal packages. For example, if your company is called `acme`, you might name your packages `@acme/package-name`. This is a good practice to avoid conflicts with other packages on the npm registry.
+</Callout>
+
+### `exports`
+
+The `exports` field is used to specify the entrypoints for other packages that want to use the package. When you want to use code from one package in another package, you'll import from that entrypoint.
+
+For example, if you had a `@repo/math` package, you might have the following `exports` field:
+
+```json title="./packages/math/package.json"
+{
+  "exports": {
+    "./add": "./src/add.ts",
+    "./subtract": "./src/subtract.ts"
+  }
+}
+```
+
+<Callout type="info">
+The `exports` field in this example requires modern versions of Node.js and TypeScript.
+</Callout>
+
+This would allow you to import the `add` and `subtract` functions from the `@repo/math` package like so:
+
+```ts title="./apps/my-app/src/index.ts"
+  import { add, subtract } from '@repo/math'
+```
+
+### `scripts`
+
+The `scripts` field is used to define scripts that can be run from the command line in the package. We'll talk more about these scripts when it comes time to discuss [Running Tasks](/repo/docs/crafting-your-repository/running-tasks).
+
+---
+
+## Next steps
+
+Now that you have a workspace set up, you can install dependencies into your workspace to bring code in from the npm registry and share code within your repository.

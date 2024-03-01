@@ -27,3 +27,19 @@ export const Tabs: FC<{
     </FumaTabs>
   );
 };
+
+export const PackageManagerTabs: FC<{
+  storageKey?: string;
+  children: ReactElement;
+}> = function ({ storageKey = "tab-index", children = null, ...props }) {
+  const items = ["npm", "yarn", "pnpm"];
+
+  return (
+    <FumaTabs id={storageKey} items={items} {...props}>
+      {/* @ts-expect-error */}
+      {children.map((child, index) => {
+        return { ...child, props: { ...child.props, value: items[index] } };
+      })}
+    </FumaTabs>
+  );
+};

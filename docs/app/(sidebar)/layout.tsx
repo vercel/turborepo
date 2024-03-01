@@ -19,7 +19,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               icon: <GithubLogo />,
             },
             {
-              href: "https://example.com",
+              href: "https://turbo.build/discord",
               label: "Example",
               icon: <DiscordLogo />,
             },
