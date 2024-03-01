@@ -55,7 +55,7 @@ pub struct TelemetryConfig {
 
 impl TelemetryConfig {
     pub fn with_default_config_path() -> Result<TelemetryConfig, ConfigError> {
-        let config_path = get_config_path()?;
+        let config_path = default_config_path()?;
         TelemetryConfig::new(config_path)
     }
 
@@ -227,26 +227,19 @@ impl TelemetryConfig {
     }
 }
 
-fn get_config_path() -> Result<AbsoluteSystemPathBuf, ConfigError> {
-    if cfg!(test) {
-        let tmp_dir = AbsoluteSystemPathBuf::try_from(env::temp_dir()).unwrap();
-        let config_path = tmp_dir.join_component("test-telemetry.json");
-        Ok(config_path)
-    } else {
-        let config_dir = config_dir().ok_or(ConfigError::Message(
-            "Unable to find telemetry config directory".to_string(),
-        ))?;
-        let abs_config_dir =
-            AbsoluteSystemPathBuf::try_from(config_dir.as_path()).map_err(|e| {
-                ConfigError::Message(format!(
-                    "Invalid config directory {}: {}",
-                    config_dir.display(),
-                    e
-                ))
-            })?;
-        // stored as a sibling to the turbo global config
-        Ok(abs_config_dir.join_components(&["turborepo", "telemetry.json"]))
-    }
+fn default_config_path() -> Result<AbsoluteSystemPathBuf, ConfigError> {
+    let config_dir = config_dir().ok_or(ConfigError::Message(
+        "Unable to find telemetry config directory".to_string(),
+    ))?;
+    let abs_config_dir = AbsoluteSystemPathBuf::try_from(config_dir.as_path()).map_err(|e| {
+        ConfigError::Message(format!(
+            "Invalid config directory {}: {}",
+            config_dir.display(),
+            e
+        ))
+    })?;
+    // stored as a sibling to the turbo global config
+    Ok(abs_config_dir.join_components(&["turborepo", "telemetry.json"]))
 }
 
 fn write_new_config(file_path: &AbsoluteSystemPath) -> Result<(), ConfigError> {

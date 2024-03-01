@@ -76,12 +76,12 @@ pub fn telem(event: events::TelemetryEvent) {
 }
 
 fn init(
+    mut config: TelemetryConfig,
     client: impl telemetry::TelemetryClient + Clone + Send + Sync + 'static,
     ui: UI,
 ) -> Result<(TelemetryHandle, TelemetrySender), Box<dyn std::error::Error>> {
     let (tx, rx) = mpsc::unbounded_channel();
     let (cancel_tx, cancel_rx) = oneshot::channel();
-    let mut config = TelemetryConfig::with_default_config_path()?;
     config.show_alert(ui);
 
     let session_id = Uuid::new_v4();
@@ -122,7 +122,8 @@ pub fn init_telemetry(
         debug!("telemetry already initialized");
         return Err(Box::new(Error::AlreadyInitialized()));
     }
-    let (handle, sender) = init(client, ui)?;
+    let config = TelemetryConfig::with_default_config_path()?;
+    let (handle, sender) = init(config, client, ui)?;
     SENDER_INSTANCE.set(sender).unwrap();
     Ok(handle)
 }
@@ -260,11 +261,12 @@ mod tests {
         select,
         sync::{mpsc, mpsc::UnboundedReceiver},
     };
+    use turbopath::AbsoluteSystemPathBuf;
     use turborepo_api_client::telemetry::TelemetryClient;
     use turborepo_ui::UI;
     use turborepo_vercel_api::telemetry::{TelemetryEvent, TelemetryGenericEvent};
 
-    use crate::init;
+    use crate::{config::TelemetryConfig, init};
 
     #[derive(Clone)]
     struct DummyClient {
@@ -322,8 +324,19 @@ mod tests {
         }
     }
 
+    fn temp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let path = AbsoluteSystemPathBuf::try_from(temp_dir.path()).unwrap();
+        (temp_dir, path)
+    }
+
     #[tokio::test]
     async fn test_batching() {
+        let (_tmp, temp_dir) = temp_dir();
+        let config =
+            TelemetryConfig::new(temp_dir.join_components(&["turborepo", "telemetry.json"]))
+                .unwrap();
+
         let (tx, mut rx) = mpsc::unbounded_channel();
 
         let client = DummyClient {
@@ -331,7 +344,7 @@ mod tests {
             tx,
         };
 
-        let result = init(client.clone(), UI::new(false));
+        let result = init(config, client.clone(), UI::new(false));
 
         let (telemetry_handle, telemetry_sender) = result.unwrap();
 
@@ -360,6 +373,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_batching_across_two_batches() {
+        let (_tmp, temp_dir) = temp_dir();
+        let config =
+            TelemetryConfig::new(temp_dir.join_components(&["turborepo", "telemetry.json"]))
+                .unwrap();
         let (tx, mut rx) = mpsc::unbounded_channel();
 
         let client = DummyClient {
@@ -367,7 +384,7 @@ mod tests {
             tx,
         };
 
-        let result = init(client.clone(), UI::new(false));
+        let result = init(config, client.clone(), UI::new(false));
 
         let (telemetry_handle, telemetry_sender) = result.unwrap();
 
@@ -402,6 +419,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_closing() {
+        let (_tmp, temp_dir) = temp_dir();
+        let config =
+            TelemetryConfig::new(temp_dir.join_components(&["turborepo", "telemetry.json"]))
+                .unwrap();
         let (tx, mut _rx) = mpsc::unbounded_channel();
 
         let client = DummyClient {
@@ -409,7 +430,7 @@ mod tests {
             tx,
         };
 
-        let result = init(client.clone(), UI::new(false));
+        let result = init(config, client.clone(), UI::new(false));
 
         let (telemetry_handle, telemetry_sender) = result.unwrap();
 
