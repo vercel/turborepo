@@ -26,7 +26,7 @@ use tokio::{
     sync::{OwnedSemaphorePermit, Semaphore},
     time::{sleep, timeout},
 };
-use turbo_tasks::Vc;
+use turbo_tasks::{duration_span, Vc};
 use turbo_tasks_fs::{json::parse_json_with_source_context, FileSystemPath};
 use turbopack_ecmascript::magic_identifier::unmangle_identifiers;
 
@@ -71,6 +71,8 @@ enum NodeJsPoolProcess {
 }
 
 struct SpawnedNodeJsPoolProcess {
+    #[allow(dyn_drop)]
+    guard: Box<dyn Drop + Send + Sync>,
     child: Child,
     listener: TcpListener,
     assets_for_source_mapping: Vc<AssetsForSourceMapping>,
@@ -334,6 +336,7 @@ impl NodeJsPoolProcess {
         shared_stderr: SharedOutputSet,
         debug: bool,
     ) -> Result<Self> {
+        let guard = Box::new(duration_span!("Node.js process startup"));
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
             .context("binding to a port")?;
@@ -364,6 +367,7 @@ impl NodeJsPoolProcess {
         let child = cmd.spawn().context("spawning node pooled process")?;
 
         Ok(Self::Spawned(SpawnedNodeJsPoolProcess {
+            guard,
             listener,
             child,
             debug,
@@ -378,6 +382,7 @@ impl NodeJsPoolProcess {
     async fn run(self) -> Result<RunningNodeJsPoolProcess> {
         Ok(match self {
             NodeJsPoolProcess::Spawned(SpawnedNodeJsPoolProcess {
+                guard,
                 mut child,
                 listener,
                 assets_for_source_mapping,
@@ -462,7 +467,7 @@ impl NodeJsPoolProcess {
                     final_stream: stderr(),
                 };
 
-                RunningNodeJsPoolProcess {
+                let mut process = RunningNodeJsPoolProcess {
                     child: Some(child),
                     connection,
                     assets_for_source_mapping,
@@ -471,7 +476,20 @@ impl NodeJsPoolProcess {
                     stdout_handler,
                     stderr_handler,
                     debug,
+                };
+
+                drop(guard);
+
+                let guard = duration_span!("Node.js initialization");
+                let ready_signal = process.recv().await?;
+
+                if !ready_signal.is_empty() {
+                    bail!("Node.js process didn't send the expected ready signal");
                 }
+
+                drop(guard);
+
+                process
             }
             NodeJsPoolProcess::Running(running) => running,
         })
