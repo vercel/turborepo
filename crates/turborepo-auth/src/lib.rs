@@ -108,6 +108,7 @@ impl Token {
         }
         Ok(true)
     }
+
     /// This is the same as `is_valid`, but also checks if the token is valid
     /// for SSO.
     ///
@@ -158,6 +159,7 @@ impl Token {
             (Err(e), _) | (_, Err(e)) => Err(Error::APIError(e)),
         }
     }
+
     /// Checks if the token is active. We do a few checks:
     /// 1. Fetch the token metadata.
     /// 2. From the metadata, check if the token is active.

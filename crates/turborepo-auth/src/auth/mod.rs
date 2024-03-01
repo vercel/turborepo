@@ -5,6 +5,7 @@ mod sso;
 pub use login::*;
 pub use logout::*;
 pub use sso::*;
+use turbopath::AbsoluteSystemPath;
 use turborepo_api_client::{CacheClient, Client, TokenClient};
 use turborepo_ui::UI;
 
@@ -13,10 +14,7 @@ use crate::LoginServer;
 const VERCEL_TOKEN_DIR: &str = "com.vercel.cli";
 const VERCEL_TOKEN_FILE: &str = "auth.json";
 
-pub struct LoginOptions<'a, T>
-where
-    T: Client + TokenClient + CacheClient,
-{
+pub struct LoginOptions<'a, T: Client + TokenClient + CacheClient> {
     pub ui: &'a UI,
     pub login_url: &'a str,
     pub api_client: &'a T,
@@ -26,10 +24,7 @@ where
     pub existing_token: Option<&'a str>,
     pub force: bool,
 }
-impl<'a, T> LoginOptions<'a, T>
-where
-    T: Client + TokenClient + CacheClient,
-{
+impl<'a, T: Client + TokenClient + CacheClient> LoginOptions<'a, T> {
     pub fn new(
         ui: &'a UI,
         login_url: &'a str,
@@ -46,6 +41,15 @@ where
             force: false,
         }
     }
+}
+
+/// Options for logging out.
+pub struct LogoutOptions<'a, T> {
+    pub ui: &'a UI,
+    pub api_client: &'a T,
+
+    /// The path where we should look for the token to logout.
+    pub path: &'a AbsoluteSystemPath,
 }
 
 fn extract_vercel_token() -> Result<Option<String>, Error> {
