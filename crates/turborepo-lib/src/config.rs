@@ -531,7 +531,7 @@ impl TurborepoConfigBuilder {
 
     fn get_global_auth(&self) -> Result<ConfigurationOptions, Error> {
         let global_auth_path = self.global_auth_path()?;
-        let token = match turborepo_auth::Token::from_file(global_auth_path) {
+        let token = match turborepo_auth::Token::from_file(&global_auth_path) {
             Ok(token) => token,
             // Multiple ways this can go wrong. Don't error out if we can't find the token - it
             // just might not be there.
