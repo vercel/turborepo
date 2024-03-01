@@ -303,12 +303,7 @@ struct TurboGrpcServiceInner<PD> {
 // we have a grpc service that uses watching package discovery, and where the
 // watching package hasher also uses watching package discovery as well as
 // falling back to a local package hasher
-impl
-    TurboGrpcServiceInner<
-        Arc<WatchingPackageDiscovery>,
-        //WatchingPackageHasher<Arc<WatchingPackageDiscovery>>,
-    >
-{
+impl TurboGrpcServiceInner<Arc<WatchingPackageDiscovery>> {
     pub fn new<PD: Sync + PackageDiscovery + Send + 'static>(
         package_discovery_backup: PD,
         repo_root: AbsoluteSystemPathBuf,
@@ -362,7 +357,6 @@ impl
 impl<PD> TurboGrpcServiceInner<PD>
 where
     PD: PackageDiscovery + Send + Sync + 'static,
-    //PH: PackageHasher + Send + Sync + 'static,
 {
     async fn trigger_shutdown(&self) {
         info!("triggering shutdown");
@@ -455,10 +449,8 @@ async fn watch_root(
 }
 
 #[tonic::async_trait]
-impl<
-        PD: PackageDiscovery + Send + Sync + 'static, /* , PH: PackageHasher + Send + Sync +
-                                                       * 'static */
-    > proto::turbod_server::Turbod for TurboGrpcServiceInner<PD>
+impl<PD: PackageDiscovery + Send + Sync + 'static> proto::turbod_server::Turbod
+    for TurboGrpcServiceInner<PD>
 {
     async fn hello(
         &self,
