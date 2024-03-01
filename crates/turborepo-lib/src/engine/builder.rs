@@ -239,7 +239,7 @@ impl<'a> EngineBuilder<'a> {
                 continue;
             }
 
-            validate_task_name(task_id.task())?;
+            validate_task_name(task_id.to(task_id.task()))?;
 
             if task_id.package() != ROOT_PKG_NAME
                 && self
