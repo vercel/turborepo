@@ -79,7 +79,15 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
 
     let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{DEFAULT_PORT}");
     let mut login_url = Url::parse(login_url_configuration)?;
+    let mut success_url = login_url.clone();
+    success_url
+        .path_segments_mut()
+        .map_err(|_: ()| Error::LoginUrlCannotBeABase {
+            value: login_url_configuration.to_string(),
+        })?
+        .extend(["turborepo", "success"]);
 
+    // Create the full login URL.
     login_url
         .path_segments_mut()
         .map_err(|_: ()| Error::LoginUrlCannotBeABase {
@@ -105,7 +113,7 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
         .run(
             DEFAULT_PORT,
             crate::LoginType::Basic {
-                login_url_configuration: login_url.to_string(),
+                success_redirect: success_url.to_string(),
             },
             token_cell.clone(),
         )
