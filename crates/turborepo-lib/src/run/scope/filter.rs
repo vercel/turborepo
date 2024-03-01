@@ -18,7 +18,7 @@ use super::{
     simple_glob::{Match, SimpleGlob},
     target_selector::{InvalidSelectorError, TargetSelector},
 };
-use crate::run::scope::change_detector::ScopeChangeDetector;
+use crate::{run::scope::change_detector::ScopeChangeDetector, turbo_json::TurboJson};
 
 pub struct PackageInference {
     package_name: Option<String>,
@@ -112,12 +112,16 @@ impl<'a> FilterResolver<'a, ScopeChangeDetector<'a>> {
         turbo_root: &'a AbsoluteSystemPath,
         inference: Option<PackageInference>,
         scm: &'a SCM,
+        root_turbo_json: &TurboJson,
     ) -> Self {
+        let mut global_deps = opts.global_deps.clone();
+        global_deps.extend_from_slice(&root_turbo_json.global_deps);
+
         let change_detector = ScopeChangeDetector::new(
             turbo_root,
             scm,
             pkg_graph,
-            opts.global_deps.clone(),
+            global_deps,
             opts.ignore_patterns.clone(),
         );
         Self::new_with_change_detector(pkg_graph, turbo_root, inference, scm, change_detector)

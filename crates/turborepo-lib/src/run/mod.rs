@@ -19,7 +19,6 @@ use std::{
 
 pub use cache::{ConfigCache, RunCache, TaskCache};
 use chrono::{DateTime, Local};
-use itertools::Itertools;
 use rayon::iter::ParallelBridge;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
@@ -363,6 +362,7 @@ impl Run {
                 &self.repo_root,
                 &pkg_dep_graph,
                 &scm,
+                &root_turbo_json,
             )?;
 
             if is_all_packages {
@@ -586,15 +586,7 @@ impl Run {
         if !self.opts.run_opts.parallel {
             engine
                 .validate(pkg_dep_graph, self.opts.run_opts.concurrency)
-                .map_err(|errors| {
-                    Error::EngineValidation(
-                        errors
-                            .into_iter()
-                            .map(|e| e.to_string())
-                            .sorted()
-                            .join("\n"),
-                    )
-                })?;
+                .map_err(Error::EngineValidation)?;
         }
 
         Ok(engine)

@@ -34,4 +34,8 @@ pub enum Error {
     SSOTeamNotFound(String),
     #[error("sso token expired for team: {0}")]
     SSOTokenExpired(String),
+    #[error("token not found")]
+    TokenNotFound,
+    #[error("invalid token file format: {0}")]
+    InvalidTokenFileFormat(#[source] serde_json::Error),
 }
