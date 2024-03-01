@@ -880,8 +880,7 @@ async fn gen_content_with_visitors(
                 path = ident.path().to_string().await?,
                 error_messages = messages
                     .as_ref()
-                    .map(|m| { m.first().map(|f| format!("\\n{}", f)) })
-                    .flatten()
+                    .and_then(|m| { m.first().map(|f| format!("\\n{}", f)) })
                     .unwrap_or("".to_string())
             )
             .into(),

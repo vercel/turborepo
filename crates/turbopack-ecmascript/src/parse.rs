@@ -259,21 +259,19 @@ async fn parse_content(
     let handler = Handler::with_emitter(
         true,
         false,
-        Box::new(IssueEmitter {
+        Box::new(IssueEmitter::new(
             source,
-            source_map: source_map.clone(),
-            title: Some("Ecmascript file had an error".to_string()),
-        }),
+            source_map.clone(),
+            Some("Ecmascript file had an error".to_string()),
+        )),
     );
-    let parser_handler = Handler::with_emitter(
-        true,
-        false,
-        Box::new(IssueEmitter {
-            source,
-            source_map: source_map.clone(),
-            title: Some("Parsing ecmascript source code failed".to_string()),
-        }),
-    );
+
+    let emitter = Box::new(IssueEmitter::new(
+        source,
+        source_map.clone(),
+        Some("Parsing ecmascript source code failed".to_string()),
+    ));
+    let parser_handler = Handler::with_emitter(true, false, emitter.clone());
     let globals = Arc::new(Globals::new());
     let globals_ref = &globals;
     let helpers = GLOBALS.set(globals_ref, || Helpers::new(true));
@@ -397,9 +395,18 @@ async fn parse_content(
                     .await?;
             }
 
-            // seems already emitted errors are not readable except the count?
             if parser_handler.has_errors() {
-                return Ok(ParseResult::Unparseable { messages: None });
+                let messages = if let Some(error) = emitter.emitted_issues.last() {
+                    // The emitter created in here only uses StyledString::Text
+                    if let StyledString::Text(xx) = &*error.await?.message.await? {
+                        Some(vec![xx.clone()])
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+                return Ok(ParseResult::Unparseable { messages });
             }
 
             parsed_program.visit_mut_with(
