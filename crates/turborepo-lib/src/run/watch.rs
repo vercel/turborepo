@@ -1,15 +1,19 @@
 use futures::StreamExt;
+use turbopath::AbsoluteSystemPath;
 
-use crate::{commands::CommandBase, daemon::proto, run::Error, DaemonConnector, DaemonPaths};
+use crate::{
+    daemon::{proto, DaemonError},
+    DaemonConnector, DaemonPaths,
+};
 
 pub struct WatchClient {}
 
 impl WatchClient {
-    pub async fn start(base: &CommandBase) -> Result<(), Error> {
+    pub async fn start(repo_root: &AbsoluteSystemPath) -> Result<(), DaemonError> {
         let connector = DaemonConnector {
             can_start_server: true,
             can_kill_server: true,
-            paths: DaemonPaths::from_repo_root(&base.repo_root),
+            paths: DaemonPaths::from_repo_root(repo_root),
         };
 
         let mut client = connector.connect().await?;

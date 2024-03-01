@@ -136,7 +136,7 @@ impl Subscriber {
                             .into_iter()
                             .filter_map(|p| {
                                 let p = AbsoluteSystemPathBuf::try_from(p).ok()?;
-                                self.repo_root.anchor(&p).ok()
+                                self.repo_root.anchor(p).ok()
                             })
                             .filter(|p| !ancestors_is_ignored(&root_gitignore, p))
                             .collect();
