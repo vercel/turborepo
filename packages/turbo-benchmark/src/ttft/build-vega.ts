@@ -14,7 +14,19 @@ async function fetchAggregateFromTinybird(): Promise<{
 }> {
   const token = process.env.TINYBIRD_TOKEN;
   const resp = await fetch(`${TINYBIRD_AGGREGATE}?token=${token}`);
-  return resp.json() as Promise<{ data: Array<TTFTData> }>;
+  if (resp.status !== 200) {
+    console.error(
+      "Failed to fetch aggregate data",
+      resp.status,
+      resp.statusText,
+      await resp.text()
+    );
+  }
+  const payload = (await resp.json()) as { data: Array<TTFTData> };
+  if (payload.data.length === 0) {
+    console.error("No data found in tinybird response", payload);
+  }
+  return payload;
 }
 
 function generateVegaSpec(aggregateData: { data: Array<TTFTData> }): vega.Spec {
