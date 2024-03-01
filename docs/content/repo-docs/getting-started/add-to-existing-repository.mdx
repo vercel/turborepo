@@ -3,4 +3,318 @@ title: Add to an existing repository
 description: Using Turborepo with your existing repository
 ---
 
-TODO
+import { Tabs, Tab } from '#/components/Tabs'
+import {Callout} from '#/components/Callout'
+import {Step, Steps} from 'fumadocs-ui/components/steps'
+
+Turborepo can be used in any project to speed up the execution of scripts in
+your `package.json`.
+
+After you install `turbo`, you'll be able to run all your `package.json` tasks
+through `turbo` instead of your package manager. Once your tasks have been configured in `turbo.json`, you'll notice how [caching](/TODO-LINK) helps your tasks run a lot faster.
+
+## Multi-package workspaces (Monorepos)
+
+`turbo` is built on top of Workspaces, a feature of the major package managers in the JavaScript ecosystem. This allows you to quickly, incrementally adopt Turborepo into your existing codebase.
+
+You can configure workspaces any way you want, but a common folder structure is keeping applications in the `/apps` folder and shared libraries in the `/packages` folder, which we will refer to in this guide.
+
+<Callout type="info">
+You may have also heard Workspaces be called "monorepos" - but we prefer [a more specific definition](https://vercel.com/docs/vercel-platform/glossary#monorepo).
+</Callout>
+
+<Steps>
+<Step>
+
+### Install `turbo`
+
+In your existing repository, we recommend you install `turbo` both globally and into your repository's root for the best developer experience.
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab value="npm">
+    ```bash
+    npm install turbo --global
+    npm install turbo --save-dev
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn global add turbo
+    yarn add turbo --dev
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add turbo --global
+    pnpm add turbo --save-dev
+    ```
+  </Tab>
+</Tabs>
+
+To learn more about why we recommend both installations, [visit the Installation page](/docs/repo/getting-started/installation).
+
+</Step>
+
+<Step>
+
+### Add a `turbo.json` file
+
+In the root of your repository, create a `turbo.json` file.
+
+<Tabs items={['Next.js', 'Vite']} storageKey="framework-preference">
+  <Tab value="Next.js">
+```json filename="turbo.json"
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      "outputs": [".next/**", "!.next/cache/**"]
+    },
+    "type-check": {}
+  }
+}
+```
+  </Tab>
+  <Tab value="Vite">
+```json filename="turbo.json"
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      "outputs": ["dist/**"]
+    },
+    "type-check": {}
+  }
+}
+```
+
+Some Vite starters ship with a `package.json` that looks like this:
+
+```json filename="package.json"
+{
+  "scripts": {
+    "build": "tsc && vite build"
+  }
+}
+```
+
+We recommend splitting these into a `type-check` and `build` script.
+
+```json filename="package.json"
+{
+  "scripts": {
+    "build": "vite build",
+    "type-check": "tsc"
+  }
+}
+```
+
+This means that Turbo can schedule them separately.
+
+  </Tab>
+</Tabs>
+
+    For more information on configuring your `turbo.json`, see the [Configuration Options](/repo/docs/reference/configuration) documentation.
+
+</Step>
+<Step>
+3. **Edit `.gitignore`**
+
+Add `.turbo` to your `.gitignore` file. The CLI uses these folders for logs and certain task outputs.
+
+```diff
++ .turbo
+```
+
+</Step>
+<Step>
+4. **Run the `build` and `lint` tasks with `turbo`:**
+
+```bash
+turbo type-check build
+```
+
+This runs `build` and `lint` at the same time.
+
+</Step>
+<Step>
+5. **Without making any changes to the code, try running `build` and `lint` again:**
+
+```bash
+turbo type-check build
+```
+
+You should see terminal output like this:
+
+```
+ Tasks:    2 successful, 2 total
+Cached:    2 cached, 2 total
+  Time:    185ms >>> FULL TURBO
+```
+
+Congratulations - **you just completed a build and lint in under 200ms**.
+
+To learn how this is possible, check out our [core concepts docs](/repo/docs/core-concepts/caching).
+
+</Step>
+<Step>
+6. **Try running `dev` with `turbo`:**
+
+```bash
+turbo dev
+```
+
+You'll notice that your `dev` script starts up. You can use `turbo` to run any script in your `package.json`.
+
+</Step>
+</Steps>
+
+## Single-package workspaces
+
+Turborepo can also be used in repositories where there is only one package, like a standalone Next.js or Vite application.
+
+<Steps>
+
+<Step>
+
+### Create your repository
+
+An example of a single-package workspace is the code you get after running `npx create-react-app` or `npx create vite`, which we'll use for this guide.
+
+Create your repository with your framework of choice.
+
+<Tabs items={["Next.js", "Vite"]} storageKey="framework-preference">
+
+<Tab value="Next.js">
+```bash title="Terminal"
+npx create-next-app@latest
+```
+</Tab>
+
+<Tab value="Vite">
+```bash title="Terminal"
+npx create vite@latest
+```
+</Tab>
+</Tabs>
+</Step>
+
+<Step>
+
+### Install `turbo`
+
+For the best developer experience, we recommend you install `turbo` both globally and into your repository.
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab value="npm">
+    ```bash
+    npm install turbo --global
+    npm install turbo --save-dev
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn global add turbo
+    yarn add turbo --dev
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add turbo --global
+    pnpm add turbo --save-dev
+    ```
+  </Tab>
+</Tabs>
+
+To learn more about why we recommend both installations, [visit the Installation page](/docs/repo/getting-started/installation).
+
+</Step>
+<Step>
+
+### Add a `turbo.json`
+
+At the root of your repository, create a `turbo.json` file.
+
+<Tabs items={["Next.js", "Vite"]} storageKey="framework-preference">
+
+<Tab value="Next.js">
+```json title="turbo.json"
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      "outputs": [".next/**", "!next/cache/**"]
+    },
+    "lint": {},
+    "dev": {
+      "persistent": true,
+      "cache": false
+    }
+  }
+}
+```
+</Tab>
+
+<Tab value="Vite">
+```json title="turbo.json"
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      "outputs": ["dist/**"]
+    },
+    "lint": {},
+    "dev": {
+      "persistent": true,
+      "cache": false
+    }
+  }
+}
+```
+</Tab>
+</Tabs>
+</Step>
+<Step>
+
+### Run your tasks with `turbo`
+
+Visit your terminal to run your tasks using global `turbo`.
+
+```bash title="Terminal"
+turbo build lint
+```
+
+Your tasks will run in parallel and cache the results of the tasks.
+
+</Step>
+<Step>
+### Hit cache for your tasks
+
+Without changing any source code, run your tasks again.
+
+```bash title="Terminal"
+turbo build lint
+```
+
+Your tasks will hit the cache and complete in milliseconds, showing terminal output like this:
+
+```txt title="Terminal"
+  Tasks:   2 successful, 2 total
+  Cached:  2 cached, 2 total
+  Time:    185ms >>> FULL TURBO
+```
+
+</Step>
+
+<Step>
+
+### Enable Remote Caching (optional)
+
+To make your end to end workflow as fast as possible, we recommend using Remote Caching to share the cache with your teammates and CI.
+
+- [Enable Remote Caching for development machines](/docs/repo/crafting-your-repository/caching#remote-caching)
+- [Enable Remote Caching in CI](/docs/repo/crafting-your-repository/constructing-ci)
+
+</Step>
+
+</Steps>
