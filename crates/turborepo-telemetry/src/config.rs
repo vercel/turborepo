@@ -54,8 +54,12 @@ pub struct TelemetryConfig {
 }
 
 impl TelemetryConfig {
-    pub fn new() -> Result<TelemetryConfig, ConfigError> {
+    pub fn with_default_config_path() -> Result<TelemetryConfig, ConfigError> {
         let config_path = get_config_path()?;
+        TelemetryConfig::new(config_path)
+    }
+
+    pub fn new(config_path: AbsoluteSystemPathBuf) -> Result<TelemetryConfig, ConfigError> {
         debug!("Telemetry config path: {}", config_path);
         if !config_path.exists() {
             write_new_config(&config_path)?;
@@ -100,7 +104,7 @@ impl TelemetryConfig {
     }
 
     pub fn one_way_hash(input: &str) -> String {
-        match TelemetryConfig::new() {
+        match TelemetryConfig::with_default_config_path() {
             Ok(config) => config.one_way_hash_with_config_salt(input),
             Err(_) => TelemetryConfig::one_way_hash_with_tmp_salt(input),
         }
@@ -252,7 +256,7 @@ fn write_new_config(file_path: &AbsoluteSystemPath) -> Result<(), ConfigError> {
     // Create the directory if it doesn't exist
     file_path
         .ensure_dir()
-        .map_err(|_| ConfigError::Message("Failed to create director".to_string()))?;
+        .map_err(|_| ConfigError::Message("Failed to create directory".to_string()))?;
 
     // Write the file
     file_path
