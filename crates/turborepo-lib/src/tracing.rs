@@ -10,10 +10,10 @@ use tracing_appender::{non_blocking::NonBlocking, rolling::RollingFileAppender};
 use tracing_chrome::ChromeLayer;
 pub use tracing_subscriber::reload::Error;
 use tracing_subscriber::{
-    filter::{Filtered, Targets},
+    filter::Filtered,
     fmt::{
         self,
-        format::{DefaultFields, FmtSpan, Writer},
+        format::{DefaultFields, Writer},
         FmtContext, FormatEvent, FormatFields, MakeWriter,
     },
     layer,

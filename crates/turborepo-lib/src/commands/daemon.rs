@@ -1,4 +1,4 @@
-use std::{fs, io, path::Path, time::Duration};
+use std::time::Duration;
 
 use camino::Utf8PathBuf;
 use futures::FutureExt;
@@ -45,7 +45,7 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
             if let Err(e) = result {
                 tracing::debug!("failed to restart the daemon: {:?}", e);
                 tracing::debug!("falling back to clean");
-                clean(&connector.paths.pid_file, &connector.paths.sock_file).await?;
+                clean(&connector.paths.pid_file, &connector.paths.sock_file)?;
                 tracing::debug!("connecting for second time");
                 let _ = connector.connect().await?;
             }
@@ -137,7 +137,9 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
                 .status()
                 .expect("failed to execute tail");
         }
-        DaemonCommand::Clean { clean_logs: logs } => {
+        DaemonCommand::Clean {
+            clean_logs: should_clean_logs,
+        } => {
             // try to connect and shutdown the daemon
             let paths = connector.paths.clone();
             let client = connector.connect().await;
@@ -154,9 +156,9 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
                     tracing::trace!("unable to connect to the daemon: {:?}", e);
                 }
             }
-            clean(&paths.pid_file, &paths.sock_file).await?;
-            if *logs {
-                clean_logs(&paths.log_folder).await?;
+            clean(&paths.pid_file, &paths.sock_file)?;
+            if *should_clean_logs {
+                clean_logs(&paths.log_folder)?;
             }
             println!("Done");
         }
@@ -194,16 +196,13 @@ async fn get_log_file_from_folder(base: &CommandBase) -> Result<String, DaemonEr
         .to_string())
 }
 
-async fn clean(
-    pid_file: &AbsoluteSystemPath,
-    sock_file: &AbsoluteSystemPath,
-) -> Result<(), DaemonError> {
+fn clean(pid_file: &AbsoluteSystemPath, sock_file: &AbsoluteSystemPath) -> Result<(), DaemonError> {
     // remove pid and sock files
     let mut success = true;
     trace!("cleaning up daemon files");
     // if the pid_file and sock_file still exist, remove them:
     if pid_file.exists() {
-        let result = std::fs::remove_file(pid_file);
+        let result = pid_file.remove_file();
         // ignore this error
         if let Err(e) = result {
             println!("Failed to remove pid file: {}", e);
@@ -212,7 +211,7 @@ async fn clean(
         }
     }
     if sock_file.exists() {
-        let result = std::fs::remove_file(sock_file);
+        let result = sock_file.remove_file();
         // ignore this error
         if let Err(e) = result {
             println!("Failed to remove socket file: {}", e);
@@ -229,24 +228,16 @@ async fn clean(
     }
 }
 
-async fn clean_logs(log_folder: &AbsoluteSystemPath) -> Result<(), DaemonError> {
-    let mut success = true;
+fn clean_logs(log_folder: &AbsoluteSystemPath) -> Result<(), DaemonError> {
     trace!("cleaning up log files");
     // clear all files in the log folder. we want to keep the
     // folder just remove the contents
     // `remove_dir_all_recursive` is lifted from `std`
-    if let Err(e) = fs::remove_dir_all(log_folder.as_std_path()) {
+    log_folder.remove_dir_all().map_err(|e| {
         println!("Failed to remove log files: {}", e);
         println!("Please remove manually: {}", log_folder);
-        success = false;
-    };
-
-    if success {
-        Ok(())
-    } else {
-        // return error
-        Err(DaemonError::CleanFailed)
-    }
+        DaemonError::CleanFailed
+    })
 }
 
 // log_filename matches the algorithm used by tracing_appender::Rotation::DAILY
