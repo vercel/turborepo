@@ -1,24 +1,26 @@
 use anyhow::Result;
 use swc_core::{
-    ecma::ast::{Callee, ExprOrSpread},
+    common::{util::take::Take, DUMMY_SP},
+    ecma::ast::{CallExpr, Callee, Expr, ExprOrSpread, Lit},
     quote_expr,
 };
 use turbo_tasks::{Value, ValueToString, Vc};
 use turbopack_core::{
-    chunk::{ChunkableModuleReference, ChunkingType, ChunkingTypeOption},
+    chunk::{ChunkableModuleReference, ChunkingContext, ChunkingType, ChunkingTypeOption},
+    environment::ChunkLoading,
     issue::IssueSource,
     reference::ModuleReference,
     reference_type::EcmaScriptModulesReferenceSubType,
     resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult},
 };
+use turbopack_resolve::ecmascript::{esm_resolve, try_to_severity};
 
-use super::super::pattern_mapping::{PatternMapping, ResolveType::EsmAsync};
+use super::super::pattern_mapping::{PatternMapping, ResolveType};
 use crate::{
     chunk::EcmascriptChunkingContext,
     code_gen::{CodeGenerateable, CodeGeneration},
     create_visitor,
     references::AstPath,
-    resolve::{esm_resolve, try_to_severity},
 };
 
 #[turbo_tasks::value]
@@ -29,6 +31,7 @@ pub struct EsmAsyncAssetReference {
     pub path: Vc<AstPath>,
     pub issue_source: Vc<IssueSource>,
     pub in_try: bool,
+    pub import_externals: bool,
 }
 
 #[turbo_tasks::value_impl]
@@ -40,6 +43,7 @@ impl EsmAsyncAssetReference {
         path: Vc<AstPath>,
         issue_source: Vc<IssueSource>,
         in_try: bool,
+        import_externals: bool,
     ) -> Vc<Self> {
         Self::cell(EsmAsyncAssetReference {
             origin,
@@ -47,6 +51,7 @@ impl EsmAsyncAssetReference {
             path,
             issue_source,
             in_try,
+            import_externals,
         })
     }
 }
@@ -59,8 +64,8 @@ impl ModuleReference for EsmAsyncAssetReference {
             self.origin,
             self.request,
             Default::default(),
-            Some(self.issue_source),
             try_to_severity(self.in_try),
+            Some(self.issue_source),
         )
     }
 }
@@ -98,86 +103,57 @@ impl CodeGenerateable for EsmAsyncAssetReference {
             esm_resolve(
                 self.origin,
                 self.request,
-                Value::new(EcmaScriptModulesReferenceSubType::Undefined),
-                Some(self.issue_source),
+                Value::new(EcmaScriptModulesReferenceSubType::DynamicImport),
                 try_to_severity(self.in_try),
+                Some(self.issue_source),
             ),
-            Value::new(EsmAsync),
+            if matches!(
+                *chunking_context.environment().chunk_loading().await?,
+                ChunkLoading::None
+            ) {
+                Value::new(ResolveType::ChunkItem)
+            } else {
+                Value::new(ResolveType::AsyncChunkLoader)
+            },
         )
         .await?;
 
         let path = &self.path.await?;
+        let import_externals = self.import_externals;
 
-        let visitor = match &*pm {
-            PatternMapping::Invalid => {
-                create_visitor!(exact path, visit_mut_call_expr(call_expr: &mut CallExpr) {
-                    let old_args = std::mem::take(&mut call_expr.args);
-                    let message = match old_args.first() {
-                        Some(ExprOrSpread { spread: None, expr }) => {
-                            quote_expr!(
-                                "'could not resolve \"' + $arg + '\" into a module'",
-                                arg: Expr = *expr.clone(),
-                            )
-                        }
-                        // These are SWC bugs: https://github.com/swc-project/swc/issues/5394
-                        Some(ExprOrSpread { spread: Some(_), expr: _ }) => {
-                            quote_expr!("'spread operator is illegal in import() expressions.'")
-                        }
-                        _ => {
-                            quote_expr!("'import() expressions require at least 1 argument'")
-                        }
-                    };
-                    let error = quote_expr!(
-                        "new Error($message)",
-                        message: Expr = *message
-                    );
-                    call_expr.callee = Callee::Expr(quote_expr!("Promise.reject"));
-                    call_expr.args = vec![
-                        ExprOrSpread { spread: None, expr: error, },
-                    ];
-                })
-            }
-            PatternMapping::SingleLoader(_) => {
-                create_visitor!(exact path, visit_mut_call_expr(call_expr: &mut CallExpr) {
-                    let old_args = std::mem::take(&mut call_expr.args);
-                    let expr = match old_args.into_iter().next() {
-                        Some(ExprOrSpread { expr, spread: None }) => pm.apply(*expr),
-                        _ => pm.create(),
-                    };
-                    call_expr.callee = Callee::Expr(quote_expr!(
-                        "__turbopack_require__($arg)",
-                        arg: Expr = expr
-                    ));
-                    call_expr.args = vec![
-                        ExprOrSpread { spread: None, expr: quote_expr!("__turbopack_import__") },
-                    ];
-                })
-            }
-            _ => {
-                create_visitor!(exact path, visit_mut_call_expr(call_expr: &mut CallExpr) {
-                    let old_args = std::mem::take(&mut call_expr.args);
-                    let expr = match old_args.into_iter().next() {
-                        Some(ExprOrSpread { expr, spread: None }) => pm.apply(*expr),
-                        _ => pm.create(),
-                    };
-                    if pm.is_internal_import() {
-                        call_expr.callee = Callee::Expr(quote_expr!(
-                            "Promise.resolve().then",
-                        ));
-                        call_expr.args = vec![
-                            ExprOrSpread { spread: None, expr: quote_expr!(
-                                "() => __turbopack_require__($arg)",
-                                arg: Expr = expr
-                            ) },
-                        ];
-                    } else {
-                        call_expr.args = vec![
-                            ExprOrSpread { spread: None, expr: Box::new(expr) }
-                        ]
+        let visitor = create_visitor!(path, visit_mut_expr(expr: &mut Expr) {
+            let old_expr = expr.take();
+            let message = if let Expr::Call(CallExpr { args, ..}) = old_expr {
+                match args.into_iter().next() {
+                    Some(ExprOrSpread { spread: None, expr: key_expr }) => {
+                        *expr = pm.create_import(*key_expr, import_externals);
+                        return;
                     }
-                })
-            }
-        };
+                    // These are SWC bugs: https://github.com/swc-project/swc/issues/5394
+                    Some(ExprOrSpread { spread: Some(_), expr: _ }) => {
+                        "spread operator is illegal in import() expressions."
+                    }
+                    _ => {
+                        "import() expressions require at least 1 argument"
+                    }
+                }
+            } else {
+                "visitor must be executed on a CallExpr"
+            };
+            let error = quote_expr!(
+                "() => { throw new Error($message); }",
+                message: Expr = Expr::Lit(Lit::Str(message.into()))
+            );
+            *expr = Expr::Call(CallExpr {
+                callee: Callee::Expr(quote_expr!("Promise.resolve().then")),
+                args: vec![ExprOrSpread {
+                    spread: None,
+                    expr: error,
+                }],
+                span: DUMMY_SP,
+                type_args: None,
+            });
+        });
 
         Ok(CodeGeneration {
             visitors: vec![visitor],

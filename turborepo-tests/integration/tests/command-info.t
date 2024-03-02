@@ -1,14 +1,14 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup.sh
-  $ . ${TESTDIR}/_helpers/setup_monorepo.sh $(pwd)
+  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh
 
 Run info
   $ ${TURBO} info
+  You are not logged in
   3 packages found in workspace
   
-  - another packages/another/package.json
-  - my-app apps/my-app/package.json
-  - util packages/util/package.json
+  - another packages(\/|\\)another (re)
+  - my-app apps(\/|\\)my-app (re)
+  - util packages(\/|\\)util (re)
 
 
 Run info on package `another`

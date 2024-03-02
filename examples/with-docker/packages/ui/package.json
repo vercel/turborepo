@@ -1,19 +1,19 @@
 {
-  "name": "ui",
+  "name": "@repo/ui",
   "version": "0.0.0",
-  "license": "MIT",
-  "main": "./index.tsx",
-  "types": "./index.tsx",
+  "exports": {
+    "./button": "./src/button.tsx"
+  },
   "scripts": {
-    "lint": "eslint \"**/*.ts*\""
+    "lint": "eslint \"**/*.ts*\" --max-warnings 0"
   },
   "devDependencies": {
-    "@types/react": "^17.0.37",
-    "@types/react-dom": "^17.0.11",
-    "eslint": "^7.32.0",
-    "eslint-config-custom": "*",
+    "@types/react": "^18.2.46",
+    "@types/react-dom": "^18.2.18",
+    "eslint": "^8.56.0",
+    "@repo/eslint-config": "*",
     "react": "^18.2.0",
-    "tsconfig": "*",
-    "typescript": "^4.5.2"
+    "@repo/typescript-config": "*",
+    "typescript": "^5.3.3"
   }
 }

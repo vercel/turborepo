@@ -1,10 +1,11 @@
 //! TODO(WEB-741) Remove this file once Sass is supported.
 
 use anyhow::Result;
-use turbo_tasks::Vc;
+use turbo_tasks::{Value, Vc};
 use turbo_tasks_fs::{glob::Glob, FileSystemPath};
 use turbopack_core::{
-    issue::{Issue, IssueExt, IssueSeverity},
+    issue::{Issue, IssueExt, IssueSeverity, IssueStage, OptionStyledString, StyledString},
+    reference_type::ReferenceType,
     resolve::{
         parse::Request,
         plugin::{ResolvePlugin, ResolvePluginCondition},
@@ -38,6 +39,7 @@ impl ResolvePlugin for UnsupportedSassResolvePlugin {
         &self,
         fs_path: Vc<FileSystemPath>,
         lookup_path: Vc<FileSystemPath>,
+        _reference_type: Value<ReferenceType>,
         request: Vc<Request>,
     ) -> Result<Vc<ResolveResultOption>> {
         let extension = fs_path.extension().await?;
@@ -68,16 +70,12 @@ impl Issue for UnsupportedSassModuleIssue {
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("resolve".to_string())
-    }
-
-    #[turbo_tasks::function]
-    async fn title(&self) -> Result<Vc<String>> {
-        Ok(Vc::cell(format!(
+    async fn title(&self) -> Result<Vc<StyledString>> {
+        Ok(StyledString::Text(format!(
             "Unsupported Sass request: {}",
             self.request.await?.request().as_deref().unwrap_or("N/A")
-        )))
+        ))
+        .cell())
     }
 
     #[turbo_tasks::function]
@@ -86,7 +84,17 @@ impl Issue for UnsupportedSassModuleIssue {
     }
 
     #[turbo_tasks::function]
-    fn description(&self) -> Vc<String> {
-        Vc::cell("Turbopack does not yet support importing Sass modules.".to_string())
+    fn description(&self) -> Vc<OptionStyledString> {
+        Vc::cell(Some(
+            StyledString::Text(
+                "Turbopack does not yet support importing Sass modules.".to_string(),
+            )
+            .cell(),
+        ))
+    }
+
+    #[turbo_tasks::function]
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::Unsupported.cell()
     }
 }

@@ -1,10 +1,12 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+};
 
-use anyhow::Result;
-use globwalk::WalkType;
+use globwalk::{ValidatedGlob, WalkType};
 use thiserror::Error;
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_env::{get_global_hashable_env_vars, DetailedMap, EnvironmentVariableMap};
 use turborepo_lockfiles::Lockfile;
 use turborepo_repository::package_manager::{self, PackageManager};
@@ -20,7 +22,18 @@ static DEFAULT_ENV_VARS: [&str; 1] = ["VERCEL_ANALYTICS_ID"];
 const GLOBAL_CACHE_KEY: &str = "HEY STELLLLLLLAAAAAAAAAAAAA";
 
 #[derive(Debug, Error)]
-enum GlobalHashError {}
+pub enum Error {
+    #[error(transparent)]
+    Env(#[from] turborepo_env::Error),
+    #[error(transparent)]
+    Globwalk(#[from] globwalk::WalkError),
+    #[error("invalid glob for globwalking: {0}")]
+    Glob(#[from] globwalk::GlobError),
+    #[error(transparent)]
+    Scm(#[from] turborepo_scm::Error),
+    #[error(transparent)]
+    PackageManager(#[from] turborepo_repository::package_manager::Error),
+}
 
 #[derive(Debug)]
 pub struct GlobalHashableInputs<'a> {
@@ -51,7 +64,8 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     env_mode: EnvMode,
     framework_inference: bool,
     dot_env: Option<&'a [RelativeUnixPathBuf]>,
-) -> Result<GlobalHashableInputs<'a>> {
+    hasher: &SCM,
+) -> Result<GlobalHashableInputs<'a>, Error> {
     let global_hashable_env_vars =
         get_global_hashable_env_vars(env_at_execution_start, global_env)?;
 
@@ -60,31 +74,8 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
         global_hashable_env_vars.all.names()
     );
 
-    let mut global_deps = HashSet::new();
-
-    if !global_file_dependencies.is_empty() {
-        let exclusions = match package_manager.get_workspace_globs(root_path) {
-            Ok(globs) => globs.raw_exclusions,
-            // If we hit a missing workspaces error, we could be in single package mode
-            // so we should just use the default globs
-            Err(package_manager::Error::Workspace(_)) => {
-                package_manager.get_default_exclusions().collect()
-            }
-            Err(err) => {
-                debug!("no workspace globs found");
-                return Err(err.into());
-            }
-        };
-
-        let files = globwalk::globwalk(
-            root_path,
-            global_file_dependencies,
-            &exclusions,
-            WalkType::All,
-        )?;
-
-        global_deps.extend(files);
-    }
+    let mut global_deps =
+        collect_global_deps(package_manager, root_path, global_file_dependencies)?;
 
     if lockfile.is_none() {
         global_deps.insert(root_path.join_component("package.json"));
@@ -93,8 +84,6 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
             global_deps.insert(lockfile_path);
         }
     }
-
-    let hasher = SCM::new(root_path);
 
     let global_deps_paths = global_deps
         .iter()
@@ -134,6 +123,58 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     })
 }
 
+fn collect_global_deps(
+    package_manager: &PackageManager,
+    root_path: &AbsoluteSystemPath,
+    global_file_dependencies: &[String],
+) -> Result<HashSet<AbsoluteSystemPathBuf>, Error> {
+    if global_file_dependencies.is_empty() {
+        return Ok(HashSet::new());
+    }
+    let raw_exclusions = match package_manager.get_workspace_globs(root_path) {
+        Ok(globs) => globs.raw_exclusions,
+        // If we hit a missing workspaces error, we could be in single package mode
+        // so we should just use the default globs
+        Err(package_manager::Error::Workspace(_)) => {
+            package_manager.get_default_exclusions().collect()
+        }
+        Err(err) => {
+            debug!("no workspace globs found");
+            return Err(err.into());
+        }
+    };
+    let exclusions = raw_exclusions
+        .iter()
+        .map(|e| ValidatedGlob::from_str(e))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    #[cfg(not(windows))]
+    let inclusions = global_file_dependencies
+        .iter()
+        .map(|i| ValidatedGlob::from_str(i))
+        .collect::<Result<Vec<_>, _>>()?;
+    // This is a bit of a hack to ensure that we don't crash
+    // when given an absolute path on Windows. We don't support
+    // absolute paths, but the ':' from the drive letter will also
+    // fail to compile to a glob. We already know we aren't going to
+    // get anything good, and we've already logged a warning, but we
+    // can modify the glob so it compiles. This is similar to the old
+    // behavior, which tacked it on to the end of the base path unmodified,
+    // and then would produce no files.
+    #[cfg(windows)]
+    let inclusions: Vec<ValidatedGlob> = global_file_dependencies
+        .iter()
+        .map(|s| ValidatedGlob::from_str(&s.replace(":", "")))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(globwalk::globwalk(
+        root_path,
+        &inclusions,
+        &exclusions,
+        WalkType::Files,
+    )?)
+}
+
 impl<'a> GlobalHashableInputs<'a> {
     pub fn calculate_global_hash_from_inputs(&mut self) -> String {
         match self.env_mode {
@@ -171,5 +212,94 @@ impl<'a> GlobalHashableInputs<'a> {
         };
 
         global_hashable.hash()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_env::EnvironmentVariableMap;
+    use turborepo_lockfiles::Lockfile;
+    use turborepo_repository::package_manager::PackageManager;
+    use turborepo_scm::SCM;
+
+    use super::get_global_hash_inputs;
+    use crate::{cli::EnvMode, run::global_hash::collect_global_deps};
+
+    #[test]
+    fn test_absolute_path() {
+        // We don't technically support absolute paths in global deps,
+        // but we shouldn't crash. We already print out a warning.
+        // Send an absolute path through and verify that we don't crash.
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+        // Always default included, so it has to exist
+        root.join_component("package.json")
+            .create_with_contents("{}")
+            .unwrap();
+
+        let env_var_map = EnvironmentVariableMap::default();
+        let lockfile: Option<&dyn Lockfile> = None;
+        #[cfg(windows)]
+        let file_deps = ["C:\\some\\path".to_string()];
+        #[cfg(not(windows))]
+        let file_deps = ["/some/path".to_string()];
+        let result = get_global_hash_inputs(
+            None,
+            &root,
+            &PackageManager::Pnpm,
+            lockfile,
+            &file_deps,
+            &env_var_map,
+            &[],
+            None,
+            EnvMode::Infer,
+            false,
+            None,
+            &SCM::new(&root),
+        );
+        assert!(result.is_ok());
+    }
+
+    /// get_global_hash_inputs should not yield any folders when walking since
+    /// turbo does not consider changes to folders when evaluating hashes,
+    /// only to files
+    #[test]
+    fn test_collect_only_yields_files() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        // add some files
+        //   - package.json
+        //   - src/index.js
+        //   - src/index.test.js
+        //   - empty-folder/
+
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let src = root.join_component("src");
+
+        root.join_component("package.json")
+            .create_with_contents("{}")
+            .unwrap();
+        root.join_component("empty-folder")
+            .create_dir_all()
+            .unwrap();
+
+        src.create_dir_all().unwrap();
+        src.join_component("index.js")
+            .create_with_contents("console.log('hello world');")
+            .unwrap();
+        src.join_component("index.test.js")
+            .create_with_contents("")
+            .unwrap();
+
+        let global_file_dependencies = vec!["**".to_string()];
+        let results =
+            collect_global_deps(&PackageManager::Berry, &root, &global_file_dependencies).unwrap();
+
+        // should not yield the root folder itself, src, or empty-folder
+        assert_eq!(results.len(), 3, "{:?}", results);
     }
 }

@@ -67,14 +67,14 @@ Create file called `.github/workflows/ci.yml` in your repository with the follow
 
         steps:
           - name: Check out code
-            uses: actions/checkout@v3
+            uses: actions/checkout@v4
             with:
               fetch-depth: 2
 
           - name: Setup Node.js environment
-            uses: actions/setup-node@v3
+            uses: actions/setup-node@v4
             with:
-              node-version: 18
+              node-version: 20
               cache: 'npm'
 
           - name: Install dependencies
@@ -110,14 +110,14 @@ Create file called `.github/workflows/ci.yml` in your repository with the follow
 
         steps:
           - name: Check out code
-            uses: actions/checkout@v3
+            uses: actions/checkout@v4
             with:
               fetch-depth: 2
 
           - name: Setup Node.js environment
-            uses: actions/setup-node@v3
+            uses: actions/setup-node@v4
             with:
-              node-version: 18
+              node-version: 20
               cache: 'yarn'
 
           - name: Install dependencies
@@ -153,18 +153,18 @@ Create file called `.github/workflows/ci.yml` in your repository with the follow
 
         steps:
           - name: Check out code
-            uses: actions/checkout@v3
+            uses: actions/checkout@v4
             with:
               fetch-depth: 2
 
-          - uses: pnpm/action-setup@v2.0.1
+          - uses: pnpm/action-setup@v3
             with:
-              version: 6.32.2
+              version: 8
 
           - name: Setup Node.js environment
-            uses: actions/setup-node@v3
+            uses: actions/setup-node@v4
             with:
-              node-version: 18
+              node-version: 20
               cache: 'pnpm'
 
           - name: Install dependencies
@@ -227,8 +227,71 @@ jobs:
 
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 2
     # ...
 ```
+
+## Caching with github actions/cache
+
+The following steps exemplify how you could use [actions/cache](https://github.com/actions/cache) to cache your monorepo artifacts on github.
+
+1. Supply the desired cache output location with the `--cache-dir` flag to your `turbo build` command
+
+- Example `package.json` with `.turbo` as desired output directory:
+
+```json
+{
+  "name": "my-turborepo",
+  "scripts": {
+    "build": "turbo run build --cache-dir=.turbo",
+  },
+  "devDependencies": {
+    "turbo": "1.2.5"
+  }
+}
+```
+
+2. Configure your github pipeline with a step which utilizes the `actions/cache@v3` action before the build steps of your ci file.
+
+- Make sure that the `path` attribute set within the `actions/cache` action matches the output location above.
+  - In the example below, `path` was set to `.turbo`.
+- State the cache key for the current run under the `key` attribute.
+  - In the example below, we used a combination of the runner os and github sha as the cache key.
+- State the desired cache prefix pattern under the `restore-keys` attribute. Make sure this pattern will remain valid for future ci runs.
+
+  - In the example below, we used the `${{ runner.os }}-turbo-` as the cache key prefix pattern to search against. This allows us to hit the cache on any subsequent ci runs despite `github.sha` changing.
+
+- Example `ci` yaml with `.turbo` as chosen cache folder
+
+  ```yaml highlight="13-19"
+    # ...
+  jobs:
+    build:
+      runs-on: ubuntu-latest
+      steps:
+        - name: Check out code
+          uses: actions/checkout@v4
+
+        - name: Cache turbo build setup
+          uses: actions/cache@v4
+          with:
+            path: .turbo
+            key: ${{ runner.os }}-turbo-${{ github.sha }}
+            restore-keys: |
+              ${{ runner.os }}-turbo-
+
+        - name: Setup Node.js environment
+          uses: actions/setup-node@v4
+          with:
+            node-version: 20
+            cache: 'npm'
+
+        - name: Install dependencies
+          run: npm install
+
+        - name: Build
+          run: npm run build
+      # ...
+  ```

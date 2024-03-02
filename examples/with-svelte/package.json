@@ -7,11 +7,14 @@
     "format": "prettier --write ."
   },
   "devDependencies": {
-    "eslint": "^8.0.0",
-    "eslint-config-custom": "workspace:*",
-    "prettier": "^2.7.1",
-    "prettier-plugin-svelte": "^2.7.0",
-    "turbo": "latest"
+    "eslint": "^8.56.0",
+    "@repo/eslint-config": "workspace:*",
+    "prettier": "^3.1.1",
+    "prettier-plugin-svelte": "^3.1.2",
+    "turbo": "^1.12.1"
   },
-  "packageManager": "pnpm@8.6.10"
+  "packageManager": "pnpm@8.9.0",
+  "engines": {
+    "node": ">=18"
+  }
 }

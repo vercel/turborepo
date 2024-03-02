@@ -50,6 +50,7 @@ impl Version for EcmascriptDevChunkVersion {
     #[turbo_tasks::function]
     fn id(&self) -> Vc<String> {
         let mut hasher = Xxh3Hash64Hasher::new();
+        hasher.write_ref(&self.chunk_path);
         let sorted_hashes = {
             let mut hashes: Vec<_> = self.entries_hashes.values().copied().collect();
             hashes.sort();

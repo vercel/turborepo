@@ -6,6 +6,7 @@
  */
 
 /// <reference path="../base/runtime-base.ts" />
+/// <reference path="../../../shared/require-type.d.ts" />
 
 type ChunkResolver = {
   resolved: boolean;
@@ -18,13 +19,6 @@ let BACKEND: RuntimeBackend;
 
 function augmentContext(context: TurbopackDevBaseContext): TurbopackDevContext {
   return context;
-}
-
-function commonJsRequireContext(
-  entry: RequireContextEntry,
-  sourceModule: Module
-): Exports {
-  return commonJsRequire(sourceModule, entry.id());
 }
 
 function fetchWebAssembly(wasmChunkPath: ChunkPath) {
@@ -90,9 +84,13 @@ async function loadWebAssemblyModule(
       deleteResolver(chunkPath);
 
       const chunkUrl = getChunkRelativeUrl(chunkPath);
+      // TODO(PACK-2140): remove this once all filenames are guaranteed to be escaped.
+      const decodedChunkUrl = decodeURI(chunkUrl);
 
       if (chunkPath.endsWith(".css")) {
-        const links = document.querySelectorAll(`link[href="${chunkUrl}"]`);
+        const links = document.querySelectorAll(
+          `link[href="${chunkUrl}"],link[href^="${chunkUrl}?"],link[href="${decodedChunkUrl}"],link[href^="${decodedChunkUrl}?"]`
+        );
         for (const link of Array.from(links)) {
           link.remove();
         }
@@ -101,7 +99,9 @@ async function loadWebAssemblyModule(
         // runtime once evaluated.
         // However, we still want to remove the script tag from the DOM to keep
         // the HTML somewhat consistent from the user's perspective.
-        const scripts = document.querySelectorAll(`script[src="${chunkUrl}"]`);
+        const scripts = document.querySelectorAll(
+          `script[src="${chunkUrl}"],script[src^="${chunkUrl}?"],script[src="${decodedChunkUrl}"],script[src^="${decodedChunkUrl}?"]`
+        );
         for (const script of Array.from(scripts)) {
           script.remove();
         }
@@ -117,15 +117,11 @@ async function loadWebAssemblyModule(
           return;
         }
 
-        const encodedChunkPath = chunkPath
-          .split("/")
-          .map((p) => encodeURIComponent(p))
-          .join("/");
-
-        const chunkUrl = getChunkRelativeUrl(encodedChunkPath);
+        const chunkUrl = getChunkRelativeUrl(chunkPath);
+        const decodedChunkUrl = decodeURI(chunkUrl);
 
         const previousLinks = document.querySelectorAll(
-          `link[rel=stylesheet][href^="${chunkUrl}"]`
+          `link[rel=stylesheet][href="${chunkUrl}"],link[rel=stylesheet][href^="${chunkUrl}?"],link[rel=stylesheet][href="${decodedChunkUrl}"],link[rel=stylesheet][href^="${decodedChunkUrl}?"]`
         );
 
         if (previousLinks.length == 0) {
@@ -135,7 +131,20 @@ async function loadWebAssemblyModule(
 
         const link = document.createElement("link");
         link.rel = "stylesheet";
-        link.href = chunkUrl;
+
+        if (navigator.userAgent.includes("Firefox")) {
+          // Firefox won't reload CSS files that were previously loaded on the current page,
+          // we need to add a query param to make sure CSS is actually reloaded from the server.
+          //
+          // I believe this is this issue: https://bugzilla.mozilla.org/show_bug.cgi?id=1037506
+          //
+          // Safari has a similar issue, but only if you have a `<link rel=preload ... />` tag
+          // pointing to the same URL as the stylesheet: https://bugs.webkit.org/show_bug.cgi?id=187726
+          link.href = `${chunkUrl}?ts=${Date.now()}`;
+        } else {
+          link.href = chunkUrl;
+        }
+
         link.onerror = () => {
           reject();
         };
@@ -223,30 +232,53 @@ async function loadWebAssemblyModule(
     }
 
     const chunkUrl = getChunkRelativeUrl(chunkPath);
+    const decodedChunkUrl = decodeURI(chunkUrl);
 
     if (chunkPath.endsWith(".css")) {
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = chunkUrl;
-      link.onerror = () => {
-        resolver.reject();
-      };
-      link.onload = () => {
+      const previousLinks = document.querySelectorAll(
+        `link[rel=stylesheet][href="${chunkUrl}"],link[rel=stylesheet][href^="${chunkUrl}?"],link[rel=stylesheet][href="${decodedChunkUrl}"],link[rel=stylesheet][href^="${decodedChunkUrl}?"]`
+      );
+      if (previousLinks.length > 0) {
         // CSS chunks do not register themselves, and as such must be marked as
         // loaded instantly.
         resolver.resolve();
-      };
-      document.body.appendChild(link);
+      } else {
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = chunkUrl;
+        link.onerror = () => {
+          resolver.reject();
+        };
+        link.onload = () => {
+          // CSS chunks do not register themselves, and as such must be marked as
+          // loaded instantly.
+          resolver.resolve();
+        };
+        document.body.appendChild(link);
+      }
     } else if (chunkPath.endsWith(".js")) {
-      const script = document.createElement("script");
-      script.src = chunkUrl;
-      // We'll only mark the chunk as loaded once the script has been executed,
-      // which happens in `registerChunk`. Hence the absence of `resolve()` in
-      // this branch.
-      script.onerror = () => {
-        resolver.reject();
-      };
-      document.body.appendChild(script);
+      const previousScripts = document.querySelectorAll(
+        `script[src="${chunkUrl}"],script[src^="${chunkUrl}?"],script[src="${decodedChunkUrl}"],script[src^="${decodedChunkUrl}?"]`
+      );
+      if (previousScripts.length > 0) {
+        // There is this edge where the script already failed loading, but we
+        // can't detect that. The Promise will never resolve in this case.
+        for (const script of Array.from(previousScripts)) {
+          script.addEventListener("error", () => {
+            resolver.reject();
+          });
+        }
+      } else {
+        const script = document.createElement("script");
+        script.src = chunkUrl;
+        // We'll only mark the chunk as loaded once the script has been executed,
+        // which happens in `registerChunk`. Hence the absence of `resolve()` in
+        // this branch.
+        script.onerror = () => {
+          resolver.reject();
+        };
+        document.body.appendChild(script);
+      }
     } else {
       throw new Error(`can't infer type of chunk from path ${chunkPath}`);
     }
@@ -258,6 +290,8 @@ async function loadWebAssemblyModule(
 function _eval({ code, url, map }: EcmascriptModuleEntry): ModuleFactory {
   code += `\n\n//# sourceURL=${location.origin}/${CHUNK_BASE_PATH}${url}`;
   if (map)
-    code += `\n//# sourceMappingURL=${location.origin}/${CHUNK_BASE_PATH}${map}`;
+    code += `\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${btoa(
+      map
+    )}`;
   return eval(code);
 }

@@ -1,11 +1,13 @@
 import classNames from "classnames";
 import Link from "next/link";
 import type { Feature as FeatureType } from "../content/legacy-features";
+import type { IconType } from "./Icons";
 
 interface FeatureProps {
   feature: Omit<FeatureType, "page">;
   // include feature description
   detailed?: boolean;
+  Icon?: IconType;
 }
 
 function DetailedFeatureInner(props: { feature: FeatureProps["feature"] }) {
@@ -18,7 +20,7 @@ function DetailedFeatureInner(props: { feature: FeatureProps["feature"] }) {
             aria-hidden="true"
             className={classNames(
               "h-8 w-8 dark:text-white flex-shrink-0 p-1.5 text-black block dark:stroke-[url(#pink-gradient)]",
-              Icon.requiresFill && "dark:fill-[url(#pink-gradient)]"
+              Icon.requiresFill ? "dark:fill-[url(#pink-gradient)]" : false
             )}
           />
         </div>
@@ -31,6 +33,7 @@ function DetailedFeatureInner(props: { feature: FeatureProps["feature"] }) {
           {description}
         </p>
       </div>
+      {/* eslint-disable-next-line react/no-unknown-property -- styled-jsx stuff. */}
       <style global jsx>{`
         html.dark .icon-circle {
           background: linear-gradient(
@@ -59,7 +62,7 @@ export function DetailedFeatureLink(props: {
   );
 }
 
-export default function Feature(props: FeatureProps) {
+export function Feature(props: FeatureProps) {
   const { feature, detailed = false } = props;
   const { Icon, name } = feature;
 

@@ -4,7 +4,7 @@ use turbo_tasks::Vc;
 use turbo_tasks_fetch::{fetch, register, FetchErrorKind};
 use turbo_tasks_fs::{DiskFileSystem, FileSystem, FileSystemPath};
 use turbo_tasks_testing::{register, run};
-use turbopack_core::issue::{Issue, IssueSeverity};
+use turbopack_core::issue::{Issue, IssueSeverity, StyledString};
 
 register!();
 
@@ -21,7 +21,7 @@ async fn basic_get() {
         });
 
 
-        let result = &*fetch(Vc::cell(server.url("/foo.woff")), Vc::cell(None)).await?;
+        let result = &*fetch(Vc::cell(server.url("/foo.woff")), Vc::cell(None), Vc::cell(None)).await?;
         resource_mock.assert();
 
         match result {
@@ -47,7 +47,7 @@ async fn sends_user_agent() {
                 .body("responsebody");
         });
 
-        let result = &*fetch(Vc::cell(server.url("/foo.woff")), Vc::cell(Some("foo".to_owned()))).await?;
+        let result = &*fetch(Vc::cell(server.url("/foo.woff")), Vc::cell(Some("foo".to_owned())), Vc::cell(None)).await?;
         resource_mock.assert();
 
         let Ok(response) = result else {
@@ -76,7 +76,8 @@ async fn invalidation_does_not_invalidate() {
 
         let url = Vc::cell(server.url("/foo.woff"));
         let user_agent = Vc::cell(Some("foo".to_owned()));
-        let result = &*fetch(url, user_agent).await?;
+        let proxy = Vc::cell(None);
+        let result = &*fetch(url, user_agent, proxy).await?;
         resource_mock.assert();
 
         let Ok(response_vc) = result else {
@@ -86,7 +87,7 @@ async fn invalidation_does_not_invalidate() {
         assert_eq!(response.status, 200);
         assert_eq!(*response.body.to_string().await?, "responsebody");
 
-        let second_result = &*fetch(url, user_agent).await?;
+        let second_result = &*fetch(url, user_agent, proxy).await?;
         let Ok(second_response_vc) = second_result else {
             panic!()
         };
@@ -104,7 +105,7 @@ async fn errors_on_failed_connection() {
         register();
 
         let url = "https://doesnotexist/foo.woff";
-        let result = &*fetch(Vc::cell(url.to_owned()), Vc::cell(None)).await?;
+        let result = &*fetch(Vc::cell(url.to_owned()), Vc::cell(None), Vc::cell(None)).await?;
         let Err(err_vc) = result else {
             panic!()
         };
@@ -114,8 +115,7 @@ async fn errors_on_failed_connection() {
 
         let issue = err_vc.to_issue(IssueSeverity::Error.into(), get_issue_context());
         assert_eq!(*issue.severity().await?, IssueSeverity::Error);
-        assert_eq!(*issue.category().await?, "fetch");
-        assert_eq!(*issue.description().await?, "There was an issue establishing a connection while requesting https://doesnotexist/foo.woff.");
+        assert_eq!(*issue.description().await?.unwrap().await?, StyledString::Text("There was an issue establishing a connection while requesting https://doesnotexist/foo.woff.".to_string()));
     }
 }
 
@@ -126,7 +126,7 @@ async fn errors_on_404() {
 
         let server = httpmock::MockServer::start();
         let resource_url = server.url("/");
-        let result = &*fetch(Vc::cell(resource_url.clone()), Vc::cell(None)).await?;
+        let result = &*fetch(Vc::cell(resource_url.clone()), Vc::cell(None), Vc::cell(None)).await?;
         let Err(err_vc) = result else {
             panic!()
         };
@@ -136,11 +136,10 @@ async fn errors_on_404() {
 
         let issue = err_vc.to_issue(IssueSeverity::Error.into(), get_issue_context());
         assert_eq!(*issue.severity().await?, IssueSeverity::Error);
-        assert_eq!(*issue.category().await?, "fetch");
-        assert_eq!(*issue.description().await?, format!("Received response with status 404 when requesting {}", &resource_url));
+        assert_eq!(*issue.description().await?.unwrap().await?, StyledString::Text(format!("Received response with status 404 when requesting {}", &resource_url)));
     }
 }
 
 fn get_issue_context() -> Vc<FileSystemPath> {
-    DiskFileSystem::new("root".to_owned(), "/".to_owned()).root()
+    DiskFileSystem::new("root".to_owned(), "/".to_owned(), vec![]).root()
 }

@@ -14,7 +14,7 @@ const RIGHT_PADDING = 12;
 // The width of the logo + wordmark. This does not include the "invisible" padding.
 const VISUAL_WIDTH = 112;
 
-function TurboAnimated({ height = 32, className = "" }: LogoProps) {
+export function TurboAnimated({ height = 32, className = "" }: LogoProps) {
   const site = useTurboSite();
 
   return (
@@ -138,8 +138,6 @@ function TurboAnimated({ height = 32, className = "" }: LogoProps) {
   );
 }
 
-export default TurboAnimated;
-
 const variants: Variants = {
   visible: {
     opacity: 1,
@@ -148,7 +146,7 @@ const variants: Variants = {
       duration: 0.3,
     },
   },
-  hidden: (distance) => ({
+  hidden: (distance: number) => ({
     opacity: 0,
     x: distance,
     transition: {

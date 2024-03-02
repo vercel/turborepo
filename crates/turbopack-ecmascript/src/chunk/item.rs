@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{trace::TraceRawVcs, Upcast, ValueToString, Vc};
 use turbo_tasks_fs::rope::Rope;
@@ -8,21 +8,22 @@ use turbopack_core::{
     chunk::{AsyncModuleInfo, ChunkItem, ChunkItemExt, ChunkingContext},
     code_builder::{Code, CodeBuilder},
     error::PrettyPrintError,
-    issue::{code_gen::CodeGenerationIssue, IssueExt, IssueSeverity},
+    issue::{code_gen::CodeGenerationIssue, IssueExt, IssueSeverity, StyledString},
+    source_map::GenerateSourceMap,
 };
 
 use super::EcmascriptChunkingContext;
 use crate::{
     references::async_module::{AsyncModuleOptions, OptionAsyncModuleOptions},
     utils::FormatIter,
-    EcmascriptModuleContent, ParseResultSourceMap,
+    EcmascriptModuleContent,
 };
 
 #[turbo_tasks::value(shared)]
 #[derive(Default, Clone)]
 pub struct EcmascriptChunkItemContent {
     pub inner_code: Rope,
-    pub source_map: Option<Vc<ParseResultSourceMap>>,
+    pub source_map: Option<Vc<Box<dyn GenerateSourceMap>>>,
     pub options: EcmascriptChunkItemOptions,
     pub placeholder_for_future_extensions: (),
 }
@@ -36,15 +37,18 @@ impl EcmascriptChunkItemContent {
         async_module_options: Vc<OptionAsyncModuleOptions>,
     ) -> Result<Vc<Self>> {
         let refresh = *chunking_context.has_react_refresh().await?;
-        let externals = *chunking_context.environment().node_externals().await?;
+        let externals = *chunking_context
+            .environment()
+            .supports_commonjs_externals()
+            .await?;
 
         let content = content.await?;
+        let async_module = async_module_options.await?.clone_value();
+
         Ok(EcmascriptChunkItemContent {
             inner_code: content.inner_code.clone(),
             source_map: content.source_map,
             options: if content.is_esm {
-                let async_module = async_module_options.await?.clone_value();
-
                 EcmascriptChunkItemOptions {
                     strict: true,
                     refresh,
@@ -53,6 +57,10 @@ impl EcmascriptChunkItemContent {
                     ..Default::default()
                 }
             } else {
+                if async_module.is_some() {
+                    bail!("CJS module can't be async.");
+                }
+
                 EcmascriptChunkItemOptions {
                     refresh,
                     externals,
@@ -66,7 +74,7 @@ impl EcmascriptChunkItemContent {
             },
             ..Default::default()
         }
-        .into())
+        .cell())
     }
 
     #[turbo_tasks::function]
@@ -74,14 +82,18 @@ impl EcmascriptChunkItemContent {
         let this = self.await?;
         let mut args = vec![
             "r: __turbopack_require__",
-            "f: __turbopack_require_context__",
+            "f: __turbopack_module_context__",
             "i: __turbopack_import__",
             "s: __turbopack_esm__",
             "v: __turbopack_export_value__",
             "n: __turbopack_export_namespace__",
             "c: __turbopack_cache__",
+            "M: __turbopack_modules__",
             "l: __turbopack_load__",
             "j: __turbopack_dynamic__",
+            "P: __turbopack_resolve_absolute_path__",
+            "U: __turbopack_relative_url__",
+            "R: __turbopack_resolve_module_id_path__",
             "g: global",
             // HACK
             "__dirname",
@@ -124,11 +136,10 @@ impl EcmascriptChunkItemContent {
 
         if this.options.async_module.is_some() {
             code += "__turbopack_async_module__(async (__turbopack_handle_async_dependencies__, \
-                     __turbopack_async_result__) => { try {";
+                     __turbopack_async_result__) => { try {\n";
         }
 
-        let source_map = this.source_map.map(Vc::upcast);
-        code.push_source(&this.inner_code, source_map);
+        code.push_source(&this.inner_code, this.source_map);
 
         if let Some(opts) = &this.options.async_module {
             write!(
@@ -235,8 +246,9 @@ async fn module_factory_with_code_generation_issue(
                 CodeGenerationIssue {
                     severity: IssueSeverity::Error.cell(),
                     path: chunk_item.asset_ident().path(),
-                    title: Vc::cell("Code generation for chunk item errored".to_string()),
-                    message: Vc::cell(error_message),
+                    title: StyledString::Text("Code generation for chunk item errored".to_string())
+                        .cell(),
+                    message: StyledString::Text(error_message).cell(),
                 }
                 .cell()
                 .emit();

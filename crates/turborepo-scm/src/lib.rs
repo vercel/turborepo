@@ -3,6 +3,10 @@
 #![feature(assert_matches)]
 #![deny(clippy::all)]
 
+//! Turborepo's library for interacting with source control management (SCM).
+//! Currently we only support git. We use SCM for finding changed files,
+//! for getting the previous version of a lockfile, and for hashing files.
+
 use std::{
     backtrace::{self, Backtrace},
     io::Read,
@@ -24,7 +28,11 @@ mod status;
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("git error on {1}: {0}")]
-    Git2(git2::Error, String, #[backtrace] backtrace::Backtrace),
+    Git2(
+        #[source] git2::Error,
+        String,
+        #[backtrace] backtrace::Backtrace,
+    ),
     #[error("git error: {0}")]
     Git(String, #[backtrace] backtrace::Backtrace),
     #[error(
@@ -50,7 +58,9 @@ pub enum Error {
     #[error("package traversal error: {0}")]
     Ignore(#[from] ignore::Error, #[backtrace] backtrace::Backtrace),
     #[error("invalid glob: {0}")]
-    Glob(Box<wax::BuildError>, backtrace::Backtrace),
+    Glob(#[source] Box<wax::BuildError>, backtrace::Backtrace),
+    #[error("invalid globwalk pattern: {0}")]
+    Globwalk(#[from] globwalk::GlobError),
     #[error(transparent)]
     Walk(#[from] globwalk::WalkError),
 }
@@ -89,10 +99,31 @@ pub(crate) fn wait_for_success<R: Read, T>(
     root_path: impl AsRef<AbsoluteSystemPath>,
     parse_result: Result<T, Error>,
 ) -> Result<T, Error> {
+    if let Err(parse_err) = parse_result {
+        // In this case, we don't care about waiting for the child to exit,
+        // we need to kill it. It's possible that we didn't read all of the output,
+        // or that the child process doesn't know to exit.
+        child.kill()?;
+        let stderr_output = read_git_error_to_string(stderr);
+        let stderr_text = stderr_output
+            .map(|stderr| format!(" stderr: {}", stderr))
+            .unwrap_or_default();
+        let err_text = format!(
+            "'{}' in {}{}{}",
+            command,
+            root_path.as_ref(),
+            stderr_text,
+            parse_err
+        );
+        return Err(Error::Git(err_text, Backtrace::capture()));
+    }
+    // TODO: if we've successfully parsed the output, but the command is hanging for
+    // some reason, we will currently block forever.
     let exit_status = child.wait()?;
-    if exit_status.success() && parse_result.is_ok() {
+    if exit_status.success() {
         return parse_result;
     }
+    // We successfully parsed, but the command failed.
     let stderr_output = read_git_error_to_string(stderr);
     let stderr_text = stderr_output
         .map(|stderr| format!(" stderr: {}", stderr))
@@ -100,25 +131,15 @@ pub(crate) fn wait_for_success<R: Read, T>(
     if matches!(exit_status.code(), Some(129)) {
         return Err(Error::GitVersion(stderr_text));
     }
-    let exit_text = if exit_status.success() {
-        "".to_string()
-    } else {
+    let exit_text = {
         let code = exit_status
             .code()
             .map(|code| code.to_string())
             .unwrap_or("unknown".to_string());
         format!(" exited with code {}", code)
     };
-    let parse_error_text = if let Err(parse_error) = parse_result {
-        format!(" had a parse error {}", parse_error)
-    } else {
-        "".to_string()
-    };
     let path_text = root_path.as_ref();
-    let err_text = format!(
-        "'{}' in {}{}{}{}",
-        command, path_text, parse_error_text, exit_text, stderr_text
-    );
+    let err_text = format!("'{}' in {}{}{}", command, path_text, exit_text, stderr_text);
     Err(Error::Git(err_text, Backtrace::capture()))
 }
 
@@ -171,7 +192,7 @@ fn find_git_root(turbo_root: &AbsoluteSystemPath) -> Result<AbsoluteSystemPathBu
     if let Some(line) = lines.next() {
         let line = String::from_utf8(line?)?;
         let tail = RelativeUnixPathBuf::new(line)?;
-        turbo_root.join_unix_path(tail).map_err(|e| e.into())
+        Ok(turbo_root.join_unix_path(tail))
     } else {
         let stderr = String::from_utf8_lossy(&rev_parse.stderr);
         Err(Error::git_error(format!(
@@ -203,12 +224,16 @@ impl SCM {
 
 #[cfg(test)]
 mod tests {
-    use std::{assert_matches::assert_matches, process::Command};
+    use std::{
+        assert_matches::assert_matches,
+        io::Read,
+        process::{Command, Stdio},
+    };
 
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
     use super::find_git_root;
-    use crate::Error;
+    use crate::{wait_for_success, Error};
 
     fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp_dir = tempfile::tempdir().unwrap();
@@ -256,5 +281,62 @@ mod tests {
         tmp_root.create_dir_all().unwrap();
         let result = find_git_root(&tmp_root);
         assert_matches!(result, Err(Error::Git(_, _)));
+    }
+
+    #[test]
+    fn test_wait_for_success() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+        #[cfg(windows)]
+        let mut cmd = {
+            let batch = r#"
+            echo "some error text" 1>&2
+            echo "started"
+            set /p myvar=Press enter to stop hanging
+            "#;
+
+            let script_path = root.join_component("hanging.cmd");
+            script_path.create_with_contents(batch).unwrap();
+            Command::new(script_path.as_std_path())
+        };
+
+        #[cfg(unix)]
+        let mut cmd = {
+            // Shell script to simulate a command that hangs
+            let sh = r#"
+            echo "some error text" >&2
+            echo "started"
+            read -p "Press enter to stop hanging"
+            "#;
+            let bash = which::which("bash").unwrap();
+            let script_path = root.join_component("hanging.sh");
+            script_path.create_with_contents(sh).unwrap();
+            script_path.set_mode(0x755).unwrap();
+            let mut cmd = Command::new(bash);
+            cmd.arg(script_path.as_str());
+            cmd
+        };
+
+        let mut cmd = cmd
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .stdin(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut stderr = cmd.stderr.take().unwrap();
+        let mut stdout = cmd.stdout.take().unwrap();
+        // read from stdout to ensure the process has started
+        let mut buf = vec![0; 8];
+        stdout.read_exact(&mut buf).unwrap();
+        // simulate a parsing error. Any error will work here
+        let parse_result: Result<(), super::Error> =
+            Err(Error::GitVersion("any error".to_string()));
+        // Previously, this would hang forever trying to read from stderr
+        let err =
+            wait_for_success(cmd, &mut stderr, "hanging.sh", &root, parse_result).unwrap_err();
+        // Note that we aren't guaranteed to have captured stderr, notably on windows.
+        // We should, however, have our injected error of "any error" in the error
+        // message.
+        assert!(err.to_string().contains("any error"));
     }
 }

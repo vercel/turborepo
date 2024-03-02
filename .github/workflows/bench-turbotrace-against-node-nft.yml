@@ -31,10 +31,8 @@ jobs:
           package-install: false
 
       - uses: ./.github/actions/setup-rust
-
-      - uses: ./.github/actions/setup-go
         with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install hoisted npm dependencies
         working-directory: crates/turbopack/tests/node-file-trace
@@ -43,7 +41,9 @@ jobs:
           pnpm install -r --side-effects-cache false
 
       - name: Install nextest
-        uses: taiki-e/install-action@nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest@0.9.61
 
       - name: Build benchmark
         timeout-minutes: 60

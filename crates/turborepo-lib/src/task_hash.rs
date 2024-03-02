@@ -8,16 +8,19 @@ use serde::Serialize;
 use thiserror::Error;
 use tracing::{debug, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
-use turborepo_cache::CacheResponse;
+use turborepo_cache::CacheHitMetadata;
 use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap, ResolvedEnvMode};
+use turborepo_repository::package_graph::{PackageInfo, PackageName};
 use turborepo_scm::SCM;
+use turborepo_telemetry::events::{
+    generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder,
+};
 
 use crate::{
     engine::TaskNode,
     framework::infer_framework,
-    hash::{FileHashes, TaskHashable, TurboHash},
-    opts::Opts,
-    package_graph::{WorkspaceInfo, WorkspaceName},
+    hash::{FileHashes, LockFilePackages, TaskHashable, TurboHash},
+    opts::RunOpts,
     run::task_id::TaskId,
     task_graph::TaskDefinition,
 };
@@ -67,9 +70,10 @@ impl PackageInputsHashes {
     pub fn calculate_file_hashes<'a>(
         scm: &SCM,
         all_tasks: impl ParallelIterator<Item = &'a TaskNode>,
-        workspaces: HashMap<&WorkspaceName, &WorkspaceInfo>,
+        workspaces: HashMap<&PackageName, &PackageInfo>,
         task_definitions: &HashMap<TaskId<'static>, TaskDefinition>,
         repo_root: &AbsoluteSystemPath,
+        telemetry: &GenericEventBuilder,
     ) -> Result<PackageInputsHashes, Error> {
         tracing::trace!(scm_manual=%scm.is_manual(), "scm running in {} mode", if scm.is_manual() { "manual" } else { "git" });
 
@@ -90,7 +94,11 @@ impl PackageInputsHashes {
                     Ok(def) => def,
                     Err(err) => return Some(Err(err)),
                 };
+                let package_task_event =
+                    PackageTaskEventBuilder::new(task_id.package(), task_id.task())
+                        .with_parent(telemetry);
 
+                package_task_event.track_scm_mode(if scm.is_manual() { "manual" } else { "git" });
                 let workspace_name = task_id.to_workspace_name();
 
                 let pkg = match workspaces
@@ -106,30 +114,30 @@ impl PackageInputsHashes {
                     .parent()
                     .unwrap_or_else(|| AnchoredSystemPath::new("").unwrap());
 
+                let scm_telemetry = package_task_event.child();
                 let mut hash_object = match scm.get_package_file_hashes(
                     repo_root,
                     package_path,
                     &task_definition.inputs,
+                    Some(scm_telemetry),
                 ) {
                     Ok(hash_object) => hash_object,
                     Err(err) => return Some(Err(err.into())),
                 };
+                if let Some(dot_env) = &task_definition.dot_env {
+                    if !dot_env.is_empty() {
+                        let absolute_package_path = repo_root.resolve(package_path);
+                        let dot_env_object = match scm.hash_existing_of(
+                            &absolute_package_path,
+                            dot_env.iter().map(|p| p.to_anchored_system_path_buf()),
+                        ) {
+                            Ok(dot_env_object) => dot_env_object,
+                            Err(err) => return Some(Err(err.into())),
+                        };
 
-                if !task_definition.dot_env.is_empty() {
-                    let absolute_package_path = repo_root.resolve(package_path);
-                    let dot_env_object = match scm.hash_existing_of(
-                        &absolute_package_path,
-                        task_definition
-                            .dot_env
-                            .iter()
-                            .map(|p| p.to_anchored_system_path_buf()),
-                    ) {
-                        Ok(dot_env_object) => dot_env_object,
-                        Err(err) => return Some(Err(err.into())),
-                    };
-
-                    for (key, value) in dot_env_object {
-                        hash_object.insert(key, value);
+                        for (key, value) in dot_env_object {
+                            hash_object.insert(key, value);
+                        }
                     }
                 }
 
@@ -165,7 +173,7 @@ pub struct TaskHashTrackerState {
     #[serde(skip)]
     package_task_outputs: HashMap<TaskId<'static>, Vec<AnchoredSystemPathBuf>>,
     #[serde(skip)]
-    package_task_cache: HashMap<TaskId<'static>, CacheResponse>,
+    package_task_cache: HashMap<TaskId<'static>, CacheHitMetadata>,
     #[serde(skip)]
     package_task_inputs_expanded_hashes: HashMap<TaskId<'static>, FileHashes>,
 }
@@ -173,7 +181,7 @@ pub struct TaskHashTrackerState {
 /// Caches package-inputs hashes, and package-task hashes.
 pub struct TaskHasher<'a> {
     hashes: HashMap<TaskId<'static>, String>,
-    opts: &'a Opts<'a>,
+    run_opts: &'a RunOpts,
     env_at_execution_start: &'a EnvironmentVariableMap,
     global_hash: &'a str,
     task_hash_tracker: TaskHashTracker,
@@ -182,7 +190,7 @@ pub struct TaskHasher<'a> {
 impl<'a> TaskHasher<'a> {
     pub fn new(
         package_inputs_hashes: PackageInputsHashes,
-        opts: &'a Opts,
+        run_opts: &'a RunOpts,
         env_at_execution_start: &'a EnvironmentVariableMap,
         global_hash: &'a str,
     ) -> Self {
@@ -192,7 +200,7 @@ impl<'a> TaskHasher<'a> {
         } = package_inputs_hashes;
         Self {
             hashes,
-            opts,
+            run_opts,
             env_at_execution_start,
             global_hash,
             task_hash_tracker: TaskHashTracker::new(expanded_hashes),
@@ -205,11 +213,12 @@ impl<'a> TaskHasher<'a> {
         task_id: &TaskId<'static>,
         task_definition: &TaskDefinition,
         task_env_mode: ResolvedEnvMode,
-        workspace: &WorkspaceInfo,
+        workspace: &PackageInfo,
         dependency_set: HashSet<&TaskNode>,
+        telemetry: PackageTaskEventBuilder,
     ) -> Result<String, Error> {
-        let do_framework_inference = self.opts.run_opts.framework_inference;
-        let is_monorepo = !self.opts.run_opts.single_package;
+        let do_framework_inference = self.run_opts.framework_inference;
+        let is_monorepo = !self.run_opts.single_package;
 
         let hash_of_files = self
             .hashes
@@ -219,7 +228,7 @@ impl<'a> TaskHasher<'a> {
         let mut all_env_var_map = EnvironmentVariableMap::default();
         let mut matching_env_var_map = EnvironmentVariableMap::default();
 
-        if do_framework_inference {
+        let framework_slug = if do_framework_inference {
             // See if we infer a framework
             if let Some(framework) = infer_framework(workspace, is_monorepo) {
                 debug!("auto detected framework for {}", task_id.package());
@@ -228,6 +237,7 @@ impl<'a> TaskHasher<'a> {
                     framework.slug(),
                     framework.env_wildcards()
                 );
+                telemetry.track_framework(framework.slug());
                 let mut computed_wildcards = framework
                     .env_wildcards()
                     .iter()
@@ -264,12 +274,14 @@ impl<'a> TaskHasher<'a> {
 
                 matching_env_var_map.union(&inference_env_var_map);
                 matching_env_var_map.difference(&user_env_var_set.exclusions);
+                Some(framework.slug().to_string())
             } else {
                 all_env_var_map = self
                     .env_at_execution_start
                     .from_wildcards(&task_definition.env)?;
 
                 explicit_env_var_map.union(&all_env_var_map);
+                None
             }
         } else {
             all_env_var_map = self
@@ -277,7 +289,8 @@ impl<'a> TaskHasher<'a> {
                 .from_wildcards(&task_definition.env)?;
 
             explicit_env_var_map.union(&all_env_var_map);
-        }
+            None
+        };
 
         let env_vars = DetailedMap {
             all: all_env_var_map,
@@ -290,7 +303,8 @@ impl<'a> TaskHasher<'a> {
         let hashable_env_pairs = env_vars.all.to_hashable();
         let outputs = task_definition.hashable_outputs(task_id);
         let task_dependency_hashes = self.calculate_dependency_hashes(dependency_set)?;
-        let external_deps_hash = is_monorepo.then(|| workspace.get_external_deps_hash());
+        let external_deps_hash =
+            is_monorepo.then(|| get_external_deps_hash(&workspace.transitive_dependencies));
 
         debug!(
             "task hash env vars for {}:{}\n vars: {:?}",
@@ -313,7 +327,7 @@ impl<'a> TaskHasher<'a> {
             task: task_id.task(),
             outputs,
 
-            pass_through_args: self.opts.run_opts.pass_through_args,
+            pass_through_args: &self.run_opts.pass_through_args,
             env: &task_definition.env,
             resolved_env_vars: hashable_env_pairs,
             pass_through_env: task_definition
@@ -321,13 +335,17 @@ impl<'a> TaskHasher<'a> {
                 .as_deref()
                 .unwrap_or_default(),
             env_mode: task_env_mode,
-            dot_env: &task_definition.dot_env,
+            dot_env: task_definition.dot_env.as_deref().unwrap_or_default(),
         };
 
         let task_hash = task_hashable.calculate_task_hash();
 
-        self.task_hash_tracker
-            .insert_hash(task_id.clone(), env_vars, task_hash.clone());
+        self.task_hash_tracker.insert_hash(
+            task_id.clone(),
+            env_vars,
+            task_hash.clone(),
+            framework_slug,
+        );
 
         Ok(task_hash)
     }
@@ -385,9 +403,16 @@ impl<'a> TaskHasher<'a> {
         match task_env_mode {
             ResolvedEnvMode::Strict => {
                 let mut pass_through_env = EnvironmentVariableMap::default();
-                let default_env_var_pass_through_map = self
-                    .env_at_execution_start
-                    .from_wildcards(&["PATH", "SHELL", "SYSTEMROOT"])?;
+                let default_env_var_pass_through_map =
+                    self.env_at_execution_start.from_wildcards(&[
+                        "SHELL",
+                        // Command Prompt casing of env variables
+                        "PATH",
+                        "SYSTEMROOT",
+                        // Powershell casing of env variables
+                        "Path",
+                        "SystemRoot",
+                    ])?;
                 let tracker_env = self
                     .task_hash_tracker
                     .env_vars(task_id)
@@ -397,18 +422,40 @@ impl<'a> TaskHasher<'a> {
                 pass_through_env.union(global_env);
                 pass_through_env.union(&tracker_env.all);
 
-                if let Some(definition_pass_through) = &task_definition.pass_through_env {
-                    let env_var_pass_through_map = self
-                        .env_at_execution_start
-                        .from_wildcards(definition_pass_through)?;
-                    pass_through_env.union(&env_var_pass_through_map);
-                }
+                let env_var_pass_through_map = self.env_at_execution_start.from_wildcards(
+                    task_definition
+                        .pass_through_env
+                        .as_deref()
+                        .unwrap_or_default(),
+                )?;
+                pass_through_env.union(&env_var_pass_through_map);
 
                 Ok(pass_through_env)
             }
             ResolvedEnvMode::Loose => Ok(self.env_at_execution_start.clone()),
         }
     }
+}
+
+pub fn get_external_deps_hash(
+    transitive_dependencies: &Option<HashSet<turborepo_lockfiles::Package>>,
+) -> String {
+    let Some(transitive_dependencies) = transitive_dependencies else {
+        return "".into();
+    };
+
+    let mut transitive_deps = Vec::with_capacity(transitive_dependencies.len());
+
+    for dependency in transitive_dependencies.iter() {
+        transitive_deps.push(dependency.clone());
+    }
+
+    transitive_deps.sort_by(|a, b| match a.key.cmp(&b.key) {
+        std::cmp::Ordering::Equal => a.version.cmp(&b.version),
+        other => other,
+    });
+
+    LockFilePackages(transitive_deps).hash()
 }
 
 impl TaskHashTracker {
@@ -426,11 +473,22 @@ impl TaskHashTracker {
         state.package_task_hashes.get(task_id).cloned()
     }
 
-    fn insert_hash(&self, task_id: TaskId<'static>, env_vars: DetailedMap, hash: String) {
+    fn insert_hash(
+        &self,
+        task_id: TaskId<'static>,
+        env_vars: DetailedMap,
+        hash: String,
+        framework_slug: Option<String>,
+    ) {
         let mut state = self.state.lock().expect("hash tracker mutex poisoned");
         state
             .package_task_env_vars
             .insert(task_id.clone(), env_vars);
+        if let Some(framework) = framework_slug {
+            state
+                .package_task_framework
+                .insert(task_id.clone(), framework);
+        }
         state.package_task_hashes.insert(task_id, hash);
     }
 
@@ -458,12 +516,12 @@ impl TaskHashTracker {
         state.package_task_outputs.insert(task_id, outputs);
     }
 
-    pub fn cache_status(&self, task_id: &TaskId) -> Option<CacheResponse> {
+    pub fn cache_status(&self, task_id: &TaskId) -> Option<CacheHitMetadata> {
         let state = self.state.lock().expect("hash tracker mutex poisoned");
         state.package_task_cache.get(task_id).copied()
     }
 
-    pub fn insert_cache_status(&self, task_id: TaskId<'static>, cache_status: CacheResponse) {
+    pub fn insert_cache_status(&self, task_id: TaskId<'static>, cache_status: CacheHitMetadata) {
         let mut state = self.state.lock().expect("hash tracker mutex poisoned");
         state.package_task_cache.insert(task_id, cache_status);
     }

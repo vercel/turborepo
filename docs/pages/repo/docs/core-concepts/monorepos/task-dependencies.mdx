@@ -3,7 +3,7 @@ title: Task Dependencies
 description: Turborepo helps you specify task dependencies declaratively.
 ---
 
-import Callout from "../../../../../components/Callout";
+import { Callout } from "../../../../../components/Callout";
 import HeartIcon from "@heroicons/react/solid/HeartIcon";
 import { Tabs, Tab } from '../../../../../components/Tabs'
 
@@ -149,7 +149,7 @@ turbo.json
 package.json
 ```
 
-You've written some TypeScript in your workspaces and it's time run `tsc` to check your types.
+You've written some TypeScript in your workspaces and it's time to run `tsc` to check your types.
 There are two requirements here:
 
 - **All type checks run in parallel to keep things speedy**: Because the results of your type checks don't depend on each other, you can run all of them in parallel.
@@ -164,7 +164,7 @@ To accomplish this, you'll create a fake, recursive task in your graph and depen
      "topo": {
        "dependsOn": ["^topo"]
      },
-     "your-task": {
+     "typecheck": {
        "dependsOn": ["topo"]
      }
    }

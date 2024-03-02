@@ -1,0 +1,17 @@
+[package]
+name = "turborepo-graph-utils"
+version = "0.1.0"
+edition = "2021"
+license = "MPL-2.0"
+
+[lints]
+workspace = true
+
+[dependencies]
+futures = "0.3.26"
+itertools = { workspace = true }
+log = "0.4.20"
+petgraph = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full", "time"] }
+tracing = { workspace = true, features = ["log"] }

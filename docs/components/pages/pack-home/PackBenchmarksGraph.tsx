@@ -1,8 +1,8 @@
+import { useEffect, useRef, useState } from "react";
 import cn from "classnames";
 import type { AnimationPlaybackControls } from "framer-motion";
 import { animate, motion, useInView, useAnimation } from "framer-motion";
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
 import { Gradient } from "../home-shared/Gradient";
 import gradients from "../home-shared/gradients.module.css";
 import benchmarkData from "./benchmark-data/data.json";
@@ -26,6 +26,7 @@ export function BenchmarksGraph({
   bars,
   pinTime,
 }: BenchmarksGraphProps) {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access -- JSON not typed.
   const data: BenchmarkData = benchmarkData[category][numberOfModules];
   const keys = bars.map((bar) => bar.key);
   const longestTime = Math.max(...keys.map((key) => data[key])) * 1000;
@@ -113,9 +114,10 @@ function GraphBar({
   const [timerAnimation, setTimerAnimation] =
     useState<AnimationPlaybackControls>();
   const [barWidth, setBarWidth] = useState(0);
+  // eslint-disable-next-line react/hook-use-state -- Don't need the value.
   const [, setFinished] = useState(false);
 
-  async function stopAnimation() {
+  function stopAnimation() {
     timerAnimation && timerAnimation.stop();
     controls.stop();
   }
@@ -140,6 +142,9 @@ function GraphBar({
       })
       .then(() => {
         setFinished(true);
+      })
+      .catch(() => {
+        setFinished(true);
       });
     const timerAnimationRef = animate(0, duration, {
       ...transition,
@@ -152,7 +157,7 @@ function GraphBar({
   }
 
   async function playFullAnimation() {
-    await stopAnimation();
+    stopAnimation();
     await controls.start("hidden");
     await resetAnimation();
     await startAnimation();
@@ -162,16 +167,16 @@ function GraphBar({
     if (inView) {
       void startAnimation();
     } else {
-      void stopAnimation();
+      stopAnimation();
       void resetAnimation();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Would make the animation wrong.
   }, [inView]);
 
   useEffect(() => {
     if (!inView) return;
     void playFullAnimation();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Would make the animation wrong.
   }, [duration, longestTime]);
 
   return (
@@ -221,7 +226,7 @@ function GraphTimer({
   timer,
   duration,
 }: {
-  turbo: boolean;
+  turbo?: boolean;
   timer: number;
   duration: number;
 }) {

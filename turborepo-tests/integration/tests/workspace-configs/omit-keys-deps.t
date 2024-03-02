@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) composable_config
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config
 
 # The omit-keys-task-with-deps configures dependsOn. The workspace config
 # defines the task, but does not override anything. This test checks
@@ -16,25 +15,25 @@ Setup
   \xe2\x80\xa2 Running omit-keys-task-with-deps in 1 packages (esc)
 
   $ cat tmp.log | grep "omit-keys:omit-keys-task-with-deps"
-  omit-keys:omit-keys-task-with-deps: cache miss, executing e54f9191d29df976
+  omit-keys:omit-keys-task-with-deps: cache miss, executing 9a01368558ebb03f
   omit-keys:omit-keys-task-with-deps: 
   omit-keys:omit-keys-task-with-deps: > omit-keys-task-with-deps
-  omit-keys:omit-keys-task-with-deps: > echo "running omit-keys-task-with-deps" > out/foo.min.txt
+  omit-keys:omit-keys-task-with-deps: > echo running-omit-keys-task-with-deps > out/foo.min.txt
   omit-keys:omit-keys-task-with-deps: 
 
   $ cat tmp.log | grep "omit-keys:omit-keys-underlying-task"
-  omit-keys:omit-keys-underlying-task: cache miss, executing 21453021b6a70aa7
+  omit-keys:omit-keys-underlying-task: cache miss, executing a2db581d4cbbd3d6
   omit-keys:omit-keys-underlying-task: 
   omit-keys:omit-keys-underlying-task: > omit-keys-underlying-task
-  omit-keys:omit-keys-underlying-task: > echo "running omit-keys-underlying-task"
+  omit-keys:omit-keys-underlying-task: > echo running-omit-keys-underlying-task
   omit-keys:omit-keys-underlying-task: 
-  omit-keys:omit-keys-underlying-task: running omit-keys-underlying-task
+  omit-keys:omit-keys-underlying-task: running-omit-keys-underlying-task
 
   $ cat tmp.log | grep "blank-pkg:omit-keys-underlying-topo-task"
-  blank-pkg:omit-keys-underlying-topo-task: cache miss, executing b3c03108a0966b58
+  blank-pkg:omit-keys-underlying-topo-task: cache miss, executing e14022a5380dbf76
   blank-pkg:omit-keys-underlying-topo-task: 
   blank-pkg:omit-keys-underlying-topo-task: > omit-keys-underlying-topo-task
-  blank-pkg:omit-keys-underlying-topo-task: > echo "omit-keys-underlying-topo-task from blank-pkg"
+  blank-pkg:omit-keys-underlying-topo-task: > echo omit-keys-underlying-topo-task from blank-pkg
   blank-pkg:omit-keys-underlying-topo-task: 
   blank-pkg:omit-keys-underlying-topo-task: omit-keys-underlying-topo-task from blank-pkg
 

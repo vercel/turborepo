@@ -13,8 +13,9 @@ pub fn node_cjs_resolve_options(root: Vc<FileSystemPath>) -> Vc<ResolveOptions> 
         ("require".to_string(), ConditionValue::Set),
     ]
     .into();
+    let extensions = vec![".js".to_string(), ".json".to_string(), ".node".to_string()];
     ResolveOptions {
-        extensions: vec![".js".to_string(), ".json".to_string(), ".node".to_string()],
+        extensions,
         modules: vec![ResolveModules::Nested(
             root,
             vec!["node_modules".to_string()],
@@ -24,13 +25,15 @@ pub fn node_cjs_resolve_options(root: Vc<FileSystemPath>) -> Vc<ResolveOptions> 
                 conditions: conditions.clone(),
                 unspecified_conditions: ConditionValue::Unset,
             },
-            ResolveIntoPackage::MainField("main".to_string()),
-            ResolveIntoPackage::Default("index".to_string()),
+            ResolveIntoPackage::MainField {
+                field: "main".to_string(),
+            },
         ],
         in_package: vec![ResolveInPackage::ImportsField {
             conditions,
             unspecified_conditions: ConditionValue::Unset,
         }],
+        default_files: vec!["index".to_string()],
         ..Default::default()
     }
     .cell()
@@ -43,8 +46,10 @@ pub fn node_esm_resolve_options(root: Vc<FileSystemPath>) -> Vc<ResolveOptions> 
         ("import".to_string(), ConditionValue::Set),
     ]
     .into();
+    let extensions = vec![".js".to_string(), ".json".to_string(), ".node".to_string()];
     ResolveOptions {
-        extensions: vec![],
+        fully_specified: true,
+        extensions,
         modules: vec![ResolveModules::Nested(
             root,
             vec!["node_modules".to_string()],
@@ -54,15 +59,15 @@ pub fn node_esm_resolve_options(root: Vc<FileSystemPath>) -> Vc<ResolveOptions> 
                 conditions: conditions.clone(),
                 unspecified_conditions: ConditionValue::Unset,
             },
-            ResolveIntoPackage::MainField("main".to_string()),
-            ResolveIntoPackage::Default("index.js".to_string()),
-            ResolveIntoPackage::Default("index.json".to_string()),
-            ResolveIntoPackage::Default("index.node".to_string()),
+            ResolveIntoPackage::MainField {
+                field: "main".to_string(),
+            },
         ],
         in_package: vec![ResolveInPackage::ImportsField {
             conditions,
             unspecified_conditions: ConditionValue::Unset,
         }],
+        default_files: vec!["index".to_string()],
         ..Default::default()
     }
     .cell()

@@ -1,5 +1,10 @@
+//! Types for interacting with the Vercel API. Used for both
+//! the client (`turborepo-api-client`) and for the
+//! mock server (`turborepo-vercel-api-mock`)
 use serde::{Deserialize, Serialize};
 use url::Url;
+pub mod telemetry;
+pub mod token;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct VerifiedSsoUser {
@@ -123,4 +128,76 @@ pub struct PreflightResponse {
 pub struct APIError {
     pub code: String,
     pub message: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum CacheSource {
+    Local,
+    Remote,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum CacheEvent {
+    Hit,
+    Miss,
+}
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AnalyticsEvent {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    pub source: CacheSource,
+    pub event: CacheEvent,
+    pub hash: String,
+    pub duration: u64,
+}
+
+impl AnalyticsEvent {
+    pub fn set_session_id(&mut self, id: String) {
+        self.session_id = Some(id);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use test_case::test_case;
+
+    use crate::{AnalyticsEvent, CacheEvent, CacheSource};
+
+    #[test_case(
+      AnalyticsEvent {
+        session_id: Some("session-id".to_string()),
+        source: CacheSource::Local,
+        event: CacheEvent::Hit,
+        hash: "this-is-my-hash".to_string(),
+        duration: 58,
+      },
+      "with-id-local-hit"
+    )]
+    #[test_case(
+      AnalyticsEvent {
+        session_id: Some("session-id".to_string()),
+        source: CacheSource::Remote,
+        event: CacheEvent::Miss,
+        hash: "this-is-my-hash-2".to_string(),
+        duration: 21,
+      },
+      "with-id-remote-miss"
+    )]
+    #[test_case(
+      AnalyticsEvent {
+        session_id: None,
+        source: CacheSource::Remote,
+        event: CacheEvent::Miss,
+        hash: "this-is-my-hash-2".to_string(),
+        duration: 21,
+      },
+      "without-id-remote-miss"
+    )]
+    fn test_serialize_analytics_event(event: AnalyticsEvent, name: &str) {
+        let json = serde_json::to_string(&event).unwrap();
+        insta::assert_json_snapshot!(name, json);
+    }
 }

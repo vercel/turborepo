@@ -5,9 +5,10 @@
   "bugs": "https://github.com/vercel/turbo/issues",
   "homepage": "https://turbo.build/repo",
   "scripts": {
-    "build": "napi build --platform -p turborepo-napi --cargo-cwd ../../ --cargo-name turborepo_napi native --js false --dts ../js/index-generated.d.ts",
-    "build:release": "napi build --release --platform -p turborepo-napi --cargo-cwd ../../ --cargo-name turborepo_napi native --js false --dts false",
-    "package": "node scripts/publish.mjs"
+    "build": "napi build --platform -p turborepo-napi --cargo-cwd ../../ --cargo-name turborepo_napi native --js false --dts ../js/index.d.ts && mkdir -p js/dist && cp js/index.js js/dist/index.js && cp js/index.d.ts js/dist/index.d.ts",
+    "build:release": "napi build --release --platform -p turborepo-napi --cargo-cwd ../../ --cargo-name turborepo_napi native --js false",
+    "package": "node scripts/publish.mjs",
+    "test": "jest"
   },
   "keywords": [],
   "author": "",
@@ -15,7 +16,9 @@
   "devDependencies": {
     "@napi-rs/cli": "^2.16.3",
     "execa": "^8.0.1",
-    "fs-extra": "^11.1.1"
+    "fs-extra": "^11.1.1",
+    "jest": "^27.4.3",
+    "ts-jest": "^27.1.1"
   },
   "main": "dist/index.js",
   "napi": {

@@ -35,14 +35,19 @@ interface BaseModule {
 
 interface Module extends BaseModule {}
 
-type RequireContextMap = Record<ModuleId, RequireContextEntry>;
+type ModuleContextMap = Record<ModuleId, ModuleContextEntry>;
 
-interface RequireContextEntry {
+interface ModuleContextEntry {
   id: () => ModuleId;
+  module: () => any;
 }
 
-interface RequireContext {
+interface ModuleContext {
+  // require call
   (moduleId: ModuleId): Exports | EsmNamespaceObject;
+
+  // async import call
+  import(moduleId: ModuleId): Promise<Exports | EsmNamespaceObject>;
 
   keys(): ModuleId[];
 
@@ -53,11 +58,6 @@ type GetOrInstantiateModuleFromParent = (
   moduleId: ModuleId,
   parentModule: Module
 ) => Module;
-
-type CommonJsRequireContext = (
-  entry: RequireContextEntry,
-  parentModule: Module
-) => Exports;
 
 const hasOwnProperty = Object.prototype.hasOwnProperty;
 const toStringTag = typeof Symbol !== "undefined" && Symbol.toStringTag;
@@ -137,7 +137,9 @@ function dynamicExport(
 ) {
   ensureDynamicExports(module, exports);
 
-  module[REEXPORTED_OBJECTS]!.push(object);
+  if (typeof object === "object" && object !== null) {
+    module[REEXPORTED_OBJECTS]!.push(object);
+  }
 }
 
 function exportValue(module: Module, value: any) {
@@ -211,7 +213,7 @@ function esmImport(
   return (module.namespaceObject = interopEsm(
     raw,
     {},
-    (raw as any).__esModule
+    raw && (raw as any).__esModule
   ));
 }
 
@@ -230,41 +232,39 @@ function commonJsRequire(sourceModule: Module, id: ModuleId): Exports {
   return module.exports;
 }
 
-type RequireContextFactory = (map: RequireContextMap) => RequireContext;
-
-function requireContext(
-  sourceModule: Module,
-  map: RequireContextMap
-): RequireContext {
-  function requireContext(id: ModuleId): Exports {
-    const entry = map[id];
-
-    if (!entry) {
-      throw new Error(
-        `module ${id} is required from a require.context, but is not in the context`
-      );
+/**
+ * `require.context` and require/import expression runtime.
+ */
+function moduleContext(map: ModuleContextMap): ModuleContext {
+  function moduleContext(id: ModuleId): Exports {
+    if (hasOwnProperty.call(map, id)) {
+      return map[id].module();
     }
 
-    return commonJsRequireContext(entry, sourceModule);
+    const e = new Error(`Cannot find module '${name}'`);
+    (e as any).code = "MODULE_NOT_FOUND";
+    throw e;
   }
 
-  requireContext.keys = (): ModuleId[] => {
+  moduleContext.keys = (): ModuleId[] => {
     return Object.keys(map);
   };
 
-  requireContext.resolve = (id: ModuleId): ModuleId => {
-    const entry = map[id];
-
-    if (!entry) {
-      throw new Error(
-        `module ${id} is resolved from a require.context, but is not in the context`
-      );
+  moduleContext.resolve = (id: ModuleId): ModuleId => {
+    if (hasOwnProperty.call(map, id)) {
+      return map[id].id();
     }
 
-    return entry.id();
+    const e = new Error(`Cannot find module '${name}'`);
+    (e as any).code = "MODULE_NOT_FOUND";
+    throw e;
   };
 
-  return requireContext;
+  moduleContext.import = async (id: ModuleId) => {
+    return await (moduleContext(id) as Promise<Exports>);
+  };
+
+  return moduleContext;
 }
 
 /**
@@ -445,3 +445,31 @@ function asyncModule(
     queue.resolved = false;
   }
 }
+
+/**
+ * A pseudo "fake" URL object to resolve to its relative path.
+ *
+ * When UrlRewriteBehavior is set to relative, calls to the `new URL()` will construct url without base using this
+ * runtime function to generate context-agnostic urls between different rendering context, i.e ssr / client to avoid
+ * hydration mismatch.
+ *
+ * This is based on webpack's existing implementation:
+ * https://github.com/webpack/webpack/blob/87660921808566ef3b8796f8df61bd79fc026108/lib/runtime/RelativeUrlRuntimeModule.js
+ */
+const relativeURL = function relativeURL(this: any, inputUrl: string) {
+  const realUrl = new URL(inputUrl, "x:/");
+  const values: Record<string, any> = {};
+  for (const key in realUrl) values[key] = (realUrl as any)[key];
+  values.href = inputUrl;
+  values.pathname = inputUrl.replace(/[?#].*/, "");
+  values.origin = values.protocol = "";
+  values.toString = values.toJSON = (..._args: Array<any>) => inputUrl;
+  for (const key in values)
+    Object.defineProperty(this, key, {
+      enumerable: true,
+      configurable: true,
+      value: values[key],
+    });
+};
+
+relativeURL.prototype = URL.prototype;

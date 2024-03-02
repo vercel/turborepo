@@ -18,7 +18,15 @@ export function useTurboSite(): TurboSite | undefined {
   return undefined;
 }
 
-function SiteSwitcherLink({ href, text, isActive }) {
+function SiteSwitcherLink({
+  href,
+  text,
+  isActive,
+}: {
+  href: string;
+  text: string;
+  isActive: boolean;
+}) {
   const classes =
     "py-1 transition-colors duration-300 inline-block w-[50px] cursor-pointer hover:text-black dark:hover:text-white";
 
@@ -33,7 +41,7 @@ function SiteSwitcherLink({ href, text, isActive }) {
   );
 }
 
-function SiteSwitcher() {
+export function SiteSwitcher() {
   const site = useTurboSite();
 
   return (
@@ -62,5 +70,3 @@ function SiteSwitcher() {
     </div>
   );
 }
-
-export default SiteSwitcher;

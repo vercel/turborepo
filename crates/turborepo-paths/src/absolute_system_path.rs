@@ -20,13 +20,14 @@ use crate::{
     AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, PathError, RelativeUnixPath,
 };
 
+/// Models how two paths relate to each other
 #[derive(Debug, PartialEq, Eq)]
 pub enum PathRelation {
-    // e.g. /a/b vs /a/c
+    /// e.g. /a/b vs /a/c
     Divergent,
-    // e.g. /a vs /a/b
+    /// e.g. /a vs /a/b
     Parent,
-    // e.g. /a/b vs /a
+    /// e.g. /a/b vs /a
     Child,
 }
 
@@ -60,10 +61,9 @@ impl AsRef<Path> for AbsoluteSystemPath {
 }
 
 impl AbsoluteSystemPath {
-    /// Creates a path that is known to be absolute and a system path.
-    /// If either of these conditions are not met, we error.
-    /// Does *not* do automatic conversion like `AbsoluteSystemPathBuf::new`
-    /// does
+    /// Validates that the path is absolute and creates an `AbsoluteSystemPath`.
+    /// Does *not* validate that the path is a system path. See module
+    /// documentation for an explanation why.
     ///
     /// # Arguments
     ///
@@ -94,11 +94,15 @@ impl AbsoluteSystemPath {
         Self::from_utf8_path(path)
     }
 
+    /// Converts a standard library `Path` to an `AbsoluteSystemPath`
+    /// Errors if `Path` is not valid Unicode or if it's relative.
     pub fn from_std_path(path: &Path) -> Result<&Self, PathError> {
         let path: &Utf8Path = path.try_into()?;
         Self::from_utf8_path(path)
     }
 
+    /// Converts a `Utf8Path` to an `AbsoluteSystemPath`.
+    /// Errors if `Utf8Path` is relative.
     fn from_utf8_path(path: &Utf8Path) -> Result<&Self, PathError> {
         if path.is_relative() {
             return Err(PathError::NotAbsolute(path.to_string()));
@@ -134,6 +138,8 @@ impl AbsoluteSystemPath {
         File::create(&self.0)
     }
 
+    /// Recursively creates a directory and all of its parent components
+    /// if they are missing.
     pub fn create_dir_all(&self) -> Result<(), io::Error> {
         fs::create_dir_all(&self.0)
     }
@@ -166,7 +172,7 @@ impl AbsoluteSystemPath {
         Ok(())
     }
 
-    /// create_with_contents will create or truncate a file, then write the
+    /// Creates or truncates a file, then write the
     /// given contents to it
     pub fn create_with_contents<B: AsRef<[u8]>>(&self, contents: B) -> Result<(), io::Error> {
         let mut f = fs::File::create(&self.0)?;
@@ -174,6 +180,9 @@ impl AbsoluteSystemPath {
         Ok(())
     }
 
+    /// Removes a directory at this path, after removing all its contents. Use
+    /// carefully! This function does not follow symbolic links and it will
+    /// simply remove the symbolic link itself.
     pub fn remove_dir_all(&self) -> Result<(), io::Error> {
         fs::remove_dir_all(&self.0)
     }
@@ -182,11 +191,16 @@ impl AbsoluteSystemPath {
         fs::rename(&self.0, &other.0)
     }
 
+    pub fn try_exists(&self) -> Result<bool, PathError> {
+        // try_exists is an experimental API and not yet in fs_err
+        Ok(std::fs::try_exists(&self.0)?)
+    }
+
     pub fn extension(&self) -> Option<&str> {
         self.0.extension()
     }
 
-    // intended for joining literals or obviously single-token strings
+    /// Intended for joining literals or obviously single-token strings
     pub fn join_component(&self, segment: &str) -> AbsoluteSystemPathBuf {
         debug_assert!(!segment.contains(std::path::MAIN_SEPARATOR));
         AbsoluteSystemPathBuf(
@@ -199,7 +213,7 @@ impl AbsoluteSystemPath {
         )
     }
 
-    // intended for joining a path composed of literals
+    /// Intended for joining a path composed of literals
     pub fn join_components(&self, segments: &[&str]) -> AbsoluteSystemPathBuf {
         debug_assert!(!segments
             .iter()
@@ -218,14 +232,20 @@ impl AbsoluteSystemPath {
         self.0.as_str()
     }
 
-    pub fn join_unix_path(
-        &self,
-        unix_path: impl AsRef<RelativeUnixPath>,
-    ) -> Result<AbsoluteSystemPathBuf, PathError> {
+    pub fn join_unix_path(&self, unix_path: impl AsRef<RelativeUnixPath>) -> AbsoluteSystemPathBuf {
         let tail = unix_path.as_ref().to_system_path_buf();
-        Ok(AbsoluteSystemPathBuf(
-            self.0.join(tail).as_std_path().clean().try_into()?,
-        ))
+        AbsoluteSystemPathBuf(
+            self.0
+                .join(tail)
+                .as_std_path()
+                .clean()
+                // The unwrap here should never panic as `try_into` will only panic if
+                // - path isn't absolute: self is already absolute, appending to it won't change
+                //   that
+                // - path isn't valid utf8: self and unix_path are both utf8 already
+                .try_into()
+                .expect("joined path is absolute and valid utf8"),
+        )
     }
 
     pub fn anchor(&self, path: &AbsoluteSystemPath) -> Result<AnchoredSystemPathBuf, PathError> {
@@ -258,6 +278,14 @@ impl AbsoluteSystemPath {
         AbsoluteSystemPathBuf(path)
     }
 
+    /// Lexically cleans a path by doing the following:
+    /// 1. Reduce multiple slashes to a single slash.
+    /// 2. Eliminate . path name elements (the current directory).
+    /// 3. Eliminate .. path name elements (the parent directory) and the non-.
+    ///    non-.., element that precedes them.
+    /// 4. Eliminate .. elements that begin a rooted path, that is, replace /..
+    ///    by / at the beginning of a path.
+    /// 5. Leave intact .. elements that begin a non-rooted path.
     pub fn clean(&self) -> Result<AbsoluteSystemPathBuf, PathError> {
         let cleaned_path = self
             .0
@@ -269,19 +297,21 @@ impl AbsoluteSystemPath {
         Ok(AbsoluteSystemPathBuf(cleaned_path))
     }
 
+    /// Canonicalizes a path. Uses `dunce` to avoid UNC paths when possible.
     pub fn to_realpath(&self) -> Result<AbsoluteSystemPathBuf, PathError> {
         let realpath = dunce::canonicalize(&self.0)?;
         Ok(AbsoluteSystemPathBuf(Utf8PathBuf::try_from(realpath)?))
     }
 
-    // note that this is *not* lstat. If this is a symlink, it
-    // will return metadata for the target.
+    /// Gets metadata on path.
+    /// NOTE: This is *not* lstat. If this is a symlink, it
+    /// will return metadata for the target.
     pub fn stat(&self) -> Result<Metadata, PathError> {
         Ok(fs::metadata(&self.0)?)
     }
 
-    // The equivalent of lstat. Returns the metadata for this file,
-    // even if it is a symlink
+    /// The equivalent of lstat. Returns the metadata for this file,
+    /// even if it is a symlink
     pub fn symlink_metadata(&self) -> Result<Metadata, PathError> {
         Ok(fs::symlink_metadata(&self.0)?)
     }
@@ -377,6 +407,10 @@ impl AbsoluteSystemPath {
         self.0.parent().map(Self::new_unchecked)
     }
 
+    pub fn file_name(&self) -> Option<&str> {
+        self.0.file_name()
+    }
+
     /// Opens file and sets the `FILE_FLAG_SEQUENTIAL_SCAN` flag on Windows to
     /// help with performance
     pub fn open(&self) -> Result<File, io::Error> {
@@ -417,9 +451,18 @@ impl AbsoluteSystemPath {
     where
         I: Into<String>,
     {
-        fs::read_to_string(&self.0).or_else(|e| {
+        match self.read_existing_to_string()? {
+            Some(contents) => Ok(contents),
+            None => default_value.map(|value| value.into()),
+        }
+    }
+
+    /// Attempts to read a file returning None if the file does not exist
+    /// For all other scenarios passes through the `read_to_string` results.
+    pub fn read_existing_to_string(&self) -> Result<Option<String>, io::Error> {
+        fs::read_to_string(&self.0).map(Some).or_else(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
-                default_value.map(|intoable| intoable.into())
+                Ok(None)
             } else {
                 Err(e)
             }
@@ -482,7 +525,6 @@ impl<'a> TryFrom<&'a Path> for &'a AbsoluteSystemPath {
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
-    use tempdir::TempDir;
     use test_case::test_case;
 
     use super::*;
@@ -558,6 +600,28 @@ mod tests {
         assert_eq!(base.contains(&other), expected);
     }
 
+    #[test]
+    fn test_read_non_existing_to_string() -> Result<()> {
+        let test_dir = tempdir::TempDir::new("read-existing")?;
+        let test_path = test_dir.path().join("foo");
+        let path = AbsoluteSystemPathBuf::new(test_path.to_str().unwrap())?;
+        assert_eq!(path.read_existing_to_string()?, None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_existing_to_string() -> Result<()> {
+        let test_dir = tempdir::TempDir::new("read-existing")?;
+        let test_path = test_dir.path().join("foo");
+        let path = AbsoluteSystemPathBuf::new(test_path.to_str().unwrap())?;
+        path.create_with_contents("hi there!")?;
+        assert_eq!(
+            path.read_existing_to_string()?.as_deref(),
+            Some("hi there!")
+        );
+        Ok(())
+    }
+
     // Constructing a windows permissions struct is only possible by calling
     // fs::metadata so we only run these tests on unix.
     #[cfg(unix)]
@@ -578,7 +642,7 @@ mod tests {
             mode: Option<Permissions>,
             expected: Permissions,
         ) -> Result<()> {
-            let test_dir = TempDir::new("mkdir-all")?;
+            let test_dir = tempdir::TempDir::new("mkdir-all")?;
 
             let test_path = test_dir.path().join("foo");
 

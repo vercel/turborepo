@@ -7,7 +7,7 @@ use turbo_tasks_fs::{DiskFileSystem, FileSystem, NullFileSystem};
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
     emit_with_completion, module_options::ModuleOptionsContext, rebase::RebasedAsset, register,
-    resolve_options_context::ResolveOptionsContext, ModuleAssetContext,
+    ModuleAssetContext,
 };
 use turbopack_core::{
     compile_time_info::CompileTimeInfo,
@@ -16,6 +16,7 @@ use turbopack_core::{
     file_source::FileSource,
     reference_type::ReferenceType,
 };
+use turbopack_resolve::resolve_options_context::ResolveOptionsContext;
 
 // TODO this should move to the `node-file-trace` crate
 pub fn benchmark(c: &mut Criterion) {
@@ -71,7 +72,7 @@ fn bench_emit(b: &mut Bencher, bench_input: &BenchInput) {
         let input = bench_input.input.clone();
         async move {
             let task = tt.spawn_once_task(async move {
-                let input_fs = DiskFileSystem::new("tests".to_string(), tests_root.clone());
+                let input_fs = DiskFileSystem::new("tests".to_string(), tests_root.clone(), vec![]);
                 let input = input_fs.root().join(input.clone());
 
                 let input_dir = input.parent().parent();
@@ -99,7 +100,8 @@ fn bench_emit(b: &mut Bencher, bench_input: &BenchInput) {
                     Vc::cell("node_file_trace".to_string()),
                 );
                 let module = module_asset_context
-                    .process(Vc::upcast(source), Value::new(ReferenceType::Undefined));
+                    .process(Vc::upcast(source), Value::new(ReferenceType::Undefined))
+                    .module();
                 let rebased = RebasedAsset::new(Vc::upcast(module), input_dir, output_dir);
 
                 emit_with_completion(Vc::upcast(rebased), output_dir).await?;

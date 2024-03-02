@@ -3,28 +3,26 @@
 #![feature(iter_intersperse)]
 #![feature(int_roundings)]
 #![feature(arbitrary_self_types)]
-#![feature(async_fn_in_trait)]
 
 mod asset;
 pub mod chunk;
 mod code_gen;
 pub mod embed;
 mod global_asset;
+mod lifetime_util;
 mod module_asset;
 pub(crate) mod parse;
-mod path_visitor;
+pub(crate) mod process;
 pub(crate) mod references;
-pub(crate) mod transform;
 pub(crate) mod util;
 
 pub use asset::CssModuleAsset;
 pub use global_asset::GlobalCssAsset;
 pub use module_asset::ModuleCssAsset;
-pub use parse::{ParseCss, ParseCssResult};
 use serde::{Deserialize, Serialize};
-pub use transform::{CssInputTransform, CssInputTransforms};
 use turbo_tasks::{trace::TraceRawVcs, TaskInput};
 
+pub use self::process::*;
 use crate::references::import::ImportAssetReference;
 
 #[derive(

@@ -1,5 +1,5 @@
 import { Tabs, Tab } from "../../../../../components/Tabs";
-import Callout from '../../../../../components/Callout'
+import { Callout } from '../../../../../components/Callout'
 
 # ESLint in a monorepo
 
@@ -149,7 +149,7 @@ module.exports = {
 By adding `custom/next` to our `extends` array, we're telling ESLint to look for a package called `eslint-config-custom`, and reference the file `next.js`.
 
 <Callout type="info">
-  You can avoid specifing the file by setting the entrypoint for your package. For example, setting `main: 'next.js'` in the `package.json`, could be loaded as simply `extends: ["custom"]` in your `.eslintrc.js`.
+  You can avoid specifying the file by setting the entrypoint for your package. For example, setting `main: 'next.js'` in the `package.json`, could be loaded as simply `extends: ["custom"]` in your `.eslintrc.js`.
 </Callout>
 
 ### Summary

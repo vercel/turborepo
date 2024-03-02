@@ -38,7 +38,7 @@ jobs:
           comment-id: ${{ steps.comment.outputs.comment-id }}
           issue-number: ${{ github.event.pull_request.number }}
           body: |
-            ## :hourglass_flowing_sand: Turbopack Benchmark CI is running again... :hourglass_flowing_sand:
+            ## ⏳ Turbopack Benchmark CI is running again... ⏳
 
             [Wait for it...](https://github.com/vercel/turbo/actions/runs/${{ github.run_id }})
 
@@ -123,7 +123,12 @@ jobs:
       needs.determine_jobs.outputs.cargo_on_main == 'true' ||
       needs.determine_jobs.outputs.cargo_only == 'true'
     name: Turbopack rust check
-    runs-on: ubuntu-latest-16-core-oss
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -133,130 +138,11 @@ jobs:
         with:
           components: clippy
           targets: wasm32-unknown-unknown
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run cargo check release
         run: |
           RUSTFLAGS="-D warnings -A deprecated" cargo groups check turbopack --features rustls-tls --release
-
-  turbopack_rust_test_bench1:
-    needs: [turbopack_rust_check]
-    runs-on: ubuntu-latest-16-core-oss
-    name: Turbopack Rust testing benchmarks on ubuntu
-
-    env:
-      TURBOPACK_BENCH_COUNTS: "100"
-      TURBOPACK_BENCH_PROGRESS: "1"
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Setup Rust
-        uses: ./.github/actions/setup-rust
-        with:
-          save-cache: true
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Setup Node.js
-        uses: ./.github/actions/setup-node
-        with:
-          node-version: 18
-
-      - name: Build benchmarks for tests
-        timeout-minutes: 120
-        run: |
-          cargo tp-bench-test --no-run
-
-      - name: Run cargo test on benchmarks
-        timeout-minutes: 120
-        run: |
-          cargo tp-bench-test
-
-      - name: Build benchmarks for tests for other bundlers
-        if: needs.determine_jobs.outputs.turbopack_bench == 'true'
-        timeout-minutes: 120
-        run: |
-          cargo test --benches --release -p turbopack-bench --no-run
-
-      - name: Run cargo test on benchmarks for other bundlers
-        if: needs.determine_jobs.outputs.turbopack_bench == 'true'
-        timeout-minutes: 120
-        run: |
-          cargo test --benches --release -p turbopack-bench
-
-  turbopack_rust_test_bench2:
-    needs: [turbopack_rust_check]
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - name: macos
-            runner: macos-latest
-          # Temporarily disable windows bench due to consistent timeouts
-          # - name: windows
-          #   runner: windows-2019
-    runs-on: ${{ matrix.os.runner }}
-    name: Turbopack Rust testing benchmarks on ${{ matrix.os.name }}
-
-    env:
-      TURBOPACK_BENCH_COUNTS: "100"
-      TURBOPACK_BENCH_PROGRESS: "1"
-
-    steps:
-      - name: Set git to use LF
-        run: |
-          git config --global core.autocrlf false
-          git config --global core.eol lf
-        if: matrix.os.name == 'windows'
-
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Setup Rust
-        uses: ./.github/actions/setup-rust
-        with:
-          save-cache: true
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Setup Node.js
-        uses: ./.github/actions/setup-node
-        with:
-          node-version: 18
-
-      - name: Build benchmarks for tests
-        timeout-minutes: 120
-        run: |
-          cargo tp-bench-test --no-run
-
-      - name: Run cargo test on benchmarks
-        timeout-minutes: 120
-        run: |
-          cargo tp-bench-test
-
-      - name: Build benchmarks for tests for other bundlers
-        if: needs.determine_jobs.outputs.turbopack_bench == 'true'
-        timeout-minutes: 120
-        run: |
-          cargo test --benches --release -p turbopack-bench --no-run
-
-      - name: Run cargo test on benchmarks for other bundlers
-        if: needs.determine_jobs.outputs.turbopack_bench == 'true'
-        timeout-minutes: 120
-        run: |
-          cargo test --benches --release -p turbopack-bench
 
   turbopack_rust_bench:
     needs: [determine_jobs, turbopack_rust_check]
@@ -297,17 +183,17 @@ jobs:
             args: -p turbopack-cli
             TURBOPACK_BENCH_COUNTS: 1000,10000
 
-    runs-on: ubuntu-latest-8-core-oss
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
+
     name: Benchmark on ${{ matrix.bench.name }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
@@ -317,6 +203,7 @@ jobs:
         with:
           shared-cache-key: benchmark-${{ matrix.bench.cache_key }}
           save-cache: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Clear benchmarks
         run: rm -rf target/criterion
@@ -432,7 +319,11 @@ jobs:
           - name: linux
             title: Linux
             quiet: false
-            runner: ubuntu-latest-16-core-oss
+            runs-on:
+              - "self-hosted"
+              - "linux"
+              - "x64"
+              - "metal"
           # - name: macos
           #   title: MacOS
           #   quiet: true
@@ -453,11 +344,6 @@ jobs:
       - name: Fetch the base branch
         run: git -c protocol.version=2 fetch --no-tags --progress --no-recurse-submodules --depth=1 origin +${{ github.base_ref }}:base
 
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
 
@@ -465,6 +351,7 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           shared-cache-key: benchmark-${{ matrix.os.name }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Benchmark and compare with base branch
         uses: sokra/criterion-compare-action@main
@@ -480,8 +367,6 @@ jobs:
     needs:
       - determine_jobs
       - turbopack_rust_check
-      - turbopack_rust_test_bench1
-      - turbopack_rust_test_bench2
       - turbopack_rust_bench
     if: always()
     permissions:
@@ -508,8 +393,6 @@ jobs:
           }
           subjob ${{needs.determine_jobs.result}} "Determining jobs"
           subjob ${{needs.turbopack_rust_check.result}} "Turbopack Rust checks"
-          subjob ${{needs.turbopack_rust_test_bench1.result}} "Turbopack Rust benchmark tests (linux)"
-          subjob ${{needs.turbopack_rust_test_bench2.result}} "Turbopack Rust benchmark tests (mac/win, non-blocking)"
           subjob ${{needs.turbopack_rust_bench.result}} "Turbopack Rust benchmarks (non-blocking)"
           if [ "$cancelled" = "true" ]; then
              echo "cancelled=true" >> $GITHUB_OUTPUT
@@ -522,7 +405,7 @@ jobs:
       - name: Add failure prose text
         if: steps.info.outputs.failure == 'true'
         run: |
-          echo "## :warning: Turbopack Benchmark CI failed :warning:" > comment.md
+          echo "## ⚠️ Turbopack Benchmark CI failed ⚠️" > comment.md
           echo >> comment.md
           echo "The following steps have failed in CI:" >> comment.md
           echo >> comment.md
@@ -535,7 +418,7 @@ jobs:
       - name: Add success prose text
         if: steps.info.outputs.success == 'true'
         run: |
-          echo "## :green_circle: Turbopack Benchmark CI successful :green_circle:" > comment.md
+          echo "## 🟢 Turbopack Benchmark CI successful 🟢" > comment.md
           echo >> comment.md
           echo "Thanks" >> comment.md
           echo >> comment.md

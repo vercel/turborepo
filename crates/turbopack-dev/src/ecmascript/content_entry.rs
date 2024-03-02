@@ -8,7 +8,7 @@ use turbopack_core::{
     chunk::{AsyncModuleInfo, ChunkItem, ChunkItemExt, ModuleId},
     code_builder::{Code, CodeBuilder},
     error::PrettyPrintError,
-    issue::{code_gen::CodeGenerationIssue, IssueExt, IssueSeverity},
+    issue::{code_gen::CodeGenerationIssue, IssueExt, IssueSeverity, StyledString},
 };
 use turbopack_ecmascript::chunk::{
     EcmascriptChunkContent, EcmascriptChunkItem, EcmascriptChunkItemExt,
@@ -22,7 +22,7 @@ use turbopack_ecmascript::chunk::{
 /// computing updates.
 #[turbo_tasks::value]
 #[derive(Debug)]
-pub(super) struct EcmascriptDevChunkContentEntry {
+pub struct EcmascriptDevChunkContentEntry {
     pub code: Vc<Code>,
     pub hash: Vc<u64>,
 }
@@ -41,7 +41,7 @@ impl EcmascriptDevChunkContentEntry {
 }
 
 #[turbo_tasks::value(transparent)]
-pub(super) struct EcmascriptDevChunkContentEntries(
+pub struct EcmascriptDevChunkContentEntries(
     IndexMap<ReadRef<ModuleId>, EcmascriptDevChunkContentEntry>,
 );
 
@@ -103,8 +103,9 @@ async fn item_code(
                 CodeGenerationIssue {
                     severity: IssueSeverity::Error.cell(),
                     path: item.asset_ident().path(),
-                    title: Vc::cell("Code generation for chunk item errored".to_string()),
-                    message: Vc::cell(error_message),
+                    title: StyledString::Text("Code generation for chunk item errored".to_string())
+                        .cell(),
+                    message: StyledString::Text(error_message).cell(),
                 }
                 .cell()
                 .emit();

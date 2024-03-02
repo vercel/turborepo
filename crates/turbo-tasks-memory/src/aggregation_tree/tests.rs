@@ -528,6 +528,7 @@ fn many_children() {
     }
     let children_duration = start.elapsed();
     println!("Children: {:?}", children_duration);
+    let mut number_of_slow_children = 0;
     for _ in 0..10 {
         let start = Instant::now();
         for i in 0..CHILDREN {
@@ -543,8 +544,14 @@ fn many_children() {
         }
         let dur = start.elapsed();
         println!("Children: {:?}", dur);
-        assert!(dur < children_duration * 2);
+        if dur > children_duration * 2 {
+            number_of_slow_children += 1;
+        }
     }
+
+    // Technically it should always be 0, but the performance of the environment
+    // might vary so we accept a few slow children
+    assert!(number_of_slow_children < 3);
 
     let root = NodeRef(roots[0].clone());
 
@@ -559,17 +566,20 @@ fn connect_child(
     let state = parent.inner.lock();
     let node_ref = NodeRef(child.clone());
     let mut node_guard = unsafe { NodeGuard::new(state, parent.clone()) };
-    let job1 = ensure_thresholds(aggregation_context, &mut node_guard);
+    while let Some(job) = ensure_thresholds(aggregation_context, &mut node_guard) {
+        drop(node_guard);
+        job();
+        node_guard = unsafe { NodeGuard::new(parent.inner.lock(), parent.clone()) };
+    }
     let NodeGuard {
         guard: mut state, ..
     } = node_guard;
     state.children.push(child.clone());
-    let job2 = state
+    let job = state
         .aggregation_leaf
         .add_child_job(aggregation_context, &node_ref);
     drop(state);
-    job1();
-    job2();
+    job();
 }
 
 fn print(aggregation_context: &NodeAggregationContext<'_>, current: &NodeRef) {

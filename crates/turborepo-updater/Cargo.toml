@@ -9,8 +9,11 @@ publish = false
 [features]
 # Allows configuring a specific tls backend for reqwest.
 # See top level Cargo.toml for more details.
-native-tls = ["reqwest/native-tls"]
-rustls-tls = ["reqwest/rustls-tls"]
+native-tls = ["reqwest/native-tls", "update-informer/native-tls"]
+rustls-tls = ["reqwest/rustls-tls", "update-informer/rustls-tls"]
+
+[lints]
+workspace = true
 
 [dependencies]
 atty = { workspace = true }
@@ -19,4 +22,6 @@ reqwest = { workspace = true, features = ["json", "blocking"] }
 semver = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
-update-informer = { version = "1.0", default-features = false }
+update-informer = { version = "1.1", default-features = false, features = [
+  "reqwest",
+] }

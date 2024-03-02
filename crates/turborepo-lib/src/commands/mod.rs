@@ -1,10 +1,8 @@
 use std::cell::OnceCell;
 
-use anyhow::anyhow;
-use dirs_next::config_dir;
-use sha2::{Digest, Sha256};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::{APIAuth, APIClient};
+use turborepo_dirs::config_dir;
 use turborepo_ui::UI;
 
 use crate::{
@@ -21,6 +19,7 @@ pub(crate) mod login;
 pub(crate) mod logout;
 pub(crate) mod prune;
 pub(crate) mod run;
+pub(crate) mod telemetry;
 pub(crate) mod unlink;
 
 #[derive(Debug)]
@@ -99,10 +98,12 @@ impl CommandBase {
         let team_id = config.team_id();
         let team_slug = config.team_slug();
 
-        let token = config.token();
+        let Some(token) = config.token() else {
+            return Ok(None);
+        };
 
-        Ok(team_id.zip(token).map(|(team_id, token)| APIAuth {
-            team_id: team_id.to_string(),
+        Ok(Some(APIAuth {
+            team_id: team_id.map(|s| s.to_string()),
             token: token.to_string(),
             team_slug: team_slug.map(|s| s.to_string()),
         }))
@@ -119,28 +120,8 @@ impl CommandBase {
         let api_url = config.api_url();
         let timeout = config.timeout();
 
-        APIClient::new(api_url, timeout, self.version, args.preflight).map_err(|e| {
-            // This error can only be turborepo_api_client::Error::TlsError()
-            match e {
-                turborepo_api_client::Error::TlsError(e) => {
-                    ConfigError::Anyhow(anyhow!("Unable to configure TLS for your machine: {}", e))
-                }
-                _ => panic!("Got a non-builder error at build time."),
-            }
-        })
-    }
-
-    pub fn daemon_file_root(&self) -> AbsoluteSystemPathBuf {
-        AbsoluteSystemPathBuf::new(std::env::temp_dir().to_str().expect("UTF-8 path"))
-            .expect("temp dir is valid")
-            .join_component("turbod")
-            .join_component(self.repo_hash().as_str())
-    }
-
-    fn repo_hash(&self) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(self.repo_root.as_bytes());
-        hex::encode(&hasher.finalize()[..8])
+        APIClient::new(api_url, timeout, self.version, args.preflight)
+            .map_err(ConfigError::ApiClient)
     }
 
     /// Current working directory for the turbo command
@@ -154,46 +135,5 @@ impl CommandBase {
 
     pub fn version(&self) -> &'static str {
         self.version
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use test_case::test_case;
-    use turbopath::AbsoluteSystemPathBuf;
-    use turborepo_ui::UI;
-
-    use crate::get_version;
-
-    #[cfg(not(target_os = "windows"))]
-    #[test_case("/tmp/turborepo", "6e0cfa616f75a61c"; "basic example")]
-    fn test_repo_hash(path: &str, expected_hash: &str) {
-        use super::CommandBase;
-        use crate::Args;
-
-        let args = Args::default();
-        let repo_root = AbsoluteSystemPathBuf::new(path).unwrap();
-        let command_base = CommandBase::new(args, repo_root, get_version(), UI::new(true));
-
-        let hash = command_base.repo_hash();
-
-        assert_eq!(hash, expected_hash);
-        assert_eq!(hash.len(), 16);
-    }
-
-    #[cfg(target_os = "windows")]
-    #[test_case("C:\\\\tmp\\turborepo", "0103736e6883e35f"; "basic example")]
-    fn test_repo_hash_win(path: &str, expected_hash: &str) {
-        use super::CommandBase;
-        use crate::Args;
-
-        let args = Args::default();
-        let repo_root = AbsoluteSystemPathBuf::new(path).unwrap();
-        let command_base = CommandBase::new(args, repo_root, get_version(), UI::new(true));
-
-        let hash = command_base.repo_hash();
-
-        assert_eq!(hash, expected_hash);
-        assert_eq!(hash.len(), 16);
     }
 }

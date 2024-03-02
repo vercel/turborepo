@@ -90,7 +90,7 @@ type EcmascriptModuleEntry = {
 
 type ResourceIdentifier = {
   path: string;
-  headers?: { [string]: string };
+  headers?: { [key: string]: string };
 };
 
 type ClientMessageSubscribe = {
@@ -124,6 +124,10 @@ type SourcePos = {
 
 type IssueSource = {
   asset: IssueAsset;
+  range?: IssueSourceRange;
+};
+
+type IssueSourceRange = {
   start: SourcePos;
   end: SourcePos;
 };

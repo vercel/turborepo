@@ -1,4 +1,4 @@
-import Callout from "../../../../components/Callout";
+import { Callout } from "../../../../components/Callout";
 
 # Deploying with Docker
 
@@ -112,6 +112,10 @@ Splitting up **dependencies** and **source files** in this way lets us **only ru
 ### Example
 
 Our detailed [`with-docker` example](https://github.com/vercel/turbo/tree/main/examples/with-docker) goes into depth on how to utilise `prune` to its full potential. Here's the Dockerfile, copied over for convenience.
+
+<Callout type="info">
+  This Dockerfile is written for a [Next.js](https://nextjs.org/) app that is using the `standalone` [output mode](https://nextjs.org/docs/pages/api-reference/next-config-js/output).
+</Callout>
 
 ```docker
 FROM node:18-alpine AS base

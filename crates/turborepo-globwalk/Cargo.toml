@@ -6,9 +6,15 @@ license = "MPL-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lints]
+workspace = true
+
 [dependencies]
+camino = { workspace = true }
 itertools.workspace = true
+path-clean = "1.0.1"
 path-slash = "0.2.1"
+rayon = "1"
 regex.workspace = true
 thiserror.workspace = true
 tracing = "0.1.37"

@@ -11,7 +11,9 @@ inputs:
   components:
     description: "Comma-separated list of components to be additionally installed"
     required: false
-
+  github-token:
+    description: "GitHub token. You can pass secrets.GITHUB_TOKEN"
+    required: true
   shared-cache-key:
     description: "A cache key that is used instead of the automatic `job`-based key, and is stable over multiple jobs."
     required: false
@@ -52,6 +54,21 @@ runs:
       if: ${{ inputs.windows == 'true' }}
       shell: bash
       run: rustup set default-host x86_64-pc-windows-gnu && rustup show
+
+    - name: Set Up Protoc
+      id: set-up-protoc
+      continue-on-error: true
+      uses: arduino/setup-protoc@v1.2.0
+      with:
+        version: "3.x"
+        repo-token: ${{ inputs.github-token }}
+
+    - name: Set Up Protoc (second try)
+      if: steps.set-up-protoc.outcome == 'failure'
+      uses: arduino/setup-protoc@v1.2.0
+      with:
+        version: "3.x"
+        repo-token: ${{ inputs.github-token }}
 
     - name: "Add cargo problem matchers"
       shell: bash

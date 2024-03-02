@@ -45,6 +45,7 @@ struct NpmPackage {
 }
 
 impl Lockfile for NpmLockfile {
+    #[tracing::instrument(skip(self, _version))]
     fn resolve_package(
         &self,
         workspace_path: &str,
@@ -78,6 +79,7 @@ impl Lockfile for NpmLockfile {
             .transpose()
     }
 
+    #[tracing::instrument(skip(self))]
     fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, String>>, Error> {
         self.packages
             .get(key)

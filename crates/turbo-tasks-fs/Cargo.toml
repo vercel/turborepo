@@ -17,6 +17,11 @@ harness = false
 # A binary built with this option **is not portable**, the directory
 # path will be embedded into the binary.
 dynamic_embed_contents = []
+# Write a hashed version of each file to allow to debug conflicting writes
+write_version = []
+
+[lints]
+workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
@@ -32,7 +37,8 @@ include_dir = { version = "0.7.2", features = ["nightly"] }
 indexmap = { workspace = true }
 jsonc-parser = { version = "0.21.0", features = ["serde"] }
 mime = { workspace = true }
-notify = "4.0.17"
+notify = { workspace = true }
+notify-debouncer-full = { workspace = true }
 parking_lot = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
 serde_json = { workspace = true }
@@ -41,6 +47,7 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 turbo-tasks = { workspace = true }
 turbo-tasks-hash = { workspace = true }
+unicode-segmentation = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true, features = ["async_tokio"] }

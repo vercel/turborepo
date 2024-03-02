@@ -2,30 +2,18 @@ import { Tabs, Tab } from '../../../../components/Tabs'
 
 # Add Turborepo to your existing project
 
-Turborepo can be used in **any project** to speed up the execution of scripts in your `package.json`.
+Turborepo can be used in any project to speed up the execution of scripts in
+your `package.json`.
 
-After you install `turbo`, you'll be able to run all your `package.json` tasks from `turbo` instead of your package manager.
+After you install `turbo`, you'll be able to run all your `package.json` tasks
+from `turbo` instead of your package manager.
 
-By configuring your `turbo.json` correctly, you'll notice how [caching](/repo/docs/core-concepts/caching) helps your tasks run a lot faster.
+By configuring your `turbo.json` correctly, you'll notice how
+[caching](/repo/docs/core-concepts/caching) helps your tasks run a lot faster.
 
 ## Quickstart
 
-0. **If you don't have one already, create a new application:**
-
-<Tabs items={['Next.js', 'Vite']} storageKey="selected-framework">
-  <Tab>
-```bash
-npx create-next-app@latest
-```
-  </Tab>
-  <Tab>
-```bash
-npm create vite@latest
-```
-  </Tab>
-</Tabs>
-
-1. **Install `turbo` globally:**
+1. **Install `turbo` globally**
 
 <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>
@@ -47,7 +35,7 @@ npm create vite@latest
 
 For more details about installation, see [Installing Turborepo](../installing)
 
-2. **Add a `turbo.json` file at the base of your new repository:**
+2. **Add a `turbo.json` file at the base of your repository:**
 
 For more information on configuring your `turbo.json`, see the [Configuration Options](/repo/docs/reference/configuration) documentation.
 
@@ -60,7 +48,7 @@ For more information on configuring your `turbo.json`, see the [Configuration Op
     "build": {
       "outputs": [".next/**", "!.next/cache/**"]
     },
-    "lint": {}
+    "type-check": {}
   }
 }
 ```
@@ -73,7 +61,7 @@ For more information on configuring your `turbo.json`, see the [Configuration Op
     "build": {
       "outputs": ["dist/**"]
     },
-    "lint": {}
+    "type-check": {}
   }
 }
 ```
@@ -88,13 +76,13 @@ Some Vite starters ship with a `package.json` that looks like this:
 }
 ```
 
-We recommend splitting these into a `lint` and `build` script.
+We recommend splitting these into a `type-check` and `build` script.
 
 ```json filename="package.json"
 {
   "scripts": {
     "build": "vite build",
-    "lint": "tsc"
+    "type-check": "tsc"
   }
 }
 ```
@@ -112,10 +100,10 @@ Add `.turbo` to your `.gitignore` file. The CLI uses these folders for logs and 
 + .turbo
 ```
 
-4. **Try running `build` and `lint` with `turbo`:**
+4. **Run the `build` and `lint` tasks with `turbo`:**
 
 ```bash
-turbo build lint
+turbo type-check build
 ```
 
 This runs `build` and `lint` at the same time.
@@ -123,7 +111,7 @@ This runs `build` and `lint` at the same time.
 5. **Without making any changes to the code, try running `build` and `lint` again:**
 
 ```bash
-turbo build lint
+turbo type-check build
 ```
 
 You should see terminal output like this:

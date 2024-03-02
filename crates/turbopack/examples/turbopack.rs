@@ -16,10 +16,7 @@ use turbo_tasks_memory::{
     viz::graph::{visualize_stats_tree, wrap_html},
     MemoryBackend,
 };
-use turbopack::{
-    emit_with_completion, rebase::RebasedAsset, register,
-    resolve_options_context::ResolveOptionsContext,
-};
+use turbopack::{emit_with_completion, rebase::RebasedAsset, register};
 use turbopack_core::{
     compile_time_info::CompileTimeInfo,
     context::AssetContext,
@@ -27,6 +24,7 @@ use turbopack_core::{
     file_source::FileSource,
     PROJECT_FILESYSTEM_NAME,
 };
+use turbopack_resolve::resolve_options_context::ResolveOptionsContext;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -38,7 +36,7 @@ async fn main() -> Result<()> {
     let task = tt.spawn_root_task(|| {
         Box::pin(async {
             let root = current_dir().unwrap().to_str().unwrap().to_string();
-            let disk_fs = DiskFileSystem::new(PROJECT_FILESYSTEM_NAME.to_string(), root);
+            let disk_fs = DiskFileSystem::new(PROJECT_FILESYSTEM_NAME.to_string(), root, vec![]);
             disk_fs.await?.start_watching()?;
 
             // Smart Pointer cast
@@ -64,10 +62,12 @@ async fn main() -> Result<()> {
                 .cell(),
                 Vc::cell("default".to_string()),
             );
-            let module = module_asset_context.process(
-                Vc::upcast(source),
-                Value::new(turbopack_core::reference_type::ReferenceType::Undefined),
-            );
+            let module = module_asset_context
+                .process(
+                    Vc::upcast(source),
+                    Value::new(turbopack_core::reference_type::ReferenceType::Undefined),
+                )
+                .module();
             let rebased = RebasedAsset::new(module, input, output);
             emit_with_completion(Vc::upcast(rebased), output).await?;
 

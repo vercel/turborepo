@@ -13,7 +13,7 @@ A new generation of native-speed bundlers were emerging, but after assessing the
 
 ## Unified Graph
 
-A large reason why frameworks like Next.js have become so popular is that implementing features like SSR (and now RSC) with the current generation of bundlers is non-trivial. You need to create multiple compilers for each output enviroment (browser, server, etc), and manage the communication between them so that their bundles end up correctly stitched together.
+A large reason why frameworks like Next.js have become so popular is that implementing features like SSR (and now RSC) with the current generation of bundlers is non-trivial. You need to create multiple compilers for each output environment (browser, server, etc), and manage the communication between them so that their bundles end up correctly stitched together.
 
 We wanted to remove this maintenance burden from Next.js and any framework that chooses to use Turbopack. We can also create a cleaner and more stable implementation by designing a single unified graph that can be used to generate bundles for multiple environments.
 

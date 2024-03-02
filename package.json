@@ -8,27 +8,23 @@
     "build:ts": "tsc -b tsconfig.project.json",
     "lint:prettier": "turbo run lint:prettier",
     "check:toml": "taplo format --check",
-    "format": "run-p format:prettier format:rs format:toml",
-    "format:prettier": "prettier -w .",
-    "format:rs": "cargo fmt --all",
-    "format:toml": "taplo format",
     "turbo": "pnpm run build:turbo && node turbow.js",
     "turbo-prebuilt": "node turbow.js",
     "docs": "pnpm -- turbo run dev --filter=docs --no-cache",
     "prepare": "husky install",
-    "test": "turbo run test"
+    "test": "turbo run test",
+    "rustdoc": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going || true",
+    "rustdoc:open": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going --open"
   },
   "devDependencies": {
     "@taplo/cli": "^0.5.2",
     "@types/react": "18.2.0",
-    "eslint": "^8.48.0",
+    "eslint": "^8.55.0",
     "husky": "^8.0.0",
     "lint-staged": "^13.1.0",
-    "next": "^13.0.6",
-    "npm-run-all": "^4.1.5",
     "prettier": "^2.8.7",
     "semver": "^7.3.8",
-    "typescript": "^4.9.4"
+    "typescript": "5.3.3"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [
@@ -37,9 +33,6 @@
     "*.{md,mdx,mjs,yml,yaml,css}": [
       "prettier --write"
     ],
-    "*.go": [
-      "pnpm --filter cli format"
-    ],
     "*.toml": [
       "taplo format"
     ],
@@ -47,13 +40,8 @@
       "cargo fmt --"
     ]
   },
-  "pnpm": {
-    "overrides": {
-      "next": "^13.4.12"
-    }
-  },
-  "packageManager": "pnpm@8.9.0",
+  "packageManager": "pnpm@8.14.0",
   "engines": {
-    "node": "18.x"
+    "node": "20.x"
   }
 }

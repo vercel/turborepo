@@ -11,6 +11,7 @@ bench = false
 [features]
 __swc = []
 __swc_core = ["__swc"]
+__swc_core_serde = ["swc_core/ecma_ast_serde"]
 __swc_core_next_core = [
   "__swc_core",
   "swc_core/common_concurrent",
@@ -20,6 +21,7 @@ __swc_core_next_core = [
   "swc_core/ecma_loader_lru",
   "swc_core/ecma_utils",
   "swc_core/ecma_minifier",
+  "swc_core/ecma_preset_env",
   "swc_core/ecma_transforms",
   "swc_core/ecma_transforms_react",
   "swc_core/ecma_transforms_typescript",
@@ -136,6 +138,7 @@ __turbopack_ecmascript_hmr_protocol = [
   "__turbopack",
   "turbopack-ecmascript-hmr-protocol",
 ]
+__turbopack_trace_utils = ["__turbopack", "turbopack-trace-utils"]
 
 __turbopack_env = ["__turbopack", "turbopack-env"]
 __turbopack_image = ["__turbopack", "turbopack-image"]
@@ -169,7 +172,12 @@ __swc_transform_styled_components = [
   "__swc_custom_transform",
   "styled_components",
 ]
-__swc_transform_styled_jsx = ["__swc", "__swc_custom_transform", "styled_jsx"]
+__swc_transform_styled_jsx = [
+  "__swc",
+  "__swc_custom_transform",
+  "swc_core/ecma_preset_env",
+  "styled_jsx",
+]
 __swc_transform_emotion = ["__swc", "__swc_custom_transform", "swc_emotion"]
 __swc_transform_relay = ["__swc", "__swc_custom_transform", "swc_relay"]
 __swc_transform_modularize_imports = [
@@ -178,6 +186,9 @@ __swc_transform_modularize_imports = [
   "modularize_imports",
 ]
 __swc_testing = ["__swc", "testing"]
+
+[lints]
+workspace = true
 
 [dependencies]
 mdxjs = { optional = true, workspace = true }
@@ -229,3 +240,4 @@ turbopack-static = { optional = true, workspace = true }
 turbopack-swc-utils = { optional = true, workspace = true }
 turbopack-test-utils = { optional = true, workspace = true }
 turbopack-tests = { optional = true, workspace = true }
+turbopack-trace-utils = { optional = true, workspace = true }

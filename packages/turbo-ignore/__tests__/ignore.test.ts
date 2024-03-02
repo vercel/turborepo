@@ -127,7 +127,7 @@ describe("turboIgnore()", () => {
 
     validateLogs(
       [
-        `turbo-ignore could not complete - commit does not exist or is unreachable`,
+        `turbo-ignore could not complete - a ref or SHA is invalid. It could have been removed from the branch history via a force push, or this could be a shallow clone with insufficient history`,
       ],
       mockConsole.warn,
       { prefix: "≫  " }

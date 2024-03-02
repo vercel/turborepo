@@ -4,15 +4,19 @@
     "build": "turbo build",
     "dev": "turbo dev",
     "lint": "turbo lint",
+    "type-check": "turbo type-check",
     "clean": "turbo clean",
     "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {
-    "eslint": "^8.48.0",
-    "prettier": "^3.0.3",
-    "prettier-plugin-tailwindcss": "^0.5.3",
-    "tsconfig": "workspace:*",
-    "turbo": "^1.10.12"
+    "eslint": "^8.56.0",
+    "prettier": "^3.1.1",
+    "prettier-plugin-tailwindcss": "^0.5.10",
+    "@repo/typescript-config": "workspace:*",
+    "turbo": "^1.12.1"
   },
-  "packageManager": "pnpm@8.6.10"
+  "packageManager": "pnpm@8.9.0",
+  "engines": {
+    "node": ">=18"
+  }
 }

@@ -15,7 +15,7 @@ pub(crate) fn hash_objects(
         let span = tracing::info_span!(parent: &parent, "hash_object", ?filename);
         let _enter = span.enter();
 
-        let full_file_path = git_root.join_unix_path(filename)?;
+        let full_file_path = git_root.join_unix_path(filename);
         match git2::Oid::hash_file(git2::ObjectType::Blob, &full_file_path) {
             Ok(hash) => {
                 let package_relative_path =

@@ -38,7 +38,7 @@ jobs:
           comment-id: ${{ steps.comment.outputs.comment-id }}
           issue-number: ${{ github.event.pull_request.number }}
           body: |
-            ## :hourglass_flowing_sand: CI is running again... :hourglass_flowing_sand:
+            ## ⏳ CI is running again... ⏳
 
             [Wait for it...](https://github.com/vercel/turbo/actions/runs/${{ github.run_id }})
 
@@ -56,9 +56,6 @@ jobs:
           PATTERNS: |
             .github/actions/**
             .github/workflows/test.yml
-            .github/workflows/setup-nextjs-build.yml
-            .github/workflows/nextjs-integration-test-results.yml
-            .github/workflows/upload-nextjs-integration-test-results.yml
 
       - name: Root cargo related changes
         id: cargo
@@ -134,13 +131,6 @@ jobs:
             !**.md
             !**.mdx
 
-      - name: Turborepo Go related changes
-        id: turborepo_go
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            cli/**
-
       - name: Turborepo integration tests changes
         id: turborepo_integration
         uses: technote-space/get-diff-action@v6
@@ -149,21 +139,14 @@ jobs:
             turborepo-tests/integration/**
             turborepo-tests/helpers/**
 
-      - name: Turborepo e2e tests changes
-        id: turborepo_e2e
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            turborepo-tests/e2e/**
-            turborepo-tests/helpers/**
-
       - name: Examples related changes
         id: examples
         uses: technote-space/get-diff-action@v6
         with:
           PATTERNS: |
             examples/**
-            examples-tests/**
+            turborepo-tests/example-*/**
+            turborepo-tests/helpers/**
             !**.md
             !**.mdx
 
@@ -173,6 +156,13 @@ jobs:
         with:
           PATTERNS: |
             packages/**
+
+      - name: Docs related changes
+        id: docs
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            docs/**
 
       - name: Formatting related changes
         id: format
@@ -190,13 +180,11 @@ jobs:
       turbopack_typescript: ${{ steps.ci.outputs.diff != '' || steps.turbopack_typescript.outputs.diff != '' }}
       turborepo_rust: ${{ steps.ci.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' }}
       turbopack_bench: ${{ steps.ci.outputs.diff != '' || steps.turbopack_bench.outputs.diff != '' }}
-      turborepo_go_unit: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' }}
-      turborepo_go_lint: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != ''}}
-      turborepo_build: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' || steps.turborepo_integration.outputs.diff != '' || steps.turborepo_e2e.outputs.diff != ''}}
-      turborepo_e2e: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_e2e.outputs.diff != '' }}
-      turborepo_integration: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_integration.outputs.diff != '' }}
+      turborepo_build: ${{ steps.ci.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' || steps.turborepo_integration.outputs.diff != ''}}
+      turborepo_integration: ${{ steps.ci.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_integration.outputs.diff != '' }}
       examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' || steps.turborepo_version.outputs.diff != '' }}
       turborepo_js: ${{ steps.ci.outputs.diff != '' || steps.turborepo_js.outputs.diff != '' }}
+      docs: ${{ steps.ci.outputs.diff != '' || steps.docs.outputs.diff != '' }}
       format: ${{ steps.ci.outputs.diff != '' || steps.format.outputs.diff != '' }}
       push: ${{ steps.ci.outputs.diff != '' || github.event_name == 'push' }}
       tag: ${{ steps.ci.outputs.diff != '' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace')) }}
@@ -213,7 +201,11 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            runner: ubuntu-latest
+            runner:
+              - "self-hosted"
+              - "linux"
+              - "x64"
+              - "metal"
           - name: macos
             runner: macos-latest
           - name: windows
@@ -231,8 +223,13 @@ jobs:
         with:
           windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - run: turbo run build --filter=cli --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+      # We explicitly unset RUSTC_WRAPPER if it is an empty string as causes build issues
+      - run: |
+          if [ -z "${RUSTC_WRAPPER}" ]; then
+            unset RUSTC_WRAPPER
+          fi
+          turbo run build --filter=cli --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+        shell: bash
         env:
           SCCACHE_BUCKET: turborepo-sccache
           SCCACHE_REGION: us-east-2
@@ -247,150 +244,52 @@ jobs:
         run: ${SCCACHE_PATH} --show-stats
         if: ${{ !github.event.pull_request.head.repo.fork }}
 
-  go_lint:
-    name: Go linting
-    runs-on: ubuntu-latest
-    needs: determine_jobs
-    if: needs.determine_jobs.outputs.turborepo_go_lint == 'true'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Setup Protos
-        run: cd cli && make compile-protos
-
-      - name: Build turborepo-ffi
-        run: cd cli && make turborepo-ffi-install
-
-      - name: golangci Linting
-        uses: golangci/golangci-lint-action@v3
-        with:
-          # More config options documented here: https://github.com/golangci/golangci-lint-action
-          version: latest
-          working-directory: cli
-          args: --new-from-rev=${{ github.event.pull_request.base.sha || 'HEAD~1' }}
-
-  go_unit:
-    name: Go Unit Tests
-    needs: determine_jobs
-    if: needs.determine_jobs.outputs.turborepo_go_unit == 'true'
-    timeout-minutes: 45
-    runs-on: ${{ matrix.os.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - name: ubuntu
-            runner: ubuntu-latest
-          - name: macos
-            runner: macos-latest
-          - name: windows
-            runner: windows-latest
-
-    steps:
-      - uses: actions/checkout@v3
-      - uses: ./.github/actions/setup-turborepo-environment
-        with:
-          windows: ${{ matrix.os.name == 'windows' }}
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - run: turbo run test --filter=cli --color
-
   turborepo_integration:
-    name: Turborepo Integration Tests
+    name: Turborepo Integration
     needs: [determine_jobs, build_turborepo]
     if: needs.determine_jobs.outputs.turborepo_integration == 'true'
-    timeout-minutes: 30
     runs-on: ${{ matrix.os.runner }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         os:
-          - name: ubuntu
-            runner: ubuntu-latest
-          - name: macos
-            runner: macos-latest
+          - runner: ubuntu-latest
+          - runner: macos-latest
+          - runner: windows-latest
     steps:
+      # On Windows, set autocrlf to input so that when the repo is cloned down
+      # the fixtures retain their line endings and don't get updated to CRLF.
+      # We want this because this repo also contains the fixtures for our test cases
+      # and these fixtures have files that need stable file hashes. If we let git update
+      # the line endings on checkout, the file hashes will change.
+      # https://www.git-scm.com/book/en/v2/Customizing-Git-Git-Configuration#_core_autocrlf
+      - name: set crlf
+        if: matrix.os.runner == 'windows-latest'
+        shell: bash
+        run: git config --global core.autocrlf input
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-turborepo-environment
         with:
-          windows: ${{ matrix.os.name == 'windows' }}
+          windows: ${{ matrix.os.runner == 'windows-latest' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Setup Graphviz
+        uses: ts-graphviz/setup-graphviz@v1
+        with:
+          macos-skip-brew-update: "true"
+        env:
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
 
       - name: Cache Prysk
         id: cache-prysk
         uses: actions/cache@v3
         with:
           path: cli/.cram_env
-          key: prysk-venv-${{ matrix.os.name }}
+          key: prysk-venv-${{ matrix.os.runner }}
 
       - name: Integration Tests
         run: turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
-
-  turborepo_integration_rust:
-    name: Turborepo Integration Tests (Rust Codepath)
-    needs: [determine_jobs, build_turborepo]
-    if: needs.determine_jobs.outputs.turborepo_integration == 'true'
-    timeout-minutes: 30
-    runs-on: ${{ matrix.os.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - name: ubuntu
-            runner: ubuntu-latest
-          # TODO: enable macos when --experimental-rust-codepath is passing all tests on ubuntu
-          # - name: macos
-          #   runner: macos-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: ./.github/actions/setup-turborepo-environment
-        with:
-          target: ${{ matrix.os.name }}
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Cache Prysk
-        id: cache-prysk
-        uses: actions/cache@v3
-        with:
-          path: cli/.cram_env
-          key: prysk-venv-${{ matrix.os.name }}
-
-      - name: Integration Tests
-        run: turbo run test:rust-codepath --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
-
-  turborepo_e2e:
-    name: Turborepo E2E Tests
-    needs: [determine_jobs, build_turborepo]
-    if: needs.determine_jobs.outputs.turborepo_e2e == 'true'
-    timeout-minutes: 60
-    runs-on: ${{ matrix.os.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - name: ubuntu
-            runner: ubuntu-latest
-          - name: macos
-            runner: macos-latest
-          - name: windows
-            runner: windows-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: ./.github/actions/setup-turborepo-environment
-        with:
-          windows: ${{ matrix.os.name == 'windows' }}
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: E2E Tests
-        run: turbo run test --filter=turborepo-tests-e2e --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --color --env-mode=strict
 
   turborepo_examples:
     name: Turborepo Examples
@@ -398,60 +297,32 @@ jobs:
     if: needs.determine_jobs.outputs.examples == 'true'
     timeout-minutes: 40
 
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - name: ubuntu
-            runner: ubuntu-latest
-          - name: macos
-            runner: macos-latest
-    runs-on: ${{ matrix.os.runner }}
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
-      # Note: the setup-node action inside this is somehow required for
-      # the node setup below this step. Not sure why.
-      - uses: ./.github/actions/setup-turborepo-environment
-        with:
-          windows: ${{ matrix.os.name == 'windows' }}
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      # TODO: .github/actions/setup-node is pretty similar to the following
-      # steps (Setup Pnpm, pnpm cache, corepack, setup node), but it didn't
-      # work out of box. We should take another stab at it later.
-      - name: Setup Pnpm
-        uses: pnpm/action-setup@v2.2.4
-
-      - name: Make sure pnpm always has a cache
-        shell: bash
-        run: |
-          mkdir -p `pnpm store path`
-
-      # Disable corepack, actions/setup-node invokes other package managers and
+      # Disable corepack. actions/setup-node invokes other package managers and
       # that causes corepack to throw an error, so we disable it first.
       - name: Disable corepack
         shell: bash
         run: corepack disable
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+      - uses: ./.github/actions/setup-turborepo-environment
         with:
-          node-version: 18
-          cache: ${{ matrix.manager }}
-          cache-dependency-path: package.json
+          windows: ${{ matrix.os.runner == 'windows-latest' }}
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Check examples
         shell: bash
-        # Note: using CLI flags instead of env vars because
-        # envs var would apply to the actual tests that exercise turbo also,
-        # making test output non-deterministic.
-        run: turbo run example-test --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict
+        # Concurrency being 1 is a big hammer here.
+        # It's a quick fix for non-deterministic behaviors we're seeing around package resolution.
+        # We could likely do some hacking to reparallelize this, but it's not worth it right now.
+        run: turbo run test --filter="@turborepo-examples-tests/*" --continue --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict --concurrency=1
 
-      # Re-enable corepack, actions/setup-node invokes other package managers and
-      # that causes corepack to throw an error, so we disable it here. The "Post" step
-      # for actions/setup-node will run at the end of this job, so we need to prep for it.
+      # Disable corepack again. actions/setup-node's "Post" step runs at the end of
+      # this job invokes other package managers, and corepack throws an error.
+      # (corepack was enabled from inside the tests above).
       - name: Disable corepack again
         shell: bash
         run: corepack disable
@@ -459,7 +330,7 @@ jobs:
   js_packages:
     name: JS Package Tests
     timeout-minutes: 30
-    if: needs.determine_jobs.outputs.turborepo_js == 'true'
+    if: needs.determine_jobs.outputs.turborepo_js == 'true' || needs.determine_jobs.outputs.docs == 'true'
     needs: [determine_jobs]
     runs-on: ${{ matrix.os.runner }}
     strategy:
@@ -467,7 +338,11 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            runner: ubuntu-latest
+            runner:
+              - "self-hosted"
+              - "linux"
+              - "x64"
+              - "metal"
           - name: macos
             runner: macos-latest
     env:
@@ -496,12 +371,20 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Run tests
+        # We manually set TURBO_API to an empty string to override Hetzner env
+        # We filter out turborepo-repository because it's a native package and needs
+        # to run when turbo core changes. This job (`js_packages`) does not run on turborpeo core
+        # changes, and we don't want to enable that beahvior for _all_ our JS packages.
         run: |
-          turbo run check-types test --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color
+          TURBO_API= turbo run check-types test --filter=docs --filter="!turborepo-repository" --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
 
   turbopack_typescript:
     name: Turbopack TypeScript files
-    runs-on: ubuntu-latest
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     needs: determine_jobs
     if: needs.determine_jobs.outputs.turbopack_typescript == 'true'
     steps:
@@ -530,7 +413,11 @@ jobs:
     needs: [determine_jobs]
     if: needs.determine_jobs.outputs.rust == 'true'
     name: Rust lints
-    runs-on: ubuntu-latest
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -539,13 +426,14 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           components: rustfmt
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Run cargo fmt check
         run: |
           cargo fmt --check
 
       - name: Check Cargo.toml formatting (taplo)
-        run: npx @taplo/cli format --check
+        run: npx @taplo/cli@0.5.2 format --check
 
       - name: Check licenses
         uses: EmbarkStudios/cargo-deny-action@v1
@@ -560,24 +448,20 @@ jobs:
       needs.determine_jobs.outputs.cargo_on_main == 'true' ||
       needs.determine_jobs.outputs.cargo_only == 'true'
     name: Turborepo rust check
-    runs-on: ubuntu-latest-16-core-oss
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Setup Rust
-        uses: ./.github/actions/setup-rust
+      - name: Setup Turborepo Environment
+        uses: ./.github/actions/setup-turborepo-environment
         with:
-          components: clippy
-          targets: wasm32-unknown-unknown
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
+          windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Setup capnproto
-        uses: ./.github/actions/setup-capnproto
 
       - name: Run cargo check
         run: |
@@ -586,24 +470,20 @@ jobs:
   turborepo_rust_clippy:
     needs: [turborepo_rust_check]
     name: Turborepo rust clippy
-    runs-on: ubuntu-latest-16-core-oss
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Setup Rust
-        uses: ./.github/actions/setup-rust
+      - name: Setup Turborepo Environment
+        uses: ./.github/actions/setup-turborepo-environment
         with:
-          components: clippy
-          targets: wasm32-unknown-unknown
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
+          windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Setup capnproto
-        uses: ./.github/actions/setup-capnproto
 
       - name: Run cargo clippy
         run: |
@@ -621,7 +501,11 @@ jobs:
       needs.determine_jobs.outputs.cargo_on_main == 'true' ||
       needs.determine_jobs.outputs.cargo_only == 'true'
     name: Turbopack rust check
-    runs-on: ubuntu-latest-16-core-oss
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -630,21 +514,24 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           components: clippy
-          targets: wasm32-unknown-unknown
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          targets: wasm32-unknown-unknown,wasm32-wasi-preview1-threads
 
       - name: Run cargo check release
         run: |
           RUSTFLAGS="-D warnings -A deprecated" cargo groups check turbopack --features rustls-tls --release
 
+      - name: Run cargo check for the wasi targets
+        run: |
+          RUSTFLAGS="-D warnings -A deprecated" cargo groups check turbopack-wasi --release
+
   turbopack_rust_clippy:
     needs: [turbopack_rust_check]
     name: Turbopack rust clippy
-    runs-on: ubuntu-latest-16-core-oss
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -654,15 +541,11 @@ jobs:
         with:
           components: clippy
           targets: wasm32-unknown-unknown
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Run cargo clippy
         run: |
-          RUSTFLAGS="-D warnings -A deprecated -Aclippy::too_many_arguments" cargo groups clippy turbopack --features rustls-tls
+          RUSTFLAGS="-D warnings -A deprecated" cargo groups clippy turbopack --features rustls-tls
 
       - name: Run ast-grep lints
         run: |
@@ -672,13 +555,14 @@ jobs:
     needs: [determine_jobs]
     if: needs.determine_jobs.outputs.turbopack == 'true' || needs.determine_jobs.outputs.cargo_on_main == 'true'
     name: Check next-swc
-    runs-on: ubuntu-latest-8-core-oss
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     permissions:
       pull-requests: write
     steps:
-      - name: tune linux network
-        run: sudo ethtool -K eth0 tx off rx off
-
       - name: Checkout Next.js
         uses: actions/checkout@v3
         with:
@@ -686,6 +570,8 @@ jobs:
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Build next-swc
         run: |
@@ -701,7 +587,7 @@ jobs:
           cargo check \
             --config $BINDING --config $TASKS --config $TASKS_FS \
             --all -p next-swc-api \
-            --no-default-features --features custom_allocator,rustls-tls \
+            --no-default-features --features rustls-tls \
             --message-format short --quiet \
           2>&1 | tee cargo_output.log)
 
@@ -718,7 +604,7 @@ jobs:
 
           # strip ansi colors with `sed`
           echo "\
-          :warning: This change may fail to build \`next-swc\`.
+          ⚠️ This change may fail to build \`next-swc\`.
 
           <details><summary>Logs</summary>
           <p>
@@ -748,7 +634,11 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            runner: ubuntu-latest-16-core-oss
+            runner:
+              - "self-hosted"
+              - "linux"
+              - "x64"
+              - "metal"
             nextest: linux
           - name: macos
             runner: macos-latest
@@ -768,18 +658,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Setup Rust
-        uses: ./.github/actions/setup-rust
+      - name: Setup Turborepo Environment
+        uses: ./.github/actions/setup-turborepo-environment
         with:
-          save-cache: true
-
-      - name: Setup capnproto
-        uses: ./.github/actions/setup-capnproto
-
-      - name: Setup Protoc
-        uses: arduino/setup-protoc@v1
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          windows: ${{ matrix.os.name == 'windows' }}
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Run tests
         timeout-minutes: 120
@@ -788,7 +671,11 @@ jobs:
 
   turbopack_rust_test1:
     needs: [turbopack_rust_check]
-    runs-on: ubuntu-latest-16-core-oss
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     name: Turbopack Rust testing on ubuntu
     steps:
       - name: Checkout
@@ -798,6 +685,7 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           save-cache: true
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
@@ -813,7 +701,9 @@ jobs:
         run: npm install
 
       - name: Install nextest
-        uses: taiki-e/install-action@nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest@0.9.61
 
       - name: Build nextest
         timeout-minutes: 120
@@ -853,20 +743,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          # TODO: Remove this specific version constraint once pnpm ships with
+          # node-gyp that's compatible with Python 3.12+
+          python-version: 3.11
+
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
         with:
           save-cache: true
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
           node-version: 18
-
-      - name: Setup Protoc
-        uses: arduino/setup-protoc@v1
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Prepare toolchain on Windows
         run: |
@@ -883,7 +776,9 @@ jobs:
         run: npm install
 
       - name: Install nextest
-        uses: taiki-e/install-action@nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest@0.9.61
 
       - name: Build nextest
         timeout-minutes: 120
@@ -909,9 +804,41 @@ jobs:
           name: test_reports
           path: target/nextest/**/*.xml
 
+  turbopack_rust_test_bench1:
+    needs: [determine_jobs, turbopack_rust_check]
+    name: Turbopack Rust testing benchmarks on linux
+    uses: ./.github/workflows/test-turbopack-rust-bench-test.yml
+    with:
+      # custom runner label specific to workflow
+      runner: ubuntu-latest-metal
+      os: linux
+      all: ${{ needs.determine_jobs.outputs.turbopack_bench == 'true' }}
+
+  turbopack_rust_test_bench2:
+    needs: [determine_jobs, turbopack_rust_check]
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: macos
+            runner: macos-latest
+          # Temporarily disable windows bench due to consistent timeouts
+          # - name: windows
+          #   runner: windows-2019
+    name: Turbopack Rust testing benchmarks on ${{ matrix.os.name }}
+    uses: ./.github/workflows/test-turbopack-rust-bench-test.yml
+    with:
+      runner: ${{ matrix.os.runner }}
+      os: ${{ matrix.os.name }}
+      all: ${{ needs.determine_jobs.outputs.turbopack_bench == 'true' }}
+
   format_lint:
     name: Formatting
-    runs-on: ubuntu-latest
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     needs: determine_jobs
     if: needs.determine_jobs.outputs.format == 'true'
     env:
@@ -921,23 +848,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+
       - uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+
       - name: Lint
         # Filters some workspaces out:
-        # - `cli` because it runs golangci-lint and this Job doesn't have all the dependencies for that.
         # - Other `@vercel/*` packages because ??
-        run: turbo run lint --filter=!cli --filter=!@vercel/devlow-bench --filter=!@vercel/experimental-nft-next-plugin --filter=!@vercel/experimental-nft-next-plugin --filter=!turbopack-bump-action --filter=!next-integration-stat
+        run: turbo run lint --filter=!@vercel/devlow-bench --filter=!@vercel/experimental-nft-next-plugin --filter=!@vercel/experimental-nft-next-plugin --filter=!turbopack-bump-action --filter=!next-integration-stat --env-mode=strict
 
   final:
     name: Ok
     needs:
       - determine_jobs
-      - go_lint
-      - go_unit
       - turborepo_examples
-      - turborepo_e2e
       - turborepo_integration
       - js_packages
       - rust_lint
@@ -946,6 +871,7 @@ jobs:
       - turbopack_rust_check
       - turbopack_rust_clippy
       - turbopack_rust_test1
+      - turbopack_rust_test_bench1
       - turbopack_typescript
       - turborepo_rust_test
       - format_lint
@@ -972,10 +898,7 @@ jobs:
             fi
           }
           subjob ${{needs.determine_jobs.result}} "Determining jobs"
-          subjob ${{needs.go_lint.result}} "Go lints"
-          subjob ${{needs.go_unit.result}} "Go unit tests"
           subjob ${{needs.turborepo_examples.result}} "Turborepo examples"
-          subjob ${{needs.turborepo_e2e.result}} "Go e2e tests"
           subjob ${{needs.turborepo_integration.result}} "Turborepo integration tests"
           subjob ${{needs.js_packages.result}} "JS Package tests"
           subjob ${{needs.rust_lint.result}} "Rust lints"
@@ -984,6 +907,7 @@ jobs:
           subjob ${{needs.turbopack_rust_check.result}} "Turbopack Rust checks"
           subjob ${{needs.turbopack_rust_clippy.result}} "Turbopack Rust clippy"
           subjob ${{needs.turbopack_rust_test1.result}} "Turbopack Rust tests (linux)"
+          subjob ${{needs.turbopack_rust_test_bench1.result}} "Turbopack Rust benchmark tests (linux)"
           subjob ${{needs.turbopack_typescript.result}} "Turbopack Typescript checks"
           subjob ${{needs.turborepo_rust_test.result}} "Turborepo Rust tests"
           subjob ${{needs.format_lint.result}} "Formatting"
@@ -998,7 +922,7 @@ jobs:
       - name: Add failure prose text
         if: steps.info.outputs.failure == 'true'
         run: |
-          echo "## :warning: CI failed :warning:" > comment.md
+          echo "## ⚠ CI failed ⚠" > comment.md
           echo >> comment.md
           echo "The following steps have failed in CI:" >> comment.md
           echo >> comment.md
@@ -1011,7 +935,7 @@ jobs:
       - name: Add success prose text
         if: steps.info.outputs.success == 'true'
         run: |
-          echo "## :green_circle: CI likely successful :green_circle:" > comment.md
+          echo "## 🟢 CI likely successful 🟢" > comment.md
           echo >> comment.md
           echo "A few longer running steps are still running, but they should not be considered as blocking." >> comment.md
           echo >> comment.md
@@ -1086,10 +1010,7 @@ jobs:
     needs:
       - final
       - determine_jobs
-      - go_lint
-      - go_unit
       - turborepo_examples
-      - turborepo_e2e
       - turborepo_integration
       - rust_lint
       - turborepo_rust_check
@@ -1098,6 +1019,8 @@ jobs:
       - turbopack_rust_clippy
       - turbopack_rust_test1
       - turbopack_rust_test2
+      - turbopack_rust_test_bench1
+      - turbopack_rust_test_bench2
       - turbopack_typescript
       - turborepo_rust_test
       - format_lint
@@ -1125,10 +1048,7 @@ jobs:
             fi
           }
           subjob ${{needs.determine_jobs.result}} "Determining jobs"
-          subjob ${{needs.go_lint.result}} "Go lints"
-          subjob ${{needs.go_unit.result}} "Go unit tests"
           subjob ${{needs.turborepo_examples.result}} "Turborepo examples"
-          subjob ${{needs.turborepo_e2e.result}} "Turborepo e2e tests"
           subjob ${{needs.turborepo_integration.result}} "Turborepo integration tests"
           subjob ${{needs.rust_lint.result}} "Rust lints"
           subjob ${{needs.turborepo_rust_check.result}} "Turborepo Rust checks"
@@ -1137,6 +1057,8 @@ jobs:
           subjob ${{needs.turbopack_rust_clippy.result}} "Turbopack Rust clippy"
           subjob ${{needs.turbopack_rust_test1.result}} "Turbopack Rust tests (linux)"
           subjob ${{needs.turbopack_rust_test2.result}} "Turbopack Rust tests (mac/win, non-blocking)"
+          subjob ${{needs.turbopack_rust_test_bench1.result}} "Turbopack Rust benchmark tests (linux)"
+          subjob ${{needs.turbopack_rust_test_bench2.result}} "Turbopack Rust benchmark tests (mac/win, non-blocking)"
           subjob ${{needs.turbopack_typescript.result}} "Turbopack Typescript checks"
           subjob ${{needs.turborepo_rust_test.result}} "TurboRepo Rust tests"
           subjob ${{needs.format_lint.result}} "Formatting"
@@ -1151,7 +1073,7 @@ jobs:
       - name: Add failure prose text
         if: steps.info.outputs.failure == 'true'
         run: |
-          echo "## :warning: CI failed :warning:" > comment.md
+          echo "## ⚠️ CI failed ⚠️" > comment.md
           echo >> comment.md
           echo "The following steps have failed in CI:" >> comment.md
           echo >> comment.md
@@ -1164,7 +1086,7 @@ jobs:
       - name: Add success prose text
         if: steps.info.outputs.success == 'true'
         run: |
-          echo "## :green_circle: CI successful :green_circle:" > comment.md
+          echo "## 🟢 CI successful 🟢" > comment.md
           echo >> comment.md
           echo "Thanks" >> comment.md
           echo >> comment.md

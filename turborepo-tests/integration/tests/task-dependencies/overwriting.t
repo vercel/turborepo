@@ -1,7 +1,6 @@
 
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) task_dependencies/overwriting
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh task_dependencies/overwriting
 
 Test
   $ ${TURBO} run build > tmp.log
@@ -12,20 +11,20 @@ Test
 
 # workspace-a#generate ran
   $ cat tmp.log | grep "workspace-a:generate"
-  workspace-a:generate: cache miss, executing 0f8eb8ca4ccf800c
+  workspace-a:generate: cache miss, executing b876a84c09681ba1
   workspace-a:generate: 
   workspace-a:generate: > generate
-  workspace-a:generate: > echo 'generate workspace-a'
+  workspace-a:generate: > echo generate-workspace-a
   workspace-a:generate: 
-  workspace-a:generate: generate workspace-a
+  workspace-a:generate: generate-workspace-a
 workspace-a#build ran
   $ cat tmp.log | grep "workspace-a:build"
-  workspace-a:build: cache miss, executing 395dd1beb7362607
+  workspace-a:build: cache miss, executing 264da930a689be4e
   workspace-a:build: 
   workspace-a:build: > build
-  workspace-a:build: > echo 'build workspace-a'
+  workspace-a:build: > echo build-workspace-a
   workspace-a:build: 
-  workspace-a:build: build workspace-a
+  workspace-a:build: build-workspace-a
 
 workspace-b#generate DID NOT run
   $ cat tmp.log | grep "workspace-b:generate"
@@ -33,9 +32,9 @@ workspace-b#generate DID NOT run
 
 workspace-b#build ran
   $ cat tmp.log | grep "workspace-b:build"
-  workspace-b:build: cache miss, executing aadbe65bee70be0d
+  workspace-b:build: cache miss, executing 36137fdec800ec2e
   workspace-b:build: 
   workspace-b:build: > build
-  workspace-b:build: > echo 'build workspace-b'
+  workspace-b:build: > echo build-workspace-b
   workspace-b:build: 
-  workspace-b:build: build workspace-b
+  workspace-b:build: build-workspace-b

@@ -4,7 +4,7 @@ pub mod resolve;
 pub mod unsupported_module;
 
 use std::{
-    cmp::Ordering,
+    cmp::{min, Ordering},
     fmt::{Display, Formatter},
     sync::Arc,
 };
@@ -12,6 +12,7 @@ use std::{
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use auto_hash_map::AutoSet;
+use serde::Serialize;
 use turbo_tasks::{
     emit, CollectiblesSource, RawVc, ReadRef, TransientInstance, TransientValue, TryJoinIterExt,
     Upcast, ValueToString, Vc,
@@ -73,6 +74,28 @@ impl Display for IssueSeverity {
     }
 }
 
+/// Represents a section of structured styled text. This can be interpreted and
+/// rendered by various UIs as appropriate, e.g. HTML for display on the web,
+/// ANSI sequences in TTYs.
+#[derive(Clone, Debug, PartialOrd, Ord, DeterministicHash)]
+#[turbo_tasks::value(shared)]
+pub enum StyledString {
+    /// Multiple [StyledString]s concatenated into a single line. Each item is
+    /// considered as inline element. Items might contain line breaks, which
+    /// would be considered as soft line breaks.
+    Line(Vec<StyledString>),
+    /// Multiple [StyledString]s stacked vertically. They are considered as
+    /// block elements, just like the top level [StyledString].
+    Stack(Vec<StyledString>),
+    /// Some prose text.
+    Text(String),
+    /// Code snippet.
+    // TODO add language to support syntax hightlighting
+    Code(String),
+    /// Some important text.
+    Strong(String),
+}
+
 #[turbo_tasks::value_trait]
 pub trait Issue {
     /// Severity allows the user to filter out unimportant issues, with Bug
@@ -85,28 +108,28 @@ pub trait Issue {
     /// header.
     fn file_path(self: Vc<Self>) -> Vc<FileSystemPath>;
 
-    /// A short identifier of the type of error (eg "parse", "analyze", or
-    /// "evaluate") displayed to the user as part of the message header.
-    fn category(self: Vc<Self>) -> Vc<String> {
-        Vc::<String>::default()
-    }
+    /// The stage of the compilation process at which the issue occurred. This
+    /// is used to sort issues.
+    fn stage(self: Vc<Self>) -> Vc<IssueStage>;
 
     /// The issue title should be descriptive of the issue, but should be a
     /// single line. This is displayed to the user directly under the issue
     /// header.
     // TODO add Vc<StyledString>
-    fn title(self: Vc<Self>) -> Vc<String>;
+    fn title(self: Vc<Self>) -> Vc<StyledString>;
 
     /// A more verbose message of the issue, appropriate for providing multiline
     /// information of the issue.
     // TODO add Vc<StyledString>
-    fn description(self: Vc<Self>) -> Vc<String>;
+    fn description(self: Vc<Self>) -> Vc<OptionStyledString> {
+        Vc::cell(None)
+    }
 
     /// Full details of the issue, appropriate for providing debug level
     /// information. Only displayed if the user explicitly asks for detailed
     /// messages (not to be confused with severity).
-    fn detail(self: Vc<Self>) -> Vc<String> {
-        Vc::<String>::default()
+    fn detail(self: Vc<Self>) -> Vc<OptionStyledString> {
+        Vc::cell(None)
     }
 
     /// A link to relevant documentation of the issue. Only displayed in console
@@ -130,13 +153,21 @@ pub trait Issue {
         self: Vc<Self>,
         processing_path: Vc<OptionIssueProcessingPathItems>,
     ) -> Result<Vc<PlainIssue>> {
+        let description = match *self.description().await? {
+            Some(description) => Some((*description.await?).clone()),
+            None => None,
+        };
+        let detail = match *self.detail().await? {
+            Some(detail) => Some((*detail.await?).clone()),
+            None => None,
+        };
         Ok(PlainIssue {
             severity: *self.severity().await?,
             file_path: self.file_path().to_string().await?.clone_value(),
-            category: self.category().await?.clone_value(),
+            stage: self.stage().await?.clone_value(),
             title: self.title().await?.clone_value(),
-            description: self.description().await?.clone_value(),
-            detail: self.detail().await?.clone_value(),
+            description,
+            detail,
             documentation_link: self.documentation_link().await?.clone_value(),
             source: {
                 if let Some(s) = *self.source().await? {
@@ -391,74 +422,157 @@ impl CapturedIssues {
             })
             .try_join()
             .await?;
-        list.sort_by(ReadRef::ptr_cmp);
+        list.sort();
         Ok(list)
     }
 }
 
 #[turbo_tasks::value]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct IssueSource {
-    pub source: Vc<Box<dyn Source>>,
-    pub start: SourcePos,
-    pub end: SourcePos,
+    source: Vc<Box<dyn Source>>,
+    range: Option<Vc<SourceRange>>,
+}
+
+#[turbo_tasks::value]
+#[derive(Clone, Debug)]
+enum SourceRange {
+    LineColumn(SourcePos, SourcePos),
+    ByteOffset(usize, usize),
 }
 
 #[turbo_tasks::value_impl]
 impl IssueSource {
+    // Sometimes we only have the source file that causes an issue, not the
+    // exact location, such as as in some generated code.
     #[turbo_tasks::function]
+    pub fn from_source_only(source: Vc<Box<dyn Source>>) -> Vc<Self> {
+        Self::cell(IssueSource {
+            source,
+            range: None,
+        })
+    }
+
+    #[turbo_tasks::function]
+    pub fn from_line_col(
+        source: Vc<Box<dyn Source>>,
+        start: SourcePos,
+        end: SourcePos,
+    ) -> Vc<Self> {
+        Self::cell(IssueSource {
+            source,
+            range: Some(SourceRange::LineColumn(start, end).cell()),
+        })
+    }
+
+    /// Create a [`IssueSource`] from byte offsets given by an swc ast node
+    /// span.
+    ///
+    /// Arguments:
+    ///
+    /// * `source`: The source code in which to look up the byte offsets.
+    /// * `start`: The start index of the span. Must use **1-based** indexing.
+    /// * `end`: The end index of the span. Must use **1-based** indexing.
+    #[turbo_tasks::function]
+    pub fn from_swc_offsets(source: Vc<Box<dyn Source>>, start: usize, end: usize) -> Vc<Self> {
+        Self::cell(IssueSource {
+            source,
+            range: match (start == 0, end == 0) {
+                (true, true) => None,
+                (false, false) => Some(SourceRange::ByteOffset(start - 1, end - 1).cell()),
+                (false, true) => Some(SourceRange::ByteOffset(start - 1, start - 1).cell()),
+                (true, false) => Some(SourceRange::ByteOffset(end - 1, end - 1).cell()),
+            },
+        })
+    }
+
+    #[turbo_tasks::function]
+    /// Returns an `IssueSource` representing a span of code in the `source`.
+    /// Positions are derived from byte offsets and stored as lines and columns.
+    /// Requires a binary search of the source text to perform this.
+    ///
+    /// Arguments:
+    ///
+    /// * `source`: The source code in which to look up the byte offsets.
+    /// * `start`: Byte offset into the source that the text begins. 0-based
+    ///   index and inclusive.
+    /// * `end`: Byte offset into the source that the text ends. 0-based index
+    ///   and exclusive.
     pub async fn from_byte_offset(
         source: Vc<Box<dyn Source>>,
         start: usize,
         end: usize,
     ) -> Result<Vc<Self>> {
-        fn find_line_and_column(lines: &[FileLine], offset: usize) -> SourcePos {
-            match lines.binary_search_by(|line| line.bytes_offset.cmp(&offset)) {
-                Ok(i) => SourcePos { line: i, column: 0 },
-                Err(i) => {
-                    if i == 0 {
-                        SourcePos {
-                            line: 0,
-                            column: offset,
-                        }
-                    } else {
-                        SourcePos {
-                            line: i - 1,
-                            column: offset - lines[i - 1].bytes_offset,
-                        }
-                    }
-                }
-            }
-        }
-        Ok(Self::cell(
-            if let FileLinesContent::Lines(lines) = &*source.content().lines().await? {
+        Ok(Self::cell(IssueSource {
+            source,
+            range: if let FileLinesContent::Lines(lines) = &*source.content().lines().await? {
                 let start = find_line_and_column(lines.as_ref(), start);
                 let end = find_line_and_column(lines.as_ref(), end);
-                IssueSource { source, start, end }
+                Some(SourceRange::LineColumn(start, end).cell())
             } else {
-                IssueSource {
-                    source,
-                    start: SourcePos::default(),
-                    end: SourcePos::max(),
-                }
+                None
             },
-        ))
+        }))
     }
 }
 
 #[turbo_tasks::value(transparent)]
 pub struct OptionIssueSource(Option<Vc<IssueSource>>);
 
+#[turbo_tasks::value(transparent)]
+pub struct OptionStyledString(Option<Vc<StyledString>>);
+
+#[turbo_tasks::value(shared, serialization = "none")]
+#[derive(Clone, Debug, PartialOrd, Ord, DeterministicHash, Serialize)]
+pub enum IssueStage {
+    Config,
+    AppStructure,
+    ProcessModule,
+    /// Read file.
+    Load,
+    SourceTransform,
+    Parse,
+    /// TODO: Add index of the transform
+    Transform,
+    Analysis,
+    Resolve,
+    CodeGen,
+    Unsupported,
+    Misc,
+    Other(String),
+}
+
+impl Display for IssueStage {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            IssueStage::Config => write!(f, "config"),
+            IssueStage::Resolve => write!(f, "resolve"),
+            IssueStage::ProcessModule => write!(f, "process module"),
+            IssueStage::Load => write!(f, "load"),
+            IssueStage::SourceTransform => write!(f, "source transform"),
+            IssueStage::Parse => write!(f, "parse"),
+            IssueStage::Transform => write!(f, "transform"),
+            IssueStage::Analysis => write!(f, "analysis"),
+            IssueStage::CodeGen => write!(f, "code gen"),
+            IssueStage::Unsupported => write!(f, "unsupported"),
+            IssueStage::AppStructure => write!(f, "app structure"),
+            IssueStage::Misc => write!(f, "misc"),
+            IssueStage::Other(s) => write!(f, "{}", s),
+        }
+    }
+}
+
 #[turbo_tasks::value(serialization = "none")]
 #[derive(Clone, Debug)]
 pub struct PlainIssue {
     pub severity: IssueSeverity,
     pub file_path: String,
-    pub category: String,
 
-    pub title: String,
-    pub description: String,
-    pub detail: String,
+    pub stage: IssueStage,
+
+    pub title: StyledString,
+    pub description: Option<StyledString>,
+    pub detail: Option<StyledString>,
     pub documentation_link: String,
 
     pub source: Option<ReadRef<PlainIssueSource>>,
@@ -466,15 +580,36 @@ pub struct PlainIssue {
     pub processing_path: ReadRef<PlainIssueProcessingPath>,
 }
 
+impl Ord for PlainIssue {
+    fn cmp(&self, other: &Self) -> Ordering {
+        macro_rules! cmp {
+            ($a:expr, $b:expr) => {
+                match $a.cmp(&$b) {
+                    Ordering::Equal => {}
+                    other => return other,
+                }
+            };
+        }
+
+        cmp!(self.severity, other.severity);
+        cmp!(self.stage, other.stage);
+
+        self.title.cmp(&other.title)
+    }
+}
+
+impl PartialOrd for PlainIssue {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 fn hash_plain_issue(issue: &PlainIssue, hasher: &mut Xxh3Hash64Hasher, full: bool) {
     hasher.write_ref(&issue.severity);
     hasher.write_ref(&issue.file_path);
-    hasher.write_ref(&issue.category);
+    hasher.write_ref(&issue.stage);
     hasher.write_ref(&issue.title);
-    hasher.write_ref(
-        // Normalize syspaths from Windows. These appear in stack traces.
-        &issue.description.replace('\\', "/"),
-    );
+    hasher.write_ref(&issue.description);
     hasher.write_ref(&issue.detail);
     hasher.write_ref(&issue.documentation_link);
 
@@ -482,8 +617,7 @@ fn hash_plain_issue(issue: &PlainIssue, hasher: &mut Xxh3Hash64Hasher, full: boo
         hasher.write_value(1_u8);
         // I'm assuming we don't need to hash the contents. Not 100% correct, but
         // probably 99%.
-        hasher.write_ref(&source.start);
-        hasher.write_ref(&source.end);
+        hasher.write_ref(&source.range);
     } else {
         hasher.write_value(0_u8);
     }
@@ -534,8 +668,7 @@ impl PlainIssue {
 #[derive(Clone, Debug)]
 pub struct PlainIssueSource {
     pub asset: ReadRef<PlainSource>,
-    pub start: SourcePos,
-    pub end: SourcePos,
+    pub range: Option<(SourcePos, SourcePos)>,
 }
 
 #[turbo_tasks::value_impl]
@@ -545,8 +678,23 @@ impl IssueSource {
         let this = self.await?;
         Ok(PlainIssueSource {
             asset: PlainSource::from_source(this.source).await?,
-            start: this.start,
-            end: this.end,
+            range: match this.range {
+                Some(range) => match &*range.await? {
+                    SourceRange::LineColumn(start, end) => Some((*start, *end)),
+                    SourceRange::ByteOffset(start, end) => {
+                        if let FileLinesContent::Lines(lines) =
+                            &*this.source.content().lines().await?
+                        {
+                            let start = find_line_and_column(lines.as_ref(), *start);
+                            let end = find_line_and_column(lines.as_ref(), *end);
+                            Some((start, end))
+                        } else {
+                            None
+                        }
+                    }
+                },
+                _ => None,
+            },
         }
         .cell())
     }
@@ -759,5 +907,25 @@ pub async fn handle_issues<T: Send>(
         Err(anyhow!(message))
     } else {
         Ok(())
+    }
+}
+
+fn find_line_and_column(lines: &[FileLine], offset: usize) -> SourcePos {
+    match lines.binary_search_by(|line| line.bytes_offset.cmp(&offset)) {
+        Ok(i) => SourcePos { line: i, column: 0 },
+        Err(i) => {
+            if i == 0 {
+                SourcePos {
+                    line: 0,
+                    column: offset,
+                }
+            } else {
+                let line = &lines[i - 1];
+                SourcePos {
+                    line: i - 1,
+                    column: min(line.content.len(), offset - line.bytes_offset),
+                }
+            }
+        }
     }
 }

@@ -1,7 +1,7 @@
 /// <reference path="../shared/runtime-utils.ts" />
-/// <reference path="../shared-node/node-utils.ts" />
-
-declare var RUNTIME_PUBLIC_PATH: string;
+/// <reference path="../shared-node/base-externals-utils.ts" />
+/// <reference path="../shared-node/node-externals-utils.ts" />
+/// <reference path="../shared-node/node-wasm-utils.ts" />
 
 enum SourceType {
   /**
@@ -25,10 +25,22 @@ type SourceInfo =
       parentId: ModuleId;
     };
 
+function stringifySourceInfo(source: SourceInfo): string {
+  switch (source.type) {
+    case SourceType.Runtime:
+      return `runtime for chunk ${source.chunkPath}`;
+    case SourceType.Parent:
+      return `parent module ${source.parentId}`;
+  }
+}
+
 type ExternalRequire = (id: ModuleId) => Exports | EsmNamespaceObject;
 type ExternalImport = (id: ModuleId) => Promise<Exports | EsmNamespaceObject>;
+type ResolveAbsolutePath = (modulePath?: string) => string;
 
 interface TurbopackNodeBuildContext extends TurbopackBaseContext {
+  P: ResolveAbsolutePath;
+  R: ResolvePathFromModule;
   x: ExternalRequire;
   y: ExternalImport;
 }
@@ -38,35 +50,69 @@ type ModuleFactory = (
   context: TurbopackNodeBuildContext
 ) => undefined;
 
-const path = require("path");
-const relativePathToRuntimeRoot = path.relative(RUNTIME_PUBLIC_PATH, ".");
-const RUNTIME_ROOT = path.resolve(__filename, relativePathToRuntimeRoot);
+const url = require("url");
 
 const moduleFactories: ModuleFactories = Object.create(null);
 const moduleCache: ModuleCache = Object.create(null);
 
-function loadChunk(chunkData: ChunkData): void {
+/**
+ * Returns an absolute path to the given module's id.
+ */
+function createResolvePathFromModule(
+  resolver: (moduleId: string) => Exports
+): (moduleId: string) => string {
+  return function resolvePathFromModule(moduleId: string): string {
+    const exported = resolver(moduleId);
+    const exportedPath = exported?.default ?? exported;
+    if (typeof exportedPath !== "string") {
+      return exported as any;
+    }
+
+    const strippedAssetPrefix = exportedPath.slice(ASSET_PREFIX.length);
+    const resolved = path.resolve(
+      ABSOLUTE_ROOT,
+      OUTPUT_ROOT,
+      strippedAssetPrefix
+    );
+
+    return url.pathToFileURL(resolved);
+  };
+}
+
+function loadChunk(chunkData: ChunkData, source?: SourceInfo): void {
   if (typeof chunkData === "string") {
-    return loadChunkPath(chunkData);
+    return loadChunkPath(chunkData, source);
   } else {
-    return loadChunkPath(chunkData.path);
+    return loadChunkPath(chunkData.path, source);
   }
 }
 
-function loadChunkPath(chunkPath: ChunkPath): void {
+function loadChunkPath(chunkPath: ChunkPath, source?: SourceInfo): void {
   if (!chunkPath.endsWith(".js")) {
     // We only support loading JS chunks in Node.js.
     // This branch can be hit when trying to load a CSS chunk.
     return;
   }
 
-  const resolved = path.resolve(RUNTIME_ROOT, chunkPath);
-  const chunkModules: ModuleFactories = require(resolved);
+  try {
+    const resolved = path.resolve(RUNTIME_ROOT, chunkPath);
+    const chunkModules: ModuleFactories = require(resolved);
 
-  for (const [moduleId, moduleFactory] of Object.entries(chunkModules)) {
-    if (!moduleFactories[moduleId]) {
-      moduleFactories[moduleId] = moduleFactory;
+    for (const [moduleId, moduleFactory] of Object.entries(chunkModules)) {
+      if (!moduleFactories[moduleId]) {
+        moduleFactories[moduleId] = moduleFactory;
+      }
     }
+  } catch (e) {
+    let errorMessage = `Failed to load chunk ${chunkPath}`;
+
+    if (source) {
+      errorMessage += ` from ${stringifySourceInfo(source)}`;
+    }
+
+    throw new Error(errorMessage, {
+      cause: e,
+    });
   }
 }
 
@@ -76,7 +122,7 @@ async function loadChunkAsync(
 ): Promise<any> {
   return new Promise<void>((resolve, reject) => {
     try {
-      loadChunk(chunkData);
+      loadChunk(chunkData, source);
     } catch (err) {
       reject(err);
       return;
@@ -142,14 +188,15 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
 
   // NOTE(alexkirsz) This can fail when the module encounters a runtime error.
   try {
+    const r = commonJsRequire.bind(null, module);
     moduleFactory.call(module.exports, {
       a: asyncModule.bind(null, module),
       e: module.exports,
-      r: commonJsRequire.bind(null, module),
+      r,
       t: runtimeRequire,
       x: externalRequire,
       y: externalImport,
-      f: requireContext.bind(null, module),
+      f: moduleContext,
       i: esmImport.bind(null, module),
       s: esmExport.bind(null, module, module.exports),
       j: dynamicExport.bind(null, module, module.exports),
@@ -157,10 +204,14 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
       n: exportNamespace.bind(null, module),
       m: module,
       c: moduleCache,
+      M: moduleFactories,
       l: loadChunkAsync.bind(null, { type: SourceType.Parent, parentId: id }),
       w: loadWebAssembly,
       u: loadWebAssemblyModule,
       g: globalThis,
+      P: resolveAbsolutePath,
+      U: relativeURL,
+      R: createResolvePathFromModule(r),
       __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
     });
   } catch (error) {

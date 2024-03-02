@@ -1,6 +1,6 @@
 use std::sync::OnceLock;
 
-use crate::package_graph::WorkspaceInfo;
+use turborepo_repository::package_graph::PackageInfo;
 
 #[derive(Debug, PartialEq)]
 enum Strategy {
@@ -137,7 +137,7 @@ fn get_frameworks() -> &'static [Framework] {
 }
 
 impl Matcher {
-    pub fn test(&self, workspace: &WorkspaceInfo, is_monorepo: bool) -> bool {
+    pub fn test(&self, workspace: &PackageInfo, is_monorepo: bool) -> bool {
         // In the case where we're not in a monorepo, i.e. single package mode
         // `unresolved_external_dependencies` is not populated. In which
         // case we should check `dependencies` instead.
@@ -160,8 +160,7 @@ impl Matcher {
     }
 }
 
-#[allow(dead_code)]
-pub fn infer_framework(workspace: &WorkspaceInfo, is_monorepo: bool) -> Option<&'static Framework> {
+pub fn infer_framework(workspace: &PackageInfo, is_monorepo: bool) -> Option<&'static Framework> {
     let frameworks = get_frameworks();
 
     frameworks
@@ -172,12 +171,9 @@ pub fn infer_framework(workspace: &WorkspaceInfo, is_monorepo: bool) -> Option<&
 #[cfg(test)]
 mod tests {
     use test_case::test_case;
-    use turborepo_repository::package_json::PackageJson;
+    use turborepo_repository::{package_graph::PackageInfo, package_json::PackageJson};
 
-    use crate::{
-        framework::{get_frameworks, infer_framework, Framework},
-        package_graph::WorkspaceInfo,
-    };
+    use crate::framework::{get_frameworks, infer_framework, Framework};
 
     fn get_framework_by_slug(slug: &str) -> &'static Framework {
         get_frameworks()
@@ -186,9 +182,9 @@ mod tests {
             .expect("framework not found")
     }
 
-    #[test_case(WorkspaceInfo::default(), None, true; "empty dependencies")]
+    #[test_case(PackageInfo::default(), None, true; "empty dependencies")]
     #[test_case(
-        WorkspaceInfo {
+        PackageInfo {
             unresolved_external_dependencies: Some(
                 vec![("blitz".to_string(), "*".to_string())].into_iter().collect()
             ),
@@ -199,7 +195,7 @@ mod tests {
         "blitz"
     )]
     #[test_case(
-        WorkspaceInfo {
+        PackageInfo {
             unresolved_external_dependencies: Some(
                 vec![("blitz", "*"), ("next", "*")]
                     .into_iter()
@@ -213,7 +209,7 @@ mod tests {
         "Order is preserved (returns blitz, not next)"
     )]
     #[test_case(
-        WorkspaceInfo {
+        PackageInfo {
             unresolved_external_dependencies: Some(
                 vec![("next", "*")]
                     .into_iter()
@@ -227,7 +223,7 @@ mod tests {
         "Finds next without blitz"
     )]
     #[test_case(
-        WorkspaceInfo {
+        PackageInfo {
             unresolved_external_dependencies: Some(
                 vec![("solid-js", "*"), ("solid-start", "*")]
                     .into_iter()
@@ -241,7 +237,7 @@ mod tests {
         "match all strategy works (solid)"
     )]
     #[test_case(
-        WorkspaceInfo {
+        PackageInfo {
             unresolved_external_dependencies: Some(
                 vec![("nuxt3", "*")]
                     .into_iter()
@@ -255,7 +251,7 @@ mod tests {
         "match some strategy works (nuxt)"
     )]
     #[test_case(
-        WorkspaceInfo {
+        PackageInfo {
             unresolved_external_dependencies: Some(
                 vec![("react-scripts", "*")]
                     .into_iter()
@@ -269,7 +265,7 @@ mod tests {
         "match some strategy works (create-react-app)"
     )]
     #[test_case(
-        WorkspaceInfo {
+        PackageInfo {
             package_json: PackageJson {
               dependencies: Some(
                 vec![("next", "*")]
@@ -286,7 +282,7 @@ mod tests {
         "Finds next in non-monorepo"
     )]
     fn test_infer_framework(
-        workspace_info: WorkspaceInfo,
+        workspace_info: PackageInfo,
         expected: Option<&'static Framework>,
         is_monorepo: bool,
     ) {

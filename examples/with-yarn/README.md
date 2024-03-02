@@ -1,4 +1,4 @@
-# Turborepo starter with yarn
+# Turborepo starter
 
 This is an official starter Turborepo.
 
@@ -12,15 +12,15 @@ npx create-turbo@latest -e with-yarn
 
 ## What's inside?
 
-This Turborepo uses [yarn](https://classic.yarnpkg.com/lang/en/) as a packages manager. It includes the following packages/apps:
+This Turborepo includes the following packages/apps:
 
 ### Apps and Packages
 
 - `docs`: a [Next.js](https://nextjs.org/) app
 - `web`: another [Next.js](https://nextjs.org/) app
-- `ui`: a stub React component library shared by both `web` and `docs` applications
-- `eslint-config-custom`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `tsconfig`: `tsconfig.json`s used throughout the monorepo
+- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
+- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
+- `@repo/tsconfig`: `tsconfig.json`s used throughout the monorepo
 
 Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
 
@@ -63,7 +63,7 @@ npx turbo login
 
 This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
 
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your turborepo:
+Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
 
 ```
 npx turbo link

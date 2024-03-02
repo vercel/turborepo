@@ -1,22 +1,21 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) task_dependencies/topological
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh task_dependencies/topological
 
 Check my-app#build output
   $ ${TURBO} run build
   \xe2\x80\xa2 Packages in scope: //, my-app, util (esc)
   \xe2\x80\xa2 Running build in 3 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  util:build: cache miss, executing a9488769e770f34c
+  util:build: cache miss, executing d8a403c3594c01e7
   util:build: 
   util:build: > build
-  util:build: > echo 'building'
+  util:build: > echo building
   util:build: 
   util:build: building
-  my-app:build: cache miss, executing c60056997b3dcc9c
+  my-app:build: cache miss, executing 6f5a797f7b88130e
   my-app:build: 
   my-app:build: > build
-  my-app:build: > echo 'building'
+  my-app:build: > echo building
   my-app:build: 
   my-app:build: building
   

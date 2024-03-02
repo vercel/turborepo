@@ -1,9 +1,5 @@
 {
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
@@ -11,9 +7,10 @@
     "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {
-    "eslint": "^7.32.0",
-    "eslint-config-custom": "workspace:*",
-    "prettier": "^2.5.1",
-    "turbo": "canary"
-  }
+    "@repo/eslint-config": "workspace:*",
+    "eslint": "^8.56.0",
+    "prettier": "^3.1.1",
+    "turbo": "^1.12.2"
+  },
+  "packageManager": "pnpm@8.9.0"
 }

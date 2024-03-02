@@ -6,14 +6,19 @@
  */
 
 /// <reference path="../base/runtime-base.ts" />
-/// <reference path="../../../shared-node/node-utils.ts" />
+/// <reference path="../../../shared-node/base-externals-utils.ts" />
+/// <reference path="../../../shared-node/node-externals-utils.ts" />
+/// <reference path="../../../shared-node/node-wasm-utils.ts" />
 
 interface RequireContextEntry {
   // Only the Node.js backend has this flag.
   external: boolean;
 }
 
-type ExternalRequire = (id: ModuleId) => Exports | EsmNamespaceObject;
+type ExternalRequire = (
+  id: ModuleId,
+  esm?: boolean
+) => Exports | EsmNamespaceObject;
 type ExternalImport = (id: ModuleId) => Promise<Exports | EsmNamespaceObject>;
 
 interface TurbopackDevContext extends TurbopackDevBaseContext {

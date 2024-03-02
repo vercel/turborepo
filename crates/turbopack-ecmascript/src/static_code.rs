@@ -28,11 +28,13 @@ impl StaticEcmascriptCode {
         asset_context: Vc<Box<dyn AssetContext>>,
         asset_path: Vc<FileSystemPath>,
     ) -> Result<Vc<Self>> {
-        let asset = asset_context.process(
-            Vc::upcast(FileSource::new(asset_path)),
-            Value::new(ReferenceType::Undefined),
-        );
-        let Some(asset) = Vc::try_resolve_downcast_type::<EcmascriptModuleAsset>(asset).await?
+        let module = asset_context
+            .process(
+                Vc::upcast(FileSource::new(asset_path)),
+                Value::new(ReferenceType::Runtime),
+            )
+            .module();
+        let Some(asset) = Vc::try_resolve_downcast_type::<EcmascriptModuleAsset>(module).await?
         else {
             bail!("asset is not an Ecmascript module")
         };
@@ -51,7 +53,7 @@ impl StaticEcmascriptCode {
         let mut code = CodeBuilder::default();
         code.push_source(
             &runtime_base_content.inner_code,
-            runtime_base_content.source_map.map(Vc::upcast),
+            runtime_base_content.source_map,
         );
         Ok(Code::cell(code.build()))
     }

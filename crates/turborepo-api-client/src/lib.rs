@@ -9,18 +9,22 @@ use lazy_static::lazy_static;
 use regex::Regex;
 pub use reqwest::Response;
 use reqwest::{Method, RequestBuilder, StatusCode};
+use serde::Deserialize;
 use turborepo_ci::{is_ci, Vendor};
 use turborepo_vercel_api::{
-    APIError, CachingStatus, CachingStatusResponse, PreflightResponse, SpacesResponse, Team,
-    TeamsResponse, UserResponse, VerificationResponse, VerifiedSsoUser,
+    token::ResponseTokenMetadata, APIError, CachingStatus, CachingStatusResponse,
+    PreflightResponse, SpacesResponse, Team, TeamsResponse, UserResponse, VerificationResponse,
+    VerifiedSsoUser,
 };
 use url::Url;
 
 pub use crate::error::{Error, Result};
 
+pub mod analytics;
 mod error;
 mod retry;
 pub mod spaces;
+pub mod telemetry;
 
 lazy_static! {
     static ref AUTHORIZATION_REGEX: Regex =
@@ -33,19 +37,30 @@ pub trait Client {
     async fn get_teams(&self, token: &str) -> Result<TeamsResponse>;
     async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>>;
     fn add_ci_header(request_builder: RequestBuilder) -> RequestBuilder;
-    fn add_team_params(
-        request_builder: RequestBuilder,
-        team_id: &str,
-        team_slug: Option<&str>,
-    ) -> RequestBuilder;
-    async fn get_caching_status(
-        &self,
-        token: &str,
-        team_id: &str,
-        team_slug: Option<&str>,
-    ) -> Result<CachingStatusResponse>;
     async fn get_spaces(&self, token: &str, team_id: Option<&str>) -> Result<SpacesResponse>;
     async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser>;
+    async fn handle_403(response: Response) -> Error;
+    fn make_url(&self, endpoint: &str) -> Result<Url>;
+}
+
+#[async_trait]
+pub trait CacheClient {
+    async fn get_artifact(
+        &self,
+        hash: &str,
+        token: &str,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
+        method: Method,
+    ) -> Result<Option<Response>>;
+    async fn fetch_artifact(
+        &self,
+        hash: &str,
+        token: &str,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
+    ) -> Result<Option<Response>>;
+    #[allow(clippy::too_many_arguments)]
     async fn put_artifact(
         &self,
         hash: &str,
@@ -53,38 +68,27 @@ pub trait Client {
         duration: u64,
         tag: Option<&str>,
         token: &str,
-    ) -> Result<()>;
-    async fn handle_403(response: Response) -> Error;
-    async fn fetch_artifact(
-        &self,
-        hash: &str,
-        token: &str,
-        team_id: &str,
+        team_id: Option<&str>,
         team_slug: Option<&str>,
-    ) -> Result<Response>;
+    ) -> Result<()>;
     async fn artifact_exists(
         &self,
         hash: &str,
         token: &str,
-        team_id: &str,
+        team_id: Option<&str>,
         team_slug: Option<&str>,
-    ) -> Result<Response>;
-    async fn get_artifact(
-        &self,
-        hash: &str,
-        token: &str,
-        team_id: &str,
-        team_slug: Option<&str>,
-        method: Method,
-    ) -> Result<Response>;
-    async fn do_preflight(
+    ) -> Result<Option<Response>>;
+    async fn get_caching_status(
         &self,
         token: &str,
-        request_url: &str,
-        request_method: &str,
-        request_headers: &str,
-    ) -> Result<PreflightResponse>;
-    fn make_url(&self, endpoint: &str) -> String;
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
+    ) -> Result<CachingStatusResponse>;
+}
+
+#[async_trait]
+pub trait TokenClient {
+    async fn get_metadata(&self, token: &str) -> Result<ResponseTokenMetadata>;
 }
 
 #[derive(Clone)]
@@ -97,15 +101,21 @@ pub struct APIClient {
 
 #[derive(Clone)]
 pub struct APIAuth {
-    pub team_id: String,
+    pub team_id: Option<String>,
     pub token: String,
     pub team_slug: Option<String>,
+}
+
+pub fn is_linked(api_auth: &Option<APIAuth>) -> bool {
+    api_auth
+        .as_ref()
+        .map_or(false, |api_auth| api_auth.is_linked())
 }
 
 #[async_trait]
 impl Client for APIClient {
     async fn get_user(&self, token: &str) -> Result<UserResponse> {
-        let url = self.make_url("/v2/user");
+        let url = self.make_url("/v2/user")?;
         let request_builder = self
             .client
             .get(url)
@@ -122,7 +132,7 @@ impl Client for APIClient {
     async fn get_teams(&self, token: &str) -> Result<TeamsResponse> {
         let request_builder = self
             .client
-            .get(self.make_url("/v2/teams?limit=100"))
+            .get(self.make_url("/v2/teams?limit=100")?)
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {}", token));
@@ -135,10 +145,10 @@ impl Client for APIClient {
     }
 
     async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>> {
+        let endpoint = format!("/v2/teams/{team_id}");
         let response = self
             .client
-            .get(self.make_url("/v2/team"))
-            .query(&[("teamId", team_id)])
+            .get(self.make_url(&endpoint)?)
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {}", token))
@@ -158,43 +168,6 @@ impl Client for APIClient {
         request_builder
     }
 
-    fn add_team_params(
-        mut request_builder: RequestBuilder,
-        team_id: &str,
-        team_slug: Option<&str>,
-    ) -> RequestBuilder {
-        if let Some(slug) = team_slug {
-            request_builder = request_builder.query(&[("teamSlug", slug)]);
-        }
-        if team_id.starts_with("team_") {
-            request_builder = request_builder.query(&[("teamId", team_id)]);
-        }
-
-        request_builder
-    }
-
-    async fn get_caching_status(
-        &self,
-        token: &str,
-        team_id: &str,
-        team_slug: Option<&str>,
-    ) -> Result<CachingStatusResponse> {
-        let request_builder = self
-            .client
-            .get(self.make_url("/v8/artifacts/status"))
-            .header("User-Agent", self.user_agent.clone())
-            .header("Content-Type", "application/json")
-            .header("Authorization", format!("Bearer {}", token));
-
-        let request_builder = Self::add_team_params(request_builder, team_id, team_slug);
-
-        let response = retry::make_retryable_request(request_builder)
-            .await?
-            .error_for_status()?;
-
-        Ok(response.json().await?)
-    }
-
     async fn get_spaces(&self, token: &str, team_id: Option<&str>) -> Result<SpacesResponse> {
         // create url with teamId if provided
         let endpoint = match team_id {
@@ -204,7 +177,7 @@ impl Client for APIClient {
 
         let request_builder = self
             .client
-            .get(self.make_url(endpoint.as_str()))
+            .get(self.make_url(endpoint.as_str())?)
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {}", token));
@@ -219,7 +192,7 @@ impl Client for APIClient {
     async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser> {
         let request_builder = self
             .client
-            .get(self.make_url("/registration/verify"))
+            .get(self.make_url("/registration/verify")?)
             .query(&[("token", token), ("tokenName", token_name)])
             .header("User-Agent", self.user_agent.clone());
 
@@ -235,63 +208,24 @@ impl Client for APIClient {
         })
     }
 
-    async fn put_artifact(
-        &self,
-        hash: &str,
-        artifact_body: &[u8],
-        duration: u64,
-        tag: Option<&str>,
-        token: &str,
-    ) -> Result<()> {
-        let mut request_url = self.make_url(&format!("/v8/artifacts/{}", hash));
-        let mut allow_auth = true;
-
-        if self.use_preflight {
-            let preflight_response = self
-                .do_preflight(
-                    token,
-                    &request_url,
-                    "PUT",
-                    "Authorization, Content-Type, User-Agent, x-artifact-duration, x-artifact-tag",
-                )
-                .await?;
-
-            allow_auth = preflight_response.allow_authorization_header;
-            request_url = preflight_response.location.to_string();
-        }
-
-        let mut request_builder = self
-            .client
-            .put(&request_url)
-            .header("Content-Type", "application/octet-stream")
-            .header("x-artifact-duration", duration.to_string())
-            .header("User-Agent", self.user_agent.clone())
-            .body(artifact_body.to_vec());
-
-        if allow_auth {
-            request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
-        }
-
-        request_builder = Self::add_ci_header(request_builder);
-
-        if let Some(tag) = tag {
-            request_builder = request_builder.header("x-artifact-tag", tag);
-        }
-
-        let response = retry::make_retryable_request(request_builder).await?;
-
-        if response.status() == StatusCode::FORBIDDEN {
-            return Err(Self::handle_403(response).await);
-        }
-
-        response.error_for_status()?;
-        Ok(())
-    }
-
     async fn handle_403(response: Response) -> Error {
-        let api_error: APIError = match response.json().await {
-            Ok(api_error) => api_error,
+        #[derive(Deserialize)]
+        struct WrappedAPIError {
+            error: APIError,
+        }
+        let body = match response.text().await {
+            Ok(body) => body,
             Err(e) => return Error::ReqwestError(e),
+        };
+
+        let WrappedAPIError { error: api_error } = match serde_json::from_str(&body) {
+            Ok(api_error) => api_error,
+            Err(err) => {
+                return Error::InvalidJson {
+                    err,
+                    text: body.clone(),
+                }
+            }
         };
 
         if let Some(status_string) = api_error.code.strip_prefix("remote_caching_") {
@@ -321,46 +255,37 @@ impl Client for APIClient {
         }
     }
 
-    async fn fetch_artifact(
-        &self,
-        hash: &str,
-        token: &str,
-        team_id: &str,
-        team_slug: Option<&str>,
-    ) -> Result<Response> {
-        self.get_artifact(hash, token, team_id, team_slug, Method::GET)
-            .await
+    fn make_url(&self, endpoint: &str) -> Result<Url> {
+        let url = format!("{}{}", self.base_url, endpoint);
+        Url::parse(&url).map_err(|err| Error::InvalidUrl { url, err })
     }
+}
 
-    async fn artifact_exists(
-        &self,
-        hash: &str,
-        token: &str,
-        team_id: &str,
-        team_slug: Option<&str>,
-    ) -> Result<Response> {
-        self.get_artifact(hash, token, team_id, team_slug, Method::HEAD)
-            .await
-    }
-
+#[async_trait]
+impl CacheClient for APIClient {
     async fn get_artifact(
         &self,
         hash: &str,
         token: &str,
-        team_id: &str,
+        team_id: Option<&str>,
         team_slug: Option<&str>,
         method: Method,
-    ) -> Result<Response> {
-        let mut request_url = self.make_url(&format!("/v8/artifacts/{}", hash));
+    ) -> Result<Option<Response>> {
+        let mut request_url = self.make_url(&format!("/v8/artifacts/{}", hash))?;
         let mut allow_auth = true;
 
         if self.use_preflight {
             let preflight_response = self
-                .do_preflight(token, &request_url, "GET", "Authorization, User-Agent")
+                .do_preflight(
+                    token,
+                    request_url.clone(),
+                    "GET",
+                    "Authorization, User-Agent",
+                )
                 .await?;
 
             allow_auth = preflight_response.allow_authorization_header;
-            request_url = preflight_response.location.to_string();
+            request_url = preflight_response.location;
         };
 
         let mut request_builder = self
@@ -376,59 +301,137 @@ impl Client for APIClient {
 
         let response = retry::make_retryable_request(request_builder).await?;
 
-        if response.status() == StatusCode::FORBIDDEN {
-            Err(Self::handle_403(response).await)
-        } else {
-            Ok(response.error_for_status()?)
+        match response.status() {
+            StatusCode::FORBIDDEN => Err(Self::handle_403(response).await),
+            StatusCode::NOT_FOUND => Ok(None),
+            _ => Ok(Some(response.error_for_status()?)),
         }
     }
 
-    async fn do_preflight(
+    #[tracing::instrument(skip_all)]
+    async fn artifact_exists(
         &self,
+        hash: &str,
         token: &str,
-        request_url: &str,
-        request_method: &str,
-        request_headers: &str,
-    ) -> Result<PreflightResponse> {
-        let request_builder = self
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
+    ) -> Result<Option<Response>> {
+        self.get_artifact(hash, token, team_id, team_slug, Method::HEAD)
+            .await
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn fetch_artifact(
+        &self,
+        hash: &str,
+        token: &str,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
+    ) -> Result<Option<Response>> {
+        self.get_artifact(hash, token, team_id, team_slug, Method::GET)
+            .await
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn put_artifact(
+        &self,
+        hash: &str,
+        artifact_body: &[u8],
+        duration: u64,
+        tag: Option<&str>,
+        token: &str,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
+    ) -> Result<()> {
+        let mut request_url = self.make_url(&format!("/v8/artifacts/{}", hash))?;
+        let mut allow_auth = true;
+
+        if self.use_preflight {
+            let preflight_response = self
+                .do_preflight(
+                    token,
+                    request_url.clone(),
+                    "PUT",
+                    "Authorization, Content-Type, User-Agent, x-artifact-duration, x-artifact-tag",
+                )
+                .await?;
+
+            allow_auth = preflight_response.allow_authorization_header;
+            request_url = preflight_response.location.clone();
+        }
+
+        let mut request_builder = self
             .client
-            .request(Method::OPTIONS, request_url)
+            .put(request_url)
+            .header("Content-Type", "application/octet-stream")
+            .header("x-artifact-duration", duration.to_string())
             .header("User-Agent", self.user_agent.clone())
-            .header("Access-Control-Request-Method", request_method)
-            .header("Access-Control-Request-Headers", request_headers)
-            .header("Authorization", format!("Bearer {}", token));
+            .body(artifact_body.to_vec());
+
+        if allow_auth {
+            request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
+        }
+
+        request_builder = Self::add_team_params(request_builder, team_id, team_slug);
+
+        request_builder = Self::add_ci_header(request_builder);
+
+        if let Some(tag) = tag {
+            request_builder = request_builder.header("x-artifact-tag", tag);
+        }
 
         let response = retry::make_retryable_request(request_builder).await?;
 
-        let headers = response.headers();
-        let location = if let Some(location) = headers.get("Location") {
-            let location = location.to_str()?;
+        if response.status() == StatusCode::FORBIDDEN {
+            return Err(Self::handle_403(response).await);
+        }
 
-            match Url::parse(location) {
-                Ok(location_url) => location_url,
-                Err(url::ParseError::RelativeUrlWithoutBase) => {
-                    Url::parse(&self.base_url)?.join(location)?
-                }
-                Err(e) => return Err(e.into()),
-            }
-        } else {
-            response.url().clone()
-        };
-
-        let allowed_headers = headers
-            .get("Access-Control-Allow-Headers")
-            .map_or("", |h| h.to_str().unwrap_or(""));
-
-        let allow_auth = AUTHORIZATION_REGEX.is_match(allowed_headers);
-
-        Ok(PreflightResponse {
-            location,
-            allow_authorization_header: allow_auth,
-        })
+        response.error_for_status()?;
+        Ok(())
     }
 
-    fn make_url(&self, endpoint: &str) -> String {
-        format!("{}{}", self.base_url, endpoint)
+    async fn get_caching_status(
+        &self,
+        token: &str,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
+    ) -> Result<CachingStatusResponse> {
+        let request_builder = self
+            .client
+            .get(self.make_url("/v8/artifacts/status")?)
+            .header("User-Agent", self.user_agent.clone())
+            .header("Content-Type", "application/json")
+            .header("Authorization", format!("Bearer {}", token));
+
+        let request_builder = Self::add_team_params(request_builder, team_id, team_slug);
+
+        let response = retry::make_retryable_request(request_builder)
+            .await?
+            .error_for_status()?;
+
+        Ok(response.json().await?)
+    }
+}
+
+#[async_trait]
+impl TokenClient for APIClient {
+    async fn get_metadata(&self, token: &str) -> Result<ResponseTokenMetadata> {
+        let url = self.make_url("/v5/user/tokens/current")?;
+        let request_builder = self
+            .client
+            .get(url)
+            .header("User-Agent", self.user_agent.clone())
+            .header("Authorization", format!("Bearer {}", token))
+            .header("Content-Type", "application/json");
+        let response = retry::make_retryable_request(request_builder).await?;
+
+        #[derive(Deserialize, Debug)]
+        struct Response {
+            #[serde(rename = "token")]
+            metadata: ResponseTokenMetadata,
+        }
+        let body = response.json::<Response>().await?;
+        Ok(body.metadata)
     }
 }
 
@@ -449,13 +452,7 @@ impl APIClient {
 
         let client = client_build.map_err(Error::TlsError)?;
 
-        let user_agent = format!(
-            "turbo {} {} {} {}",
-            version,
-            rustc_version_runtime::version(),
-            env::consts::OS,
-            env::consts::ARCH
-        );
+        let user_agent = build_user_agent(version);
         Ok(APIClient {
             client,
             base_url: base_url.as_ref().to_string(),
@@ -463,12 +460,188 @@ impl APIClient {
             use_preflight,
         })
     }
+
+    pub fn base_url(&self) -> &str {
+        self.base_url.as_str()
+    }
+
+    async fn do_preflight(
+        &self,
+        token: &str,
+        request_url: Url,
+        request_method: &str,
+        request_headers: &str,
+    ) -> Result<PreflightResponse> {
+        let request_builder = self
+            .client
+            .request(Method::OPTIONS, request_url)
+            .header("User-Agent", self.user_agent.clone())
+            .header("Access-Control-Request-Method", request_method)
+            .header("Access-Control-Request-Headers", request_headers)
+            .header("Authorization", format!("Bearer {}", token));
+
+        let response = retry::make_retryable_request(request_builder).await?;
+
+        let headers = response.headers();
+        let location = if let Some(location) = headers.get("Location") {
+            let location = location.to_str()?;
+
+            match Url::parse(location) {
+                Ok(location_url) => location_url,
+                Err(url::ParseError::RelativeUrlWithoutBase) => Url::parse(&self.base_url)
+                    .map_err(|err| Error::InvalidUrl {
+                        url: self.base_url.clone(),
+                        err,
+                    })?
+                    .join(location)
+                    .map_err(|err| Error::InvalidUrl {
+                        url: location.to_string(),
+                        err,
+                    })?,
+                Err(e) => {
+                    return Err(Error::InvalidUrl {
+                        url: location.to_string(),
+                        err: e,
+                    })
+                }
+            }
+        } else {
+            response.url().clone()
+        };
+
+        let allowed_headers = headers
+            .get("Access-Control-Allow-Headers")
+            .map_or("", |h| h.to_str().unwrap_or(""));
+
+        let allow_auth = AUTHORIZATION_REGEX.is_match(allowed_headers);
+
+        Ok(PreflightResponse {
+            location,
+            allow_authorization_header: allow_auth,
+        })
+    }
+    /// Create a new request builder with the preflight check done,
+    /// team parameters added, CI header, and a content type of json.
+    pub(crate) async fn create_request_builder(
+        &self,
+        url: &str,
+        api_auth: &APIAuth,
+        method: Method,
+    ) -> Result<RequestBuilder> {
+        let mut url = self.make_url(url)?;
+        let mut allow_auth = true;
+
+        let APIAuth {
+            token,
+            team_id,
+            team_slug,
+        } = api_auth;
+
+        if self.use_preflight {
+            let preflight_response = self
+                .do_preflight(
+                    token,
+                    url.clone(),
+                    method.as_str(),
+                    "Authorization, User-Agent",
+                )
+                .await?;
+
+            allow_auth = preflight_response.allow_authorization_header;
+            url = preflight_response.location;
+        }
+
+        let mut request_builder = self
+            .client
+            .request(method, url)
+            .header("Content-Type", "application/json");
+
+        if allow_auth {
+            request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
+        }
+
+        request_builder =
+            Self::add_team_params(request_builder, team_id.as_deref(), team_slug.as_deref());
+
+        if let Some(constant) = turborepo_ci::Vendor::get_constant() {
+            request_builder = request_builder.header("x-artifact-client-ci", constant);
+        }
+
+        Ok(request_builder)
+    }
+
+    fn add_team_params(
+        mut request_builder: RequestBuilder,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
+    ) -> RequestBuilder {
+        match team_id {
+            Some(team_id) if team_id.starts_with("team_") => {
+                request_builder = request_builder.query(&[("teamId", team_id)]);
+            }
+            _ => (),
+        }
+        if let Some(slug) = team_slug {
+            request_builder = request_builder.query(&[("slug", slug)]);
+        }
+        request_builder
+    }
+}
+
+impl APIAuth {
+    pub fn is_linked(&self) -> bool {
+        self.team_id.is_some() || self.team_slug.is_some()
+    }
+}
+
+// Anon Client
+#[derive(Clone)]
+pub struct AnonAPIClient {
+    client: reqwest::Client,
+    base_url: String,
+    user_agent: String,
+}
+
+impl AnonAPIClient {
+    fn make_url(&self, endpoint: &str) -> String {
+        format!("{}{}", self.base_url, endpoint)
+    }
+
+    pub fn new(base_url: impl AsRef<str>, timeout: u64, version: &str) -> Result<Self> {
+        let client_build = if timeout != 0 {
+            reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(timeout))
+                .build()
+        } else {
+            reqwest::Client::builder().build()
+        };
+
+        let client = client_build.map_err(Error::TlsError)?;
+
+        let user_agent = build_user_agent(version);
+        Ok(AnonAPIClient {
+            client,
+            base_url: base_url.as_ref().to_string(),
+            user_agent,
+        })
+    }
+}
+
+fn build_user_agent(version: &str) -> String {
+    format!(
+        "turbo {} {} {} {}",
+        version,
+        rustc_version_runtime::version(),
+        env::consts::OS,
+        env::consts::ARCH
+    )
 }
 
 #[cfg(test)]
 mod test {
     use anyhow::Result;
     use turborepo_vercel_api_mock::start_test_server;
+    use url::Url;
 
     use crate::{APIClient, Client};
 
@@ -483,7 +656,7 @@ mod test {
         let response = client
             .do_preflight(
                 "",
-                &format!("{}/preflight/absolute-location", base_url),
+                Url::parse(&format!("{}/preflight/absolute-location", base_url)).unwrap(),
                 "GET",
                 "Authorization, User-Agent",
             )
@@ -494,7 +667,7 @@ mod test {
         let response = client
             .do_preflight(
                 "",
-                &format!("{}/preflight/relative-location", base_url),
+                Url::parse(&format!("{}/preflight/relative-location", base_url)).unwrap(),
                 "GET",
                 "Authorization, User-Agent",
             )
@@ -507,7 +680,7 @@ mod test {
         let response = client
             .do_preflight(
                 "",
-                &format!("{}/preflight/allow-auth", base_url),
+                Url::parse(&format!("{}/preflight/allow-auth", base_url)).unwrap(),
                 "GET",
                 "Authorization, User-Agent",
             )
@@ -518,7 +691,7 @@ mod test {
         let response = client
             .do_preflight(
                 "",
-                &format!("{}/preflight/no-allow-auth", base_url),
+                Url::parse(&format!("{}/preflight/no-allow-auth", base_url)).unwrap(),
                 "GET",
                 "Authorization, User-Agent",
             )
@@ -528,5 +701,30 @@ mod test {
 
         handle.abort();
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_handle_403_includes_text_on_invalid_json() {
+        let response = reqwest::Response::from(
+            http::Response::builder()
+                .body("this isn't valid JSON")
+                .unwrap(),
+        );
+        let err = APIClient::handle_403(response).await;
+        assert_eq!(
+            err.to_string(),
+            "unable to parse 'this isn't valid JSON' as JSON: expected ident at line 1 column 2"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_handle_403_parses_error_if_present() {
+        let response = reqwest::Response::from(
+            http::Response::builder()
+                .body(r#"{"error": {"code": "forbidden", "message": "Not authorized"}}"#)
+                .unwrap(),
+        );
+        let err = APIClient::handle_403(response).await;
+        assert_eq!(err.to_string(), "unknown status forbidden: Not authorized");
     }
 }

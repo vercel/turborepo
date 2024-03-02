@@ -27,6 +27,21 @@ function isMusl() {
     }
   } else {
     const { glibcVersionRuntime } = process.report.getReport().header;
+    if (typeof glibcVersionRuntime === "string") {
+      try {
+        // We support glibc v2.26+
+        let [major, minor] = glibcVersionRuntime.split(".", 2);
+        if (parseInt(major, 10) !== 2) {
+          return true;
+        }
+        if (parseInt(minor, 10) < 26) {
+          return true;
+        }
+        return false;
+      } catch (e) {
+        return true;
+      }
+    }
     return !glibcVersionRuntime;
   }
 }
@@ -71,7 +86,16 @@ switch (platform) {
     break;
   case "linux":
     if (isMusl()) {
-      throw new Error("musl not yet supported");
+      switch (arch) {
+        case "x64":
+          suffix = "linux-x64-musl";
+          break;
+        case "arm64":
+          suffix = "linux-arm64-musl";
+          break;
+        default:
+          throw new Error(`Unsupported architecture on Linux: ${arch}`);
+      }
     } else {
       switch (arch) {
         case "x64":
@@ -91,7 +115,8 @@ switch (platform) {
 
 nativeBinding = loadViaSuffix(suffix);
 
-const { Repository, PackageManager } = nativeBinding;
+const { PackageManagerRoot, PackageManager, Workspace } = nativeBinding;
 
-module.exports.Repository = Repository;
+module.exports.PackageManagerRoot = PackageManagerRoot;
 module.exports.PackageManager = PackageManager;
+module.exports.Workspace = Workspace;

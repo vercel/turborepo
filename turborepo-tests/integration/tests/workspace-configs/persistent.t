@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) composable_config
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config
 
 This test covers:
 - [x] `persistent:true` in root, omit in workspace with turbo.json
@@ -11,10 +10,18 @@ This test covers:
 # persistent-task-1-parent dependsOn persistent-task-1
 # persistent-task-1 is persistent:true in the root workspace, and does NOT get overriden in the workspace
   $ ${TURBO} run persistent-task-1-parent --filter=persistent
-   ERROR  run failed: error preparing engine: Invalid persistent task configuration:
-  "persistent#persistent-task-1" is a persistent task, "persistent#persistent-task-1-parent" cannot depend on it
-  Turbo error: error preparing engine: Invalid persistent task configuration:
-  "persistent#persistent-task-1" is a persistent task, "persistent#persistent-task-1-parent" cannot depend on it
+    x invalid persistent task configuration
+  
+  Error:   x "persistent#persistent-task-1" is a persistent task,
+    | "persistent#persistent-task-1-parent" cannot depend on it
+      ,-[turbo.json:69:1]
+   69 |     "persistent-task-1-parent": {
+   70 |       "dependsOn": ["persistent-task-1"]
+      :                     ^^^^^^^^^|^^^^^^^^^
+      :                              `-- persistent task
+   71 |     },
+      `----
+  
   [1]
 
 # persistent-task-2-parent dependsOn persistent-task-2
@@ -23,16 +30,16 @@ This test covers:
   \xe2\x80\xa2 Packages in scope: persistent (esc)
   \xe2\x80\xa2 Running persistent-task-2-parent in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  persistent:persistent-task-2: cache miss, executing 899791c2225002f8
+  persistent:persistent-task-2: cache miss, executing 37375b286d724c01
   persistent:persistent-task-2: 
   persistent:persistent-task-2: > persistent-task-2
-  persistent:persistent-task-2: > echo 'persistent-task-2'
+  persistent:persistent-task-2: > echo persistent-task-2
   persistent:persistent-task-2: 
   persistent:persistent-task-2: persistent-task-2
-  persistent:persistent-task-2-parent: cache miss, executing 5e7bc170d610664e
+  persistent:persistent-task-2-parent: cache miss, executing dfc8c20283d7826a
   persistent:persistent-task-2-parent: 
   persistent:persistent-task-2-parent: > persistent-task-2-parent
-  persistent:persistent-task-2-parent: > echo 'persistent-task-2-parent'
+  persistent:persistent-task-2-parent: > echo persistent-task-2-parent
   persistent:persistent-task-2-parent: 
   persistent:persistent-task-2-parent: persistent-task-2-parent
   
@@ -44,17 +51,33 @@ This test covers:
 # persistent-task-3 is persistent:true in the root workspace
 # persistent-task-3 is defined in workspace, but does NOT have the persistent flag
   $ ${TURBO} run persistent-task-3-parent --filter=persistent
-   ERROR  run failed: error preparing engine: Invalid persistent task configuration:
-  "persistent#persistent-task-3" is a persistent task, "persistent#persistent-task-3-parent" cannot depend on it
-  Turbo error: error preparing engine: Invalid persistent task configuration:
-  "persistent#persistent-task-3" is a persistent task, "persistent#persistent-task-3-parent" cannot depend on it
+    x invalid persistent task configuration
+  
+  Error:   x "persistent#persistent-task-3" is a persistent task,
+    | "persistent#persistent-task-3-parent" cannot depend on it
+      ,-[turbo.json:75:1]
+   75 |     "persistent-task-3-parent": {
+   76 |       "dependsOn": ["persistent-task-3"]
+      :                     ^^^^^^^^^|^^^^^^^^^
+      :                              `-- persistent task
+   77 |     },
+      `----
+  
   [1]
 
 # persistent-task-4-parent dependsOn persistent-task-4
 # persistent-task-4 has no config in the root workspace, and is set to true in the workspace
   $ ${TURBO} run persistent-task-4-parent --filter=persistent
-   ERROR  run failed: error preparing engine: Invalid persistent task configuration:
-  "persistent#persistent-task-4" is a persistent task, "persistent#persistent-task-4-parent" cannot depend on it
-  Turbo error: error preparing engine: Invalid persistent task configuration:
-  "persistent#persistent-task-4" is a persistent task, "persistent#persistent-task-4-parent" cannot depend on it
+    x invalid persistent task configuration
+  
+  Error:   x "persistent#persistent-task-4" is a persistent task,
+    | "persistent#persistent-task-4-parent" cannot depend on it
+      ,-[turbo.json:78:1]
+   78 |     "persistent-task-4-parent": {
+   79 |       "dependsOn": ["persistent-task-4"]
+      :                     ^^^^^^^^^|^^^^^^^^^
+      :                              `-- persistent task
+   80 |     },
+      `----
+  
   [1]

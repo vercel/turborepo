@@ -27,7 +27,7 @@ class MyDocument extends Document {
 
           {/* we can disable these lint rules because we've already established a preconnect to https://fonts.gstatic.com above */}
 
-          {/* eslint-disable-next-line @next/next/google-font-preconnect */}
+          {/* eslint-disable-next-line @next/next/google-font-preconnect -- This could probably change with next/font? */}
           <link
             as="font"
             crossOrigin="anonymous"
@@ -35,7 +35,7 @@ class MyDocument extends Document {
             rel="preload"
             type="font/woff2"
           />
-          {/* eslint-disable-next-line @next/next/google-font-preconnect */}
+          {/* eslint-disable-next-line @next/next/google-font-preconnect -- This could probably change with next/font? */}
           <link
             as="font"
             crossOrigin="anonymous"

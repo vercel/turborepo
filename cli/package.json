@@ -4,16 +4,6 @@
   "version": "0.0.0",
   "scripts": {
     "clean": "make clean",
-    "build": "make",
-    "test": "make test-go",
-    "format": "make fmt-go",
-    "lint": "make lint-go",
-    "lint:prettier": "prettier -c ./**/*.js ./**/*.ts --cache --ignore-path=../.prettierignore"
-  },
-  "devDependencies": {
-    "copy-template-dir": "^1.4.0",
-    "faker": "^5.1.0",
-    "ngraph.generators": "^19.3.0",
-    "shelljs": "^0.8.4"
+    "build": "make"
   }
 }

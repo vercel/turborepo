@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd)
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
 
 Run a build to get a local cache.
   $ SOME_ENV_VAR=hi ${TURBO} run build --output-logs=none --filter=my-app

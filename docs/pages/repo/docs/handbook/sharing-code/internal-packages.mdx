@@ -1,4 +1,4 @@
-import Callout from "../../../../../components/Callout";
+import { Callout } from "../../../../../components/Callout";
 
 import { Tabs, Tab } from "../../../../../components/Tabs";
 
@@ -72,7 +72,8 @@ You'll also need to add a `tsconfig.json` at `packages/math-helpers/tsconfig.jso
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,
-    "moduleResolution": "node",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "preserveWatchOutput": true,
     "skipLibCheck": true,
     "noEmit": true,
@@ -136,15 +137,16 @@ Cannot find module 'math-helpers' or its corresponding type declarations.
 
 That's because we've missed a step. We haven't told our `math-helpers/package.json` what the entry point to our package is.
 
-### 4. Fix `main` and `types`
+### 4. Fix `exports`
 
-Go back to `packages/math-helpers/package.json` and add two fields, `main` and `types`:
+Go back to `packages/math-helpers/package.json` and add a field: `exports`:
 
 ```json filename="packages/math-helpers/package.json"
 {
   "name": "math-helpers",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "dependencies": {
     "typescript": "latest"
   }

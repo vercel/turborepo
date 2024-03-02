@@ -2,21 +2,22 @@ mod builder;
 mod execute;
 
 mod dot;
+mod mermaid;
 
 use std::{
     collections::{HashMap, HashSet},
     fmt,
 };
 
-pub use builder::EngineBuilder;
+pub use builder::{EngineBuilder, Error as BuilderError};
 pub use execute::{ExecuteError, ExecutionOptions, Message, StopExecution};
+use miette::{Diagnostic, NamedSource, SourceSpan};
 use petgraph::Graph;
+use thiserror::Error;
+use turborepo_errors::Spanned;
+use turborepo_repository::package_graph::{PackageGraph, PackageName};
 
-use crate::{
-    package_graph::{PackageGraph, WorkspaceName},
-    run::task_id::TaskId,
-    task_graph::TaskDefinition,
-};
+use crate::{run::task_id::TaskId, task_graph::TaskDefinition};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum TaskNode {
@@ -42,6 +43,7 @@ pub struct Engine<S = Built> {
     root_index: petgraph::graph::NodeIndex,
     task_lookup: HashMap<TaskId<'static>, petgraph::graph::NodeIndex>,
     task_definitions: HashMap<TaskId<'static>, TaskDefinition>,
+    task_locations: HashMap<TaskId<'static>, Spanned<()>>,
 }
 
 impl Engine<Building> {
@@ -54,6 +56,7 @@ impl Engine<Building> {
             root_index,
             task_lookup: HashMap::default(),
             task_definitions: HashMap::default(),
+            task_locations: HashMap::default(),
         }
     }
 
@@ -78,6 +81,19 @@ impl Engine<Building> {
         self.task_definitions.insert(task_id, definition)
     }
 
+    pub fn add_task_location(&mut self, task_id: TaskId<'static>, location: Spanned<()>) {
+        // If we don't have the location stored,
+        // or if the location stored is empty, we add it to the map.
+        let has_location = self
+            .task_locations
+            .get(&task_id)
+            .map_or(false, |existing| existing.range.is_some());
+
+        if !has_location {
+            self.task_locations.insert(task_id, location);
+        }
+    }
+
     // Seals the task graph from being mutated
     pub fn seal(self) -> Engine<Built> {
         let Engine {
@@ -85,6 +101,7 @@ impl Engine<Building> {
             task_lookup,
             root_index,
             task_definitions,
+            task_locations,
             ..
         } = self;
         Engine {
@@ -93,6 +110,7 @@ impl Engine<Building> {
             task_lookup,
             root_index,
             task_definitions,
+            task_locations,
         }
     }
 }
@@ -163,10 +181,6 @@ impl Engine<Built> {
                     // No need to check the root node if that's where we are.
                     return Ok(false);
                 };
-                let is_persistent = self
-                    .task_definitions
-                    .get(task_id)
-                    .map_or(false, |task_def| task_def.persistent);
 
                 for dep_index in self
                     .task_graph
@@ -189,21 +203,46 @@ impl Engine<Built> {
                     })?;
 
                     let package_json = package_graph
-                        .package_json(&WorkspaceName::from(dep_id.package()))
+                        .package_json(&PackageName::from(dep_id.package()))
                         .ok_or_else(|| ValidateError::MissingPackageJson {
                             package: dep_id.package().to_string(),
                         })?;
                     if task_definition.persistent
                         && package_json.scripts.contains_key(dep_id.task())
                     {
+                        let (span, text) = self
+                            .task_locations
+                            .get(dep_id)
+                            .map(|spanned| spanned.span_and_text("turbo.json"))
+                            .unwrap_or((None, NamedSource::new("", "")));
+
                         return Err(ValidateError::DependencyOnPersistentTask {
+                            span,
+                            text,
                             persistent_task: dep_id.to_string(),
                             dependant: task_id.to_string(),
                         });
                     }
                 }
 
-                Ok(is_persistent)
+                // check if the package for the task has that task in its package.json
+                let info = package_graph
+                    .package_info(&PackageName::from(task_id.package().to_string()))
+                    .expect("package graph should contain workspace info for task package");
+
+                let package_has_task = info
+                    .package_json
+                    .scripts
+                    .get(task_id.task())
+                    // handle legacy behaviour from go where an empty string may appear
+                    .map_or(false, |script| !script.is_empty());
+
+                let task_is_persistent = self
+                    .task_definitions
+                    .get(task_id)
+                    .map_or(false, |task_def| task_def.persistent);
+
+                Ok(task_is_persistent && package_has_task)
             })
             .fold((0, Vec::new()), |(mut count, mut errs), result| {
                 match result {
@@ -214,6 +253,8 @@ impl Engine<Built> {
                 (count, errs)
             });
 
+        // there must always be at least one concurrency 'slot' available for
+        // non-persistent tasks otherwise we get race conditions
         if persistent_count >= concurrency {
             validation_errors.push(ValidateError::PersistentTasksExceedConcurrency {
                 persistent_count,
@@ -228,7 +269,7 @@ impl Engine<Built> {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum ValidateError {
     #[error("Cannot find task definition for {task_id} in package {package_name}")]
     MissingTask {
@@ -239,6 +280,10 @@ pub enum ValidateError {
     MissingPackageJson { package: String },
     #[error("\"{persistent_task}\" is a persistent task, \"{dependant}\" cannot depend on it")]
     DependencyOnPersistentTask {
+        #[label("persistent task")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
         persistent_task: String,
         dependant: String,
     },
@@ -258,5 +303,125 @@ impl fmt::Display for TaskNode {
             TaskNode::Root => f.write_str("___ROOT___"),
             TaskNode::Task(task) => task.fmt(f),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+
+    use std::collections::BTreeMap;
+
+    use tempdir::TempDir;
+    use turbopath::AbsoluteSystemPath;
+    use turborepo_repository::{
+        discovery::{DiscoveryResponse, PackageDiscovery, WorkspaceData},
+        package_json::PackageJson,
+    };
+
+    use super::*;
+
+    struct DummyDiscovery<'a>(&'a TempDir);
+
+    impl<'a> PackageDiscovery for DummyDiscovery<'a> {
+        async fn discover_packages(
+            &self,
+        ) -> Result<
+            turborepo_repository::discovery::DiscoveryResponse,
+            turborepo_repository::discovery::Error,
+        > {
+            // our workspace has three packages, two of which have a build script
+            let workspaces = [("a", true), ("b", true), ("c", false)]
+                .into_iter()
+                .map(|(name, had_build)| {
+                    let path = AbsoluteSystemPath::from_std_path(self.0.path()).unwrap();
+                    let package_json = path.join_component(&format!("{}.json", name));
+
+                    let scripts = if had_build {
+                        BTreeMap::from_iter(
+                            [("build".to_string(), "echo built!".to_string())].into_iter(),
+                        )
+                    } else {
+                        BTreeMap::default()
+                    };
+
+                    let package = PackageJson {
+                        name: Some(name.to_string()),
+                        scripts,
+                        ..Default::default()
+                    };
+
+                    let file = std::fs::File::create(package_json.as_std_path()).unwrap();
+                    serde_json::to_writer(file, &package).unwrap();
+
+                    WorkspaceData {
+                        package_json,
+                        turbo_json: None,
+                    }
+                })
+                .collect();
+
+            Ok(DiscoveryResponse {
+                package_manager: turborepo_repository::package_manager::PackageManager::Pnpm,
+                workspaces,
+            })
+        }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<
+            turborepo_repository::discovery::DiscoveryResponse,
+            turborepo_repository::discovery::Error,
+        > {
+            self.discover_packages().await
+        }
+    }
+
+    #[tokio::test]
+    async fn issue_4291() {
+        // we had an issue where our engine validation would reject running persistent
+        // tasks if the number of _total packages_ exceeded the concurrency limit,
+        // rather than the number of package that had that task. in this test, we
+        // set up a workspace with three packages, two of which have a persistent build
+        // task. we expect concurrency limit 1 to fail, but 2 and 3 to pass.
+
+        let tmp = tempdir::TempDir::new("issue_4291").unwrap();
+
+        let mut engine = Engine::new();
+
+        // add two packages with a persistent build task
+        for package in ["a", "b"] {
+            let task_id = TaskId::new(package, "build");
+            engine.get_index(&task_id);
+            engine.add_definition(
+                task_id,
+                TaskDefinition {
+                    persistent: true,
+                    ..Default::default()
+                },
+            );
+        }
+
+        let engine = engine.seal();
+
+        let graph_builder = PackageGraph::builder(
+            AbsoluteSystemPath::from_std_path(tmp.path()).unwrap(),
+            PackageJson::default(),
+        )
+        .with_package_discovery(DummyDiscovery(&tmp));
+
+        let graph = graph_builder.build().await.unwrap();
+
+        // if our limit is less than, it should fail
+        engine.validate(&graph, 1).expect_err("not enough");
+
+        // if our limit is less than, it should fail
+        engine.validate(&graph, 2).expect_err("not enough");
+
+        // we have two persistent tasks, and a slot for all other tasks, so this should
+        // pass
+        engine.validate(&graph, 3).expect("ok");
+
+        // if our limit is greater, then it should pass
+        engine.validate(&graph, 4).expect("ok");
     }
 }

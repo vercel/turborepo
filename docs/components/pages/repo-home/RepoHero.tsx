@@ -4,32 +4,30 @@ import { HeroText, SectionSubtext } from "../home-shared/Headings";
 import { Gradient } from "../home-shared/Gradient";
 import { FadeIn } from "../home-shared/FadeIn";
 import { CTAButton } from "../home-shared/CTAButton";
-import RepoLogo from "../../logos/RepoLogo";
+import { RepoLogo } from "../../logos/RepoLogo";
 
 export function RepoHero() {
   return (
     <FadeIn
-      className="font-sans w-auto pb-16 pt-[48px] md:pb-24 lg:pb-32 md:pt-16 lg:pt-20 flex justify-between gap-8 items-center flex-col relative z-0"
+      className="font-sans w-auto min-h-[calc(100svh-var(--nextra-navbar-height))] pb-16 pt-[48px] md:pb-24 lg:pb-32 md:pt-16 lg:pt-20 flex justify-between gap-8 items-center flex-col relative z-0"
       noVertical
     >
-      <FadeIn className="z-50 flex items-center justify-center w-full ">
-        <div className="absolute min-w-[614px] min-h-[614px]">
-          {/* TODO: On dark mode, there should be a "breathing" gradient inside the inner circle */}
-          <Image
-            alt="Turborepo"
-            className="hidden dark:block"
-            height={614}
-            src="/images/docs/repo/repo-hero-circles-dark.svg"
-            width={614}
-          />
-          <Image
-            alt="Turborepo"
-            className="block dark:hidden"
-            height={614}
-            src="/images/docs/repo/repo-hero-circles-light.svg"
-            width={614}
-          />
-        </div>
+      <FadeIn className="z-50 flex items-center justify-center w-full">
+        {/* TODO: On dark mode, there should be a "breathing" gradient inside the inner circle */}
+        <Image
+          alt="Turborepo"
+          className="absolute hidden dark:block"
+          height={614}
+          src="/images/docs/repo/repo-hero-circles-dark.svg"
+          width={614}
+        />
+        <Image
+          alt="Turborepo"
+          className="absolute block dark:hidden"
+          height={614}
+          src="/images/docs/repo/repo-hero-circles-light.svg"
+          width={614}
+        />
         <div className="absolute z-50 flex items-center justify-center w-64 h-64">
           <Gradient
             className="dark:opacity-100 opacity-40"

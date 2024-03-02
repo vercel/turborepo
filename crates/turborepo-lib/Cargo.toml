@@ -15,15 +15,16 @@ rustls-tls = ["turborepo-api-client/rustls-tls", "turbo-updater/rustls-tls"]
 http = ["tonic-reflection"]
 
 go-daemon = []
+daemon-package-discovery = []
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
+anyhow = { workspace = true, features = ["backtrace"] }
 assert_cmd = { workspace = true }
 async-stream = "0.3.4"
 itertools = { workspace = true }
 port_scanner = { workspace = true }
 pretty_assertions = { workspace = true }
-rand = { workspace = true }
 tempdir = "0.3.7"
 tempfile = { workspace = true }
 test-case = { workspace = true }
@@ -31,8 +32,10 @@ tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
 tracing.workspace = true
 turborepo-vercel-api-mock = { workspace = true }
 
+[lints]
+workspace = true
+
 [dependencies]
-anyhow = { workspace = true, features = ["backtrace"] }
 atty = { workspace = true }
 axum = { workspace = true }
 axum-server = { workspace = true }
@@ -41,6 +44,7 @@ clap = { workspace = true, features = ["derive", "env"] }
 clap_complete = { workspace = true }
 command-group = { version = "2.1.0", features = ["with-tokio"] }
 console = { workspace = true }
+crossterm = "0.26"
 ctrlc = { version = "3.4.0", features = ["termination"] }
 dialoguer = { workspace = true, features = ["fuzzy-select"] }
 directories = "4.0.1"
@@ -57,10 +61,14 @@ json_comments = "0.2.1"
 jsonc-parser = { version = "0.21.0" }
 lazy_static = { workspace = true }
 libc = "0.2.140"
-notify = "5.1"
+nix = "0.26.2"
+notify = { workspace = true }
+path-clean = "1.0.1"
 petgraph = { workspace = true }
 pidlock = { path = "../turborepo-pidlock" }
-prost = "0.11.6"
+portable-pty = "0.8.1"
+prost = "0.12.3"
+rand = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["json"] }
 rustc_version_runtime = "0.2.1"
 semver = { workspace = true }
@@ -76,23 +84,35 @@ tiny-gradient = { workspace = true }
 tokio = { workspace = true, features = ["full", "time"] }
 tokio-stream = { version = "0.1.12", features = ["net"] }
 tokio-util = { version = "0.7.7", features = ["compat"] }
-tonic = { version = "0.8.3", features = ["transport"] }
-tonic-reflection = { version = "0.6.0", optional = true }
+tonic = { version = "0.11.0", features = ["transport"] }
+tonic-reflection = { version = "0.11.0", optional = true }
 tower = "0.4.13"
+turborepo-analytics = { path = "../turborepo-analytics" }
 turborepo-auth = { path = "../turborepo-auth" }
+turborepo-dirs = { path = "../turborepo-dirs" }
+
 turborepo-fs = { path = "../turborepo-fs" }
+turborepo-graph-utils = { path = "../turborepo-graph-utils" }
 turborepo-repository = { path = "../turborepo-repository" }
 turborepo-vercel-api = { path = "../turborepo-vercel-api" }
 uds_windows = "1.0.2"
 url = "2.3.1"
 
+biome_console = { workspace = true }
+biome_deserialize = { workspace = true }
+biome_diagnostics = { workspace = true }
+biome_json_parser = { workspace = true }
+biome_json_syntax = { workspace = true }
+
 camino = "1.1.4"
 capnp = "0.17.2"
 const_format = "0.2.30"
+convert_case = "0.6.0"
 globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 go-parse-duration = "0.1.1"
 is-terminal = "0.4.7"
 lazy-regex = "2.5.0"
+miette = { workspace = true, features = ["fancy"] }
 node-semver = "2.1.0"
 num_cpus = "1.15.0"
 owo-colors.workspace = true
@@ -102,6 +122,7 @@ pprof = { version = "0.12.1", features = [
 ], optional = true }
 rayon = "1.7.0"
 regex.workspace = true
+struct_iterable = "0.1.1"
 svix-ksuid = { version = "0.7.0", features = ["serde"] }
 tabwriter = "1.3.0"
 tracing-appender = "0.2.2"
@@ -114,9 +135,11 @@ turborepo-api-client = { workspace = true }
 turborepo-cache = { workspace = true }
 turborepo-ci = { workspace = true }
 turborepo-env = { workspace = true }
+turborepo-errors = { workspace = true }
 turborepo-filewatch = { path = "../turborepo-filewatch" }
 turborepo-lockfiles = { workspace = true }
 turborepo-scm = { workspace = true }
+turborepo-telemetry = { path = "../turborepo-telemetry" }
 turborepo-ui = { workspace = true }
 twox-hash = "1.6.3"
 wax = { workspace = true }

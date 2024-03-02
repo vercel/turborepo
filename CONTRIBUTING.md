@@ -21,7 +21,6 @@ Thanks for your interest in contributing to Turbo!
   - [Contributing to Turbopack](#contributing-to-turbopack)
     - [Turbopack Architecture](#turbopack-architecture)
     - [Testing Turbopack](#testing-turbopack)
-    - [Benchmarking Turbopack](#benchmarking-turbopack)
     - [Profiling Turbopack](#profiling-turbopack)
   - [Troubleshooting](#troubleshooting)
 
@@ -50,9 +49,9 @@ Building
 Turborepo uses `reqwest`, a Rust HTTP client, to make requests to the Turbo API. `reqwest` supports two TLS
 implementations: `rustls` and `native-tls`. `rustls` is a pure Rust implementation of TLS, while `native-tls`
 is a wrapper around OpenSSL. Turborepo allows users to select which implementation they want with the `native-tls`
-and `rustls-tls` features. By default, the `native-tls` feature is selected---this is done so that `cargo build` works
-out of the box. If you wish to select `rustls-tls`, you may do so by passing `--no-default-features --features rustls-tls`
-to the build command. This allows for us to build for more platforms, as `native-tls` is not supported everywhere.
+and `rustls-tls` features. By default, the `rustls-tls` feature is selected---this is done so that `cargo build` works
+out of the box. If you wish to select `native-tls`, you may do so by passing `--no-default-features --features native-tls`
+to the build command.
 
 ### Running Turborepo Tests
 
@@ -89,17 +88,16 @@ Then from the root directory, you can run:
   pnpm test -- --filter=turborepo-tests-integration
   ```
 - A single Integration test
-  e.g to run everything in `tests/run_summary`:
+  e.g to run everything in `tests/run-summary`:
+
   ```
   # build first because the next command doesn't run through turbo
   pnpm -- turbo run build --filter=cli
-  pnpm test -F turborepo-tests-integration -- "run_summary"
+  pnpm test -F turborepo-tests-integration -- "run-summary"
   ```
+
   Note: this is not through turbo, so you'll have to build turbo yourself first.
-- E2E test
-  ```bash
-  pnpm -- turbo e2e --filter=cli
-  ```
+
 - Example tests
   ```bash
   pnpm test -- --filter=turborepo-tests-examples -- <example-name> <packagemanager>

@@ -20,6 +20,7 @@ pub enum Error {
     NotImplemented(),
 }
 
+#[derive(Debug)]
 pub struct BunLockfile {
     inner: Map<String, Entry>,
 }
@@ -55,6 +56,7 @@ impl FromStr for BunLockfile {
 }
 
 impl Lockfile for BunLockfile {
+    #[tracing::instrument(skip(self, _workspace_path))]
     fn resolve_package(
         &self,
         _workspace_path: &str,
@@ -73,6 +75,7 @@ impl Lockfile for BunLockfile {
         Ok(None)
     }
 
+    #[tracing::instrument(skip(self))]
     fn all_dependencies(
         &self,
         key: &str,

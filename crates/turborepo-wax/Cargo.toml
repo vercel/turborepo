@@ -1,12 +1,12 @@
 [package]
 name = "wax"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["Sean Olson <olson.sean.k@gmail.com>"]
 description = "Opinionated and portable globs that can be matched against paths and directory trees."
 repository = "https://github.com/olson-sean-k/wax"
 readme = "README.md"
 edition = "2021"
-rust-version = "1.60.0"
+rust-version = "1.66.1"
 license = "MIT"
 keywords = ["glob", "pattern", "regex"]
 categories = ["filesystem"]
@@ -22,9 +22,12 @@ miette = ["dep:miette", "dep:tardar"]
 # Provides APIs for matching globs against directory trees.
 walk = ["dep:walkdir"]
 
+[lints]
+workspace = true
+
 [dependencies]
 const_format = "^0.2.0"
-itertools = "^0.10.0"
+itertools = "^0.11.0"
 nom = "^7.0.0"
 pori = "=0.0.0"
 thiserror = "^1.0.0"
@@ -32,22 +35,23 @@ thiserror = "^1.0.0"
   [dependencies.miette]
   default-features = false
   optional = true
-  version = "^5.1.0"
+  version = "^5.10.0"
 
   [dependencies.regex]
   default-features = false
   features = ["perf", "std", "unicode-case"]
-  version = "^1.5.0"
+  version = "^1.9.0"
 
   [dependencies.tardar]
   optional = true
-  version = "=0.0.0"
+  version = "^0.1.0"
 
   [dependencies.walkdir]
   optional = true
-  version = "^2.3.0"
+  version = "^2.4.0"
 
 [dev-dependencies]
-build-fs-tree = "^0.3.0"
+build-fs-tree = "^0.6.0"
 dunce = "^1.0.0"
-tempfile = "^3.2.0"
+path-slash = "0.2.1"
+tempfile = "^3.8.0"

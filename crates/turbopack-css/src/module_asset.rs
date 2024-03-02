@@ -1,25 +1,24 @@
-use std::{fmt::Write, iter::once, sync::Arc};
+use std::{fmt::Write, sync::Arc};
 
 use anyhow::{bail, Context, Result};
 use indexmap::IndexMap;
 use indoc::formatdoc;
-use swc_core::{
-    common::{BytePos, FileName, LineCol, SourceMap},
-    css::modules::CssClassName,
-};
+use lightningcss::css_modules::CssModuleReference;
+use swc_core::common::{BytePos, FileName, LineCol, SourceMap};
 use turbo_tasks::{Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{ChunkItem, ChunkItemExt, ChunkType, ChunkableModule, ChunkingContext},
-    context::AssetContext,
+    context::{AssetContext, ProcessResult},
     ident::AssetIdent,
-    issue::{Issue, IssueExt, IssueSeverity},
+    issue::{Issue, IssueExt, IssueSeverity, IssueStage, OptionStyledString, StyledString},
     module::Module,
     reference::{ModuleReference, ModuleReferences},
     reference_type::{CssReferenceSubType, ReferenceType},
     resolve::{origin::ResolveOrigin, parse::Request},
     source::Source,
+    source_map::OptionSourceMap,
 };
 use turbopack_ecmascript::{
     chunk::{
@@ -31,7 +30,7 @@ use turbopack_ecmascript::{
 };
 
 use crate::{
-    parse::{ParseCss, ParseCssResult},
+    process::{CssWithPlaceholderResult, ProcessCss},
     references::{compose::CssModuleComposeReference, internal::InternalCssAssetReference},
 };
 
@@ -73,13 +72,25 @@ impl Module for ModuleCssAsset {
 
     #[turbo_tasks::function]
     async fn references(self: Vc<Self>) -> Result<Vc<ModuleReferences>> {
-        // The inner reference must come first so it is processed before other potential
-        // references inside of the CSS, like `@import` and `composes:`.
+        // The inner reference must come last so it is loaded as the last in the
+        // resulting css. @import or composes references must be loaded first so
+        // that the css style rules in them are overridable from the local css.
+
         // This affects the order in which the resulting CSS chunks will be loaded:
-        // later references are processed first in the post-order traversal of the
-        // reference tree, and as such they will be loaded first in the resulting HTML.
-        let references = once(Vc::upcast(InternalCssAssetReference::new(self.inner())))
-            .chain(self.module_references().await?.iter().copied())
+        // 1. @import or composes references are loaded first
+        // 2. The local CSS is loaded last
+
+        let references = self
+            .module_references()
+            .await?
+            .iter()
+            .copied()
+            .chain(match *self.inner().await? {
+                ProcessResult::Module(inner) => {
+                    Some(Vc::upcast(InternalCssAssetReference::new(inner)))
+                }
+                ProcessResult::Ignore => None,
+            })
             .collect();
 
         Ok(Vc::cell(references))
@@ -141,7 +152,7 @@ struct ModuleCssClasses(IndexMap<String, Vec<ModuleCssClass>>);
 #[turbo_tasks::value_impl]
 impl ModuleCssAsset {
     #[turbo_tasks::function]
-    async fn inner(self: Vc<Self>) -> Result<Vc<Box<dyn Module>>> {
+    async fn inner(self: Vc<Self>) -> Result<Vc<ProcessResult>> {
         let this = self.await?;
         Ok(this.asset_context.process(
             this.source,
@@ -151,34 +162,44 @@ impl ModuleCssAsset {
 
     #[turbo_tasks::function]
     async fn classes(self: Vc<Self>) -> Result<Vc<ModuleCssClasses>> {
-        let inner = self.inner();
+        let inner = self.inner().module();
 
-        let Some(inner) = Vc::try_resolve_sidecast::<Box<dyn ParseCss>>(inner).await? else {
-            bail!("inner asset should be CSS parseable");
-        };
+        let inner = Vc::try_resolve_sidecast::<Box<dyn ProcessCss>>(inner)
+            .await?
+            .context("inner asset should be CSS processable")?;
 
-        let parse_result = inner.parse_css().await?;
+        let result = inner.get_css_with_placeholder().await?;
         let mut classes = IndexMap::default();
 
         // TODO(alexkirsz) Should we report an error on parse error here?
-        if let ParseCssResult::Ok { exports, .. } = &*parse_result {
+        if let CssWithPlaceholderResult::Ok {
+            exports: Some(exports),
+            ..
+        } = &*result
+        {
             for (class_name, export_class_names) in exports {
                 let mut export = Vec::default();
 
-                for export_class_name in export_class_names {
+                export.push(ModuleCssClass::Local {
+                    name: export_class_names.name.clone(),
+                });
+
+                for export_class_name in &export_class_names.composes {
                     export.push(match export_class_name {
-                        CssClassName::Import { from, name } => ModuleCssClass::Import {
-                            original: name.value.to_string(),
-                            from: CssModuleComposeReference::new(
-                                Vc::upcast(self),
-                                Request::parse(Value::new(from.to_string().into())),
-                            ),
+                        CssModuleReference::Dependency { specifier, name } => {
+                            ModuleCssClass::Import {
+                                original: name.to_string(),
+                                from: CssModuleComposeReference::new(
+                                    Vc::upcast(self),
+                                    Request::parse(Value::new(specifier.to_string().into())),
+                                ),
+                            }
+                        }
+                        CssModuleReference::Local { name } => ModuleCssClass::Local {
+                            name: name.to_string(),
                         },
-                        CssClassName::Local { name } => ModuleCssClass::Local {
-                            name: name.value.to_string(),
-                        },
-                        CssClassName::Global { name } => ModuleCssClass::Global {
-                            name: name.value.to_string(),
+                        CssModuleReference::Global { name } => ModuleCssClass::Global {
+                            name: name.to_string(),
                         },
                     })
                 }
@@ -316,12 +337,12 @@ impl EcmascriptChunkItem for ModuleChunkItem {
                             CssModuleComposesIssue {
                                 severity: IssueSeverity::Error.cell(),
                                 source: self.module.ident(),
-                                message: Vc::cell(formatdoc! {
+                                message: formatdoc! {
                                     r#"
                                         Module {from} referenced in `composes: ... from {from};` can't be resolved.
                                     "#,
                                     from = &*from.await?.request.to_string().await?
-                                }),
+                                },
                             }.cell().emit();
                             continue;
                         };
@@ -333,12 +354,12 @@ impl EcmascriptChunkItem for ModuleChunkItem {
                             CssModuleComposesIssue {
                                 severity: IssueSeverity::Error.cell(),
                                 source: self.module.ident(),
-                                message: Vc::cell(formatdoc! {
+                                message: formatdoc! {
                                     r#"
                                         Module {from} referenced in `composes: ... from {from};` is not a CSS module.
                                     "#,
                                     from = &*from.await?.request.to_string().await?
-                                }),
+                                },
                             }.cell().emit();
                             continue;
                         };
@@ -378,10 +399,10 @@ impl EcmascriptChunkItem for ModuleChunkItem {
             inner_code: code.clone().into(),
             // We generate a minimal map for runtime code so that the filename is
             // displayed in dev tools.
-            source_map: Some(generate_minimal_source_map(
+            source_map: Some(Vc::upcast(generate_minimal_source_map(
                 self.module.ident().to_string().await?.to_string(),
                 code,
-            )),
+            ))),
             ..Default::default()
         }
         .cell())
@@ -404,7 +425,7 @@ fn generate_minimal_source_map(filename: String, source: String) -> Vc<ParseResu
     }
     let sm: Arc<SourceMap> = Default::default();
     sm.new_source_file(FileName::Custom(filename), source);
-    let map = ParseResultSourceMap::new(sm, mappings);
+    let map = ParseResultSourceMap::new(sm, mappings, OptionSourceMap::none());
     map.cell()
 }
 
@@ -412,7 +433,7 @@ fn generate_minimal_source_map(filename: String, source: String) -> Vc<ParseResu
 struct CssModuleComposesIssue {
     severity: Vc<IssueSeverity>,
     source: Vc<AssetIdent>,
-    message: Vc<String>,
+    message: String,
 }
 
 #[turbo_tasks::value_impl]
@@ -423,15 +444,16 @@ impl Issue for CssModuleComposesIssue {
     }
 
     #[turbo_tasks::function]
-    async fn title(&self) -> Result<Vc<String>> {
-        Ok(Vc::cell(
+    async fn title(&self) -> Result<Vc<StyledString>> {
+        Ok(StyledString::Text(
             "An issue occurred while resolving a CSS module `composes:` rule".to_string(),
-        ))
+        )
+        .cell())
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("css".to_string())
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::CodeGen.cell()
     }
 
     #[turbo_tasks::function]
@@ -440,7 +462,7 @@ impl Issue for CssModuleComposesIssue {
     }
 
     #[turbo_tasks::function]
-    fn description(&self) -> Vc<String> {
-        self.message
+    fn description(&self) -> Vc<OptionStyledString> {
+        Vc::cell(Some(StyledString::Text(self.message.clone()).cell()))
     }
 }

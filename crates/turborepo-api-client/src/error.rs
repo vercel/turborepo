@@ -12,11 +12,11 @@ pub enum Error {
     #[error("skipping HTTP Request, too many failures have occurred.\nLast error: {0}")]
     TooManyFailures(#[from] Box<reqwest::Error>),
     #[error("Unable to set up TLS.")]
-    TlsError(reqwest::Error),
+    TlsError(#[source] reqwest::Error),
     #[error("Error parsing header: {0}")]
     InvalidHeader(#[from] ToStrError),
-    #[error("Error parsing URL: {0}")]
-    InvalidUrl(#[from] url::ParseError),
+    #[error("Error parsing '{url}' as URL: {err}")]
+    InvalidUrl { url: String, err: url::ParseError },
     #[error("unknown caching status: {0}")]
     UnknownCachingStatus(String, #[backtrace] Backtrace),
     #[error("unknown status {code}: {message}")]
@@ -30,6 +30,11 @@ pub enum Error {
     CacheDisabled {
         status: CachingStatus,
         message: String,
+    },
+    #[error("unable to parse '{text}' as JSON: {err}")]
+    InvalidJson {
+        err: serde_json::Error,
+        text: String,
     },
 }
 

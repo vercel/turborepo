@@ -4,39 +4,42 @@
 //! displaying it We have this split because the tracker representation is not
 //! exactly what we want to display to the user.
 #[allow(dead_code)]
+mod duration;
 mod execution;
 mod global_hash;
 mod scm;
 mod spaces;
 mod task;
 mod task_factory;
-
 use std::{collections::HashSet, io, io::Write};
 
 use chrono::{DateTime, Local};
+pub use duration::TurboDuration;
+pub use execution::{TaskExecutionSummary, TaskTracker};
 pub use global_hash::GlobalHashSummary;
 use itertools::Itertools;
 use serde::Serialize;
+pub use spaces::{SpacesTaskClient, SpacesTaskInformation};
 use svix_ksuid::{Ksuid, KsuidLike};
 use tabwriter::TabWriter;
 use thiserror::Error;
-use tracing::log::warn;
+use tracing::{error, log::warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_api_client::{spaces::CreateSpaceRunPayload, APIAuth, APIClient};
 use turborepo_env::EnvironmentVariableMap;
+use turborepo_repository::package_graph::{PackageGraph, PackageName};
+use turborepo_scm::SCM;
 use turborepo_ui::{color, cprintln, cwriteln, BOLD, BOLD_CYAN, GREY, UI};
 
 use self::{
-    execution::{TaskState, TaskTracker},
-    task::SinglePackageTaskSummary,
-    task_factory::TaskSummaryFactory,
+    execution::TaskState, task::SinglePackageTaskSummary, task_factory::TaskSummaryFactory,
 };
 use super::task_id::TaskId;
 use crate::{
     cli,
+    cli::DryRunMode,
     engine::Engine,
     opts::RunOpts,
-    package_graph::{PackageGraph, WorkspaceName},
     run::summary::{
         execution::{ExecutionSummary, ExecutionTracker},
         scm::SCMState,
@@ -53,7 +56,7 @@ pub enum Error {
     #[error("failed to serialize run summary to JSON")]
     Serde(#[from] serde_json::Error),
     #[error("missing workspace {0}")]
-    MissingWorkspace(WorkspaceName),
+    MissingWorkspace(PackageName),
     #[error("request took too long to resolve: {0}")]
     Timeout(#[from] tokio::time::error::Elapsed),
     #[error("failed to send spaces request: {0}")]
@@ -63,7 +66,7 @@ pub enum Error {
     #[error("failed to contact spaces client")]
     SpacesClientSend(#[from] tokio::sync::mpsc::error::SendError<SpaceRequest>),
     #[error("failed to parse environment variables")]
-    EnvironmentVars(regex::Error),
+    Env(#[source] turborepo_env::Error),
     #[error("failed to construct task summary: {0}")]
     TaskSummary(#[from] task_factory::Error),
 }
@@ -111,7 +114,7 @@ pub struct RunSummary<'a> {
     global_hash_summary: GlobalHashSummary<'a>,
     #[serde(skip_serializing_if = "Option::is_none")]
     execution: Option<ExecutionSummary<'a>>,
-    packages: HashSet<WorkspaceName>,
+    packages: Vec<PackageName>,
     env_mode: EnvMode,
     framework_inference: bool,
     tasks: Vec<TaskSummary>,
@@ -143,7 +146,7 @@ impl RunTracker {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         started_at: DateTime<Local>,
-        synthesized_command: &str,
+        synthesized_command: String,
         package_inference_root: Option<&AnchoredSystemPath>,
         env_at_execution_start: &EnvironmentVariableMap,
         repo_root: &AbsoluteSystemPath,
@@ -152,35 +155,35 @@ impl RunTracker {
         spaces_api_client: APIClient,
         api_auth: Option<APIAuth>,
         user: String,
+        scm: &SCM,
     ) -> Self {
-        let scm = SCMState::get(env_at_execution_start, repo_root);
+        let scm = SCMState::get(env_at_execution_start, scm, repo_root);
 
-        let mut run_tracker = RunTracker {
-            scm: scm.clone(),
+        let spaces_client_handle =
+            SpacesClient::new(spaces_id.clone(), spaces_api_client, api_auth).and_then(
+                |spaces_client| {
+                    let payload = CreateSpaceRunPayload::new(
+                        started_at,
+                        synthesized_command.clone(),
+                        package_inference_root,
+                        scm.branch.clone(),
+                        scm.sha.clone(),
+                        version.to_string(),
+                        user.clone(),
+                    );
+                    spaces_client.start(payload).ok()
+                },
+            );
+
+        RunTracker {
+            scm,
             version,
             started_at,
             execution_tracker: ExecutionTracker::new(),
-            spaces_client_handle: None,
-            user: user.clone(),
-            synthesized_command: synthesized_command.to_string(),
-        };
-
-        if let Some(spaces_client) =
-            SpacesClient::new(spaces_id.clone(), spaces_api_client, api_auth)
-        {
-            let payload = CreateSpaceRunPayload::new(
-                started_at,
-                synthesized_command,
-                package_inference_root,
-                scm.branch,
-                scm.sha,
-                version.to_string(),
-                user,
-            );
-            run_tracker.spaces_client_handle = spaces_client.start(payload).ok();
+            user,
+            synthesized_command,
+            spaces_client_handle,
         }
-
-        run_tracker
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -198,25 +201,23 @@ impl RunTracker {
         package_inference_root: Option<&'a AnchoredSystemPath>,
         exit_code: i32,
         end_time: DateTime<Local>,
-        run_opts: &RunOpts<'a>,
-        packages: HashSet<WorkspaceName>,
+        run_opts: &'a RunOpts,
+        packages: HashSet<PackageName>,
         global_hash_summary: GlobalHashSummary<'a>,
+        global_env_mode: EnvMode,
         task_factory: TaskSummaryFactory<'a>,
     ) -> Result<RunSummary<'a>, Error> {
         let single_package = run_opts.single_package;
         let should_save = run_opts.summarize.flatten().is_some_and(|s| s);
 
-        let run_type = if run_opts.dry_run {
-            if run_opts.dry_run_json {
-                RunType::DryJson
-            } else {
-                RunType::DryText
-            }
-        } else {
-            RunType::Real
+        let run_type = match run_opts.dry_run {
+            None => RunType::Real,
+            Some(DryRunMode::Json) => RunType::DryJson,
+            Some(DryRunMode::Text) => RunType::DryText,
         };
 
         let summary_state = self.execution_tracker.finish().await?;
+
         let tasks = summary_state
             .tasks
             .iter()
@@ -236,9 +237,9 @@ impl RunTracker {
             id: Ksuid::new(None, None),
             version: RUN_SUMMARY_SCHEMA_VERSION.to_string(),
             turbo_version: self.version,
-            packages,
+            packages: packages.into_iter().sorted().collect(),
             execution: Some(execution_summary),
-            env_mode: run_opts.env_mode.into(),
+            env_mode: global_env_mode,
             framework_inference: run_opts.framework_inference,
             tasks,
             global_hash_summary,
@@ -252,7 +253,16 @@ impl RunTracker {
         })
     }
 
-    #[tracing::instrument(skip(pkg_dep_graph, ui, engine, hash_tracker))]
+    #[tracing::instrument(skip(
+        pkg_dep_graph,
+        ui,
+        run_opts,
+        packages,
+        global_hash_summary,
+        engine,
+        hash_tracker,
+        env_at_execution_start
+    ))]
     #[allow(clippy::too_many_arguments)]
     pub async fn finish<'a>(
         self,
@@ -261,8 +271,8 @@ impl RunTracker {
         ui: UI,
         repo_root: &'a AbsoluteSystemPath,
         package_inference_root: Option<&AnchoredSystemPath>,
-        run_opts: &RunOpts<'a>,
-        packages: HashSet<WorkspaceName>,
+        run_opts: &'a RunOpts,
+        packages: HashSet<PackageName>,
         global_hash_summary: GlobalHashSummary<'a>,
         global_env_mode: cli::EnvMode,
         engine: &'a Engine,
@@ -289,6 +299,7 @@ impl RunTracker {
                 run_opts,
                 packages,
                 global_hash_summary,
+                global_env_mode.into(),
                 task_factory,
             )
             .await?;
@@ -300,6 +311,16 @@ impl RunTracker {
 
     pub fn track_task(&self, task_id: TaskId<'static>) -> TaskTracker<()> {
         self.execution_tracker.task_tracker(task_id)
+    }
+
+    pub fn spaces_enabled(&self) -> bool {
+        self.spaces_client_handle.is_some()
+    }
+
+    pub fn spaces_task_client(&self) -> Option<SpacesTaskClient> {
+        self.spaces_client_handle
+            .as_ref()
+            .map(|handle| handle.task_client())
     }
 }
 
@@ -352,6 +373,7 @@ impl<'a> From<&'a RunSummary<'a>> for SinglePackageRunSummary<'a> {
 }
 
 impl<'a> RunSummary<'a> {
+    #[tracing::instrument(skip(self, pkg_dep_graph, ui))]
     async fn finish(
         mut self,
         end_time: DateTime<Local>,
@@ -360,7 +382,7 @@ impl<'a> RunSummary<'a> {
         ui: UI,
     ) -> Result<(), Error> {
         if matches!(self.run_type, RunType::DryJson | RunType::DryText) {
-            self.close_dry_run(pkg_dep_graph, ui)?;
+            return self.close_dry_run(pkg_dep_graph, ui);
         }
 
         if self.should_save {
@@ -376,35 +398,40 @@ impl<'a> RunSummary<'a> {
         }
 
         if let Some(spaces_client_handle) = self.spaces_client_handle.take() {
-            println!("Sending to space");
             self.send_to_space(spaces_client_handle, end_time, exit_code)
-                .await?;
+                .await;
         }
 
         Ok(())
     }
 
+    #[tracing::instrument(skip_all)]
     async fn send_to_space(
         &self,
         spaces_client_handle: SpacesClientHandle,
         ended_at: DateTime<Local>,
         exit_code: i32,
-    ) -> Result<(), Error> {
-        let spinner = turborepo_ui::start_spinner("...sending run summary...");
+    ) {
+        let spinner = tokio::spawn(async {
+            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+            turborepo_ui::start_spinner("...sending run summary...");
+        });
 
-        spaces_client_handle.finish_run(exit_code, ended_at).await?;
+        // We log the error here but don't fail because
+        // failing to send the space shouldn't fail the run.
+        if let Err(err) = spaces_client_handle.finish_run(exit_code, ended_at).await {
+            warn!("Error sending to space: {}", err);
+        };
 
         let result = spaces_client_handle.close().await;
 
-        spinner.finish_and_clear();
+        spinner.abort();
 
         Self::print_errors(&result.errors);
 
         if let Some(run) = result.run {
             println!("Run: {}\n", run.url);
         }
-
-        Ok(())
     }
 
     fn print_errors(errors: &[Error]) {
@@ -433,25 +460,25 @@ impl<'a> RunSummary<'a> {
 
         if self.monorepo {
             println!("\n{}", color!(ui, BOLD_CYAN, "Packages in Scope"));
-            let mut tab_writer = TabWriter::new(io::stdout());
-            writeln!(tab_writer, "Name\tPath")?;
+            let mut tab_writer = TabWriter::new(io::stdout()).minwidth(0).padding(1);
+            writeln!(tab_writer, "Name\tPath\t")?;
             for pkg in &self.packages {
-                if matches!(pkg, WorkspaceName::Root) {
+                if matches!(pkg, PackageName::Root) {
                     continue;
                 }
                 let dir = pkg_dep_graph
-                    .workspace_info(pkg)
+                    .package_info(pkg)
                     .ok_or_else(|| Error::MissingWorkspace(pkg.clone()))?
                     .package_path();
 
                 writeln!(tab_writer, "{}\t{}", pkg, dir)?;
-                tab_writer.flush()?;
             }
+            tab_writer.flush()?;
         }
 
         let file_count = self.global_hash_summary.files.len();
 
-        let mut tab_writer = TabWriter::new(io::stdout());
+        let mut tab_writer = TabWriter::new(io::stdout()).minwidth(0).padding(1);
         cprintln!(ui, BOLD_CYAN, "\nGlobal Hash Inputs");
         cwriteln!(tab_writer, ui, GREY, "  Global Files\t=\t{}", file_count)?;
         cwriteln!(
@@ -472,7 +499,7 @@ impl<'a> RunSummary<'a> {
             tab_writer,
             ui,
             GREY,
-            "  Global .env Files considered\t=\t{}",
+            "  Global .env Files Considered\t=\t{}",
             self.global_hash_summary
                 .global_dot_env
                 .unwrap_or_default()
@@ -513,8 +540,34 @@ impl<'a> RunSummary<'a> {
                 .unwrap_or_default()
                 .join(", ")
         )?;
+        cwriteln!(
+            tab_writer,
+            ui,
+            GREY,
+            "  Global Passed Through Env Vars\t=\t{}",
+            self.global_hash_summary
+                .environment_variables
+                .specified
+                .pass_through_env
+                .unwrap_or_default()
+                .join(", ")
+        )?;
+        cwriteln!(
+            tab_writer,
+            ui,
+            GREY,
+            "  Global Passed Through Env Vars Values\t=\t{}",
+            self.global_hash_summary
+                .environment_variables
+                .pass_through
+                .as_deref()
+                .unwrap_or_default()
+                .join(", ")
+        )?;
 
         tab_writer.flush()?;
+        println!();
+        cprintln!(ui, BOLD_CYAN, "Tasks to Run");
 
         for task in &self.tasks {
             if self.monorepo {
@@ -523,11 +576,32 @@ impl<'a> RunSummary<'a> {
                 cprintln!(ui, BOLD, "{}", task.task_id.task());
             };
 
-            let mut tab_writer = TabWriter::new(io::stdout());
-            cwriteln!(tab_writer, ui, GREY, "  Task\t=\t{}", task.task_id)?;
+            let mut tab_writer = TabWriter::new(io::stdout()).padding(1).minwidth(0);
+            cwriteln!(tab_writer, ui, GREY, "  Task\t=\t{}", task.task)?;
+            if self.monorepo {
+                cwriteln!(tab_writer, ui, GREY, "  Package\t=\t{}", &task.package)?;
+            }
+            cwriteln!(tab_writer, ui, GREY, "  Hash\t=\t{}", &task.shared.hash)?;
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  Cached (Local)\t=\t{}",
+                &task.shared.cache.local
+            )?;
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  Cached (Remote)\t=\t{}",
+                &task.shared.cache.remote
+            )?;
 
-            cwriteln!(tab_writer, ui, GREY, "  Package\t=\t{}", &task.package)?;
-
+            if self.monorepo {
+                if let Some(directory) = &task.shared.directory {
+                    cwriteln!(tab_writer, ui, GREY, "  Directory\t=\t{}", directory)?;
+                }
+            }
             cwriteln!(
                 tab_writer,
                 ui,
@@ -540,7 +614,10 @@ impl<'a> RunSummary<'a> {
                 ui,
                 GREY,
                 "  Outputs\t=\t{}",
-                task.shared.outputs.join(", ")
+                task.shared
+                    .outputs
+                    .as_ref()
+                    .map_or_else(String::new, |outputs| outputs.join(", "))
             )?;
             cwriteln!(
                 tab_writer,
@@ -549,20 +626,30 @@ impl<'a> RunSummary<'a> {
                 "  Log File\t=\t{}",
                 task.shared.log_file
             )?;
-            cwriteln!(
-                tab_writer,
-                ui,
-                GREY,
-                "  Dependencies\t=\t{}",
+
+            let dependencies = if !self.monorepo {
+                task.shared
+                    .dependencies
+                    .iter()
+                    .map(|dep| dep.task())
+                    .join(", ")
+            } else {
                 task.shared.dependencies.iter().join(", ")
-            )?;
-            cwriteln!(
-                tab_writer,
-                ui,
-                GREY,
-                "  Dependents\t=\t{}",
+            };
+
+            cwriteln!(tab_writer, ui, GREY, "  Dependencies\t=\t{}", dependencies)?;
+
+            let dependents = if !self.monorepo {
+                task.shared
+                    .dependents
+                    .iter()
+                    .map(|dep| dep.task())
+                    .join(", ")
+            } else {
                 task.shared.dependents.iter().join(", ")
-            )?;
+            };
+
+            cwriteln!(tab_writer, ui, GREY, "  Dependents\t=\t{}", dependents)?;
             cwriteln!(
                 tab_writer,
                 ui,
@@ -575,7 +662,10 @@ impl<'a> RunSummary<'a> {
                 ui,
                 GREY,
                 "  .env Files Considered\t=\t{}",
-                task.shared.dot_env.len()
+                task.shared
+                    .dot_env
+                    .as_ref()
+                    .map_or(0, |dot_env| dot_env.len())
             )?;
 
             cwriteln!(
@@ -609,14 +699,19 @@ impl<'a> RunSummary<'a> {
                     .environment_variables
                     .specified
                     .pass_through_env
-                    .join(", ")
+                    .as_ref()
+                    .map_or_else(String::new, |pass_through_env| pass_through_env.join(", "))
             )?;
             cwriteln!(
                 tab_writer,
                 ui,
                 GREY,
                 "  Passed Through Env Vars Values\t=\t{}",
-                task.shared.environment_variables.pass_through.join(", ")
+                task.shared
+                    .environment_variables
+                    .pass_through
+                    .as_ref()
+                    .map_or_else(String::new, |vars| vars.join(", "))
             )?;
 
             // If there's an error, we can silently ignore it, we don't need to block the
@@ -628,10 +723,20 @@ impl<'a> RunSummary<'a> {
                     tab_writer,
                     ui,
                     GREY,
-                    "  Task Definition\t=\t{}",
+                    "  Resolved Task Definition\t=\t{}",
                     task_definition_json
                 )?;
             }
+
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  Framework\t=\t{}",
+                task.shared.framework
+            )?;
+
+            tab_writer.flush()?;
         }
 
         Ok(())
@@ -640,13 +745,16 @@ impl<'a> RunSummary<'a> {
     fn format_json(&mut self) -> Result<String, Error> {
         self.normalize();
 
-        if self.monorepo {
-            Ok(serde_json::to_string_pretty(&self)?)
+        let mut rendered_json = if self.monorepo {
+            serde_json::to_string_pretty(&self)
         } else {
             // Deref coercion used to get an immutable reference from the mutable reference.
             let monorepo_rsm = SinglePackageRunSummary::from(&*self);
-            Ok(serde_json::to_string_pretty(&monorepo_rsm)?)
-        }
+            serde_json::to_string_pretty(&monorepo_rsm)
+        }?;
+        // Go produces an extra newline at the end of the JSON
+        rendered_json.push('\n');
+        Ok(rendered_json)
     }
 
     fn normalize(&mut self) {
@@ -658,10 +766,16 @@ impl<'a> RunSummary<'a> {
         // For single packages, we don't need the packages
         // and each task summary needs some cleaning
         if !self.monorepo {
-            self.packages.drain();
+            self.packages.clear();
         }
 
         self.tasks.sort_by(|a, b| a.task_id.cmp(&b.task_id));
+
+        // Sort dependencies
+        for task in &mut self.tasks {
+            task.shared.dependencies.sort();
+            task.shared.dependents.sort();
+        }
     }
 
     fn get_path(&self) -> AbsoluteSystemPathBuf {

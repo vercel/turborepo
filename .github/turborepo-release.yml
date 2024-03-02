@@ -3,25 +3,32 @@
 changelog:
   exclude:
     labels:
-      - "team: turbopack"
+      - "owned-by: turbopack"
       - "area: ci"
+      - "release: turborepo"
   categories:
-    - title: Changelog
+    - title: Docs
       labels:
-        - "*"
+        - "area: docs"
+        - "area: site"
+    - title: create-turbo
+      labels:
+        - "pkg: create-turbo"
     - title: turbo-ignore
       labels:
         - "pkg: turbo-ignore"
     - title: "@turbo/codemod"
       labels:
         - "pkg: turbo-codemod"
-    - title: create-turbo
+    - title: "eslint"
       labels:
-        - "pkg: create-turbo"
+        - "pkg: turbo-eslint"
+    - title: "@turbo/repository"
+      labels:
+        - "pkg: turbo-repository"
     - title: Examples
       labels:
         - "area: examples"
-    - title: Docs
+    - title: Changelog
       labels:
-        - "area: docs"
-        - "area: site"
+        - "*"

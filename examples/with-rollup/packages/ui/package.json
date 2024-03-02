@@ -1,23 +1,31 @@
 {
-  "name": "ui",
+  "name": "@repo/ui",
   "version": "0.0.0",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "license": "MIT",
+  "type": "module",
+  "exports": {
+    "./button": {
+      "types": "./Button.tsx",
+      "default": "./dist/button.js"
+    },
+    "./header": {
+      "types": "./Header.tsx",
+      "default": "./dist/header.js"
+    }
+  },
   "scripts": {
     "lint": "eslint *.ts*",
     "build": "rollup --config",
     "dev": "pnpm run build -- --watch"
   },
   "devDependencies": {
-    "@rollup/plugin-typescript": "^8.5.0",
-    "@types/react": "^18.2.5",
-    "@types/react-dom": "^18.2.4",
-    "eslint": "^7.32.0",
-    "eslint-config-custom": "workspace:*",
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@rollup/plugin-typescript": "^11.1.5",
+    "@types/react": "^18.2.46",
+    "@types/react-dom": "^18.2.18",
+    "eslint": "^8.56.0",
     "react": "^18.2.0",
-    "rollup": "^2.79.0",
-    "tsconfig": "workspace:*",
-    "typescript": "^4.5.2"
+    "rollup": "^4.9.2",
+    "typescript": "^5.3.3"
   }
 }

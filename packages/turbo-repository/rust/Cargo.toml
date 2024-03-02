@@ -7,10 +7,14 @@ license = "MPL-2.0"
 [lib]
 crate-type = ["cdylib"]
 
+[lints]
+workspace = true
+
 [dependencies]
-anyhow.workspace = true
-napi = { version = "2.13.3", features = ["anyhow"] }
-napi-derive = "2.13.0"
+napi = { version = "2.14.0", features = ["tokio_rt"] }
+napi-derive = "2.14.0"
+thiserror = { workspace = true }
+tokio = { workspace = true }
 turbopath = { workspace = true }
 turborepo-repository = { workspace = true }
 

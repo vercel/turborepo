@@ -1,0 +1,10 @@
+{
+  "name": "@turborepo-examples-tests/with-tailwind",
+  "scripts": {
+    "test": "bash ./node_modules/turborepo-tests-helpers/setup_example_test.sh with-tailwind pnpm"
+  },
+  "dependencies": {
+    "turborepo-tests-helpers": "workspace:*",
+    "turborepo-examples": "workspace:*"
+  }
+}

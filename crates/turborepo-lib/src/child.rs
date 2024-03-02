@@ -1,10 +1,9 @@
-use std::{process::Command, sync::Arc};
+use std::{io, process::Command, sync::Arc};
 
-use anyhow::Result;
 use shared_child::SharedChild;
 
 /// Spawns a child in a way where SIGINT is correctly forwarded to the child
-pub fn spawn_child(mut command: Command) -> Result<Arc<SharedChild>> {
+pub fn spawn_child(mut command: Command) -> Result<Arc<SharedChild>, io::Error> {
     let shared_child = Arc::new(SharedChild::spawn(&mut command)?);
     let handler_shared_child = shared_child.clone();
 

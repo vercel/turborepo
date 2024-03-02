@@ -1,6 +1,7 @@
 use std::{fmt, path::Path};
 
 use camino::{Utf8Component, Utf8Path};
+use path_clean::PathClean;
 use serde::Serialize;
 
 use crate::{AnchoredSystemPathBuf, PathError, RelativeUnixPathBuf};
@@ -41,6 +42,8 @@ impl AsRef<Path> for AnchoredSystemPath {
     }
 }
 
+const EMPTY: &str = "";
+
 impl AnchoredSystemPath {
     pub(crate) unsafe fn new_unchecked<'a>(path: impl AsRef<Path> + 'a) -> &'a Self {
         let path = path.as_ref();
@@ -55,6 +58,10 @@ impl AnchoredSystemPath {
         }
 
         Ok(unsafe { &*(path as *const Path as *const Self) })
+    }
+
+    pub fn empty() -> &'static Self {
+        unsafe { Self::new_unchecked(EMPTY) }
     }
 
     pub fn as_str(&self) -> &str {
@@ -92,5 +99,19 @@ impl AnchoredSystemPath {
     pub fn join_component(&self, segment: &str) -> AnchoredSystemPathBuf {
         debug_assert!(!segment.contains(std::path::MAIN_SEPARATOR));
         AnchoredSystemPathBuf(self.0.join(segment))
+    }
+
+    pub fn join_components(&self, segments: &[&str]) -> AnchoredSystemPathBuf {
+        debug_assert!(!segments
+            .iter()
+            .any(|segment| segment.contains(std::path::MAIN_SEPARATOR)));
+        AnchoredSystemPathBuf(
+            self.0
+                .join(segments.join(std::path::MAIN_SEPARATOR_STR))
+                .as_std_path()
+                .clean()
+                .try_into()
+                .unwrap(),
+        )
     }
 }

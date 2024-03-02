@@ -47,6 +47,9 @@ Skip turbo-ignore check and automatically deploy:
   - [vercel build]
   - [vercel deploy <workspace>]
   - [vercel build <workspace>]
+
+Skip turbo-ignore check and automatically deploy specific workspace and ignore others:
+  - [vercel only <workspace>]
 ```
 
 ### Examples

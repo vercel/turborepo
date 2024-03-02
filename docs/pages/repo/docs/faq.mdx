@@ -3,7 +3,7 @@ title: Frequently Asked Questions
 description: Frequently asked questions about Turborepo.
 ---
 
-import Callout from '../../../components/Callout'
+import { Callout } from '../../../components/Callout'
 import { Tabs, Tab } from '../../../components/Tabs'
 
 # Frequently Asked Questions
@@ -15,7 +15,10 @@ You have two options when working with Turborepo:
 1. Install it globally, via `npm install --global turbo`
 2. Install a local version in your project
 
-We recommend installing the `turbo` CLI globally. This gives you a smooth, ergonomic experience for running tasks.
+We recommend installing the `turbo` CLI globally. This gives you a smooth,
+ergonomic experience for running tasks. If your project _also_ has `turbo` as a
+dependency in package.json, the global `turbo` will invoke the local one to
+ensure that intended version is used in the project.
 
 ### Why isn't my global `turbo` working as expected?
 
@@ -86,3 +89,18 @@ Some new features are marked as "experimental" in Turborepo. This means that the
 
 - [Report a bug with an experimental feature](https://github.com/vercel/turbo/issues/new?labels=experimental,kind:+bug,area:+turborepo,needs:+triage&template=0-turborepo-bug-report.yml&title=%5Bturborepo%5D+)
 - [Provide feedback on an experimental feature](https://github.com/vercel/turbo/issues/new?labels=experimental,story,needs:+triage&template=2-feature-request.yml&title=%5Bturborepo%5D+)
+
+## Can I use Turborepo with a monorepo that non-JS code?
+
+Your monorepo can include subdirectories with any kind of code (a Django app,
+Rust crates, Ruby CLIs, etc). Turborepo will largely ignore these directories.
+However, if you want Turborepo to _do_ anything with those parts of your
+codebase, you will need to:
+
+- Include these subdirectories in your workspaces declaration (e.g. `pnpm-workspace.yaml` or
+  the `workspaces` key in `package.json`.
+- Add a `package.json` file to this directory the `name` and `scripts`
+  fields populated.
+
+Turborepo use Node.js conventions to find workspaces and execute tasks, but it
+doesn't care what those tasks are.

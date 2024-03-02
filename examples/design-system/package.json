@@ -2,7 +2,7 @@
   "private": true,
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev --no-cache --continue",
+    "dev": "turbo run dev",
     "lint": "turbo run lint",
     "clean": "turbo run clean && rm -rf node_modules",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
@@ -11,11 +11,9 @@
     "release": "turbo run build --filter=docs^... && changeset publish"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.25.2",
-    "eslint": "^8.48.0",
-    "prettier": "^3.0.3",
-    "tsconfig": "workspace:*",
-    "turbo": "latest"
+    "@changesets/cli": "^2.27.1",
+    "prettier": "^3.1.1",
+    "turbo": "^1.12.1"
   },
-  "packageManager": "pnpm@8.6.10"
+  "packageManager": "pnpm@8.9.0"
 }

@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, future::Future, pin::Pin};
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{
     debug::ValueDebugFormat, trace::TraceRawVcs, TryJoinIterExt, Value, ValueToString, Vc,
@@ -9,7 +9,7 @@ use turbo_tasks_fs::{glob::Glob, FileSystemPath};
 
 use super::{
     alias_map::{AliasMap, AliasTemplate},
-    AliasPattern, ResolveResult, ResolveResultItem,
+    AliasPattern, ExternalType, ResolveResult, ResolveResultItem,
 };
 use crate::resolve::{parse::Request, plugin::ResolvePlugin};
 
@@ -67,9 +67,7 @@ pub enum ResolveIntoPackage {
     /// [main]: https://nodejs.org/api/packages.html#main
     /// [module]: https://esbuild.github.io/api/#main-fields
     /// [browser]: https://esbuild.github.io/api/#main-fields
-    MainField(String),
-    /// Default behavior of using the index.js file at the root of the package.
-    Default(String),
+    MainField { field: String },
 }
 
 // The different ways to resolve a request withing a package
@@ -89,7 +87,7 @@ pub enum ResolveInPackage {
 #[turbo_tasks::value(shared)]
 #[derive(Clone)]
 pub enum ImportMapping {
-    External(Option<String>),
+    External(Option<String>, ExternalType),
     /// An already resolved result that will be returned directly.
     Direct(Vc<ResolveResult>),
     /// A request alias that will be resolved first, and fall back to resolving
@@ -128,11 +126,11 @@ impl AliasTemplate for Vc<ImportMapping> {
         Box::pin(async move {
             let this = &*self.await?;
             Ok(match this {
-                ImportMapping::External(name) => {
+                ImportMapping::External(name, ty) => {
                     if let Some(name) = name {
-                        ImportMapping::External(Some(name.clone().replace('*', capture)))
+                        ImportMapping::External(Some(name.clone().replace('*', capture)), *ty)
                     } else {
-                        ImportMapping::External(None)
+                        ImportMapping::External(None, *ty)
                     }
                 }
                 ImportMapping::PrimaryAlternative(name, context) => {
@@ -268,12 +266,15 @@ async fn import_mapping_to_result(
 ) -> Result<ImportMapResult> {
     Ok(match &*mapping.await? {
         ImportMapping::Direct(result) => ImportMapResult::Result(*result),
-        ImportMapping::External(name) => ImportMapResult::Result(
-            ResolveResult::primary(name.as_ref().map_or_else(
-                || ResolveResultItem::OriginalReferenceExternal,
-                |req| ResolveResultItem::OriginalReferenceTypeExternal(req.to_string()),
-            ))
-            .into(),
+        ImportMapping::External(name, ty) => ImportMapResult::Result(
+            ResolveResult::primary(if let Some(name) = name {
+                ResolveResultItem::External(name.to_string(), *ty)
+            } else if let Some(request) = request.await?.request() {
+                ResolveResultItem::External(request, *ty)
+            } else {
+                bail!("Cannot resolve external reference without request")
+            })
+            .cell(),
         ),
         ImportMapping::Ignore => {
             ImportMapResult::Result(ResolveResult::primary(ResolveResultItem::Ignore).into())
@@ -354,8 +355,22 @@ impl ImportMap {
         request: Vc<Request>,
     ) -> Result<ImportMapResult> {
         // TODO lookup pattern
+        // relative requests must not match global wildcard aliases.
         if let Some(request_string) = request.await?.request() {
-            if let Some(result) = self.map.lookup(&request_string).next() {
+            let mut lookup = if request_string.starts_with("./") {
+                self.map
+                    .lookup_with_prefix_predicate(&request_string, |prefix| {
+                        prefix.starts_with("./")
+                    })
+            } else if request_string.starts_with("../") {
+                self.map
+                    .lookup_with_prefix_predicate(&request_string, |prefix| {
+                        prefix.starts_with("../")
+                    })
+            } else {
+                self.map.lookup(&request_string)
+            };
+            if let Some(result) = lookup.next() {
                 return import_mapping_to_result(
                     result.try_join_into_self().await?.into_owned(),
                     lookup_path,
@@ -396,6 +411,13 @@ impl ResolvedMap {
 #[turbo_tasks::value(shared)]
 #[derive(Clone, Debug, Default)]
 pub struct ResolveOptions {
+    /// When set, do not apply extensions and default_files for relative
+    /// request. But they are still applied for resolving into packages.
+    pub fully_specified: bool,
+    /// When set, when resolving a module request, try to resolve it as relative
+    /// request first.
+    pub prefer_relative: bool,
+    /// The extensions that should be added to a request when resolving.
     pub extensions: Vec<String>,
     /// The locations where to resolve modules.
     pub modules: Vec<ResolveModules>,
@@ -403,6 +425,8 @@ pub struct ResolveOptions {
     pub into_package: Vec<ResolveIntoPackage>,
     /// How to resolve in packages.
     pub in_package: Vec<ResolveInPackage>,
+    /// The default files to resolve in a folder.
+    pub default_files: Vec<String>,
     /// An import map to use before resolving a request.
     pub import_map: Option<Vc<ImportMap>>,
     /// An import map to use when a request is otherwise unresolveable.
@@ -414,14 +438,6 @@ pub struct ResolveOptions {
 
 #[turbo_tasks::value_impl]
 impl ResolveOptions {
-    #[turbo_tasks::function]
-    pub async fn modules(self: Vc<Self>) -> Result<Vc<ResolveModulesOptions>> {
-        Ok(ResolveModulesOptions {
-            modules: self.await?.modules.clone(),
-        }
-        .into())
-    }
-
     /// Returns a new [Vc<ResolveOptions>] with its import map extended to
     /// include the given import map.
     #[turbo_tasks::function]
@@ -455,20 +471,43 @@ impl ResolveOptions {
         );
         Ok(resolve_options.into())
     }
+
+    /// Overrides the extensions used for resolving
+    #[turbo_tasks::function]
+    pub async fn with_extensions(self: Vc<Self>, extensions: Vec<String>) -> Result<Vc<Self>> {
+        let mut resolve_options = self.await?.clone_value();
+        resolve_options.extensions = extensions;
+        Ok(resolve_options.into())
+    }
+
+    /// Overrides the fully_specified flag for resolving
+    #[turbo_tasks::function]
+    pub async fn with_fully_specified(self: Vc<Self>, fully_specified: bool) -> Result<Vc<Self>> {
+        let resolve_options = self.await?;
+        if resolve_options.fully_specified == fully_specified {
+            return Ok(self);
+        }
+        let mut resolve_options = resolve_options.clone_value();
+        resolve_options.fully_specified = fully_specified;
+        Ok(resolve_options.cell())
+    }
 }
 
 #[turbo_tasks::value(shared)]
 #[derive(Hash, Clone, Debug)]
 pub struct ResolveModulesOptions {
     pub modules: Vec<ResolveModules>,
+    pub extensions: Vec<String>,
 }
 
 #[turbo_tasks::function]
 pub async fn resolve_modules_options(
     options: Vc<ResolveOptions>,
 ) -> Result<Vc<ResolveModulesOptions>> {
+    let options = options.await?;
     Ok(ResolveModulesOptions {
-        modules: options.await?.modules.clone(),
+        modules: options.modules.clone(),
+        extensions: options.extensions.clone(),
     }
     .into())
 }

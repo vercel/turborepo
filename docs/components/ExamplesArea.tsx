@@ -31,15 +31,16 @@ export function ExamplesArea({
 }: {
   filter: "featured" | "all";
 }) {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Awkward typing from Nextra.
   const { examples }: { examples: Example[] } = useSSG();
 
   const sortedExamples = examples
     .filter(({ featured }) => (filter === "featured" ? featured : true))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  const withBoost = [];
-  const withTemplate = [];
-  const withoutTemplate = [];
+  const withBoost: Example[] = [];
+  const withTemplate: Example[] = [];
+  const withoutTemplate: Example[] = [];
   sortedExamples.forEach((e) => {
     if (e.boost) {
       withBoost.push(e);

@@ -4,7 +4,7 @@ import { PackHero } from "./PackHero";
 import { PackLetter } from "./PackLetter";
 import { PackFeatures } from "./PackFeatures";
 
-export default function Home() {
+export function TurbopackHome() {
   return (
     <>
       <LandingPageGlobalStyles />

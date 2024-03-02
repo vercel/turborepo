@@ -3,11 +3,14 @@ use indexmap::IndexSet;
 use serde::{Deserialize, Serialize};
 use swc_core::{
     common::DUMMY_SP,
-    ecma::ast::{ArrayLit, ArrayPat, Expr, Ident, Pat, Program},
+    ecma::ast::{ArrayLit, ArrayPat, Expr, Ident, Program},
     quote,
 };
-use turbo_tasks::{trace::TraceRawVcs, TryFlatJoinIterExt, Vc};
-use turbopack_core::chunk::{AsyncModuleInfo, ChunkableModule};
+use turbo_tasks::{trace::TraceRawVcs, TryFlatJoinIterExt, TryJoinIterExt, Vc};
+use turbopack_core::{
+    chunk::{AsyncModuleInfo, ChunkableModule},
+    resolve::ExternalType,
+};
 
 use super::esm::base::ReferencedAsset;
 use crate::{
@@ -46,6 +49,7 @@ pub struct AsyncModule {
     pub placeable: Vc<Box<dyn EcmascriptChunkPlaceable>>,
     pub references: IndexSet<Vc<EsmAssetReference>>,
     pub has_top_level_await: bool,
+    pub import_externals: bool,
 }
 
 /// Option<[AsyncModule]>.
@@ -80,22 +84,27 @@ struct AsyncModuleIdents(IndexSet<String>);
 impl AsyncModule {
     #[turbo_tasks::function]
     async fn get_async_idents(
-        self: Vc<Self>,
+        &self,
         chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
         async_module_info: Vc<AsyncModuleInfo>,
     ) -> Result<Vc<AsyncModuleIdents>> {
-        let this = self.await?;
         let async_module_info = async_module_info.await?;
 
-        let reference_idents = this
+        let reference_idents = self
             .references
             .iter()
             .map(|r| async {
                 let referenced_asset = r.get_referenced_asset().await?;
                 Ok(match &*referenced_asset {
-                    ReferencedAsset::OriginalReferenceTypeExternal(_) => {
-                        // TODO(WEB-1259): we need to detect if external modules are esm
-                        None
+                    ReferencedAsset::External(
+                        _,
+                        ExternalType::OriginalReference | ExternalType::EcmaScriptModule,
+                    ) => {
+                        if self.import_externals {
+                            referenced_asset.get_ident().await?
+                        } else {
+                            None
+                        }
                     }
                     ReferencedAsset::Some(placeable) => {
                         let chunk_item = placeable
@@ -111,6 +120,7 @@ impl AsyncModule {
                             None
                         }
                     }
+                    ReferencedAsset::External(..) => None,
                     ReferencedAsset::None => None,
                 })
             })
@@ -121,8 +131,31 @@ impl AsyncModule {
     }
 
     #[turbo_tasks::function]
-    pub(crate) fn is_self_async(&self) -> Vc<bool> {
-        Vc::cell(self.has_top_level_await)
+    pub(crate) async fn is_self_async(&self) -> Result<Vc<bool>> {
+        if self.has_top_level_await {
+            return Ok(Vc::cell(true));
+        }
+
+        Ok(Vc::cell(
+            self.import_externals
+                && self
+                    .references
+                    .iter()
+                    .map(|r| async {
+                        let referenced_asset = r.get_referenced_asset().await?;
+                        Ok(matches!(
+                            &*referenced_asset,
+                            ReferencedAsset::External(
+                                _,
+                                ExternalType::OriginalReference | ExternalType::EcmaScriptModule
+                            )
+                        ))
+                    })
+                    .try_join()
+                    .await?
+                    .iter()
+                    .any(|&b| b),
+        ))
     }
 
     /// Returns
@@ -190,7 +223,7 @@ fn add_async_dependency_handler(program: &mut Program, idents: &IndexSet<String>
     let stmt = quote!(
         "($deps = __turbopack_async_dependencies__.then ? (await \
          __turbopack_async_dependencies__)() : __turbopack_async_dependencies__);" as Stmt,
-        deps: Pat = Pat::Array(ArrayPat {
+        deps: AssignTarget = ArrayPat {
             span: DUMMY_SP,
             elems: idents
                 .into_iter()
@@ -198,7 +231,7 @@ fn add_async_dependency_handler(program: &mut Program, idents: &IndexSet<String>
                 .collect(),
             optional: false,
             type_ann: None,
-        }),
+        }.into(),
     );
 
     insert_hoisted_stmt(program, stmt);

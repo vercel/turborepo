@@ -1,23 +1,22 @@
 #![feature(assert_matches)]
 #![deny(clippy::all)]
 
-mod empty_glob;
-
 use std::{
     borrow::Cow,
     collections::HashSet,
-    io::ErrorKind,
     path::{Path, PathBuf},
+    str::FromStr,
     sync::OnceLock,
 };
 
-use empty_glob::InclusiveEmptyAny;
+use camino::Utf8PathBuf;
 use itertools::Itertools;
+use path_clean::PathClean;
 use path_slash::PathExt;
+use rayon::prelude::*;
 use regex::Regex;
-use tracing::{info_span, Span};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
-use wax::{Any, BuildError, Glob, Pattern};
+use wax::{walk::FileIterator, BuildError, Glob};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum WalkType {
@@ -26,25 +25,8 @@ pub enum WalkType {
     All,
 }
 
-#[derive(Debug, PartialEq)]
-pub enum MatchType {
-    Match,
-    PotentialMatch,
-    None,
-    Exclude,
-}
-
-impl WalkType {
-    fn should_emit(&self, is_dir: bool) -> bool {
-        match self {
-            WalkType::Files => !is_dir,
-            WalkType::Folders => is_dir,
-            WalkType::All => true,
-        }
-    }
-}
-
 pub use walkdir::Error as WalkDirError;
+use wax::walk::Entry;
 
 #[derive(Debug, thiserror::Error)]
 pub enum WalkError {
@@ -58,111 +40,21 @@ pub enum WalkError {
     #[error(transparent)]
     Path(#[from] PathError),
     #[error(transparent)]
-    WaxWalk(#[from] wax::WalkError),
+    WaxWalk(#[from] wax::walk::WalkError),
     #[error("Internal error on glob {glob}: {error}")]
     InternalError { glob: String, error: String },
     #[error("IO Error: {0}")]
     IO(#[from] std::io::Error),
 }
 
-/// Performs a glob walk, yielding paths that _are_ included in the include list
-/// (if it is nonempty) and _not_ included in the exclude list.
-///
-/// In the case of an empty include, then all files are included.
-///
-/// note: the rough algorithm to achieve this is as follows:
-///       - prepend the slashified base_path to each include and exclude
-///       - collapse the path, and calculate the new base_path, which defined as
-///         the longest common prefix of all the includes
-///       - traversing above the root of the base_path is not allowed
-pub fn _globwalk(
-    base_path: &AbsoluteSystemPath,
-    include: &[String],
-    exclude: &[String],
-    walk_type: WalkType,
-) -> Result<impl Iterator<Item = Result<AbsoluteSystemPathBuf, WalkError>>, WalkError> {
-    let (base_path_new, include_paths, exclude_paths) =
-        preprocess_paths_and_globs(base_path, include, exclude)?;
-
-    let (include, exclude) = build_glob_matchers(include_paths, exclude_paths)?;
-
-    // we enable following symlinks but only because without it they are ignored
-    // completely (as opposed to yielded but not followed)
-    let walker = walkdir::WalkDir::new(base_path_new.as_path()).follow_links(false);
-    let mut iter = walker.into_iter();
-
-    Ok(std::iter::from_fn(move || loop {
-        let entry = iter.next()?;
-
-        let (is_symlink, path) = match entry {
-            Ok(entry) => (entry.path_is_symlink(), entry.into_path()),
-            Err(err) => match (err.io_error(), err.path()) {
-                // make sure to yield broken symlinks
-                (Some(io_err), Some(path))
-                    if io_err.kind() == ErrorKind::NotFound && path.is_symlink() =>
-                {
-                    (true, path.to_owned())
-                }
-                _ => return Some(Err(err.into())),
-            },
-        };
-
-        let relative_path = path.as_path(); // TODO
-        let is_directory = !path.is_symlink() && path.is_dir();
-
-        let match_type = do_match(relative_path, &include, &exclude);
-
-        if (match_type == MatchType::Exclude || is_symlink) && is_directory {
-            iter.skip_current_dir();
-        }
-
-        match match_type {
-            // if it is a perfect match, and our walk_type allows it, then we should yield it
-            MatchType::Match if walk_type.should_emit(is_directory) => {
-                return Some(Ok(
-                    AbsoluteSystemPathBuf::try_from(path.as_path()).expect("absolute")
-                ));
-            }
-            // we should yield potential matches if they are symlinks. we don't want to traverse
-            // into them, but simply say 'hey this is a symlink that could match'
-            // MatchType::PotentialMatch if is_symlink && walk_type.should_emit(is_directory) => {
-            // return Some(Ok(AbsoluteSystemPathBuf::new(path).expect("absolute")));
-            // }
-            // just skip and continue on with the loop
-            MatchType::None | MatchType::PotentialMatch | MatchType::Match | MatchType::Exclude => {
-            }
-        }
-    }))
-}
-
-/// Builds the include and exclude glob matchers
-///
-/// note: we could probably reduce the number of allocations here
-///       with a tasteful PR to wax, rather than having us convert
-///       to globs, calling into_owned, then collecting and erroring.
-///       really, `Any` should have an `into_owned` method
-///       additionally, `BuildError` currently has a lifetime, which
-///       prevents us from using ? here, since we must convert to str
-fn build_glob_matchers(
-    include_paths: Vec<String>,
-    exclude_paths: Vec<String>,
-) -> Result<(InclusiveEmptyAny<'static>, Any<'static>), WalkError> {
-    let inc_patterns = include_paths
-        .iter()
-        .map(glob_with_contextual_error)
-        .collect::<Result<Vec<_>, _>>()?;
-    let include =
-        InclusiveEmptyAny::new(inc_patterns, include_paths).map_err(Into::<WalkError>::into)?;
-    let ex_patterns = exclude_paths
-        .iter()
-        .map(glob_with_contextual_error)
-        .collect::<Result<Vec<_>, _>>()?;
-    let exclude = any_with_contextual_error(ex_patterns, exclude_paths)?;
-    Ok((include, exclude))
-}
-
 fn join_unix_like_paths(a: &str, b: &str) -> String {
     [a.trim_end_matches('/'), "/", b.trim_start_matches('/')].concat()
+}
+
+fn escape_glob_literals(literal_glob: &str) -> Cow<str> {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"(?<literal>[\?\*\$:<>\(\)\[\]{},])").unwrap())
+        .replace_all(literal_glob, "\\$literal")
 }
 
 #[tracing::instrument]
@@ -174,8 +66,11 @@ fn preprocess_paths_and_globs(
     let base_path_slash = base_path
         .as_std_path()
         .to_slash()
-        // Windows drive paths need to be escaped, and ':' is a valid token in unix paths
-        .map(|s| s.replace(':', "\\:"))
+        .map(|s| {
+            // Paths can contain various tokens that have special meaning when parsing as a
+            // glob We escape them to avoid any unintended consequences.
+            escape_glob_literals(&s).into_owned()
+        })
         .ok_or(WalkError::InvalidPath)?;
 
     let (include_paths, lowest_segment) = include
@@ -232,7 +127,7 @@ fn preprocess_paths_and_globs(
 
 fn double_doublestar() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"\*\*/\*\*").unwrap())
+    RE.get_or_init(|| Regex::new(r"\*\*(?:/\*\*)+").unwrap())
 }
 
 fn leading_doublestar() -> &'static Regex {
@@ -269,21 +164,6 @@ pub fn fix_glob_pattern(pattern: &str) -> String {
     let p3 = trailing_doublestar().replace(&p2, "$prefix*/**");
 
     p3.to_string()
-}
-
-fn do_match(path: &Path, include: &InclusiveEmptyAny, exclude: &Any) -> MatchType {
-    let path_unix = match path.to_slash() {
-        Some(path) => path,
-        None => return MatchType::None, // you can't match a path that isn't valid unicode
-    };
-
-    let is_match = include.is_match(path_unix.as_ref());
-    let is_match2 = exclude.is_match(path_unix.as_ref());
-    match (is_match, is_match2) {
-        (_, true) => MatchType::Exclude, // exclude takes precedence
-        (true, false) => MatchType::Match,
-        (false, false) => MatchType::None,
-    }
 }
 
 /// collapse a path, returning a new path with all the dots and dotdots removed
@@ -345,18 +225,82 @@ fn glob_with_contextual_error<S: AsRef<str> + std::fmt::Debug>(
         .map_err(|e| WalkError::BadPattern(raw.to_string(), Box::new(e)))
 }
 
-pub(crate) fn any_with_contextual_error(
-    precompiled: Vec<Glob<'static>>,
-    text: Vec<String>,
-) -> Result<wax::Any<'static>, WalkError> {
-    wax::any(precompiled).map_err(|e| {
-        let text = text.iter().join(",");
-        WalkError::BadPattern(text, Box::new(e))
-    })
+#[derive(Debug, thiserror::Error)]
+#[error("Invalid globwalking input {raw_input}: {reason}")]
+pub struct GlobError {
+    raw_input: String,
+    reason: String,
+}
+
+/// ValidatedGlob represents an input string that we have either validated or
+/// modified to fit our constraints. It does not _yet_ validate that the glob is
+/// a valid glob pattern, just that we have checked for unix format, ':'s, clean
+/// paths, etc.
+#[derive(Clone, Debug)]
+pub struct ValidatedGlob {
+    inner: String,
+}
+
+impl ValidatedGlob {
+    pub fn as_str(&self) -> &str {
+        self.inner.as_str()
+    }
+}
+
+impl FromStr for ValidatedGlob {
+    type Err = GlobError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // Valid globs:
+        // 1. are to_slash'd,
+        // 2. are relative
+        // 3. directory traversals are leading or not at all
+        // 4. single `.`s removed
+        // 5. colons escaped on unix, error on windows
+
+        // Lexically clean the path
+        let path_buf = Utf8PathBuf::from_str(s).expect("infallible");
+        let cleaned_path = path_buf.as_std_path().clean();
+        // TODO: fully deprecate allowing absolute paths (that won't work anyways),
+        // and return an error here if cleaned_path is absolute
+        let cleaned = cleaned_path.to_str().expect("valid utf-8");
+
+        // Check slashes + ':'
+        #[cfg(not(windows))]
+        let cross_platform = cleaned.trim_start_matches('/').replace(':', "\\:");
+        #[cfg(windows)]
+        let cross_platform = {
+            let to_slashed = cleaned.replace('\\', "/");
+            if let Some(index) = to_slashed.find(':') {
+                return Err(GlobError {
+                    raw_input: s.to_owned(),
+                    reason: format!(
+                        "Found invalid windows relative path character ':' at position {index}"
+                    ),
+                });
+            }
+            to_slashed
+        };
+
+        Ok(Self {
+            inner: cross_platform,
+        })
+    }
+}
+
+pub fn globwalk(
+    base_path: &AbsoluteSystemPath,
+    include: &[ValidatedGlob],
+    exclude: &[ValidatedGlob],
+    walk_type: WalkType,
+) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
+    let include = include.iter().map(|i| i.inner.clone()).collect::<Vec<_>>();
+    let exclude = exclude.iter().map(|e| e.inner.clone()).collect::<Vec<_>>();
+    globwalk_internal(base_path, &include, &exclude, walk_type)
 }
 
 #[tracing::instrument]
-pub fn globwalk(
+pub fn globwalk_internal(
     base_path: &AbsoluteSystemPath,
     include: &[String],
     exclude: &[String],
@@ -364,94 +308,74 @@ pub fn globwalk(
 ) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
     let (base_path_new, include_paths, exclude_paths) =
         preprocess_paths_and_globs(base_path, include, exclude)?;
-    let inc_patterns = include_paths
-        .iter()
+
+    let ex_patterns: Vec<_> = exclude_paths
+        .into_iter()
         .map(glob_with_contextual_error)
-        .collect::<Result<Vec<_>, WalkError>>()?;
-    let ex_patterns = exclude_paths
-        .iter()
+        .collect::<Result<_, _>>()?;
+
+    let include_patterns = include_paths
+        .into_par_iter()
         .map(glob_with_contextual_error)
         .collect::<Result<Vec<_>, _>>()?;
 
-    let span = Span::current();
-    let result = inc_patterns
-        .into_iter()
-        .flat_map(|glob| {
-            let span =
-                tracing::info_span!(parent: &span, &"walk_glob", glob = glob.to_string().as_str());
-            let _enter = span.enter();
-            // Check if the glob specifies an exact filename with no meta characters.
-            if let Some(prefix) = glob.variance().path() {
-                // We expect all of our globs to be absolute paths (asserted above)
-                assert!(prefix.is_absolute(), "Found relative glob path {}", glob);
-                // We're either going to return this path or nothing. Check if it's a directory
-                // and if we want directories
-                match AbsoluteSystemPathBuf::try_from(prefix).and_then(|path| {
-                    let metadata = path.symlink_metadata()?;
-                    Ok((path, metadata))
-                }) {
-                    Err(e) if e.is_io_error(ErrorKind::NotFound) => {
-                        // If the file doesn't exist, it's not an error, there's just nothing to
-                        // glob
-                        vec![]
-                    }
-                    Err(e) => vec![Err(e.into())],
-                    Ok((_, md)) if walk_type == WalkType::Files && md.is_dir() => {
-                        vec![]
-                    }
-                    Ok((path, _)) => vec![Ok(path)],
-                }
-            } else {
-                glob.walk(&base_path_new)
-                    .not(ex_patterns.clone())
-                    // Per docs, only fails if exclusion list is too large, since we're using
-                    // pre-compiled globs
-                    .unwrap_or_else(|e| {
-                        panic!(
-                            "Failed to compile exclusion globs: {:?}: {}",
-                            ex_patterns, e,
-                        )
-                    })
-                    .filter_map(|entry| {
-                        let span = info_span!(parent: &span, "visit_file", entry = ?entry);
-                        let _enter = span.enter();
-                        match entry {
-                            Ok(entry)
-                                if walk_type == WalkType::Files && entry.file_type().is_dir() =>
-                            {
-                                None
-                            }
-                            Ok(entry) => Some(
-                                AbsoluteSystemPathBuf::try_from(entry.path()).map_err(|e| e.into()),
-                            ),
-                            Err(e) => {
-                                let io_err = std::io::Error::from(e);
-                                if io_err.kind() == std::io::ErrorKind::NotFound {
-                                    None
-                                } else {
-                                    Some(Err(io_err.into()))
-                                }
-                            }
-                        }
-                    })
-                    .collect::<Vec<_>>()
-            }
+    include_patterns
+        .into_par_iter()
+        // Use flat_map_iter as we only want parallelism for walking the globs and not iterating
+        // over the results.
+        // See https://docs.rs/rayon/latest/rayon/iter/trait.ParallelIterator.html#method.flat_map_iter
+        .flat_map_iter(|glob| walk_glob(walk_type, &base_path_new, ex_patterns.clone(), glob))
+        .collect()
+}
+
+#[tracing::instrument(skip(ex_patterns), fields(glob=glob.to_string().as_str()))]
+fn walk_glob(
+    walk_type: WalkType,
+    base_path_new: &Path,
+    ex_patterns: Vec<Glob>,
+    glob: Glob,
+) -> Vec<Result<AbsoluteSystemPathBuf, WalkError>> {
+    glob.walk(base_path_new)
+        .not(ex_patterns)
+        .unwrap_or_else(|e| {
+            // Per docs, only fails if exclusion list is too large, since we're using
+            // pre-compiled globs
+            panic!("Failed to compile exclusion globs: {}", e,)
         })
-        .collect::<Result<HashSet<_>, WalkError>>()?;
-    Ok(result)
+        .filter_map(|entry| visit_file(walk_type, entry))
+        .collect::<Vec<_>>()
+}
+
+#[tracing::instrument]
+fn visit_file(
+    walk_type: WalkType,
+    entry: Result<wax::walk::GlobEntry, wax::walk::WalkError>,
+) -> Option<Result<AbsoluteSystemPathBuf, WalkError>> {
+    match entry {
+        Ok(entry) if walk_type == WalkType::Files && entry.file_type().is_dir() => None,
+        Ok(entry) => Some(AbsoluteSystemPathBuf::try_from(entry.path()).map_err(|e| e.into())),
+        Err(e) => {
+            let io_err = std::io::Error::from(e);
+            match io_err.kind() {
+                // Ignore DNE and permission errors
+                std::io::ErrorKind::NotFound | std::io::ErrorKind::PermissionDenied => None,
+                _ => Some(Err(io_err.into())),
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashSet, path::Path};
+    use std::{collections::HashSet, str::FromStr};
 
     use itertools::Itertools;
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
 
     use crate::{
-        collapse_path, empty_glob::InclusiveEmptyAny, glob_with_contextual_error, globwalk,
-        MatchType, WalkError, WalkType,
+        collapse_path, escape_glob_literals, fix_glob_pattern, globwalk, ValidatedGlob, WalkError,
+        WalkType,
     };
 
     #[cfg(unix)]
@@ -462,6 +386,16 @@ mod test {
     const GLOB_ROOT: &str = "/";
     #[cfg(windows)]
     const GLOB_ROOT: &str = "C\\:/"; // in globs, expect an escaped ':' token
+
+    #[test_case("a", "a" ; "no change")]
+    #[test_case("**/**", "**")]
+    #[test_case("**/**/**", "**" ; "Triple doublestar")]
+    #[test_case("**token/foo", "**/*token/foo")]
+    #[test_case("**token**", "**/*token*/**")]
+    fn test_fix_glob_pattern(input: &str, expected: &str) {
+        let output = fix_glob_pattern(input);
+        assert_eq!(output, expected);
+    }
 
     #[test_case("a/./././b", "a/b", 1 ; "test path with dot segments")]
     #[test_case("a/../b", "b", 0 ; "test path with dotdot segments")]
@@ -543,54 +477,6 @@ mod test {
                     .as_slice()
             );
         }
-    }
-
-    #[test_case("a/b/c", "dist/**", "dist/js/**")]
-    fn exclude_prunes_subfolder(base_path: &str, include: &str, exclude: &str) {
-        let base_path = AbsoluteSystemPathBuf::new(format!("{}{}", ROOT, base_path)).unwrap();
-        let include = vec![include.to_string()];
-        let exclude = vec![exclude.to_string()];
-
-        let (_, include, exclude) =
-            super::preprocess_paths_and_globs(&base_path, &include, &exclude).unwrap();
-
-        let include_globs = include
-            .iter()
-            .map(glob_with_contextual_error)
-            .collect::<Result<Vec<_>, WalkError>>()
-            .unwrap();
-        let include_glob = InclusiveEmptyAny::new(include_globs, include).unwrap();
-        let exclude_glob = wax::any(exclude.iter().map(|s| s.as_ref())).unwrap();
-
-        assert_eq!(
-            super::do_match(
-                Path::new(&format!("{}{}", ROOT, "a/b/c/dist/js/test.js")),
-                &include_glob,
-                &exclude_glob
-            ),
-            MatchType::Exclude
-        );
-    }
-
-    #[test]
-    fn do_match_empty_include() {
-        let patterns: Vec<String> = vec![];
-        let empty: [&str; 0] = [];
-        let any = wax::any(empty).unwrap();
-        let compiled = patterns
-            .iter()
-            .map(glob_with_contextual_error)
-            .collect::<Result<Vec<_>, WalkError>>()
-            .unwrap();
-        let any_empty = InclusiveEmptyAny::new(compiled, patterns).unwrap();
-        assert_eq!(
-            super::do_match(
-                Path::new(&format!("{}{}", ROOT, "/a/b/c/d")),
-                &any_empty,
-                &any
-            ),
-            MatchType::Match
-        )
     }
 
     /// set up a globwalk test in a tempdir, returning the path to the tempdir
@@ -699,7 +585,7 @@ mod test {
     #[test_case("abc/**", 3, 3 => matches None ; "abc then doublestar")]
     #[test_case("**/abc", 2, 2 => matches None)]
     #[test_case("**/*.txt", 1, 1 => matches None)]
-    #[test_case("**/【*", 1, 1 => matches None)]
+    #[test_case("**/【*", 1, 1 => matches None ; "star with unicode")]
     #[test_case("b/**/f", 0, 0 => matches None)]
     fn glob_walk(
         pattern: &str,
@@ -749,7 +635,8 @@ mod test {
         let dir = setup();
 
         let path = AbsoluteSystemPathBuf::try_from(dir.path()).unwrap();
-        let success = match super::globwalk(&path, &[pattern.into()], &[], crate::WalkType::All) {
+        let validated = ValidatedGlob::from_str(pattern).unwrap();
+        let success = match super::globwalk(&path, &[validated], &[], crate::WalkType::All) {
             Ok(e) => e.into_iter(),
             Err(e) => return Some(e),
         };
@@ -1313,8 +1200,14 @@ mod test {
         let dir = setup_files(files);
         let base_path = base_path.trim_start_matches('/');
         let path = AbsoluteSystemPathBuf::try_from(dir.path().join(base_path)).unwrap();
-        let include: Vec<_> = include.iter().map(|s| s.to_string()).collect();
-        let exclude: Vec<_> = exclude.iter().map(|s| s.to_string()).collect();
+        let include: Vec<_> = include
+            .iter()
+            .map(|s| ValidatedGlob::from_str(s).expect("valid inputs"))
+            .collect();
+        let exclude: Vec<_> = exclude
+            .iter()
+            .map(|s| ValidatedGlob::from_str(s).expect("valid inputs"))
+            .collect();
 
         for (walk_type, expected) in [
             (crate::WalkType::Files, expected_files),
@@ -1387,7 +1280,11 @@ mod test {
     }
 
     fn setup_files(files: &[&str]) -> tempdir::TempDir {
-        let tmp = tempdir::TempDir::new("globwalk").unwrap();
+        setup_files_with_prefix("globwalk", files)
+    }
+
+    fn setup_files_with_prefix(prefix: &str, files: &[&str]) -> tempdir::TempDir {
+        let tmp = tempdir::TempDir::new(prefix).unwrap();
         for file in files {
             let file = file.trim_start_matches('/');
             let path = tmp.path().join(file);
@@ -1405,7 +1302,7 @@ mod test {
         let tmp = setup_files(files);
         let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
         let child = root.join_component("child");
-        let include = &["../*-file".to_string()];
+        let include = &[ValidatedGlob::from_str("../*-file").unwrap()];
         let exclude = &[];
         let iter = globwalk(&child, include, exclude, WalkType::Files)
             .unwrap()
@@ -1429,13 +1326,21 @@ mod test {
         ];
         let tmp = setup_files(files);
         let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
-        let include = &[
-            "apps/*/package.json".to_string(),
-            "docs/package.json".to_string(),
-            "empty/*/package.json".to_string(),
-        ];
-        let exclude = &["apps/ignored".to_string(), "**/node_modules/**".to_string()];
-        let iter = globwalk(&root, include, exclude, WalkType::Files).unwrap();
+        let include = [
+            "apps/*/package.json",
+            "docs/package.json",
+            "empty/*/package.json",
+        ]
+        .into_iter()
+        .map(ValidatedGlob::from_str)
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+        let exclude = ["apps/ignored", "**/node_modules/**"]
+            .into_iter()
+            .map(ValidatedGlob::from_str)
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let iter = globwalk(&root, &include, &exclude, WalkType::Files).unwrap();
         let paths = iter
             .into_iter()
             .map(|path| {
@@ -1452,5 +1357,70 @@ mod test {
                 .to_string(),
         ]);
         assert_eq!(paths, expected);
+    }
+
+    #[test]
+    #[cfg(not(windows))] // Windows doesn't support ':' at all, so just test not-Windows for correct
+                         // behavior
+    fn test_weird_filenames() {
+        let files = &[
+            "apps/foo",
+            "apps/foo:bar",
+            "apps/foo::bar",
+            "apps/foo\\:bar",
+        ];
+        let tmp = setup_files(files);
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let include = ["apps/*:bar"]
+            .into_iter()
+            .map(ValidatedGlob::from_str)
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let exclude = &[];
+        let iter = globwalk(&root, &include, exclude, WalkType::Files).unwrap();
+        let paths = iter
+            .into_iter()
+            .map(|path| {
+                let relative = root.anchor(path).unwrap();
+                relative.to_string()
+            })
+            .collect::<HashSet<_>>();
+        let expected: HashSet<String> = HashSet::from_iter([
+            "apps/foo:bar".to_string(),
+            "apps/foo::bar".to_string(),
+            "apps/foo\\:bar".to_string(),
+        ]);
+        assert_eq!(paths, expected);
+    }
+
+    #[test]
+    fn test_base_with_brackets() {
+        let files = &["foo", "bar", "baz"];
+        let tmp = setup_files_with_prefix("[path]", files);
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let include = ["ba*"]
+            .into_iter()
+            .map(ValidatedGlob::from_str)
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let exclude = &[];
+        let iter = globwalk(&root, &include, exclude, WalkType::Files).unwrap();
+        let paths = iter
+            .into_iter()
+            .map(|path| {
+                let relative = root.anchor(path).unwrap();
+                relative.to_string()
+            })
+            .collect::<HashSet<_>>();
+        let expected: HashSet<String> = HashSet::from_iter(["bar".to_string(), "baz".to_string()]);
+        assert_eq!(paths, expected);
+    }
+
+    #[test]
+    fn test_escape_glob_literals() {
+        assert_eq!(
+            escape_glob_literals("?*$:<>()[]{},"),
+            r"\?\*\$\:\<\>\(\)\[\]\{\}\,"
+        );
     }
 }

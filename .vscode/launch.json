@@ -2,143 +2,79 @@
   // Use IntelliSense to learn about possible attributes.
   // Hover to view descriptions of existing attributes.
   // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-  "version": "0.2.0",
+  "version": "2.0.0",
   "configurations": [
     {
-      "name": "E2E",
-      "runtimeArgs": ["-r", "esbuild-register"],
-      "cwd": "${workspaceFolder}/cli",
-      "program": "${workspaceFolder}/cli/scripts/e2e/e2e.ts",
-      "request": "launch",
-      "skipFiles": ["<node_internals>/**"],
-      "type": "node",
-      "preLaunchTask": "prepare e2e"
-    },
-    {
-      "name": "Server",
-      "type": "go",
-      "request": "launch",
-      "mode": "debug",
-      "program": "${workspaceRoot}/cli/cmd/turbo",
-      "cwd": "${workspaceRoot}/examples/basic",
-      "args": ["daemon"]
-    },
-    {
-      "name": "Benchmark Server",
-      "type": "go",
-      "request": "launch",
-      "mode": "debug",
-      "program": "${workspaceRoot}/cli/cmd/turbo",
-      "cwd": "${workspaceRoot}/benchmark/large-monorepo",
-      "args": ["daemon"]
-    },
-    {
-      "name": "Benchmark Client",
-      "type": "go",
-      "request": "launch",
-      "mode": "debug",
-      "program": "${workspaceRoot}/cli/cmd/turbo",
-      "cwd": "${workspaceRoot}/benchmark/large-monorepo",
-      "args": ["run", "build", "-vvv"]
-    },
-    {
-      "name": "Client",
-      "type": "go",
-      "request": "launch",
-      "mode": "debug",
-      "program": "${workspaceRoot}/cli/cmd/turbo",
-      "cwd": "${workspaceRoot}/examples/basic",
-      "args": ["run", "build", "-vvv"]
-    },
-    {
-      "name": "turbo --version",
-      "type": "go",
-      "request": "launch",
-      "mode": "debug",
-      "program": "${workspaceRoot}/cli/cmd/turbo",
-      "cwd": "${workspaceRoot}/examples/basic",
-      "args": ["--version"]
-    },
-    {
-      "name": "Build Basic",
-      "type": "go",
-      "request": "launch",
-      "mode": "debug",
-      "program": "${workspaceRoot}/cli/cmd/turbo",
-      "cwd": "${workspaceRoot}/examples/basic",
-      "args": ["run", "build"]
-    },
-    {
-      "name": "Build Basic (Dry Run / Debug)",
-      "type": "go",
-      "request": "launch",
-      "mode": "debug",
-      "program": "${workspaceRoot}/cli/cmd/turbo",
-      "cwd": "${workspaceRoot}/examples/basic",
-      "args": ["run", "build", "--dry-run", "-vv"]
-    },
-    {
-      "name": "Build Kitchen Sink",
-      "type": "go",
-      "request": "launch",
-      "mode": "debug",
-      "program": "${workspaceRoot}/cli/cmd/turbo",
-      "cwd": "${workspaceRoot}/examples/kitchen-sink",
-      "args": ["run", "build", "-vv"]
-    },
-    {
-      "name": "Build Kitchen Sink (Dry Run)",
-      "type": "go",
-      "request": "launch",
-      "mode": "debug",
-      "program": "${workspaceRoot}/cli/cmd/turbo",
-      "cwd": "${workspaceRoot}/examples/kitchen-sink",
-      "args": ["run", "build", "--dry-run"]
-    },
-    {
-      "name": "Build All",
-      "type": "go",
-      "request": "launch",
-      "mode": "debug",
-      "program": "${workspaceRoot}/cli/cmd/turbo",
-      "cwd": "${workspaceRoot}",
-      "args": ["run", "build"]
-    },
-    {
-      "name": "Build All (Force)",
-      "type": "go",
-      "request": "launch",
-      "mode": "debug",
-      "program": "${workspaceRoot}/cli/cmd/turbo",
-      "cwd": "${workspaceRoot}",
-      "args": ["run", "build", "--force"]
-    },
-    {
-      "name": "Testbed",
-      "type": "go",
-      "request": "launch",
-      "mode": "debug",
-      "program": "${workspaceRoot}/cli/cmd/turbo",
-      "cwd": "${workspaceRoot}/cli/testbed",
-      "args": ["run", "build", "--single-package"]
-    },
-    {
-      "name": "Build Basic (Shim)",
+      "name": "turbo build (example)",
       "type": "lldb",
       "request": "launch",
       "preLaunchTask": "prepare turbo",
       "program": "${workspaceRoot}/target/debug/turbo",
-      "args": ["build"],
-      "cwd": "${workspaceRoot}/examples/basic"
+      "args": ["build", "--skip-infer"],
+      "cwd": "${workspaceRoot}/${input:pickExample}",
+      "presentation": {
+        "group": "commands",
+        "order": 1
+      }
     },
     {
-      "name": "Daemon",
+      "name": "turbo gen",
+      "type": "lldb",
+      "request": "launch",
+      "preLaunchTask": "prepare turbo",
+      "program": "${workspaceRoot}/target/debug/turbo",
+      "args": [
+        "gen",
+        "blog - release post",
+        "--args",
+        "1.11.0",
+        "1.10.0",
+        "_",
+        "tagline about my really cool release"
+      ],
+      "cwd": "${workspaceRoot}",
+      "presentation": {
+        "group": "commands",
+        "order": 1
+      }
+    },
+    {
+      "name": "turbo daemon",
       "type": "lldb",
       "request": "launch",
       "preLaunchTask": "prepare turbo",
       "program": "${workspaceRoot}/target/debug/turbo",
       "args": ["--skip-infer", "daemon"],
-      "cwd": "${workspaceRoot}"
+      "cwd": "${workspaceRoot}",
+      "presentation": {
+        "group": "commands",
+        "order": 1
+      }
+    },
+    {
+      "type": "extensionHost",
+      "request": "launch",
+      "name": "Turbo VSC",
+      "runtimeExecutable": "${execPath}",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceRoot}/packages/turbo-vsc"
+      ],
+      "outFiles": ["${workspaceRoot}/packages/turbo-vsc/out/**/*.js"]
+    }
+  ],
+  "inputs": [
+    {
+      "id": "pickExample",
+      "description": "Select the example to use",
+      "type": "pickString",
+      "options": [
+        "examples/basic",
+        "examples/kitchen-sink",
+        "examples/design-system",
+        "examples/non-monorepo",
+        "examples/non-shell-commands"
+      ],
+      "default": "examples/basic"
     }
   ]
 }

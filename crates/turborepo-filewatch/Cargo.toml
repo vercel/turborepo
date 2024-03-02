@@ -6,16 +6,21 @@ license = "MPL-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = { workspace = true }
 dashmap = { workspace = true }
 futures = { version = "0.3.26" }
 itertools = { workspace = true }
-notify = "6.0.1"
+notify = { workspace = true }
 thiserror = "1.0.38"
 tokio = { workspace = true, features = ["full", "time"] }
 tracing = "0.1.37"
+tracing-test = "0.2.4"
 turbopath = { workspace = true }
+turborepo-repository = { version = "0.1.0", path = "../turborepo-repository" }
 walkdir = "2.3.3"
 wax = { workspace = true }
 

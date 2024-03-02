@@ -10,6 +10,7 @@ use std::{
 
 use auto_hash_map::{AutoMap, AutoSet};
 use serde::{Deserialize, Serialize};
+use tracing::Span;
 
 use crate::{
     id::{FunctionId, TraitTypeId},
@@ -192,7 +193,7 @@ impl ValueType {
         self.traits.iter().copied()
     }
 
-    pub fn register(&'static self, global_name: &str) {
+    pub fn register(&'static self, global_name: &'static str) {
         register_value_type(global_name, self)
     }
 }
@@ -251,8 +252,15 @@ impl TraitType {
         self.default_trait_methods.insert(name, native_fn);
     }
 
-    pub fn register(&'static self, global_name: &str) {
+    pub fn register(&'static self, global_name: &'static str) {
         register_trait_type(global_name, self);
+    }
+
+    pub fn resolve_span(&'static self, name: &str) -> Span {
+        tracing::trace_span!(
+            "turbo_tasks::resolve_trait_call",
+            name = format_args!("{}::{name}", &self.name),
+        )
     }
 }
 

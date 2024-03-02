@@ -1,4 +1,6 @@
 const RUNTIME_PUBLIC_PATH = "output/[turbopack]_runtime.js";
+const OUTPUT_ROOT = "crates/turbopack-tests/tests/snapshot/runtime/default_build_runtime";
+const ASSET_PREFIX = "";
 /**
  * This file contains runtime types and functions that are shared between all
  * TurboPack ECMAScript runtimes.
@@ -8,8 +10,8 @@ const RUNTIME_PUBLIC_PATH = "output/[turbopack]_runtime.js";
 const REEXPORTED_OBJECTS = Symbol("reexported objects");
 const hasOwnProperty = Object.prototype.hasOwnProperty;
 const toStringTag = typeof Symbol !== "undefined" && Symbol.toStringTag;
-function defineProp(obj, name, options) {
-    if (!hasOwnProperty.call(obj, name)) Object.defineProperty(obj, name, options);
+function defineProp(obj, name1, options) {
+    if (!hasOwnProperty.call(obj, name1)) Object.defineProperty(obj, name1, options);
 }
 /**
  * Adds the getters to the exports object.
@@ -64,7 +66,9 @@ function ensureDynamicExports(module, exports) {
  * Dynamically exports properties from an object
  */ function dynamicExport(module, exports, object) {
     ensureDynamicExports(module, exports);
-    module[REEXPORTED_OBJECTS].push(object);
+    if (typeof object === "object" && object !== null) {
+        module[REEXPORTED_OBJECTS].push(object);
+    }
 }
 function exportValue(module, value) {
     module.exports = value;
@@ -112,7 +116,7 @@ function esmImport(sourceModule, id) {
     if (module.namespaceObject) return module.namespaceObject;
     // only ESM can be an async module, so we don't need to worry about exports being a promise here.
     const raw = module.exports;
-    return module.namespaceObject = interopEsm(raw, {}, raw.__esModule);
+    return module.namespaceObject = interopEsm(raw, {}, raw && raw.__esModule);
 }
 // Add a simple runtime require so that environments without one can still pass
 // `typeof require` CommonJS checks so that exports are correctly registered.
@@ -124,25 +128,32 @@ function commonJsRequire(sourceModule, id) {
     if (module.error) throw module.error;
     return module.exports;
 }
-function requireContext(sourceModule, map) {
-    function requireContext(id) {
-        const entry = map[id];
-        if (!entry) {
-            throw new Error(`module ${id} is required from a require.context, but is not in the context`);
+/**
+ * `require.context` and require/import expression runtime.
+ */ function moduleContext(map) {
+    function moduleContext(id) {
+        if (hasOwnProperty.call(map, id)) {
+            return map[id].module();
         }
-        return commonJsRequireContext(entry, sourceModule);
+        const e = new Error(`Cannot find module '${name}'`);
+        e.code = "MODULE_NOT_FOUND";
+        throw e;
     }
-    requireContext.keys = ()=>{
+    moduleContext.keys = ()=>{
         return Object.keys(map);
     };
-    requireContext.resolve = (id)=>{
-        const entry = map[id];
-        if (!entry) {
-            throw new Error(`module ${id} is resolved from a require.context, but is not in the context`);
+    moduleContext.resolve = (id)=>{
+        if (hasOwnProperty.call(map, id)) {
+            return map[id].id();
         }
-        return entry.id();
+        const e = new Error(`Cannot find module '${name}'`);
+        e.code = "MODULE_NOT_FOUND";
+        throw e;
     };
-    return requireContext;
+    moduleContext.import = async (id)=>{
+        return await moduleContext(id);
+    };
+    return moduleContext;
 }
 /**
  * Returns the path of a chunk defined by its data.
@@ -261,12 +272,49 @@ function asyncModule(module, body, hasAwait) {
         queue.resolved = false;
     }
 }
+/**
+ * A pseudo "fake" URL object to resolve to its relative path.
+ *
+ * When UrlRewriteBehavior is set to relative, calls to the `new URL()` will construct url without base using this
+ * runtime function to generate context-agnostic urls between different rendering context, i.e ssr / client to avoid
+ * hydration mismatch.
+ *
+ * This is based on webpack's existing implementation:
+ * https://github.com/webpack/webpack/blob/87660921808566ef3b8796f8df61bd79fc026108/lib/runtime/RelativeUrlRuntimeModule.js
+ */ const relativeURL = function relativeURL(inputUrl) {
+    const realUrl = new URL(inputUrl, "x:/");
+    const values = {};
+    for(const key in realUrl)values[key] = realUrl[key];
+    values.href = inputUrl;
+    values.pathname = inputUrl.replace(/[?#].*/, "");
+    values.origin = values.protocol = "";
+    values.toString = values.toJSON = (..._args)=>inputUrl;
+    for(const key in values)Object.defineProperty(this, key, {
+        enumerable: true,
+        configurable: true,
+        value: values[key]
+    });
+};
+relativeURL.prototype = URL.prototype;
 /// <reference path="../shared/runtime-utils.ts" />
-function commonJsRequireContext(entry, sourceModule) {
-    return entry.external ? externalRequire(entry.id(), false) : commonJsRequire(sourceModule, entry.id());
-}
-function externalImport(id) {
-    return import(id);
+/// A 'base' utilities to support runtime can have externals.
+/// Currently this is for node.js / edge runtime both.
+/// If a fn requires node.js specific behavior it should be placed in `node-external-utils` instead.
+async function externalImport(id) {
+    let raw;
+    try {
+        raw = await import(id);
+    } catch (err) {
+        // TODO(alexkirsz) This can happen when a client-side module tries to load
+        // an external module we don't provide a shim for (e.g. querystring, url).
+        // For now, we fail semi-silently, but in the future this should be a
+        // compilation error.
+        throw new Error(`Failed to load external module ${id}: ${err}`);
+    }
+    if (raw && raw.__esModule && raw.default && "default" in raw.default) {
+        return interopEsm(raw.default, {}, true);
+    }
+    return raw;
 }
 function externalRequire(id, esm = false) {
     let raw;
@@ -287,6 +335,27 @@ function externalRequire(id, esm = false) {
 externalRequire.resolve = (id, options)=>{
     return require.resolve(id, options);
 };
+const path = require("path");
+const relativePathToRuntimeRoot = path.relative(RUNTIME_PUBLIC_PATH, ".");
+// Compute the relative path to the `distDir`.
+const relativePathToDistRoot = path.relative(path.join(OUTPUT_ROOT, RUNTIME_PUBLIC_PATH), ".");
+const RUNTIME_ROOT = path.resolve(__filename, relativePathToRuntimeRoot);
+// Compute the absolute path to the root, by stripping distDir from the absolute path to this file.
+const ABSOLUTE_ROOT = path.resolve(__filename, relativePathToDistRoot);
+/**
+ * Returns an absolute path to the given module path.
+ * Module path should be relative, either path to a file or a directory.
+ *
+ * This fn allows to calculate an absolute path for some global static values, such as
+ * `__dirname` or `import.meta.url` that Turbopack will not embeds in compile time.
+ * See ImportMetaBinding::code_generation for the usage.
+ */ function resolveAbsolutePath(modulePath) {
+    if (modulePath) {
+        return path.join(ABSOLUTE_ROOT, modulePath);
+    }
+    return ABSOLUTE_ROOT;
+}
+/// <reference path="../shared/runtime-utils.ts" />
 function readWebAssemblyAsResponse(path) {
     const { createReadStream } = require("fs");
     const { Readable } = require("stream");
@@ -308,7 +377,9 @@ async function instantiateWebAssemblyFromPath(path, importsObj) {
     return instance.exports;
 }
 /// <reference path="../shared/runtime-utils.ts" />
-/// <reference path="../shared-node/node-utils.ts" />
+/// <reference path="../shared-node/base-externals-utils.ts" />
+/// <reference path="../shared-node/node-externals-utils.ts" />
+/// <reference path="../shared-node/node-wasm-utils.ts" />
 let SourceType;
 (function(SourceType) {
     /**
@@ -319,36 +390,66 @@ let SourceType;
    * The module was instantiated because a parent module imported it.
    */ SourceType[SourceType["Parent"] = 1] = "Parent";
 })(SourceType || (SourceType = {}));
-const path = require("path");
-const relativePathToRuntimeRoot = path.relative(RUNTIME_PUBLIC_PATH, ".");
-const RUNTIME_ROOT = path.resolve(__filename, relativePathToRuntimeRoot);
-const moduleFactories = Object.create(null);
-const moduleCache = Object.create(null);
-function loadChunk(chunkData) {
-    if (typeof chunkData === "string") {
-        return loadChunkPath(chunkData);
-    } else {
-        return loadChunkPath(chunkData.path);
+function stringifySourceInfo(source) {
+    switch(source.type){
+        case 0:
+            return `runtime for chunk ${source.chunkPath}`;
+        case 1:
+            return `parent module ${source.parentId}`;
     }
 }
-function loadChunkPath(chunkPath) {
+const url = require("url");
+const moduleFactories = Object.create(null);
+const moduleCache = Object.create(null);
+/**
+ * Returns an absolute path to the given module's id.
+ */ function createResolvePathFromModule(resolver) {
+    return function resolvePathFromModule(moduleId) {
+        const exported = resolver(moduleId);
+        const exportedPath = exported?.default ?? exported;
+        if (typeof exportedPath !== "string") {
+            return exported;
+        }
+        const strippedAssetPrefix = exportedPath.slice(ASSET_PREFIX.length);
+        const resolved = path.resolve(ABSOLUTE_ROOT, OUTPUT_ROOT, strippedAssetPrefix);
+        return url.pathToFileURL(resolved);
+    };
+}
+function loadChunk(chunkData, source) {
+    if (typeof chunkData === "string") {
+        return loadChunkPath(chunkData, source);
+    } else {
+        return loadChunkPath(chunkData.path, source);
+    }
+}
+function loadChunkPath(chunkPath, source) {
     if (!chunkPath.endsWith(".js")) {
         // We only support loading JS chunks in Node.js.
         // This branch can be hit when trying to load a CSS chunk.
         return;
     }
-    const resolved = path.resolve(RUNTIME_ROOT, chunkPath);
-    const chunkModules = require(resolved);
-    for (const [moduleId, moduleFactory] of Object.entries(chunkModules)){
-        if (!moduleFactories[moduleId]) {
-            moduleFactories[moduleId] = moduleFactory;
+    try {
+        const resolved = path.resolve(RUNTIME_ROOT, chunkPath);
+        const chunkModules = require(resolved);
+        for (const [moduleId, moduleFactory] of Object.entries(chunkModules)){
+            if (!moduleFactories[moduleId]) {
+                moduleFactories[moduleId] = moduleFactory;
+            }
         }
+    } catch (e) {
+        let errorMessage = `Failed to load chunk ${chunkPath}`;
+        if (source) {
+            errorMessage += ` from ${stringifySourceInfo(source)}`;
+        }
+        throw new Error(errorMessage, {
+            cause: e
+        });
     }
 }
 async function loadChunkAsync(source, chunkData) {
     return new Promise((resolve, reject)=>{
         try {
-            loadChunk(chunkData);
+            loadChunk(chunkData, source);
         } catch (err) {
             reject(err);
             return;
@@ -406,14 +507,15 @@ function instantiateModule(id, source) {
     moduleCache[id] = module1;
     // NOTE(alexkirsz) This can fail when the module encounters a runtime error.
     try {
+        const r = commonJsRequire.bind(null, module1);
         moduleFactory.call(module1.exports, {
             a: asyncModule.bind(null, module1),
             e: module1.exports,
-            r: commonJsRequire.bind(null, module1),
+            r,
             t: runtimeRequire,
             x: externalRequire,
             y: externalImport,
-            f: requireContext.bind(null, module1),
+            f: moduleContext,
             i: esmImport.bind(null, module1),
             s: esmExport.bind(null, module1, module1.exports),
             j: dynamicExport.bind(null, module1, module1.exports),
@@ -421,6 +523,7 @@ function instantiateModule(id, source) {
             n: exportNamespace.bind(null, module1),
             m: module1,
             c: moduleCache,
+            M: moduleFactories,
             l: loadChunkAsync.bind(null, {
                 type: 1,
                 parentId: id
@@ -428,6 +531,9 @@ function instantiateModule(id, source) {
             w: loadWebAssembly,
             u: loadWebAssemblyModule,
             g: globalThis,
+            P: resolveAbsolutePath,
+            U: relativeURL,
+            R: createResolvePathFromModule(r),
             __dirname: module1.id.replace(/(^|\/)[\/]+$/, "")
         });
     } catch (error) {

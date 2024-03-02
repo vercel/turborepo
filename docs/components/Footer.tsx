@@ -4,7 +4,7 @@ import type { ReactNode, ReactElement } from "react";
 import { useState } from "react";
 import cn from "classnames";
 import { ThemeSwitch } from "nextra-theme-docs";
-import VercelLogo from "./logos/Vercel";
+import { Vercel } from "./logos/Vercel";
 import type { TurboSite } from "./SiteSwitcher";
 import { useTurboSite } from "./SiteSwitcher";
 
@@ -33,6 +33,7 @@ const navigation = {
   general: [
     { name: "Blog", href: "/blog" },
     { name: "Releases", href: "https://github.com/vercel/turbo/releases" },
+    { name: "Governance", href: "/governance" },
   ],
   repo: [
     { name: "Documentation", href: "/repo/docs" },
@@ -77,7 +78,8 @@ const navigation = {
 };
 
 export function FooterContent() {
-  const site = useTurboSite();
+  // Turborepo is used by default
+  const site = useTurboSite() ?? "repo";
   return (
     <div aria-labelledby="footer-heading" className="w-full">
       <h2 className="sr-only" id="footer-heading">
@@ -89,7 +91,7 @@ export function FooterContent() {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 md:gap-8">
               <div className="mt-12 md:!mt-0">
                 <FooterHeader>Resources</FooterHeader>
-                <ul className="mt-4 space-y-1.5 list-none ml-0" role="list">
+                <ul className="mt-4 space-y-1.5 list-none ml-0">
                   {navigation.general.map((item) => (
                     <li key={item.name}>
                       <FooterLink href={item.href}>{item.name}</FooterLink>
@@ -99,7 +101,7 @@ export function FooterContent() {
               </div>
               <div className="mt-12 md:!mt-0">
                 <FooterHeader>Turborepo</FooterHeader>
-                <ul className="mt-4 space-y-1.5 list-none ml-0" role="list">
+                <ul className="mt-4 space-y-1.5 list-none ml-0">
                   {navigation.repo.map((item) => (
                     <li key={item.name}>
                       <FooterLink href={item.href}>{item.name}</FooterLink>
@@ -109,7 +111,7 @@ export function FooterContent() {
               </div>
               <div className="mt-12 md:!mt-0">
                 <FooterHeader>Turbopack</FooterHeader>
-                <ul className="mt-4 space-y-1.5 list-none ml-0" role="list">
+                <ul className="mt-4 space-y-1.5 list-none ml-0">
                   {navigation.pack.map((item) => (
                     <li key={item.name}>
                       <FooterLink href={item.href}>{item.name}</FooterLink>
@@ -119,7 +121,7 @@ export function FooterContent() {
               </div>
               <div className="mt-12 md:!mt-0">
                 <FooterHeader>Company</FooterHeader>
-                <ul className="mt-4 space-y-1.5 list-none ml-0" role="list">
+                <ul className="mt-4 space-y-1.5 list-none ml-0">
                   {navigation.company(site).map((item) => (
                     <li key={item.name}>
                       <FooterLink href={item.href}>{item.name}</FooterLink>
@@ -129,7 +131,7 @@ export function FooterContent() {
               </div>
               <div className="mt-12 md:!mt-0">
                 <FooterHeader>Legal</FooterHeader>
-                <ul className="mt-4 space-y-1.5 list-none ml-0" role="list">
+                <ul className="mt-4 space-y-1.5 list-none ml-0">
                   {navigation.legal.map((item) => (
                     <li key={item.name}>
                       <FooterLink href={item.href}>{item.name}</FooterLink>
@@ -139,7 +141,7 @@ export function FooterContent() {
               </div>
               <div className="mt-12 md:!mt-0">
                 <FooterHeader>Support</FooterHeader>
-                <ul className="mt-4 space-y-1.5 list-none ml-0" role="list">
+                <ul className="mt-4 space-y-1.5 list-none ml-0">
                   {navigation.support.map((item) => (
                     <li key={item.name}>
                       <FooterLink href={item.href}>{item.name}</FooterLink>
@@ -168,7 +170,7 @@ export function FooterContent() {
               target="_blank"
               title="vercel.com homepage"
             >
-              <VercelLogo />
+              <Vercel />
             </a>
             <p className="mt-4 text-xs text-gray-500 dark:text-[#888888]">
               &copy; {new Date().getFullYear()} Vercel, Inc. All rights
@@ -187,7 +189,7 @@ function SubmitForm() {
   return (
     <form
       className="mt-4 sm:flex sm:max-w-md"
-      onSubmit={(e) => {
+      onSubmit={(ev) => {
         fetch("/api/signup", {
           method: "POST",
           headers: {
@@ -198,8 +200,15 @@ function SubmitForm() {
           .then((res) => res.json())
           .then(() => {
             return router.push("/confirm");
+          })
+          .catch((e: unknown) => {
+            if (e instanceof Error) {
+              // eslint-disable-next-line no-console -- We'd like to see something weird is happening in Logs.
+              console.error(e.message);
+            }
+            return router.push("/confirm");
           });
-        e.preventDefault();
+        ev.preventDefault();
       }}
     >
       <label className="sr-only" htmlFor="email-address">

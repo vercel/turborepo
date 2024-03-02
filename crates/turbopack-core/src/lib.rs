@@ -4,7 +4,6 @@
 #![feature(type_alias_impl_trait)]
 #![feature(assert_matches)]
 #![feature(lint_reasons)]
-#![feature(async_fn_in_trait)]
 #![feature(arbitrary_self_types)]
 #![feature(iter_intersperse)]
 
@@ -13,6 +12,7 @@ pub mod changed;
 pub mod chunk;
 pub mod code_builder;
 pub mod compile_time_info;
+pub mod condition;
 pub mod context;
 pub mod diagnostics;
 pub mod environment;

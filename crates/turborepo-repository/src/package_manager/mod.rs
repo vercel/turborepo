@@ -8,20 +8,22 @@ use std::{
     fmt::{self, Display},
     fs,
     process::Command,
+    str::FromStr,
 };
 
-use globwalk::fix_glob_pattern;
+use globwalk::{fix_glob_pattern, ValidatedGlob};
 use itertools::{Either, Itertools};
 use lazy_regex::{lazy_regex, Lazy};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPath};
 use turborepo_lockfiles::Lockfile;
-use wax::{Any, Glob, Pattern};
+use wax::{Any, Glob, Program};
 use which::which;
 
 use crate::{
+    discovery,
     package_json::PackageJson,
     package_manager::{bun::BunDetector, npm::NpmDetector, pnpm::PnpmDetector, yarn::YarnDetector},
 };
@@ -61,7 +63,7 @@ impl From<Workspaces> for Vec<String> {
     }
 }
 
-#[derive(Debug, Serialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 pub enum PackageManager {
     Berry,
@@ -88,19 +90,20 @@ impl Display for PackageManager {
 }
 
 // WorkspaceGlobs is suitable for finding package.json files via globwalk
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WorkspaceGlobs {
     directory_inclusions: Any<'static>,
     directory_exclusions: Any<'static>,
-    package_json_inclusions: Vec<String>,
+    package_json_inclusions: Vec<ValidatedGlob>,
+    pub raw_inclusions: Vec<String>,
     pub raw_exclusions: Vec<String>,
+    validated_exclusions: Vec<ValidatedGlob>,
 }
 
 impl PartialEq for WorkspaceGlobs {
     fn eq(&self, other: &Self) -> bool {
         // Use the literals for comparison, not the compiled globs
-        self.package_json_inclusions == other.package_json_inclusions
-            && self.raw_exclusions == other.raw_exclusions
+        self.raw_inclusions == other.raw_inclusions && self.raw_exclusions == other.raw_exclusions
     }
 }
 
@@ -135,10 +138,14 @@ impl WorkspaceGlobs {
             .iter()
             .map(|s| {
                 let mut s: String = s.clone();
-                s.push_str("/package.json");
-                s
+                if s.ends_with('/') {
+                    s.push_str("package.json");
+                } else {
+                    s.push_str("/package.json");
+                }
+                ValidatedGlob::from_str(&s)
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<ValidatedGlob>, _>>()?;
         let raw_exclusions: Vec<String> = exclusions
             .into_iter()
             .map(|s| s.into())
@@ -151,22 +158,36 @@ impl WorkspaceGlobs {
             .iter()
             .map(glob_with_contextual_error)
             .collect::<Result<Vec<_>, _>>()?;
+        let validated_exclusions = raw_exclusions
+            .iter()
+            .map(|e| ValidatedGlob::from_str(e))
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
-            directory_inclusions: any_with_contextual_error(inclusion_globs, raw_inclusions)?,
+            directory_inclusions: any_with_contextual_error(
+                inclusion_globs,
+                raw_inclusions.clone(),
+            )?,
             directory_exclusions: any_with_contextual_error(
                 exclusion_globs,
                 raw_exclusions.clone(),
             )?,
             package_json_inclusions,
+            validated_exclusions,
             raw_exclusions,
+            raw_inclusions,
         })
     }
 
+    /// Checks if the given `target` matches this `WorkspaceGlobs`.
+    ///
+    /// Errors:
+    /// This function returns an Err if `root` is not a valid anchor for
+    /// `target`
     pub fn target_is_workspace(
         &self,
         root: &AbsoluteSystemPath,
         target: &AbsoluteSystemPath,
-    ) -> Result<bool, Error> {
+    ) -> Result<bool, PathError> {
         let search_value = root.anchor(target)?;
 
         let includes = self.directory_inclusions.is_match(&search_value);
@@ -219,7 +240,7 @@ impl Display for MissingWorkspaceError {
 impl From<&PackageManager> for MissingWorkspaceError {
     fn from(value: &PackageManager) -> Self {
         Self {
-            package_manager: value.clone(),
+            package_manager: *value,
         }
     }
 }
@@ -264,15 +285,35 @@ pub enum Error {
     #[error(transparent)]
     WalkError(#[from] globwalk::WalkError),
     #[error("invalid workspace glob {0}: {1}")]
-    Glob(String, Box<wax::BuildError>),
+    Glob(String, #[source] Box<wax::BuildError>),
+    #[error("invalid globwalk pattern {0}")]
+    Globwalk(#[from] globwalk::GlobError),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
+
+    #[error("discovering workspace: {0}")]
+    WorkspaceDiscovery(#[from] discovery::Error),
+}
+
+impl From<std::convert::Infallible> for Error {
+    fn from(_: std::convert::Infallible) -> Self {
+        unreachable!()
+    }
 }
 
 static PACKAGE_MANAGER_PATTERN: Lazy<Regex> =
     lazy_regex!(r"(?P<manager>bun|npm|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(-.+)?)");
 
 impl PackageManager {
+    pub fn command(&self) -> &'static str {
+        match self {
+            PackageManager::Npm => "npm",
+            PackageManager::Pnpm | PackageManager::Pnpm6 => "pnpm",
+            PackageManager::Yarn | PackageManager::Berry => "yarn",
+            PackageManager::Bun => "bun",
+        }
+    }
+
     /// Returns the set of globs for the workspace.
     pub fn get_workspace_globs(
         &self,
@@ -313,9 +354,9 @@ impl PackageManager {
             PackageManager::Pnpm | PackageManager::Pnpm6 => {
                 // Make sure to convert this to a missing workspace error
                 // so we can catch it in the case of single package mode.
-                let workspace_yaml =
-                    fs::read_to_string(root_path.join_component("pnpm-workspace.yaml"))
-                        .map_err(|_| Error::Workspace(MissingWorkspaceError::from(self)))?;
+                let source = self.workspace_glob_source(root_path);
+                let workspace_yaml = fs::read_to_string(source)
+                    .map_err(|_| Error::Workspace(MissingWorkspaceError::from(self)))?;
                 let pnpm_workspace: PnpmWorkspace = serde_yaml::from_str(&workspace_yaml)?;
                 if pnpm_workspace.packages.is_empty() {
                     return Err(MissingWorkspaceError::from(self).into());
@@ -327,8 +368,7 @@ impl PackageManager {
             | PackageManager::Npm
             | PackageManager::Yarn
             | PackageManager::Bun => {
-                let package_json_text =
-                    fs::read_to_string(root_path.join_component("package.json"))?;
+                let package_json_text = fs::read_to_string(self.workspace_glob_source(root_path))?;
                 let package_json: PackageJsonWorkspaces = serde_json::from_str(&package_json_text)
                     .map_err(|_| Error::Workspace(MissingWorkspaceError::from(self)))?; // Make sure to convert this to a missing workspace error
 
@@ -351,8 +391,19 @@ impl PackageManager {
         Ok((inclusions, exclusions))
     }
 
-    // TODO: consider if this method should not need an Option, and possibly be a
-    // method on PackageJSON
+    pub fn workspace_glob_source(&self, root_path: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
+        root_path.join_component(
+            self.workspace_configuration_path()
+                .unwrap_or("package.json"),
+        )
+    }
+
+    /// Try to detect the package manager by inspecting the repository.
+    /// This method does not read the package.json, instead looking for
+    /// lockfiles and other files that indicate the package manager.
+    ///
+    /// TODO: consider if this method should not need an Option, and possibly be
+    /// a method on PackageJSON
     pub fn get_package_manager(
         repo_root: &AbsoluteSystemPath,
         pkg: Option<&PackageJson>,
@@ -429,7 +480,7 @@ impl PackageManager {
         let files = globwalk::globwalk(
             repo_root,
             &globs.package_json_inclusions,
-            &globs.raw_exclusions,
+            &globs.validated_exclusions,
             globwalk::WalkType::Files,
         )?;
         Ok(files.into_iter())
@@ -474,7 +525,7 @@ impl PackageManager {
         self.parse_lockfile(root_package_json, &contents)
     }
 
-    #[tracing::instrument(skip(self, root_package_json))]
+    #[tracing::instrument(skip(self, root_package_json, contents))]
     pub fn parse_lockfile(
         &self,
         root_package_json: &PackageJson,
@@ -523,12 +574,31 @@ impl PackageManager {
     pub fn lockfile_path(&self, turbo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
         turbo_root.join_component(self.lockfile_name())
     }
+
+    pub fn arg_separator(&self, user_args: &[String]) -> Option<&str> {
+        match self {
+            PackageManager::Yarn | PackageManager::Bun => {
+                // Yarn and bun warn and swallows a "--" token. If the user is passing "--", we
+                // need to prepend our own so that the user's doesn't get
+                // swallowed. If they are not passing their own, we don't need
+                // the "--" token and can avoid the warning.
+                if user_args.iter().any(|arg| arg == "--") {
+                    Some("--")
+                } else {
+                    None
+                }
+            }
+            PackageManager::Npm | PackageManager::Pnpm6 => Some("--"),
+            PackageManager::Pnpm | PackageManager::Berry => None,
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use std::{collections::HashSet, fs::File};
 
+    use pretty_assertions::assert_eq;
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
 
@@ -561,8 +631,8 @@ mod tests {
         let with_yarn_expected: HashSet<AbsoluteSystemPathBuf> = HashSet::from_iter([
             with_yarn.join_components(&["apps", "docs", "package.json"]),
             with_yarn.join_components(&["apps", "web", "package.json"]),
-            with_yarn.join_components(&["packages", "eslint-config-custom", "package.json"]),
-            with_yarn.join_components(&["packages", "tsconfig", "package.json"]),
+            with_yarn.join_components(&["packages", "eslint-config", "package.json"]),
+            with_yarn.join_components(&["packages", "typescript-config", "package.json"]),
             with_yarn.join_components(&["packages", "ui", "package.json"]),
         ]);
         for mgr in &[
@@ -577,16 +647,18 @@ mod tests {
         }
 
         let basic = examples.join_component("basic");
-        let basic_expected: HashSet<AbsoluteSystemPathBuf> = HashSet::from_iter([
+        let mut basic_expected = Vec::from_iter([
             basic.join_components(&["apps", "docs", "package.json"]),
             basic.join_components(&["apps", "web", "package.json"]),
-            basic.join_components(&["packages", "eslint-config-custom", "package.json"]),
-            basic.join_components(&["packages", "tsconfig", "package.json"]),
+            basic.join_components(&["packages", "eslint-config", "package.json"]),
+            basic.join_components(&["packages", "typescript-config", "package.json"]),
             basic.join_components(&["packages", "ui", "package.json"]),
         ]);
+        basic_expected.sort();
         for mgr in &[PackageManager::Pnpm, PackageManager::Pnpm6] {
             let found = mgr.get_package_jsons(&basic).unwrap();
-            let found: HashSet<AbsoluteSystemPathBuf> = HashSet::from_iter(found);
+            let mut found = Vec::from_iter(found);
+            found.sort();
             assert_eq!(found, basic_expected, "{}", mgr);
         }
     }
@@ -814,5 +886,19 @@ mod tests {
             serde_json::from_str("{ \"workspaces\": {\"packages\": [\"packages/**\"]}}")?;
         assert_eq!(nested.workspaces.as_ref(), vec!["packages/**"]);
         Ok(())
+    }
+
+    #[test]
+    fn test_workspace_globs_trailing_slash() {
+        let globs =
+            WorkspaceGlobs::new(vec!["scripts/", "packages/**"], vec!["package/template"]).unwrap();
+        assert_eq!(
+            &globs
+                .package_json_inclusions
+                .iter()
+                .map(|i| i.as_str())
+                .collect::<Vec<_>>(),
+            &["scripts/package.json", "packages/**/package.json"]
+        );
     }
 }

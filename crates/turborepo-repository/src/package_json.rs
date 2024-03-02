@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, str::FromStr};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -22,8 +22,8 @@ pub struct PackageJson {
     pub optional_dependencies: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub peer_dependencies: Option<BTreeMap<String, String>>,
-    #[serde(rename = "turbo", skip_serializing_if = "Option::is_none")]
-    pub legacy_turbo_config: Option<serde_json::Value>,
+    #[serde(rename = "turbo", default, skip_serializing_if = "Option::is_none")]
+    pub legacy_turbo_config: Option<Value>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub scripts: BTreeMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -55,9 +55,9 @@ pub enum Error {
 
 impl PackageJson {
     pub fn load(path: &AbsoluteSystemPath) -> Result<PackageJson, Error> {
-        let contents = std::fs::read_to_string(path)?;
-        let package_json: PackageJson = serde_json::from_str(&contents)?;
-        Ok(package_json)
+        tracing::debug!("loading package.json from {}", path);
+        let contents = path.read_to_string()?;
+        Self::from_str(&contents)
     }
 
     // Utility method for easy construction of package.json during testing
@@ -67,11 +67,19 @@ impl PackageJson {
     }
 
     pub fn all_dependencies(&self) -> impl Iterator<Item = (&String, &String)> + '_ {
-        self.dependencies
+        self.dev_dependencies
             .iter()
             .flatten()
-            .chain(self.dev_dependencies.iter().flatten())
             .chain(self.optional_dependencies.iter().flatten())
+            .chain(self.dependencies.iter().flatten())
+    }
+}
+
+impl FromStr for PackageJson {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(serde_json::from_str(s)?)
     }
 }
 

@@ -1,16 +1,10 @@
 {
-  "name": "database",
+  "name": "@repo/database",
   "version": "1.0.0",
-  "license": "MIT",
-  "main": "./dist/index.js",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.ts",
-  "files": [
-    "dist/**"
-  ],
+  "exports": {
+    ".": "./src/client.ts"
+  },
   "scripts": {
-    "build": "tsup",
-    "clean": "rimraf .turbo node_modules dist",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
     "db:push": "prisma db push",
@@ -18,22 +12,21 @@
     "dev": "tsup --watch",
     "format": "prisma format",
     "generate": "prisma generate",
-    "lint": "eslint \"src/**/*.ts\"",
+    "lint": "eslint . --max-warnings 0",
     "prebuild": "npm run generate",
     "predev": "npm run generate",
     "studio": "prisma studio"
   },
   "dependencies": {
-    "@prisma/client": "^3.10.0"
+    "@prisma/client": "^5.7.1"
   },
   "devDependencies": {
-    "config": "*",
-    "eslint": "^8.12.0",
-    "prisma": "^3.10.0",
-    "rimraf": "^3.0.2",
-    "tsconfig": "*",
-    "tsup": "^5.11.13",
-    "tsx": "^3.7.1",
-    "typescript": "^4.5.5"
+    "@repo/eslint-config": "*",
+    "eslint": "^8.56.0",
+    "prisma": "^5.7.1",
+    "rimraf": "^5.0.5",
+    "@repo/typescript-config": "*",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
   }
 }

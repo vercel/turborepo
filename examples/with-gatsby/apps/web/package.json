@@ -7,22 +7,23 @@
     "build": "gatsby build",
     "start": "gatsby develop",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src/"
+    "lint": "eslint src/ --max-warnings 0"
   },
   "dependencies": {
-    "gatsby": "^5.12.4",
+    "gatsby": "^5.13.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "ui": "workspace:*"
+    "@repo/ui": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^18.15.0",
-    "@types/react": "^18.0.28",
-    "@types/react-dom": "^18.0.11",
-    "eslint-config-custom": "workspace:*",
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^20.10.6",
+    "@types/react": "^18.2.46",
+    "@types/react-dom": "^18.2.18",
+    "eslint": "^8.56.0",
     "gatsby-plugin-compile-es6-packages": "^2.1.1",
     "gatsby-plugin-pnpm": "^1.2.10",
-    "tsconfig": "workspace:*",
-    "typescript": "^5.2.2"
+    "typescript": "^5.3.3"
   }
 }

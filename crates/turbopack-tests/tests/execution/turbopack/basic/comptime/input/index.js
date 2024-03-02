@@ -39,6 +39,32 @@ it("should not follow conditional references", () => {
   expect(func.toString()).not.toContain("import(");
 });
 
+function funcTenary() {
+  false ? require("fail") : undefined;
+  false ? import("fail") : undefined;
+  true ? require("./ok") : undefined;
+  true ? require("./ok") : require("fail");
+  true ? require("./ok") : (require("fail"), import("fail"));
+  true
+    ? require("./ok")
+    : (() => {
+        require("fail");
+        import("fail");
+      })();
+  const value = false
+    ? (() => {
+        require("fail");
+        import("fail");
+      })()
+    : require("./ok");
+}
+
+it("should not follow conditional tenary references", () => {
+  funcTenary();
+
+  expect(funcTenary.toString()).not.toContain("import(");
+});
+
 it("should allow to mutate objects", () => {
   const obj = { a: true, b: false };
   if (!obj.a) {
@@ -99,5 +125,44 @@ it("should evaluate NODE_ENV", () => {
   if (process.env.NODE_ENV !== "development") {
     require("fail");
     import("fail");
+  }
+});
+
+it("should keep side-effects in if statements", () => {
+  {
+    let ok = false;
+    let ok2 = true;
+    if (((ok = true), false)) {
+      ok2 = false;
+      // TODO improve static analysis to detect that this is unreachable
+      // require("fail");
+    }
+    expect(ok).toBe(true);
+    expect(ok2).toBe(true);
+  }
+  {
+    let ok = false;
+    let ok2 = false;
+    let ok3 = true;
+    if (((ok = true), true)) {
+      ok2 = true;
+    } else {
+      ok3 = false;
+      // TODO improve static analysis to detect that this is unreachable
+      // require("fail");
+    }
+    expect(ok).toBe(true);
+    expect(ok2).toBe(true);
+    expect(ok3).toBe(true);
+  }
+  {
+    let ok = 0;
+    if ((ok++, true)) {
+      ok++;
+    } else {
+      // TODO improve static analysis to detect that this is unreachable
+      // require("fail");
+    }
+    expect(ok).toBe(2);
   }
 });

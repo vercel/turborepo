@@ -1,0 +1,12 @@
+{
+  "name": "missing-workspace-config",
+  "scripts": {
+    "missing-workspace-config-task": "echo running-missing-workspace-config-task > out/foo.min.txt",
+    "missing-workspace-config-task-with-deps": "echo running-missing-workspace-config-task-with-deps > out/foo.min.txt",
+    "missing-workspace-config-underlying-task": "echo running-missing-workspace-config-underlying-task",
+    "cached-task-4": "echo cached-task-4 > out/foo.min.txt"
+  },
+  "dependencies": {
+    "blank-pkg": "*"
+  }
+}

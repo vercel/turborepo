@@ -9,12 +9,11 @@ license = "MPL-2.0"
 # This is for the convenience of running daily dev workflows, i.e running
 # `cargo xxx` without explicitly specifying features, not that we want to
 # promote this as default backend.
-default = ["rustls-tls", "go-binary"]
+default = ["rustls-tls"]
 native-tls = ["turborepo-lib/native-tls"]
 rustls-tls = ["turborepo-lib/rustls-tls"]
 http = ["turborepo-lib/http"]
 go-daemon = ["turborepo-lib/go-daemon"]
-go-binary = []
 pprof = ["turborepo-lib/pprof"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -26,6 +25,9 @@ assert_cmd = { workspace = true }
 itertools = { workspace = true }
 pretty_assertions = { workspace = true }
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
 clap = { workspace = true, features = ["derive"] }
@@ -33,6 +35,7 @@ clap_complete = { workspace = true }
 command-group = { version = "2.0.1", features = ["with-tokio"] }
 dunce = { workspace = true }
 human-panic = "1.2.1"
+miette.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }

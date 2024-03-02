@@ -2,7 +2,7 @@ use anyhow::Result;
 use turbo_tasks::Vc;
 use turbo_tasks_fs::FileSystemPath;
 
-use super::{Issue, IssueSeverity};
+use super::{Issue, IssueSeverity, IssueStage, OptionStyledString, StyledString};
 
 #[turbo_tasks::value(shared)]
 pub struct UnsupportedModuleIssue {
@@ -19,13 +19,13 @@ impl Issue for UnsupportedModuleIssue {
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("resolve".to_string())
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::ProcessModule.into()
     }
 
     #[turbo_tasks::function]
-    fn title(&self) -> Vc<String> {
-        Vc::cell("Unsupported module".into())
+    fn title(&self) -> Vc<StyledString> {
+        StyledString::Text("Unsupported module".into()).cell()
     }
 
     #[turbo_tasks::function]
@@ -34,10 +34,24 @@ impl Issue for UnsupportedModuleIssue {
     }
 
     #[turbo_tasks::function]
-    async fn description(&self) -> Result<Vc<String>> {
-        Ok(Vc::cell(match &self.package_path {
-            Some(path) => format!("The module {}{} is not yet supported", self.package, path),
-            None => format!("The package {} is not yet supported", self.package),
-        }))
+    async fn description(&self) -> Result<Vc<OptionStyledString>> {
+        Ok(Vc::cell(Some(
+            StyledString::Line(vec![
+                StyledString::Text("The ".to_string()),
+                StyledString::Text(
+                    match &self.package_path {
+                        Some(_) => "module",
+                        None => "package",
+                    }
+                    .to_string(),
+                ),
+                StyledString::Code(match &self.package_path {
+                    Some(path) => format!(" {}{}", self.package, path),
+                    None => format!(" {}", self.package),
+                }),
+                StyledString::Text(" is not yet supported".to_string()),
+            ])
+            .cell(),
+        )))
     }
 }

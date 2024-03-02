@@ -119,7 +119,7 @@ impl<'a> CacheReader<'a> {
         symlinks: &[Entry<'_, T>],
     ) -> Result<Vec<AnchoredSystemPathBuf>, CacheError> {
         let mut graph = DiGraph::new();
-        let mut header_lookup = HashMap::new();
+        let mut entry_lookup = HashMap::new();
         let mut restored = Vec::new();
         let mut nodes = HashMap::new();
 
@@ -144,7 +144,7 @@ impl<'a> CacheReader<'a> {
 
             graph.add_edge(source_node, link_node, ());
 
-            header_lookup.insert(processed_sourcename, entry.header().clone());
+            entry_lookup.insert(processed_sourcename, entry);
         }
 
         let nodes = petgraph::algo::toposort(&graph, None)
@@ -153,10 +153,10 @@ impl<'a> CacheReader<'a> {
         for node in nodes {
             let key = &graph[node];
 
-            let Some(header) = header_lookup.get(key) else {
+            let Some(entry) = entry_lookup.get(key) else {
                 continue;
             };
-            let file = restore_symlink_allow_missing_target(dir_cache, anchor, header)?;
+            let file = restore_symlink_allow_missing_target(dir_cache, anchor, entry)?;
             restored.push(file);
         }
 
@@ -174,7 +174,7 @@ fn restore_entry<T: Read>(
     match header.entry_type() {
         tar::EntryType::Directory => restore_directory(dir_cache, anchor, entry.header()),
         tar::EntryType::Regular => restore_regular(dir_cache, anchor, entry),
-        tar::EntryType::Symlink => restore_symlink(dir_cache, anchor, entry.header()),
+        tar::EntryType::Symlink => restore_symlink(dir_cache, anchor, entry),
         ty => Err(CacheError::RestoreUnsupportedFileType(
             ty,
             Backtrace::capture(),

@@ -10,13 +10,13 @@
     "lint": "eslint \"src/**/*.ts\""
   },
   "dependencies": {
-    "ui": "workspace:*"
+    "@repo/ui": "workspace:*"
   },
   "devDependencies": {
-    "eslint": "^7.32.0",
-    "eslint-config-custom": "workspace:*",
-    "tsconfig": "workspace:*",
-    "typescript": "^4.9.4",
-    "vite": "^4.0.3"
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10"
   }
 }

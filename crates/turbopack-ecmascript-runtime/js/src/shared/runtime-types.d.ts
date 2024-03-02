@@ -20,6 +20,7 @@ type ChunkData =
     };
 
 type CommonJsRequire = (moduleId: ModuleId) => Exports;
+type ModuleContextFactory = (map: ModuleContextMap) => ModuleContext;
 type EsmImport = (
   moduleId: ModuleId,
   allowExportDefault: boolean
@@ -39,6 +40,9 @@ type LoadWebAssemblyModule = (wasmChunkPath: ChunkPath) => WebAssembly.Module;
 type ModuleCache = Record<ModuleId, Module>;
 type ModuleFactories = Record<ModuleId, ModuleFactory>;
 
+type RelativeURL = (inputUrl: string) => void;
+type ResolvePathFromModule = (moduleId: string) => string;
+
 type AsyncModule = (
   body: (
     handleAsyncDependencies: (
@@ -54,7 +58,7 @@ interface TurbopackBaseContext {
   e: Module["exports"];
   r: CommonJsRequire;
   t: CommonJsRequire;
-  f: RequireContextFactory;
+  f: ModuleContextFactory;
   i: EsmImport;
   s: EsmExport;
   j: DynamicExport;
@@ -62,9 +66,11 @@ interface TurbopackBaseContext {
   n: ExportNamespace;
   m: Module;
   c: ModuleCache;
+  M: ModuleFactories;
   l: LoadChunk;
   w: LoadWebAssembly;
   u: LoadWebAssemblyModule;
   g: typeof globalThis;
+  U: RelativeURL;
   __dirname: string;
 }

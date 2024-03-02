@@ -2,9 +2,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
+use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{APIAuth, APIClient};
 
-use crate::{fs::FSCache, http::HTTPCache, CacheError, CacheOpts, CacheResponse};
+use crate::{fs::FSCache, http::HTTPCache, CacheError, CacheHitMetadata, CacheOpts};
 
 pub struct CacheMultiplexer {
     // We use an `AtomicBool` instead of removing the cache because that would require
@@ -12,16 +13,22 @@ pub struct CacheMultiplexer {
     // This does create a mild race condition where we might use the cache
     // even though another thread might be removing it, but that's fine.
     should_use_http_cache: AtomicBool,
+    // Just for keeping track of whether we've already printed a warning about the remote cache
+    // being read-only
+    should_print_skipping_remote_put: AtomicBool,
+    remote_cache_read_only: bool,
     fs: Option<FSCache>,
     http: Option<HTTPCache>,
 }
 
 impl CacheMultiplexer {
+    #[tracing::instrument(skip_all)]
     pub fn new(
         opts: &CacheOpts,
         repo_root: &AbsoluteSystemPath,
         api_client: APIClient,
         api_auth: Option<APIAuth>,
+        analytics_recorder: Option<AnalyticsSender>,
     ) -> Result<Self, CacheError> {
         let use_fs_cache = !opts.skip_filesystem;
         let use_http_cache = !opts.skip_remote;
@@ -34,16 +41,32 @@ impl CacheMultiplexer {
         }
 
         let fs_cache = use_fs_cache
-            .then(|| FSCache::new(opts.override_dir, repo_root))
+            .then(|| {
+                FSCache::new(
+                    opts.override_dir.as_deref(),
+                    repo_root,
+                    analytics_recorder.clone(),
+                )
+            })
             .transpose()?;
 
         let http_cache = use_http_cache
             .then_some(api_auth)
             .flatten()
-            .map(|api_auth| HTTPCache::new(api_client, opts, repo_root.to_owned(), api_auth));
+            .map(|api_auth| {
+                HTTPCache::new(
+                    api_client,
+                    opts,
+                    repo_root.to_owned(),
+                    api_auth,
+                    analytics_recorder.clone(),
+                )
+            });
 
         Ok(CacheMultiplexer {
+            should_print_skipping_remote_put: AtomicBool::new(true),
             should_use_http_cache: AtomicBool::new(http_cache.is_some()),
+            remote_cache_read_only: opts.remote_cache_read_only,
             fs: fs_cache,
             http: http_cache,
         })
@@ -59,6 +82,7 @@ impl CacheMultiplexer {
         }
     }
 
+    #[tracing::instrument(skip_all)]
     pub async fn put(
         &self,
         anchor: &AbsoluteSystemPath,
@@ -73,72 +97,95 @@ impl CacheMultiplexer {
 
         let http_result = match self.get_http_cache() {
             Some(http) => {
-                let http_result = http.put(anchor, key, files, duration).await;
+                if self.remote_cache_read_only {
+                    if self
+                        .should_print_skipping_remote_put
+                        .load(Ordering::Relaxed)
+                    {
+                        // Warn once per build, not per task
+                        warn!("Remote cache is read-only, skipping upload");
+                        self.should_print_skipping_remote_put
+                            .store(false, Ordering::Relaxed);
+                    }
+                    // Cache is functional but running in read-only mode, so we don't want to try to
+                    // write to it
+                    None
+                } else {
+                    let http_result = http.put(anchor, key, files, duration).await;
 
-                Some(http_result)
+                    Some(http_result)
+                }
             }
             _ => None,
         };
 
-        if let Some(Err(CacheError::ApiClientError(
-            box turborepo_api_client::Error::CacheDisabled { .. },
-            ..,
-        ))) = http_result
-        {
-            warn!("failed to put to http cache: cache disabled");
-            self.should_use_http_cache.store(false, Ordering::Relaxed);
+        match http_result {
+            Some(Err(CacheError::ApiClientError(
+                box turborepo_api_client::Error::CacheDisabled { .. },
+                ..,
+            ))) => {
+                warn!("failed to put to http cache: cache disabled");
+                self.should_use_http_cache.store(false, Ordering::Relaxed);
+                Ok(())
+            }
+            Some(Err(e)) => Err(e),
+            None | Some(Ok(())) => Ok(()),
         }
-
-        Ok(())
     }
 
+    #[tracing::instrument(skip_all)]
     pub async fn fetch(
         &self,
         anchor: &AbsoluteSystemPath,
         key: &str,
-    ) -> Result<(CacheResponse, Vec<AnchoredSystemPathBuf>), CacheError> {
+    ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
         if let Some(fs) = &self.fs {
-            if let Ok(cache_response) = fs.fetch(anchor, key) {
-                return Ok(cache_response);
+            if let response @ Ok(Some(_)) = fs.fetch(anchor, key) {
+                return response;
             }
         }
 
         if let Some(http) = self.get_http_cache() {
-            if let Ok((cache_response, files)) = http.fetch(key).await {
+            if let Ok(Some((CacheHitMetadata { source, time_saved }, files))) =
+                http.fetch(key).await
+            {
                 // Store this into fs cache. We can ignore errors here because we know
                 // we have previously successfully stored in HTTP cache, and so the overall
                 // result is a success at fetching. Storing in lower-priority caches is an
                 // optimization.
                 if let Some(fs) = &self.fs {
-                    let _ = fs.put(anchor, key, &files, cache_response.time_saved);
+                    let _ = fs.put(anchor, key, &files, time_saved);
                 }
 
-                return Ok((cache_response, files));
+                return Ok(Some((CacheHitMetadata { source, time_saved }, files)));
             }
         }
 
-        Err(CacheError::CacheMiss)
+        Ok(None)
     }
 
-    pub async fn exists(&self, key: &str) -> Result<CacheResponse, CacheError> {
+    #[tracing::instrument(skip_all)]
+    pub async fn exists(&self, key: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
         if let Some(fs) = &self.fs {
             match fs.exists(key) {
-                Ok(cache_response) => {
-                    return Ok(cache_response);
+                cache_hit @ Ok(Some(_)) => {
+                    return cache_hit;
                 }
+                Ok(None) => {}
                 Err(err) => debug!("failed to check fs cache: {:?}", err),
             }
         }
 
         if let Some(http) = self.get_http_cache() {
             match http.exists(key).await {
-                Ok(cache_response) => {
-                    return Ok(cache_response);
+                cache_hit @ Ok(Some(_)) => {
+                    return cache_hit;
                 }
+                Ok(None) => {}
                 Err(err) => debug!("failed to check http cache: {:?}", err),
             }
         }
 
-        Err(CacheError::CacheMiss)
+        Ok(None)
     }
 }

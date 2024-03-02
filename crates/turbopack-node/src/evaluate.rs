@@ -12,8 +12,7 @@ use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use turbo_tasks::{
-    duration_span, mark_finished, util::SharedError, Completion, RawVc, TryJoinIterExt, Value,
-    ValueToString, Vc,
+    duration_span, mark_finished, util::SharedError, Completion, RawVc, TryJoinIterExt, Value, Vc,
 };
 use turbo_tasks_bytes::{Bytes, Stream};
 use turbo_tasks_env::ProcessEnv;
@@ -26,7 +25,7 @@ use turbopack_core::{
     context::AssetContext,
     file_source::FileSource,
     ident::AssetIdent,
-    issue::{Issue, IssueExt, IssueSeverity},
+    issue::{Issue, IssueExt, IssueSeverity, IssueStage, OptionStyledString, StyledString},
     module::Module,
     reference_type::{InnerAssets, ReferenceType},
     virtual_source::VirtualSource,
@@ -104,12 +103,14 @@ pub async fn get_evaluate_pool(
     additional_invalidation: Vc<Completion>,
     debug: bool,
 ) -> Result<Vc<NodeJsPool>> {
-    let runtime_asset = asset_context.process(
-        Vc::upcast(FileSource::new(embed_file_path(
-            "ipc/evaluate.ts".to_string(),
-        ))),
-        Value::new(ReferenceType::Internal(InnerAssets::empty())),
-    );
+    let runtime_asset = asset_context
+        .process(
+            Vc::upcast(FileSource::new(embed_file_path(
+                "ipc/evaluate.ts".to_string(),
+            ))),
+            Value::new(ReferenceType::Internal(InnerAssets::empty())),
+        )
+        .module();
 
     let module_path = module_asset.ident().path().await?;
     let file_name = module_path.file_name();
@@ -121,22 +122,24 @@ pub async fn get_evaluate_pool(
         Cow::Owned(format!("{file_name}.js"))
     };
     let path = chunking_context.output_root().join(file_name.to_string());
-    let entry_module = asset_context.process(
-        Vc::upcast(VirtualSource::new(
-            runtime_asset.ident().path().join("evaluate.js".to_string()),
-            AssetContent::file(
-                File::from(
-                    "import { run } from 'RUNTIME'; run((...args) => \
-                     (require('INNER').default(...args)))",
-                )
-                .into(),
-            ),
-        )),
-        Value::new(ReferenceType::Internal(Vc::cell(indexmap! {
-            "INNER".to_string() => module_asset,
-            "RUNTIME".to_string() => runtime_asset
-        }))),
-    );
+    let entry_module = asset_context
+        .process(
+            Vc::upcast(VirtualSource::new(
+                runtime_asset.ident().path().join("evaluate.js".to_string()),
+                AssetContent::file(
+                    File::from(
+                        "import { run } from 'RUNTIME'; run(async (...args) => ((await \
+                         import('INNER')).default(...args)))",
+                    )
+                    .into(),
+                ),
+            )),
+            Value::new(ReferenceType::Internal(Vc::cell(indexmap! {
+                "INNER".to_string() => module_asset,
+                "RUNTIME".to_string() => runtime_asset
+            }))),
+        )
+        .module();
 
     let Some(entry_module) =
         Vc::try_resolve_sidecast::<Box<dyn EvaluatableAsset>>(entry_module).await?
@@ -149,10 +152,12 @@ pub async fn get_evaluate_pool(
     };
 
     let runtime_entries = {
-        let globals_module = asset_context.process(
-            Vc::upcast(FileSource::new(embed_file_path("globals.ts".to_string()))),
-            Value::new(ReferenceType::Internal(InnerAssets::empty())),
-        );
+        let globals_module = asset_context
+            .process(
+                Vc::upcast(FileSource::new(embed_file_path("globals.ts".to_string()))),
+                Value::new(ReferenceType::Internal(InnerAssets::empty())),
+            )
+            .module();
 
         let Some(globals_module) =
             Vc::try_resolve_sidecast::<Box<dyn EvaluatableAsset>>(globals_module).await?
@@ -488,13 +493,13 @@ pub struct EvaluationIssue {
 #[turbo_tasks::value_impl]
 impl Issue for EvaluationIssue {
     #[turbo_tasks::function]
-    fn title(&self) -> Vc<String> {
-        Vc::cell("Error evaluating Node.js code".to_string())
+    fn title(&self) -> Vc<StyledString> {
+        StyledString::Text("Error evaluating Node.js code".to_string()).cell()
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("build".to_string())
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::Transform.into()
     }
 
     #[turbo_tasks::function]
@@ -503,17 +508,20 @@ impl Issue for EvaluationIssue {
     }
 
     #[turbo_tasks::function]
-    async fn description(&self) -> Result<Vc<String>> {
-        Ok(Vc::cell(
-            self.error
-                .print(
-                    self.assets_for_source_mapping,
-                    self.assets_root,
-                    self.project_dir,
-                    FormattingMode::Plain,
-                )
-                .await?,
-        ))
+    async fn description(&self) -> Result<Vc<OptionStyledString>> {
+        Ok(Vc::cell(Some(
+            StyledString::Text(
+                self.error
+                    .print(
+                        self.assets_for_source_mapping,
+                        self.assets_root,
+                        self.project_dir,
+                        FormattingMode::Plain,
+                    )
+                    .await?,
+            )
+            .cell(),
+        )))
     }
 }
 
@@ -532,13 +540,13 @@ impl Issue for BuildDependencyIssue {
     }
 
     #[turbo_tasks::function]
-    fn title(&self) -> Vc<String> {
-        Vc::cell("Build dependencies are not yet supported".to_string())
+    fn title(&self) -> Vc<StyledString> {
+        StyledString::Text("Build dependencies are not yet supported".to_string()).cell()
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("build".to_string())
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::Unsupported.cell()
     }
 
     #[turbo_tasks::function]
@@ -547,11 +555,13 @@ impl Issue for BuildDependencyIssue {
     }
 
     #[turbo_tasks::function]
-    async fn description(&self) -> Result<Vc<String>> {
-        Ok(Vc::cell(
-            format!("The file at {} is a build dependency, which is not yet implemented.
-Changing this file or any dependency will not be recognized and might require restarting the server", self.path.to_string().await?)
-        ))
+    async fn description(&self) -> Result<Vc<OptionStyledString>> {
+        Ok(Vc::cell(Some(StyledString::Line(vec![
+            StyledString::Text("The file at ".to_string()),
+            StyledString::Code(self.path.await?.to_string()),
+            StyledString::Text(" is a build dependency, which is not yet implemented.
+Changing this file or any dependency will not be recognized and might require restarting the server".to_string()),
+        ]).cell())))
     }
 }
 
@@ -612,31 +622,34 @@ impl Issue for EvaluateEmittedErrorIssue {
     }
 
     #[turbo_tasks::function]
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::Transform.cell()
+    }
+
+    #[turbo_tasks::function]
     fn severity(&self) -> Vc<IssueSeverity> {
         self.severity
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("loaders".to_string())
+    fn title(&self) -> Vc<StyledString> {
+        StyledString::Text("Issue while running loader".to_string()).cell()
     }
 
     #[turbo_tasks::function]
-    fn title(&self) -> Vc<String> {
-        Vc::cell("Issue while running loader".to_string())
-    }
-
-    #[turbo_tasks::function]
-    async fn description(&self) -> Result<Vc<String>> {
-        Ok(Vc::cell(
-            self.error
-                .print(
-                    self.assets_for_source_mapping,
-                    self.assets_root,
-                    self.project_dir,
-                    FormattingMode::Plain,
-                )
-                .await?,
-        ))
+    async fn description(&self) -> Result<Vc<OptionStyledString>> {
+        Ok(Vc::cell(Some(
+            StyledString::Text(
+                self.error
+                    .print(
+                        self.assets_for_source_mapping,
+                        self.assets_root,
+                        self.project_dir,
+                        FormattingMode::Plain,
+                    )
+                    .await?,
+            )
+            .cell(),
+        )))
     }
 }

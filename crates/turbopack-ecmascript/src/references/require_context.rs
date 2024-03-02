@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, sync::Arc};
+use std::{borrow::Cow, collections::VecDeque, sync::Arc};
 
 use anyhow::{bail, Context, Result};
 use indexmap::IndexMap;
@@ -28,6 +28,7 @@ use turbopack_core::{
     resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult},
     source::Source,
 };
+use turbopack_resolve::ecmascript::{cjs_resolve, try_to_severity};
 
 use crate::{
     chunk::{
@@ -37,10 +38,9 @@ use crate::{
     code_gen::CodeGeneration,
     create_visitor,
     references::{
-        pattern_mapping::{PatternMapping, ResolveType::Cjs},
+        pattern_mapping::{PatternMapping, ResolveType},
         AstPath,
     },
-    resolve::{cjs_resolve, try_to_severity},
     utils::module_id_to_lit,
     CodeGenerateable, EcmascriptChunkPlaceable,
 };
@@ -197,7 +197,7 @@ impl RequireContextMap {
 }
 
 /// A reference for `require.context()`, will replace it with an inlined map
-/// wrapped in `__turbopack_require_context__`;
+/// wrapped in `__turbopack_module_context__`;
 #[turbo_tasks::value]
 #[derive(Hash, Debug)]
 pub struct RequireContextAssetReference {
@@ -291,7 +291,7 @@ impl CodeGenerateable for RequireContextAssetReference {
         visitors.push(create_visitor!(path, visit_mut_expr(expr: &mut Expr) {
             if let Expr::Call(_) = expr {
                 *expr = quote!(
-                    "__turbopack_require_context__(__turbopack_require__($id))" as Expr,
+                    "__turbopack_module_context__(__turbopack_require__($id))" as Expr,
                     id: Expr = module_id_to_lit(&module_id)
                 );
             }
@@ -439,25 +439,25 @@ impl EcmascriptChunkItem for RequireContextChunkItem {
                 self.origin,
                 Vc::upcast(self.chunking_context),
                 entry.result,
-                Value::new(Cjs),
+                Value::new(ResolveType::ChunkItem),
             )
             .await?;
 
+            let PatternMapping::Single(pm) = &*pm else {
+                continue;
+            };
+
+            let key_expr = Expr::Lit(Lit::Str(entry.origin_relative.as_str().into()));
+
             let prop = KeyValueProp {
                 key: PropName::Str(key.as_str().into()),
-                value: match *self.chunking_context.environment().node_externals().await? {
-                    true => quote_expr!(
-                        "{ external: $external, id: () => $id }",
-                        external: Expr = (!pm.is_internal_import()).into(),
-                        id: Expr =
-                            pm.apply(Expr::Lit(Lit::Str(entry.origin_relative.as_str().into()))),
-                    ),
-                    false => quote_expr!(
-                        "{ id: () => $id }",
-                        id: Expr =
-                            pm.apply(Expr::Lit(Lit::Str(entry.origin_relative.as_str().into()))),
-                    ),
-                },
+                value: quote_expr!(
+                    "{ id: () => $id, module: () => $module }",
+                    id: Expr =
+                        pm.create_id(Cow::Borrowed(&key_expr)),
+                    module: Expr =
+                        pm.create_require(Cow::Borrowed(&key_expr)),
+                ),
             };
 
             context_map

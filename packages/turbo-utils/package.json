@@ -15,11 +15,10 @@
   "bugs": {
     "url": "https://github.com/vercel/turbo/issues"
   },
-  "module": "dist/index.mjs",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "module": "src/index.ts",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
   "scripts": {
-    "build": "tsup",
     "test": "jest",
     "lint": "eslint src/",
     "check-types": "tsc --noEmit",
@@ -51,7 +50,6 @@
     "ora": "4.1.1",
     "tar": "6.1.13",
     "ts-jest": "^27.1.1",
-    "tsup": "^5.12.1",
-    "typescript": "^4.7.4"
+    "typescript": "5.3.3"
   }
 }

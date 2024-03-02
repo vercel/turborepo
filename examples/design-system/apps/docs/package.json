@@ -1,32 +1,34 @@
 {
-  "name": "@acme/docs",
+  "name": "@repo/docs",
   "version": "0.0.0",
+  "type": "module",
   "private": true,
   "scripts": {
     "dev": "storybook dev -p 6006",
     "build": "storybook build --docs",
     "preview-storybook": "serve storybook-static",
     "clean": "rm -rf .turbo && rm -rf node_modules",
-    "lint": "eslint ./stories/*.stories.tsx"
+    "lint": "eslint ./stories/*.stories.tsx --max-warnings 0"
   },
   "dependencies": {
+    "@acme/ui": "workspace:*",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "ui": "workspace:*"
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "@storybook/addon-actions": "^7.4.0",
-    "@storybook/addon-docs": "^7.4.0",
-    "@storybook/addon-essentials": "^7.4.0",
-    "@storybook/addon-links": "^7.4.0",
-    "@storybook/react": "^7.4.0",
-    "@storybook/react-vite": "^7.4.0",
-    "@vitejs/plugin-react": "^1.3.2",
-    "eslint-config-custom": "workspace:*",
-    "serve": "^13.0.4",
-    "storybook": "^7.4.0",
-    "tsconfig": "workspace:*",
-    "typescript": "^5.2.2",
-    "vite": "^4.4.9"
+    "@repo/eslint-config": "workspace:*",
+    "@storybook/addon-actions": "^7.6.7",
+    "@storybook/addon-docs": "^7.6.7",
+    "@storybook/addon-essentials": "^7.6.7",
+    "@storybook/addon-links": "^7.6.7",
+    "@storybook/react": "^7.6.7",
+    "@storybook/react-vite": "^7.6.7",
+    "@vitejs/plugin-react": "^4.2.1",
+    "eslint": "^8.56.0",
+    "serve": "^14.2.1",
+    "storybook": "^7.6.7",
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10"
   }
 }

@@ -1,11 +1,13 @@
 use anyhow::{bail, Context, Result};
-use turbo_tasks::{Value, Vc};
+use tracing::Instrument;
+use turbo_tasks::{Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     chunk::{
         availability_info::AvailabilityInfo,
         chunk_group::{make_chunk_group, MakeChunkGroupResult},
-        Chunk, ChunkItem, ChunkableModule, ChunkingContext, EvaluatableAssets, ModuleId,
+        Chunk, ChunkGroupResult, ChunkItem, ChunkableModule, ChunkingContext, EvaluatableAssets,
+        ModuleId,
     },
     environment::Environment,
     ident::AssetIdent,
@@ -13,6 +15,7 @@ use turbopack_core::{
     output::{OutputAsset, OutputAssets},
 };
 use turbopack_ecmascript::{
+    async_chunk::module::AsyncLoaderModule,
     chunk::{EcmascriptChunk, EcmascriptChunkingContext},
     manifest::{chunk_asset::ManifestAsyncModule, loader_item::ManifestLoaderChunkItem},
 };
@@ -59,6 +62,11 @@ impl DevChunkingContextBuilder {
         self
     }
 
+    pub fn manifest_chunks(mut self, manifest_chunks: bool) -> Self {
+        self.chunking_context.manifest_chunks = manifest_chunks;
+        self
+    }
+
     pub fn build(self) -> Vc<DevChunkingContext> {
         DevChunkingContext::new(Value::new(self.chunking_context))
     }
@@ -75,8 +83,10 @@ pub struct DevChunkingContext {
     /// This path get stripped off of chunk paths before generating output asset
     /// paths.
     context_path: Vc<FileSystemPath>,
-    /// This path is used to compute the url to request chunks or assets from
+    /// This path is used to compute the url to request chunks from
     output_root: Vc<FileSystemPath>,
+    /// This path is used to compute the url to request assets from
+    client_root: Vc<FileSystemPath>,
     /// Chunks are placed at this path
     chunk_root_path: Vc<FileSystemPath>,
     /// Chunks reference source maps assets
@@ -97,12 +107,15 @@ pub struct DevChunkingContext {
     environment: Vc<Environment>,
     /// The kind of runtime to include in the output.
     runtime_type: RuntimeType,
+    /// Whether to use manifest chunks for lazy compilation
+    manifest_chunks: bool,
 }
 
 impl DevChunkingContext {
     pub fn builder(
         context_path: Vc<FileSystemPath>,
         output_root: Vc<FileSystemPath>,
+        client_root: Vc<FileSystemPath>,
         chunk_root_path: Vc<FileSystemPath>,
         asset_root_path: Vc<FileSystemPath>,
         environment: Vc<Environment>,
@@ -111,6 +124,7 @@ impl DevChunkingContext {
             chunking_context: DevChunkingContext {
                 context_path,
                 output_root,
+                client_root,
                 chunk_root_path,
                 reference_chunk_source_maps: true,
                 reference_css_chunk_source_maps: true,
@@ -120,6 +134,7 @@ impl DevChunkingContext {
                 enable_hot_module_replacement: false,
                 environment,
                 runtime_type: Default::default(),
+                manifest_chunks: false,
             },
         }
     }
@@ -233,8 +248,8 @@ impl ChunkingContext for DevChunkingContext {
         let this = self.await?;
         let asset_path = ident.path().await?.to_string();
         let asset_path = asset_path
-            .strip_prefix(&format!("{}/", this.output_root.await?.path))
-            .context("expected output_root to contain asset path")?;
+            .strip_prefix(&format!("{}/", this.client_root.await?.path))
+            .context("expected asset_path to contain client_root")?;
 
         Ok(Vc::cell(format!(
             "{}{}",
@@ -315,32 +330,44 @@ impl ChunkingContext for DevChunkingContext {
         self: Vc<Self>,
         module: Vc<Box<dyn ChunkableModule>>,
         availability_info: Value<AvailabilityInfo>,
-    ) -> Result<Vc<OutputAssets>> {
-        let MakeChunkGroupResult { chunks } = make_chunk_group(
-            Vc::upcast(self),
-            [Vc::upcast(module)],
-            availability_info.into_value(),
-        )
-        .await?;
+    ) -> Result<Vc<ChunkGroupResult>> {
+        let span = tracing::info_span!("chunking", module = *module.ident().to_string().await?);
+        async move {
+            let MakeChunkGroupResult {
+                chunks,
+                availability_info,
+            } = make_chunk_group(
+                Vc::upcast(self),
+                [Vc::upcast(module)],
+                availability_info.into_value(),
+            )
+            .await?;
 
-        let mut assets: Vec<Vc<Box<dyn OutputAsset>>> = chunks
-            .iter()
-            .map(|chunk| self.generate_chunk(*chunk))
-            .collect();
+            let mut assets: Vec<Vc<Box<dyn OutputAsset>>> = chunks
+                .iter()
+                .map(|chunk| self.generate_chunk(*chunk))
+                .collect();
 
-        assets.push(self.generate_chunk_list_register_chunk(
-            module.ident(),
-            EvaluatableAssets::empty(),
-            Vc::cell(assets.clone()),
-            Value::new(EcmascriptDevChunkListSource::Dynamic),
-        ));
+            assets.push(self.generate_chunk_list_register_chunk(
+                module.ident(),
+                EvaluatableAssets::empty(),
+                Vc::cell(assets.clone()),
+                Value::new(EcmascriptDevChunkListSource::Dynamic),
+            ));
 
-        // Resolve assets
-        for asset in assets.iter_mut() {
-            *asset = asset.resolve().await?;
+            // Resolve assets
+            for asset in assets.iter_mut() {
+                *asset = asset.resolve().await?;
+            }
+
+            Ok(ChunkGroupResult {
+                assets: Vc::cell(assets),
+                availability_info,
+            }
+            .cell())
         }
-
-        Ok(Vc::cell(assets))
+        .instrument(span)
+        .await
     }
 
     #[turbo_tasks::function]
@@ -348,64 +375,89 @@ impl ChunkingContext for DevChunkingContext {
         self: Vc<Self>,
         ident: Vc<AssetIdent>,
         evaluatable_assets: Vc<EvaluatableAssets>,
-    ) -> Result<Vc<OutputAssets>> {
-        let availability_info = AvailabilityInfo::Root;
+        availability_info: Value<AvailabilityInfo>,
+    ) -> Result<Vc<ChunkGroupResult>> {
+        let span = {
+            let ident = ident.to_string().await?;
+            tracing::info_span!("chunking", chunking_type = "evaluated", ident = *ident)
+        };
+        async move {
+            let availability_info = availability_info.into_value();
 
-        let evaluatable_assets_ref = evaluatable_assets.await?;
+            let evaluatable_assets_ref = evaluatable_assets.await?;
 
-        // TODO this collect is unnecessary, but it hits a compiler bug when it's not
-        // used
-        let entries = evaluatable_assets_ref
-            .iter()
-            .map(|&evaluatable| Vc::upcast(evaluatable))
-            .collect::<Vec<_>>();
+            // TODO this collect is unnecessary, but it hits a compiler bug when it's not
+            // used
+            let entries = evaluatable_assets_ref
+                .iter()
+                .map(|&evaluatable| Vc::upcast(evaluatable))
+                .collect::<Vec<_>>();
 
-        let MakeChunkGroupResult { chunks } =
-            make_chunk_group(Vc::upcast(self), entries, availability_info).await?;
+            let MakeChunkGroupResult {
+                chunks,
+                availability_info,
+            } = make_chunk_group(Vc::upcast(self), entries, availability_info).await?;
 
-        let mut assets: Vec<Vc<Box<dyn OutputAsset>>> = chunks
-            .iter()
-            .map(|chunk| self.generate_chunk(*chunk))
-            .collect();
+            let mut assets: Vec<Vc<Box<dyn OutputAsset>>> = chunks
+                .iter()
+                .map(|chunk| self.generate_chunk(*chunk))
+                .collect();
 
-        let other_assets = Vc::cell(assets.clone());
+            let other_assets = Vc::cell(assets.clone());
 
-        assets.push(self.generate_chunk_list_register_chunk(
-            ident,
-            evaluatable_assets,
-            other_assets,
-            Value::new(EcmascriptDevChunkListSource::Entry),
-        ));
+            assets.push(self.generate_chunk_list_register_chunk(
+                ident,
+                evaluatable_assets,
+                other_assets,
+                Value::new(EcmascriptDevChunkListSource::Entry),
+            ));
 
-        assets.push(self.generate_evaluate_chunk(ident, other_assets, evaluatable_assets));
+            assets.push(self.generate_evaluate_chunk(ident, other_assets, evaluatable_assets));
 
-        // Resolve assets
-        for asset in assets.iter_mut() {
-            *asset = asset.resolve().await?;
+            // Resolve assets
+            for asset in assets.iter_mut() {
+                *asset = asset.resolve().await?;
+            }
+
+            Ok(ChunkGroupResult {
+                assets: Vc::cell(assets),
+                availability_info,
+            }
+            .cell())
         }
-
-        Ok(Vc::cell(assets))
+        .instrument(span)
+        .await
     }
 
     #[turbo_tasks::function]
-    fn async_loader_chunk_item(
+    async fn async_loader_chunk_item(
         self: Vc<Self>,
         module: Vc<Box<dyn ChunkableModule>>,
         availability_info: Value<AvailabilityInfo>,
-    ) -> Vc<Box<dyn ChunkItem>> {
-        let manifest_asset = ManifestAsyncModule::new(module, Vc::upcast(self), availability_info);
-        Vc::upcast(ManifestLoaderChunkItem::new(
-            manifest_asset,
-            Vc::upcast(self),
-        ))
+    ) -> Result<Vc<Box<dyn ChunkItem>>> {
+        Ok(if self.await?.manifest_chunks {
+            let manifest_asset =
+                ManifestAsyncModule::new(module, Vc::upcast(self), availability_info);
+            Vc::upcast(ManifestLoaderChunkItem::new(
+                manifest_asset,
+                Vc::upcast(self),
+            ))
+        } else {
+            let module = AsyncLoaderModule::new(module, Vc::upcast(self), availability_info);
+            Vc::upcast(module.as_chunk_item(Vc::upcast(self)))
+        })
     }
 
     #[turbo_tasks::function]
-    fn async_loader_chunk_item_id(
+    async fn async_loader_chunk_item_id(
         self: Vc<Self>,
         module: Vc<Box<dyn ChunkableModule>>,
-    ) -> Vc<ModuleId> {
-        self.chunk_item_id_from_ident(ManifestLoaderChunkItem::asset_ident_for(module))
+    ) -> Result<Vc<ModuleId>> {
+        Ok(if self.await?.manifest_chunks {
+            self.chunk_item_id_from_ident(ManifestLoaderChunkItem::asset_ident_for(module))
+        } else {
+            self.chunk_item_id_from_ident(AsyncLoaderModule::asset_ident_for(module))
+        })
     }
 }
 

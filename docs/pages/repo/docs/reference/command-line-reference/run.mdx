@@ -1,9 +1,9 @@
 ---
-title: "`turbo run`"
-description: Turborepo CLI Reference for `run` command
+title: "turbo run"
+description: Turborepo CLI Reference for run command
 ---
 
-import Callout from "../../../../../components/Callout";
+import { Callout } from "../../../../../components/Callout";
 import OuputModeTable from "../../../../../components/output-mode-table.mdx";
 
 # `turbo run <task>`
@@ -159,10 +159,9 @@ turbo run build test lint --graph=my-graph.mermaid
 <Callout type="info">
   **Known Bug**: All possible pipeline task nodes will be added to the graph at
   the moment, even if that pipeline task does not actually exist in a given
-  workspace. This has no impact on execution, it means that 1) the terminal
-  output may overstate the number of workspaces in which a task is running and
-  2) your dot viz graph may contain additional nodes that represents tasks that
-  do not exist.
+  workspace. This has no impact on execution, it means that
+  1. the terminal output may overstate the number of workspaces in which a task is running
+  2. the dot viz graph may contain nodes that represent tasks that do not exist.
 </Callout>
 
 ### `--force`
@@ -234,7 +233,7 @@ Set type of task output order. Defaults to "auto" which lets
 | option  | description                               |
 | ------- | ----------------------------------------- |
 | auto    | Turbo decides based on its own heuristics |
-| stream  | show output as soon as it is available    |
+| stream  | Show output as soon as it is available    |
 | grouped | Show output grouped by task               |
 
 **Example**
@@ -249,6 +248,27 @@ turbo run build --log-order=grouped
   create [grouped logs](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#grouping-log-lines).
   You can opt out of this behavior by setting a log order of your own.
 </Callout>
+
+### `--log-prefix`
+
+`type: string`
+
+This controls the `<package>:<task>:` prefix to log lines produced when running tasks (both on execute and replay from cache). This also applies to "single package" repos where the prefix will be just `<task>:`.
+The log output when running multiple parallel tasks will be interleaved, so another method must be used to determine which task logged that line (ie enriched JSON logs) if the prefix is omitted.
+
+| option | description                               |
+| ------ | ----------------------------------------- |
+| auto   | Turbo decides based on its own heuristics |
+| none   | No prefixes                               |
+| prefix | Force prepending the prefix to logs       |
+
+```shell
+--log-prefix=none
+```
+
+```shell
+turbo run dev --log-prefix=none
+```
 
 ### `--no-cache`
 
@@ -323,6 +343,23 @@ turbo run lint --parallel --no-cache
 turbo run dev --parallel --no-cache
 ```
 
+### `--profile`
+
+Generates a trace of the run in Chrome Tracing format that you can use to analyze performance.
+The profile can be viewed in [Perfetto](https://ui.perfetto.dev/).
+
+```sh
+turbo run build --profile=profile.json
+```
+
+### `--remote-cache-timeout`
+
+Default `30` seconds. Set the timeout for remote cache operations in seconds.
+
+```shell
+turbo run build --remote-cache-timeout=60
+```
+
 ### `--remote-only`
 
 Default `false`. Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache.
@@ -377,47 +414,6 @@ turbo run build --preflight
 
 The same behavior can also be set via the `TURBO_PREFLIGHT=true` environment variable.
 
-### `--trace`
-
-`type: string`
-
-To view CPU trace, outputs the trace to the given file, use `go tool trace [file]`.
-
-<Callout>
-  **Important**: The trace viewer doesn't work under Windows Subsystem for
-  Linux.
-</Callout>
-
-```sh
-turbo run build --trace="<trace-file-name>"
-```
-
-### `--heap`
-
-`type: string`
-
-To view heap trace, outputs the trace to the given file, use `go tool pprof [file]` and type `top`. You can also drop it into [speedscope](https://www.speedscope.app/) and use the `left heavy` or `sandwich` view modes.
-
-```sh
-turbo run build --heap="<heap-file-name>"
-```
-
-### `--cpuprofile`
-
-`type: string`
-
-To view CPU profile, outputs the profile to the given file, drop the file into [speedscope](https://www.speedscope.app/).
-
-<Callout>
-  **Important**: The CPU profiler doesn't work under Windows Subsystem for
-  Linux. The profiler has to be built for native Windows and run using the
-  command prompt instead.
-</Callout>
-
-```sh
-turbo run build --cpuprofile="<cpu-profile-file-name>"
-```
-
 ### `--verbosity`
 
 To specify log level, use `--verbosity=<num>` or `-v, -vv, -vvv`.
@@ -433,6 +429,28 @@ turbo run build -vvv
 ```
 
 ## Deprecated Options
+
+### `--cpuprofile`
+
+`type: string`
+
+<Callout type="error">
+  `--cpuprofile` is deprecated in `1.11.x`. Please use
+  [`--profile`](#--profile)
+  instead.
+</Callout>
+
+To view CPU profile, outputs the profile to the given file, drop the file into [speedscope](https://www.speedscope.app/).
+
+<Callout>
+  **Important**: The CPU profiler doesn't work under Windows Subsystem for
+  Linux. The profiler has to be built for native Windows and run using the
+  command prompt instead.
+</Callout>
+
+```sh
+turbo run build --cpuprofile="<cpu-profile-file-name>"
+```
 
 ### `--include-dependencies`
 
@@ -473,6 +491,21 @@ cached. Then, you change a line of code in B. With the `--deps` flag on, running
 because they are not impacted by the change. If you were to run
 `turbo run build --no-deps` instead, turbo will only run `build` in B.
 
+### `--heap`
+
+<Callout type="error">
+  `--heap` is deprecated in `1.2.x`. Please use
+  [`--profile`](#--profile) instead.
+</Callout>
+
+`type: string`
+
+To view heap trace, outputs the trace to the given file, use `go tool pprof [file]` and type `top`. You can also drop it into [speedscope](https://www.speedscope.app/) and use the `left heavy` or `sandwich` view modes.
+
+```sh
+turbo run build --heap="<heap-file-name>"
+```
+
 ### `--scope`
 
 <Callout type="error">
@@ -509,6 +542,27 @@ turbo run build --since=origin/main
   identify which workspaces have changed. There is an assumption that all the
   input files for a workspace exist inside their respective workspace folders.
 </Callout>
+
+### `--trace`
+
+<Callout type="error">
+  `--trace` is deprecated in `1.11.x`, use
+  [`--profile`](#--profile)
+  instead.
+</Callout>
+
+`type: string`
+
+To view CPU trace, outputs the trace to the given file, use `go tool trace [file]`.
+
+<Callout>
+  **Important**: The trace viewer doesn't work under Windows Subsystem for
+  Linux.
+</Callout>
+
+```sh
+turbo run build --trace="<trace-file-name>"
+```
 
 [1]: /repo/docs/reference/configuration#passThroughEnv
 [2]: /repo/docs/reference/configuration#globalPassThroughEnv

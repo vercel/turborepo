@@ -12,8 +12,8 @@ use axum::{
 use futures_util::StreamExt;
 use tokio::sync::Mutex;
 use turborepo_vercel_api::{
-    CachingStatus, CachingStatusResponse, Membership, Role, Space, SpaceRun, SpacesResponse, Team,
-    TeamsResponse, User, UserResponse, VerificationResponse,
+    AnalyticsEvent, CachingStatus, CachingStatusResponse, Membership, Role, Space, SpaceRun,
+    SpacesResponse, Team, TeamsResponse, User, UserResponse, VerificationResponse,
 };
 
 pub const EXPECTED_TOKEN: &str = "expected_token";
@@ -41,6 +41,9 @@ pub async fn start_test_server(port: u16) -> Result<()> {
     let put_durations_ref = get_durations_ref.clone();
     let put_tempdir_ref = Arc::new(tempfile::tempdir()?);
     let get_tempdir_ref = put_tempdir_ref.clone();
+
+    let get_analytics_events_ref = Arc::new(Mutex::new(Vec::new()));
+    let post_analytics_events_ref = get_analytics_events_ref.clone();
 
     let app = Router::new()
         .route(
@@ -175,7 +178,9 @@ pub async fn start_test_server(port: u16) -> Result<()> {
             get(|Path(hash): Path<String>| async move {
                 let root_path = get_tempdir_ref.path();
                 let file_path = root_path.join(&hash);
-                let buffer = std::fs::read(file_path).unwrap();
+                let Ok(buffer) = std::fs::read(file_path) else {
+                    return (StatusCode::NOT_FOUND, HeaderMap::new(), Vec::new());
+                };
                 let duration = get_durations_ref
                     .lock()
                     .await
@@ -189,7 +194,7 @@ pub async fn start_test_server(port: u16) -> Result<()> {
                     HeaderValue::from_str(&duration.to_string()).unwrap(),
                 );
 
-                (headers, buffer)
+                (StatusCode::FOUND, headers, buffer)
             }),
         )
         .route(
@@ -208,6 +213,21 @@ pub async fn start_test_server(port: u16) -> Result<()> {
 
                 (StatusCode::OK, headers)
             }),
+        )
+        .route(
+            "/v8/artifacts/events",
+            post(
+                |Json(analytics_events): Json<Vec<AnalyticsEvent>>| async move {
+                    post_analytics_events_ref
+                        .lock()
+                        .await
+                        .extend(analytics_events);
+                },
+            ),
+        )
+        .route(
+            "/v8/artifacts/events",
+            get(|| async move { Json(get_analytics_events_ref.lock().await.clone()) }),
         )
         .route(
             "/preflight/absolute-location",

@@ -326,7 +326,7 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
           e: module.exports,
           r: commonJsRequire.bind(null, module),
           t: runtimeRequire,
-          f: requireContext.bind(null, module),
+          f: moduleContext,
           i: esmImport.bind(null, module),
           s: esmExport.bind(null, module, module.exports),
           j: dynamicExport.bind(null, module, module.exports),
@@ -334,10 +334,12 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
           n: exportNamespace.bind(null, module),
           m: module,
           c: moduleCache,
+          M: moduleFactories,
           l: loadChunk.bind(null, sourceInfo),
           w: loadWebAssembly.bind(null, sourceInfo),
           u: loadWebAssemblyModule.bind(null, sourceInfo),
           g: globalThis,
+          U: relativeURL,
           k: refresh,
           __dirname: module.id.replace(/(^|\/)\/+$/, ""),
         })
@@ -463,8 +465,8 @@ function registerExportsAndSetupBoundaryForReactRefresh(
       // function, we want to invalidate the boundary.
       if (
         helpers.shouldInvalidateReactRefreshBoundary(
-          prevExports,
-          currentExports
+          helpers.getRefreshBoundarySignature(prevExports),
+          helpers.getRefreshBoundarySignature(currentExports)
         )
       ) {
         module.hot.invalidate();
@@ -727,25 +729,22 @@ function invariant(never: never, computeMessage: (arg: any) => string): never {
   throw new Error(`Invariant: ${computeMessage(never)}`);
 }
 
-function applyUpdate(chunkListPath: ChunkPath, update: PartialUpdate) {
+function applyUpdate(update: PartialUpdate) {
   switch (update.type) {
     case "ChunkListUpdate":
-      applyChunkListUpdate(chunkListPath, update);
+      applyChunkListUpdate(update);
       break;
     default:
       invariant(update, (update) => `Unknown update type: ${update.type}`);
   }
 }
 
-function applyChunkListUpdate(
-  chunkListPath: ChunkPath,
-  update: ChunkListUpdate
-) {
+function applyChunkListUpdate(update: ChunkListUpdate) {
   if (update.merged != null) {
     for (const merged of update.merged) {
       switch (merged.type) {
         case "EcmascriptMergedUpdate":
-          applyEcmascriptMergedUpdate(chunkListPath, merged);
+          applyEcmascriptMergedUpdate(merged);
           break;
         default:
           invariant(merged, (merged) => `Unknown merged type: ${merged.type}`);
@@ -781,10 +780,7 @@ function applyChunkListUpdate(
   }
 }
 
-function applyEcmascriptMergedUpdate(
-  chunkPath: ChunkPath,
-  update: EcmascriptMergedUpdate
-) {
+function applyEcmascriptMergedUpdate(update: EcmascriptMergedUpdate) {
   const { entries = {}, chunks = {} } = update;
   const { added, modified, chunksAdded, chunksDeleted } = computeChangedModules(
     entries,
@@ -828,6 +824,7 @@ function applyInternal(
 
   // we want to continue on error and only throw the error after we tried applying all updates
   let error: any;
+
   function reportError(err: any) {
     if (!error) error = err;
   }
@@ -1031,7 +1028,7 @@ function handleApply(chunkListPath: ChunkPath, update: ServerMessage) {
   switch (update.type) {
     case "partial": {
       // This indicates that the update is can be applied to the current state of the application.
-      applyUpdate(chunkListPath, update.instruction);
+      applyUpdate(update.instruction);
       break;
     }
     case "restart": {
@@ -1290,7 +1287,10 @@ function getOrInstantiateRuntimeModule(
  * Returns the URL relative to the origin where a chunk can be fetched from.
  */
 function getChunkRelativeUrl(chunkPath: ChunkPath): string {
-  return `${CHUNK_BASE_PATH}${chunkPath}`;
+  return `${CHUNK_BASE_PATH}${chunkPath
+    .split("/")
+    .map((p) => encodeURIComponent(p))
+    .join("/")}`;
 }
 
 /**

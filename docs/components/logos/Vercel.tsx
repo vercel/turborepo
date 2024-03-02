@@ -1,4 +1,4 @@
-function Vercel({ height = 20 }: { height?: number }) {
+export function Vercel({ height = 20 }: { height?: number }) {
   return (
     <svg fill="none" height={height} viewBox="0 0 283 64">
       <title>Vercel</title>
@@ -9,5 +9,3 @@ function Vercel({ height = 20 }: { height?: number }) {
     </svg>
   );
 }
-
-export default Vercel;

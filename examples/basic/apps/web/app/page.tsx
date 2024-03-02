@@ -1,6 +1,8 @@
 import Image from "next/image";
-import { Card } from "ui";
+import { Card } from "@repo/ui/card";
+import { Code } from "@repo/ui/code";
 import styles from "./page.module.css";
+import { Button } from "@repo/ui/button";
 
 function Gradient({
   conic,
@@ -45,7 +47,7 @@ const LINKS = [
     title: "Deploy",
     href: "https://vercel.com/new",
     description:
-      " Instantly deploy your Turborepo to a shareable URL with Vercel.",
+      "Instantly deploy your Turborepo to a shareable URL with Vercel.",
   },
 ];
 
@@ -55,7 +57,7 @@ export default function Page(): JSX.Element {
       <div className={styles.description}>
         <p>
           examples/basic&nbsp;
-          <code className={styles.code}>web</code>
+          <Code className={styles.code}>web</Code>
         </p>
         <div>
           <a
@@ -76,15 +78,20 @@ export default function Page(): JSX.Element {
         </div>
       </div>
 
+      <Button appName="web" className={styles.button}>
+        Click me!
+      </Button>
+
       <div className={styles.hero}>
         <div className={styles.heroContent}>
           <div className={styles.logos}>
             <div className={styles.circles}>
               <Image
-                alt="Turborepo"
+                alt=""
                 height={614}
                 src="circles.svg"
                 width={614}
+                style={{ pointerEvents: "none" }}
               />
             </div>
             <div className={styles.logoGradientContainer}>
@@ -93,11 +100,12 @@ export default function Page(): JSX.Element {
 
             <div className={styles.logo}>
               <Image
-                alt=""
+                alt="Turborepo"
                 height={120}
                 priority
                 src="turborepo.svg"
                 width={120}
+                style={{ pointerEvents: "none" }}
               />
             </div>
           </div>

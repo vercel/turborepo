@@ -22,6 +22,14 @@ pub struct OutputClient<W> {
     // Any locals held across an await must implement Sync and RwLock lets us achieve this
     buffer: Option<RwLock<Vec<SinkBytes<'static>>>>,
     writers: Arc<Mutex<SinkWriters<W>>>,
+    primary: Marginals,
+    error: Marginals,
+}
+
+#[derive(Default)]
+struct Marginals {
+    header: Option<String>,
+    footer: Option<String>,
 }
 
 pub struct OutputWriter<'a, W> {
@@ -80,11 +88,21 @@ impl<W: Write> OutputSink<W> {
             behavior,
             buffer,
             writers,
+            primary: Default::default(),
+            error: Default::default(),
         }
     }
 }
 
 impl<W: Write> OutputClient<W> {
+    pub fn with_header_footer(&mut self, header: Option<String>, footer: Option<String>) {
+        self.primary = Marginals { header, footer };
+    }
+
+    pub fn with_error_header_footer(&mut self, header: Option<String>, footer: Option<String>) {
+        self.error = Marginals { header, footer };
+    }
+
     /// A writer that will write to the underlying sink's out writer according
     /// to this client's behavior.
     pub fn stdout(&self) -> OutputWriter<W> {
@@ -107,13 +125,23 @@ impl<W: Write> OutputClient<W> {
 
     /// Consume the client and flush any bytes to the underlying sink if
     /// necessary
-    pub fn finish(self) -> io::Result<Option<Vec<u8>>> {
+    pub fn finish(self, use_error: bool) -> io::Result<Option<Vec<u8>>> {
         let Self {
             behavior,
             buffer,
             writers,
+            primary,
+            error,
         } = self;
         let buffers = buffer.map(|cell| cell.into_inner().expect("lock poisoned"));
+        let header = use_error
+            .then_some(error.header)
+            .flatten()
+            .or(primary.header);
+        let footer = use_error
+            .then_some(error.footer)
+            .flatten()
+            .or(primary.footer);
 
         if matches!(behavior, OutputClientBehavior::Grouped) {
             let buffers = buffers
@@ -122,6 +150,9 @@ impl<W: Write> OutputClient<W> {
             // We hold the mutex until we write all of the bytes associated for the client
             // to ensure that the bytes aren't interspersed.
             let mut writers = writers.lock().expect("lock poisoned");
+            if let Some(prefix) = header {
+                writers.out.write_all(prefix.as_bytes())?;
+            }
             for SinkBytes {
                 buffer,
                 destination,
@@ -132,6 +163,9 @@ impl<W: Write> OutputClient<W> {
                     Destination::Stderr => &mut writers.err,
                 };
                 writer.write_all(buffer)?;
+            }
+            if let Some(suffix) = footer {
+                writers.out.write_all(suffix.as_bytes())?;
             }
         }
 
@@ -236,7 +270,7 @@ mod test {
                 let mut err = pass_thru_logger.stderr();
                 writeln!(&mut out, "task 1: out").unwrap();
                 writeln!(&mut err, "task 1: err").unwrap();
-                assert!(pass_thru_logger.finish().unwrap().is_none());
+                assert!(pass_thru_logger.finish(true).unwrap().is_none());
             });
             s.spawn(move || {
                 let mut out = buffer_logger.stdout();
@@ -244,7 +278,7 @@ mod test {
                 writeln!(&mut out, "task 2: out").unwrap();
                 writeln!(&mut err, "task 2: err").unwrap();
                 assert_eq!(
-                    buffer_logger.finish().unwrap().unwrap(),
+                    buffer_logger.finish(true).unwrap().unwrap(),
                     b"task 2: out\ntask 2: err\n"
                 );
             });
@@ -274,7 +308,7 @@ mod test {
             "pass thru should end up in sink immediately"
         );
         assert!(
-            logger.finish()?.is_none(),
+            logger.finish(true)?.is_none(),
             "pass through logs shouldn't keep a buffer"
         );
         assert_eq!(
@@ -300,7 +334,7 @@ mod test {
             "buffer should end up in sink immediately"
         );
         assert_eq!(
-            logger.finish()?.unwrap(),
+            logger.finish(true)?.unwrap(),
             b"output for 1\n",
             "buffer should return buffer"
         );
@@ -326,11 +360,11 @@ mod test {
         writeln!(&mut group2_out, "output for 2")?;
         writeln!(&mut group1_out, "output for 1")?;
         let group1_logs = group1_logger
-            .finish()?
+            .finish(true)?
             .expect("grouped logs should have buffer");
         writeln!(&mut group2_err, "warning for 2")?;
         let group2_logs = group2_logger
-            .finish()?
+            .finish(true)?
             .expect("grouped logs should have buffer");
 
         assert_eq!(group1_logs, b"output for 1\n");
@@ -339,6 +373,44 @@ mod test {
         let SinkWriters { out, err } = Arc::into_inner(sink.writers).unwrap().into_inner().unwrap();
         assert_eq!(out, b"output for 1\noutput for 2\n");
         assert_eq!(err, b"warning for 2\n");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_marginals() -> io::Result<()> {
+        let sink = OutputSink::new(Vec::new(), Vec::new());
+        let mut group1_logger = sink.logger(OutputClientBehavior::Grouped);
+        group1_logger
+            .with_header_footer(Some("good header\n".into()), Some("good footer\n".into()));
+        group1_logger
+            .with_error_header_footer(Some("bad header\n".into()), Some("bad footer\n".into()));
+        let mut group2_logger = sink.logger(OutputClientBehavior::Grouped);
+        group2_logger
+            .with_header_footer(Some("good header\n".into()), Some("good footer\n".into()));
+
+        let mut group1_out = group1_logger.stdout();
+        let mut group2_out = group2_logger.stdout();
+
+        writeln!(&mut group2_out, "output for 2")?;
+        writeln!(&mut group1_out, "output for 1")?;
+        let group1_logs = group1_logger
+            .finish(true)?
+            .expect("grouped logs should have buffer");
+        let group2_logs = group2_logger
+            .finish(true)?
+            .expect("grouped logs should have buffer");
+
+        assert_eq!(group1_logs, b"output for 1\n");
+        assert_eq!(group2_logs, b"output for 2\n");
+
+        let SinkWriters { out, .. } = Arc::into_inner(sink.writers).unwrap().into_inner().unwrap();
+        // Error marginals used when present, primary ones used if errors aren't
+        // provided
+        assert_eq!(
+            out,
+            b"bad header\noutput for 1\nbad footer\ngood header\noutput for 2\ngood footer\n"
+        );
 
         Ok(())
     }
@@ -357,14 +429,14 @@ mod test {
                 write!(&mut out, "task 1:").unwrap();
                 b1.wait();
                 writeln!(&mut out, " echo building").unwrap();
-                assert!(logger1.finish().unwrap().is_none());
+                assert!(logger1.finish(true).unwrap().is_none());
             });
             s.spawn(move || {
                 let mut out = logger2.stdout();
                 write!(&mut out, "task 2:").unwrap();
                 b2.wait();
                 writeln!(&mut out, " echo failing").unwrap();
-                assert!(logger2.finish().unwrap().is_none(),);
+                assert!(logger2.finish(true).unwrap().is_none(),);
             });
         });
         let SinkWriters { out, .. } = Arc::into_inner(sink.writers).unwrap().into_inner().unwrap();

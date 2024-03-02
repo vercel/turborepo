@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup.sh
-  $ . ${TESTDIR}/_helpers/setup_monorepo.sh $(pwd)
+  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh
 
 # Running with --filter works and exits with success
   $ ${TURBO} run build --filter="[main]"
@@ -28,3 +27,17 @@ Setup
   Cached:    0 cached, 0 total
     Time:\s*[\.0-9]+m?s  (re)
   
+
+  $ rm bar.txt
+  $ echo "global dependency" >> foo.txt
+  $ git commit -am "global dependency change" --quiet
+  $ ${TURBO} run build --filter="[HEAD^]" --output-logs none
+  \xe2\x80\xa2 Packages in scope: //, another, my-app, util (esc)
+  \xe2\x80\xa2 Running build in 4 packages (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
+  
+   Tasks:    2 successful, 2 total
+  Cached:    0 cached, 2 total
+    Time:\s*[\.0-9]+m?s  (re)
+  
+

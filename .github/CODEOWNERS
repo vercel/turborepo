@@ -12,8 +12,7 @@
 /cli @vercel/turbo-oss
 /benchmark @vercel/turbo-oss
 /buildcontainer @vercel/turbo-oss
-/examples @vercel/turbo-oss
-/examples-tests @vercel/turbo-oss
+/examples @vercel/turbo-oss @anthonyshew
 /docs/pages/repo @vercel/turbo-oss @anthonyshew
 .github/workflows/bench-turborepo.yml @vercel/turbo-oss
 .github/workflows/pr-go-*.yml @vercel/turbo-oss
@@ -42,6 +41,7 @@ pnpm-lock.yaml
 
 # overrides for crates that are owned by turbo-oss
 /crates/turborepo* @vercel/turbo-oss
+/crates/turborepo-telemetry/src/events @gsoltis @tknickman @padmaia
 
 # overrides for crates that are owned by turbopack
 /crates/turbo-tasks* @vercel/turbopack
@@ -56,12 +56,15 @@ pnpm-lock.yaml
 /packages/eslint-config-turbo			@vercel/turbo-oss
 /packages/eslint-plugin-turbo			@vercel/turbo-oss
 /packages/node-module-trace				@vercel/turbopack
+/packages/turbo							@vercel/turbo-oss
+/packages/turbo-benchmark				@vercel/turbo-oss
 /packages/turbo-codemod					@vercel/turbo-oss
-/packages/turbo-gen							@vercel/turbo-oss
+/packages/turbo-gen						@vercel/turbo-oss
 /packages/turbo-ignore					@vercel/turbo-oss
+/packages/turbo-repository				@vercel/turbo-oss
 /packages/turbo-tracing-next-plugin		@vercel/turbopack
 /packages/turbo-types					@vercel/turbo-oss
 /packages/turbo-utils					@vercel/turbo-oss
-/packages/turbo-workspaces					@vercel/turbo-oss
-/packages/turbo							@vercel/turbo-oss
+/packages/turbo-workspaces				@vercel/turbo-oss
 /packages/webpack-nmt					@vercel/turbopack
+

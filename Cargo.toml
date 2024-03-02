@@ -3,10 +3,11 @@ resolver = "2"
 
 members = [
   "crates/node-file-trace",
+  "crates/tower-uds",
   "crates/turbo-tasks*",
   "crates/turbopack*",
   "crates/turborepo*",
-  "packages/turbo-repository/rust/",
+  "packages/turbo-repository/rust",
   "xtask",
 ]
 
@@ -41,11 +42,14 @@ default-members = [
   "crates/turbopack-json",
   "crates/turbopack-mdx",
   "crates/turbopack-node",
+  "crates/turbopack-resolve",
   "crates/turbopack-static",
   "crates/turbopack-swc-ast-explorer",
   "crates/turbopack-swc-utils",
   "crates/turbopack-test-utils",
   "crates/turbopack-tests",
+  "crates/turbopack-trace-server",
+  "crates/turbopack-trace-utils",
   "crates/turbopack-wasm",
   "xtask",
 ]
@@ -61,6 +65,12 @@ turbopack = [
   "path:crates/node-file-trace",
 ]
 
+# List of the packages can be compiled against wasm32-wasi target.
+turbopack-wasi = ["path:crates/turbo-tasks-hash"]
+
+[workspace.lints.clippy]
+too_many_arguments = "allow"
+
 [profile.dev.package.turbo-tasks-macros]
 opt-level = 3
 
@@ -71,24 +81,33 @@ opt-level = 3
 [profile.release]
 lto = "off"
 
+[profile.release-turborepo-lsp]
+inherits = "release"
+strip = true
+opt-level = "z"
+
+[profile.release-turborepo]
+inherits = "release"
+strip = true
+
 # Declare dependencies used across workspace packages requires single version bump.
 # ref: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#inheriting-a-dependency-from-a-workspace
 [workspace.dependencies]
 async-recursion = "1.0.2"
 # Keep consistent with preset_env_base through swc_core
-browserslist-rs = { version = "0.12.2" }
-
-mdxjs = "0.1.19"
-modularize_imports = { version = "0.50.0" }
-styled_components = { version = "0.77.0" }
-styled_jsx = { version = "0.54.0" }
-swc_core = { version = "0.86.10", features = [
+browserslist-rs = { version = "0.15.0" }
+miette = { version = "5.10.0", features = ["fancy"] }
+mdxjs = "0.1.23"
+modularize_imports = { version = "0.68.7" }
+styled_components = { version = "0.96.6" }
+styled_jsx = { version = "0.73.8" }
+swc_core = { version = "0.90.12", features = [
   "ecma_loader_lru",
   "ecma_loader_parking_lot",
 ] }
-swc_emotion = { version = "0.53.0" }
-swc_relay = { version = "0.25.0" }
-testing = { version = "0.35.0" }
+swc_emotion = { version = "0.72.6" }
+swc_relay = { version = "0.44.5" }
+testing = { version = "0.35.19" }
 
 auto-hash-map = { path = "crates/turbo-tasks-auto-hash-map" }
 node-file-trace = { path = "crates/node-file-trace", default-features = false }
@@ -129,18 +148,21 @@ turbopack-image = { path = "crates/turbopack-image" }
 turbopack-json = { path = "crates/turbopack-json" }
 turbopack-mdx = { path = "crates/turbopack-mdx" }
 turbopack-node = { path = "crates/turbopack-node" }
+turbopack-resolve = { path = "crates/turbopack-resolve" }
 turbopack-static = { path = "crates/turbopack-static" }
 turbopack-swc-utils = { path = "crates/turbopack-swc-utils" }
 turbopack-test-utils = { path = "crates/turbopack-test-utils" }
 turbopack-tests = { path = "crates/turbopack-tests" }
+turbopack-trace-utils = { path = "crates/turbopack-trace-utils" }
 turbopack-wasm = { path = "crates/turbopack-wasm" }
 turbopath = { path = "crates/turborepo-paths" }
 turborepo = { path = "crates/turborepo" }
+turborepo-analytics = { path = "crates/turborepo-analytics" }
 turborepo-api-client = { path = "crates/turborepo-api-client" }
 turborepo-cache = { path = "crates/turborepo-cache" }
 turborepo-ci = { path = "crates/turborepo-ci" }
 turborepo-env = { path = "crates/turborepo-env" }
-turborepo-ffi = { path = "crates/turborepo-ffi" }
+turborepo-errors = { path = "crates/turborepo-errors" }
 turborepo-fs = { path = "crates/turborepo-fs" }
 turborepo-lib = { path = "crates/turborepo-lib", default-features = false }
 turborepo-lockfiles = { path = "crates/turborepo-lockfiles" }
@@ -155,7 +177,7 @@ turborepo-vercel-api-mock = { path = "crates/turborepo-vercel-api-mock" }
 # If you changed, must verify with ALL build targets with next-swc to ensure
 # it works. next-swc have various platforms, some doesn't support native (using openssl-sys)
 # and some aren't buildable with rustls.
-reqwest = { version = "0.11.14", default-features = false }
+reqwest = { version = "=0.11.17", default-features = false }
 
 chromiumoxide = { version = "0.5.0", features = [
   "tokio-runtime",
@@ -174,6 +196,11 @@ async-trait = "0.1.64"
 atty = "0.2.14"
 axum = "0.6.2"
 axum-server = "0.4.4"
+biome_console = "0.3.1"
+biome_deserialize = "0.3.1"
+biome_diagnostics = "0.3.1"
+biome_json_parser = "0.3.1"
+biome_json_syntax = "0.3.1"
 bytes = "1.1.0"
 camino = { version = "1.1.4", features = ["serde1"] }
 chrono = "0.4.23"
@@ -187,6 +214,7 @@ crossbeam-channel = "0.5.8"
 dashmap = "5.4.0"
 dialoguer = "0.10.3"
 dunce = "1.0.3"
+either = "1.9.0"
 futures = "0.3.26"
 futures-retry = "0.6.0"
 hex = "0.4.3"
@@ -197,10 +225,19 @@ indicatif = "0.17.3"
 indoc = "2.0.0"
 itertools = "0.10.5"
 lazy_static = "1.4.0"
+lightningcss = { version = "1.0.0-alpha.50", features = [
+  "serde",
+  "visitor",
+  "into_owned",
+] }
 mime = "0.3.16"
 nohash-hasher = "0.2.0"
+notify = "6.1.1"
+notify-debouncer-full = "0.3.1"
+notify-debouncer-mini = { version = "0.3.0", default-features = false }
 once_cell = "1.17.1"
 owo-colors = "3.5.0"
+parcel_selectors = "0.26.0"
 parking_lot = "0.12.1"
 path-clean = "1.0.1"
 pathdiff = "0.2.1"
@@ -224,7 +261,7 @@ serde_qs = "0.11.0"
 serde_with = "2.3.2"
 serde_yaml = "0.9.17"
 sha2 = "0.10.6"
-smallvec = { version = "1.11.1", features = [
+smallvec = { version = "1.13.1", features = [
   "serde",
   "const_generics",
   "union",
@@ -245,3 +282,4 @@ url = "2.2.2"
 urlencoding = "2.1.2"
 webbrowser = "0.8.7"
 which = "4.4.0"
+unicode-segmentation = "1.10.1"

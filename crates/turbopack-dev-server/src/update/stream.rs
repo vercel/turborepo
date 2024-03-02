@@ -10,7 +10,8 @@ use turbo_tasks_fs::{FileSystem, FileSystemPath};
 use turbopack_core::{
     error::PrettyPrintError,
     issue::{
-        Issue, IssueDescriptionExt, IssueSeverity, OptionIssueProcessingPathItems, PlainIssue,
+        Issue, IssueDescriptionExt, IssueSeverity, IssueStage, OptionIssueProcessingPathItems,
+        OptionStyledString, PlainIssue, StyledString,
     },
     server_fs::ServerFileSystem,
     version::{
@@ -55,7 +56,7 @@ async fn get_update_stream_item(
             plain_issues.push(
                 FatalStreamIssue {
                     resource: resource.to_string(),
-                    description: Vc::cell(format!("{}", PrettyPrintError(&e))),
+                    description: StyledString::Text(format!("{}", PrettyPrintError(&e))).cell(),
                 }
                 .cell()
                 .into_plain(OptionIssueProcessingPathItems::none())
@@ -279,7 +280,7 @@ pub enum UpdateStreamItem {
 
 #[turbo_tasks::value(serialization = "none")]
 struct FatalStreamIssue {
-    description: Vc<String>,
+    description: Vc<StyledString>,
     resource: String,
 }
 
@@ -291,22 +292,22 @@ impl Issue for FatalStreamIssue {
     }
 
     #[turbo_tasks::function]
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::Other("websocket".into()).cell()
+    }
+
+    #[turbo_tasks::function]
     fn file_path(&self) -> Vc<FileSystemPath> {
         ServerFileSystem::new().root().join(self.resource.clone())
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("websocket".to_string())
+    fn title(&self) -> Vc<StyledString> {
+        StyledString::Text("Fatal error while getting content to stream".to_string()).cell()
     }
 
     #[turbo_tasks::function]
-    fn title(&self) -> Vc<String> {
-        Vc::cell("Fatal error while getting content to stream".to_string())
-    }
-
-    #[turbo_tasks::function]
-    fn description(&self) -> Vc<String> {
-        self.description
+    fn description(&self) -> Vc<OptionStyledString> {
+        Vc::cell(Some(self.description))
     }
 }

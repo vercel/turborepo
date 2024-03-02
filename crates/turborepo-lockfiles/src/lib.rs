@@ -18,6 +18,7 @@ pub use bun::BunLockfile;
 pub use error::Error;
 pub use npm::*;
 pub use pnpm::{pnpm_global_change, pnpm_subgraph, PnpmLockfile};
+use rayon::prelude::*;
 use serde::Serialize;
 use turbopath::RelativeUnixPathBuf;
 pub use yarn1::{yarn_subgraph, Yarn1Lockfile};
@@ -31,7 +32,7 @@ pub struct Package {
 // This trait will only be used when migrating the Go lockfile implementations
 // to Rust. Once the migration is complete we will leverage petgraph for doing
 // our graph calculations.
-pub trait Lockfile: Send + Sync + Any {
+pub trait Lockfile: Send + Sync + Any + std::fmt::Debug {
     // Given a workspace, a package it imports and version returns the key, resolved
     // version, and if it was found
     fn resolve_package(
@@ -68,7 +69,7 @@ pub fn all_transitive_closures<L: Lockfile + ?Sized>(
     workspaces: HashMap<String, HashMap<String, String>>,
 ) -> Result<HashMap<String, HashSet<Package>>, Error> {
     workspaces
-        .into_iter()
+        .into_par_iter()
         .map(|(workspace, unresolved_deps)| {
             let closure = transitive_closure(lockfile, &workspace, unresolved_deps)?;
             Ok((workspace, closure))
@@ -77,6 +78,7 @@ pub fn all_transitive_closures<L: Lockfile + ?Sized>(
 }
 
 // this should get replaced by petgraph in the future :)
+#[tracing::instrument(skip_all)]
 pub fn transitive_closure<L: Lockfile + ?Sized>(
     lockfile: &L,
     workspace_path: &str,

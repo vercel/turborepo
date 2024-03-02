@@ -10,6 +10,7 @@
 //! must be either `wait`ed on or `stop`ped to drive state.
 
 mod child;
+mod command;
 
 use std::{
     io,
@@ -17,7 +18,7 @@ use std::{
     time::Duration,
 };
 
-pub use child::Command;
+pub use command::Command;
 use futures::Future;
 use tokio::task::JoinSet;
 use tracing::{debug, trace};
@@ -29,7 +30,10 @@ pub use self::child::{Child, ChildExit};
 /// using `spawn`. When the manager is Closed, all currently-running children
 /// will be closed, and no new children can be spawned.
 #[derive(Debug, Clone)]
-pub struct ProcessManager(Arc<Mutex<ProcessManagerInner>>);
+pub struct ProcessManager {
+    state: Arc<Mutex<ProcessManagerInner>>,
+    use_pty: bool,
+}
 
 #[derive(Debug)]
 struct ProcessManagerInner {
@@ -38,11 +42,22 @@ struct ProcessManagerInner {
 }
 
 impl ProcessManager {
-    pub fn new() -> Self {
-        Self(Arc::new(Mutex::new(ProcessManagerInner {
-            is_closing: false,
-            children: Vec::new(),
-        })))
+    pub fn new(use_pty: bool) -> Self {
+        Self {
+            state: Arc::new(Mutex::new(ProcessManagerInner {
+                is_closing: false,
+                children: Vec::new(),
+            })),
+            use_pty,
+        }
+    }
+
+    /// Construct a process manager and infer if pty should be used
+    pub fn infer() -> Self {
+        // Only use PTY if we're not on windows and we're currently hooked up to a
+        // in a TTY
+        let use_pty = !cfg!(windows) && atty::is(atty::Stream::Stdout);
+        Self::new(use_pty)
     }
 }
 
@@ -57,14 +72,18 @@ impl ProcessManager {
     /// manager is open, but the child process failed to spawn.
     pub fn spawn(
         &self,
-        command: child::Command,
+        command: Command,
         stop_timeout: Duration,
     ) -> Option<io::Result<child::Child>> {
-        let mut lock = self.0.lock().unwrap();
+        let mut lock = self.state.lock().unwrap();
         if lock.is_closing {
             return None;
         }
-        let child = child::Child::spawn(command, child::ShutdownStyle::Graceful(stop_timeout));
+        let child = child::Child::spawn(
+            command,
+            child::ShutdownStyle::Graceful(stop_timeout),
+            self.use_pty,
+        );
         if let Ok(child) = &child {
             lock.children.push(child.clone());
         }
@@ -100,7 +119,7 @@ impl ProcessManager {
         let mut set = JoinSet::new();
 
         {
-            let mut lock = self.0.lock().expect("not poisoned");
+            let mut lock = self.state.lock().expect("not poisoned");
             lock.is_closing = true;
             for child in lock.children.iter() {
                 let child = child.clone();
@@ -115,7 +134,7 @@ impl ProcessManager {
         }
 
         {
-            let mut lock = self.0.lock().expect("not poisoned");
+            let mut lock = self.state.lock().expect("not poisoned");
 
             // just allocate a new vec rather than clearing the old one
             lock.children = vec![];
@@ -125,12 +144,10 @@ impl ProcessManager {
 
 #[cfg(test)]
 mod test {
-    use std::process::Stdio;
-
     use futures::{stream::FuturesUnordered, StreamExt};
     use test_case::test_case;
     use time::Instant;
-    use tokio::{join, process::Command, time::sleep};
+    use tokio::{join, time::sleep};
     use tracing_test::traced_test;
 
     use super::*;
@@ -141,35 +158,28 @@ mod test {
 
     fn get_script_command(script_name: &str) -> Command {
         let mut cmd = Command::new("node");
-        cmd.arg(format!("./test/scripts/{script_name}"));
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
+        cmd.args([format!("./test/scripts/{script_name}")]);
         cmd
     }
 
-    // windows doesn't support graceful stop
-    const STOPPED_EXIT: Option<ChildExit> = Some(if cfg!(windows) {
-        ChildExit::Killed
-    } else {
-        ChildExit::Finished(None)
-    });
+    const STOPPED_EXIT: Option<ChildExit> = Some(ChildExit::Killed);
 
     #[tokio::test]
     async fn test_basic() {
-        let manager = ProcessManager::new();
+        let manager = ProcessManager::new(false);
         let mut child = manager
             .spawn(get_script_command("hello_world.js"), Duration::from_secs(2))
             .unwrap()
             .unwrap();
         let mut out = Vec::new();
-        let exit = child.wait_with_piped_outputs(&mut out, None).await.unwrap();
+        let exit = child.wait_with_piped_outputs(&mut out).await.unwrap();
         assert_eq!(exit, Some(ChildExit::Finished(Some(0))));
         assert_eq!(out, b"hello world\n");
     }
 
     #[tokio::test]
     async fn test_multiple() {
-        let manager = ProcessManager::new();
+        let manager = ProcessManager::new(false);
 
         let children = (0..2)
             .map(|_| {
@@ -192,14 +202,14 @@ mod test {
 
     #[tokio::test]
     async fn test_closed() {
-        let manager = ProcessManager::new();
+        let manager = ProcessManager::new(false);
         let mut child = manager
             .spawn(get_command(), Duration::from_secs(2))
             .unwrap()
             .unwrap();
         let mut out = Vec::new();
         let (exit, _) = join! {
-            child.wait_with_piped_outputs(&mut out, None),
+            child.wait_with_piped_outputs(&mut out),
             manager.stop(),
         };
         let exit = exit.unwrap();
@@ -219,7 +229,7 @@ mod test {
 
     #[tokio::test]
     async fn test_exit_code() {
-        let manager = ProcessManager::new();
+        let manager = ProcessManager::new(false);
         let mut child = manager
             .spawn(get_script_command("hello_world.js"), Duration::from_secs(2))
             .unwrap()
@@ -236,7 +246,7 @@ mod test {
     #[tokio::test]
     #[traced_test]
     async fn test_message_after_stop() {
-        let manager = ProcessManager::new();
+        let manager = ProcessManager::new(false);
         let mut child = manager
             .spawn(get_script_command("hello_world.js"), Duration::from_secs(2))
             .unwrap()
@@ -254,19 +264,19 @@ mod test {
         assert_eq!(kill_code, Some(ChildExit::Finished(Some(0))));
 
         let code = child.wait().await;
-        assert_eq!(code, None);
+        assert_eq!(code, Some(ChildExit::Finished(Some(0))));
     }
 
     #[tokio::test]
     async fn test_reuse_manager() {
-        let manager = ProcessManager::new();
+        let manager = ProcessManager::new(false);
         manager.spawn(get_command(), Duration::from_secs(2));
 
         sleep(Duration::from_millis(100)).await;
 
         manager.stop().await;
 
-        assert!(manager.0.lock().unwrap().children.is_empty());
+        assert!(manager.state.lock().unwrap().children.is_empty());
 
         // TODO: actually do some check that this is idempotent
         // idempotent
@@ -281,7 +291,7 @@ mod test {
         script: &str,
         expected: Option<ChildExit>,
     ) {
-        let manager = ProcessManager::new();
+        let manager = ProcessManager::new(false);
         let tasks = FuturesUnordered::new();
 
         for _ in 0..10 {
@@ -316,7 +326,7 @@ mod test {
 
     #[tokio::test]
     async fn test_wait_multiple_tasks() {
-        let manager = ProcessManager::new();
+        let manager = ProcessManager::new(false);
 
         let mut out = Vec::new();
         let mut child = manager
@@ -332,7 +342,7 @@ mod test {
         // we support 'close escalation'; someone can call
         // stop even if others are waiting
         let (exit, _, _) = join! {
-            child.wait_with_piped_outputs(&mut out, None),
+            child.wait_with_piped_outputs(&mut out),
             manager.wait(),
             manager.stop(),
         };

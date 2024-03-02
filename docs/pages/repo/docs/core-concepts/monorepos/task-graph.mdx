@@ -1,0 +1,122 @@
+---
+title: The Task Graph
+description: Turborepo builds a Task Graph based on your configuration and repository structure.
+---
+
+# The Task Graph
+
+[The previous section][2] talked about how Turborepo uses `turbo.json` to
+express how tasks relate to each other. You can think of these relationships as
+dependencies between tasks, but we have a more formal name for them: the Task
+Graph.
+
+Turborepo uses a data structure called a [directed acyclic graph (DAG)][1] to
+understand your repository and its tasks. A graph is made up of "nodes" and
+"edges". In our Task Graph, the nodes are tasks and the edges are the the
+dependencies between tasks. A _directed_ graph indicates that the edges
+connecting each node have a direction, so if Task A points to Task B, we can say
+that Task A depends on Task B. The direction of the edge depends on which task
+depends on which.
+
+For example, let's say you have a monorepo with an application `apps/web` that
+depends on two packages: `@repo/ui` and `@repo/utils`:
+
+```
+my-monorepo
+└─ apps
+ └─ web
+└─ packages
+ └─ ui
+ └─ utils
+```
+
+And a `build` task that depends on `^build`:
+
+```json
+{
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"]
+    }
+  }
+}
+```
+
+Turborepo will build a task graph like this:
+
+![Task graph visualization. The diagram has one node at the top named "apps/web" with two lines that connect to other nodes, "packages/ui" and "packages/utils" respectively.](/images/docs/simple-task-graph.png)
+
+## Transit Nodes
+
+A challenge when building a Task Graph is handling nested dependencies. For
+example, let's say your monorepo has a `docs` app that depends on the `ui`
+package, which depends on the `core` package:
+
+```
+my-monorepo
+└─ apps
+ └─ docs
+└─ packages
+ └─ ui
+ └─ core
+```
+
+Let's assume the `docs` app and the `core` package each have a `build` task, but
+the `ui` package does not. You also have a `turbo.json` that configures the
+`build` task the same way as above with `"dependsOn": ["^build"]`. When you run
+`turbo run build`, what would you expect to happen?
+
+Turborepo will build this Task Graph:
+
+![A Task Graph visualization with a Transit Node. The diagram has one node at the top named "apps/doc" with a line that connects to a "packages/ui" node. This node does not have a "build" task. The "packages/ui" node has another line to a "packages/core" node that does have a "build" task.](/images/docs/transitive-nodes.png)
+
+You can think of this graph in a series of steps:
+
+- The `docs` app only depends on `ui`.
+- The `ui` package does **not** have a build script.
+- The `ui` package's _dependencies_ have a `build` script, so the task graph knows to include those.
+
+Turborepo calls the `ui` package a Transit Node in this scenario, because it
+doesn't have its own `build` script. Since it doesn't have a `build` script,
+Turborepo won't execute anything for it, but it's still part of the graph for
+the purpose of including its own dependencies.
+
+What if we didn't include Transit Nodes in the graph?
+
+In the example above, we're including the `ui` node (and its dependencies) in
+the Task Graph. This is an important distinction to make sure that Turborepo
+misses the cache when you'd expect.
+
+If the default was to **exclude** Transit Nodes, a source code change in the
+`core` package would not invalidate the cache for the `docs` app for
+`turbo run build`, using stale code from previous iterations of your `core`
+package.
+
+### Transit Nodes as entry points
+
+What if the `docs/` package didn't implement the `build` task? What would
+you expect to happen in this case? Should the `ui` and `core` packages still
+execute their build tasks? Should _anything_ happen here?
+
+Turborepo's mental model is that all nodes in the Task Graph are the same. In other words,
+Transit Nodes are included in the graph regardless of where they appear in the graph.
+This mental can have unexpected consequences. For example, let's say you've configured
+your `build` task to depend on `^test`:
+
+```json
+{
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^test"]
+    }
+  }
+}
+```
+
+Let's say your monorepo has many apps and many packages. All packages have
+`test` tasks, but only one app have a `build` task. Turborepo's mental model
+says that when you run `turbo run build`, even if an app doesn't implement `build`
+the `test` task of all packages that are dependencies will show up in the graph.
+
+[1]: https://en.wikipedia.org/wiki/Directed_acyclic_graph
+[2]: /repo/docs/core-concepts/monorepos/task-dependencies

@@ -64,7 +64,12 @@ export function ExampleCard({
         text: `examples/${slug}`,
       });
     }
-  }, [isHoveringStartBuilding, isHoveringDeployNow, copiedStartBuildingCmd]);
+  }, [
+    isHoveringStartBuilding,
+    isHoveringDeployNow,
+    copiedStartBuildingCmd,
+    slug,
+  ]);
 
   return (
     <li className="col-span-1 md:col-span-2 lg:col-span-1 rounded-lg dark:bg-opacity-5 bg-white border-gray-500 text-white flex flex-col divide-y divide-[#dfdfdf] dark:divide-black shadow-lg">
@@ -108,10 +113,12 @@ export function ExampleCard({
           onMouseLeave={() => {
             setIsHoveringStartBuilding(false);
           }}
+          type="button"
         >
           Start Building
         </button>
         {template ? (
+          // eslint-disable-next-line jsx-a11y/anchor-is-valid -- This is an unfornate hack for right now. We need to fix this for a11y.
           <a
             className="flex-1 p-4 rounded-none hover:text-gray-900 dark:hover:text-gray-100"
             href={copiedStartBuildingCmd ? undefined : template}

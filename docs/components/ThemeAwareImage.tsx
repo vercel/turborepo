@@ -10,18 +10,18 @@ interface ImageAttrs {
   props?: ImageProps;
 }
 
-interface Props {
+interface ThemeAwareImageProps {
   className?: string;
   light: ImageAttrs;
   dark: ImageAttrs;
 }
 
-export default function ThemeAwareImage({
+export function ThemeAwareImage({
   className,
   light,
   dark,
   ...other
-}: Props) {
+}: ThemeAwareImageProps) {
   const Images = (
     <>
       <Image

@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh single_package
 
 Check
   $ ${TURBO} run build --summarize > /dev/null
@@ -8,7 +7,7 @@ Check
   $ ls .turbo/runs/*.json | wc -l
   \s*1 (re)
 
-  $ source "$TESTDIR/../_helpers/run-summary-utils.sh"
+  $ source "$TESTDIR/../../../helpers/run_summary.sh"
   $ SUMMARY=$(/bin/ls .turbo/runs/*.json | head -n1)
   $ TASK_SUMMARY=$(getSummaryTask "$SUMMARY" "build")
 
@@ -100,8 +99,8 @@ Check
   []
   $ echo $TASK_SUMMARY | jq '.expandedOutputs'
   [
-    ".turbo/turbo-build.log",
-    "foo"
+    ".turbo(\/|\\\\)turbo-build.log", (re)
+    "foo.txt"
   ]
   $ echo $TASK_SUMMARY | jq '.cache'
   {
@@ -113,12 +112,12 @@ Check
 
   $ rm -r .turbo/runs
 Check Rust implementation
-  $ ${TURBO} run build --summarize --experimental-rust-codepath --no-daemon > /dev/null
+  $ ${TURBO} run build --summarize --no-daemon > /dev/null
   $ test -d .turbo/runs
   $ ls .turbo/runs/*.json | wc -l
   \s*1 (re)
 
-  $ source "$TESTDIR/../_helpers/run-summary-utils.sh"
+  $ source "$TESTDIR/../../../helpers/run_summary.sh"
   $ SUMMARY=$(/bin/ls .turbo/runs/*.json | head -n1)
 
   $ TASK_SUMMARY=$(getSummaryTask "$SUMMARY" "build")

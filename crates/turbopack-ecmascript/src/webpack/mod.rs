@@ -11,13 +11,13 @@ use turbopack_core::{
     resolve::{
         origin::{ResolveOrigin, ResolveOriginExt},
         parse::Request,
-        resolve, AffectingResolvingAssetReference, ModuleResolveResult,
+        resolve, ModuleResolveResult, ModuleResolveResultItem,
     },
     source::Source,
 };
+use turbopack_resolve::ecmascript::apply_cjs_specific_options;
 
 use self::{parse::WebpackRuntime, references::module_references};
-use super::resolve::apply_cjs_specific_options;
 use crate::EcmascriptInputTransforms;
 
 pub mod parse;
@@ -171,22 +171,18 @@ impl ModuleReference for WebpackRuntimeAssetReference {
 
         let resolved = resolve(
             self.origin.origin_path().parent().resolve().await?,
+            Value::new(ReferenceType::CommonJs(CommonJsReferenceSubType::Undefined)),
             self.request,
             options,
         );
 
         Ok(resolved
             .await?
-            .map_module(
-                |source| async move {
-                    Ok(Vc::upcast(WebpackModuleAsset::new(
-                        source,
-                        self.runtime,
-                        self.transforms,
-                    )))
-                },
-                |r| async move { Ok(Vc::upcast(AffectingResolvingAssetReference::new(r))) },
-            )
+            .map_module(|source| async move {
+                Ok(ModuleResolveResultItem::Module(Vc::upcast(
+                    WebpackModuleAsset::new(source, self.runtime, self.transforms),
+                )))
+            })
             .await?
             .cell())
     }

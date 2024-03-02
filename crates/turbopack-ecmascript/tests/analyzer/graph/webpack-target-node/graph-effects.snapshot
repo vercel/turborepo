@@ -69,13 +69,10 @@
             AssignExpr(
                 Left,
             ),
-            PatOrExpr(
-                Pat,
+            AssignTarget(
+                Simple,
             ),
-            Pat(
-                Expr,
-            ),
-            Expr(
+            SimpleAssignTarget(
                 Member,
             ),
         ],
@@ -160,13 +157,10 @@
             AssignExpr(
                 Left,
             ),
-            PatOrExpr(
-                Pat,
+            AssignTarget(
+                Simple,
             ),
-            Pat(
-                Expr,
-            ),
-            Expr(
+            SimpleAssignTarget(
                 Member,
             ),
         ],
@@ -251,13 +245,10 @@
             AssignExpr(
                 Left,
             ),
-            PatOrExpr(
-                Pat,
+            AssignTarget(
+                Simple,
             ),
-            Pat(
-                Expr,
-            ),
-            Expr(
+            SimpleAssignTarget(
                 Member,
             ),
         ],
@@ -2578,13 +2569,10 @@
             AssignExpr(
                 Left,
             ),
-            PatOrExpr(
-                Pat,
+            AssignTarget(
+                Simple,
             ),
-            Pat(
-                Expr,
-            ),
-            Expr(
+            SimpleAssignTarget(
                 Member,
             ),
         ],
@@ -2608,10 +2596,11 @@
         ),
         args: [
             Value(
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
+                Unknown {
+                    original_value: None,
+                    reason: "unsupported expression",
+                    has_side_effects: true,
+                },
             ),
         ],
         ast_path: [
@@ -2854,13 +2843,10 @@
             AssignExpr(
                 Left,
             ),
-            PatOrExpr(
-                Pat,
+            AssignTarget(
+                Simple,
             ),
-            Pat(
-                Expr,
-            ),
-            Expr(
+            SimpleAssignTarget(
                 Member,
             ),
         ],
@@ -2935,13 +2921,10 @@
             AssignExpr(
                 Left,
             ),
-            PatOrExpr(
-                Pat,
+            AssignTarget(
+                Simple,
             ),
-            Pat(
-                Expr,
-            ),
-            Expr(
+            SimpleAssignTarget(
                 Member,
             ),
             MemberExpr(

@@ -7,11 +7,16 @@ license = "MPL-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
 native-tls = ["reqwest/native-tls"]
-rustls-tls = ["reqwest/rustls-tls"]
+rustls-tls = ["reqwest/rustls-tls-native-roots"]
 
 [dev-dependencies]
+http = "0.2.9"
 port_scanner = { workspace = true }
+test-case = { workspace = true }
 turborepo-vercel-api-mock = { workspace = true }
+
+[lints]
+workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
@@ -22,8 +27,10 @@ regex = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 rustc_version_runtime = "0.2.1"
 serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
 turbopath = { workspace = true }
 turborepo-ci = { workspace = true }
 turborepo-vercel-api = { workspace = true }

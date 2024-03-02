@@ -1,4 +1,4 @@
-function PackLogo(props) {
+export function PackLogo(props) {
   return (
     <svg
       {...props}
@@ -70,5 +70,3 @@ function PackLogo(props) {
     </svg>
   );
 }
-
-export default PackLogo;

@@ -6,25 +6,26 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "next": "^13.4.19",
+    "next": "^14.0.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "ui": "workspace:*"
+    "@repo/ui": "workspace:*"
   },
   "devDependencies": {
-    "@next/eslint-plugin-next": "^13.4.19",
-    "@types/node": "^18.11.17",
-    "@types/react": "^18.2.5",
-    "@types/react-dom": "^18.2.4",
-    "autoprefixer": "^10.4.13",
-    "eslint-config-custom": "workspace:*",
-    "postcss": "^8.4.20",
-    "tailwind-config": "workspace:*",
-    "tailwindcss": "^3.2.4",
-    "tsconfig": "workspace:*",
-    "typescript": "^5.1.6"
+    "@next/eslint-plugin-next": "^14.0.4",
+    "@types/node": "^20.10.6",
+    "@types/react": "^18.2.46",
+    "@types/react-dom": "^18.2.18",
+    "autoprefixer": "^10.4.16",
+    "@repo/eslint-config": "workspace:*",
+    "postcss": "^8.4.33",
+    "@repo/tailwind-config": "workspace:*",
+    "tailwindcss": "^3.4.0",
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "^5.3.3"
   }
 }

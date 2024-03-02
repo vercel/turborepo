@@ -1,15 +1,14 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) composable_config
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config
 
   $ ${TURBO} run added-task --filter=add-tasks
   \xe2\x80\xa2 Packages in scope: add-tasks (esc)
   \xe2\x80\xa2 Running added-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  add-tasks:added-task: cache miss, executing c1ae9a604e43b4f1
+  add-tasks:added-task: cache miss, executing 79780b288549784d
   add-tasks:added-task: 
   add-tasks:added-task: > added-task
-  add-tasks:added-task: > echo "running added-task" > out/foo.min.txt
+  add-tasks:added-task: > echo running-added-task > out/foo.min.txt
   add-tasks:added-task: 
   
    Tasks:    1 successful, 1 total

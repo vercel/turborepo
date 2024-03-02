@@ -5,13 +5,16 @@ edition = "2021"
 description = "Watch a set of globs efficiently"
 license = "MIT OR Apache-2.0"
 
+[lints]
+workspace = true
+
 [dependencies]
 camino = "1.1.4"
 futures = { version = "0.3.26" }
 itertools.workspace = true
 merge-streams = "0.1.2"
-notify = "5.1"
-notify-debouncer-mini = { version = "0.2.1", default-features = false }
+notify = { workspace = true }
+notify-debouncer-mini = { workspace = true }
 pin-project = "1.0.12"
 stop-token = "0.7.0"
 thiserror = { workspace = true }

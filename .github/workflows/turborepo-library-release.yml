@@ -2,6 +2,10 @@ name: Turborepo Library Release
 
 on:
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Do a dry run, skipping the final publish step."
+        type: boolean
 
 jobs:
   build:
@@ -27,13 +31,49 @@ jobs:
               echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> $GITHUB_ENV
           - host: ubuntu-latest
             target: "x86_64-unknown-linux-gnu"
+            container: amazon/aws-lambda-nodejs:18
+            install: |
+              yum install -y gcc gcc-c++ git
+              curl https://sh.rustup.rs -sSf | bash -s -- -y
+              npm i -g pnpm@8.9.0
+            setup: |
+              pnpm install
+          - host: ubuntu-latest
+            container: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2023-09-17-alpine
+            install: |
+              apk add libc6-compat curl
+            setup: |
+              pnpm install
+            target: "x86_64-unknown-linux-musl"
+          - host: ubuntu-latest
+            container: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2023-09-17-alpine
+            install: |
+              apk add libc6-compat curl
+              echo /root/.cargo/bin >> ${GITHUB_PATH}
+              echo /usr/local/cargo/bin/rustup >> ${GITHUB_PATH}
+              echo /aarch64-linux-musl-cross/bin >> ${GITHUB_PATH}
+              export PATH=/aarch64-linux-musl-cross/bin:/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
+            setup: |
+              export PATH=/aarch64-linux-musl-cross/bin:/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
+              rustup default $(cat ./rust-toolchain)-aarch64-unknown-linux-musl
+              rustup target add aarch64-unknown-linux-musl
+              rustup toolchain install $(cat ./rust-toolchain)
+              pnpm install
+            target: "aarch64-unknown-linux-musl"
+            rust_env: CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc RUSTFLAGS="-Ctarget-feature=-crt-static"
           - host: windows-latest
             target: "aarch64-pc-windows-msvc"
           - host: windows-latest
             target: "x86_64-pc-windows-msvc"
 
     runs-on: ${{ matrix.settings.host }}
+    container:
+      image: ${{ matrix.settings.container }}
     steps:
+      - name: Install Packages
+        run: ${{ matrix.settings.install }}
+        if: ${{ matrix.settings.install }}
+
       - name: Checkout
         uses: actions/checkout@v3
         with:
@@ -43,11 +83,13 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           targets: ${{ matrix.settings.target }}
+        if: ${{ !matrix.settings.install }}
 
       - name: Setup Node
         uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
+        if: ${{ !matrix.settings.install }}
 
       - name: Setup toolchain
         run: ${{ matrix.settings.setup }}
@@ -56,7 +98,7 @@ jobs:
       - name: Build native library
         run: |
           cd packages/turbo-repository
-          pnpm build:release --target=${{ matrix.settings.target }}
+          ${{ matrix.settings.rust_env }} pnpm build:release --target=${{ matrix.settings.target }}
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
@@ -89,7 +131,9 @@ jobs:
           mv native-packages/turbo-library-aarch64-apple-darwin/@turbo/repository.darwin-arm64.node packages/turbo-repository/npm/darwin-arm64/
           mv native-packages/turbo-library-x86_64-apple-darwin/@turbo/repository.darwin-x64.node packages/turbo-repository/npm/darwin-x64/
           mv native-packages/turbo-library-aarch64-unknown-linux-gnu/@turbo/repository.linux-arm64-gnu.node packages/turbo-repository/npm/linux-arm64-gnu/
+          mv native-packages/turbo-library-aarch64-unknown-linux-musl/@turbo/repository.linux-arm64-musl.node packages/turbo-repository/npm/linux-arm64-musl/
           mv native-packages/turbo-library-x86_64-unknown-linux-gnu/@turbo/repository.linux-x64-gnu.node packages/turbo-repository/npm/linux-x64-gnu/
+          mv native-packages/turbo-library-x86_64-unknown-linux-musl/@turbo/repository.linux-x64-musl.node packages/turbo-repository/npm/linux-x64-musl/
           mv native-packages/turbo-library-aarch64-pc-windows-msvc/@turbo/repository.win32-arm64-msvc.node packages/turbo-repository/npm/win32-arm64-msvc/
           mv native-packages/turbo-library-x86_64-pc-windows-msvc/@turbo/repository.win32-x64-msvc.node packages/turbo-repository/npm/win32-x64-msvc/
 
@@ -104,7 +148,9 @@ jobs:
           npm pack packages/turbo-repository/npm/darwin-arm64
           npm pack packages/turbo-repository/npm/darwin-x64
           npm pack packages/turbo-repository/npm/linux-arm64-gnu
+          npm pack packages/turbo-repository/npm/linux-arm64-musl
           npm pack packages/turbo-repository/npm/linux-x64-gnu
+          npm pack packages/turbo-repository/npm/linux-x64-musl
           npm pack packages/turbo-repository/npm/win32-arm64-msvc
           npm pack packages/turbo-repository/npm/win32-x64-msvc
           npm pack packages/turbo-repository/js
@@ -119,6 +165,7 @@ jobs:
       - name: Publish Artifacts
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        if: ${{ !inputs.dry_run }}
         run: |
           npm config set --location=project "//registry.npmjs.org/:_authToken" ${NPM_TOKEN}
           VERSION=$(jq -r .version packages/turbo-repository/js/package.json)
@@ -128,7 +175,9 @@ jobs:
           npm publish -ddd --tag ${TAG} --access public turbo-repository-darwin-arm64-${VERSION}.tgz
           npm publish -ddd --tag ${TAG} --access public turbo-repository-darwin-x64-${VERSION}.tgz
           npm publish -ddd --tag ${TAG} --access public turbo-repository-linux-arm64-gnu-${VERSION}.tgz
+          npm publish -ddd --tag ${TAG} --access public turbo-repository-linux-arm64-musl-${VERSION}.tgz
           npm publish -ddd --tag ${TAG} --access public turbo-repository-linux-x64-gnu-${VERSION}.tgz
+          npm publish -ddd --tag ${TAG} --access public turbo-repository-linux-x64-musl-${VERSION}.tgz
           npm publish -ddd --tag ${TAG} --access public turbo-repository-win32-arm64-msvc-${VERSION}.tgz
           npm publish -ddd --tag ${TAG} --access public turbo-repository-win32-x64-msvc-${VERSION}.tgz
           npm publish -ddd --tag ${TAG} --access public turbo-repository-${VERSION}.tgz

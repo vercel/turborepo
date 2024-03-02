@@ -1,15 +1,17 @@
-use std::{backtrace, io};
+use std::backtrace;
 
+use miette::Diagnostic;
 use thiserror::Error;
-use turbopath::AbsoluteSystemPathBuf;
+use turborepo_repository::package_graph;
 
 use crate::{
-    commands::{bin, prune},
+    commands::{bin, generate, prune},
     daemon::DaemonError,
     rewrite_json::RewriteError,
+    run,
 };
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum Error {
     #[error("No command specified")]
     NoCommand(#[backtrace] backtrace::Backtrace),
@@ -20,19 +22,12 @@ pub enum Error {
     #[error("at least one task must be specified")]
     NoTasks(#[backtrace] backtrace::Backtrace),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Config(#[from] crate::config::Error),
     #[error(transparent)]
     ChromeTracing(#[from] crate::tracing::Error),
-    #[error("Encountered an IO error while attempting to read {config_path}: {error}")]
-    FailedToReadConfig {
-        config_path: AbsoluteSystemPathBuf,
-        error: io::Error,
-    },
-    #[error("Encountered an IO error while attempting to set {config_path}: {error}")]
-    FailedToSetConfig {
-        config_path: AbsoluteSystemPathBuf,
-        error: io::Error,
-    },
+    #[error(transparent)]
+    BuildPackageGraph(#[from] package_graph::builder::Error),
     #[error(transparent)]
     Rewrite(#[from] RewriteError),
     #[error(transparent)]
@@ -40,8 +35,17 @@ pub enum Error {
     #[error(transparent)]
     Daemon(#[from] DaemonError),
     #[error(transparent)]
-    Prune(#[from] prune::Error),
-    // Temporary to prevent having to move all of the errors from anyhow to thiserror at once.
+    Generate(#[from] generate::Error),
     #[error(transparent)]
-    Anyhow(#[from] anyhow::Error),
+    #[diagnostic(transparent)]
+    Prune(#[from] prune::Error),
+    #[error(transparent)]
+    PackageJson(#[from] turborepo_repository::package_json::Error),
+    #[error(transparent)]
+    PackageManager(#[from] turborepo_repository::package_manager::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Run(#[from] run::Error),
+    #[error(transparent)]
+    SerdeJson(#[from] serde_json::Error),
 }

@@ -6,6 +6,7 @@ use crate::{
     cli,
     cli::{Error, LinkTarget},
     commands::CommandBase,
+    config,
     rewrite_json::unset_path,
 };
 
@@ -23,7 +24,7 @@ fn unlink_remote_caching(base: &mut CommandBase) -> Result<(), cli::Error> {
 
         let before = local_config_path
             .read_existing_to_string_or(Ok("{}"))
-            .map_err(|error| cli::Error::FailedToReadConfig {
+            .map_err(|error| config::Error::FailedToReadConfig {
                 config_path: local_config_path.clone(),
                 error,
             })?;
@@ -32,14 +33,14 @@ fn unlink_remote_caching(base: &mut CommandBase) -> Result<(), cli::Error> {
 
         local_config_path
             .ensure_dir()
-            .map_err(|error| cli::Error::FailedToSetConfig {
+            .map_err(|error| config::Error::FailedToSetConfig {
                 config_path: local_config_path.clone(),
                 error,
             })?;
 
         local_config_path
             .create_with_contents(no_slug)
-            .map_err(|error| cli::Error::FailedToSetConfig {
+            .map_err(|error| config::Error::FailedToSetConfig {
                 config_path: local_config_path.clone(),
                 error,
             })?;
@@ -62,7 +63,7 @@ fn unlink_spaces(base: &mut CommandBase) -> Result<(), cli::Error> {
         let local_config_path = base.local_config_path();
         let before = local_config_path
             .read_existing_to_string_or(Ok("{}"))
-            .map_err(|e| Error::FailedToReadConfig {
+            .map_err(|e| config::Error::FailedToReadConfig {
                 config_path: local_config_path.clone(),
                 error: e,
             })?;
@@ -71,14 +72,14 @@ fn unlink_spaces(base: &mut CommandBase) -> Result<(), cli::Error> {
 
         local_config_path
             .ensure_dir()
-            .map_err(|e| Error::FailedToSetConfig {
+            .map_err(|e| config::Error::FailedToSetConfig {
                 config_path: local_config_path.clone(),
                 error: e,
             })?;
 
         local_config_path
             .create_with_contents(no_slug)
-            .map_err(|e| Error::FailedToSetConfig {
+            .map_err(|e| config::Error::FailedToSetConfig {
                 config_path: local_config_path.clone(),
                 error: e,
             })?;
@@ -113,14 +114,14 @@ pub fn unlink(base: &mut CommandBase, target: LinkTarget) -> Result<(), cli::Err
 fn remove_spaces_from_turbo_json(base: &CommandBase) -> Result<UnlinkSpacesResult, Error> {
     let turbo_json_path = base.repo_root.join_component("turbo.json");
     let turbo_json =
-        fs::read_to_string(&turbo_json_path).map_err(|e| Error::FailedToReadConfig {
+        fs::read_to_string(&turbo_json_path).map_err(|e| config::Error::FailedToReadConfig {
             config_path: turbo_json_path.clone(),
             error: e,
         })?;
 
     let output = unset_path(&turbo_json, &["experimentalSpaces", "id"], true)?;
     if let Some(output) = output {
-        fs::write(&turbo_json_path, output).map_err(|e| Error::FailedToSetConfig {
+        fs::write(&turbo_json_path, output).map_err(|e| config::Error::FailedToSetConfig {
             config_path: turbo_json_path.clone(),
             error: e,
         })?;

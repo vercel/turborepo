@@ -1,12 +1,11 @@
 #![allow(clippy::items_after_test_module)]
 #![feature(arbitrary_self_types)]
-#![feature(async_fn_in_trait)]
 
 mod helpers;
 #[cfg(feature = "bench_against_node_nft")]
 use std::time::Instant;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     env::temp_dir,
     fmt::Display,
     fs::{
@@ -34,7 +33,7 @@ use turbo_tasks_fs::{DiskFileSystem, FileSystem, FileSystemPath};
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
     emit_with_completion, module_options::ModuleOptionsContext, rebase::RebasedAsset, register,
-    resolve_options_context::ResolveOptionsContext, ModuleAssetContext,
+    ModuleAssetContext,
 };
 use turbopack_core::{
     compile_time_info::CompileTimeInfo,
@@ -44,6 +43,7 @@ use turbopack_core::{
     output::OutputAsset,
     reference_type::ReferenceType,
 };
+use turbopack_resolve::resolve_options_context::ResolveOptionsContext;
 
 #[global_allocator]
 static ALLOC: turbo_tasks_malloc::TurboMalloc = turbo_tasks_malloc::TurboMalloc;
@@ -206,6 +206,7 @@ static ALLOC: turbo_tasks_malloc::TurboMalloc = turbo_tasks_malloc::TurboMalloc;
     CaseInput::new("integration/package-exports/fail/alt-multiple.js")
         .expected_stderr("Error [ERR_MODULE_NOT_FOUND]: Cannot find module")
 )]
+#[case::read_file("integration/read-file.mjs")]
 #[cfg_attr(
     not(feature = "bench_against_node_nft"),
     //[TODO]: WEB-1188 reenable once fixed.
@@ -403,6 +404,7 @@ fn node_file_trace<B: Backend + 'static>(
                 let workspace_fs: Vc<Box<dyn FileSystem>> = Vc::upcast(DiskFileSystem::new(
                     "workspace".to_string(),
                     package_root.clone(),
+                    vec![],
                 ));
                 let input_dir = workspace_fs.root();
                 let input = input_dir.join(format!("tests/{input_string}"));
@@ -410,7 +412,8 @@ fn node_file_trace<B: Backend + 'static>(
                 #[cfg(not(feature = "bench_against_node_nft"))]
                 let original_output = exec_node(package_root, input);
 
-                let output_fs = DiskFileSystem::new("output".to_string(), directory.clone());
+                let output_fs =
+                    DiskFileSystem::new("output".to_string(), directory.clone(), vec![]);
                 let output_dir = output_fs.root();
 
                 let source = FileSource::new(input);
@@ -438,11 +441,15 @@ fn node_file_trace<B: Backend + 'static>(
                     Vc::cell("test".to_string()),
                 );
                 let module = module_asset_context
-                    .process(Vc::upcast(source), Value::new(ReferenceType::Undefined));
+                    .process(Vc::upcast(source), Value::new(ReferenceType::Undefined))
+                    .module();
                 let rebased = RebasedAsset::new(Vc::upcast(module), input_dir, output_dir);
 
                 #[cfg(not(feature = "bench_against_node_nft"))]
                 let output_path = rebased.ident().path();
+
+                print_graph(Vc::upcast(rebased)).await?;
+
                 emit_with_completion(Vc::upcast(rebased), output_dir).await?;
 
                 #[cfg(not(feature = "bench_against_node_nft"))]
@@ -729,4 +736,28 @@ impl std::str::FromStr for CaseInput {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self::new(s))
     }
+}
+
+async fn print_graph(asset: Vc<Box<dyn OutputAsset>>) -> Result<()> {
+    let mut visited = HashSet::new();
+    let mut queue = Vec::new();
+    queue.push((0, asset));
+    while let Some((depth, asset)) = queue.pop() {
+        let references = asset.references().await?;
+        let mut indent = String::new();
+        for _ in 0..depth {
+            indent.push_str("  ");
+        }
+        if visited.insert(asset) {
+            for &asset in references.iter().rev() {
+                queue.push((depth + 1, asset));
+            }
+            println!("{}{}", indent, asset.ident().to_string().await?);
+        } else if references.is_empty() {
+            println!("{}{} *", indent, asset.ident().to_string().await?);
+        } else {
+            println!("{}{} *...", indent, asset.ident().to_string().await?);
+        }
+    }
+    Ok(())
 }

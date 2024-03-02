@@ -12,29 +12,59 @@ use regex::Regex;
 use tracing::Level;
 use turbo_tasks::{ReadRef, TryJoinIterExt, ValueToString, Vc};
 
-use super::{AsyncModuleInfo, Chunk, ChunkItem, ChunkType, ChunkingContext};
+use super::{
+    AsyncModuleInfo, Chunk, ChunkItem, ChunkItemsWithAsyncModuleInfo, ChunkType, ChunkingContext,
+    Chunks,
+};
 use crate::output::OutputAssets;
+
+#[turbo_tasks::value]
+struct ChunkItemInfo {
+    ty: Vc<Box<dyn ChunkType>>,
+    name: Vc<String>,
+    size: usize,
+}
+
+#[turbo_tasks::function]
+async fn chunk_item_info(
+    chunking_context: Vc<Box<dyn ChunkingContext>>,
+    chunk_item: Vc<Box<dyn ChunkItem>>,
+    async_info: Option<Vc<AsyncModuleInfo>>,
+) -> Result<Vc<ChunkItemInfo>> {
+    let asset_ident = chunk_item.asset_ident().to_string();
+    let ty = chunk_item.ty().resolve().await?;
+    let chunk_item_size = ty.chunk_item_size(chunking_context, chunk_item, async_info);
+    Ok(ChunkItemInfo {
+        ty,
+        size: *chunk_item_size.await?,
+        name: asset_ident.resolve().await?,
+    }
+    .cell())
+}
 
 /// Creates chunks based on heuristics for the passed `chunk_items`. Also
 /// attaches `referenced_output_assets` to the first chunk.
-#[tracing::instrument(level = Level::TRACE, skip_all)]
+#[turbo_tasks::function]
 pub async fn make_chunks(
     chunking_context: Vc<Box<dyn ChunkingContext>>,
-    chunk_items: impl IntoIterator<Item = (Vc<Box<dyn ChunkItem>>, Option<Vc<AsyncModuleInfo>>)>,
-    key_prefix: &str,
+    chunk_items: Vc<ChunkItemsWithAsyncModuleInfo>,
+    key_prefix: String,
     mut referenced_output_assets: Vc<OutputAssets>,
-) -> Result<Vec<Vc<Box<dyn Chunk>>>> {
+) -> Result<Vc<Chunks>> {
     let chunk_items = chunk_items
-        .into_iter()
-        .map(|(chunk_item, async_info)| async move {
-            let ty = chunk_item.ty().resolve().await?;
-            Ok((ty, chunk_item, async_info))
+        .await?
+        .iter()
+        .map(|&(chunk_item, async_info)| async move {
+            let chunk_item_info = chunk_item_info(chunking_context, chunk_item, async_info).await?;
+            Ok((chunk_item, async_info, chunk_item_info))
         })
         .try_join()
         .await?;
     let mut map = IndexMap::<_, Vec<_>>::new();
-    for (ty, chunk_item, async_info) in chunk_items {
-        map.entry(ty).or_default().push((chunk_item, async_info));
+    for (chunk_item, async_info, chunk_item_info) in chunk_items {
+        map.entry(chunk_item_info.ty)
+            .or_default()
+            .push((chunk_item, async_info, chunk_item_info));
     }
 
     let mut chunks = Vec::new();
@@ -43,13 +73,12 @@ pub async fn make_chunks(
 
         let chunk_items = chunk_items
             .into_iter()
-            .map(|(chunk_item, async_info)| async move {
+            .map(|(chunk_item, async_info, chunk_item_info)| async move {
                 Ok((
                     chunk_item,
                     async_info,
-                    *ty.chunk_item_size(chunking_context, chunk_item, async_info)
-                        .await?,
-                    chunk_item.asset_ident().to_string().await?,
+                    chunk_item_info.size,
+                    chunk_item_info.name.await?,
                 ))
             })
             .try_join()
@@ -71,7 +100,7 @@ pub async fn make_chunks(
         .await?;
     }
 
-    Ok(chunks)
+    Ok(Vc::cell(chunks))
 }
 
 type ChunkItemWithInfo = (
@@ -114,7 +143,7 @@ async fn handle_split_group(
 
 /// Creates a chunk with the given `chunk_items. `key` should be unique and is
 /// used with [keyed_cell] to place the chunk items into a cell.
-#[tracing::instrument(level = Level::TRACE, skip(chunk_items, split_context))]
+#[tracing::instrument(level = Level::TRACE, skip_all, fields(key = display(key)))]
 async fn make_chunk(
     chunk_items: Vec<ChunkItemWithInfo>,
     key: &mut String,
@@ -138,7 +167,7 @@ async fn make_chunk(
 
 /// Split chunk items into app code and vendor code. Continues splitting with
 /// [package_name_split] if necessary.
-#[tracing::instrument(level = Level::TRACE, skip(chunk_items, split_context))]
+#[tracing::instrument(level = Level::TRACE, skip_all, fields(name = display(&name)))]
 async fn app_vendors_split(
     chunk_items: Vec<ChunkItemWithInfo>,
     mut name: String,
@@ -187,7 +216,7 @@ async fn app_vendors_split(
 
 /// Split chunk items by node_modules package name. Continues splitting with
 /// [folder_split] if necessary.
-#[tracing::instrument(level = Level::TRACE, skip(chunk_items, split_context))]
+#[tracing::instrument(level = Level::TRACE, skip_all, fields(name = display(&name)))]
 async fn package_name_split(
     chunk_items: Vec<ChunkItemWithInfo>,
     mut name: String,
@@ -229,7 +258,7 @@ fn folder_split_boxed<'a, 'b>(
 }
 
 /// Split chunk items by folder structure.
-#[tracing::instrument(level = Level::TRACE, skip(chunk_items, split_context))]
+#[tracing::instrument(level = Level::TRACE, skip_all, fields(name = display(&name), location))]
 async fn folder_split(
     mut chunk_items: Vec<ChunkItemWithInfo>,
     mut location: usize,
@@ -312,8 +341,8 @@ fn folder_name(ident: &str, location: usize) -> (&str, Option<usize>) {
     }
 }
 
-const LARGE_CHUNK: usize = 300_000;
-const SMALL_CHUNK: usize = 30_000;
+const LARGE_CHUNK: usize = 1_000_000;
+const SMALL_CHUNK: usize = 100_000;
 
 enum ChunkSize {
     Large,

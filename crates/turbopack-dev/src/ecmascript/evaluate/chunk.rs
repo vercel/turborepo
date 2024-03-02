@@ -145,6 +145,7 @@ impl EcmascriptDevEvaluateChunk {
                 let runtime_code = turbopack_ecmascript_runtime::get_dev_runtime_code(
                     environment,
                     chunking_context.chunk_base_path(),
+                    Vc::cell(output_root.to_string()),
                 );
                 code.push_code(&*runtime_code.await?);
             }
@@ -157,7 +158,11 @@ impl EcmascriptDevEvaluateChunk {
 
         if code.has_source_map() {
             let filename = chunk_path.file_name();
-            write!(code, "\n\n//# sourceMappingURL={}.map", filename)?;
+            write!(
+                code,
+                "\n\n//# sourceMappingURL={}.map",
+                urlencoding::encode(filename)
+            )?;
         }
 
         Ok(Code::cell(code.build()))

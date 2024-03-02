@@ -19,6 +19,7 @@ pub enum Error {
     NonUTF8(#[from] std::str::Utf8Error),
 }
 
+#[derive(Debug)]
 pub struct Yarn1Lockfile {
     inner: Map<String, Entry>,
 }
@@ -54,6 +55,7 @@ impl FromStr for Yarn1Lockfile {
 }
 
 impl Lockfile for Yarn1Lockfile {
+    #[tracing::instrument(skip(self, _workspace_path))]
     fn resolve_package(
         &self,
         _workspace_path: &str,
@@ -72,6 +74,7 @@ impl Lockfile for Yarn1Lockfile {
         Ok(None)
     }
 
+    #[tracing::instrument(skip(self))]
     fn all_dependencies(
         &self,
         key: &str,

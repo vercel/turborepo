@@ -7,7 +7,7 @@ use swc_core::common::{
 };
 use turbo_tasks::Vc;
 use turbopack_core::{
-    issue::{analyze::AnalyzeIssue, IssueExt, IssueSeverity, IssueSource},
+    issue::{analyze::AnalyzeIssue, IssueExt, IssueSeverity, IssueSource, StyledString},
     source::Source,
 };
 
@@ -41,11 +41,7 @@ impl Emitter for IssueEmitter {
         }
 
         let source = db.span.primary_span().map(|span| {
-            IssueSource::from_byte_offset(
-                self.source,
-                self.source_map.lookup_byte_offset(span.lo()).pos.to_usize(),
-                self.source_map.lookup_byte_offset(span.lo()).pos.to_usize(),
-            )
+            IssueSource::from_swc_offsets(self.source, span.lo.to_usize(), span.hi.to_usize())
         });
         // TODO add other primary and secondary spans with labels as sub_issues
 
@@ -61,10 +57,9 @@ impl Emitter for IssueEmitter {
                 Level::FailureNote => IssueSeverity::Note,
             }
             .cell(),
-            category: Vc::cell("parse".to_string()),
             source_ident: self.source.ident(),
             title: Vc::cell(title),
-            message: Vc::cell(message),
+            message: StyledString::Text(message).cell(),
             code,
             source,
         }

@@ -7,14 +7,20 @@ license = "MPL-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
 anyhow = { workspace = true }
+indoc.workspace = true
 tempfile = { workspace = true }
 test-case = { workspace = true }
+
+[lints]
+workspace = true
 
 [dependencies]
 atty = { workspace = true }
 console = { workspace = true }
+crossterm = "0.26.1"
 indicatif = { workspace = true }
 lazy_static = { workspace = true }
+ratatui = "0.26.1"
 thiserror = { workspace = true }
 tracing = { workspace = true }
 turbopath = { workspace = true }

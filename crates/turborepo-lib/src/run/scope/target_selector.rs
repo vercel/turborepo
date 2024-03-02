@@ -120,7 +120,11 @@ impl FromStr for TargetSelector {
             if directory.is_empty() {
                 return Err(InvalidSelectorError::EmptyPathSpecification);
             } else {
-                parent_dir = AnchoredSystemPathBuf::try_from(directory.as_str())
+                let clean_directory = path_clean::clean(std::path::Path::new(directory.as_str()))
+                    .into_os_string()
+                    .into_string()
+                    .expect("directory was valid utf8 before cleaning");
+                parent_dir = AnchoredSystemPathBuf::try_from(clean_directory.as_str())
                     .map_err(|_| InvalidSelectorError::InvalidAnchoredPath(directory))?;
             }
         }
@@ -195,8 +199,12 @@ pub fn is_selector_by_location(
             .iter()
             .any(|prefix| raw_selector.starts_with(prefix))
     {
+        let cleaned_selector = path_clean::clean(std::path::Path::new(raw_selector))
+            .into_os_string()
+            .into_string()
+            .expect("raw selector was valid utf8");
         Some(
-            AnchoredSystemPathBuf::try_from(raw_selector)
+            AnchoredSystemPathBuf::try_from(cleaned_selector.as_str())
                 .map_err(|_| InvalidSelectorError::InvalidAnchoredPath(raw_selector.to_string())),
         )
     } else {
@@ -219,9 +227,10 @@ mod test {
     #[test_case("...foo...", TargetSelector { name_pattern: "foo".to_string(), raw: "...foo...".to_string(), include_dependents: true, include_dependencies: true, ..Default::default() }; "dot dot dot foo dot dot dot")]
     #[test_case("foo^...", TargetSelector { name_pattern: "foo".to_string(), raw: "foo^...".to_string(), include_dependencies: true, exclude_self: true, ..Default::default() }; "foo caret dot dot dot")]
     #[test_case("...^foo", TargetSelector { name_pattern: "foo".to_string(), raw: "...^foo".to_string(), include_dependents: true, exclude_self: true, ..Default::default() }; "dot dot dot caret foo")]
-    #[test_case("./foo", TargetSelector { raw: "./foo".to_string(), parent_dir: AnchoredSystemPathBuf::try_from("./foo").unwrap(), ..Default::default() }; "dot slash foo")]
-    #[test_case("../foo", TargetSelector { raw: "../foo".to_string(), parent_dir: AnchoredSystemPathBuf::try_from("../foo").unwrap(), ..Default::default() }; "dot dot slash foo")]
-    #[test_case("...{./foo}", TargetSelector { raw: "...{./foo}".to_string(), parent_dir: AnchoredSystemPathBuf::try_from("./foo").unwrap(), include_dependents: true, ..Default::default() }; "dot dot dot curly bracket foo")]
+    #[test_case("../foo", TargetSelector { raw: "../foo".to_string(), parent_dir: AnchoredSystemPathBuf::try_from(if cfg!(windows) { "..\\foo" } else { "../foo" }).unwrap(), ..Default::default() }; "dot dot slash foo")]
+    #[test_case("./foo", TargetSelector { raw: "./foo".to_string(), parent_dir: AnchoredSystemPathBuf::try_from("foo").unwrap(), ..Default::default() }; "dot slash foo")]
+    #[test_case("./foo/*", TargetSelector { raw: "./foo/*".to_string(), parent_dir: AnchoredSystemPathBuf::try_from(if cfg!(windows) { "foo\\*" } else { "foo/*" }).unwrap(), ..Default::default() }; "dot slash foo star")]
+    #[test_case("...{./foo}", TargetSelector { raw: "...{./foo}".to_string(), parent_dir: AnchoredSystemPathBuf::try_from("foo").unwrap(), include_dependents: true, ..Default::default() }; "dot dot dot curly bracket foo")]
     #[test_case(".", TargetSelector { raw: ".".to_string(), parent_dir: AnchoredSystemPathBuf::try_from(".").unwrap(), ..Default::default() }; "parent dir dot")]
     #[test_case("..", TargetSelector { raw: "..".to_string(), parent_dir: AnchoredSystemPathBuf::try_from("..").unwrap(), ..Default::default() }; "parent dir dot dot")]
     #[test_case("[master]", TargetSelector { raw: "[master]".to_string(), from_ref: "master".to_string(), ..Default::default() }; "square brackets master")]

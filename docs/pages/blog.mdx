@@ -21,10 +21,24 @@ export function BlogHeader() {
 
 export function BlogIndex() {
   return getPagesUnderRoute("/blog").map((page) => {
+
+    // If the page has a `href` front matter item, we'll render it as an external link
+    const externalLinkProps = page.frontMatter.href
+      ? {
+          href: page.frontMatter.href,
+          target: "_blank",
+          rel: "noopener noreferrer",
+        }
+      : {};
+
     return (
       <div key={page.route} className="mb-10">
-        <Link href={page.route} style={{ color: "inherit", textDecoration: "none" }} className="block font-semibold mt-8 text-2xl">
-          {page.meta?.title || page.frontMatter?.title || page.name}
+        <Link
+          href={page.route}
+          style={{ color: "inherit", textDecoration: "none" }} className="block font-semibold mt-8 text-2xl"
+          {...externalLinkProps}
+          >
+            {page.meta?.title || page.frontMatter?.title || page.name}
         </Link>
         <p className="opacity-80" style={{ marginTop: ".5rem" }}>
           {page.frontMatter?.description}{" "}
@@ -37,7 +51,8 @@ export function BlogIndex() {
         ) : null}
       </div>
     );
-  });
+
+});
 }
 
 <BlogHeader />

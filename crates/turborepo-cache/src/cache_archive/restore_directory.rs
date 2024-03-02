@@ -62,6 +62,8 @@ impl CachedDirTree {
         self.prefix.push(new_component);
     }
 
+    // Windows doesn't have file modes, so mode is unused
+    #[allow(unused_variables)]
     pub fn safe_mkdir_all(
         &mut self,
         anchor: &AbsoluteSystemPath,

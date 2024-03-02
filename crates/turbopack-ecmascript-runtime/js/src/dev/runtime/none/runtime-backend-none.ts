@@ -6,6 +6,8 @@
  */
 
 /// <reference path="../base/runtime-base.ts" />
+/// <reference path="../../../shared-node/base-externals-utils.ts" />
+/// <reference path="../../../shared/require-type.d.ts" />
 
 type ChunkRunner = {
   requiredChunks: Set<ChunkPath>;
@@ -15,31 +17,70 @@ type ChunkRunner = {
 
 let BACKEND: RuntimeBackend;
 
-function augmentContext(context: TurbopackDevBaseContext): TurbopackDevContext {
-  return context;
+type ExternalRequire = (
+  id: ModuleId,
+  esm?: boolean
+) => Exports | EsmNamespaceObject;
+type ExternalImport = (id: ModuleId) => Promise<Exports | EsmNamespaceObject>;
+
+interface TurbopackDevContext extends TurbopackDevBaseContext {
+  x: ExternalRequire;
+  y: ExternalImport;
 }
 
-function commonJsRequireContext(
-  entry: RequireContextEntry,
-  sourceModule: Module
-): Exports {
-  return commonJsRequire(sourceModule, entry.id());
+function augmentContext(context: TurbopackDevBaseContext): TurbopackDevContext {
+  const nodejsContext = context as TurbopackDevContext;
+  nodejsContext.x = externalRequire;
+  nodejsContext.y = externalImport;
+  return nodejsContext;
 }
 
 async function loadWebAssembly(
-  _source: SourceInfo,
-  _id: ModuleId,
-  _importsObj: any
+  source: SourceInfo,
+  chunkPath: ChunkPath,
+  imports: WebAssembly.Imports
 ): Promise<Exports> {
-  throw new Error("loading WebAssembly is not supported");
+  const module = await loadWebAssemblyModule(source, chunkPath);
+
+  return await WebAssembly.instantiate(module, imports);
 }
 
+function getFileStem(path: string): string {
+  const fileName = path.split("/").pop()!;
+
+  const stem = fileName.split(".").shift()!;
+
+  if (stem == "") {
+    return fileName;
+  }
+
+  return stem;
+}
+
+type GlobalWithInjectedWebAssembly = typeof globalThis & {
+  [key: `wasm_${string}`]: WebAssembly.Module;
+};
 
 async function loadWebAssemblyModule(
   _source: SourceInfo,
-  _id: ModuleId,
-): Promise<any> {
-  throw new Error("loading WebAssembly is not supported");
+  chunkPath: ChunkPath
+): Promise<WebAssembly.Module> {
+  const stem = getFileStem(chunkPath);
+
+  // very simple escaping just replacing unsupported characters with `_`
+  const escaped = stem.replace(/[^a-zA-Z0-9$_]/gi, "_");
+
+  const identifier: `wasm_${string}` = `wasm_${escaped}`;
+
+  const module = (globalThis as GlobalWithInjectedWebAssembly)[identifier];
+
+  if (!module) {
+    throw new Error(
+      `dynamically loading WebAssembly is not supported in this runtime and global \`${identifier}\` was not injected`
+    );
+  }
+
+  return module;
 }
 
 (() => {
@@ -75,7 +116,7 @@ async function loadWebAssemblyModule(
       }
     },
 
-    loadChunk(chunkPath, fromChunkPath) {
+    loadChunk(_chunkPath, _fromChunkPath) {
       throw new Error("chunk loading is not supported");
     },
 
@@ -156,6 +197,6 @@ async function loadWebAssemblyModule(
   }
 })();
 
-function _eval({ code, url, map }: EcmascriptModuleEntry): ModuleFactory {
+function _eval(_: EcmascriptModuleEntry): ModuleFactory {
   throw new Error("HMR evaluation is not implemented on this backend");
 }

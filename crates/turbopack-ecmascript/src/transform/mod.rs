@@ -21,7 +21,7 @@ use turbo_tasks::{ValueDefault, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     environment::Environment,
-    issue::{Issue, IssueSeverity},
+    issue::{Issue, IssueSeverity, IssueStage, StyledString},
 };
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
@@ -299,13 +299,11 @@ impl Issue for UnsupportedServerActionIssue {
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("unsupported".to_string())
-    }
-
-    #[turbo_tasks::function]
-    fn title(&self) -> Vc<String> {
-        Vc::cell("Server actions (\"use server\") are not yet supported in Turbopack".into())
+    fn title(&self) -> Vc<StyledString> {
+        StyledString::Text(
+            "Server actions (\"use server\") are not yet supported in Turbopack".into(),
+        )
+        .cell()
     }
 
     #[turbo_tasks::function]
@@ -314,7 +312,7 @@ impl Issue for UnsupportedServerActionIssue {
     }
 
     #[turbo_tasks::function]
-    async fn description(&self) -> Result<Vc<String>> {
-        Ok(Vc::cell("".to_string()))
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::Transform.cell()
     }
 }

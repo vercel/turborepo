@@ -1,7 +1,6 @@
 
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) task_dependencies/complex
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh task_dependencies/complex
 
 # Workspace Graph:
 # app-a -> lib-a
@@ -33,15 +32,16 @@ We can scope the run to specific packages
 
 
 Can't depend on unknown tasks
-  $ ${TURBO} run build2
-  Error: Could not find "app-a#custom" in root turbo.json or "custom" in workspace
+  $ ${TURBO} run build2 > BUILD2 2>&1
   [1]
+  $ cat BUILD2 | grep --only-match 'x Could not find "app-a#custom" in root turbo.json or "custom" in package'
+  x Could not find "app-a#custom" in root turbo.json or "custom" in package
 
 Can't depend on tasks from unknown packages
-  $ ${TURBO} run build3
-  Error: Could not find workspace "unknown" from task "unknown#custom" in project
+  $ ${TURBO} run build3 > BUILD3 2>&1
   [1]
-
+  $ cat BUILD3 | grep --only-match 'x Could not find package "unknown" from task "unknown#custom" in project'
+  x Could not find package "unknown" from task "unknown#custom" in project
 
 Complex dependency chain
   $ ${TURBO} run test --graph
@@ -98,6 +98,7 @@ Check that --only only runs leaf tasks
 
 
 Can't depend on itself
-  $ ${TURBO} run build4
-  Error: (lib-a|lib-b|lib-c|lib-d|app-a|app-b)#build4 depends on itself (re)
+  $ ${TURBO} run build4 > BUILD4 2>&1
   [1]
+  $ cat BUILD4 | grep --only-match -E '(lib-a|lib-b|lib-c|lib-d|app-a|app-b)#build4 depends on itself'
+  (lib-a|lib-b|lib-c|lib-d|app-a|app-b)#build4 depends on itself (re)

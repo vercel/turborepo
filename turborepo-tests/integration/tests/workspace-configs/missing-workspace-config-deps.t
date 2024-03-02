@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) composable_config
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config
 
 # The missing-workspace-config-task-with-deps configures dependsOn in the root turbo.json.
 # The workspace does not have a turbo.json config. This test checks that both regular dependencies
@@ -16,25 +15,25 @@ Setup
   \xe2\x80\xa2 Remote caching disabled (esc)
 
   $ cat tmp.log | grep "missing-workspace-config:missing-workspace-config-task-with-deps"
-  missing-workspace-config:missing-workspace-config-task-with-deps: cache miss, executing 11e9ca65b3cd782d
+  missing-workspace-config:missing-workspace-config-task-with-deps: cache miss, executing cb5a7b7c7ef29b91
   missing-workspace-config:missing-workspace-config-task-with-deps: 
   missing-workspace-config:missing-workspace-config-task-with-deps: > missing-workspace-config-task-with-deps
-  missing-workspace-config:missing-workspace-config-task-with-deps: > echo "running missing-workspace-config-task-with-deps" > out/foo.min.txt
+  missing-workspace-config:missing-workspace-config-task-with-deps: > echo running-missing-workspace-config-task-with-deps > out/foo.min.txt
   missing-workspace-config:missing-workspace-config-task-with-deps: 
 
   $ cat tmp.log | grep "missing-workspace-config:missing-workspace-config-underlying-task"
-  missing-workspace-config:missing-workspace-config-underlying-task: cache miss, executing 4b2b1345ce8e9a35
+  missing-workspace-config:missing-workspace-config-underlying-task: cache miss, executing 26878c99d9f1f2ad
   missing-workspace-config:missing-workspace-config-underlying-task: 
   missing-workspace-config:missing-workspace-config-underlying-task: > missing-workspace-config-underlying-task
-  missing-workspace-config:missing-workspace-config-underlying-task: > echo "running missing-workspace-config-underlying-task"
+  missing-workspace-config:missing-workspace-config-underlying-task: > echo running-missing-workspace-config-underlying-task
   missing-workspace-config:missing-workspace-config-underlying-task: 
-  missing-workspace-config:missing-workspace-config-underlying-task: running missing-workspace-config-underlying-task
+  missing-workspace-config:missing-workspace-config-underlying-task: running-missing-workspace-config-underlying-task
 
   $ cat tmp.log | grep "blank-pkg:missing-workspace-config-underlying-topo-task"
-  blank-pkg:missing-workspace-config-underlying-topo-task: cache miss, executing ec3db259096d2811
+  blank-pkg:missing-workspace-config-underlying-topo-task: cache miss, executing 86d7535cfbce352a
   blank-pkg:missing-workspace-config-underlying-topo-task: 
   blank-pkg:missing-workspace-config-underlying-topo-task: > missing-workspace-config-underlying-topo-task
-  blank-pkg:missing-workspace-config-underlying-topo-task: > echo "missing-workspace-config-underlying-topo-task from blank-pkg"
+  blank-pkg:missing-workspace-config-underlying-topo-task: > echo missing-workspace-config-underlying-topo-task from blank-pkg
   blank-pkg:missing-workspace-config-underlying-topo-task: 
   blank-pkg:missing-workspace-config-underlying-topo-task: missing-workspace-config-underlying-topo-task from blank-pkg
 

@@ -5,7 +5,7 @@ use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     reference_type::ReferenceType, source::Source, source_transform::SourceTransforms,
 };
-use turbopack_css::{CssInputTransforms, CssModuleAssetType};
+use turbopack_css::CssModuleAssetType;
 use turbopack_ecmascript::{EcmascriptInputTransforms, EcmascriptOptions};
 use turbopack_mdx::MdxTransformOptions;
 use turbopack_wasm::source::WebAssemblySourceType;
@@ -85,7 +85,13 @@ impl ModuleRule {
 #[derive(Debug, Clone)]
 pub enum ModuleRuleEffect {
     ModuleType(ModuleType),
-    AddEcmascriptTransforms(Vc<EcmascriptInputTransforms>),
+    /// Allow to extend an existing Ecmascript module rules for the additional
+    /// transforms. First argument will prepend the existing transforms, and
+    /// the second argument will append the new transforms.
+    ExtendEcmascriptTransforms {
+        prepend: Vc<EcmascriptInputTransforms>,
+        append: Vc<EcmascriptInputTransforms>,
+    },
     SourceTransforms(Vc<SourceTransforms>),
 }
 
@@ -99,11 +105,10 @@ pub enum ModuleType {
     },
     Typescript {
         transforms: Vc<EcmascriptInputTransforms>,
-        #[turbo_tasks(trace_ignore)]
-        options: EcmascriptOptions,
-    },
-    TypescriptWithTypes {
-        transforms: Vc<EcmascriptInputTransforms>,
+        // parse JSX syntax.
+        tsx: bool,
+        // follow references to imported types.
+        analyze_types: bool,
         #[turbo_tasks(trace_ignore)]
         options: EcmascriptOptions,
     },
@@ -114,6 +119,9 @@ pub enum ModuleType {
     },
     Json,
     Raw,
+    // [TODO] We want to consolidate mdx as a type of ecma|typescript module types with
+    // its source transform. Refer `turbopack-mdx::into_ecmascript_module_asset` for the reason
+    // why we keep this separately.
     Mdx {
         transforms: Vc<EcmascriptInputTransforms>,
         options: Vc<MdxTransformOptions>,
@@ -122,7 +130,7 @@ pub enum ModuleType {
     CssModule,
     Css {
         ty: CssModuleAssetType,
-        transforms: Vc<CssInputTransforms>,
+        use_lightningcss: bool,
     },
     Static,
     WebAssembly {

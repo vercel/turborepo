@@ -8,8 +8,9 @@ use turbopack_core::{
     reference_type::{ReferenceType, TypeScriptReferenceSubType},
     resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult},
 };
+use turbopack_resolve::typescript::type_resolve;
 
-use crate::typescript::{resolve::type_resolve, TsConfigModuleAsset};
+use crate::typescript::TsConfigModuleAsset;
 
 #[turbo_tasks::value]
 #[derive(Hash, Clone, Debug)]
@@ -76,13 +77,17 @@ impl ModuleReference for TsReferencePathAssetReference {
                 .try_join(self.path.clone())
                 .await?
             {
-                ModuleResolveResult::module(Vc::upcast(self.origin.asset_context().process(
-                    Vc::upcast(FileSource::new(*path)),
-                    Value::new(ReferenceType::TypeScript(
-                        TypeScriptReferenceSubType::Undefined,
-                    )),
-                )))
-                .cell()
+                let module = self
+                    .origin
+                    .asset_context()
+                    .process(
+                        Vc::upcast(FileSource::new(*path)),
+                        Value::new(ReferenceType::TypeScript(
+                            TypeScriptReferenceSubType::Undefined,
+                        )),
+                    )
+                    .module();
+                ModuleResolveResult::module(module).cell()
             } else {
                 ModuleResolveResult::unresolveable().cell()
             },
