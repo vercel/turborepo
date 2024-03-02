@@ -8,7 +8,7 @@ import { Tabs, Tab } from '../../../components/Tabs'
 
 # Install Turborepo
 
-`turbo` works with [yarn](https://classic.yarnpkg.com/lang/en/), [npm](https://www.npmjs.com/), and [pnpm](https://pnpm.io/) on the following operating systems:
+`turbo` works with [yarn](https://classic.yarnpkg.com/lang/en/), [npm](https://www.npmjs.com/), [pnpm](https://pnpm.io/), and [bun](https://bun.sh/) on the following operating systems:
 
 - macOS darwin 64-bit (Intel), ARM 64-bit (Apple Silicon)
 - Linux 64-bit, ARM 64-bit
@@ -19,7 +19,7 @@ import { Tabs, Tab } from '../../../components/Tabs'
 A global install of `turbo` can be used in any project, and enables automatic workspace
 selection based on the directory where you run `turbo`.
 
-<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+<Tabs items={['npm', 'yarn', 'pnpm', 'bun']} storageKey="selected-pkg-manager">
   <Tab>
     ```bash
     npm install turbo --global
@@ -33,6 +33,11 @@ selection based on the directory where you run `turbo`.
   <Tab>
     ```bash
     pnpm install turbo --global
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    bun install turbo --global
     ```
   </Tab>
 </Tabs>
@@ -60,7 +65,7 @@ You may wish to pin the version of Turborepo used within a repository, especiall
 collaborating with other developers](../docs/core-concepts/remote-caching). In that case, add `turbo` as a dev dependency at the root
 of the repository:
 
-<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+<Tabs items={['npm', 'yarn', 'pnpm', 'bun']} storageKey="selected-pkg-manager">
   <Tab>
     ```bash
     npm install turbo --save-dev
@@ -74,6 +79,11 @@ of the repository:
   <Tab>
     ```bash
     pnpm add turbo --save-dev --ignore-workspace-root-check
+    ```
+  </Tab>
+   <Tab>
+    ```bash
+    bun install turbo --save-dev
     ```
   </Tab>
 </Tabs>

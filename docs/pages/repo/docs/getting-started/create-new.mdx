@@ -18,7 +18,7 @@ import { Tabs, Tab } from "../../../../components/Tabs";
 
 To create a new monorepo, use our [`create-turbo`](https://www.npmjs.com/package/create-turbo) npm package:
 
-<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+<Tabs items={['npm', 'yarn', 'pnpm', 'bun']} storageKey="selected-pkg-manager">
   <Tab>
     ```sh
     npx create-turbo@latest
@@ -32,6 +32,11 @@ To create a new monorepo, use our [`create-turbo`](https://www.npmjs.com/package
   <Tab>
     ```sh
     pnpm dlx create-turbo@latest
+    ```
+  </Tab>
+  <Tab>
+    ```sh
+    bunx create-turbo@latest
     ```
   </Tab>
 </Tabs>
@@ -52,7 +57,7 @@ During this tutorial, some lines of code are omitted from the code samples. For 
 
 First, run:
 
-<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+<Tabs items={['npm', 'yarn', 'pnpm', 'bun']} storageKey="selected-pkg-manager">
   <Tab>
     ```sh
     npx create-turbo@latest
@@ -66,6 +71,11 @@ First, run:
   <Tab>
     ```sh
     pnpm dlx create-turbo@latest
+    ```
+  </Tab>
+   <Tab>
+    ```sh
+    bunx create-turbo@latest
     ```
   </Tab>
 </Tabs>
@@ -83,7 +93,7 @@ Turborepo doesn't handle installing packages, so you'll need to choose one of:
 - [bun](https://bun.sh/)
 - [npm](https://www.npmjs.com/)
 - [pnpm](https://pnpm.io/)
-- [yarn](https://yarnpkg.com/)
+- [bun](https://bun.sh/)
 
 `create-turbo` will detect which package managers you have available on your system. If you're unsure which to choose, Turborepo recommends `pnpm`.
 
@@ -117,7 +127,7 @@ Next, open `./apps/web/package.json`. You'll notice that this package's name is 
 
 You'll see that `"web"` depends on a package called `"@repo/ui"`.
 
-<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+<Tabs items={['npm', 'yarn', 'pnpm', 'bun']} storageKey="selected-pkg-manager">
   <Tab>
     ```json filename="apps/web/package.json"
     {
@@ -132,6 +142,15 @@ You'll see that `"web"` depends on a package called `"@repo/ui"`.
     {
       "dependencies": {
         "@repo/ui": "*"
+      }
+    }
+    ```
+  </Tab>
+   <Tab>
+    ```json filename="apps/web/package.json"
+    {
+      "dependencies": {
+        "@repo/ui": "workspace:*"
       }
     }
     ```
@@ -292,7 +311,7 @@ It's important to understand the dependencies between these workspaces. Let's ma
 - `typescript-config` - no dependencies
 - `eslint-config` - no dependencies
 
-Note that **the Turborepo CLI is not responsible for managing these dependencies**. All of the things above are handled by the package manager you chose (`npm`, `pnpm` or `yarn`).
+Note that **the Turborepo CLI is not responsible for managing these dependencies**. All of the things above are handled by the package manager you chose (`npm`, `pnpm`, `yarn` or `bun`).
 
 ### 3. Understanding `turbo.json`
 

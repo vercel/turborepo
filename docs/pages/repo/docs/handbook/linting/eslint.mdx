@@ -107,7 +107,7 @@ Note that the ESLint dependencies are all listed here. This is useful - it means
 
 In our `web` app, we first need to add `eslint-config-custom` as a dependency.
 
-<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+<Tabs items={['npm', 'yarn', 'pnpm', 'bun']} storageKey="selected-pkg-manager">
   <Tab>
 ```jsonc filename="apps/web/package.json"
 {
@@ -127,6 +127,15 @@ In our `web` app, we first need to add `eslint-config-custom` as a dependency.
 ```
   </Tab>
   <Tab>
+```jsonc filename="apps/web/package.json"
+{
+  "dependencies": {
+    "eslint-config-custom": "workspace:*"
+  }
+}
+```
+  </Tab>
+    <Tab>
 ```jsonc filename="apps/web/package.json"
 {
   "dependencies": {

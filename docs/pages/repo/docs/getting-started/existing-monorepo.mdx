@@ -14,7 +14,7 @@ import { Tabs, Tab } from "../../../../components/Tabs";
 
 You can configure workspaces any way you want, but a common folder structure example is keeping applications in the `/apps` folder and packages in the `/packages` folder. The configuration of these folders is different for each package manager.
 
-<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+<Tabs items={['npm', 'yarn', 'pnpm', 'bun']} storageKey="selected-pkg-manager">
   <Tab>
 Specify your `workspaces` in your monorepo's root `package.json` file:
 
@@ -47,6 +47,15 @@ packages:
 `pnpm` supports the ability to declare workspaces in deeply nested subdirectories with a `**`. Turborepo does not currently support this behavior.
 </Callout>
   </Tab>
+  <Tab>
+Specify your `workspaces` in your monorepo's root `package.json` file:
+
+```json filename="package.json"
+{
+  "workspaces": ["packages/*", "apps/*"]
+}
+```
+  </Tab>
 </Tabs>
 
 After configuring your workspaces, re-run your package manager's `install` command.
@@ -55,7 +64,7 @@ After configuring your workspaces, re-run your package manager's `install` comma
 
 Install `turbo` globally.
 
-<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+<Tabs items={['npm', 'yarn', 'pnpm', 'bun']} storageKey="selected-pkg-manager">
   <Tab>
     ```bash
     npm install turbo --global
@@ -69,6 +78,11 @@ Install `turbo` globally.
   <Tab>
     ```bash
     pnpm install turbo --global
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    bun install turbo --global
     ```
   </Tab>
 </Tabs>

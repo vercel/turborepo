@@ -166,7 +166,7 @@ We're working on a first-class solution to this problem - but while you wait, he
 
 1. Install `dotenv-cli` in your [root workspace](/repo/docs/handbook/what-is-a-monorepo#the-root-workspace):
 
-<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+<Tabs items={['npm', 'yarn', 'pnpm', 'bun']} storageKey="selected-pkg-manager">
   <Tab>
     ```bash
     # Installs dotenv-cli in the root workspace
@@ -183,6 +183,12 @@ We're working on a first-class solution to this problem - but while you wait, he
     ```bash
     # Installs dotenv-cli in the root workspace
     pnpm add dotenv-cli --ignore-workspace-root-check
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    # Installs dotenv-cli in the root workspace
+    bun add dotenv-cli
     ```
   </Tab>
 </Tabs>

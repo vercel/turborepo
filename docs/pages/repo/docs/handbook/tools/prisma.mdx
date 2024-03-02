@@ -127,7 +127,7 @@ Following the [internal packages pattern](/repo/docs/handbook/sharing-code/inter
 
 Let's now import our database package into one of our apps to test it out. Let's say you have an app at `apps/web`. Add the dependency to `apps/web/package.json`:
 
-<Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
+<Tabs items={["npm", "yarn", "pnpm", "bun"]} storageKey="selected-pkg-manager">
   <Tab>
     ```json filename="apps/web/package.json"
     {
@@ -147,6 +147,15 @@ Let's now import our database package into one of our apps to test it out. Let's
     ```
   </Tab>
   <Tab>
+    ```json filename="apps/web/package.json"
+    {
+      "dependencies": {
+        "database": "workspace:*"
+      }
+    }
+    ```
+  </Tab>
+   <Tab>
     ```json filename="apps/web/package.json"
     {
       "dependencies": {

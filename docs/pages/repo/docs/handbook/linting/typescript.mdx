@@ -76,7 +76,7 @@ This lets us export different config settings for different types of projects.
 
 Each app/package which uses our shared `tsconfig` must first specify it as a dependency:
 
-<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+<Tabs items={['npm', 'yarn', 'pnpm', 'bun']} storageKey="selected-pkg-manager">
   <Tab>
 ```jsonc filename="apps/web/package.json"
 {
@@ -96,6 +96,15 @@ Each app/package which uses our shared `tsconfig` must first specify it as a dep
 ```
   </Tab>
   <Tab>
+```jsonc filename="apps/web/package.json"
+{
+  "dependencies": {
+    "tsconfig": "workspace:*"
+  }
+}
+```
+  </Tab>
+    <Tab>
 ```jsonc filename="apps/web/package.json"
 {
   "dependencies": {
