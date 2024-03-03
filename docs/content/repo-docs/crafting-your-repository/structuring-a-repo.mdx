@@ -3,7 +3,7 @@ title: Structuring a repo
 description: Start by creating a repository using the conventions of the ecosystem.
 ---
 
-import {Callout} from '#/components/callout'
+import {Callout} from '#/components/Callout'
 import {PackageManagerTabs, Tab, Tabs} from '#/components/Tabs'
 import { File, Folder, Files } from 'fumadocs-ui/components/files';
 
@@ -122,6 +122,7 @@ For example, if you had a `@repo/math` package, you might have the following `ex
 ```json title="./packages/math/package.json"
 {
   "exports": {
+    ".": "./src/index.ts",
     "./add": "./src/add.ts",
     "./subtract": "./src/subtract.ts"
   }
@@ -132,11 +133,18 @@ For example, if you had a `@repo/math` package, you might have the following `ex
 The `exports` field in this example requires modern versions of Node.js and TypeScript.
 </Callout>
 
-This would allow you to import the `add` and `subtract` functions from the `@repo/math` package like so:
+This would allow you to import `add` and `subtract` functions from the `@repo/math` package like so:
 
 ```ts title="./apps/my-app/src/index.ts"
-  import { add, subtract } from '@repo/math'
+  import { GRAVITATIONAL_CONSTANT, SPEED_OF_LIGHT_CONSTANT } from '@repo/math'
+  import { add } from '@repo/math/add'
+  import { subtract } from '@repo/math/subtract'
 ```
+
+Using exports this way provides two major benefits:
+
+- **Avoiding barrel files**: Barrel files are files that re-export other files in the same package, creating one entrypoint for the entire package. While they might appear convenient at a glance, they're extremely difficult for compilers and bundlers to understand and can quickly lead to performance problems.
+- **IDE autocompletion**: By specifying the entrypoints for your package using `exports`, you can ensure that your code editor can provide auto-completion for the package's exports.
 
 ### `scripts`
 
@@ -146,4 +154,7 @@ The `scripts` field is used to define scripts that can be run from the command l
 
 ## Next steps
 
-Now that you have a workspace set up, you can install dependencies into your workspace to bring code in from the npm registry and share code within your repository.
+Now that you have a workspace set up, you can use your package manager to install dependencies into your packages to:
+
+- Install useful external dependencies from the npm registry
+- Create relationships between internal packages to share code easily in your repository

@@ -3,4 +3,22 @@ title: Installing dependencies
 description: Install dependencies from the registry into your repository.
 ---
 
-TODO
+Dependencies play an important role in the development of your monorepo.
+
+- External dependencies let you leverage the work of the ecosystem to build your applications and libraries faster.
+- Internal dependencies let you share code and functionality across your repo. Additionally, where we choose to install our internal packages creates a dependency graph for Turborepo to work with.
+
+## Best practices
+
+### Install dependencies where they're used
+
+When you install a dependency, you should install it in the package that uses it. This is true for both internal and external dependencies.
+
+This practice has several key benefits:
+
+- **Improved flexibility**: In a scaled monorepo, it might not be realistic for every package to upgrade to the same version of an external dependency at the same time. By installing dependencies where they're used, you can incrementally upgrade dependencies that you don't control.
+- **Pruning unused dependencies**: For Docker users, Turborepo's pruning feature can remove unused dependencies from Docker images to create lighter images.
+
+- You'll likely end up with very few deps in root
+- Internal dependencies
+- Keeping dependencies in lockstep
