@@ -6,7 +6,6 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { Clients } from "@/app/_clients/Clients";
 import { FadeIn } from "@/app/_components/home-shared/FadeIn";
-import { LandingPageGlobalStyles } from "@/app/_components/home-shared/GlobalStyles";
 import { PackLogo } from "@/app/_components/logos/PackLogo";
 import { RepoLogo } from "@/app/_components/logos/RepoLogo";
 import { TurboheroBackground } from "@/app/_components/turbohero-background";
@@ -179,7 +178,6 @@ function Teams() {
 export default function LandingPage() {
   return (
     <>
-      <LandingPageGlobalStyles />
       <main className="relative flex flex-col items-center justify-center w-full h-full  overflow-hidden [--geist-foreground:#fff] dark:[--geist-foreground:#000] [--gradient-stop-1:0px] [--gradient-stop-2:120px] sm:[--gradient-stop-1:0px] sm:[--gradient-stop-2:120px]">
         <Background />
         <FadeIn className="z-10 flex flex-col items-center justify-center w-full h-full">
