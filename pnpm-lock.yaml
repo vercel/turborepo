@@ -216,6 +216,9 @@ importers:
       fumadocs-ui:
         specifier: ^9.0.0
         version: 9.0.0(@types/react-dom@18.2.1)(@types/react@18.2.0)(next@14.1.0)(react-dom@18.2.0)(react@18.2.0)
+      geist:
+        specifier: ^1.2.2
+        version: 1.2.2(next@14.1.0)
       next:
         specifier: ^14.1.0
         version: 14.1.0(react-dom@18.2.0)(react@18.2.0)
@@ -8353,6 +8356,14 @@ packages:
     requiresBuild: true
     dev: false
     optional: true
+
+  /geist@1.2.2(next@14.1.0):
+    resolution: {integrity: sha512-uRDrxhvdnPwWJmh+K5+/5LXSKwvJzaYCl9tDXgiBi4hj7hB4K7+n/WLcvJMFs5btvyn0r9OSwCd1s6CmqAsxEw==}
+    peerDependencies:
+      next: '>=13.2.0 <15'
+    dependencies:
+      next: 14.1.0(react-dom@18.2.0)(react@18.2.0)
+    dev: false
 
   /gensync@1.0.0-beta.2:
     resolution: {integrity: sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg==}
