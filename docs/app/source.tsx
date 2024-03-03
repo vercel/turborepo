@@ -1,19 +1,42 @@
 import { map } from "@/.map";
 import { createMDXSource, defaultSchemas } from "fumadocs-mdx";
 import { loader } from "fumadocs-core/source";
+import { ExternalLinkIcon } from "@heroicons/react/outline";
 import { z } from "zod";
 
 const docFrontmatterSchema = defaultSchemas.frontmatter.extend({
   searchable: z.boolean().default(true),
 });
 
-export const { getPage, getPages, pageTree } = loader({
+export const {
+  getPage,
+  getPages,
+  pageTree: repoDocsPageTree,
+} = loader({
   baseUrl: "/repo/docs",
   rootDir: "repo-docs",
   source: createMDXSource(map, {
     schema: { frontmatter: docFrontmatterSchema },
   }),
 });
+
+// Insert external links into the page tree
+repoDocsPageTree.children.splice(9, 0, {
+  type: "page",
+  name: "Glossary",
+  url: "https://vercel.com/docs/vercel-platform/glossary",
+  external: true,
+  icon: <ExternalLinkIcon />,
+});
+repoDocsPageTree.children.splice(10, 0, {
+  type: "page",
+  name: "Changelog",
+  url: "https://github.com/vercel/turbo/releases",
+  external: true,
+  icon: <ExternalLinkIcon />,
+});
+
+export const pageTree = repoDocsPageTree;
 
 const blogPostFrontmatterSchema = defaultSchemas.frontmatter
   .extend({
