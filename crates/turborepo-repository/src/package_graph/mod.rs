@@ -15,6 +15,7 @@ use crate::{
 };
 
 pub mod builder;
+mod dep_splitter;
 
 pub use builder::{Error, PackageGraphBuilder};
 

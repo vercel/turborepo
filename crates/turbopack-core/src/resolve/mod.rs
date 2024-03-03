@@ -10,7 +10,6 @@ use std::{
 use anyhow::{bail, Result};
 use indexmap::{indexmap, IndexMap, IndexSet};
 use serde::{Deserialize, Serialize};
-use serde_json::Value as JsonValue;
 use tracing::{Instrument, Level};
 use turbo_tasks::{trace::TraceRawVcs, TryJoinIterExt, Value, ValueToString, Vc};
 use turbo_tasks_fs::{
@@ -1733,10 +1732,7 @@ async fn resolve_into_folder(
 
     for resolve_into_package in options_value.into_package.iter() {
         match resolve_into_package {
-            ResolveIntoPackage::MainField {
-                field: name,
-                extensions,
-            } => {
+            ResolveIntoPackage::MainField { field: name } => {
                 if let Some(package_json) = &*read_package_json(package_json_path).await? {
                     if let Some(field_value) = package_json[name].as_str() {
                         let normalized_request = normalize_request(field_value);
@@ -1747,12 +1743,6 @@ async fn resolve_into_folder(
                             continue;
                         }
                         let request = Request::parse(Value::new(normalized_request.into()));
-
-                        let options = if let Some(extensions) = extensions {
-                            options.with_extensions(extensions.clone())
-                        } else {
-                            options
-                        };
 
                         let result = &*resolve_internal_inline(package_path, request, options)
                             .await?
@@ -1773,9 +1763,23 @@ async fn resolve_into_folder(
         }
     }
 
+    if options_value.fully_specified {
+        return Ok(ResolveResult::unresolveable().into());
+    }
+
     // fall back to dir/index.[js,ts,...]
-    let str = "./index".to_string();
-    let request = Request::parse(Value::new(str.into()));
+    let pattern = match &options_value.default_files[..] {
+        [] => return Ok(ResolveResult::unresolveable().into()),
+        [file] => Pattern::Constant(format!("./{file}")),
+        files => Pattern::Alternatives(
+            files
+                .iter()
+                .map(|file| Pattern::Constant(format!("./{file}")))
+                .collect(),
+        ),
+    };
+
+    let request = Request::parse(Value::new(pattern));
 
     Ok(
         resolve_internal_inline(package_path, request.resolve().await?, options)
@@ -1814,19 +1818,21 @@ async fn resolve_relative_request(
     }
 
     let mut new_path = path_pattern.clone();
-    // Add the extensions as alternatives to the path
-    // read_matches keeps the order of alternatives intact
-    new_path.push(Pattern::Alternatives(
-        once(Pattern::Constant("".to_string()))
-            .chain(
-                options_value
-                    .extensions
-                    .iter()
-                    .map(|ext| Pattern::Constant(ext.clone())),
-            )
-            .collect(),
-    ));
-    new_path.normalize();
+    if !options_value.fully_specified {
+        // Add the extensions as alternatives to the path
+        // read_matches keeps the order of alternatives intact
+        new_path.push(Pattern::Alternatives(
+            once(Pattern::Constant("".to_string()))
+                .chain(
+                    options_value
+                        .extensions
+                        .iter()
+                        .map(|ext| Pattern::Constant(ext.clone())),
+                )
+                .collect(),
+        ));
+        new_path.normalize();
+    };
 
     let mut results = Vec::new();
     let matches = read_matches(
@@ -1840,24 +1846,26 @@ async fn resolve_relative_request(
     for m in matches.iter() {
         if let PatternMatch::File(matched_pattern, path) = m {
             let mut matches_without_extension = false;
-            for ext in options_value.extensions.iter() {
-                let Some(matched_pattern) = matched_pattern.strip_suffix(ext) else {
-                    continue;
-                };
-                if path_pattern.is_match(matched_pattern) {
-                    results.push(
-                        resolved(
-                            RequestKey::new(matched_pattern.to_string()),
-                            *path,
-                            lookup_path,
-                            request,
-                            options_value,
-                            options,
-                            query,
-                        )
-                        .await?,
-                    );
-                    matches_without_extension = true;
+            if !options_value.fully_specified {
+                for ext in options_value.extensions.iter() {
+                    let Some(matched_pattern) = matched_pattern.strip_suffix(ext) else {
+                        continue;
+                    };
+                    if path_pattern.is_match(matched_pattern) {
+                        results.push(
+                            resolved(
+                                RequestKey::new(matched_pattern.to_string()),
+                                *path,
+                                lookup_path,
+                                request,
+                                options_value,
+                                options,
+                                query,
+                            )
+                            .await?,
+                        );
+                        matches_without_extension = true;
+                    }
                 }
             }
             if !matches_without_extension || path_pattern.is_match(matched_pattern) {
@@ -1935,22 +1943,53 @@ async fn apply_in_package(
             continue;
         };
 
+        let refs = refs.clone();
+        let request_key = RequestKey::new(request.clone());
+
+        if value.as_bool() == Some(false) {
+            return Ok(Some(
+                ResolveResult::primary_with_affecting_sources(
+                    request_key,
+                    ResolveResultItem::Ignore,
+                    refs,
+                )
+                .cell(),
+            ));
+        }
+
+        if let Some(value) = value.as_str() {
+            if value == request {
+                // This would be a cycle, so we ignore it
+                return Ok(None);
+            }
+            return Ok(Some(
+                resolve_internal(
+                    package_path,
+                    Request::parse(Value::new(Pattern::Constant(value.to_string())))
+                        .with_query(query),
+                    options,
+                )
+                .with_replaced_request_key(value.to_string(), Value::new(request_key))
+                .with_affecting_sources(refs),
+            ));
+        }
+
+        ResolvingIssue {
+            severity: IssueSeverity::Error.cell(),
+            file_path: *package_json_path,
+            request_type: format!("alias field ({field})"),
+            request: Request::parse(Value::new(Pattern::Constant(request.to_string()))),
+            resolve_options: options,
+            error_message: Some(format!("invalid alias field value: {}", value)),
+            source: None,
+        }
+        .cell()
+        .emit();
+
         return Ok(Some(
-            resolve_alias_field_result(
-                RequestKey::new(request.clone()),
-                value,
-                refs.clone(),
-                package_path,
-                options,
-                *package_json_path,
-                &request,
-                field,
-                query,
-            )
-            .await?,
+            ResolveResult::unresolveable_with_affecting_sources(refs).cell(),
         ));
     }
-
     Ok(None)
 }
 
@@ -1980,6 +2019,8 @@ async fn resolve_module_request(
         return Ok(result);
     }
 
+    let mut results = vec![];
+
     let result = find_package(
         lookup_path,
         module.to_string(),
@@ -1994,7 +2035,7 @@ async fn resolve_module_request(
         .into());
     }
 
-    let mut results = vec![];
+    let package_options = options.with_fully_specified(false).resolve().await?;
 
     // There may be more than one package with the same name. For instance, in a
     // TypeScript project, `compilerOptions.baseUrl` can declare a path where to
@@ -2008,7 +2049,7 @@ async fn resolve_module_request(
                     Value::new(path.clone()),
                     package_path,
                     query,
-                    options,
+                    package_options,
                 ));
             }
             FindPackageItem::PackageFile(package_path) => {
@@ -2029,13 +2070,32 @@ async fn resolve_module_request(
         }
     }
 
-    Ok(
+    let module_result =
         merge_results_with_affecting_sources(results, result.affecting_sources.clone())
             .with_replaced_request_key(
                 ".".to_string(),
                 Value::new(RequestKey::new(module.to_string())),
-            ),
-    )
+            );
+
+    if options_value.prefer_relative {
+        let module_prefix = format!("./{module}");
+        let pattern = Pattern::concat([
+            module_prefix.clone().into(),
+            "/".to_string().into(),
+            path.clone(),
+        ]);
+        let relative = Request::relative(Value::new(pattern), query, true);
+        let relative_result =
+            resolve_internal_boxed(lookup_path, relative.resolve().await?, options).await?;
+        let relative_result = relative_result.with_replaced_request_key(
+            module_prefix,
+            Value::new(RequestKey::new(module.to_string())),
+        );
+
+        Ok(merge_results(vec![relative_result, module_result]))
+    } else {
+        Ok(module_result)
+    }
 }
 
 #[turbo_tasks::function]
@@ -2183,52 +2243,6 @@ fn resolve_import_map_result_boxed<'a>(
         options,
         query,
     ))
-}
-
-#[tracing::instrument(level = Level::TRACE, skip_all)]
-async fn resolve_alias_field_result(
-    request_key: RequestKey,
-    result: &JsonValue,
-    refs: Vec<Vc<Box<dyn Source>>>,
-    package_path: Vc<FileSystemPath>,
-    resolve_options: Vc<ResolveOptions>,
-    issue_context: Vc<FileSystemPath>,
-    issue_request: &str,
-    field_name: &str,
-    query: Vc<String>,
-) -> Result<Vc<ResolveResult>> {
-    if result.as_bool() == Some(false) {
-        return Ok(ResolveResult::primary_with_affecting_sources(
-            request_key,
-            ResolveResultItem::Ignore,
-            refs,
-        )
-        .cell());
-    }
-
-    if let Some(value) = result.as_str() {
-        return Ok(resolve_internal(
-            package_path,
-            Request::parse(Value::new(Pattern::Constant(value.to_string()))).with_query(query),
-            resolve_options,
-        )
-        .with_replaced_request_key(value.to_string(), Value::new(request_key))
-        .with_affecting_sources(refs));
-    }
-
-    ResolvingIssue {
-        severity: IssueSeverity::Error.cell(),
-        file_path: issue_context,
-        request_type: format!("alias field ({field_name})"),
-        request: Request::parse(Value::new(Pattern::Constant(issue_request.to_string()))),
-        resolve_options,
-        error_message: Some(format!("invalid alias field value: {}", result)),
-        source: None,
-    }
-    .cell()
-    .emit();
-
-    Ok(ResolveResult::unresolveable_with_affecting_sources(refs).cell())
 }
 
 #[tracing::instrument(level = Level::TRACE, skip_all)]

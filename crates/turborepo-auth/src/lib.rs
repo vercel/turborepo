@@ -13,7 +13,7 @@ pub use auth::*;
 pub use error::Error;
 pub use login_server::*;
 use serde::Deserialize;
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::AbsoluteSystemPath;
 use turborepo_api_client::{CacheClient, Client, TokenClient};
 use turborepo_vercel_api::{token::ResponseTokenMetadata, User};
 
@@ -48,21 +48,25 @@ impl Token {
     /// Reads a token from a file. If the file is a JSON object with a
     /// `token` field, we read that in. If no such field exists, we error out.
     ///
-    /// # Errors
+    /// ## Errors
     /// * `Error::TokenNotFound` - If the file does not exist.
     /// * `Error::InvalidTokenFileFormat` - If the file does not contain a
     ///   properly formatted JSON object with a `token` field.
-    pub fn from_file(path: AbsoluteSystemPathBuf) -> Result<Self, Error> {
+    pub fn from_file(path: &AbsoluteSystemPath) -> Result<Self, Error> {
         #[derive(Deserialize)]
         struct TokenWrapper {
-            token: String,
+            token: Option<String>,
         }
 
         match path.read_existing_to_string()? {
             Some(content) => {
                 let wrapper = serde_json::from_str::<TokenWrapper>(&content)
                     .map_err(Error::InvalidTokenFileFormat)?;
-                Ok(Self::Existing(wrapper.token))
+                if let Some(token) = wrapper.token {
+                    Ok(Self::Existing(token))
+                } else {
+                    Err(Error::TokenNotFound)
+                }
             }
             None => Err(Error::TokenNotFound),
         }
@@ -104,6 +108,7 @@ impl Token {
         }
         Ok(true)
     }
+
     /// This is the same as `is_valid`, but also checks if the token is valid
     /// for SSO.
     ///
@@ -154,6 +159,7 @@ impl Token {
             (Err(e), _) | (_, Err(e)) => Err(Error::APIError(e)),
         }
     }
+
     /// Checks if the token is active. We do a few checks:
     /// 1. Fetch the token metadata.
     /// 2. From the metadata, check if the token is active.
@@ -253,6 +259,7 @@ fn is_token_active(metadata: &ResponseTokenMetadata, current_time: u128) -> bool
 #[cfg(test)]
 mod tests {
     use tempfile::tempdir;
+    use turbopath::AbsoluteSystemPathBuf;
     use turborepo_vercel_api::token::Scope;
 
     use super::*;
@@ -333,7 +340,7 @@ mod tests {
             .create_with_contents(r#"{"token": "valid_token_here"}"#)
             .unwrap();
 
-        let result = Token::from_file(file_path).expect("Failed to read token from file");
+        let result = Token::from_file(&file_path).expect("Failed to read token from file");
 
         assert!(matches!(result, Token::Existing(ref t) if t == "valid_token_here"));
     }
@@ -346,7 +353,7 @@ mod tests {
             .expect("Failed to create AbsoluteSystemPathBuf");
         file_path.create_with_contents("not a valid json").unwrap();
 
-        let result = Token::from_file(file_path);
+        let result = Token::from_file(&file_path);
         assert!(
             matches!(result, Err(Error::InvalidTokenFileFormat(_))),
             "Expected Err(Error::InvalidTokenFileFormat), got {:?}",
@@ -361,7 +368,7 @@ mod tests {
 
         let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
             .expect("Failed to create AbsoluteSystemPathBuf");
-        let result = Token::from_file(file_path);
+        let result = Token::from_file(&file_path);
 
         assert!(matches!(result, Err(Error::TokenNotFound)));
     }

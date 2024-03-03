@@ -10,7 +10,7 @@ use url::Url;
 use crate::Error;
 
 pub enum LoginType {
-    Basic { login_url_configuration: String },
+    Basic { success_redirect: String },
     SSO,
 }
 
@@ -57,15 +57,13 @@ impl LoginServer for DefaultLoginServer {
         let route_handle = handle.clone();
         let addr = SocketAddr::from(([127, 0, 0, 1], port));
         match login_type {
-            LoginType::Basic {
-                login_url_configuration,
-            } => {
+            LoginType::Basic { success_redirect } => {
                 let app = Router::new().route(
                     "/",
                     get(|login_payload: Query<LoginPayload>| async move {
                         let _ = login_token.set(login_payload.0.token);
                         route_handle.shutdown();
-                        Redirect::to(&format!("{login_url_configuration}/turborepo/success"))
+                        Redirect::to(&success_redirect)
                     }),
                 );
 

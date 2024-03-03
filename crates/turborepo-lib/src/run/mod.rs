@@ -362,6 +362,7 @@ impl Run {
                 &self.repo_root,
                 &pkg_dep_graph,
                 &scm,
+                &root_turbo_json,
             )?;
 
             if is_all_packages {
