@@ -31,7 +31,7 @@ export function FeatureBox({
         width={64}
       />
       <div className="flex flex-col gap-2">
-        <h3 className="m-0 font-bold leading-5 text-gray-900 font-space-grotesk dark:text-white">
+        <h3 className="m-0 font-bold leading-5 text-gray-900 font-mono dark:text-white">
           {name}
         </h3>
 

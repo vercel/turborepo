@@ -319,23 +319,14 @@ function GraphLabel({
     >
       <p>{label}</p>
       {turbo ? (
-        <p
-          className={cn(
-            "font-space-grotesk m-0",
-            gradients.benchmarkTurboLabel
-          )}
-        >
+        <p className={cn("font-mono m-0", gradients.benchmarkTurboLabel)}>
           turbo
         </p>
       ) : null}
       {swc ? (
-        <p className="font-space-grotesk m-0 font-light text-[#666666]">
-          with SWC
-        </p>
+        <p className="font-mono m-0 font-light text-[#666666]">with SWC</p>
       ) : null}
-      {esbuild ? (
-        <p className="font-space-grotesk m-0 text-[#666666]">esbuild</p>
-      ) : null}
+      {esbuild ? <p className="font-mono m-0 text-[#666666]">esbuild</p> : null}
     </div>
   );
 }

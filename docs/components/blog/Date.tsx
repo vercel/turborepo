@@ -8,7 +8,7 @@ export function Date({
   update?: string;
 }) {
   return (
-    <div className="text-sm mt-2 text-center text-gray-500 dark:text-gray-400 font-space-grotesk">
+    <div className="text-sm mt-2 text-center text-gray-500 dark:text-gray-400 font-mono">
       {children}
 
       {update !== undefined && (
