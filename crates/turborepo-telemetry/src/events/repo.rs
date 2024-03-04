@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use turborepo_vercel_api::{TelemetryEvent, TelemetryRepoEvent};
+use turborepo_vercel_api::telemetry::{TelemetryEvent, TelemetryRepoEvent};
 use uuid::Uuid;
 
 use super::{Event, EventBuilder, EventType, Identifiable};

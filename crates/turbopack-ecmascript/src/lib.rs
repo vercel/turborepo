@@ -7,6 +7,7 @@
 #![recursion_limit = "256"]
 
 pub mod analyzer;
+pub mod async_chunk;
 pub mod chunk;
 pub mod chunk_group_files_asset;
 pub mod code_gen;
@@ -16,7 +17,6 @@ pub mod manifest;
 pub mod parse;
 mod path_visitor;
 pub mod references;
-pub mod resolve;
 pub mod side_effect_optimization;
 pub(crate) mod special_cases;
 pub(crate) mod static_code;
@@ -71,8 +71,10 @@ use turbopack_core::{
         FindContextFileResult, ModulePart,
     },
     source::Source,
-    source_map::{GenerateSourceMap, SourceMap},
+    source_map::{GenerateSourceMap, OptionSourceMap, SourceMap},
 };
+// TODO remove this
+pub use turbopack_resolve::ecmascript as resolve;
 
 use self::{
     chunk::{EcmascriptChunkItemContent, EcmascriptChunkType, EcmascriptExports},
@@ -378,7 +380,7 @@ impl EcmascriptModuleAsset {
                     evaluation_references: result_value.evaluation_references.await?,
                     exports: result_value.exports.await?,
                     async_module: result_value.async_module.await?,
-                    source_map: if let Some(map) = result_value.source_map {
+                    source_map: if let Some(map) = *result_value.source_map.await? {
                         Some(map.await?)
                     } else {
                         None
@@ -406,7 +408,7 @@ impl EcmascriptModuleAsset {
                 exports: ReadRef::cell(exports.clone()),
                 code_generation: result_value.code_generation,
                 async_module: ReadRef::cell(async_module.clone()),
-                source_map: source_map.clone().map(ReadRef::cell),
+                source_map: Vc::cell(source_map.clone().map(ReadRef::cell)),
                 successful: false,
             }
             .cell());
@@ -720,7 +722,7 @@ impl EcmascriptModuleContent {
         chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
         references: Vc<ModuleReferences>,
         code_generation: Vc<CodeGenerateables>,
-        source_map: Option<Vc<SourceMap>>,
+        source_map: Vc<OptionSourceMap>,
         exports: Vc<EcmascriptExports>,
         async_module_info: Option<Vc<AsyncModuleInfo>>,
     ) -> Result<Vc<Self>> {
@@ -790,7 +792,7 @@ impl EcmascriptModuleContent {
             specified_module_type,
             Vec::new(),
             Vec::new(),
-            None,
+            OptionSourceMap::none(),
         )
         .await
     }
@@ -805,7 +807,7 @@ async fn gen_content_with_visitors(
         &dyn VisitorFactory,
     )>,
     root_visitors: Vec<&dyn VisitorFactory>,
-    original_src_map: Option<Vc<SourceMap>>,
+    original_src_map: Vc<OptionSourceMap>,
 ) -> Result<Vc<EcmascriptModuleContent>> {
     let parsed = parsed.await?;
 

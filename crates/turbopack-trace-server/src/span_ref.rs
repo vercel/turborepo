@@ -139,6 +139,10 @@ impl<'a> SpanRef<'a> {
         self.span.self_allocation_count.saturating_sub(4)
     }
 
+    pub fn self_span_count(&self) -> u64 {
+        1
+    }
+
     // TODO(sokra) use events instead of children for visualizing span graphs
     #[allow(dead_code)]
     pub fn events_count(&self) -> usize {
@@ -216,6 +220,16 @@ impl<'a> SpanRef<'a> {
                 .reduce(|a, b| a + b)
                 .unwrap_or_default()
                 + self.self_allocation_count()
+        })
+    }
+
+    pub fn total_span_count(&self) -> u64 {
+        *self.span.total_span_count.get_or_init(|| {
+            self.children()
+                .map(|child| child.total_span_count())
+                .reduce(|a, b| a + b)
+                .unwrap_or_default()
+                + 1
         })
     }
 
@@ -325,6 +339,21 @@ impl<'a> SpanRef<'a> {
                         .or_insert_with(|| (cat.to_string(), vec![span.span.index]));
                 }
                 if !name.is_empty() {
+                    index
+                        .raw_entry_mut()
+                        .from_key(name)
+                        .and_modify(|_, v| v.push(span.span.index))
+                        .or_insert_with(|| (name.to_string(), vec![span.span.index]));
+                }
+                for (_, value) in span.span.args.iter() {
+                    index
+                        .raw_entry_mut()
+                        .from_key(value)
+                        .and_modify(|_, v| v.push(span.span.index))
+                        .or_insert_with(|| (value.to_string(), vec![span.span.index]));
+                }
+                if !span.is_complete() {
+                    let name = "incomplete";
                     index
                         .raw_entry_mut()
                         .from_key(name)

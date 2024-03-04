@@ -7,13 +7,10 @@
 #![recursion_limit = "256"]
 #![feature(arbitrary_self_types)]
 
-pub mod condition;
 pub mod evaluate_context;
 mod graph;
 pub mod module_options;
 pub mod rebase;
-pub mod resolve;
-pub mod resolve_options_context;
 pub mod transition;
 pub(crate) mod unsupported_sass;
 
@@ -28,21 +25,20 @@ use ecmascript::{
     chunk::EcmascriptChunkPlaceable,
     references::{follow_reexports, FollowExportsResult},
     side_effect_optimization::facade::module::EcmascriptModuleFacadeModule,
-    typescript::resolve::TypescriptTypesAssetReference,
     EcmascriptModuleAsset, EcmascriptModuleAssetType, TreeShakingMode,
 };
 use graph::{aggregate, AggregatedGraph, AggregatedGraphNodeContent};
 use module_options::{ModuleOptions, ModuleOptionsContext, ModuleRuleEffect, ModuleType};
-pub use resolve::resolve_options;
 use tracing::Instrument;
 use turbo_tasks::{Completion, Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
+pub use turbopack_core::condition;
 use turbopack_core::{
     asset::Asset,
     compile_time_info::CompileTimeInfo,
     context::{AssetContext, ProcessResult},
     ident::AssetIdent,
-    issue::{Issue, IssueExt, OptionStyledString, StyledString},
+    issue::{Issue, IssueExt, IssueStage, OptionStyledString, StyledString},
     module::Module,
     output::OutputAsset,
     raw_module::RawModule,
@@ -50,9 +46,8 @@ use turbopack_core::{
         CssReferenceSubType, EcmaScriptModulesReferenceSubType, InnerAssets, ReferenceType,
     },
     resolve::{
-        options::ResolveOptions, origin::PlainResolveOrigin, parse::Request, resolve,
-        AffectingResolvingAssetReference, ModulePart, ModuleResolveResult, ModuleResolveResultItem,
-        ResolveResult,
+        options::ResolveOptions, origin::PlainResolveOrigin, parse::Request, resolve, ModulePart,
+        ModuleResolveResult, ModuleResolveResultItem, ResolveResult,
     },
     source::Source,
 };
@@ -60,12 +55,13 @@ pub use turbopack_css as css;
 pub use turbopack_ecmascript as ecmascript;
 use turbopack_json::JsonModuleAsset;
 use turbopack_mdx::MdxModuleAsset;
+pub use turbopack_resolve::{resolve::resolve_options, resolve_options_context};
+use turbopack_resolve::{resolve_options_context::ResolveOptionsContext, typescript::type_resolve};
 use turbopack_static::StaticModuleAsset;
 use turbopack_wasm::{module_asset::WebAssemblyModuleAsset, source::WebAssemblySource};
 
 use self::{
     module_options::CustomModuleType,
-    resolve_options_context::ResolveOptionsContext,
     transition::{Transition, TransitionsByName},
 };
 
@@ -79,8 +75,8 @@ struct ModuleIssue {
 #[turbo_tasks::value_impl]
 impl Issue for ModuleIssue {
     #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("other".to_string())
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::ProcessModule.cell()
     }
 
     #[turbo_tasks::function]
@@ -357,6 +353,11 @@ impl ModuleAssetContext {
     }
 
     #[turbo_tasks::function]
+    pub async fn resolve_options_context(self: Vc<Self>) -> Result<Vc<ResolveOptionsContext>> {
+        Ok(self.await?.resolve_options_context)
+    }
+
+    #[turbo_tasks::function]
     pub async fn is_types_resolving_enabled(self: Vc<Self>) -> Result<Vc<bool>> {
         let resolve_options_context = self.await?.resolve_options_context.await?;
         Ok(Vc::cell(
@@ -428,6 +429,7 @@ async fn process_default_internal(
     let options = ModuleOptions::new(
         ident.path().parent(),
         module_asset_context.module_options_context(),
+        module_asset_context.resolve_options_context(),
     );
 
     let reference_type = reference_type.into_value();
@@ -467,13 +469,13 @@ async fn process_default_internal(
                     ModuleRuleEffect::ModuleType(module) => {
                         current_module_type = Some(*module);
                     }
-                    ModuleRuleEffect::AddEcmascriptTransforms(additional_transforms) => {
+                    ModuleRuleEffect::ExtendEcmascriptTransforms { prepend, append } => {
                         current_module_type = match current_module_type {
                             Some(ModuleType::Ecmascript {
                                 transforms,
                                 options,
                             }) => Some(ModuleType::Ecmascript {
-                                transforms: transforms.extend(*additional_transforms),
+                                transforms: prepend.extend(transforms).extend(*append),
                                 options,
                             }),
                             Some(ModuleType::Typescript {
@@ -482,7 +484,7 @@ async fn process_default_internal(
                                 analyze_types,
                                 options,
                             }) => Some(ModuleType::Typescript {
-                                transforms: transforms.extend(*additional_transforms),
+                                transforms: prepend.extend(transforms).extend(*append),
                                 tsx,
                                 analyze_types,
                                 options,
@@ -491,7 +493,7 @@ async fn process_default_internal(
                                 transforms,
                                 options,
                             }) => Some(ModuleType::Mdx {
-                                transforms: transforms.extend(*additional_transforms),
+                                transforms: prepend.extend(transforms).extend(*append),
                                 options,
                             }),
                             Some(module_type) => {
@@ -596,12 +598,12 @@ impl AssetContext for ModuleAssetContext {
         let mut result = self.process_resolve_result(result.resolve().await?, reference_type);
 
         if *self.is_types_resolving_enabled().await? {
-            let types_reference = TypescriptTypesAssetReference::new(
+            let types_result = type_resolve(
                 Vc::upcast(PlainResolveOrigin::new(Vc::upcast(self), origin_path)),
                 request,
             );
 
-            result = result.with_reference(Vc::upcast(types_reference));
+            result = ModuleResolveResult::alternatives(vec![result, types_result]);
         }
 
         Ok(result)
@@ -617,25 +619,20 @@ impl AssetContext for ModuleAssetContext {
         let transition = this.transition;
         Ok(result
             .await?
-            .map_module(
-                |source| {
-                    let reference_type = reference_type.clone();
-                    async move {
-                        let process_result = if let Some(transition) = transition {
-                            transition.process(source, self, reference_type)
-                        } else {
-                            self.process_default(source, reference_type)
-                        };
-                        Ok(match *process_result.await? {
-                            ProcessResult::Module(m) => {
-                                ModuleResolveResultItem::Module(Vc::upcast(m))
-                            }
-                            ProcessResult::Ignore => ModuleResolveResultItem::Ignore,
-                        })
-                    }
-                },
-                |i| async move { Ok(Vc::upcast(AffectingResolvingAssetReference::new(i))) },
-            )
+            .map_module(|source| {
+                let reference_type = reference_type.clone();
+                async move {
+                    let process_result = if let Some(transition) = transition {
+                        transition.process(source, self, reference_type)
+                    } else {
+                        self.process_default(source, reference_type)
+                    };
+                    Ok(match *process_result.await? {
+                        ProcessResult::Module(m) => ModuleResolveResultItem::Module(Vc::upcast(m)),
+                        ProcessResult::Ignore => ModuleResolveResultItem::Ignore,
+                    })
+                }
+            })
             .await?
             .into())
     }
@@ -808,6 +805,7 @@ pub fn register() {
     turbopack_env::register();
     turbopack_mdx::register();
     turbopack_json::register();
+    turbopack_resolve::register();
     turbopack_static::register();
     turbopack_wasm::register();
     include!(concat!(env!("OUT_DIR"), "/register.rs"));

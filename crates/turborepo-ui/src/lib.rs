@@ -6,6 +6,7 @@ mod color_selector;
 mod logs;
 mod output;
 mod prefixed;
+mod tui;
 
 use std::{borrow::Cow, env, f64::consts::PI, time::Duration};
 
@@ -19,6 +20,7 @@ pub use crate::{
     logs::{replay_logs, LogWriter},
     output::{OutputClient, OutputClientBehavior, OutputSink, OutputWriter},
     prefixed::{PrefixedUI, PrefixedWriter},
+    tui::TaskTable,
 };
 
 #[derive(Debug, Error)]

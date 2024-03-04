@@ -144,7 +144,7 @@ export function activate(context: ExtensionContext) {
         isTransient: true,
         iconPath: Uri.joinPath(context.extensionUri, "resources", "icon.svg"),
       });
-      terminal.sendText(`turbo run ${args}`);
+      terminal.sendText(`${turboPath} run ${args}`);
       terminal.show();
     })
   );

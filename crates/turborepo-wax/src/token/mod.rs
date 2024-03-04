@@ -89,18 +89,17 @@ impl<'t> Tokenized<'t, Annotation> {
             .map(|token| token.annotation().1)
             .sum();
 
-        // Drain invariant tokens from the beginning of the token sequence and
-        // unroot any tokens at the beginning of the variant sequence (tree
-        // wildcards). Finally, translate spans and discard the corresponding
-        // invariant bytes in the expression.
+        // Drain invariant tokens from the beginning of the token sequence and unroot
+        // any tokens at the beginning of the variant sequence (tree wildcards).
+        // Finally, translate spans and discard the corresponding invariant
+        // bytes in the expression.
         tokens.drain(0..n);
         if tokens.first_mut().map_or(false, Token::unroot) {
-            // TODO: The relationship between roots, the unrooting operation,
-            //       and the span in an expression that represents such a root
-            //       (if any) is not captured by these APIs very well. Perhaps
-            //       `unroot` should do more here?
-            // Pop additional bytes for the root separator expression if the
-            // initial token has lost a root.
+            // TODO: The relationship between roots, the unrooting operation, and the span
+            // in an       expression that represents such a root (if any) is
+            // not captured by these APIs       very well. Perhaps `unroot`
+            // should do more here? Pop additional bytes for the root separator
+            // expression if the initial token has lost a root.
             offset += ROOT_SEPARATOR_EXPRESSION.len();
         }
         for token in tokens.iter_mut() {
@@ -511,8 +510,8 @@ impl<'i, 't> UnitVariance<InvariantText<'t>> for &'i Archetype {
 
 impl<'i> UnitVariance<InvariantSize> for &'i Archetype {
     fn unit_variance(self) -> Variance<InvariantSize> {
-        // This is pessimistic and assumes that the code point will require four
-        // bytes when encoded as UTF-8. This is technically possible, but most
+        // This is pessimistic and assumes that the code point will require four bytes
+        // when encoded as UTF-8. This is technically possible, but most
         // commonly only one or two bytes will be required.
         self.domain_variance().map_invariance(|_| 4.into())
     }
@@ -586,9 +585,9 @@ impl<'t> Literal<'t> {
     }
 
     pub fn has_variant_casing(&self) -> bool {
-        // If path case sensitivity agrees with the literal case sensitivity,
-        // then the literal is not variant. Otherwise, the literal is variant if
-        // it contains characters with casing.
+        // If path case sensitivity agrees with the literal case sensitivity, then the
+        // literal is not variant. Otherwise, the literal is variant if it
+        // contains characters with casing.
         (PATHS_ARE_CASE_INSENSITIVE != self.is_case_insensitive) && self.text.has_casing()
     }
 }
@@ -615,11 +614,10 @@ impl<'i, 't> UnitVariance<InvariantSize> for &'i Literal<'t> {
 pub struct Repetition<'t, A = ()> {
     tokens: Vec<Token<'t, A>>,
     lower: usize,
-    // This representation is not ideal, as it does not statically enforce the
-    // invariant that the upper bound is greater than or equal to the lower
-    // bound. For example, this field could instead be a summand. However,
-    // tokens must closely resemble their glob expression representations so
-    // that errors in expressions can be deferred and presented more clearly.
+    // This representation is not ideal, as it does not statically enforce the invariant that the
+    // upper bound is greater than or equal to the lower bound. For example, this field could
+    // instead be a summand. However, tokens must closely resemble their glob expression
+    // representations so that errors in expressions can be deferred and presented more clearly.
     // Failures in the parser are difficult to describe.
     upper: Option<usize>,
 }
@@ -698,10 +696,10 @@ where
         let variance = self
             .tokens()
             .iter()
-            // Coalesce tokens with open variance with separators. This isn't
-            // destructive and doesn't affect invariance, because this only
-            // happens in the presence of open variance, which means that the
-            // repetition is variant (and has no invariant size or text).
+            // Coalesce tokens with open variance with separators. This isn't destructive and
+            // doesn't affect invariance, because this only happens in the presence of open
+            // variance, which means that the repetition is variant (and has no invariant size or
+            // text).
             .coalesce(|left, right| {
                 match (
                     (left.kind(), left.unit_variance()),

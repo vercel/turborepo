@@ -1,16 +1,7 @@
 //! Daemon Server
 //!
-//! This module houses the daemon server, some implementation notes for which
-//! are below.
-//!
-//! ## Implementation Notes
-//!
-//! The basic goals of the daemon are to watch for, and be able to provide
-//! details about, filesystem changes. It is organised as an async server, which
-//! holds a `HashGlobWatcher` which holds data about hashes, globs to watch for
-//! that hash, and files that have been updated for that hash. In addition, this
-//! server can be interrogated over grpc to register interest in particular
-//! globs, and to query for changes for those globs.
+//! This module houses the daemon server. For more information, go to the
+//! [daemon module](std::daemon).
 
 use std::{
     collections::{HashMap, HashSet},
@@ -22,34 +13,32 @@ use std::{
 };
 
 use futures::Future;
+use prost::DecodeError;
 use semver::Version;
 use thiserror::Error;
 use tokio::{
     select,
-    sync::{mpsc, oneshot, watch, Mutex as AsyncMutex},
+    sync::{mpsc, oneshot},
+    task::JoinHandle,
 };
-use tonic::transport::{NamedService, Server};
+use tonic::{server::NamedService, transport::Server};
 use tower::ServiceBuilder;
 use tracing::{error, info, trace, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_filewatch::{
-    cookie_jar::CookieJar,
+    cookies::CookieWriter,
     globwatcher::{Error as GlobWatcherError, GlobError, GlobSet, GlobWatcher},
-    package_watcher::PackageWatcher,
+    package_watcher::{PackageWatcher, WatchingPackageDiscovery},
     FileSystemWatcher, WatchError,
 };
 use turborepo_repository::discovery::{
     LocalPackageDiscoveryBuilder, PackageDiscovery, PackageDiscoveryBuilder,
 };
 
-use super::{
-    bump_timeout::BumpTimeout,
-    endpoint::SocketOpenError,
-    proto::{self},
-};
-use crate::{
-    daemon::{bump_timeout_layer::BumpTimeoutLayer, endpoint::listen_socket},
-    run::package_discovery::WatchingPackageDiscovery,
+use super::{bump_timeout::BumpTimeout, endpoint::SocketOpenError, proto};
+use crate::daemon::{
+    bump_timeout_layer::BumpTimeoutLayer, default_timeout_layer::DefaultTimeoutLayer,
+    endpoint::listen_socket, Paths,
 };
 
 #[derive(Debug)]
@@ -63,10 +52,14 @@ pub enum CloseReason {
     SocketOpenError(SocketOpenError),
 }
 
+/// We may need to pass out references to a subset of these, so
+/// we'll make them public Arcs. Eventually we can stabilize on
+/// a general API and close this up.
+#[derive(Clone)]
 pub struct FileWatching {
-    _watcher: FileSystemWatcher,
-    pub glob_watcher: GlobWatcher,
-    pub package_watcher: PackageWatcher,
+    watcher: Arc<FileSystemWatcher>,
+    pub glob_watcher: Arc<GlobWatcher>,
+    pub package_watcher: Arc<PackageWatcher>,
 }
 
 #[derive(Debug, Error)]
@@ -94,49 +87,56 @@ impl From<RpcError> for tonic::Status {
     }
 }
 
-async fn start_filewatching<PD: PackageDiscovery + Send + 'static>(
-    repo_root: AbsoluteSystemPathBuf,
-    watcher_tx: watch::Sender<Option<Arc<FileWatching>>>,
-    backup_discovery: PD,
-) -> Result<(), WatchError> {
-    let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).await?;
-    let cookie_jar = CookieJar::new(
-        watcher.cookie_dir(),
-        Duration::from_millis(100),
-        watcher.subscribe(),
-    );
-    let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());
-    let package_watcher =
-        PackageWatcher::new(repo_root.clone(), watcher.subscribe(), backup_discovery)
-            .await
-            .map_err(|e| WatchError::Setup(format!("{:?}", e)))?;
-    // We can ignore failures here, it means the server is shutting down and
-    // receivers have gone out of scope.
-    let _ = watcher_tx.send(Some(Arc::new(FileWatching {
-        _watcher: watcher,
-        glob_watcher,
-        package_watcher,
-    })));
-    Ok(())
+impl FileWatching {
+    /// This function is called in the constructor for the `TurboGrpcService`
+    /// and should defer ALL heavy computation to the background, making use
+    /// of `OptionalWatch` to ensure that the server can start up without
+    /// waiting for the filewatcher to be ready. Using `OptionalWatch`,
+    /// dependent services can wait for resources they need to become
+    /// available, and the server can start up without waiting for them.
+    pub fn new<PD: PackageDiscovery + Send + Sync + 'static>(
+        repo_root: AbsoluteSystemPathBuf,
+        backup_discovery: PD,
+    ) -> Result<FileWatching, WatchError> {
+        let watcher = Arc::new(FileSystemWatcher::new_with_default_cookie_dir(&repo_root)?);
+        let recv = watcher.watch();
+
+        let cookie_watcher = CookieWriter::new(
+            watcher.cookie_dir(),
+            Duration::from_millis(100),
+            recv.clone(),
+        );
+        let glob_watcher = Arc::new(GlobWatcher::new(
+            repo_root.clone(),
+            cookie_watcher,
+            recv.clone(),
+        ));
+        let package_watcher = Arc::new(
+            PackageWatcher::new(repo_root.clone(), recv.clone(), backup_discovery)
+                .map_err(|e| WatchError::Setup(format!("{:?}", e)))?,
+        );
+
+        Ok(FileWatching {
+            watcher,
+            glob_watcher,
+            package_watcher,
+        })
+    }
 }
 
 /// Timeout for every RPC the server handles
-const REQUEST_TIMEOUT: Duration = Duration::from_millis(100);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
-pub struct TurboGrpcService<S, PDA, PDB> {
-    watcher_tx: watch::Sender<Option<Arc<FileWatching>>>,
-    watcher_rx: watch::Receiver<Option<Arc<FileWatching>>>,
+pub struct TurboGrpcService<S, PDB> {
     repo_root: AbsoluteSystemPathBuf,
-    daemon_root: AbsoluteSystemPathBuf,
-    log_file: AbsoluteSystemPathBuf,
+    paths: Paths,
     timeout: Duration,
     external_shutdown: S,
 
-    package_discovery: PDA,
     package_discovery_backup: PDB,
 }
 
-impl<S> TurboGrpcService<S, WatchingPackageDiscovery, LocalPackageDiscoveryBuilder>
+impl<S> TurboGrpcService<S, LocalPackageDiscoveryBuilder>
 where
     S: Future<Output = CloseReason>,
 {
@@ -148,14 +148,10 @@ where
     /// state if the filewatcher encounters errors.
     pub fn new(
         repo_root: AbsoluteSystemPathBuf,
-        daemon_root: AbsoluteSystemPathBuf,
-        log_file: AbsoluteSystemPathBuf,
+        paths: Paths,
         timeout: Duration,
         external_shutdown: S,
     ) -> Self {
-        let (watcher_tx, watcher_rx) = watch::channel(None);
-
-        let package_discovery = WatchingPackageDiscovery::new(watcher_rx.clone());
         let package_discovery_backup =
             LocalPackageDiscoveryBuilder::new(repo_root.clone(), None, None);
 
@@ -163,95 +159,65 @@ where
         // so we use a private struct with just the pieces of state needed to handle
         // RPCs.
         TurboGrpcService {
-            watcher_tx,
-            watcher_rx,
             repo_root,
-            daemon_root,
-            log_file,
+            paths,
             timeout,
             external_shutdown,
-            package_discovery,
             package_discovery_backup,
         }
     }
 }
 
-impl<S, PDA, PDB> TurboGrpcService<S, PDA, PDB>
+impl<S, PDB> TurboGrpcService<S, PDB>
 where
     S: Future<Output = CloseReason>,
-    PDA: PackageDiscovery + Send + 'static,
     PDB: PackageDiscoveryBuilder,
-    PDB::Output: PackageDiscovery + Send + 'static,
+    PDB::Output: PackageDiscovery + Send + Sync + 'static,
 {
     /// If errors are encountered when loading the package discovery, this
     /// builder will be used as a backup to refresh the state.
     pub fn with_package_discovery_backup<PDB2: PackageDiscoveryBuilder>(
         self,
         package_discovery_backup: PDB2,
-    ) -> TurboGrpcService<S, PDA, PDB2> {
+    ) -> TurboGrpcService<S, PDB2> {
         TurboGrpcService {
-            package_discovery: self.package_discovery,
-            daemon_root: self.daemon_root,
             external_shutdown: self.external_shutdown,
-            log_file: self.log_file,
+            paths: self.paths,
             repo_root: self.repo_root,
             timeout: self.timeout,
-            watcher_rx: self.watcher_rx,
-            watcher_tx: self.watcher_tx,
             package_discovery_backup,
         }
     }
 
     pub async fn serve(self) -> Result<CloseReason, PDB::Error> {
         let Self {
-            watcher_tx,
-            watcher_rx,
-            daemon_root,
             external_shutdown,
-            log_file,
+            paths,
             repo_root,
             timeout,
-            package_discovery,
             package_discovery_backup,
         } = self;
 
-        let running = Arc::new(AtomicBool::new(true));
-        let (_pid_lock, stream) = match listen_socket(&daemon_root, running.clone()).await {
-            Ok((pid_lock, stream)) => (pid_lock, stream),
-            Err(e) => return Ok(CloseReason::SocketOpenError(e)),
-        };
-        trace!("acquired connection stream for socket");
-
-        let watcher_repo_root = repo_root.to_owned();
         // A channel to trigger the shutdown of the gRPC server. This is handed out
         // to components internal to the server process such as root watching, as
         // well as available to the gRPC server itself to handle the shutdown RPC.
         let (trigger_shutdown, mut shutdown_signal) = mpsc::channel::<()>(1);
 
-        let backup_discovery = package_discovery_backup.build()?;
+        let package_discovery_backup = package_discovery_backup.build()?;
+        let (service, exit_root_watch, watch_root_handle) = TurboGrpcServiceInner::new(
+            package_discovery_backup,
+            repo_root.clone(),
+            trigger_shutdown,
+            paths.log_file,
+        );
 
-        // watch receivers as a group own the filewatcher, which will exit when
-        // all references are dropped.
-        let fw_shutdown = trigger_shutdown.clone();
-        let fw_handle = tokio::task::spawn(async move {
-            if let Err(e) =
-                start_filewatching(watcher_repo_root, watcher_tx, backup_discovery).await
-            {
-                error!("filewatching failed to start: {}", e);
-                let _ = fw_shutdown.send(()).await;
-            }
-            info!("filewatching started");
-        });
-        // exit_root_watch delivers a signal to the root watch loop to exit.
-        // In the event that the server shuts down via some other mechanism, this
-        // cleans up root watching task.
-        let (exit_root_watch, root_watch_exit_signal) = oneshot::channel();
-        let watch_root_handle = tokio::task::spawn(watch_root(
-            watcher_rx.clone(),
-            repo_root.to_owned(),
-            trigger_shutdown.clone(),
-            root_watch_exit_signal,
-        ));
+        let running = Arc::new(AtomicBool::new(true));
+        let (_pid_lock, stream) =
+            match listen_socket(&paths.pid_file, &paths.sock_file, running.clone()).await {
+                Ok((pid_lock, stream)) => (pid_lock, stream),
+                Err(e) => return Ok(CloseReason::SocketOpenError(e)),
+            };
+        trace!("acquired connection stream for socket");
 
         let bump_timeout = Arc::new(BumpTimeout::new(timeout));
         let timeout_fut = bump_timeout.wait();
@@ -266,34 +232,29 @@ where
             };
         };
 
-        // Run the actual service. It takes ownership of the struct given to it,
-        // so we use a private struct with just the pieces of state needed to handle
-        // RPCs.
-        let service = TurboGrpcServiceInner {
-            package_discovery: AsyncMutex::new(package_discovery),
-            shutdown: trigger_shutdown,
-            watcher_rx,
-            times_saved: Arc::new(Mutex::new(HashMap::new())),
-            start_time: Instant::now(),
-            log_file: log_file.to_owned(),
-        };
         let server_fut = {
             let service = ServiceBuilder::new()
                 .layer(BumpTimeoutLayer::new(bump_timeout.clone()))
+                .layer(DefaultTimeoutLayer)
                 .service(crate::daemon::proto::turbod_server::TurbodServer::new(
                     service,
                 ));
 
             Server::builder()
-                // set a max timeout for RPCs
+                // we respect the timeout specified by the client if it is set, but
+                // have a default timeout for non-blocking calls of 100ms, courtesy of
+                // `DefaultTimeoutLayer`. the REQUEST_TIMEOUT, however, is the
+                // maximum time we will wait for a response, regardless of the client's
+                // preferences. it cannot be exceeded.
                 .timeout(REQUEST_TIMEOUT)
                 .add_service(service)
                 .serve_with_incoming_shutdown(stream, shutdown_fut)
         };
         // Wait for the server to exit.
         // This can be triggered by timeout, root watcher, or an RPC
+        tracing::debug!("server started");
         let _ = server_fut.await;
-        info!("gRPC server exited");
+        tracing::debug!("server exited");
         // Ensure our timer will exit
         running.store(false, Ordering::SeqCst);
         // We expect to have a signal from the grpc server on what triggered the exit
@@ -305,33 +266,73 @@ where
         let _ = exit_root_watch.send(());
         let _ = watch_root_handle.await;
         trace!("root watching exited");
-        // Clean up the filewatching handle in the event that we never even got
-        // started with filewatching. Again, we don't care about the error here.
-        let _ = fw_handle.await;
-        trace!("filewatching handle joined");
         Ok(close_reason)
     }
 }
 
 struct TurboGrpcServiceInner<PD> {
-    //shutdown: Arc<Mutex<Option<oneshot::Sender<()>>>>,
     shutdown: mpsc::Sender<()>,
-    watcher_rx: watch::Receiver<Option<Arc<FileWatching>>>,
+    file_watching: FileWatching,
     times_saved: Arc<Mutex<HashMap<String, u64>>>,
     start_time: Instant,
     log_file: AbsoluteSystemPathBuf,
-    package_discovery: AsyncMutex<PD>,
+    package_discovery: PD,
 }
 
-impl<PD> TurboGrpcServiceInner<PD> {
+// we have a grpc service that uses watching package discovery, and where the
+// watching package hasher also uses watching package discovery as well as
+// falling back to a local package hasher
+impl TurboGrpcServiceInner<Arc<WatchingPackageDiscovery>> {
+    pub fn new<PD: Sync + PackageDiscovery + Send + 'static>(
+        package_discovery_backup: PD,
+        repo_root: AbsoluteSystemPathBuf,
+        trigger_shutdown: mpsc::Sender<()>,
+        log_file: AbsoluteSystemPathBuf,
+    ) -> (
+        Self,
+        oneshot::Sender<()>,
+        JoinHandle<Result<(), WatchError>>,
+    ) {
+        let file_watching = FileWatching::new(repo_root.clone(), package_discovery_backup).unwrap();
+
+        tracing::debug!("initing package discovery");
+        let package_discovery = Arc::new(WatchingPackageDiscovery::new(
+            file_watching.package_watcher.clone(),
+        ));
+
+        // exit_root_watch delivers a signal to the root watch loop to exit.
+        // In the event that the server shuts down via some other mechanism, this
+        // cleans up root watching task.
+        let (exit_root_watch, root_watch_exit_signal) = oneshot::channel();
+        let watch_root_handle = tokio::task::spawn(watch_root(
+            file_watching.clone(),
+            repo_root.clone(),
+            trigger_shutdown.clone(),
+            root_watch_exit_signal,
+        ));
+
+        (
+            TurboGrpcServiceInner {
+                package_discovery,
+                shutdown: trigger_shutdown,
+                file_watching,
+                times_saved: Arc::new(Mutex::new(HashMap::new())),
+                start_time: Instant::now(),
+                log_file,
+            },
+            exit_root_watch,
+            watch_root_handle,
+        )
+    }
+}
+
+impl<PD> TurboGrpcServiceInner<PD>
+where
+    PD: PackageDiscovery + Send + Sync + 'static,
+{
     async fn trigger_shutdown(&self) {
         info!("triggering shutdown");
         let _ = self.shutdown.send(()).await;
-    }
-
-    async fn wait_for_filewatching(&self) -> Result<Arc<FileWatching>, RpcError> {
-        let rx = self.watcher_rx.clone();
-        wait_for_filewatching(rx, Duration::from_millis(100)).await
     }
 
     async fn watch_globs(
@@ -342,8 +343,10 @@ impl<PD> TurboGrpcServiceInner<PD> {
         time_saved: u64,
     ) -> Result<(), RpcError> {
         let glob_set = GlobSet::from_raw(output_globs, output_glob_exclusions)?;
-        let fw = self.wait_for_filewatching().await?;
-        fw.glob_watcher.watch_globs(hash.clone(), glob_set).await?;
+        self.file_watching
+            .glob_watcher
+            .watch_globs(hash.clone(), glob_set, REQUEST_TIMEOUT)
+            .await?;
         {
             let mut times_saved = self.times_saved.lock().expect("times saved lock poisoned");
             times_saved.insert(hash, time_saved);
@@ -360,48 +363,40 @@ impl<PD> TurboGrpcServiceInner<PD> {
             let times_saved = self.times_saved.lock().expect("times saved lock poisoned");
             times_saved.get(hash.as_str()).copied().unwrap_or_default()
         };
-        let fw = self.wait_for_filewatching().await?;
-        let changed_globs = fw.glob_watcher.get_changed_globs(hash, candidates).await?;
+        let changed_globs = self
+            .file_watching
+            .glob_watcher
+            .get_changed_globs(hash, candidates, REQUEST_TIMEOUT)
+            .await?;
         Ok((changed_globs, time_saved))
     }
 }
 
-async fn wait_for_filewatching(
-    mut rx: watch::Receiver<Option<Arc<FileWatching>>>,
-    timeout: Duration,
-) -> Result<Arc<FileWatching>, RpcError> {
-    let fw = tokio::time::timeout(timeout, rx.wait_for(|opt| opt.is_some()))
-        .await
-        .map_err(|_| RpcError::DeadlineExceeded)? // timeout case
-        .map_err(|_| RpcError::NoFileWatching)?; // sender dropped
-
-    return Ok(fw.as_ref().expect("guaranteed some above").clone());
-}
-
 async fn watch_root(
-    filewatching_access: watch::Receiver<Option<Arc<FileWatching>>>,
+    filewatching_access: FileWatching,
     root: AbsoluteSystemPathBuf,
     trigger_shutdown: mpsc::Sender<()>,
     mut exit_signal: oneshot::Receiver<()>,
 ) -> Result<(), WatchError> {
-    let mut recv_events = {
-        let Ok(fw) = wait_for_filewatching(filewatching_access, Duration::from_secs(5)).await
-        else {
-            return Ok(());
-        };
+    let mut recv_events = filewatching_access
+        .watcher
+        .subscribe()
+        .await
+        // we can only encounter an error here if the file watcher is closed (a recv error)
+        .map_err(|_| WatchError::Setup("file watching shut down".to_string()))?;
 
-        fw._watcher.subscribe()
-    };
+    tracing::debug!("watching root: {:?}", root);
 
     loop {
         // Ignore the outer layer of Result, if the sender has closed, filewatching has
         // gone away and we can return.
         select! {
-            _ = &mut exit_signal => return Ok(()),
+            _ = &mut exit_signal => break,
             event = recv_events.recv() => {
                 let Ok(event) = event else {
-                    return Ok(());
+                    break;
                 };
+                tracing::debug!("root watcher received event: {:?}", event);
                 let should_trigger_shutdown = match event {
                     // filewatching can throw some weird events, so check that the root is actually gone
                     // before triggering a shutdown
@@ -414,17 +409,20 @@ async fn watch_root(
                     // We don't care if a shutdown has already been triggered,
                     // so we can ignore the error.
                     let _ = trigger_shutdown.send(()).await;
-                    return Ok(());
+                    break;
                 }
             }
         }
     }
+
+    tracing::debug!("no longer watching root");
+
+    Ok(())
 }
 
 #[tonic::async_trait]
-impl<PD> proto::turbod_server::Turbod for TurboGrpcServiceInner<PD>
-where
-    PD: PackageDiscovery + Send + 'static,
+impl<PD: PackageDiscovery + Send + Sync + 'static> proto::turbod_server::Turbod
+    for TurboGrpcServiceInner<PD>
 {
     async fn hello(
         &self,
@@ -436,13 +434,13 @@ where
         let server_version = proto::VERSION;
 
         let passes_version_check = match (
-            proto::VersionRange::from_i32(request.supported_version_range),
+            proto::VersionRange::try_from(request.supported_version_range),
             Version::parse(&client_version),
             Version::parse(server_version),
         ) {
             // if we fail to parse, or the constraint is invalid, we have a version mismatch
-            (_, Err(_), _) | (_, _, Err(_)) | (None, _, _) => false,
-            (Some(range), Ok(client), Ok(server)) => compare_versions(client, server, range),
+            (_, Err(_), _) | (_, _, Err(_)) | (Err(DecodeError { .. }), _, _) => false,
+            (Ok(range), Ok(client), Ok(server)) => compare_versions(client, server, range),
         };
 
         if passes_version_check {
@@ -514,8 +512,6 @@ where
         _request: tonic::Request<proto::DiscoverPackagesRequest>,
     ) -> Result<tonic::Response<proto::DiscoverPackagesResponse>, tonic::Status> {
         self.package_discovery
-            .lock()
-            .await
             .discover_packages()
             .await
             .map(|packages| {
@@ -531,7 +527,44 @@ where
                     package_manager: proto::PackageManager::from(packages.package_manager).into(),
                 })
             })
-            .map_err(|e| tonic::Status::internal(format!("{}", e)))
+            .map_err(|e| match e {
+                turborepo_repository::discovery::Error::Unavailable => {
+                    tonic::Status::unavailable("package discovery unavailable")
+                }
+                turborepo_repository::discovery::Error::Failed(e) => {
+                    tonic::Status::internal(format!("{}", e))
+                }
+            })
+    }
+
+    async fn discover_packages_blocking(
+        &self,
+        _request: tonic::Request<proto::DiscoverPackagesRequest>,
+    ) -> Result<tonic::Response<proto::DiscoverPackagesResponse>, tonic::Status> {
+        self.package_discovery
+            .discover_packages_blocking()
+            .await
+            .map(|packages| {
+                tonic::Response::new(proto::DiscoverPackagesResponse {
+                    package_files: packages
+                        .workspaces
+                        .into_iter()
+                        .map(|d| proto::PackageFiles {
+                            package_json: d.package_json.to_string(),
+                            turbo_json: d.turbo_json.map(|t| t.to_string()),
+                        })
+                        .collect(),
+                    package_manager: proto::PackageManager::from(packages.package_manager).into(),
+                })
+            })
+            .map_err(|e| match e {
+                turborepo_repository::discovery::Error::Unavailable => {
+                    tonic::Status::unavailable("package discovery unavailable")
+                }
+                turborepo_repository::discovery::Error::Failed(e) => {
+                    tonic::Status::internal(format!("{}", e))
+                }
+            })
     }
 }
 
@@ -558,7 +591,7 @@ fn compare_versions(client: Version, server: Version, constraint: proto::Version
     }
 }
 
-impl<T> NamedService for TurboGrpcServiceInner<T> {
+impl<PD> NamedService for TurboGrpcServiceInner<PD> {
     const NAME: &'static str = "turborepo.Daemon";
 }
 
@@ -580,7 +613,7 @@ mod test {
     };
 
     use super::compare_versions;
-    use crate::daemon::{proto::VersionRange, CloseReason, TurboGrpcService};
+    use crate::daemon::{proto::VersionRange, CloseReason, Paths, TurboGrpcService};
 
     #[test_case("1.2.3", "1.2.3", VersionRange::Exact, true ; "exact match")]
     #[test_case("1.2.3", "1.2.3", VersionRange::Patch, true ; "patch match")]
@@ -612,7 +645,7 @@ mod test {
     struct MockDiscovery;
     impl PackageDiscovery for MockDiscovery {
         async fn discover_packages(
-            &mut self,
+            &self,
         ) -> Result<
             turborepo_repository::discovery::DiscoveryResponse,
             turborepo_repository::discovery::Error,
@@ -621,6 +654,15 @@ mod test {
                 package_manager: PackageManager::Yarn,
                 workspaces: vec![],
             })
+        }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<
+            turborepo_repository::discovery::DiscoveryResponse,
+            turborepo_repository::discovery::Error,
+        > {
+            self.discover_packages().await
         }
     }
 
@@ -636,19 +678,15 @@ mod test {
             .unwrap();
 
         let repo_root = path.join_component("repo");
-        let daemon_root = path.join_component("daemon");
-        let log_file = daemon_root.join_component("log");
+        let paths = Paths::from_repo_root(&repo_root);
         tracing::info!("start");
-
-        let pid_path = daemon_root.join_component("turbod.pid");
 
         let (tx, rx) = oneshot::channel::<CloseReason>();
         let exit_signal = rx.map(|_result| CloseReason::Interrupt);
 
         let service = TurboGrpcService::new(
             repo_root.clone(),
-            daemon_root,
-            log_file,
+            paths.clone(),
             Duration::from_secs(60 * 60),
             exit_signal,
         )
@@ -664,9 +702,9 @@ mod test {
 
         tokio::time::sleep(Duration::from_millis(2000)).await;
         assert!(
-            pid_path.exists(),
+            paths.pid_file.exists(),
             "pid file must be present at {:?}",
-            pid_path
+            paths.pid_file
         );
         // signal server exit
         tx.send(CloseReason::Interrupt).unwrap();
@@ -675,7 +713,7 @@ mod test {
         // The serve future should be dropped here, closing the server.
         tracing::info!("yay we are done");
 
-        assert!(!pid_path.exists(), "pid file must be deleted");
+        assert!(!paths.pid_file.exists(), "pid file must be deleted");
 
         tracing::info!("and files cleaned up");
     }
@@ -692,10 +730,7 @@ mod test {
             .unwrap();
 
         let repo_root = path.join_component("repo");
-        let daemon_root = path.join_component("daemon");
-        let log_file = daemon_root.join_component("log");
-
-        let pid_path = daemon_root.join_component("turbod.pid");
+        let paths = Paths::from_repo_root(&repo_root);
 
         let now = Instant::now();
         let (_tx, rx) = oneshot::channel::<CloseReason>();
@@ -703,8 +738,7 @@ mod test {
 
         let server = TurboGrpcService::new(
             repo_root.clone(),
-            daemon_root,
-            log_file,
+            paths.clone(),
             Duration::from_millis(10),
             exit_signal,
         )
@@ -727,7 +761,7 @@ mod test {
             Ok(CloseReason::Timeout),
             "must close due to timeout"
         );
-        assert!(!pid_path.exists(), "pid file must be deleted");
+        assert!(!paths.pid_file.exists(), "pid file must be deleted");
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -740,17 +774,14 @@ mod test {
             .unwrap();
 
         let repo_root = path.join_component("repo");
-        let daemon_root = path.join_component("daemon");
-        daemon_root.create_dir_all().unwrap();
-        let log_file = daemon_root.join_component("log");
+        let paths = Paths::from_repo_root(&repo_root);
 
         let (_tx, rx) = oneshot::channel::<CloseReason>();
         let exit_signal = rx.map(|_result| CloseReason::Interrupt);
 
         let server = TurboGrpcService::new(
             repo_root.clone(),
-            daemon_root,
-            log_file,
+            paths,
             Duration::from_secs(60 * 60),
             exit_signal,
         )

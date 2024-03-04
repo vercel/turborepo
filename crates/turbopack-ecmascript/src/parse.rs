@@ -7,16 +7,17 @@ use swc_core::{
         errors::{Handler, HANDLER},
         input::StringInput,
         source_map::SourceMapGenConfig,
-        BytePos, FileName, Globals, LineCol, Mark, GLOBALS,
+        BytePos, FileName, Globals, LineCol, Mark, SyntaxContext, GLOBALS,
     },
     ecma::{
         ast::{EsVersion, Program},
+        lints::{config::LintConfig, rules::LintParams},
         parser::{lexer::Lexer, EsConfig, Parser, Syntax, TsConfig},
         transforms::base::{
             helpers::{Helpers, HELPERS},
             resolver,
         },
-        visit::VisitMutWith,
+        visit::{FoldWith, VisitMutWith},
     },
 };
 use tracing::Instrument;
@@ -26,7 +27,7 @@ use turbo_tasks_hash::hash_xxh3_hash64;
 use turbopack_core::{
     asset::{Asset, AssetContent},
     error::PrettyPrintError,
-    issue::{Issue, IssueExt, IssueSeverity, OptionStyledString, StyledString},
+    issue::{Issue, IssueExt, IssueSeverity, IssueStage, OptionStyledString, StyledString},
     source::Source,
     source_map::{GenerateSourceMap, OptionSourceMap, SourceMap},
     SOURCE_MAP_ROOT_NAME,
@@ -82,7 +83,7 @@ pub struct ParseResultSourceMap {
 
     /// An input's original source map, if one exists. This will be used to
     /// trace locations back to the input's pre-transformed sources.
-    original_source_map: Option<Vc<SourceMap>>,
+    original_source_map: Vc<OptionSourceMap>,
 }
 
 impl PartialEq for ParseResultSourceMap {
@@ -95,7 +96,7 @@ impl ParseResultSourceMap {
     pub fn new(
         files_map: Arc<swc_core::common::SourceMap>,
         mappings: Vec<(BytePos, LineCol)>,
-        original_source_map: Option<Vc<SourceMap>>,
+        original_source_map: Vc<OptionSourceMap>,
     ) -> Self {
         ParseResultSourceMap {
             files_map,
@@ -109,7 +110,7 @@ impl ParseResultSourceMap {
 impl GenerateSourceMap for ParseResultSourceMap {
     #[turbo_tasks::function]
     async fn generate_source_map(&self) -> Result<Vc<OptionSourceMap>> {
-        let original_src_map = if let Some(input) = self.original_source_map {
+        let original_src_map = if let Some(input) = *self.original_source_map.await? {
             Some(input.await?.to_source_map().await?)
         } else {
             None
@@ -250,6 +251,15 @@ async fn parse_content(
         Box::new(IssueEmitter {
             source,
             source_map: source_map.clone(),
+            title: Some("Ecmascript file had an error".to_string()),
+        }),
+    );
+    let parser_handler = Handler::with_emitter(
+        true,
+        false,
+        Box::new(IssueEmitter {
+            source,
+            source_map: source_map.clone(),
             title: Some("Parsing ecmascript source code failed".to_string()),
         }),
     );
@@ -307,7 +317,7 @@ async fn parse_content(
 
                 let mut has_errors = false;
                 for e in parser.take_errors() {
-                    e.into_diagnostic(&handler).emit();
+                    e.into_diagnostic(&parser_handler).emit();
                     has_errors = true
                 }
 
@@ -318,7 +328,7 @@ async fn parse_content(
                 match program_result {
                     Ok(parsed_program) => parsed_program,
                     Err(e) => {
-                        e.into_diagnostic(&handler).emit();
+                        e.into_diagnostic(&parser_handler).emit();
                         return Ok(ParseResult::Unparseable);
                     }
                 }
@@ -338,6 +348,18 @@ async fn parse_content(
                 is_typescript,
             ));
 
+            let lint_config = LintConfig::default();
+            let rules = swc_core::ecma::lints::rules::all(LintParams {
+                program: &parsed_program,
+                lint_config: &lint_config,
+                unresolved_ctxt: SyntaxContext::empty().apply_mark(unresolved_mark),
+                top_level_ctxt: SyntaxContext::empty().apply_mark(top_level_mark),
+                es_version: EsVersion::latest(),
+                source_map: source_map.clone(),
+            });
+            parsed_program =
+                parsed_program.fold_with(&mut swc_core::ecma::lints::rules::lint_to_fold(rules));
+
             let transform_context = TransformContext {
                 comments: &comments,
                 source_map: &source_map,
@@ -352,6 +374,10 @@ async fn parse_content(
                 transform
                     .apply(&mut parsed_program, &transform_context)
                     .await?;
+            }
+
+            if parser_handler.has_errors() {
+                return Ok(ParseResult::Unparseable);
             }
 
             parsed_program.visit_mut_with(
@@ -422,7 +448,7 @@ impl Issue for ReadSourceIssue {
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("parse".to_string())
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::Load.cell()
     }
 }

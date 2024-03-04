@@ -34,14 +34,14 @@ We can scope the run to specific packages
 Can't depend on unknown tasks
   $ ${TURBO} run build2 > BUILD2 2>&1
   [1]
-  $ cat BUILD2 | grep --only-match 'Could not find "app-a#custom" in root turbo.json or "custom" in workspace'
-  Could not find "app-a#custom" in root turbo.json or "custom" in workspace
+  $ cat BUILD2 | grep --only-match 'x Could not find "app-a#custom" in root turbo.json or "custom" in package'
+  x Could not find "app-a#custom" in root turbo.json or "custom" in package
 
 Can't depend on tasks from unknown packages
   $ ${TURBO} run build3 > BUILD3 2>&1
   [1]
-  $ cat BUILD3 | grep --only-match 'Could not find workspace "unknown" from task "unknown#custom" in project'
-  Could not find workspace "unknown" from task "unknown#custom" in project
+  $ cat BUILD3 | grep --only-match 'x Could not find package "unknown" from task "unknown#custom" in project'
+  x Could not find package "unknown" from task "unknown#custom" in project
 
 Complex dependency chain
   $ ${TURBO} run test --graph

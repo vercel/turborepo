@@ -10,7 +10,6 @@ pub fn restore_regular(
     anchor: &AbsoluteSystemPath,
     entry: &mut Entry<impl Read>,
 ) -> Result<AnchoredSystemPathBuf, CacheError> {
-    let header = entry.header();
     // Assuming this was a `turbo`-created input, we currently have an
     // RelativeUnixPath. Assuming this is malicious input we don't really care
     // if we do the wrong thing.
@@ -32,6 +31,7 @@ pub fn restore_regular(
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
+        let header = entry.header();
         open_options.mode(header.mode()?);
     }
 

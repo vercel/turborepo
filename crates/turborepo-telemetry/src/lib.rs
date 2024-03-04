@@ -262,7 +262,7 @@ mod tests {
     };
     use turborepo_api_client::telemetry::TelemetryClient;
     use turborepo_ui::UI;
-    use turborepo_vercel_api::{TelemetryEvent, TelemetryGenericEvent};
+    use turborepo_vercel_api::telemetry::{TelemetryEvent, TelemetryGenericEvent};
 
     use crate::init;
 

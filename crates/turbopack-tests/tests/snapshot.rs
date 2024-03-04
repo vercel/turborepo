@@ -20,10 +20,11 @@ use turbo_tasks_fs::{
 };
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
-    condition::ContextCondition,
-    ecmascript::EcmascriptModuleAsset,
-    module_options::{CustomEcmascriptTransformPlugins, JsxTransformOptions, ModuleOptionsContext},
-    resolve_options_context::ResolveOptionsContext,
+    ecmascript::{EcmascriptInputTransform, EcmascriptModuleAsset},
+    module_options::{
+        JsxTransformOptions, ModuleOptionsContext, ModuleRule, ModuleRuleCondition,
+        ModuleRuleEffect,
+    },
     ModuleAssetContext,
 };
 use turbopack_build::{BuildChunkingContext, MinifyType};
@@ -35,6 +36,7 @@ use turbopack_core::{
     },
     compile_time_defines,
     compile_time_info::CompileTimeInfo,
+    condition::ContextCondition,
     context::AssetContext,
     environment::{BrowserEnvironment, Environment, ExecutionEnvironment, NodeJsEnvironment},
     file_source::FileSource,
@@ -52,6 +54,7 @@ use turbopack_ecmascript_plugins::transform::{
 };
 use turbopack_ecmascript_runtime::RuntimeType;
 use turbopack_env::ProcessEnvAsset;
+use turbopack_resolve::resolve_options_context::ResolveOptionsContext;
 use turbopack_test_utils::snapshot::{diff, expected, matches_expected, snapshot_issues};
 
 use crate::util::REPO_ROOT;
@@ -66,6 +69,7 @@ fn register() {
     turbopack_env::register();
     turbopack_ecmascript_plugins::register();
     turbopack_ecmascript_runtime::register();
+    turbopack_resolve::register();
     include!(concat!(env!("OUT_DIR"), "/register_test_snapshot.rs"));
 }
 
@@ -180,8 +184,8 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
         Err(_) => SnapshotOptions::default(),
         Ok(options_str) => parse_json_with_source_context(&options_str).unwrap(),
     };
-    let root_fs = DiskFileSystem::new("workspace".to_string(), REPO_ROOT.clone());
-    let project_fs = DiskFileSystem::new("project".to_string(), REPO_ROOT.clone());
+    let root_fs = DiskFileSystem::new("workspace".to_string(), REPO_ROOT.clone(), vec![]);
+    let project_fs = DiskFileSystem::new("project".to_string(), REPO_ROOT.clone(), vec![]);
     let project_root = project_fs.root();
 
     let relative_path = test_path.strip_prefix(&*REPO_ROOT)?;
@@ -226,23 +230,28 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
         .free_var_references(free_var_references!(..defines.into_iter()).cell())
         .cell();
 
-    let custom_ecma_transform_plugins = Some(CustomEcmascriptTransformPlugins::cell(
-        CustomEcmascriptTransformPlugins {
-            source_transforms: vec![
-                Vc::cell(Box::new(
-                    EmotionTransformer::new(&EmotionTransformConfig {
-                        sourcemap: Some(false),
-                        ..Default::default()
-                    })
-                    .expect("Should be able to create emotion transformer"),
-                ) as _),
-                Vc::cell(Box::new(StyledComponentsTransformer::new(
-                    &StyledComponentsTransformConfig::default(),
-                )) as _),
-            ],
-            output_transforms: vec![],
-        },
-    ));
+    let conditions = ModuleRuleCondition::any(vec![
+        ModuleRuleCondition::ResourcePathEndsWith(".js".to_string()),
+        ModuleRuleCondition::ResourcePathEndsWith(".jsx".to_string()),
+        ModuleRuleCondition::ResourcePathEndsWith(".ts".to_string()),
+        ModuleRuleCondition::ResourcePathEndsWith(".tsx".to_string()),
+    ]);
+
+    let custom_rules = ModuleRule::new(
+        conditions,
+        vec![ModuleRuleEffect::ExtendEcmascriptTransforms {
+            prepend: Vc::cell(vec![
+                EcmascriptInputTransform::Plugin(Vc::cell(Box::new(
+                    EmotionTransformer::new(&EmotionTransformConfig::default())
+                        .expect("Should be able to create emotion transformer"),
+                ) as _)),
+                EcmascriptInputTransform::Plugin(Vc::cell(Box::new(
+                    StyledComponentsTransformer::new(&StyledComponentsTransformConfig::default()),
+                ) as _)),
+            ]),
+            append: Vc::cell(vec![]),
+        }],
+    );
     let asset_context: Vc<Box<dyn AssetContext>> = Vc::upcast(ModuleAssetContext::new(
         Vc::cell(HashMap::new()),
         compile_time_info,
@@ -259,7 +268,7 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
                 }
                 .cell(),
             )],
-            custom_ecma_transform_plugins,
+            custom_rules: vec![custom_rules],
             ..Default::default()
         }
         .into(),

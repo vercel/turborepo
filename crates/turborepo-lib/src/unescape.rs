@@ -4,13 +4,19 @@ use biome_deserialize::{Deserializable, DeserializableValue, DeserializationDiag
 
 // We're using a newtype here because biome currently doesn't
 // handle escapes and we can't override the String deserializer
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(transparent)]
 pub struct UnescapedString(String);
 
 impl Display for UnescapedString {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for UnescapedString {
+    fn as_ref(&self) -> &str {
+        &self.0
     }
 }
 

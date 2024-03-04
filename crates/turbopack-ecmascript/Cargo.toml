@@ -15,6 +15,7 @@ workspace = true
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+either = { workspace = true }
 futures = { workspace = true }
 indexmap = { workspace = true }
 indoc = { workspace = true }
@@ -37,6 +38,7 @@ turbo-tasks = { workspace = true }
 turbo-tasks-fs = { workspace = true }
 turbo-tasks-hash = { workspace = true }
 turbopack-core = { workspace = true }
+turbopack-resolve = { workspace = true }
 turbopack-swc-utils = { workspace = true }
 url = { workspace = true }
 
@@ -47,6 +49,7 @@ swc_core = { workspace = true, features = [
   "common_concurrent",
   "common_sourcemap",
   "ecma_codegen",
+  "ecma_lints",
   "ecma_parser",
   "ecma_preset_env",
   "ecma_transforms",

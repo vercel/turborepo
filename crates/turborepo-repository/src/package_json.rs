@@ -55,6 +55,7 @@ pub enum Error {
 
 impl PackageJson {
     pub fn load(path: &AbsoluteSystemPath) -> Result<PackageJson, Error> {
+        tracing::debug!("loading package.json from {}", path);
         let contents = path.read_to_string()?;
         Self::from_str(&contents)
     }

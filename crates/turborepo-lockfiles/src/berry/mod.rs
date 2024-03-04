@@ -809,7 +809,7 @@ mod test {
                 key: "debug@npm:1.0.0".into(),
                 version: "1.0.0".into()
             }
-        )
+        );
     }
 
     #[test]
@@ -893,6 +893,49 @@ mod test {
             key: "uri-js@npm:4.4.1".into(),
             version: "4.4.1".into()
         }));
+    }
+
+    #[test]
+    fn test_nonexistent_resolutions_dependencies() {
+        let data: LockfileData =
+            serde_yaml::from_str(include_str!("../../fixtures/yarn4-resolution.lock")).unwrap();
+        let manifest = BerryManifest {
+            resolutions: Some(
+                [("react@^18.2.0".to_string(), "18.1.0".to_string())]
+                    .iter()
+                    .cloned()
+                    .collect(),
+            ),
+        };
+        let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
+
+        let actual = lockfile
+            .resolve_package("packages/something", "react", "^18.2.0")
+            .unwrap()
+            .unwrap();
+        let expected = Package {
+            key: "react@npm:18.1.0".into(),
+            version: "18.1.0".into(),
+        };
+        assert_eq!(actual, expected,);
+
+        let pruned = lockfile
+            .subgraph(
+                &["packages/something".into()],
+                &[
+                    "react@npm:18.1.0".into(),
+                    "loose-envify@npm:1.4.0".into(),
+                    "js-tokens@npm:4.0.0".into(),
+                ],
+            )
+            .unwrap();
+        assert_eq!(
+            pruned
+                .resolve_package("packages/something", "react", "^18.2.0")
+                .unwrap()
+                .unwrap(),
+            expected
+        );
     }
 
     #[test]

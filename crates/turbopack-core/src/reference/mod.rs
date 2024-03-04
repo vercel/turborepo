@@ -1,6 +1,7 @@
 use std::collections::{HashSet, VecDeque};
 
 use anyhow::Result;
+use indexmap::IndexSet;
 use turbo_tasks::{
     graph::{AdjacencyMap, GraphTraversal},
     TryJoinIterExt, ValueToString, Vc,
@@ -10,7 +11,8 @@ use crate::{
     issue::IssueDescriptionExt,
     module::{Module, Modules},
     output::{OutputAsset, OutputAssets},
-    resolve::ModuleResolveResult,
+    raw_module::RawModule,
+    resolve::{ModuleResolveResult, RequestKey},
 };
 pub mod source_map;
 
@@ -107,7 +109,7 @@ impl SingleOutputAssetReference {
 impl ModuleReference for SingleOutputAssetReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
-        ModuleResolveResult::output_asset(self.asset).cell()
+        ModuleResolveResult::output_asset(RequestKey::default(), self.asset).cell()
     }
 }
 
@@ -141,23 +143,29 @@ impl SingleOutputAssetReference {
 ///
 /// [Module]: crate::module::Module
 #[turbo_tasks::function]
-pub async fn all_referenced_modules(module: Vc<Box<dyn Module>>) -> Result<Vc<Modules>> {
+pub async fn referenced_modules_and_affecting_sources(
+    module: Vc<Box<dyn Module>>,
+) -> Result<Vc<Modules>> {
     let references_set = module.references().await?;
-    let mut modules = Vec::new();
-    let mut queue = VecDeque::with_capacity(32);
-    for reference in references_set.iter() {
-        queue.push_back(reference.resolve_reference());
+    let mut modules = IndexSet::new();
+    let resolve_results = references_set
+        .iter()
+        .map(|r| r.resolve_reference())
+        .try_join()
+        .await?;
+    for resolve_result in resolve_results {
+        modules.extend(resolve_result.primary_modules_iter());
+        modules.extend(
+            resolve_result
+                .affecting_sources_iter()
+                .map(|source| Vc::upcast(RawModule::new(source))),
+        );
     }
-    // that would be non-deterministic:
-    // while let Some(result) = race_pop(&mut queue).await {
-    // match &*result? {
-    while let Some(resolve_result) = queue.pop_front() {
-        modules.extend(resolve_result.primary_modules().await?.iter().copied());
-        for &reference in resolve_result.await?.get_references() {
-            queue.push_back(reference.resolve_reference());
-        }
+    let mut resolved_modules = IndexSet::new();
+    for module in modules {
+        resolved_modules.insert(module.resolve().await?);
     }
-    Ok(Vc::cell(modules))
+    Ok(Vc::cell(resolved_modules.into_iter().collect()))
 }
 
 /// Aggregates all primary [Module]s referenced by an [Module]. [AssetReference]
@@ -190,10 +198,10 @@ pub async fn primary_referenced_modules(module: Vc<Box<dyn Module>>) -> Result<V
 /// referenced [Module]s. This basically gives all [Module]s in a subgraph
 /// starting from the passed [Module].
 #[turbo_tasks::function]
-pub async fn all_modules(asset: Vc<Box<dyn Module>>) -> Result<Vc<Modules>> {
+pub async fn all_modules_and_affecting_sources(asset: Vc<Box<dyn Module>>) -> Result<Vc<Modules>> {
     // TODO need to track import path here
     let mut queue = VecDeque::with_capacity(32);
-    queue.push_back((asset, all_referenced_modules(asset)));
+    queue.push_back((asset, referenced_modules_and_affecting_sources(asset)));
     let mut assets = HashSet::new();
     assets.insert(asset);
     while let Some((parent, references)) = queue.pop_front() {
@@ -202,7 +210,7 @@ pub async fn all_modules(asset: Vc<Box<dyn Module>>) -> Result<Vc<Modules>> {
             .await?;
         for asset in references.await?.iter() {
             if assets.insert(*asset) {
-                queue.push_back((*asset, all_referenced_modules(*asset)));
+                queue.push_back((*asset, referenced_modules_and_affecting_sources(*asset)));
             }
         }
     }

@@ -30,7 +30,7 @@ use turbopack_ecmascript::ParseResultSourceMap;
 #[turbo_tasks::function]
 pub async fn minify(path: Vc<FileSystemPath>, code: Vc<Code>) -> Result<Vc<Code>> {
     let path = path.await?;
-    let original_map = code.generate_source_map().await?.clone_value();
+    let original_map = code.generate_source_map();
     let code = code.await?;
 
     let cm = Arc::new(SwcSourceMap::new(FilePathMapping::empty()));
@@ -102,7 +102,11 @@ pub async fn minify(path: Vc<FileSystemPath>, code: Vc<Code>) -> Result<Vc<Code>
         )),
     );
 
-    write!(builder, "\n\n//# sourceMappingURL={}.map", path.file_name())?;
+    write!(
+        builder,
+        "\n\n//# sourceMappingURL={}.map",
+        urlencoding::encode(path.file_name())
+    )?;
     Ok(builder.build().cell())
 }
 

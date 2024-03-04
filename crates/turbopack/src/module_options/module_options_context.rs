@@ -1,15 +1,16 @@
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{trace::TraceRawVcs, ValueDefault, Vc};
-use turbopack_core::{environment::Environment, resolve::options::ImportMapping};
-use turbopack_ecmascript::{references::esm::UrlRewriteBehavior, TransformPlugin, TreeShakingMode};
+use turbopack_core::{
+    condition::ContextCondition, environment::Environment, resolve::options::ImportMapping,
+};
+use turbopack_ecmascript::{references::esm::UrlRewriteBehavior, TreeShakingMode};
 use turbopack_node::{
     execution_context::ExecutionContext,
     transforms::{postcss::PostCssTransformOptions, webpack::WebpackLoaderItems},
 };
 
 use super::ModuleRule;
-use crate::condition::ContextCondition;
 
 #[derive(Clone, PartialEq, Eq, Debug, TraceRawVcs, Serialize, Deserialize)]
 pub struct LoaderRuleItem {
@@ -99,18 +100,6 @@ pub struct JsxTransformOptions {
     pub runtime: Option<String>,
 }
 
-/// Configuration options for the custom ecma transform to be applied.
-#[turbo_tasks::value(shared)]
-#[derive(Default, Clone)]
-pub struct CustomEcmascriptTransformPlugins {
-    /// List of plugins to be applied before the main transform.
-    /// Transform will be applied in the order of the list.
-    pub source_transforms: Vec<Vc<TransformPlugin>>,
-    /// List of plugins to be applied after the main transform.
-    /// Transform will be applied in the order of the list.
-    pub output_transforms: Vec<Vc<TransformPlugin>>,
-}
-
 #[turbo_tasks::value(shared)]
 #[derive(Default, Clone)]
 #[serde(default)]
@@ -136,6 +125,8 @@ pub struct ModuleOptionsContext {
     pub enable_jsx: Option<Vc<JsxTransformOptions>>,
     pub enable_postcss_transform: Option<Vc<PostCssTransformOptions>>,
     pub enable_webpack_loaders: Option<Vc<WebpackLoadersOptions>>,
+    /// Follow type references and resolve declaration files in additional to
+    /// normal resolution.
     pub enable_types: bool,
     pub enable_typescript_transform: Option<Vc<TypescriptTransformOptions>>,
     pub decorators: Option<Vc<DecoratorsOptions>>,
@@ -150,7 +141,6 @@ pub struct ModuleOptionsContext {
     // however we might want to unify them in the future.
     pub enable_mdx_rs: Option<Vc<MdxTransformModuleOptions>>,
     pub preset_env_versions: Option<Vc<Environment>>,
-    pub custom_ecma_transform_plugins: Option<Vc<CustomEcmascriptTransformPlugins>>,
     /// Custom rules to be applied after all default rules.
     pub custom_rules: Vec<ModuleRule>,
     pub execution_context: Option<Vc<ExecutionContext>>,

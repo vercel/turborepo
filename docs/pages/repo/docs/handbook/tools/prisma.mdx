@@ -108,7 +108,7 @@ We can now run `turbo db:push db:generate` from the root of our repository to au
 
 ### 5. Exporting your client
 
-Next, we need to export the `@prisma/client` so we can use it in our applications. Let's add a new file to `packages/database`:
+Next, we need to export the `@prisma/client` so we can use it in our applications. Let's add an `index.ts` file to `packages/database`:
 
 ```ts filename="packages/database/index.ts"
 export * from '@prisma/client';

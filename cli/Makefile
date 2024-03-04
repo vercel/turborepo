@@ -40,46 +40,6 @@ build: install
 	cd $(CLI_DIR)/../ && pnpm install --filter=eslint-config-turbo && pnpm turbo-prebuilt build --filter=eslint-config-turbo...
 	cd $(CLI_DIR)/../ && pnpm install --filter=@turbo/types && pnpm turbo-prebuilt build --filter=@turbo/types...
 
-.PHONY: publish-turbo-cross
-publish-turbo-cross: prepublish
-	goreleaser release --rm-dist -f cross-release.yml
-
-.PHONY: publish-turbo-darwin
-publish-turbo-darwin: prepublish
-	goreleaser release --rm-dist -f darwin-release.yml
-
-.PHONY: snapshot-turbo-cross
-snapshot-turbo-cross:
-	goreleaser release --snapshot --rm-dist -f cross-release.yml
-
-.PHONY: snapshot-turbo-darwin
-snapshot-turbo-darwin:
-	goreleaser release --snapshot --rm-dist -f darwin-release.yml
-
-.PHONY: snapshot-lib-turbo-darwin
-snapshot-lib-turbo-darwin:
-	goreleaser release --snapshot --rm-dist -f darwin-lib.yml
-
-.PHONY: snapshot-lib-turbo-cross
-snapshot-lib-turbo-cross:
-	goreleaser release --snapshot --rm-dist -f cross-lib.yml
-
-.PHONY: build-lib-turbo-darwin
-build-lib-turbo-darwin:
-	goreleaser release --rm-dist -f darwin-lib.yml
-
-.PHONY: build-go-turbo-darwin
-build-go-turbo-darwin:
-	goreleaser release --rm-dist -f darwin-release.yml
-
-.PHONY: build-go-turbo-cross
-build-go-turbo-cross:
-	goreleaser release --rm-dist -f cross-release.yml
-
-.PHONY: build-lib-turbo-cross
-build-lib-turbo-cross:
-	goreleaser release --rm-dist -f cross-lib.yml
-
 .PHONY: stage-release
 stage-release:
 	echo "Version: $(TURBO_VERSION)"
@@ -119,6 +79,7 @@ publish-turbo: clean build
 	npm config set --location=project "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
 
 	# Publishes the native npm modules.
+	# TODO: do this without goreleaser.
 	goreleaser release --rm-dist -f combined-shim.yml $(SKIP_PUBLISH)
 
 	# Split packing from the publish step so that npm locates the correct .npmrc file.
@@ -146,45 +107,13 @@ ifneq ($(SKIP_PUBLISH),--skip-publish)
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-types-$(TURBO_VERSION).tgz
 endif
 
-demo/lage: install
-	node $(CLI_DIR)/scripts/generate.mjs lage
-
-demo/lerna: install
-	node $(CLI_DIR)/scripts/generate.mjs lerna
-
-demo/nx: install
-	node $(CLI_DIR)/scripts/generate.mjs nx
-
-demo/turbo: install
-	node $(CLI_DIR)/scripts/generate.mjs turbo
-
-demo: demo/lage demo/lerna demo/nx demo/turbo
-
-bench/lerna: demo/lerna
-	cd $(CLI_DIR)/demo/lerna && node_modules/.bin/lerna run build
-
-bench/lage: demo/lage
-	cd $(CLI_DIR)/demo/lage && node_modules/.bin/lage build
-
-bench/nx: demo/nx
-	cd $(CLI_DIR)/demo/nx && node_modules/.bin/nx run-many --target=build --all
-
-bench/turbo: demo/turbo turbo
-	cd $(CLI_DIR)/demo/turbo && $(CLI_DIR)/turbo run test
-
-bench: bench/lerna bench/lage bench/nx bench/turbo
-
-clean: clean-build clean-demo clean-rust
+clean: clean-build clean-rust
 
 clean-rust:
 	cargo clean
 
 clean-build:
 	rm -f turbo
-
-clean-demo:
-	rm -rf node_modules
-	rm -rf demo
 
 # use target fixture-<some directory under turborepo-tests/integration/fixtures> to set up the testbed directory
 .PHONY=fixture-%

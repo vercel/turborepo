@@ -263,6 +263,7 @@ Test help flag for login command
   Options:
         --sso-team <SSO_TEAM>             
         --version                         
+    -f, --force                           Force a login to receive a new token. Will overwrite any existing tokens for the given login url
         --skip-infer                      Skip any attempts to infer which version of Turbo the project is configured to use
         --no-update-notifier              Disable the turbo update notification
         --api <API>                       Override the endpoint for API calls

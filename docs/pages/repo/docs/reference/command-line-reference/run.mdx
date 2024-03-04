@@ -348,10 +348,16 @@ turbo run dev --parallel --no-cache
 Generates a trace of the run in Chrome Tracing format that you can use to analyze performance.
 The profile can be viewed in [Perfetto](https://ui.perfetto.dev/).
 
-You must provide a verbosity flag (`-v`, `-vv`, or `-vvv`) with the `--profile` to produce a trace.
-
 ```sh
 turbo run build --profile=profile.json
+```
+
+### `--remote-cache-timeout`
+
+Default `30` seconds. Set the timeout for remote cache operations in seconds.
+
+```shell
+turbo run build --remote-cache-timeout=60
 ```
 
 ### `--remote-only`
