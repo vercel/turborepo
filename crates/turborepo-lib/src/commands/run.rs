@@ -1,32 +1,39 @@
+use std::future::Future;
+
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
 use crate::{commands::CommandBase, run, run::builder::RunBuilder, signal::SignalHandler};
 
-pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i32, run::Error> {
-    #[cfg(windows)]
-    let signal = {
-        let mut ctrl_c = tokio::signal::windows::ctrl_c().map_err(run::Error::SignalHandler)?;
-        async move { ctrl_c.recv().await }
-    };
-    #[cfg(not(windows))]
-    let signal = {
-        use tokio::signal::unix;
-        let mut sigint =
-            unix::signal(unix::SignalKind::interrupt()).map_err(run::Error::SignalHandler)?;
-        let mut sigterm =
-            unix::signal(unix::SignalKind::terminate()).map_err(run::Error::SignalHandler)?;
-        async move {
-            tokio::select! {
-                res = sigint.recv() => {
-                    res
-                }
-                res = sigterm.recv() => {
-                    res
-                }
+#[cfg(windows)]
+pub async fn get_signal() -> Result<impl Future<Output = Option<()>>, run::Error> {
+    let mut ctrl_c = tokio::signal::windows::ctrl_c().map_err(run::Error::SignalHandler)?;
+    Ok(async move { ctrl_c.recv().await })
+}
+
+#[cfg(not(windows))]
+pub fn get_signal() -> Result<impl Future<Output = Option<()>>, run::Error> {
+    use tokio::signal::unix;
+    let mut sigint =
+        unix::signal(unix::SignalKind::interrupt()).map_err(run::Error::SignalHandler)?;
+    let mut sigterm =
+        unix::signal(unix::SignalKind::terminate()).map_err(run::Error::SignalHandler)?;
+
+    Ok(async move {
+        tokio::select! {
+            res = sigint.recv() => {
+                println!("Received SIGINT");
+                res
+            }
+            res = sigterm.recv() => {
+                println!("Received SIGTERM");
+                res
             }
         }
-    };
+    })
+}
 
+pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i32, run::Error> {
+    let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
 
     let run_builder = RunBuilder::new(base)?;
