@@ -963,12 +963,12 @@ impl GenerateSourceMap for ParseCssResultSourceMap {
                 }
 
                 for m in source_map.get_mappings() {
-                    builder.add(
+                    builder.add_raw(
                         m.generated_line,
                         m.generated_column,
                         m.original.map(|v| v.original_line).unwrap_or_default(),
                         m.original.map(|v| v.original_column).unwrap_or_default(),
-                        None,
+                        Some(0),
                         None,
                     );
                 }
