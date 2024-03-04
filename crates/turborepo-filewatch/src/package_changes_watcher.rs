@@ -209,7 +209,11 @@ impl Subscriber {
                     }
                     Err(broadcast::error::RecvError::Lagged(_)) => {
                         tracing::warn!("file event lagged");
-                        break;
+                        // Lagged essentially means we're not keeping up with the file events, so
+                        // we can catch up by sending a rediscover event
+                        let _ = self
+                            .package_change_events_tx
+                            .send(PackageChangeEvent::Rediscover);
                     }
                     Err(broadcast::error::RecvError::Closed) => {
                         tracing::debug!("file event channel closed");
