@@ -5014,6 +5014,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "mopa"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a785740271256c230f57462d3b83e52f998433a7062fc18f96d5999474a9f915"
+
+[[package]]
 name = "more-asserts"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10595,6 +10601,7 @@ dependencies = [
  "event-listener",
  "futures 0.3.28",
  "indexmap 1.9.3",
+ "mopa",
  "nohash-hasher",
  "once_cell",
  "parking_lot 0.12.1",
@@ -11332,6 +11339,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-stream",
+ "async-trait",
  "bytes 1.5.0",
  "const_format",
  "futures 0.3.28",
@@ -11357,6 +11365,7 @@ dependencies = [
  "turbopack-core",
  "turbopack-dev-server",
  "turbopack-ecmascript",
+ "turbopack-resolve",
  "url 2.4.1",
  "urlencoding",
 ]

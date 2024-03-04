@@ -253,7 +253,11 @@ pub enum DaemonCommand {
     Stop,
     /// Stops the turbo daemon if it is already running, and removes any stale
     /// daemon state
-    Clean,
+    Clean {
+        /// Clean
+        #[clap(long, default_value_t = true)]
+        clean_logs: bool,
+    },
     /// Shows the daemon logs
     Logs,
 }
