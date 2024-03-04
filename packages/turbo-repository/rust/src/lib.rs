@@ -25,9 +25,36 @@ pub struct Package {
     pub relative_path: String,
 }
 
+// #[napi]
+// pub struct SerializablePackage {
+//     pub package: String,
+//     pub dependents: Vec<String>,
+//     pub dependencies: Vec<String>,
+// }
+
+// impl SerializablePackage {
+//     pub fn new(package: Package, dependents: Vec<Package>, dependencies:
+// Vec<Package>) -> Self {         Self {
+//             package,
+//             dependents,
+//             dependencies,
+//         }
+//     }
+// }
+
+// type PackageName = String;
+type RelativePath = String;
+#[napi]
+struct PackageDetails {
+    #[napi(readonly)]
+    pub dependencies: Vec<RelativePath>,
+    #[napi(readonly)]
+    pub dependents: Vec<RelativePath>,
+}
+type SerializablePackages = HashMap<RelativePath, PackageDetails>;
+
 #[derive(Clone)]
 #[napi]
-
 pub struct PackageManager {
     /// The package manager name in lower case.
     #[napi(readonly)]
@@ -73,13 +100,35 @@ impl Package {
         workspace_path: &AbsoluteSystemPath,
     ) -> Vec<Package> {
         let node = PackageNode::Workspace(PackageName::Other(self.name.clone()));
-        let ancestors = match graph.immediate_ancestors(&node) {
-            Some(ancestors) => ancestors,
+        let pkgs = match graph.immediate_ancestors(&node) {
+            Some(pkgs) => pkgs,
             None => return vec![],
         };
 
-        ancestors
-            .iter()
+        pkgs.iter()
+            .filter_map(|node| {
+                let info = graph.package_info(node.as_package_name())?;
+                // If we don't get a package name back, we'll just skip it.
+                let name = info.package_name()?;
+                let anchored_package_path = info.package_path();
+                let package_path = workspace_path.resolve(anchored_package_path);
+                Some(Package::new(name, workspace_path, &package_path))
+            })
+            .collect()
+    }
+
+    fn dependencies(
+        &self,
+        graph: &PackageGraph,
+        workspace_path: &AbsoluteSystemPath,
+    ) -> Vec<Package> {
+        let node = PackageNode::Workspace(PackageName::Other(self.name.clone()));
+        let pkgs = match graph.immediate_dependencies(&node) {
+            Some(pkgs) => pkgs,
+            None => return vec![],
+        };
+
+        pkgs.iter()
             .filter_map(|node| {
                 let info = graph.package_info(node.as_package_name())?;
                 // If we don't get a package name back, we'll just skip it.
@@ -110,9 +159,7 @@ impl Workspace {
     /// Finds and returns a map of packages within the workspace and its
     /// dependents (i.e. the packages that depend on each of those packages).
     #[napi]
-    pub async fn find_packages_and_dependents(
-        &self,
-    ) -> Result<HashMap<String, Vec<String>>, Error> {
+    pub async fn find_packages_and_dependents(&self) -> Result<SerializablePackages, Error> {
         let packages = self.find_packages().await?;
 
         let workspace_path = match AbsoluteSystemPath::new(self.absolute_path.as_str()) {
@@ -120,16 +167,30 @@ impl Workspace {
             Err(e) => return Err(Error::from_reason(e.to_string())),
         };
 
-        let map: HashMap<String, Vec<String>> = packages
+        // Create a map of package names to their dependents and dependencies
+        //  {
+        //    "package-name": {
+        //      "dependents": ["dependent1", "dependent2"],
+        //      "dependencies": ["dependency1", "dependency2"]
+        //      }
+        //  }
+        let map: HashMap<RelativePath, PackageDetails> = packages
             .into_iter()
             .map(|package| {
-                let deps = package.dependents(&self.graph, workspace_path);
-                let dep_names = deps
-                    .into_iter()
-                    .map(|p| p.relative_path)
-                    .collect::<Vec<String>>();
+                let details = PackageDetails {
+                    dependencies: package
+                        .dependencies(&self.graph, workspace_path)
+                        .into_iter()
+                        .map(|p| p.relative_path)
+                        .collect(),
+                    dependents: package
+                        .dependents(&self.graph, workspace_path)
+                        .into_iter()
+                        .map(|p| p.relative_path)
+                        .collect(),
+                };
 
-                (package.relative_path, dep_names)
+                (package.relative_path, details)
             })
             .collect();
 

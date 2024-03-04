@@ -28,14 +28,20 @@ describe("Workspace", () => {
     expect(packageManager.name).toBe("pnpm");
   });
 
-  test("returns a package graph", async () => {
+  it("returns a package graph", async () => {
     const dir = path.resolve(__dirname, "./fixtures/monorepo");
     const workspace = await Workspace.find(dir);
-    const graph = await workspace.findPackagesAndDependents();
-    expect(graph).toEqual({
-      "apps/app": [],
-      "packages/ui": ["apps/app"],
-    });
+    const packages = await workspace.findPackagesAndDependents(); // TODO: rename this
+    expect(packages.length).toBe(2);
+
+    const pkg1 = packages["apps/app"];
+    const pkg2 = packages["packages/ui"];
+
+    expect(pkg1.dependencies).toBe(["packages/ui"]);
+    expect(pkg1.dependents).toBe([]);
+
+    expect(pkg2.dependencies).toBe([]);
+    expect(pkg2.dependents).toBe(["apps/app"]);
   });
 
   describe("affectedPackages", () => {

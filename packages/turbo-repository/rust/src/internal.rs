@@ -118,7 +118,7 @@ impl Workspace {
                     workspace_root: self.workspace_state.root.clone(),
                 })?;
 
-        let packages = package_json_paths
+        let mut packages = package_json_paths
             .filter_map(|path| {
                 // Return an error if we fail to load the package.json
                 let pkg_json = match PackageJson::load(&path) {
@@ -139,6 +139,9 @@ impl Workspace {
                     .or_else(|| Some(Err(Error::MissingParent(path.to_owned()))))
             })
             .collect::<Result<Vec<Package>, Error>>()?;
+
+        // Sort the packages by name
+        packages.sort_by(|a, b| a.name.cmp(&b.name));
 
         Ok(packages)
     }
