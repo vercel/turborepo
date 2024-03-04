@@ -110,6 +110,7 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
     pub fn to_css(
         &self,
         cm: Arc<swc_core::common::SourceMap>,
+        code: &str,
         enable_srcmap: bool,
         remove_imports: bool,
         handle_nesting: bool,
@@ -138,7 +139,10 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
                 })?;
 
                 if let Some(srcmap) = &mut srcmap {
+                    debug_assert_eq!(ss.sources.len(), 1);
+
                     srcmap.add_sources(ss.sources.clone());
+                    srcmap.set_source_content(0, code);
                 }
 
                 Ok((
@@ -276,6 +280,8 @@ pub enum ParseCssResult {
         #[turbo_tasks(debug_ignore, trace_ignore)]
         cm: Arc<swc_core::common::SourceMap>,
 
+        code: String,
+
         #[turbo_tasks(trace_ignore)]
         stylesheet: StyleSheetLike<'static, 'static>,
 
@@ -357,9 +363,10 @@ pub async fn process_css_with_placeholder(
             stylesheet,
             references,
             url_references,
+            code,
             ..
         } => {
-            let (result, _) = stylesheet.to_css(cm.clone(), false, false, false)?;
+            let (result, _) = stylesheet.to_css(cm.clone(), code, false, false, false)?;
 
             let exports = result.exports.map(|exports| {
                 let mut exports = exports.into_iter().collect::<IndexMap<_, _>>();
@@ -397,12 +404,13 @@ pub async fn finalize_css(
             url_references,
             ..
         } => {
-            let mut stylesheet = match &*parse_result.await? {
+            let (mut stylesheet, code) = match &*parse_result.await? {
                 ParseCssResult::Ok {
                     stylesheet,
                     options,
+                    code,
                     ..
-                } => stylesheet.to_static(options.clone()),
+                } => (stylesheet.to_static(options.clone()), code.clone()),
                 ParseCssResult::Unparseable => return Ok(FinalCssResult::Unparseable.into()),
                 ParseCssResult::NotFound => return Ok(FinalCssResult::NotFound.into()),
             };
@@ -420,7 +428,7 @@ pub async fn finalize_css(
 
             replace_url_references(&mut stylesheet, &url_map);
 
-            let (result, srcmap) = stylesheet.to_css(cm.clone(), true, true, true)?;
+            let (result, srcmap) = stylesheet.to_css(cm.clone(), &code, true, true, true)?;
 
             Ok(FinalCssResult::Ok {
                 output_code: result.code,
@@ -623,7 +631,7 @@ async fn process_content(
             }),
         );
 
-        let fm = cm.new_source_file(FileName::Custom(ident_str.to_string()), code);
+        let fm = cm.new_source_file(FileName::Custom(ident_str.to_string()), code.clone());
         let mut errors = vec![];
 
         let ss = swc_core::css::parser::parse_file(
@@ -693,6 +701,7 @@ async fn process_content(
 
     Ok(ParseCssResult::Ok {
         cm,
+        code,
         stylesheet,
         references: Vc::cell(references),
         url_references: Vc::cell(url_references),
