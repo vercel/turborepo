@@ -8,7 +8,6 @@ use indexmap::IndexMap;
 use lightningcss::{
     css_modules::{CssModuleExport, CssModuleExports, CssModuleReference, Pattern, Segment},
     dependencies::{Dependency, ImportDependency, Location, SourceRange},
-    error::PrinterErrorKind,
     stylesheet::{ParserOptions, PrinterOptions, StyleSheet, ToCssResult},
     targets::{Features, Targets},
     values::url::Url,
@@ -114,7 +113,7 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
         enable_srcmap: bool,
         remove_imports: bool,
         handle_nesting: bool,
-    ) -> Result<CssOutput, lightningcss::error::Error<PrinterErrorKind>> {
+    ) -> Result<CssOutput> {
         match self {
             StyleSheetLike::LightningCss(ss) => {
                 let mut srcmap = if enable_srcmap {
@@ -142,7 +141,7 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
                     debug_assert_eq!(ss.sources.len(), 1);
 
                     srcmap.add_sources(ss.sources.clone());
-                    srcmap.set_source_content(0, code);
+                    srcmap.set_source_content(0, code)?;
                 }
 
                 Ok((
