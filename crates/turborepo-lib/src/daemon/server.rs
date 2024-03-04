@@ -689,14 +689,19 @@ mod test {
             paths.clone(),
             Duration::from_secs(60 * 60),
             exit_signal,
-        )
-        .with_package_discovery_backup(MockDiscovery);
+        );
 
         // the package watcher reads data from the package.json file
         // so we need to create it
         repo_root.create_dir_all().unwrap();
         let package_json = repo_root.join_component("package.json");
-        std::fs::write(package_json, r#"{"workspaces": ["packages/*"]}"#).unwrap();
+        package_json
+            .create_with_contents(r#"{"workspaces": ["packages/*"]}"#)
+            .unwrap();
+        repo_root
+            .join_component("package-lock.json")
+            .create_with_contents("")
+            .unwrap();
 
         let handle = tokio::task::spawn(service.serve());
 
@@ -741,14 +746,19 @@ mod test {
             paths.clone(),
             Duration::from_millis(10),
             exit_signal,
-        )
-        .with_package_discovery_backup(MockDiscovery);
+        );
 
         // the package watcher reads data from the package.json file
         // so we need to create it
         repo_root.create_dir_all().unwrap();
         let package_json = repo_root.join_component("package.json");
-        std::fs::write(package_json, r#"{"workspaces": ["packages/*"]}"#).unwrap();
+        package_json
+            .create_with_contents(r#"{"workspaces": ["packages/*"]}"#)
+            .unwrap();
+        repo_root
+            .join_component("package-lock.json")
+            .create_with_contents("")
+            .unwrap();
 
         let close_reason = server.serve().await;
 
@@ -774,6 +784,15 @@ mod test {
             .unwrap();
 
         let repo_root = path.join_component("repo");
+        repo_root.create_dir_all().unwrap();
+        let package_json = repo_root.join_component("package.json");
+        package_json
+            .create_with_contents(r#"{"workspaces": ["packages/*"]}"#)
+            .unwrap();
+        repo_root
+            .join_component("package-lock.json")
+            .create_with_contents("")
+            .unwrap();
         let paths = Paths::from_repo_root(&repo_root);
 
         let (_tx, rx) = oneshot::channel::<CloseReason>();
@@ -784,8 +803,7 @@ mod test {
             paths,
             Duration::from_secs(60 * 60),
             exit_signal,
-        )
-        .with_package_discovery_backup(MockDiscovery);
+        );
 
         let handle = tokio::task::spawn(server.serve());
 
