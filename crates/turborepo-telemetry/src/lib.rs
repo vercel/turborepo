@@ -81,7 +81,7 @@ fn init(
 ) -> Result<(TelemetryHandle, TelemetrySender), Box<dyn std::error::Error>> {
     let (tx, rx) = mpsc::unbounded_channel();
     let (cancel_tx, cancel_rx) = oneshot::channel();
-    let mut config = TelemetryConfig::new()?;
+    let mut config = TelemetryConfig::with_default_config_path()?;
     config.show_alert(ui);
 
     let session_id = Uuid::new_v4();
