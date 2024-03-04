@@ -254,19 +254,19 @@ where
     }
 }
 
-struct TurboGrpcServiceInner<PD> {
+struct TurboGrpcServiceInner {
     shutdown: mpsc::Sender<()>,
     file_watching: FileWatching,
     times_saved: Arc<Mutex<HashMap<String, u64>>>,
     start_time: Instant,
     log_file: AbsoluteSystemPathBuf,
-    package_discovery: PD,
+    package_discovery: Arc<WatchingPackageDiscovery>,
 }
 
 // we have a grpc service that uses watching package discovery, and where the
 // watching package hasher also uses watching package discovery as well as
 // falling back to a local package hasher
-impl TurboGrpcServiceInner<Arc<WatchingPackageDiscovery>> {
+impl TurboGrpcServiceInner {
     pub fn new<PD: Sync + PackageDiscovery + Send + 'static>(
         package_discovery_backup: PD,
         repo_root: AbsoluteSystemPathBuf,
@@ -308,12 +308,7 @@ impl TurboGrpcServiceInner<Arc<WatchingPackageDiscovery>> {
             watch_root_handle,
         )
     }
-}
 
-impl<PD> TurboGrpcServiceInner<PD>
-where
-    PD: PackageDiscovery + Send + Sync + 'static,
-{
     async fn trigger_shutdown(&self) {
         info!("triggering shutdown");
         let _ = self.shutdown.send(()).await;
@@ -405,9 +400,7 @@ async fn watch_root(
 }
 
 #[tonic::async_trait]
-impl<PD: PackageDiscovery + Send + Sync + 'static> proto::turbod_server::Turbod
-    for TurboGrpcServiceInner<PD>
-{
+impl proto::turbod_server::Turbod for TurboGrpcServiceInner {
     async fn hello(
         &self,
         request: tonic::Request<proto::HelloRequest>,
@@ -575,7 +568,7 @@ fn compare_versions(client: Version, server: Version, constraint: proto::Version
     }
 }
 
-impl<PD> NamedService for TurboGrpcServiceInner<PD> {
+impl NamedService for TurboGrpcServiceInner {
     const NAME: &'static str = "turborepo.Daemon";
 }
 
