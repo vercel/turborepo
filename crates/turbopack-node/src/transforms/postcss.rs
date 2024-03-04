@@ -30,7 +30,10 @@ use super::{
     util::{emitted_assets_to_virtual_sources, EmittedAsset},
     webpack::WebpackLoaderContext,
 };
-use crate::{embed_js::embed_file, evaluate::custom_evaluate, execution_context::ExecutionContext};
+use crate::{
+    embed_js::embed_file, execution_context::ExecutionContext,
+    transforms::webpack::evaluate_webpack_loader,
+};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -370,7 +373,7 @@ impl PostCssTransformedAsset {
         let css_fs_path = this.source.ident().path().await?;
         let css_path = css_fs_path.path.as_str();
 
-        let config_value = custom_evaluate(WebpackLoaderContext {
+        let config_value = evaluate_webpack_loader(WebpackLoaderContext {
             module_asset: postcss_executor,
             cwd: project_path,
             env,

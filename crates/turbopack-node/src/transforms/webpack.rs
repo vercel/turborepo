@@ -232,7 +232,7 @@ impl WebpackLoadersProcessedAsset {
 }
 
 #[turbo_tasks::function]
-fn evaluate_webpack_loader(
+pub(crate) fn evaluate_webpack_loader(
     webpack_loader_context: WebpackLoaderContext,
 ) -> Vc<JavaScriptEvaluation> {
     custom_evaluate(webpack_loader_context)
