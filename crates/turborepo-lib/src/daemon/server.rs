@@ -31,8 +31,9 @@ use turborepo_filewatch::{
     package_watcher::{PackageWatcher, WatchingPackageDiscovery},
     FileSystemWatcher, WatchError,
 };
-use turborepo_repository::discovery::{
-    LocalPackageDiscoveryBuilder, PackageDiscovery, PackageDiscoveryBuilder,
+use turborepo_repository::{
+    discovery::{LocalPackageDiscoveryBuilder, PackageDiscovery, PackageDiscoveryBuilder},
+    package_manager,
 };
 
 use super::{bump_timeout::BumpTimeout, endpoint::SocketOpenError, proto};
@@ -127,16 +128,16 @@ impl FileWatching {
 /// Timeout for every RPC the server handles
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
-pub struct TurboGrpcService<S, PDB> {
+pub struct TurboGrpcService<S> {
     repo_root: AbsoluteSystemPathBuf,
     paths: Paths,
     timeout: Duration,
     external_shutdown: S,
 
-    package_discovery_backup: PDB,
+    package_discovery_backup: LocalPackageDiscoveryBuilder,
 }
 
-impl<S> TurboGrpcService<S, LocalPackageDiscoveryBuilder>
+impl<S> TurboGrpcService<S>
 where
     S: Future<Output = CloseReason>,
 {
@@ -168,28 +169,11 @@ where
     }
 }
 
-impl<S, PDB> TurboGrpcService<S, PDB>
+impl<S> TurboGrpcService<S>
 where
     S: Future<Output = CloseReason>,
-    PDB: PackageDiscoveryBuilder,
-    PDB::Output: PackageDiscovery + Send + Sync + 'static,
 {
-    /// If errors are encountered when loading the package discovery, this
-    /// builder will be used as a backup to refresh the state.
-    pub fn with_package_discovery_backup<PDB2: PackageDiscoveryBuilder>(
-        self,
-        package_discovery_backup: PDB2,
-    ) -> TurboGrpcService<S, PDB2> {
-        TurboGrpcService {
-            external_shutdown: self.external_shutdown,
-            paths: self.paths,
-            repo_root: self.repo_root,
-            timeout: self.timeout,
-            package_discovery_backup,
-        }
-    }
-
-    pub async fn serve(self) -> Result<CloseReason, PDB::Error> {
+    pub async fn serve(self) -> Result<CloseReason, package_manager::Error> {
         let Self {
             external_shutdown,
             paths,
