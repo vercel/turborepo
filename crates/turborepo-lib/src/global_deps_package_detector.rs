@@ -16,7 +16,7 @@ pub enum Error {
 /// if a file should cause all packages to be marked as changed.
 /// This is less conservative than the `DefaultPackageDetector`
 /// which assumes that any changed file that is not in a package
-/// is a root dependency. Since we have a list of global deps,
+/// changes all packages. Since we have a list of global deps,
 /// we can check against that and avoid invalidating in unnecessary cases.
 pub struct GlobalDepsPackageDetector<'a> {
     pkg_dep_graph: &'a PackageGraph,
