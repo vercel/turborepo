@@ -116,6 +116,10 @@ impl Subscriber {
             let Some(mut repo_state) = self.initialize_repo_state().await else {
                 return;
             };
+
+            self.package_change_events_tx
+                .send(PackageChangeEvent::Rediscover)
+                .ok();
             // TODO: Pass in global_deps and ignore_patterns
             let mut change_mapper = ChangeMapper::new(
                 &repo_state.pkg_dep_graph,
