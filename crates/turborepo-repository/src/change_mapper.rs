@@ -273,7 +273,11 @@ mod test {
             .iter()
             .map(|s| turbopath::AnchoredSystemPathBuf::from_raw(s).unwrap())
             .collect();
-        let changes = ChangeMapper::lockfile_changed(&turbo_root, &changed_files, &lockfile_path);
+        let changes = ChangeMapper::<DefaultPackageDetector>::lockfile_changed(
+            &turbo_root,
+            &changed_files,
+            &lockfile_path,
+        );
 
         // we don't want to implement PartialEq on the error type,
         // so simply compare the debug representations

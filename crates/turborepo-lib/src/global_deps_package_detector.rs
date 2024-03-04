@@ -60,8 +60,6 @@ impl<'a> PackageDetector for GlobalDepsPackageDetector<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use tempfile::tempdir;
     use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
     use turborepo_repository::{
