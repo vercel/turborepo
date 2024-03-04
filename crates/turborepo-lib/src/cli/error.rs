@@ -9,6 +9,7 @@ use crate::{
     daemon::DaemonError,
     rewrite_json::RewriteError,
     run,
+    run::watch,
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -48,4 +49,6 @@ pub enum Error {
     Run(#[from] run::Error),
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
+    #[error(transparent)]
+    Watch(#[from] watch::Error),
 }

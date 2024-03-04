@@ -18,7 +18,6 @@ use crate::{
         endpoint::SocketOpenError, CloseReason, DaemonConnector, DaemonConnectorError, DaemonError,
         Paths,
     },
-    run::watch::WatchClient,
     tracing::TurboSubscriber,
 };
 
@@ -28,7 +27,7 @@ const DAEMON_NOT_RUNNING_MESSAGE: &str =
 /// Runs the daemon command.
 pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Result<(), DaemonError> {
     let (can_start_server, can_kill_server) = match command {
-        DaemonCommand::Status { .. } | DaemonCommand::Logs | DaemonCommand::Watch => (false, false),
+        DaemonCommand::Status { .. } | DaemonCommand::Logs => (false, false),
         DaemonCommand::Stop => (false, true),
         DaemonCommand::Restart | DaemonCommand::Start => (true, true),
         DaemonCommand::Clean { .. } => (false, true),
@@ -162,9 +161,6 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
                 clean_logs(&paths.log_folder)?;
             }
             println!("Done");
-        }
-        DaemonCommand::Watch => {
-            WatchClient::start(&base.repo_root).await?;
         }
     };
 
