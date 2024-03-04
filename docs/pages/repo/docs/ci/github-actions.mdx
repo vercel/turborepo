@@ -67,14 +67,14 @@ Create file called `.github/workflows/ci.yml` in your repository with the follow
 
         steps:
           - name: Check out code
-            uses: actions/checkout@v3
+            uses: actions/checkout@v4
             with:
               fetch-depth: 2
 
           - name: Setup Node.js environment
-            uses: actions/setup-node@v3
+            uses: actions/setup-node@v4
             with:
-              node-version: 18
+              node-version: 20
               cache: 'npm'
 
           - name: Install dependencies
@@ -110,14 +110,14 @@ Create file called `.github/workflows/ci.yml` in your repository with the follow
 
         steps:
           - name: Check out code
-            uses: actions/checkout@v3
+            uses: actions/checkout@v4
             with:
               fetch-depth: 2
 
           - name: Setup Node.js environment
-            uses: actions/setup-node@v3
+            uses: actions/setup-node@v4
             with:
-              node-version: 18
+              node-version: 20
               cache: 'yarn'
 
           - name: Install dependencies
@@ -153,18 +153,18 @@ Create file called `.github/workflows/ci.yml` in your repository with the follow
 
         steps:
           - name: Check out code
-            uses: actions/checkout@v3
+            uses: actions/checkout@v4
             with:
               fetch-depth: 2
 
-          - uses: pnpm/action-setup@v2.0.1
+          - uses: pnpm/action-setup@v3
             with:
-              version: 6.32.2
+              version: 8
 
           - name: Setup Node.js environment
-            uses: actions/setup-node@v3
+            uses: actions/setup-node@v4
             with:
-              node-version: 18
+              node-version: 20
               cache: 'pnpm'
 
           - name: Install dependencies
@@ -227,7 +227,7 @@ jobs:
 
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 2
     # ...
@@ -272,10 +272,10 @@ The following steps exemplify how you could use [actions/cache](https://github.c
       runs-on: ubuntu-latest
       steps:
         - name: Check out code
-          uses: actions/checkout@v3
+          uses: actions/checkout@v4
 
         - name: Cache turbo build setup
-          uses: actions/cache@v3
+          uses: actions/cache@v4
           with:
             path: .turbo
             key: ${{ runner.os }}-turbo-${{ github.sha }}
@@ -283,9 +283,9 @@ The following steps exemplify how you could use [actions/cache](https://github.c
               ${{ runner.os }}-turbo-
 
         - name: Setup Node.js environment
-          uses: actions/setup-node@v3
+          uses: actions/setup-node@v4
           with:
-            node-version: 16
+            node-version: 20
             cache: 'npm'
 
         - name: Install dependencies

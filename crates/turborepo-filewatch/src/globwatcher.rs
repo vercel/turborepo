@@ -118,7 +118,7 @@ impl From<oneshot::error::RecvError> for Error {
 }
 
 pub struct GlobWatcher {
-    cookie_jar: CookieWriter,
+    cookie_writer: CookieWriter,
     // _exit_ch exists to trigger a close on the receiver when an instance
     // of this struct is dropped. The task that is receiving events will exit,
     // dropping the other sender for the broadcast channel, causing all receivers
@@ -163,12 +163,12 @@ struct GlobTracker {
 impl GlobWatcher {
     pub fn new(
         root: AbsoluteSystemPathBuf,
-        cookie_jar: CookieWriter,
+        cookie_writer: CookieWriter,
         mut recv: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
     ) -> Self {
         let (exit_ch, exit_signal) = tokio::sync::oneshot::channel();
         let (query_ch_tx, query_ch_lazy) = OptionalWatch::new();
-        let cookie_root = cookie_jar.root().to_owned();
+        let cookie_root = cookie_writer.root().to_owned();
         tokio::task::spawn(async move {
             let Ok(recv) = recv.get().await.map(|r| r.resubscribe()) else {
                 // if this fails, it means that the filewatcher is not available
@@ -189,7 +189,7 @@ impl GlobWatcher {
                 .await
         });
         Self {
-            cookie_jar,
+            cookie_writer,
             _exit_ch: exit_ch,
             query_ch_lazy,
         }
@@ -231,12 +231,13 @@ impl GlobWatcher {
             candidates,
             resp: tx,
         };
+
         self.send_request(req).await?;
         tokio::time::timeout(timeout, rx).await??
     }
 
     async fn send_request(&self, req: Query) -> Result<(), Error> {
-        let cookied_request = self.cookie_jar.cookie_request(req).await?;
+        let cookied_request = self.cookie_writer.cookie_request(req).await?;
         let mut query_ch = self.query_ch_lazy.clone();
         let query_ch = query_ch
             .get_immediate()
@@ -507,8 +508,8 @@ mod test {
 
         let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
         let recv = watcher.watch();
-        let cookie_jar = CookieWriter::new(&cookie_dir, Duration::from_secs(2), recv.clone());
-        let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_jar, recv);
+        let cookie_writer = CookieWriter::new(&cookie_dir, Duration::from_secs(2), recv.clone());
+        let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, recv);
 
         let raw_includes = &["my-pkg/dist/**", "my-pkg/.next/**"];
         let raw_excludes = ["my-pkg/.next/cache/**"];
@@ -590,9 +591,9 @@ mod test {
 
         let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
         let recv = watcher.watch();
-        let cookie_jar = CookieWriter::new(&cookie_dir, Duration::from_secs(2), recv.clone());
+        let cookie_writer = CookieWriter::new(&cookie_dir, Duration::from_secs(2), recv.clone());
 
-        let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_jar, recv);
+        let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, recv);
 
         let raw_includes = &["my-pkg/dist/**", "my-pkg/.next/**"];
         let raw_excludes: [&str; 0] = [];
@@ -685,9 +686,9 @@ mod test {
 
         let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
         let recv = watcher.watch();
-        let cookie_jar = CookieWriter::new(&cookie_dir, Duration::from_secs(2), recv.clone());
+        let cookie_writer = CookieWriter::new(&cookie_dir, Duration::from_secs(2), recv.clone());
 
-        let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_jar, recv);
+        let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, recv);
 
         // On windows, we expect different sanitization before the
         // globs are passed in, due to alternative data streams in files.

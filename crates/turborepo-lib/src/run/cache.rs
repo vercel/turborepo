@@ -365,7 +365,7 @@ impl TaskCache {
             if let Err(err) = notify_result {
                 telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);
                 let task_id = &self.task_id;
-                debug!("Failed to mark outputs as cached for {task_id}: {err}");
+                debug!("failed to mark outputs as cached for {task_id}: {err}");
             }
         }
 

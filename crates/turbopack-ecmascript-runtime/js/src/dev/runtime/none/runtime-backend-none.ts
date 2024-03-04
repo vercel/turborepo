@@ -7,6 +7,7 @@
 
 /// <reference path="../base/runtime-base.ts" />
 /// <reference path="../../../shared-node/base-externals-utils.ts" />
+/// <reference path="../../../shared/require-type.d.ts" />
 
 type ChunkRunner = {
   requiredChunks: Set<ChunkPath>;
@@ -115,7 +116,7 @@ async function loadWebAssemblyModule(
       }
     },
 
-    loadChunk(chunkPath, fromChunkPath) {
+    loadChunk(_chunkPath, _fromChunkPath) {
       throw new Error("chunk loading is not supported");
     },
 
@@ -196,6 +197,6 @@ async function loadWebAssemblyModule(
   }
 })();
 
-function _eval({ code, url, map }: EcmascriptModuleEntry): ModuleFactory {
+function _eval(_: EcmascriptModuleEntry): ModuleFactory {
   throw new Error("HMR evaluation is not implemented on this backend");
 }

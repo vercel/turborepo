@@ -15,6 +15,7 @@ use crate::{
 };
 
 pub mod builder;
+mod dep_splitter;
 
 pub use builder::{Error, PackageGraphBuilder};
 
@@ -461,6 +462,12 @@ mod test {
                 package_manager: PackageManager::Npm,
                 workspaces: vec![],
             })
+        }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<crate::discovery::DiscoveryResponse, crate::discovery::Error> {
+            self.discover_packages().await
         }
     }
 

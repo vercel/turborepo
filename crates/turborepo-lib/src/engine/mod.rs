@@ -11,9 +11,10 @@ use std::{
 
 pub use builder::{EngineBuilder, Error as BuilderError};
 pub use execute::{ExecuteError, ExecutionOptions, Message, StopExecution};
-use miette::Diagnostic;
+use miette::{Diagnostic, NamedSource, SourceSpan};
 use petgraph::Graph;
 use thiserror::Error;
+use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 
 use crate::{run::task_id::TaskId, task_graph::TaskDefinition};
@@ -42,6 +43,7 @@ pub struct Engine<S = Built> {
     root_index: petgraph::graph::NodeIndex,
     task_lookup: HashMap<TaskId<'static>, petgraph::graph::NodeIndex>,
     task_definitions: HashMap<TaskId<'static>, TaskDefinition>,
+    task_locations: HashMap<TaskId<'static>, Spanned<()>>,
 }
 
 impl Engine<Building> {
@@ -54,6 +56,7 @@ impl Engine<Building> {
             root_index,
             task_lookup: HashMap::default(),
             task_definitions: HashMap::default(),
+            task_locations: HashMap::default(),
         }
     }
 
@@ -78,6 +81,19 @@ impl Engine<Building> {
         self.task_definitions.insert(task_id, definition)
     }
 
+    pub fn add_task_location(&mut self, task_id: TaskId<'static>, location: Spanned<()>) {
+        // If we don't have the location stored,
+        // or if the location stored is empty, we add it to the map.
+        let has_location = self
+            .task_locations
+            .get(&task_id)
+            .map_or(false, |existing| existing.range.is_some());
+
+        if !has_location {
+            self.task_locations.insert(task_id, location);
+        }
+    }
+
     // Seals the task graph from being mutated
     pub fn seal(self) -> Engine<Built> {
         let Engine {
@@ -85,6 +101,7 @@ impl Engine<Building> {
             task_lookup,
             root_index,
             task_definitions,
+            task_locations,
             ..
         } = self;
         Engine {
@@ -93,6 +110,7 @@ impl Engine<Building> {
             task_lookup,
             root_index,
             task_definitions,
+            task_locations,
         }
     }
 }
@@ -192,7 +210,15 @@ impl Engine<Built> {
                     if task_definition.persistent
                         && package_json.scripts.contains_key(dep_id.task())
                     {
+                        let (span, text) = self
+                            .task_locations
+                            .get(dep_id)
+                            .map(|spanned| spanned.span_and_text("turbo.json"))
+                            .unwrap_or((None, NamedSource::new("", "")));
+
                         return Err(ValidateError::DependencyOnPersistentTask {
+                            span,
+                            text,
                             persistent_task: dep_id.to_string(),
                             dependant: task_id.to_string(),
                         });
@@ -254,6 +280,10 @@ pub enum ValidateError {
     MissingPackageJson { package: String },
     #[error("\"{persistent_task}\" is a persistent task, \"{dependant}\" cannot depend on it")]
     DependencyOnPersistentTask {
+        #[label("persistent task")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
         persistent_task: String,
         dependant: String,
     },
@@ -334,6 +364,15 @@ mod test {
                 package_manager: turborepo_repository::package_manager::PackageManager::Pnpm,
                 workspaces,
             })
+        }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<
+            turborepo_repository::discovery::DiscoveryResponse,
+            turborepo_repository::discovery::Error,
+        > {
+            self.discover_packages().await
         }
     }
 

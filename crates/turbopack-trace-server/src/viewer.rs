@@ -31,6 +31,7 @@ pub enum ValueMode {
     Deallocations,
     PersistentAllocations,
     AllocationCount,
+    Count,
 }
 
 impl ValueMode {
@@ -41,6 +42,7 @@ impl ValueMode {
             ValueMode::Deallocations => span.total_deallocations(),
             ValueMode::PersistentAllocations => span.total_persistent_allocations(),
             ValueMode::AllocationCount => span.total_allocation_count(),
+            ValueMode::Count => span.total_span_count(),
         }
     }
 
@@ -51,6 +53,7 @@ impl ValueMode {
             ValueMode::Deallocations => graph.total_deallocations(),
             ValueMode::PersistentAllocations => graph.total_persistent_allocations(),
             ValueMode::AllocationCount => graph.total_allocation_count(),
+            ValueMode::Count => graph.total_span_count(),
         }
     }
 
@@ -61,6 +64,7 @@ impl ValueMode {
             ValueMode::Deallocations => event.total_deallocations(),
             ValueMode::PersistentAllocations => event.total_persistent_allocations(),
             ValueMode::AllocationCount => event.total_allocation_count(),
+            ValueMode::Count => event.total_span_count(),
         }
     }
 
@@ -71,6 +75,7 @@ impl ValueMode {
             ValueMode::Deallocations => bottom_up.self_deallocations(),
             ValueMode::PersistentAllocations => bottom_up.self_persistent_allocations(),
             ValueMode::AllocationCount => bottom_up.self_allocation_count(),
+            ValueMode::Count => bottom_up.self_span_count(),
         }
     }
 
@@ -81,6 +86,7 @@ impl ValueMode {
             ValueMode::Deallocations => bottom_up_span.self_deallocations(),
             ValueMode::PersistentAllocations => bottom_up_span.self_persistent_allocations(),
             ValueMode::AllocationCount => bottom_up_span.self_allocation_count(),
+            ValueMode::Count => bottom_up_span.self_span_count(),
         }
     }
 }
@@ -174,6 +180,10 @@ pub struct ViewSpan {
     count: u64,
     #[serde(rename = "k")]
     kind: u8,
+    #[serde(rename = "s")]
+    start_in_parent: u32,
+    #[serde(rename = "e")]
+    end_in_parent: u32,
 }
 
 #[derive(Debug)]
@@ -239,22 +249,49 @@ impl Viewer {
         let (default_view_mode, default_sorted) = default_view_mode
             .strip_suffix("-sorted")
             .map_or((default_view_mode, false), |s| (s, true));
-        let default_view_mode = match default_view_mode {
-            "aggregated" => ViewMode::Aggregated {
-                sorted: default_sorted,
-            },
-            "raw-spans" => ViewMode::RawSpans {
-                sorted: default_sorted,
-            },
-            "bottom-up" => ViewMode::BottomUp {
-                sorted: default_sorted,
-            },
-            "aggregated-bottom-up" => ViewMode::AggregatedBottomUp {
-                sorted: default_sorted,
-            },
-            _ => ViewMode::Aggregated {
-                sorted: default_sorted,
-            },
+        let (default_view_mode, with_root) = match default_view_mode {
+            "aggregated" => (
+                ViewMode::Aggregated {
+                    sorted: default_sorted,
+                },
+                false,
+            ),
+            "root-aggregated" => (
+                ViewMode::Aggregated {
+                    sorted: default_sorted,
+                },
+                true,
+            ),
+            "raw-spans" => (
+                ViewMode::RawSpans {
+                    sorted: default_sorted,
+                },
+                false,
+            ),
+            "bottom-up" => (
+                ViewMode::BottomUp {
+                    sorted: default_sorted,
+                },
+                false,
+            ),
+            "aggregated-bottom-up" => (
+                ViewMode::AggregatedBottomUp {
+                    sorted: default_sorted,
+                },
+                false,
+            ),
+            "root-aggregated-bottom-up" => (
+                ViewMode::AggregatedBottomUp {
+                    sorted: default_sorted,
+                },
+                true,
+            ),
+            _ => (
+                ViewMode::Aggregated {
+                    sorted: default_sorted,
+                },
+                false,
+            ),
         };
 
         let value_mode = match view_rect.value_mode.as_str() {
@@ -263,13 +300,19 @@ impl Viewer {
             "deallocations" => ValueMode::Deallocations,
             "persistent-deallocations" => ValueMode::PersistentAllocations,
             "allocation-count" => ValueMode::AllocationCount,
+            "count" => ValueMode::Count,
             _ => ValueMode::Duration,
         };
 
         let mut queue = Vec::new();
 
-        let mut root_spans = store.root_spans().collect::<Vec<_>>();
-        root_spans.sort_by_key(|span| span.start());
+        let root_spans = if with_root {
+            vec![store.root_span()]
+        } else {
+            let mut root_spans = store.root_spans().collect::<Vec<_>>();
+            root_spans.sort_by_key(|span| span.start());
+            root_spans
+        };
         let mut children = Vec::new();
         let mut current = 0;
         for span in root_spans {
@@ -333,12 +376,16 @@ impl Viewer {
                         .span_options
                         .get(&span.id())
                         .and_then(|o| o.view_mode)
-                        .unwrap_or((view_mode, false));
-                    let selected_view_mode = if span.is_complete() {
-                        selected_view_mode
-                    } else {
-                        selected_view_mode.as_spans()
-                    };
+                        .unwrap_or_else(|| {
+                            (
+                                if span.is_complete() {
+                                    view_mode
+                                } else {
+                                    view_mode.as_spans()
+                                },
+                                false,
+                            )
+                        });
 
                     let view_mode = if inherit {
                         selected_view_mode
@@ -631,7 +678,7 @@ impl Viewer {
                     start,
                     width,
                     ty: match span {
-                        QueueItem::Span(span) => LineEntryType::Span(span, filtered),
+                        QueueItem::Span(span) => LineEntryType::Span { span, filtered },
                         QueueItem::SpanGraph(span_graph) => {
                             LineEntryType::SpanGraph(span_graph, filtered)
                         }
@@ -662,9 +709,22 @@ impl Viewer {
                             text: String::new(),
                             count: 1,
                             kind: if filtered { 11 } else { 1 },
+                            start_in_parent: 0,
+                            end_in_parent: 0,
                         },
-                        LineEntryType::Span(span, filtered) => {
+                        LineEntryType::Span { span, filtered } => {
                             let (category, text) = span.nice_name();
+                            let mut start_in_parent = 0;
+                            let mut end_in_parent = 0;
+                            if let Some(parent) = span.parent() {
+                                let parent_start = parent.start();
+                                let parent_duration = parent.end() - parent_start;
+                                start_in_parent = ((span.start() - parent_start) * 10000
+                                    / parent_duration)
+                                    as u32;
+                                end_in_parent =
+                                    ((span.end() - parent_start) * 10000 / parent_duration) as u32;
+                            }
                             ViewSpan {
                                 id: span.id().get() as u64,
                                 start: entry.start,
@@ -673,6 +733,8 @@ impl Viewer {
                                 text: text.to_string(),
                                 count: 1,
                                 kind: if filtered { 10 } else { 0 },
+                                start_in_parent,
+                                end_in_parent,
                             }
                         }
                         LineEntryType::SpanGraph(graph, filtered) => {
@@ -685,6 +747,8 @@ impl Viewer {
                                 text: text.to_string(),
                                 count: graph.count() as u64,
                                 kind: if filtered { 10 } else { 0 },
+                                start_in_parent: 0,
+                                end_in_parent: 0,
                             }
                         }
                         LineEntryType::SpanBottomUp(bottom_up, filtered) => {
@@ -697,6 +761,8 @@ impl Viewer {
                                 text: text.to_string(),
                                 count: bottom_up.count() as u64,
                                 kind: if filtered { 12 } else { 2 },
+                                start_in_parent: 0,
+                                end_in_parent: 0,
                             }
                         }
                         LineEntryType::SpanBottomUpSpan(bottom_up_span, filtered) => {
@@ -709,6 +775,8 @@ impl Viewer {
                                 text: text.to_string(),
                                 count: 1,
                                 kind: if filtered { 12 } else { 2 },
+                                start_in_parent: 0,
+                                end_in_parent: 0,
                             }
                         }
                     })
@@ -820,7 +888,7 @@ struct LineEntry<'a> {
 
 enum LineEntryType<'a> {
     Placeholder(bool),
-    Span(SpanRef<'a>, bool),
+    Span { span: SpanRef<'a>, filtered: bool },
     SpanGraph(SpanGraphRef<'a>, bool),
     SpanBottomUp(SpanBottomUpRef<'a>, bool),
     SpanBottomUpSpan(SpanRef<'a>, bool),

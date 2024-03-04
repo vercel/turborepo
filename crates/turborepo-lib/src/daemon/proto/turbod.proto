@@ -16,6 +16,15 @@ service Turbod {
   //
   // Since 1.11.0
   rpc DiscoverPackages (DiscoverPackagesRequest) returns (DiscoverPackagesResponse);
+
+  // Request the list of packages that the daemon is aware of.
+  // This is a blocking call that will wait for the daemon to finish
+  // discovering the packages, rather than returning 'unavailable'.
+  // It will _still_ report unavailable if a critical process in the
+  // daemon is not running, and the answer will never come.
+  //
+  // Since 1.12.0
+  rpc DiscoverPackagesBlocking (DiscoverPackagesRequest) returns (DiscoverPackagesResponse);
 }
 
 message HelloRequest {

@@ -13,6 +13,7 @@ use std::{
 };
 
 use futures::Future;
+use prost::DecodeError;
 use semver::Version;
 use thiserror::Error;
 use tokio::{
@@ -20,7 +21,7 @@ use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
 };
-use tonic::transport::{NamedService, Server};
+use tonic::{server::NamedService, transport::Server};
 use tower::ServiceBuilder;
 use tracing::{error, info, trace, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
@@ -35,7 +36,10 @@ use turborepo_repository::discovery::{
 };
 
 use super::{bump_timeout::BumpTimeout, endpoint::SocketOpenError, proto};
-use crate::daemon::{bump_timeout_layer::BumpTimeoutLayer, endpoint::listen_socket, Paths};
+use crate::daemon::{
+    bump_timeout_layer::BumpTimeoutLayer, default_timeout_layer::DefaultTimeoutLayer,
+    endpoint::listen_socket, Paths,
+};
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -121,7 +125,7 @@ impl FileWatching {
 }
 
 /// Timeout for every RPC the server handles
-const REQUEST_TIMEOUT: Duration = Duration::from_millis(100);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct TurboGrpcService<S, PDB> {
     repo_root: AbsoluteSystemPathBuf,
@@ -231,12 +235,17 @@ where
         let server_fut = {
             let service = ServiceBuilder::new()
                 .layer(BumpTimeoutLayer::new(bump_timeout.clone()))
+                .layer(DefaultTimeoutLayer)
                 .service(crate::daemon::proto::turbod_server::TurbodServer::new(
                     service,
                 ));
 
             Server::builder()
-                // set a max timeout for RPCs
+                // we respect the timeout specified by the client if it is set, but
+                // have a default timeout for non-blocking calls of 100ms, courtesy of
+                // `DefaultTimeoutLayer`. the REQUEST_TIMEOUT, however, is the
+                // maximum time we will wait for a response, regardless of the client's
+                // preferences. it cannot be exceeded.
                 .timeout(REQUEST_TIMEOUT)
                 .add_service(service)
                 .serve_with_incoming_shutdown(stream, shutdown_fut)
@@ -425,13 +434,13 @@ impl<PD: PackageDiscovery + Send + Sync + 'static> proto::turbod_server::Turbod
         let server_version = proto::VERSION;
 
         let passes_version_check = match (
-            proto::VersionRange::from_i32(request.supported_version_range),
+            proto::VersionRange::try_from(request.supported_version_range),
             Version::parse(&client_version),
             Version::parse(server_version),
         ) {
             // if we fail to parse, or the constraint is invalid, we have a version mismatch
-            (_, Err(_), _) | (_, _, Err(_)) | (None, _, _) => false,
-            (Some(range), Ok(client), Ok(server)) => compare_versions(client, server, range),
+            (_, Err(_), _) | (_, _, Err(_)) | (Err(DecodeError { .. }), _, _) => false,
+            (Ok(range), Ok(client), Ok(server)) => compare_versions(client, server, range),
         };
 
         if passes_version_check {
@@ -504,6 +513,36 @@ impl<PD: PackageDiscovery + Send + Sync + 'static> proto::turbod_server::Turbod
     ) -> Result<tonic::Response<proto::DiscoverPackagesResponse>, tonic::Status> {
         self.package_discovery
             .discover_packages()
+            .await
+            .map(|packages| {
+                tonic::Response::new(proto::DiscoverPackagesResponse {
+                    package_files: packages
+                        .workspaces
+                        .into_iter()
+                        .map(|d| proto::PackageFiles {
+                            package_json: d.package_json.to_string(),
+                            turbo_json: d.turbo_json.map(|t| t.to_string()),
+                        })
+                        .collect(),
+                    package_manager: proto::PackageManager::from(packages.package_manager).into(),
+                })
+            })
+            .map_err(|e| match e {
+                turborepo_repository::discovery::Error::Unavailable => {
+                    tonic::Status::unavailable("package discovery unavailable")
+                }
+                turborepo_repository::discovery::Error::Failed(e) => {
+                    tonic::Status::internal(format!("{}", e))
+                }
+            })
+    }
+
+    async fn discover_packages_blocking(
+        &self,
+        _request: tonic::Request<proto::DiscoverPackagesRequest>,
+    ) -> Result<tonic::Response<proto::DiscoverPackagesResponse>, tonic::Status> {
+        self.package_discovery
+            .discover_packages_blocking()
             .await
             .map(|packages| {
                 tonic::Response::new(proto::DiscoverPackagesResponse {
@@ -615,6 +654,15 @@ mod test {
                 package_manager: PackageManager::Yarn,
                 workspaces: vec![],
             })
+        }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<
+            turborepo_repository::discovery::DiscoveryResponse,
+            turborepo_repository::discovery::Error,
+        > {
+            self.discover_packages().await
         }
     }
 

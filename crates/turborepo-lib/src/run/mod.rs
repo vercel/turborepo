@@ -12,14 +12,13 @@ pub mod task_id;
 
 use std::{
     collections::HashSet,
-    io::{IsTerminal, Write},
+    io::{ErrorKind, IsTerminal, Write},
     sync::Arc,
     time::SystemTime,
 };
 
 pub use cache::{ConfigCache, RunCache, TaskCache};
 use chrono::{DateTime, Local};
-use itertools::Itertools;
 use rayon::iter::ParallelBridge;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
@@ -28,16 +27,17 @@ use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::{AsyncCache, RemoteCacheOpts};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
+use turborepo_errors::Spanned;
 use turborepo_repository::{
-    package_graph::{PackageGraph, PackageName},
-    package_json::PackageJson,
+    package_graph::{self, PackageGraph, PackageName},
+    package_json::{self, PackageJson},
 };
 use turborepo_scm::SCM;
 use turborepo_telemetry::events::{
     command::CommandEventBuilder,
     generic::{DaemonInitStatus, GenericEventBuilder},
     repo::{RepoEventBuilder, RepoType},
-    EventBuilder,
+    EventBuilder, TrackedErrors,
 };
 use turborepo_ui::{cprint, cprintln, ColorSelector, BOLD_GREY, GREY, UI};
 #[cfg(feature = "daemon-package-discovery")]
@@ -311,7 +311,23 @@ impl Run {
                 builder.with_package_discovery(fallback_discovery)
             };
 
-            builder.build().await?
+            match builder.build().await {
+                Ok(graph) => graph,
+                // if we can't find the package.json, it is a bug, and we should report it.
+                // likely cause is that package discovery watching is not up to date.
+                // note: there _is_ a false positive from a race condition that can occur
+                //       from toctou if the package.json is deleted, but we'd like to know
+                Err(package_graph::builder::Error::PackageJson(package_json::Error::Io(io)))
+                    if io.kind() == ErrorKind::NotFound =>
+                {
+                    run_telemetry.track_error(TrackedErrors::InvalidPackageDiscovery);
+                    return Err(package_graph::builder::Error::PackageJson(
+                        package_json::Error::Io(io),
+                    )
+                    .into());
+                }
+                Err(e) => return Err(e.into()),
+            }
         };
 
         repo_telemetry.track_package_manager(pkg_dep_graph.package_manager().to_string());
@@ -346,6 +362,7 @@ impl Run {
                 &self.repo_root,
                 &pkg_dep_graph,
                 &scm,
+                &root_turbo_json,
             )?;
 
             if is_all_packages {
@@ -560,27 +577,16 @@ impl Run {
         ))
         .with_tasks_only(self.opts.run_opts.only)
         .with_workspaces(filtered_pkgs.clone().into_iter().collect())
-        .with_tasks(
-            self.opts
-                .run_opts
-                .tasks
-                .iter()
-                .map(|task| TaskName::from(task.as_str()).into_owned()),
-        )
+        .with_tasks(self.opts.run_opts.tasks.iter().map(|task| {
+            // TODO: Pull span info from command
+            Spanned::new(TaskName::from(task.as_str()).into_owned())
+        }))
         .build()?;
 
         if !self.opts.run_opts.parallel {
             engine
                 .validate(pkg_dep_graph, self.opts.run_opts.concurrency)
-                .map_err(|errors| {
-                    Error::EngineValidation(
-                        errors
-                            .into_iter()
-                            .map(|e| e.to_string())
-                            .sorted()
-                            .join("\n"),
-                    )
-                })?;
+                .map_err(Error::EngineValidation)?;
         }
 
         Ok(engine)

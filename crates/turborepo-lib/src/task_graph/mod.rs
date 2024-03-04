@@ -5,6 +5,7 @@ use std::str::FromStr;
 use globwalk::{GlobError, ValidatedGlob};
 use serde::{Deserialize, Serialize};
 use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
+use turborepo_errors::Spanned;
 pub use visitor::{Error as VisitorError, Visitor};
 
 use crate::{
@@ -54,13 +55,13 @@ pub struct TaskDefinition {
     // E.g. "build" is a topological dependency in:
     // dependsOn: ['^build'].
     // This field is custom-marshalled from rawTask.DependsOn
-    pub topological_dependencies: Vec<TaskName<'static>>,
+    pub topological_dependencies: Vec<Spanned<TaskName<'static>>>,
 
     // TaskDependencies are anything that is not a topological dependency
     // E.g. both something and //whatever are TaskDependencies in:
     // dependsOn: ['something', '//whatever']
     // This field is custom-marshalled from rawTask.DependsOn
-    pub task_dependencies: Vec<TaskName<'static>>,
+    pub task_dependencies: Vec<Spanned<TaskName<'static>>>,
 
     // Inputs indicate the list of files this Task depends on. If any of those files change
     // we can conclude that any cached outputs or logs for this Task should be invalidated.

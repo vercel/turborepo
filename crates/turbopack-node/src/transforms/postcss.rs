@@ -1,5 +1,6 @@
 use anyhow::{bail, Context, Result};
 use indexmap::indexmap;
+use indoc::formatdoc;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{
     trace::TraceRawVcs, Completion, Completions, TaskInput, TryFlatJoinIterExt, Value, Vc,
@@ -15,7 +16,8 @@ use turbopack_core::{
     file_source::FileSource,
     ident::AssetIdent,
     issue::{
-        Issue, IssueDescriptionExt, IssueExt, IssueSeverity, OptionStyledString, StyledString,
+        Issue, IssueDescriptionExt, IssueExt, IssueSeverity, IssueStage, OptionStyledString,
+        StyledString,
     },
     reference_type::{EntryReferenceSubType, InnerAssets, ReferenceType},
     resolve::{find_context_file, options::ImportMapping, FindContextFileResult},
@@ -24,10 +26,13 @@ use turbopack_core::{
     virtual_source::VirtualSource,
 };
 
-use super::util::{emitted_assets_to_virtual_sources, EmittedAsset};
+use super::{
+    util::{emitted_assets_to_virtual_sources, EmittedAsset},
+    webpack::WebpackLoaderContext,
+};
 use crate::{
-    debug::should_debug, embed_js::embed_file, evaluate::evaluate,
-    execution_context::ExecutionContext,
+    embed_js::embed_file, execution_context::ExecutionContext,
+    transforms::webpack::evaluate_webpack_loader,
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -78,6 +83,7 @@ fn postcss_configs() -> Vc<Vec<String>> {
             "postcss.config.js",
             "postcss.config.mjs",
             "postcss.config.cjs",
+            "postcss.config.json",
         ]
         .into_iter()
         .map(ToOwned::to_owned)
@@ -162,7 +168,26 @@ struct ProcessPostCssResult {
 }
 
 #[turbo_tasks::function]
-async fn extra_configs(
+async fn config_changed(
+    asset_context: Vc<Box<dyn AssetContext>>,
+    postcss_config_path: Vc<FileSystemPath>,
+) -> Result<Vc<Completion>> {
+    let config_asset = asset_context
+        .process(
+            Vc::upcast(FileSource::new(postcss_config_path)),
+            Value::new(ReferenceType::Internal(InnerAssets::empty())),
+        )
+        .module();
+
+    Ok(Vc::<Completions>::cell(vec![
+        any_content_changed_of_module(config_asset),
+        extra_configs_changed(asset_context, postcss_config_path),
+    ])
+    .completed())
+}
+
+#[turbo_tasks::function]
+async fn extra_configs_changed(
     asset_context: Vc<Box<dyn AssetContext>>,
     postcss_config_path: Vc<FileSystemPath>,
 ) -> Result<Vc<Completion>> {
@@ -202,13 +227,52 @@ async fn extra_configs(
 }
 
 #[turbo_tasks::function]
+pub(crate) async fn config_loader_source(
+    project_path: Vc<FileSystemPath>,
+    postcss_config_path: Vc<FileSystemPath>,
+) -> Result<Vc<Box<dyn Source>>> {
+    let postcss_config_path_value = &*postcss_config_path.await?;
+
+    // We can only load js files with `import()`.
+    if !postcss_config_path_value.path.ends_with(".js") {
+        return Ok(Vc::upcast(FileSource::new(postcss_config_path)));
+    }
+
+    let Some(config_path) = project_path
+        .await?
+        .get_relative_path_to(postcss_config_path_value)
+    else {
+        bail!("Unable to get relative path to postcss config");
+    };
+
+    // We don't want to bundle the config file, so we load it with `import()`.
+    // Bundling would break the ability to use `require.resolve` in the config file.
+    let code = formatdoc! {
+        r#"
+            const configPath = `${{process.cwd()}}/{config_path}`;
+
+            const mod = await __turbopack_external_import__(configPath);
+
+            export default mod.default ?? mod;
+        "#,
+        config_path = config_path,
+    };
+
+    Ok(Vc::upcast(VirtualSource::new(
+        postcss_config_path.append("_.loader.mjs".to_string()),
+        AssetContent::file(File::from(code).into()),
+    )))
+}
+
+#[turbo_tasks::function]
 async fn postcss_executor(
     asset_context: Vc<Box<dyn AssetContext>>,
+    project_path: Vc<FileSystemPath>,
     postcss_config_path: Vc<FileSystemPath>,
 ) -> Result<Vc<ProcessResult>> {
     let config_asset = asset_context
         .process(
-            Vc::upcast(FileSource::new(postcss_config_path)),
+            config_loader_source(project_path, postcss_config_path),
             Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
         )
         .module();
@@ -302,24 +366,24 @@ impl PostCssTransformedAsset {
         let evaluate_context = this.evaluate_context;
 
         // This invalidates the transform when the config changes.
-        let extra_configs_changed = extra_configs(evaluate_context, config_path);
+        let config_changed = config_changed(evaluate_context, config_path);
 
-        let postcss_executor = postcss_executor(evaluate_context, config_path).module();
+        let postcss_executor =
+            postcss_executor(evaluate_context, project_path, config_path).module();
         let css_fs_path = this.source.ident().path().await?;
         let css_path = css_fs_path.path.as_str();
 
-        let config_value = evaluate(
-            postcss_executor,
-            project_path,
+        let config_value = evaluate_webpack_loader(WebpackLoaderContext {
+            module_asset: postcss_executor,
+            cwd: project_path,
             env,
-            this.source.ident(),
-            evaluate_context,
+            context_ident_for_issue: this.source.ident(),
+            asset_context: evaluate_context,
             chunking_context,
-            None,
-            vec![Vc::cell(content.into()), Vc::cell(css_path.into())],
-            extra_configs_changed,
-            should_debug("postcss_transform"),
-        )
+            resolve_options_context: None,
+            args: vec![Vc::cell(content.into()), Vc::cell(css_path.into())],
+            additional_invalidation: config_changed,
+        })
         .await?;
 
         let SingleValue::Single(val) = config_value.try_into_single().await? else {
@@ -374,7 +438,7 @@ impl Issue for PostCssTransformIssue {
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("transform".to_string())
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::Transform.cell()
     }
 }

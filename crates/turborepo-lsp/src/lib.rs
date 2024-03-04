@@ -258,7 +258,12 @@ impl LanguageServer for Backend {
                 self.client
                     .log_message(MessageType::WARNING, e.to_string())
                     .await;
-                return Err(Error::internal_error());
+
+                // there aren't really any other errors we can return here, other than
+                // an internal error
+                let mut error = Error::internal_error();
+                error.message = "failed to get package list from the daemon".into();
+                return Err(error);
             }
         };
 
@@ -596,7 +601,7 @@ impl Backend {
         };
 
         DaemonPackageDiscovery::new(daemon)
-            .discover_packages()
+            .discover_packages_blocking()
             .await
     }
 

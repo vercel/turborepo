@@ -356,6 +356,16 @@ impl EvalContext {
                 JsValue::logical_not(Box::new(arg))
             }
 
+            Expr::Unary(UnaryExpr {
+                op: op!("typeof"),
+                arg,
+                ..
+            }) => {
+                let arg = self.eval(arg);
+
+                JsValue::type_of(Box::new(arg))
+            }
+
             Expr::Bin(BinExpr {
                 op: op!(bin, "+"),
                 left,
@@ -1408,6 +1418,33 @@ impl VisitAstPath for Analyzer<'_> {
 
             self.visit_opt_expr(n.init.as_ref(), &mut ast_path);
         }
+    }
+
+    fn visit_for_of_stmt<'ast: 'r, 'r>(
+        &mut self,
+        n: &'ast ForOfStmt,
+        ast_path: &mut swc_core::ecma::visit::AstNodePath<'r>,
+    ) {
+        {
+            let mut ast_path =
+                ast_path.with_guard(AstParentNodeRef::ForOfStmt(n, ForOfStmtField::Right));
+            self.current_value = None;
+            self.visit_expr(&n.right, &mut ast_path);
+        }
+
+        let array = self.eval_context.eval(&n.right);
+
+        {
+            let mut ast_path =
+                ast_path.with_guard(AstParentNodeRef::ForOfStmt(n, ForOfStmtField::Left));
+            self.current_value = Some(JsValue::iterated(array));
+            self.visit_for_head(&n.left, &mut ast_path);
+        }
+
+        let mut ast_path =
+            ast_path.with_guard(AstParentNodeRef::ForOfStmt(n, ForOfStmtField::Body));
+
+        self.visit_stmt(&n.body, &mut ast_path);
     }
 
     fn visit_simple_assign_target<'ast: 'r, 'r>(

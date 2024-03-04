@@ -145,10 +145,10 @@ impl Client for APIClient {
     }
 
     async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>> {
+        let endpoint = format!("/v2/teams/{team_id}");
         let response = self
             .client
-            .get(self.make_url("/v2/team")?)
-            .query(&[("teamId", team_id)])
+            .get(self.make_url(&endpoint)?)
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {}", token))

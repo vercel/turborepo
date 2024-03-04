@@ -7,17 +7,17 @@
 //! won't get any stale events.
 //!
 //! Here's the `CookieWriter` flow:
-//! - `CookieWriter` spins up a `watch_cookies` task and creates a
+//! - `CookieWriter` spins up a `watch_for_cookie_requests` task and creates a
 //!   `cookie_requests` mpsc channel to send a cookie request to that task. The
 //!   cookie request consists of a oneshot `Sender` that the task can use to
 //!   send back the serial number.
-//! - The `watch_cookies` task watches for cookie requests on
+//! - The `watch_for_cookie_requests` task watches for cookie requests on
 //!   `cookie_requests_rx`. When one occurs, it creates the cookie file and
 //!   bumps the serial. It then sends the serial back using the `Sender`
 //! - When `CookieWriter::cookie_request` is called, it sends the cookie request
-//!   to the `watch_cookies` channel and then waits for the serial as a response
-//!   (with a timeout). Upon getting the serial, a `CookiedRequest` gets
-//!   returned with the serial number attached.
+//!   to the `watch_for_cookie_request` channel and then waits for the serial as
+//!   a response (with a timeout). Upon getting the serial, a `CookiedRequest`
+//!   gets returned with the serial number attached.
 //!
 //! And here's the `CookieWatcher` flow:
 //! - `GlobWatcher` creates a `CookieWatcher`.
@@ -68,7 +68,8 @@ pub enum CookieError {
 /// for a downstream, filewatching-backed service.
 #[derive(Clone)]
 pub struct CookieWriter {
-    root: AbsoluteSystemPathBuf,
+    // Where we put the cookie files, usually `<repo_root>/.turbo/cookies`
+    cookie_root: AbsoluteSystemPathBuf,
     timeout: Duration,
     cookie_request_sender_lazy:
         OptionalWatch<mpsc::Sender<oneshot::Sender<Result<usize, CookieError>>>>,
@@ -112,7 +113,8 @@ impl<T> Ord for CookiedRequest<T> {
 /// CookieWatcher is used by downstream filewatching-backed services to
 /// know when it is safe to handle a particular request.
 pub(crate) struct CookieWatcher<T> {
-    root: AbsoluteSystemPathBuf,
+    // Where we expect to find the cookie files, usually `<repo_root>/.turbo/cookies`
+    cookie_root: AbsoluteSystemPathBuf,
     // We don't necessarily get requests in serial-order, but we want to keep them
     // in order so we don't have to scan all requests every time we get a new cookie.
     pending_requests: BinaryHeap<CookiedRequest<T>>,
@@ -120,9 +122,9 @@ pub(crate) struct CookieWatcher<T> {
 }
 
 impl<T> CookieWatcher<T> {
-    pub(crate) fn new(root: AbsoluteSystemPathBuf) -> Self {
+    pub(crate) fn new(cookie_root: AbsoluteSystemPathBuf) -> Self {
         Self {
-            root,
+            cookie_root,
             pending_requests: BinaryHeap::new(),
             latest: 0,
         }
@@ -153,7 +155,7 @@ impl<T> CookieWatcher<T> {
         if !matches!(event_kind, EventKind::Create(_)) {
             return None;
         }
-        if let Some(serial) = serial_for_path(&self.root, path) {
+        if let Some(serial) = serial_for_path(&self.cookie_root, path) {
             self.latest = serial;
             let mut ready_requests = Vec::new();
             while let Some(cookied_request) = self.pending_requests.pop() {
@@ -181,15 +183,24 @@ fn serial_for_path(root: &AbsoluteSystemPath, path: &AbsoluteSystemPath) -> Opti
 }
 
 impl CookieWriter {
+    pub fn new_with_default_cookie_dir(
+        repo_root: &AbsoluteSystemPath,
+        timeout: Duration,
+        recv: OptionalWatch<broadcast::Receiver<Result<notify::Event, NotifyError>>>,
+    ) -> Self {
+        let cookie_root = repo_root.join_components(&[".turbo", "cookies"]);
+        Self::new(&cookie_root, timeout, recv)
+    }
+
     pub fn new(
-        root: &AbsoluteSystemPath,
+        cookie_root: &AbsoluteSystemPath,
         timeout: Duration,
         mut recv: OptionalWatch<broadcast::Receiver<Result<notify::Event, NotifyError>>>,
     ) -> Self {
         let (cookie_request_sender_tx, cookie_request_sender_lazy) = OptionalWatch::new();
         let (exit_ch, exit_signal) = mpsc::channel(16);
         tokio::spawn({
-            let root = root.to_owned();
+            let root = cookie_root.to_owned();
             async move {
                 if recv.get().await.is_err() {
                     // here we need to wait for confirmation that the watching end is ready
@@ -208,11 +219,12 @@ impl CookieWriter {
                     tracing::debug!("nobody listening for cookie requests, exiting");
                     return;
                 };
-                watch_cookies(root.to_owned(), cookie_requests_rx, exit_signal).await;
+                watch_for_cookie_file_requests(root.to_owned(), cookie_requests_rx, exit_signal)
+                    .await;
             }
         });
         Self {
-            root: root.to_owned(),
+            cookie_root: cookie_root.to_owned(),
             timeout,
             cookie_request_sender_lazy,
             _exit_ch: exit_ch,
@@ -220,7 +232,7 @@ impl CookieWriter {
     }
 
     pub(crate) fn root(&self) -> &AbsoluteSystemPath {
-        &self.root
+        &self.cookie_root
     }
 
     /// Sends a request to make a cookie file to the
@@ -268,7 +280,7 @@ impl CookieWriter {
     }
 }
 
-async fn watch_cookies(
+async fn watch_for_cookie_file_requests(
     root: AbsoluteSystemPathBuf,
     mut cookie_requests: mpsc::Receiver<oneshot::Sender<Result<usize, CookieError>>>,
     mut exit_signal: mpsc::Receiver<()>,
@@ -278,12 +290,12 @@ async fn watch_cookies(
         tokio::select! {
             biased;
             _ = exit_signal.recv() => return,
-            req = cookie_requests.recv() => handle_cookie_request(&root, &mut serial, req),
+            req = cookie_requests.recv() => handle_cookie_file_request(&root, &mut serial, req),
         }
     }
 }
 
-fn handle_cookie_request(
+fn handle_cookie_file_request(
     root: &AbsoluteSystemPath,
     serial: &mut usize,
     req: Option<oneshot::Sender<Result<usize, CookieError>>>,
@@ -420,7 +432,7 @@ impl<T, U: CookieReady + Clone> CookiedOptionalWatch<T, U> {
             .await?
             .serial;
         self.ready(next_id).await;
-        tracing::debug!("waiting for data");
+        tracing::debug!("got cookie, waiting for data");
         Ok(self.get_inner().await?)
     }
 

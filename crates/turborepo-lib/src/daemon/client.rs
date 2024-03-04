@@ -133,6 +133,18 @@ impl<T> DaemonClient<T> {
 
         Ok(response)
     }
+
+    pub async fn discover_packages_blocking(
+        &mut self,
+    ) -> Result<DiscoverPackagesResponse, DaemonError> {
+        let response = self
+            .client
+            .discover_packages_blocking(proto::DiscoverPackagesRequest {})
+            .await?
+            .into_inner();
+
+        Ok(response)
+    }
 }
 
 impl DaemonClient<DaemonConnector> {
@@ -206,6 +218,9 @@ pub enum DaemonError {
 
     #[error("`tail` is not installed. Please install it to use this feature.")]
     TailNotInstalled,
+
+    #[error("could not find log file")]
+    LogFileNotFound,
 }
 
 impl From<Status> for DaemonError {

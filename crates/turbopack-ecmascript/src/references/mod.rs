@@ -67,6 +67,10 @@ use turbopack_core::{
     source::Source,
     source_map::{GenerateSourceMap, OptionSourceMap, SourceMap},
 };
+use turbopack_resolve::{
+    ecmascript::{apply_cjs_specific_options, cjs_resolve, try_to_severity},
+    typescript::tsconfig,
+};
 use turbopack_swc_utils::emitter::IssueEmitter;
 use unreachable::Unreachable;
 
@@ -95,7 +99,6 @@ use super::{
     },
     errors,
     parse::{parse, ParseResult},
-    resolve::{apply_cjs_specific_options, cjs_resolve},
     special_cases::special_cases,
     utils::js_value_to_pattern,
     webpack::{
@@ -125,9 +128,7 @@ use crate::{
         require_context::{RequireContextAssetReference, RequireContextMap},
         type_issue::SpecifiedModuleTypeIssue,
     },
-    resolve::try_to_severity,
     tree_shake::{part_of_module, split},
-    typescript::resolve::tsconfig,
     EcmascriptInputTransforms, EcmascriptModuleAsset, SpecifiedModuleType, TreeShakingMode,
 };
 
@@ -746,7 +747,6 @@ pub(crate) async fn analyse_ecmascript_module_internal(
     } else if let Some(span) = top_level_await_span {
         AnalyzeIssue {
             code: None,
-            category: Vc::cell("analyze".to_string()),
             message: StyledString::Text(
                 "top level await is only supported in ESM modules.".to_string(),
             )
@@ -1484,7 +1484,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
             )
         }
         JsValue::WellKnownFunction(WellKnownFunctionKind::NodePreGypFind) => {
-            use crate::resolve::node_native_binding::NodePreGypConfigReference;
+            use turbopack_resolve::node_native_binding::NodePreGypConfigReference;
 
             let args = linked_args(args).await?;
             if args.len() == 1 {
@@ -1521,7 +1521,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
             )
         }
         JsValue::WellKnownFunction(WellKnownFunctionKind::NodeGypBuild) => {
-            use crate::resolve::node_native_binding::NodeGypBuildReference;
+            use turbopack_resolve::node_native_binding::NodeGypBuildReference;
 
             let args = linked_args(args).await?;
             if args.len() == 1 {
@@ -1551,7 +1551,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
             )
         }
         JsValue::WellKnownFunction(WellKnownFunctionKind::NodeBindings) => {
-            use crate::resolve::node_native_binding::NodeBindingsReference;
+            use turbopack_resolve::node_native_binding::NodeBindingsReference;
 
             let args = linked_args(args).await?;
             if args.len() == 1 {

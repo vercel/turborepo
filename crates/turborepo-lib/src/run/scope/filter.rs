@@ -18,7 +18,7 @@ use super::{
     simple_glob::{Match, SimpleGlob},
     target_selector::{InvalidSelectorError, TargetSelector},
 };
-use crate::run::scope::change_detector::ScopeChangeDetector;
+use crate::{run::scope::change_detector::ScopeChangeDetector, turbo_json::TurboJson};
 
 pub struct PackageInference {
     package_name: Option<String>,
@@ -112,12 +112,16 @@ impl<'a> FilterResolver<'a, ScopeChangeDetector<'a>> {
         turbo_root: &'a AbsoluteSystemPath,
         inference: Option<PackageInference>,
         scm: &'a SCM,
+        root_turbo_json: &TurboJson,
     ) -> Self {
+        let mut global_deps = opts.global_deps.clone();
+        global_deps.extend_from_slice(&root_turbo_json.global_deps);
+
         let change_detector = ScopeChangeDetector::new(
             turbo_root,
             scm,
             pkg_graph,
-            opts.global_deps.clone(),
+            global_deps,
             opts.ignore_patterns.clone(),
         );
         Self::new_with_change_detector(pkg_graph, turbo_root, inference, scm, change_detector)
@@ -631,6 +635,15 @@ mod test {
                 workspaces: vec![], // we don't care about this
             })
         }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<
+            turborepo_repository::discovery::DiscoveryResponse,
+            turborepo_repository::discovery::Error,
+        > {
+            self.discover_packages().await
+        }
     }
 
     /// Make a project resolver with the provided dependencies. Extras is for
@@ -667,12 +680,9 @@ mod test {
             .map(|package_path| {
                 let (_, name) = get_name(package_path);
                 (
-                    turbo_root
-                        .join_unix_path(
-                            RelativeUnixPathBuf::new(format!("{package_path}/package.json"))
-                                .unwrap(),
-                        )
-                        .unwrap(),
+                    turbo_root.join_unix_path(
+                        RelativeUnixPathBuf::new(format!("{package_path}/package.json")).unwrap(),
+                    ),
                     PackageJson {
                         name: Some(name.to_string()),
                         dependencies: dependencies.get(name).map(|v| {
