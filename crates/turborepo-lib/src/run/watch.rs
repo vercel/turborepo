@@ -6,11 +6,13 @@ use tokio::{select, task::JoinHandle};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
 use crate::{
-    cli::{Command, RunArgs},
+    cli::{Command, OutputLogsMode, RunArgs},
     commands,
     commands::CommandBase,
     daemon::{proto, DaemonConnectorError, DaemonError},
-    get_version, run,
+    get_version,
+    opts::Opts,
+    run,
     signal::SignalHandler,
     Args, DaemonConnector, DaemonPaths,
 };
@@ -35,8 +37,6 @@ pub enum Error {
 
 impl WatchClient {
     pub async fn start(base: CommandBase, telemetry: CommandEventBuilder) -> Result<(), Error> {
-        let signal = commands::run::get_signal()?;
-        let handler = SignalHandler::new(signal);
         let connector = DaemonConnector {
             can_start_server: true,
             can_kill_server: true,
@@ -49,6 +49,9 @@ impl WatchClient {
         let mut current_runs: HashMap<String, JoinHandle<Result<i32, run::Error>>> = HashMap::new();
 
         loop {
+            let signal = commands::run::get_signal()?;
+            let handler = SignalHandler::new(signal);
+
             let Some(subscriber) = handler.subscribe() else {
                 tracing::warn!("failed to subscribe to signal handler, shutting down");
                 break;
@@ -99,11 +102,13 @@ impl WatchClient {
                 let args = Args {
                     command: Some(Command::Run(Box::new(RunArgs {
                         tasks: base.args().get_tasks().to_owned(),
-                        filter: vec![package_name.clone()],
+                        filter: vec![format!("...{}", package_name)],
+                        output_logs: Some(OutputLogsMode::None),
                         ..Default::default()
                     }))),
                     ..Args::default()
                 };
+                println!("running `{:#?}`", args);
                 let new_base =
                     CommandBase::new(args, base.repo_root.clone(), get_version(), base.ui.clone());
 
@@ -125,6 +130,7 @@ impl WatchClient {
                 let args = Args {
                     command: Some(Command::Run(Box::new(RunArgs {
                         tasks: base.args().get_tasks().to_owned(),
+                        output_logs: Some(OutputLogsMode::None),
                         ..Default::default()
                     }))),
                     ..Args::default()
