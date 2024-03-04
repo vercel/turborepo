@@ -119,7 +119,7 @@ impl vte::Perform for WrappedScreen {
     }
 
     fn osc_dispatch(&mut self, params: &[&[u8]], _bel_terminated: bool) {
-        match (params.get(0), params.get(1)) {
+        match (params.first(), params.get(1)) {
             (Some(&b"0"), Some(s)) => self.0.osc0(s),
             (Some(&b"1"), Some(s)) => self.0.osc1(s),
             (Some(&b"2"), Some(s)) => self.0.osc2(s),
