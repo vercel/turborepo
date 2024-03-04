@@ -26,7 +26,7 @@ impl Grid {
             scroll_bottom: size.rows - 1,
             origin_mode: false,
             saved_origin_mode: false,
-            scrollback: std::collections::VecDeque::new(),
+            scrollback: std::collections::VecDeque::with_capacity(0),
             scrollback_len,
             scrollback_offset: 0,
         }
