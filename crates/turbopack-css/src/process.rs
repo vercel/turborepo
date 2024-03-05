@@ -724,7 +724,8 @@ impl swc_core::css::visit::Visit for CssValidator {
             sel.subclass_selectors.iter().all(|sel| match sel {
                 SubclassSelector::Attribute { .. } => true,
                 SubclassSelector::PseudoClass(cls) => {
-                    cls.name.value == "not" || cls.name.value == "has"
+                    cls.name.value == "not"
+                        || cls.name.value == "has"
                         || match &cls.children {
                             Some(c) => c.iter().all(|c| match c {
                                 PseudoClassSelectorChildren::ComplexSelector(sel) => {
@@ -1176,13 +1177,13 @@ mod tests {
         );
 
         assert_lint_failure(
-            ":where(.div > *) {
+            ":where(div > *) {
             color: red;
         }",
         );
 
         assert_lint_failure(
-            ":where(.div) {
+            ":where(div) {
             color: red;
         }",
         );
