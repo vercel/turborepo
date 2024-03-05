@@ -20,7 +20,10 @@ use swc_core::{
     base::sourcemap::SourceMapBuilder,
     common::{BytePos, FileName, LineCol, Span},
     css::{
-        ast::{CompoundSelector, SubclassSelector, TypeSelector, UrlValue},
+        ast::{
+            CompoundSelector, PseudoClassSelectorChildren, PseudoElementSelectorChildren,
+            SubclassSelector, TypeSelector, UrlValue,
+        },
         codegen::{writer::basic::BasicCssWriter, CodeGenerator},
         modules::{CssClassName, TransformConfig},
         visit::{VisitMut, VisitMutWith, VisitWith},
@@ -723,27 +726,25 @@ impl swc_core::css::visit::Visit for CssValidator {
                 SubclassSelector::PseudoClass(cls) => {
                     cls.name.value == "not"
                         || match &cls.children {
-                            Some(c) => c.iter().all(|c| {
-                                match c {
-                        swc_core::css::ast::PseudoClassSelectorChildren::ComplexSelector(sel) => {
-                            is_complex_not_pure(sel)
-                        }
+                            Some(c) => c.iter().all(|c| match c {
+                                PseudoClassSelectorChildren::ComplexSelector(sel) => {
+                                    is_complex_not_pure(sel)
+                                }
 
-                        swc_core::css::ast::PseudoClassSelectorChildren::CompoundSelector(sel) => {
-                            is_compound_not_pure(sel)
-                        }
+                                PseudoClassSelectorChildren::CompoundSelector(sel) => {
+                                    is_compound_not_pure(sel)
+                                }
 
-                        _ => false,
-                    }
+                                _ => false,
                             }),
                             None => true,
                         }
                 }
                 SubclassSelector::PseudoElement(el) => match &el.children {
                     Some(c) => c.iter().all(|c| match c {
-                        swc_core::css::ast::PseudoElementSelectorChildren::CompoundSelector(
-                            sel,
-                        ) => is_compound_not_pure(sel),
+                        PseudoElementSelectorChildren::CompoundSelector(sel) => {
+                            is_compound_not_pure(sel)
+                        }
 
                         _ => false,
                     }),
