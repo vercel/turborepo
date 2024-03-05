@@ -144,7 +144,7 @@ impl Workspace {
     /// Finds and returns a map of packages within the workspace and its
     /// dependents (i.e. the packages that depend on each of those packages).
     #[napi]
-    pub async fn find_packages_and_dependents(&self) -> Result<SerializablePackages, Error> {
+    pub async fn find_packages_with_graph(&self) -> Result<SerializablePackages, Error> {
         let packages = self.find_packages().await?;
 
         let workspace_path = match AbsoluteSystemPath::new(self.absolute_path.as_str()) {

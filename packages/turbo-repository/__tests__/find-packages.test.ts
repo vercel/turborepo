@@ -11,7 +11,7 @@ describe("findPackages", () => {
   it("returns a package graph", async () => {
     const dir = path.resolve(__dirname, "./fixtures/monorepo");
     const workspace = await Workspace.find(dir);
-    const packages = await workspace.findPackagesAndDependents(); // TODO: rename this
+    const packages = await workspace.findPackagesWithGraph();
 
     expect(Object.keys(packages).length).toBe(2);
 
