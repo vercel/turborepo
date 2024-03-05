@@ -1109,6 +1109,12 @@ mod tests {
         }",
         );
 
+        assert_lint_success(
+            ":where(.main > *, .root > *) {
+            color: red;
+        }",
+        );
+
         assert_lint_failure(
             "div {
             color: red;
@@ -1166,6 +1172,18 @@ mod tests {
         assert_lint_failure(
             ":not(div) {
             --foo: 1;
+        }",
+        );
+
+        assert_lint_failure(
+            ":where(.div > *) {
+            color: red;
+        }",
+        );
+
+        assert_lint_failure(
+            ":where(.div) {
+            color: red;
         }",
         );
     }
