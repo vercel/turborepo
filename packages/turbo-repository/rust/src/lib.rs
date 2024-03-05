@@ -141,8 +141,14 @@ impl Workspace {
         self.packages_internal().await.map_err(|e| e.into())
     }
 
-    /// Finds and returns a map of packages within the workspace and its
-    /// dependents (i.e. the packages that depend on each of those packages).
+    /// Returns a map of packages within the workspace, its dependencies and
+    /// dependents. The response looks like this:
+    ///  {
+    ///    "package-path": {
+    ///      "dependents": ["dependent1_path", "dependent2_path"],
+    ///      "dependencies": ["dependency1_path", "dependency2_path"]
+    ///      }
+    ///  }
     #[napi]
     pub async fn find_packages_with_graph(&self) -> Result<SerializablePackages, Error> {
         let packages = self.find_packages().await?;
@@ -155,13 +161,6 @@ impl Workspace {
             }
         };
 
-        // Create a map of package names to their dependents and dependencies
-        //  {
-        //    "package-path": {
-        //      "dependents": ["dependent1_path", "dependent2_path"],
-        //      "dependencies": ["dependency1_path", "dependency2_path"]
-        //      }
-        //  }
         let map: HashMap<RelativePath, PackageDetails> = packages
             .into_iter()
             .map(|package| {
