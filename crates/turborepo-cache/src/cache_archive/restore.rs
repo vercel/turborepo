@@ -172,7 +172,7 @@ fn restore_entry<T: Read>(
     let header = entry.header();
 
     match header.entry_type() {
-        tar::EntryType::Directory => restore_directory(dir_cache, anchor, entry.header()),
+        tar::EntryType::Directory => restore_directory(dir_cache, anchor, entry),
         tar::EntryType::Regular => restore_regular(dir_cache, anchor, entry),
         tar::EntryType::Symlink => restore_symlink(dir_cache, anchor, entry),
         ty => Err(CacheError::RestoreUnsupportedFileType(
