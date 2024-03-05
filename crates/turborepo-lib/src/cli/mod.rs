@@ -1188,22 +1188,16 @@ fn initialize_telemetry_client(
     color_config: ColorConfig,
     version: &str,
 ) -> Option<TelemetryHandle> {
-    let mut telemetry_handle: Option<TelemetryHandle> = None;
-    match AnonAPIClient::new("https://telemetry.vercel.com", 250, version) {
-        Ok(anonymous_api_client) => {
-            let handle = init_telemetry(anonymous_api_client, color_config);
-            match handle {
-                Ok(h) => telemetry_handle = Some(h),
-                Err(error) => {
-                    debug!("failed to start telemetry: {:?}", error)
-                }
-            }
-        }
-        Err(error) => {
-            debug!("Failed to create AnonAPIClient: {:?}", error);
-        }
-    }
-    telemetry_handle
+    // initialize telemetry
+    let client_version = version.to_string();
+    let client_builder = move || {
+        AnonAPIClient::new("https://telemetry.vercel.com", 250, &client_version)
+            .inspect_err(|e| debug!("failed setting up client: {e}"))
+            .ok()
+    };
+    init_telemetry(client_builder, color_config)
+        .inspect_err(|err| debug!("failed to start telemetry: {err}"))
+        .ok()
 }
 
 #[derive(PartialEq)]

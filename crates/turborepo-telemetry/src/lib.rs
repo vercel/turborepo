@@ -75,11 +75,14 @@ pub fn telem(event: events::TelemetryEvent) {
     }
 }
 
-fn init(
+fn init<C>(
     mut config: TelemetryConfig,
-    client: impl telemetry::TelemetryClient + Clone + Send + Sync + 'static,
+    client: impl Send + FnOnce() -> Option<C> + 'static,
     color_config: ColorConfig,
-) -> Result<(TelemetryHandle, TelemetrySender), Box<dyn std::error::Error>> {
+) -> Result<(TelemetryHandle, TelemetrySender), Box<dyn std::error::Error>>
+where
+    C: telemetry::TelemetryClient + Clone + Send + Sync + 'static,
+{
     let (tx, rx) = mpsc::unbounded_channel();
     let (cancel_tx, cancel_rx) = oneshot::channel();
     config.show_alert(color_config);
@@ -90,13 +93,12 @@ fn init(
         buffer: Vec::new(),
         senders: FuturesUnordered::new(),
         exit_ch: cancel_tx,
-        client,
         session_id: session_id.to_string(),
         telemetry_id: config.get_id().to_string(),
         enabled: config.is_enabled(),
         color_config,
     };
-    let handle = worker.start();
+    let handle = worker.start(client);
 
     let telemetry_handle = TelemetryHandle {
         exit_ch: cancel_rx,
@@ -113,10 +115,13 @@ fn init(
 /// We have two different types because the TelemetrySender should be shared
 /// across threads (i.e. Clone + Send), while the TelemetryHandle cannot be
 /// shared since it contains the structs necessary to shut down the worker.
-pub fn init_telemetry(
-    client: impl telemetry::TelemetryClient + Clone + Send + Sync + 'static,
+pub fn init_telemetry<C>(
+    client: impl Send + FnOnce() -> Option<C> + 'static,
     color_config: ColorConfig,
-) -> Result<TelemetryHandle, Box<dyn std::error::Error>> {
+) -> Result<TelemetryHandle, Box<dyn std::error::Error>>
+where
+    C: telemetry::TelemetryClient + Clone + Send + Sync + 'static,
+{
     // make sure we're not already initialized
     if SENDER_INSTANCE.get().is_some() {
         debug!("telemetry already initialized");
@@ -147,22 +152,29 @@ impl TelemetryHandle {
     }
 }
 
-struct Worker<C> {
+struct Worker {
     rx: mpsc::UnboundedReceiver<TelemetryEvent>,
     buffer: Vec<TelemetryEvent>,
     senders: FuturesUnordered<JoinHandle<()>>,
     // Used to cancel the worker
     exit_ch: oneshot::Sender<()>,
-    client: C,
     telemetry_id: String,
     session_id: String,
     enabled: bool,
     color_config: ColorConfig,
 }
 
-impl<C: telemetry::TelemetryClient + Clone + Send + Sync + 'static> Worker<C> {
-    pub fn start(mut self) -> JoinHandle<()> {
+impl Worker {
+    pub fn start<C>(mut self, client: impl FnOnce() -> Option<C> + Send + 'static) -> JoinHandle<()>
+    where
+        C: telemetry::TelemetryClient + Clone + Send + Sync + 'static,
+    {
         tokio::spawn(async move {
+            // Constructing a HTTPS client is almost always a blocking operation
+            let Ok(Some(client)) = tokio::task::spawn_blocking(client).await else {
+                // If constructing telemetry client panics, shut down
+                return;
+            };
             let mut timeout = tokio::time::sleep(NO_TIMEOUT);
             loop {
                 select! {
@@ -176,14 +188,14 @@ impl<C: telemetry::TelemetryClient + Clone + Send + Sync + 'static> Worker<C> {
                             break;
                         }
                         if self.buffer.len() == BUFFER_THRESHOLD {
-                            self.flush_events();
+                            self.flush_events(&client);
                             timeout = tokio::time::sleep(NO_TIMEOUT);
                         } else {
                             timeout = tokio::time::sleep(EVENT_TIMEOUT);
                         }
                     }
                     _ = timeout => {
-                        self.flush_events();
+                        self.flush_events(&client);
                         timeout = tokio::time::sleep(NO_TIMEOUT);
                     }
                     _ = self.exit_ch.closed() => {
@@ -191,7 +203,7 @@ impl<C: telemetry::TelemetryClient + Clone + Send + Sync + 'static> Worker<C> {
                     }
                 }
             }
-            self.flush_events();
+            self.flush_events(&client);
             while let Some(result) = self.senders.next().await {
                 if let Err(err) = result {
                     debug!("failed to send telemetry event. error: {}", err)
@@ -200,11 +212,18 @@ impl<C: telemetry::TelemetryClient + Clone + Send + Sync + 'static> Worker<C> {
         })
     }
 
-    pub fn flush_events(&mut self) {
+    pub fn flush_events<C>(&mut self, client: &C)
+    where
+        C: telemetry::TelemetryClient + Clone + Send + Sync + 'static,
+    {
         if !self.buffer.is_empty() {
             let events = std::mem::take(&mut self.buffer);
             let num_events = events.len();
-            let handle = self.send_events(events);
+            debug!(
+                "Starting telemetry event queue flush (num_events={:?})",
+                num_events
+            );
+            let handle = self.send_events(client, events);
             if let Some(handle) = handle {
                 self.senders.push(handle);
             }
@@ -215,7 +234,10 @@ impl<C: telemetry::TelemetryClient + Clone + Send + Sync + 'static> Worker<C> {
         }
     }
 
-    fn send_events(&self, events: Vec<TelemetryEvent>) -> Option<JoinHandle<()>> {
+    fn send_events<C>(&self, client: &C, events: Vec<TelemetryEvent>) -> Option<JoinHandle<()>>
+    where
+        C: telemetry::TelemetryClient + Clone + Send + Sync + 'static,
+    {
         if !self.enabled {
             return None;
         }
@@ -232,7 +254,7 @@ impl<C: telemetry::TelemetryClient + Clone + Send + Sync + 'static> Worker<C> {
             }
         }
 
-        let client = self.client.clone();
+        let client = client.clone();
         let session_id = self.session_id.clone();
         let telemetry_id = self.telemetry_id.clone();
         Some(tokio::spawn(async move {
@@ -341,8 +363,10 @@ mod tests {
             events: Default::default(),
             tx,
         };
+        let client_copy = client.clone();
+        let client_builder = move || Some(client_copy);
 
-        let result = init(config, client.clone(), ColorConfig::new(false));
+        let result = init(config, client_builder, ColorConfig::new(false));
 
         let (telemetry_handle, telemetry_sender) = result.unwrap();
 
@@ -381,8 +405,10 @@ mod tests {
             events: Default::default(),
             tx,
         };
+        let client_copy = client.clone();
+        let client_builder = move || Some(client_copy);
 
-        let result = init(config, client.clone(), ColorConfig::new(false));
+        let result = init(config, client_builder, ColorConfig::new(false));
 
         let (telemetry_handle, telemetry_sender) = result.unwrap();
 
@@ -427,8 +453,10 @@ mod tests {
             events: Default::default(),
             tx,
         };
+        let client_copy = client.clone();
+        let client_builder = move || Some(client_copy);
 
-        let result = init(config, client.clone(), ColorConfig::new(false));
+        let result = init(config, client_builder, ColorConfig::new(false));
 
         let (telemetry_handle, telemetry_sender) = result.unwrap();
 
