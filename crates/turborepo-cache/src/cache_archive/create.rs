@@ -395,7 +395,10 @@ mod tests {
 
         let tar_path = tar_dir_path.join_component("test.tar");
         let mut archive = CacheWriter::create(&tar_path)?;
-        let really_long_file = AnchoredSystemPath::new("this-is-a-really-really-really-long-path-like-so-very-long-that-i-can-list-all-of-my-favorite-directors-like-edward-yang-claire-denis-lucrecia-martel-wong-kar-wai-even-kurosawa").unwrap();
+        let base = "this-is-a-really-really-really-long-path-like-so-very-long-that-i-can-list-all-of-my-favorite-directors-like-edward-yang-claire-denis-lucrecia-martel-wong-kar-wai-even-kurosawa";
+        let file_name = format!("{base}.txt");
+        let really_long_file = AnchoredSystemPath::new(&file_name).unwrap();
+        let really_long_dir = AnchoredSystemPath::new(base).unwrap();
         let really_long_symlink = AnchoredSystemPath::new("this-is-a-really-really-really-long-symlink-like-so-very-long-that-i-can-list-all-of-my-other-favorite-directors-like-jim-jarmusch-michelangelo-antonioni-and-terrence-malick-symlink").unwrap();
 
         let really_long_path = archive_dir_path.resolve(really_long_file);
@@ -404,7 +407,11 @@ mod tests {
         let really_long_symlink_path = archive_dir_path.resolve(really_long_symlink);
         really_long_symlink_path.symlink_to_file(really_long_file.as_str())?;
 
+        let really_long_dir_path = archive_dir_path.resolve(really_long_dir);
+        really_long_dir_path.create_dir_all()?;
+
         archive.add_file(archive_dir_path, really_long_file)?;
+        archive.add_file(archive_dir_path, really_long_dir)?;
         archive.add_file(archive_dir_path, really_long_symlink)?;
 
         archive.finish()?;
@@ -414,9 +421,10 @@ mod tests {
 
         let mut restore = CacheReader::open(&tar_path)?;
         let files = restore.restore(restore_dir_path)?;
-        assert_eq!(files.len(), 2);
+        assert_eq!(files.len(), 3);
         assert_eq!(files[0].as_str(), really_long_file.as_str());
-        assert_eq!(files[1].as_str(), really_long_symlink.as_str());
+        assert_eq!(files[1].as_str(), really_long_dir.as_str());
+        assert_eq!(files[2].as_str(), really_long_symlink.as_str());
         Ok(())
     }
 
