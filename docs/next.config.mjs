@@ -20,4 +20,3 @@ const config = {
 };
 
 export default withMDX(vercelToolbar(config));
-// export default withMDX(config);

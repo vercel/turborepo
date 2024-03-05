@@ -3,22 +3,78 @@ title: Installing dependencies
 description: Install dependencies from the registry into your repository.
 ---
 
+import {PackageManagerTabs, Tab} from '#/components/Tabs'
+
 Dependencies play an important role in the development of your monorepo.
 
-- External dependencies let you leverage the work of the ecosystem to build your applications and libraries faster.
-- Internal dependencies let you share code and functionality across your repo. Additionally, where we choose to install our internal packages creates a dependency graph for Turborepo to work with.
+- **External dependencies** come from [the npm registry](https://www.npmjs.com/), allowing you to leverage valuable code from the ecosystem to build your applications and libraries faster.
+- **Internal dependencies** let you share code and functionality across your repo. We will discuss them on [the next page](/repo/docs/crafting-your-repository/creating-an-internal-package).
 
-## Best practices
+<PackageManagerTabs>
+<Tab>
+```json title="./apps/web/package.json"
+{
+  "dependencies": {
+    "next": "latest", // External dependency
+    "@repo/ui": "*" // Internal dependency
+  }
+}
+```
+</Tab>
+<Tab>
+```json title="./apps/web/package.json"
+{
+  "dependencies": {
+    "next": "latest", // External dependency
+    "@repo/ui": "workspace:*" // Internal dependency
+  }
+}
+```
+</Tab>
+<Tab>
+```json title="./apps/web/package.json"
+{
+  "dependencies": {
+    "next": "latest", // External dependency
+    "@repo/ui": "workspace:*" // Internal dependency
+  }
+}
+```
+</Tab>
+</PackageManagerTabs>
+
+## Best practices for external dependencies
 
 ### Install dependencies where they're used
 
 When you install a dependency, you should install it in the package that uses it. This is true for both internal and external dependencies.
 
-This practice has several key benefits:
+- **Improved clarity**: It's easier to understand what a package depends on when its dependencies are listed in its `package.json`. Developers working in the repository can see at a glance what dependencies will be available within the package.
+- **Better caching ability**: If you install too many dependencies in the root of your repository, you'll be changing the workspace root whenever you add, update, or delete a dependency, leading to a lot of unnecessary cache invalidation. Instead, we can install dependencies in the package that uses them, which will only invalidate the cache for that package and the packages that depend on it.
+- **Pruning unused dependencies**: For Docker users, [Turborepo's pruning feature](/TODO-LINK) can remove unused dependencies from Docker images to create lighter images. When dependencies are installed in the packages that they are meant for, Turborepo can read your lockfile and remove dependencies that aren't used in the package from your final image.
 
-- **Improved flexibility**: In a scaled monorepo, it might not be realistic for every package to upgrade to the same version of an external dependency at the same time. By installing dependencies where they're used, you can incrementally upgrade dependencies that you don't control.
-- **Pruning unused dependencies**: For Docker users, Turborepo's pruning feature can remove unused dependencies from Docker images to create lighter images.
+### Few dependencies in the root
 
-- You'll likely end up with very few deps in root
-- Internal dependencies
-- Keeping dependencies in lockstep
+Following the first principle above to [install dependencies in the package where they're used](#install-dependencies-where-theyre-used), you'll find that you naturally end up with very few dependencies in the root of your workspace.
+
+In this mental model, dependencies in the workspace root are for repository-level management whereas dependencies for building applications and libraries are installed in packages. Some examples of dependencies that make sense to install in the root are [`turbo`](https://www.npmjs.com/package/turbo), [`husky`](https://www.npmjs.com/package/husky), or [`lint-staged`](https://www.npmjs.com/package/lint-staged).
+
+## Managing dependencies
+
+### Turborepo does not manage dependencies
+
+Note that Turborepo does not play a role in managing your dependencies, leaving that work up to your package manager of choice.
+
+It's up to the package manager to properly handle versioning, symlinking, resolving modules, and other dependency-related work. The recommendations on this page are best practices for managing dependencies in a monorepo, and are not enforced by Turborepo.
+
+### Keeping dependencies on the same version
+
+Some monorepo maintainers prefer to keep dependencies on the same version across all packages by rule. There are several ways to achieve this:
+
+- If you're using [pnpm](https://pnpm.io) as your package manager, you can update a dependency across all packages using the [`pnpm up --recursive <package-name>`](https://pnpm.io/cli/update#--recursive--r) command.
+- Using your IDE's refactoring tools, you can find and replace the version of a dependency across all `package.json` files in your repository at once. Try using a regex like `"next": ".*"` on `package.json` files to find all instances of the `next` package and replace them with the version you want.
+- Tools like [`syncpack`](https://www.npmjs.com/package/syncpack) and [`manypkg`](https://www.npmjs.com/package/@manypkg/cli) can be used for the specific purpose of keep dependencies in lockstep.
+
+## Next steps
+
+TODO

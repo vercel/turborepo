@@ -1,0 +1,133 @@
+---
+title: Creating an Internal Package
+description: Learn how to create an Internal Package for your monorepo.
+---
+
+import {Callout} from '#/components/callout'
+import {Steps, Step} from 'fumadocs-ui/components/steps'
+import {Tabs, Tab} from '#/components/tabs'
+
+Internal Packages are the building blocks of your monoreop, letting you share code and functionality across your repo. Additionally, where you choose to install your Internal Packages creates a dependency graph for Turborepo to work with.
+
+## Create your first Internal Package
+
+Let's create your first Internal Package for sharing math utilites in your repo. In the steps below, we're going to assume you've run `npx create-turbo@latest` or are using a similarly structured repository.
+
+<Callout type="good-to-know">
+These steps include details specific to TypeScript. If you're using JavaScript, you can ignore the TypeScript-specific information.
+</Callout>
+
+<Steps>
+<Step>
+### Create an empty directory
+
+You'll need a directory to build the package in so let's create one at `./packages/math`.
+
+</Step>
+<Step>
+  ### Add a `tsconfig.json` (optional)
+
+If you're using TypeScript...
+
+</Step>
+<Step>
+### Add a package.json
+
+Next, we'll create the `package.json` for the package. By adding this file, you'll fulfill the two requirements for an Internal Package making it discoverable to the rest of your workspace and Turborepo:
+
+- Exists in a directory idenfied in your Workspace's configuration
+- Directory contains a `package.json`
+
+TODO: has to get tabbed because of workspace:\*
+
+```json title="./packages/math/package.json"
+{
+  "name": "@repo/math",
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "tsc"
+  },
+  "exports": {
+    "./add": {
+      "types": "./src/add.ts",
+      "default": "./dist/add.js"
+    },
+    "./subtract": {
+      "types": "./src/subtract.ts",
+      "default": "./dist/subtract.js"
+    }
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "^4.3.5"
+  }
+}
+```
+
+Let's break down this `package.json` a bit:
+
+- **`scripts`**: The `dev` and `build` script that are used to compile the package. We're using [the Typescript compiler](https://www.typescriptlang.org/docs/handbook/compiler-options.html), the [recommended compiler for packages](/TODO-LINK).
+- **`exports`**: Defines multiple entrypoints for the package so it can be used in other packages (`import { add } from '@repo/math'`).
+  - The `"types"` field is used to tell TypeScript where to find the type definitions for the package. We're pointing it directly to where we will write our source code so we don't have to generate declaration maps.
+  - The `"default"` field is used to tell Node.js where to find the runtime code for the package. Once we compile our Typescript with `tsc`, the output will be in the `dist` directory.
+- `**devDependencies**`: Install `typescript` as a devDependency so we can compile it. In a real-world package, you will likely have more `devDependencies` and `dependencies` - but we'll keep it simple for now.
+
+<Callout>
+If you're using Typescript, you'll need to ensure that your `tsconfig.json` is using `"module": "ESNext"` and `"moduleResolution": "Bundler"`.
+
+For more information, visit the [dedicated Typescript page](/TODO-LINK).
+
+</Callout>
+</Step>
+<Step>
+### Add an `src` directory with source code
+
+We can now write some code for our package. We'll create two files:
+
+<Tabs items={["add.ts", "subtract.ts"]} storageKey="internal-package-src-file">
+<Tab value="add.ts">
+```ts title="./packages/math/src/add.ts"
+ export const add = (a: number, b: number) => a + b;
+```
+</Tab>
+<Tab value="subtract.ts">
+```ts title="./packages/math/src/subtract.ts"
+ export const subtract = (a: number, b: number) => a - b;
+```
+</Tab>
+</Tabs>
+
+</Step>
+<Step>
+### Run `turbo build`
+
+We can now run `turbo build` to compile our package to the `dist` directory, making it available to other packages in the workspace.
+
+</Step>
+</Steps>
+
+## Best practices for Internal Packages
+
+### One "purpose" per package
+
+When you're creating internal dependencies, it's best to create packages that have a single purpose. This makes it easier to understand what a package does and how it can be used. It also makes it easier to manage the dependencies of a package, as you can be sure that the dependencies are only used for the purpose of the package.
+
+The "purpose" of a package can be anything that makes sense for your repository. Some examples include:
+
+- **`@repo/ui`**: A package containing all of your shared UI components
+- **`@repo/tool-specific-config`**: A package for managing configuration of a specific tool
+- **`@repo/graphs`**: A domain-specific library for creating and manipulating graphical data
+
+### Application packages do not contain shared code
+
+When you're creating packages for your applications, it's best to avoid putting shared code in those packages. Instead, you should create a separate package for the shared code and have the application packages depend on that package.
+
+Additionally, application packages are not meant to be installed into other packages. Instead, they should be thought of as the "endpoint" of your Package Graph.
+
+<Callout type="info">
+There are exceptions to this rule where it can make sense to install an Application Package into another package. We've discussed these in the [Advanced section](/TODO-LINK).
+</Callout>
+
+## Next steps
+
+TODO
