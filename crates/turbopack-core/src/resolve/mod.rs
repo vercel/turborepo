@@ -1744,6 +1744,12 @@ async fn resolve_into_folder(
                         }
                         let request = Request::parse(Value::new(normalized_request.into()));
 
+                        // main field will always resolve not fully specified
+                        let options = if options_value.fully_specified {
+                            options.with_fully_specified(false).resolve().await?
+                        } else {
+                            options
+                        };
                         let result = &*resolve_internal_inline(package_path, request, options)
                             .await?
                             .await?;
@@ -2035,8 +2041,6 @@ async fn resolve_module_request(
         .into());
     }
 
-    let package_options = options.with_fully_specified(false).resolve().await?;
-
     // There may be more than one package with the same name. For instance, in a
     // TypeScript project, `compilerOptions.baseUrl` can declare a path where to
     // resolve packages. A request to "foo/bar" might resolve to either
@@ -2049,7 +2053,7 @@ async fn resolve_module_request(
                     Value::new(path.clone()),
                     package_path,
                     query,
-                    package_options,
+                    options,
                 ));
             }
             FindPackageItem::PackageFile(package_path) => {
