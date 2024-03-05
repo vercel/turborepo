@@ -59,9 +59,13 @@ describe("Workspace", () => {
         ],
       },
       {
-        description: "global change that can be ignored",
+        description:
+          "global change should be irrelevant but still triggers all packages",
         files: ["README.md"],
-        expected: [],
+        expected: [
+          { name: "app-a", relativePath: "apps/app" },
+          { name: "ui", relativePath: "packages/ui" },
+        ],
       },
     ];
 
