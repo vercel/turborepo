@@ -1069,6 +1069,12 @@ mod tests {
         }",
         );
 
+        assert_lint_success(
+            ":where(.main > *) {
+            color: red;
+        }",
+        );
+
         assert_lint_failure(
             "div {
             color: red;
