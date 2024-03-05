@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     std::thread::spawn(move || handle_input(tx));
 
-    let size = terminal.size()?;
+    let size = terminal.get_frame().size();
 
     let pane = TerminalPane::new(
         size.height,

@@ -131,3 +131,38 @@ impl<W> Widget for &TerminalPane<W> {
         term.render(area, buf)
     }
 }
+
+#[cfg(test)]
+mod test {
+    // Used by assert_buffer_eq
+    #[allow(unused_imports)]
+    use indoc::indoc;
+    use ratatui::{assert_buffer_eq, buffer::Buffer, layout::Rect, style::Style};
+
+    use super::*;
+
+    #[test]
+    fn test_basic() {
+        let mut pane: TerminalPane<()> = TerminalPane::new(6, 8, vec![("foo".into(), None)]);
+        pane.select("foo").unwrap();
+        pane.process_output("foo", b"1\r\n2\r\n3\r\n4\r\n5\r\n")
+            .unwrap();
+
+        let area = Rect::new(0, 0, 8, 6);
+        let mut buffer = Buffer::empty(area);
+        pane.render(area, &mut buffer);
+        // Reset style change of the cursor
+        buffer.set_style(Rect::new(1, 4, 1, 1), Style::reset());
+        assert_buffer_eq!(
+            buffer,
+            Buffer::with_lines(vec![
+                "┌ foo >┐",
+                "│3     │",
+                "│4     │",
+                "│5     │",
+                "│█     │",
+                "└──────┘",
+            ])
+        );
+    }
+}
