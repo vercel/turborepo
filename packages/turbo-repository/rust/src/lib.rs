@@ -25,8 +25,8 @@ pub struct Package {
     pub relative_path: String,
 }
 
-// type PackageName = String;
 type RelativePath = String;
+
 #[napi]
 #[derive(Debug)]
 pub struct PackageDetails {
