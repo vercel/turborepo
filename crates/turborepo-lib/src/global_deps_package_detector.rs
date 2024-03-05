@@ -71,7 +71,6 @@ mod tests {
     };
 
     use super::GlobalDepsPackageDetector;
-    use crate::turbo_json::TurboJson;
 
     #[allow(dead_code)]
     pub struct MockDiscovery;
@@ -120,11 +119,8 @@ mod tests {
         // therefore must be conservative about changes
         assert_eq!(package_changes, PackageChanges::All);
 
-        let turbo_json = TurboJson::default();
-        let turbo_package_detector = GlobalDepsPackageDetector::new(
-            &pkg_graph,
-            turbo_json.global_deps.iter().map(|s| s.as_str()),
-        )?;
+        let turbo_package_detector =
+            GlobalDepsPackageDetector::new(&pkg_graph, std::iter::empty::<&str>())?;
         let change_mapper = ChangeMapper::new(&pkg_graph, vec![], turbo_package_detector);
 
         let package_changes = change_mapper.changed_packages(
