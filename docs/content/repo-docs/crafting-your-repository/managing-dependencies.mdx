@@ -1,6 +1,6 @@
 ---
-title: Installing dependencies
-description: Install dependencies from the registry into your repository.
+title: Managing dependencies
+description: Learn how to manage dependencies in your monorepo's workspace.
 ---
 
 import {PackageManagerTabs, Tab} from '#/components/Tabs'
@@ -47,7 +47,7 @@ Dependencies play an important role in the development of your monorepo.
 
 ### Install dependencies where they're used
 
-When you install a dependency, you should install it in the package that uses it. This is true for both internal and external dependencies.
+When you install a dependency, you should install it in the package that uses it. This is true for both internal and external dependencies. This practice has several benefits:
 
 - **Improved clarity**: It's easier to understand what a package depends on when its dependencies are listed in its `package.json`. Developers working in the repository can see at a glance what dependencies will be available within the package.
 - **Better caching ability**: If you install too many dependencies in the root of your repository, you'll be changing the workspace root whenever you add, update, or delete a dependency, leading to a lot of unnecessary cache invalidation. Instead, we can install dependencies in the package that uses them, which will only invalidate the cache for that package and the packages that depend on it.
@@ -71,7 +71,44 @@ It's up to the package manager to properly handle versioning, symlinking, resolv
 
 Some monorepo maintainers prefer to keep dependencies on the same version across all packages by rule. There are several ways to achieve this:
 
-- If you're using [pnpm](https://pnpm.io) as your package manager, you can update a dependency across all packages using the [`pnpm up --recursive <package-name>`](https://pnpm.io/cli/update#--recursive--r) command.
+#### Using your package manager
+
+You can use your package manager to update dependency versions in one command.
+
+<PackageManagerTabs>
+<Tab>
+```bash title="Terminal"
+npm install typescript@latest --workspaces
+```
+  <small>[→ npm documentation](https://docs.npmjs.com/cli/v7/using-npm/config#workspaces)</small>
+
+</Tab>
+
+<Tab>
+Yarn 1:
+```bash title="Terminal"
+yarn upgrade-interactive --latest
+```
+<small>[→ Yarn 1 documentation](https://classic.yarnpkg.com/en/docs/cli/upgrade-interactive)</small>
+
+Yarn 2+:
+
+```bash title="Terminal"
+yarn upgrade typescript@latest --upgrade
+```
+
+<small>[→ Yarn 2+ documentation](https://yarnpkg.com/cli/up)</small>
+
+</Tab>
+
+<Tab>
+```bash title="Terminal"
+pnpm up --recursive typescript@latest
+```
+  <small>[→ pnpm documentation](https://pnpm.io/cli/update#--recursive--r)</small>
+
+</Tab>
+</PackageManagerTabs>
 - Using your IDE's refactoring tools, you can find and replace the version of a dependency across all `package.json` files in your repository at once. Try using a regex like `"next": ".*"` on `package.json` files to find all instances of the `next` package and replace them with the version you want.
 - Tools like [`syncpack`](https://www.npmjs.com/package/syncpack) and [`manypkg`](https://www.npmjs.com/package/@manypkg/cli) can be used for the specific purpose of keep dependencies in lockstep.
 

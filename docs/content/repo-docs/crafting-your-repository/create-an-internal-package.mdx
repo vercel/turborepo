@@ -5,13 +5,13 @@ description: Learn how to create an Internal Package for your monorepo.
 
 import {Callout} from '#/components/Callout'
 import {Steps, Step} from 'fumadocs-ui/components/steps'
-import {Tabs, Tab} from '#/components/Tabs'
+import {PackageManagerTabs, Tabs, Tab} from '#/components/Tabs'
 
 Internal Packages are the building blocks of your monoreop, letting you share code and functionality across your repo. Additionally, where you choose to install your Internal Packages creates a dependency graph for Turborepo to work with.
 
 ## Create your first Internal Package
 
-Let's create your first Internal Package for sharing math utilites in your repo. In the steps below, we're going to assume you've run `npx create-turbo@latest` or are using a similarly structured repository.
+Let's create your first Internal Package for sharing math utilites in your repo using the guidance in the [Anatomy of a package](/repo/docs/crafting-your-repository/structuring-a-repo#anatomy-of-a-package) section. In the steps below, we're going to assume you've run `npx create-turbo@latest` or are using a similarly structured repository.
 
 <Callout type="good-to-know">
 These steps include details specific to TypeScript. If you're using JavaScript, you can ignore the TypeScript-specific information.
@@ -40,6 +40,33 @@ Next, we'll create the `package.json` for the package. By adding this file, you'
 
 TODO: has to get tabbed because of workspace:\*
 
+<PackageManagerTabs>
+<Tab>
+```json title="./packages/math/package.json"
+{
+  "name": "@repo/math",
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "tsc"
+  },
+  "exports": {
+    "./add": {
+      "types": "./src/add.ts",
+      "default": "./dist/add.js"
+    },
+    "./subtract": {
+      "types": "./src/subtract.ts",
+      "default": "./dist/subtract.js"
+    }
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "*",
+    "typescript": "^4.3.5"
+  }
+}
+```
+</Tab>
+<Tab>
 ```json title="./packages/math/package.json"
 {
   "name": "@repo/math",
@@ -63,6 +90,37 @@ TODO: has to get tabbed because of workspace:\*
   }
 }
 ```
+</Tab>
+<Tab>
+```json title="./packages/math/package.json"
+{
+  "name": "@repo/math",
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "tsc"
+  },
+  "exports": {
+    "./add": {
+      "types": "./src/add.ts",
+      "default": "./dist/add.js"
+    },
+    "./subtract": {
+      "types": "./src/subtract.ts",
+      "default": "./dist/subtract.js"
+    }
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "^4.3.5"
+  }
+}
+```
+</Tab>
+</PackageManagerTabs>
+
+<Callout type="info">
+The `@repo/typescript-config` devDependency is an Internal Package in `create-turbo` that we're using to manage our TypeScript configuration.
+</Callout>
 
 Let's break down this `package.json` a bit:
 
@@ -70,7 +128,7 @@ Let's break down this `package.json` a bit:
 - **`exports`**: Defines multiple entrypoints for the package so it can be used in other packages (`import { add } from '@repo/math'`).
   - The `"types"` field is used to tell TypeScript where to find the type definitions for the package. We're pointing it directly to where we will write our source code so we don't have to generate declaration maps.
   - The `"default"` field is used to tell Node.js where to find the runtime code for the package. Once we compile our Typescript with `tsc`, the output will be in the `dist` directory.
-- `**devDependencies**`: Install `typescript` as a devDependency so we can compile it. In a real-world package, you will likely have more `devDependencies` and `dependencies` - but we'll keep it simple for now.
+- `**devDependencies**`: Install `typescript` as a devDependency so we can compile it. In a real-world package, you will likely have more `devDependencies` and `dependencies` - but we can keep it simple for now.
 
 <Callout>
 If you're using Typescript, you'll need to ensure that your `tsconfig.json` is using `"module": "ESNext"` and `"moduleResolution": "Bundler"`.
