@@ -128,10 +128,7 @@ impl<'a> CacheReader<'a> {
             let processed_sourcename =
                 canonicalize_linkname(anchor, &processed_name, processed_name.as_path())?;
             // symlink must have a linkname
-            let linkname = entry
-                .header()
-                .link_name()?
-                .expect("symlink without linkname");
+            let linkname = entry.link_name()?.expect("symlink without linkname");
 
             let processed_linkname = canonicalize_linkname(anchor, &processed_name, &linkname)?;
 
