@@ -1,4 +1,7 @@
+// @ts-check
+
 const { withSentryConfig } = require("@sentry/nextjs");
+// @ts-expect-error
 const withNextra = require("nextra")({
   theme: "nextra-theme-docs",
   themeConfig: "./theme.config.tsx",
@@ -53,6 +56,7 @@ const OLD_TURBOREPO_ROUTES = [
   "/docs/upgrading-to-v1",
 ];
 
+/** @type {import('next').NextConfig}  */
 const nextConfig = withNextra({
   sentry: {
     autoInstrumentServerFunctions: false,
@@ -60,7 +64,7 @@ const nextConfig = withNextra({
   },
   reactStrictMode: true,
   experimental: {
-    legacyBrowsers: false,
+    mdxRs: true,
   },
   eslint: {
     // TODO: remove after eslint has been fixed from new config introduced in vercel/turbo/pull/5752
