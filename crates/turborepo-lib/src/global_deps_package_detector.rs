@@ -1,7 +1,7 @@
 use thiserror::Error;
 use turbopath::AnchoredSystemPath;
 use turborepo_repository::{
-    change_mapper::{DefaultPackageDetector, PackageDetection, PackageDetector},
+    change_mapper::{DefaultPackageDetector, PackageChangeMapper, PackageMapping},
     package_graph::{PackageGraph, WorkspacePackage},
 };
 use wax::{BuildError, Program};
@@ -37,20 +37,20 @@ impl<'a> GlobalDepsPackageDetector<'a> {
     }
 }
 
-impl<'a> PackageDetector for GlobalDepsPackageDetector<'a> {
-    fn detect_package(&self, path: &AnchoredSystemPath) -> PackageDetection {
+impl<'a> PackageChangeMapper for GlobalDepsPackageDetector<'a> {
+    fn detect_package(&self, path: &AnchoredSystemPath) -> PackageMapping {
         match DefaultPackageDetector::new(self.pkg_dep_graph).detect_package(path) {
             // Since `DefaultPackageDetector` is overly conservative, we can check here if
             // the path is actually in globalDeps and if not, return it as
             // PackageDetection::Package(WorkspacePackage::root()).
-            PackageDetection::All => {
+            PackageMapping::All => {
                 let cleaned_path = path.clean();
                 let in_global_deps = self.global_deps_matcher.is_match(cleaned_path.as_str());
 
                 if in_global_deps {
-                    PackageDetection::All
+                    PackageMapping::All
                 } else {
-                    PackageDetection::Package(WorkspacePackage::root())
+                    PackageMapping::Package(WorkspacePackage::root())
                 }
             }
             result => result,

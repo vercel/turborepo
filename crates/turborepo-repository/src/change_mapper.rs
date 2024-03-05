@@ -8,7 +8,7 @@ use wax::Program;
 
 use crate::package_graph::{ChangedPackagesError, PackageGraph, PackageName, WorkspacePackage};
 
-pub enum PackageDetection {
+pub enum PackageMapping {
     /// We've hit a global file, so all packages have changed
     All,
     /// This change is meaningless, no packages have changed
@@ -17,11 +17,11 @@ pub enum PackageDetection {
     Package(WorkspacePackage),
 }
 
-/// Detects which packages are affected by a file change. This can be a single
+/// Maps a single file change to affected packages. This can be a single
 /// package (`Package`), none of the packages (`None`), or all of the packages
 /// (`All`).
-pub trait PackageDetector {
-    fn detect_package(&self, file: &AnchoredSystemPath) -> PackageDetection;
+pub trait PackageChangeMapper {
+    fn detect_package(&self, file: &AnchoredSystemPath) -> PackageMapping;
 }
 
 const DEFAULT_GLOBAL_DEPS: [&str; 2] = ["package.json", "turbo.json"];
@@ -47,15 +47,15 @@ impl<'a> DefaultPackageDetector<'a> {
     }
 }
 
-impl<'a> PackageDetector for DefaultPackageDetector<'a> {
-    fn detect_package(&self, file: &AnchoredSystemPath) -> PackageDetection {
+impl<'a> PackageChangeMapper for DefaultPackageDetector<'a> {
+    fn detect_package(&self, file: &AnchoredSystemPath) -> PackageMapping {
         for (name, entry) in self.pkg_dep_graph.packages() {
             if name == &PackageName::Root {
                 continue;
             }
             if let Some(package_path) = entry.package_json_path.parent() {
                 if Self::is_file_in_package(file, package_path) {
-                    return PackageDetection::Package(WorkspacePackage {
+                    return PackageMapping::Package(WorkspacePackage {
                         name: name.clone(),
                         path: package_path.to_owned(),
                     });
@@ -63,7 +63,7 @@ impl<'a> PackageDetector for DefaultPackageDetector<'a> {
             }
         }
 
-        PackageDetection::All
+        PackageMapping::All
     }
 }
 
@@ -87,7 +87,7 @@ pub struct ChangeMapper<'a, PD> {
     package_detector: PD,
 }
 
-impl<'a, PD: PackageDetector> ChangeMapper<'a, PD> {
+impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
     pub fn new(
         pkg_graph: &'a PackageGraph,
         ignore_patterns: Vec<String>,
@@ -158,13 +158,13 @@ impl<'a, PD: PackageDetector> ChangeMapper<'a, PD> {
         let mut changed_packages = HashSet::new();
         for file in files {
             match self.package_detector.detect_package(file) {
-                PackageDetection::Package(pkg) => {
+                PackageMapping::Package(pkg) => {
                     changed_packages.insert(pkg);
                 }
-                PackageDetection::All => {
+                PackageMapping::All => {
                     return Ok(PackageChanges::All);
                 }
-                PackageDetection::None => {}
+                PackageMapping::None => {}
             }
         }
 
