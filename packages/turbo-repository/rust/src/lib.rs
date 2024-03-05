@@ -25,27 +25,11 @@ pub struct Package {
     pub relative_path: String,
 }
 
-// #[napi]
-// pub struct SerializablePackage {
-//     pub package: String,
-//     pub dependents: Vec<String>,
-//     pub dependencies: Vec<String>,
-// }
-
-// impl SerializablePackage {
-//     pub fn new(package: Package, dependents: Vec<Package>, dependencies:
-// Vec<Package>) -> Self {         Self {
-//             package,
-//             dependents,
-//             dependencies,
-//         }
-//     }
-// }
-
 // type PackageName = String;
 type RelativePath = String;
 #[napi]
-struct PackageDetails {
+#[derive(Debug)]
+pub struct PackageDetails {
     #[napi(readonly)]
     pub dependencies: Vec<RelativePath>,
     #[napi(readonly)]
@@ -129,6 +113,7 @@ impl Package {
         };
 
         pkgs.iter()
+            .filter(|node| !matches!(node, PackageNode::Root))
             .filter_map(|node| {
                 let info = graph.package_info(node.as_package_name())?;
                 // If we don't get a package name back, we'll just skip it.
@@ -164,14 +149,17 @@ impl Workspace {
 
         let workspace_path = match AbsoluteSystemPath::new(self.absolute_path.as_str()) {
             Ok(path) => path,
-            Err(e) => return Err(Error::from_reason(e.to_string())),
+            Err(e) => {
+                print!("Error: {:?}", e);
+                return Err(Error::from_reason(e.to_string()));
+            }
         };
 
         // Create a map of package names to their dependents and dependencies
         //  {
-        //    "package-name": {
-        //      "dependents": ["dependent1", "dependent2"],
-        //      "dependencies": ["dependency1", "dependency2"]
+        //    "package-path": {
+        //      "dependents": ["dependent1_path", "dependent2_path"],
+        //      "dependencies": ["dependency1_path", "dependency2_path"]
         //      }
         //  }
         let map: HashMap<RelativePath, PackageDetails> = packages
