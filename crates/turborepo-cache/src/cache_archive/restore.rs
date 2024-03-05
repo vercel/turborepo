@@ -124,7 +124,7 @@ impl<'a> CacheReader<'a> {
         let mut nodes = HashMap::new();
 
         for entry in symlinks {
-            let processed_name = AnchoredSystemPathBuf::from_system_path(&entry.header().path()?)?;
+            let processed_name = AnchoredSystemPathBuf::from_system_path(&entry.path()?)?;
             let processed_sourcename =
                 canonicalize_linkname(anchor, &processed_name, processed_name.as_path())?;
             // symlink must have a linkname
