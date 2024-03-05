@@ -22,13 +22,14 @@ impl WatchClient {
         while let Some(hash) = hashes.next().await {
             // Should we recover here?
             let hash = hash.unwrap();
-            match proto::PackageChangeType::try_from(hash.change_type).unwrap() {
-                proto::PackageChangeType::Package => {
-                    if let Some(package) = hash.package_name {
-                        println!("{} changed", package);
-                    }
+            let event = hash.event.expect("event is missing");
+            match event {
+                proto::package_change_event::Event::PackageChanged(proto::PackageChanged {
+                    package_name,
+                }) => {
+                    println!("{} changed", package_name);
                 }
-                proto::PackageChangeType::Rediscover => {
+                proto::package_change_event::Event::RediscoverPackages(_) => {
                     println!("Rediscovering packages");
                 }
             }

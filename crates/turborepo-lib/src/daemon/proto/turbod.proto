@@ -97,9 +97,17 @@ message DiscoverPackagesRequest {
 message PackageChangesRequest {}
 
 message PackageChangeEvent {
-  PackageChangeType change_type = 1;
-  optional string package_name = 2;
+  oneof event {
+    PackageChanged package_changed = 1;
+    RediscoverPackages rediscover_packages = 2;
+  }
 }
+
+message PackageChanged {
+  string package_name = 1;
+}
+
+message RediscoverPackages {}
 
 enum PackageChangeType {
   Package = 0;

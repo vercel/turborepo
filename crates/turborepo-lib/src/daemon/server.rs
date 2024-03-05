@@ -530,6 +530,14 @@ impl proto::turbod_server::Turbod for TurboGrpcServiceInner {
         let mut package_changes_rx = self.file_watching.package_changes_watcher.package_changes();
         let (tx, rx) = mpsc::channel(1);
 
+        tx.send(Ok(proto::PackageChangeEvent {
+            event: Some(proto::package_change_event::Event::RediscoverPackages(
+                proto::RediscoverPackages {},
+            )),
+        }))
+        .await
+        .map_err(|e| tonic::Status::unavailable(format!("{}", e)))?;
+
         tokio::spawn(async move {
             loop {
                 if let Err(err) = package_changes_rx.changed().await {
@@ -539,12 +547,16 @@ impl proto::turbod_server::Turbod for TurboGrpcServiceInner {
 
                 let event = match &*package_changes_rx.borrow() {
                     PackageChangeEvent::Package { name } => proto::PackageChangeEvent {
-                        change_type: proto::PackageChangeType::Package as i32,
-                        package_name: Some(name.to_string()),
+                        event: Some(proto::package_change_event::Event::PackageChanged(
+                            proto::PackageChanged {
+                                package_name: name.to_string(),
+                            },
+                        )),
                     },
                     PackageChangeEvent::Rediscover => proto::PackageChangeEvent {
-                        change_type: proto::PackageChangeType::Rediscover as i32,
-                        package_name: None,
+                        event: Some(proto::package_change_event::Event::RediscoverPackages(
+                            proto::RediscoverPackages {},
+                        )),
                     },
                 };
 
