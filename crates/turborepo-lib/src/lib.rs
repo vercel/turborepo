@@ -21,6 +21,7 @@ mod engine;
 
 mod framework;
 mod gitignore;
+mod global_deps_package_detector;
 pub(crate) mod globwatcher;
 mod hash;
 mod opts;
