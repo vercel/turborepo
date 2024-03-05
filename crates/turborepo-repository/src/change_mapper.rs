@@ -100,12 +100,10 @@ impl<'a, PD: PackageDetector> ChangeMapper<'a, PD> {
         }
     }
 
-    fn default_global_file_changed(
-        changed_files: &HashSet<AnchoredSystemPathBuf>,
-    ) -> Result<bool, ChangeMapError> {
-        Ok(changed_files
+    fn default_global_file_changed(changed_files: &HashSet<AnchoredSystemPathBuf>) -> bool {
+        changed_files
             .iter()
-            .any(|f| DEFAULT_GLOBAL_DEPS.iter().any(|dep| *dep == f.as_str())))
+            .any(|f| DEFAULT_GLOBAL_DEPS.iter().any(|dep| *dep == f.as_str()))
     }
 
     pub fn changed_packages(
@@ -113,9 +111,7 @@ impl<'a, PD: PackageDetector> ChangeMapper<'a, PD> {
         changed_files: HashSet<AnchoredSystemPathBuf>,
         lockfile_change: Option<LockfileChange>,
     ) -> Result<PackageChanges, ChangeMapError> {
-        let global_change = Self::default_global_file_changed(&changed_files)?;
-
-        if global_change {
+        if Self::default_global_file_changed(&changed_files) {
             return Ok(PackageChanges::All);
         }
 
