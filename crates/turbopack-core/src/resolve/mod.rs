@@ -2112,8 +2112,6 @@ async fn resolve_into_package(
     let is_root_match = path.is_match("") || path.is_match("/");
     let could_match_others = path.could_match_others("");
 
-    let mut has_match = false;
-
     for resolve_into_package in options_value.into_package.iter() {
         match resolve_into_package {
             // handled by the `resolve_into_folder` call below
@@ -2155,14 +2153,13 @@ async fn resolve_into_package(
 
                 // other options do not apply anymore when an exports
                 // field exist
-                has_match = true;
-                break;
+                return Ok(merge_results(results));
             }
         }
     }
 
     // apply main field(s) or fallback to index.js if there's no subpath
-    if is_root_match && !has_match {
+    if is_root_match {
         results.push(resolve_into_folder(package_path, options));
     }
 
