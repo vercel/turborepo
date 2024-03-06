@@ -279,7 +279,7 @@ pub enum ParseCssResult {
         #[turbo_tasks(debug_ignore, trace_ignore)]
         cm: Arc<swc_core::common::SourceMap>,
 
-        code: String,
+        code: Vc<FileContent>,
 
         #[turbo_tasks(trace_ignore)]
         stylesheet: StyleSheetLike<'static, 'static>,
@@ -365,7 +365,13 @@ pub async fn process_css_with_placeholder(
             code,
             ..
         } => {
-            let (result, _) = stylesheet.to_css(cm.clone(), code, false, false, false)?;
+            let code = code.await?;
+            let code = match &*code {
+                FileContent::Content(v) => v.content().to_str()?,
+                _ => unreachable!("this case should be filtered out while parsing"),
+            };
+
+            let (result, _) = stylesheet.to_css(cm.clone(), &code, false, false, false)?;
 
             let exports = result.exports.map(|exports| {
                 let mut exports = exports.into_iter().collect::<IndexMap<_, _>>();
@@ -427,6 +433,11 @@ pub async fn finalize_css(
 
             replace_url_references(&mut stylesheet, &url_map);
 
+            let code = code.await?;
+            let code = match &*code {
+                FileContent::Content(v) => v.content().to_str()?,
+                _ => unreachable!("this case should be filtered out while parsing"),
+            };
             let (result, srcmap) = stylesheet.to_css(cm.clone(), &code, true, true, true)?;
 
             Ok(FinalCssResult::Ok {
@@ -474,12 +485,13 @@ pub async fn parse_css(
         let ident_str = &*source.ident().to_string().await?;
         Ok(match &*content.await? {
             AssetContent::Redirect { .. } => ParseCssResult::Unparseable.cell(),
-            AssetContent::File(file) => match &*file.await? {
+            AssetContent::File(file_content) => match &*file_content.await? {
                 FileContent::NotFound => ParseCssResult::NotFound.cell(),
                 FileContent::Content(file) => match file.content().to_str() {
                     Err(_err) => ParseCssResult::Unparseable.cell(),
                     Ok(string) => {
                         process_content(
+                            *file_content,
                             string.into_owned(),
                             fs_path,
                             ident_str,
@@ -500,6 +512,7 @@ pub async fn parse_css(
 }
 
 async fn process_content(
+    content_vc: Vc<FileContent>,
     code: String,
     fs_path_vc: Vc<FileSystemPath>,
     ident_str: &str,
@@ -700,7 +713,7 @@ async fn process_content(
 
     Ok(ParseCssResult::Ok {
         cm,
-        code,
+        code: content_vc,
         stylesheet,
         references: Vc::cell(references),
         url_references: Vc::cell(url_references),
