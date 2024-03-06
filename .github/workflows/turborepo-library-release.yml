@@ -46,7 +46,11 @@ jobs:
             setup: |
               sudo apt update
               sudo apt install -y crossbuild-essential-arm64 musl-tools clang llvm
-            rust_env: 'CC_aarch64_unknown_linux_musl=clang AR_aarch64_unknown_linux_musl=llvm-ar RUSTFLAGS="-Clink-self-contained=yes -Clinker=rust-lld"'
+
+              echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+              echo "CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+              echo "CXX_aarch64_unknown_linux_musl=aarch64-linux-gnu-g++" >> $GITHUB_ENV
+            rust_env: 'RUSTFLAGS="-Ctarget-feature=-crt-static"'
 
           - host: windows-latest
             target: "aarch64-pc-windows-msvc"
