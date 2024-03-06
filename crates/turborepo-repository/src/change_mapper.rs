@@ -8,6 +8,65 @@ use wax::Program;
 
 use crate::package_graph::{ChangedPackagesError, PackageGraph, PackageName, WorkspacePackage};
 
+pub enum PackageMapping {
+    /// We've hit a global file, so all packages have changed
+    All,
+    /// This change is meaningless, no packages have changed
+    None,
+    /// This change has affected one package
+    Package(WorkspacePackage),
+}
+
+/// Maps a single file change to affected packages. This can be a single
+/// package (`Package`), none of the packages (`None`), or all of the packages
+/// (`All`).
+pub trait PackageChangeMapper {
+    fn detect_package(&self, file: &AnchoredSystemPath) -> PackageMapping;
+}
+
+const DEFAULT_GLOBAL_DEPS: [&str; 2] = ["package.json", "turbo.json"];
+
+/// Detects package by checking if the file is inside the package.
+/// Does *not* use the `globalDependencies` in turbo.json.
+/// Since we don't have these dependencies, any file that is
+/// not in any package will automatically invalidate all
+/// packages. This is fine for builds, but less fine
+/// for situations like watch mode.
+pub struct DefaultPackageDetector<'a> {
+    pkg_dep_graph: &'a PackageGraph,
+}
+
+impl<'a> DefaultPackageDetector<'a> {
+    pub fn new(pkg_dep_graph: &'a PackageGraph) -> Self {
+        Self { pkg_dep_graph }
+    }
+    fn is_file_in_package(file: &AnchoredSystemPath, package_path: &AnchoredSystemPath) -> bool {
+        file.components()
+            .zip(package_path.components())
+            .all(|(a, b)| a == b)
+    }
+}
+
+impl<'a> PackageChangeMapper for DefaultPackageDetector<'a> {
+    fn detect_package(&self, file: &AnchoredSystemPath) -> PackageMapping {
+        for (name, entry) in self.pkg_dep_graph.packages() {
+            if name == &PackageName::Root {
+                continue;
+            }
+            if let Some(package_path) = entry.package_json_path.parent() {
+                if Self::is_file_in_package(file, package_path) {
+                    return PackageMapping::Package(WorkspacePackage {
+                        name: name.clone(),
+                        path: package_path.to_owned(),
+                    });
+                }
+            }
+        }
+
+        PackageMapping::All
+    }
+}
+
 // We may not be able to load the lockfile contents, but we
 // still want to be able to express a generic change.
 pub enum LockfileChange {
@@ -15,31 +74,36 @@ pub enum LockfileChange {
     WithContent(Vec<u8>),
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum PackageChanges {
     All,
     Some(HashSet<WorkspacePackage>),
 }
 
-pub struct ChangeMapper<'a> {
+pub struct ChangeMapper<'a, PD> {
     pkg_graph: &'a PackageGraph,
 
-    global_deps: Vec<String>,
     ignore_patterns: Vec<String>,
+    package_detector: PD,
 }
 
-impl<'a> ChangeMapper<'a> {
-    const DEFAULT_GLOBAL_DEPS: [&'static str; 2] = ["package.json", "turbo.json"];
-
+impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
     pub fn new(
         pkg_graph: &'a PackageGraph,
-        global_deps: Vec<String>,
         ignore_patterns: Vec<String>,
+        package_detector: PD,
     ) -> Self {
         Self {
             pkg_graph,
-            global_deps,
             ignore_patterns,
+            package_detector,
         }
+    }
+
+    fn default_global_file_changed(changed_files: &HashSet<AnchoredSystemPathBuf>) -> bool {
+        changed_files
+            .iter()
+            .any(|f| DEFAULT_GLOBAL_DEPS.iter().any(|dep| *dep == f.as_str()))
     }
 
     pub fn changed_packages(
@@ -47,17 +111,17 @@ impl<'a> ChangeMapper<'a> {
         changed_files: HashSet<AnchoredSystemPathBuf>,
         lockfile_change: Option<LockfileChange>,
     ) -> Result<PackageChanges, ChangeMapError> {
-        let global_change =
-            self.repo_global_file_has_changed(&Self::DEFAULT_GLOBAL_DEPS, &changed_files)?;
-
-        if global_change {
+        if Self::default_global_file_changed(&changed_files) {
             return Ok(PackageChanges::All);
         }
 
         // get filtered files and add the packages that contain them
         let filtered_changed_files = self.filter_ignored_files(changed_files.iter())?;
-        let mut changed_pkgs =
-            self.get_changed_packages(filtered_changed_files.into_iter(), self.pkg_graph)?;
+        let PackageChanges::Some(mut changed_pkgs) =
+            self.get_changed_packages(filtered_changed_files.into_iter())?
+        else {
+            return Ok(PackageChanges::All);
+        };
 
         match lockfile_change {
             Some(LockfileChange::WithContent(content)) => {
@@ -76,17 +140,6 @@ impl<'a> ChangeMapper<'a> {
         }
     }
 
-    fn repo_global_file_has_changed(
-        &self,
-        default_global_deps: &[&str],
-        changed_files: &HashSet<AnchoredSystemPathBuf>,
-    ) -> Result<bool, ChangeMapError> {
-        let global_deps = self.global_deps.iter().map(|s| s.as_str());
-        let filters = global_deps.chain(default_global_deps.iter().copied());
-        let matcher = wax::any(filters)?;
-        Ok(changed_files.iter().any(|f| matcher.is_match(f.as_path())))
-    }
-
     fn filter_ignored_files<'b>(
         &self,
         changed_files: impl Iterator<Item = &'b AnchoredSystemPathBuf> + 'b,
@@ -101,39 +154,21 @@ impl<'a> ChangeMapper<'a> {
     fn get_changed_packages<'b>(
         &self,
         files: impl Iterator<Item = &'b AnchoredSystemPathBuf>,
-        graph: &PackageGraph,
-    ) -> Result<HashSet<WorkspacePackage>, turborepo_scm::Error> {
+    ) -> Result<PackageChanges, turborepo_scm::Error> {
         let mut changed_packages = HashSet::new();
         for file in files {
-            let mut found = false;
-            for (name, entry) in graph.packages() {
-                if name == &PackageName::Root {
-                    continue;
+            match self.package_detector.detect_package(file) {
+                PackageMapping::Package(pkg) => {
+                    changed_packages.insert(pkg);
                 }
-                if let Some(package_path) = entry.package_json_path.parent() {
-                    if Self::is_file_in_package(file, package_path) {
-                        changed_packages.insert(WorkspacePackage {
-                            name: name.clone(),
-                            path: entry.package_path().to_owned(),
-                        });
-                        found = true;
-                        break;
-                    }
+                PackageMapping::All => {
+                    return Ok(PackageChanges::All);
                 }
-            }
-            if !found {
-                // if the file is not in any package, it must be in the root package
-                changed_packages.insert(WorkspacePackage::root());
+                PackageMapping::None => {}
             }
         }
 
-        Ok(changed_packages)
-    }
-
-    fn is_file_in_package(file: &AnchoredSystemPath, package_path: &AnchoredSystemPath) -> bool {
-        file.components()
-            .zip(package_path.components())
-            .all(|(a, b)| a == b)
+        Ok(PackageChanges::Some(changed_packages))
     }
 
     fn get_changed_packages_from_lockfile(
@@ -193,6 +228,7 @@ mod test {
     use test_case::test_case;
 
     use super::ChangeMapper;
+    use crate::change_mapper::DefaultPackageDetector;
 
     #[cfg(unix)]
     #[test_case("/a/b/c", &["package.lock"], "/a/b/c/package.lock", true ; "simple")]
@@ -209,7 +245,11 @@ mod test {
             .iter()
             .map(|s| turbopath::AnchoredSystemPathBuf::from_raw(s).unwrap())
             .collect();
-        let changes = ChangeMapper::lockfile_changed(&turbo_root, &changed_files, &lockfile_path);
+        let changes = ChangeMapper::<DefaultPackageDetector>::lockfile_changed(
+            &turbo_root,
+            &changed_files,
+            &lockfile_path,
+        );
 
         assert_eq!(changes, expected);
     }
@@ -229,7 +269,11 @@ mod test {
             .iter()
             .map(|s| turbopath::AnchoredSystemPathBuf::from_raw(s).unwrap())
             .collect();
-        let changes = ChangeMapper::lockfile_changed(&turbo_root, &changed_files, &lockfile_path);
+        let changes = ChangeMapper::<DefaultPackageDetector>::lockfile_changed(
+            &turbo_root,
+            &changed_files,
+            &lockfile_path,
+        );
 
         // we don't want to implement PartialEq on the error type,
         // so simply compare the debug representations

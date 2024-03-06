@@ -9,8 +9,6 @@
 //! these strategies will implement some sort of monad-style composition so that
 //! we can track areas of run that are performing sub-optimally.
 
-use std::sync::Arc;
-
 use tokio::time::error::Elapsed;
 use tokio_stream::{iter, StreamExt};
 use turbopath::AbsoluteSystemPathBuf;
@@ -91,16 +89,6 @@ impl<T: PackageDiscovery + Send + Sync> PackageDiscovery for Option<T> {
                 Err(Error::Unavailable)
             }
         }
-    }
-}
-
-impl<T: PackageDiscovery + Send + Sync> PackageDiscovery for Arc<T> {
-    async fn discover_packages(&self) -> Result<DiscoveryResponse, Error> {
-        self.as_ref().discover_packages().await
-    }
-
-    async fn discover_packages_blocking(&self) -> Result<DiscoveryResponse, Error> {
-        self.as_ref().discover_packages_blocking().await
     }
 }
 

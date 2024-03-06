@@ -38,7 +38,7 @@ pub fn configure(
     base: &mut CommandBase,
     telemetry: CommandEventBuilder,
 ) {
-    let config = TelemetryConfig::new();
+    let config = TelemetryConfig::with_default_config_path();
     let mut config = match config {
         Ok(config) => config,
         Err(e) => {

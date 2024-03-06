@@ -114,4 +114,8 @@ impl AnchoredSystemPath {
                 .unwrap(),
         )
     }
+
+    pub fn clean(&self) -> AnchoredSystemPathBuf {
+        AnchoredSystemPathBuf(self.0.as_std_path().clean().try_into().unwrap())
+    }
 }
