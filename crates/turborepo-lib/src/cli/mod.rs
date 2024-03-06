@@ -605,6 +605,14 @@ fn validate_graph_extension(s: &str) -> Result<String, String> {
     }
 }
 
+fn path_non_empty(s: &str) -> Result<Utf8PathBuf, String> {
+    if s.is_empty() {
+        Err("path must not be empty".to_string())
+    } else {
+        Ok(Utf8Path::new(s).to_path_buf())
+    }
+}
+
 #[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
 #[command(groups = [
     ArgGroup::new("daemon-group").multiple(false).required(false),
@@ -612,7 +620,7 @@ fn validate_graph_extension(s: &str) -> Result<String, String> {
 ])]
 pub struct RunArgs {
     /// Override the filesystem cache directory.
-    #[clap(long)]
+    #[clap(long, value_parser = path_non_empty)]
     pub cache_dir: Option<Utf8PathBuf>,
     /// Set the number of concurrent cache operations (default 10)
     #[clap(long, default_value_t = DEFAULT_NUM_WORKERS)]
@@ -2343,5 +2351,12 @@ mod test {
             "bar.json"
         ])
         .is_err());
+    }
+
+    #[test]
+    fn test_empty_cache_dir() {
+        assert!(Args::try_parse_from(["turbo", "build", "--cache-dir"]).is_err());
+        assert!(Args::try_parse_from(["turbo", "build", "--cache-dir="]).is_err());
+        assert!(Args::try_parse_from(["turbo", "build", "--cache-dir", ""]).is_err());
     }
 }

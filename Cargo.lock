@@ -122,7 +122,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "220044e6a1bb31ddee4e3db724d29767f352de47445a6cd75e1a173142136c83"
 dependencies = [
  "nom",
- "vte",
+ "vte 0.10.1",
 ]
 
 [[package]]
@@ -6384,6 +6384,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a993555f31e5a609f617c12db6250dedcac1b0a85076912c436e6fc9b2c8e6a3"
 
 [[package]]
+name = "quickcheck"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "588f6378e4dd99458b60ec275b4477add41ce4fa9f64dcba6f15adccb19b50d6"
+dependencies = [
+ "env_logger 0.8.4",
+ "log 0.4.20",
+ "rand 0.8.5",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11339,6 +11350,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-stream",
+ "async-trait",
  "bytes 1.5.0",
  "const_format",
  "futures 0.3.28",
@@ -11364,6 +11376,7 @@ dependencies = [
  "turbopack-core",
  "turbopack-dev-server",
  "turbopack-ecmascript",
+ "turbopack-resolve",
  "url 2.4.1",
  "urlencoding",
 ]
@@ -11973,10 +11986,12 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "tempfile",
  "test-case",
  "thiserror",
  "tokio",
  "tracing",
+ "turbopath",
  "turborepo-api-client",
  "turborepo-dirs",
  "turborepo-ui",
@@ -12446,12 +12461,38 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "65dd7eed29412da847b0f78bcec0ac98588165988a8cfe41d4ea1d429f8ccfff"
 
 [[package]]
+name = "vt100"
+version = "0.15.2"
+dependencies = [
+ "itoa",
+ "log 0.4.20",
+ "quickcheck",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "terminal_size 0.2.6",
+ "unicode-width",
+ "vte 0.11.1",
+]
+
+[[package]]
 name = "vte"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6cbce692ab4ca2f1f3047fcf732430249c0e971bfdd2b234cf2c47ad93af5983"
 dependencies = [
  "arrayvec 0.5.2",
+ "utf8parse",
+ "vte_generate_state_changes",
+]
+
+[[package]]
+name = "vte"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f5022b5fbf9407086c180e9557be968742d839e68346af7792b8592489732197"
+dependencies = [
+ "arrayvec 0.7.4",
  "utf8parse",
  "vte_generate_state_changes",
 ]
