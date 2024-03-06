@@ -1081,7 +1081,7 @@ impl JsValue {
                 JsValue::Not(_, r) => {
                     r.make_unknown_without_content(false, "node limit reached");
                 }
-                JsValue::Binary(_, a, _, b) => {
+                JsValue::Binary(_, a, _, b) | JsValue::InstanceOf(_, a, b) => {
                     if a.total_nodes() > b.total_nodes() {
                         a.make_unknown_without_content(b.has_side_effects(), "node limit reached");
                     } else {
@@ -2035,6 +2035,7 @@ impl JsValue {
             JsValue::Constant(..)
             | JsValue::Array { .. }
             | JsValue::Object { .. }
+            | JsValue::InstanceOf(..)
             | JsValue::Url(..)
             | JsValue::Module(..)
             | JsValue::Function(..)
