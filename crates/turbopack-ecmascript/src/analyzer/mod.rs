@@ -1858,6 +1858,7 @@ impl JsValue {
             JsValue::Argument(_, _) => false,
             JsValue::Iterated(_, iterable) => iterable.has_side_effects(),
             JsValue::TypeOf(_, operand) => operand.has_side_effects(),
+            JsValue::InstanceOf(_, lhs, rhs) => lhs.has_side_effects() || rhs.has_side_effects(),
         }
     }
 
@@ -2614,7 +2615,7 @@ impl JsValue {
                 }
                 modified
             }
-            JsValue::Binary(_, a, _, b) => {
+            JsValue::Binary(_, a, _, b) | JsValue::InstanceOf(_, a, b) => {
                 let m1 = visitor(a);
                 let m2 = visitor(b);
                 let modified = m1 || m2;
@@ -2806,7 +2807,7 @@ impl JsValue {
                 visitor(obj);
                 visitor(prop);
             }
-            JsValue::Binary(_, a, _, b) => {
+            JsValue::Binary(_, a, _, b) | JsValue::InstanceOf(_, a, b) => {
                 visitor(a);
                 visitor(b);
             }
