@@ -769,6 +769,14 @@ impl JsValue {
         Self::Iterated(1 + iterable.total_nodes(), Box::new(iterable))
     }
 
+    pub fn instance_of(l: JsValue, b: JsValue) -> Self {
+        Self::InstanceOf(
+            1 + l.total_nodes() + b.total_nodes(),
+            Box::new(l),
+            Box::new(b),
+        )
+    }
+
     pub fn equal(a: JsValue, b: JsValue) -> Self {
         Self::Binary(
             1 + a.total_nodes() + b.total_nodes(),

@@ -399,6 +399,13 @@ impl EvalContext {
             }) => JsValue::logical_or(vec![self.eval(left), self.eval(right)]),
 
             Expr::Bin(BinExpr {
+                op: op!("instanceof"),
+                left,
+                right,
+                ..
+            }) => JsValue::instance_of(self.eval(left), self.eval(right)),
+
+            Expr::Bin(BinExpr {
                 op: op!("??"),
                 left,
                 right,
