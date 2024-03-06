@@ -2322,7 +2322,7 @@ macro_rules! for_each_children_async {
                 $value.update_total_nodes();
                 ($value, modified)
             }
-            JsValue::Binary(_, box a, _, box b) => {
+            JsValue::Binary(_, box a, _, box b) | JsValue::instanceof(_, box a, box b) => {
                 let (v, m1) = $visit_fn(take(a), $($args),+).await?;
                 *a = v;
                 let (v, m2) = $visit_fn(take(b), $($args),+).await?;
@@ -3203,6 +3203,11 @@ impl JsValue {
             JsValue::Argument(i, v) => {
                 Hash::hash(i, state);
                 Hash::hash(v, state);
+            }
+
+            JsValue::InstanceOf(_, a, b) => {
+                a.similar_hash(state, depth - 1);
+                b.similar_hash(state, depth - 1);
             }
         }
     }
