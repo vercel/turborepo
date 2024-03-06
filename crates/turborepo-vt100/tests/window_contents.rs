@@ -1,3 +1,4 @@
+#![allow(unused_imports)]
 use turborepo_vt100 as vt100;
 
 mod helpers;

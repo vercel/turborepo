@@ -1,7 +1,7 @@
 use thiserror::Error;
 use turbopath::AnchoredSystemPath;
 use turborepo_repository::{
-    change_mapper::{DefaultPackageDetector, PackageChangeMapper, PackageMapping},
+    change_mapper::{DefaultPackageChangeMapper, PackageChangeMapper, PackageMapping},
     package_graph::{PackageGraph, WorkspacePackage},
 };
 use wax::{BuildError, Program};
@@ -14,16 +14,16 @@ pub enum Error {
 
 /// A package detector that uses a global deps list to determine
 /// if a file should cause all packages to be marked as changed.
-/// This is less conservative than the `DefaultPackageDetector`
+/// This is less conservative than the `DefaultPackageChangeMapper`,
 /// which assumes that any changed file that is not in a package
 /// changes all packages. Since we have a list of global deps,
 /// we can check against that and avoid invalidating in unnecessary cases.
-pub struct GlobalDepsPackageDetector<'a> {
+pub struct GlobalDepsPackageChangeMapper<'a> {
     pkg_dep_graph: &'a PackageGraph,
     global_deps_matcher: wax::Any<'a>,
 }
 
-impl<'a> GlobalDepsPackageDetector<'a> {
+impl<'a> GlobalDepsPackageChangeMapper<'a> {
     pub fn new<S: wax::Pattern<'a>, I: Iterator<Item = S>>(
         pkg_dep_graph: &'a PackageGraph,
         global_deps: I,
@@ -37,10 +37,10 @@ impl<'a> GlobalDepsPackageDetector<'a> {
     }
 }
 
-impl<'a> PackageChangeMapper for GlobalDepsPackageDetector<'a> {
+impl<'a> PackageChangeMapper for GlobalDepsPackageChangeMapper<'a> {
     fn detect_package(&self, path: &AnchoredSystemPath) -> PackageMapping {
-        match DefaultPackageDetector::new(self.pkg_dep_graph).detect_package(path) {
-            // Since `DefaultPackageDetector` is overly conservative, we can check here if
+        match DefaultPackageChangeMapper::new(self.pkg_dep_graph).detect_package(path) {
+            // Since `DefaultPackageChangeMapper` is overly conservative, we can check here if
             // the path is actually in globalDeps and if not, return it as
             // PackageDetection::Package(WorkspacePackage::root()).
             PackageMapping::All => {
@@ -63,14 +63,14 @@ mod tests {
     use tempfile::tempdir;
     use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
     use turborepo_repository::{
-        change_mapper::{ChangeMapper, DefaultPackageDetector, PackageChanges},
+        change_mapper::{ChangeMapper, DefaultPackageChangeMapper, PackageChanges},
         discovery,
         discovery::PackageDiscovery,
         package_graph::{PackageGraphBuilder, WorkspacePackage},
         package_json::PackageJson,
     };
 
-    use super::GlobalDepsPackageDetector;
+    use super::GlobalDepsPackageChangeMapper;
 
     #[allow(dead_code)]
     pub struct MockDiscovery;
@@ -105,7 +105,7 @@ mod tests {
         .build()
         .await?;
 
-        let default_package_detector = DefaultPackageDetector::new(&pkg_graph);
+        let default_package_detector = DefaultPackageChangeMapper::new(&pkg_graph);
         let change_mapper = ChangeMapper::new(&pkg_graph, vec![], default_package_detector);
 
         let package_changes = change_mapper.changed_packages(
@@ -120,7 +120,7 @@ mod tests {
         assert_eq!(package_changes, PackageChanges::All);
 
         let turbo_package_detector =
-            GlobalDepsPackageDetector::new(&pkg_graph, std::iter::empty::<&str>())?;
+            GlobalDepsPackageChangeMapper::new(&pkg_graph, std::iter::empty::<&str>())?;
         let change_mapper = ChangeMapper::new(&pkg_graph, vec![], turbo_package_detector);
 
         let package_changes = change_mapper.changed_packages(

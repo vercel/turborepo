@@ -10,9 +10,15 @@ export class Package {
   /** The relative path from the workspace root to the package root. */
   readonly relativePath: string;
 }
+/**
+ * Wrapper for dependents and dependencies.
+ * Each are a list of package paths, relative to the workspace root.
+ */
 export class PackageDetails {
-  readonly dependencies: Array<RelativePath>;
-  readonly dependents: Array<RelativePath>;
+  /** the package's dependencies */
+  readonly dependencies: Array<string>;
+  /** the packages that depend on this package */
+  readonly dependents: Array<string>;
 }
 export class PackageManager {
   /** The package manager name in lower case. */
@@ -42,7 +48,7 @@ export class Workspace {
    *      }
    *  }
    */
-  findPackagesWithGraph(): Promise<SerializablePackages>;
+  findPackagesWithGraph(): Promise<Record<string, PackageDetails>>;
   /**
    * Given a set of "changed" files, returns a set of packages that are
    * "affected" by the changes. The `files` argument is expected to be a list
