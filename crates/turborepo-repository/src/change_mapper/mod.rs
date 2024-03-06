@@ -3,69 +3,17 @@
 
 use std::collections::HashSet;
 
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
+pub use package::{
+    DefaultPackageChangeMapper, GlobalDepsPackageChangeMapper, PackageChangeMapper, PackageMapping,
+};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use wax::Program;
 
-use crate::package_graph::{ChangedPackagesError, PackageGraph, PackageName, WorkspacePackage};
+use crate::package_graph::{ChangedPackagesError, PackageGraph, WorkspacePackage};
 
-pub enum PackageMapping {
-    /// We've hit a global file, so all packages have changed
-    All,
-    /// This change is meaningless, no packages have changed
-    None,
-    /// This change has affected one package
-    Package(WorkspacePackage),
-}
-
-/// Maps a single file change to affected packages. This can be a single
-/// package (`Package`), none of the packages (`None`), or all of the packages
-/// (`All`).
-pub trait PackageChangeMapper {
-    fn detect_package(&self, file: &AnchoredSystemPath) -> PackageMapping;
-}
+mod package;
 
 const DEFAULT_GLOBAL_DEPS: [&str; 2] = ["package.json", "turbo.json"];
-
-/// Detects package by checking if the file is inside the package.
-/// Does *not* use the `globalDependencies` in turbo.json.
-/// Since we don't have these dependencies, any file that is
-/// not in any package will automatically invalidate all
-/// packages. This is fine for builds, but less fine
-/// for situations like watch mode.
-pub struct DefaultPackageChangeMapper<'a> {
-    pkg_dep_graph: &'a PackageGraph,
-}
-
-impl<'a> DefaultPackageChangeMapper<'a> {
-    pub fn new(pkg_dep_graph: &'a PackageGraph) -> Self {
-        Self { pkg_dep_graph }
-    }
-    fn is_file_in_package(file: &AnchoredSystemPath, package_path: &AnchoredSystemPath) -> bool {
-        file.components()
-            .zip(package_path.components())
-            .all(|(a, b)| a == b)
-    }
-}
-
-impl<'a> PackageChangeMapper for DefaultPackageChangeMapper<'a> {
-    fn detect_package(&self, file: &AnchoredSystemPath) -> PackageMapping {
-        for (name, entry) in self.pkg_dep_graph.packages() {
-            if name == &PackageName::Root {
-                continue;
-            }
-            if let Some(package_path) = entry.package_json_path.parent() {
-                if Self::is_file_in_package(file, package_path) {
-                    return PackageMapping::Package(WorkspacePackage {
-                        name: name.clone(),
-                        path: package_path.to_owned(),
-                    });
-                }
-            }
-        }
-
-        PackageMapping::All
-    }
-}
 
 // We may not be able to load the lockfile contents, but we
 // still want to be able to express a generic change.
@@ -228,7 +176,7 @@ mod test {
     use test_case::test_case;
 
     use super::ChangeMapper;
-    use crate::change_mapper::DefaultPackageChangeMapper;
+    use crate::change_mapper::package::DefaultPackageChangeMapper;
 
     #[cfg(unix)]
     #[test_case("/a/b/c", &["package.lock"], "/a/b/c/package.lock", true ; "simple")]
