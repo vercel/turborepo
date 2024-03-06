@@ -224,7 +224,9 @@ fn expand_named(
         destructuring,
         quote! {
             #(
-                let #fields_idents = turbo_tasks::macro_helpers::ok_or_else_for_missing_element(#inputs_list_ident.next(), stringify!(#fields_idents))?;
+                let Some(#fields_idents) = #inputs_list_ident.next() else {
+                    bail!(concat!("missing element for ", stringify!(#fields_idents)))
+                };
                 let #fields_idents = turbo_tasks::TaskInput::try_from_concrete(#fields_idents)?;
             )*
         },
@@ -247,7 +249,9 @@ fn expand_unnamed(
         destructuring,
         quote! {
             #(
-                let #fields_idents = turbo_tasks::macro_helpers::ok_or_else_for_missing_element(#inputs_list_ident.next(), stringify!(#fields_idents))?;
+                let Some(#fields_idents) = #inputs_list_ident.next() else {
+                    anyhow::bail!(concat!("missing element for ", stringify!(#fields_idents)))
+                };
                 let #fields_idents = turbo_tasks::TaskInput::try_from_concrete(#fields_idents)?;
             )*
         },
