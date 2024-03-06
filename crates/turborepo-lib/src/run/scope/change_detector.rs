@@ -3,13 +3,13 @@ use std::collections::HashSet;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
     change_mapper::{
-        ChangeMapError, ChangeMapper, DefaultPackageDetector, LockfileChange, PackageChanges,
+        ChangeMapError, ChangeMapper, DefaultPackageChangeMapper, LockfileChange, PackageChanges,
     },
     package_graph::{PackageGraph, PackageName},
 };
 use turborepo_scm::SCM;
 
-use crate::global_deps_package_detector::{Error, GlobalDepsPackageDetector};
+use crate::global_deps_package_change_mapper::{Error, GlobalDepsPackageChangeMapper};
 
 /// Given two git refs, determine which packages have changed between them.
 pub trait GitChangeDetector {
@@ -22,7 +22,7 @@ pub trait GitChangeDetector {
 
 pub struct ScopeChangeDetector<'a> {
     turbo_root: &'a AbsoluteSystemPath,
-    change_mapper: ChangeMapper<'a, GlobalDepsPackageDetector<'a>>,
+    change_mapper: ChangeMapper<'a, GlobalDepsPackageChangeMapper<'a>>,
     scm: &'a SCM,
     pkg_graph: &'a PackageGraph,
 }
@@ -35,7 +35,7 @@ impl<'a> ScopeChangeDetector<'a> {
         global_deps: impl Iterator<Item = &'a str>,
         ignore_patterns: Vec<String>,
     ) -> Result<Self, Error> {
-        let pkg_detector = GlobalDepsPackageDetector::new(pkg_graph, global_deps)?;
+        let pkg_detector = GlobalDepsPackageChangeMapper::new(pkg_graph, global_deps)?;
         let change_mapper = ChangeMapper::new(pkg_graph, ignore_patterns, pkg_detector);
 
         Ok(Self {
@@ -59,7 +59,7 @@ impl<'a> ScopeChangeDetector<'a> {
             .package_manager()
             .lockfile_path(self.turbo_root);
 
-        if !ChangeMapper::<DefaultPackageDetector>::lockfile_changed(
+        if !ChangeMapper::<DefaultPackageChangeMapper>::lockfile_changed(
             self.turbo_root,
             changed_files,
             &lockfile_path,

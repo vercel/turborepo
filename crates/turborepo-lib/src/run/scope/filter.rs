@@ -19,7 +19,7 @@ use super::{
     target_selector::{InvalidSelectorError, TargetSelector},
 };
 use crate::{
-    global_deps_package_detector, run::scope::change_detector::ScopeChangeDetector,
+    global_deps_package_change_mapper, run::scope::change_detector::ScopeChangeDetector,
     turbo_json::TurboJson,
 };
 
@@ -599,7 +599,7 @@ pub enum ResolutionError {
         err: Box<wax::BuildError>,
     },
     #[error("failed to construct glob for globalDependencies")]
-    GlobalDependenciesGlob(#[from] global_deps_package_detector::Error),
+    GlobalDependenciesGlob(#[from] global_deps_package_change_mapper::Error),
 }
 
 #[cfg(test)]

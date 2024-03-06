@@ -32,11 +32,11 @@ const DEFAULT_GLOBAL_DEPS: [&str; 2] = ["package.json", "turbo.json"];
 /// not in any package will automatically invalidate all
 /// packages. This is fine for builds, but less fine
 /// for situations like watch mode.
-pub struct DefaultPackageDetector<'a> {
+pub struct DefaultPackageChangeMapper<'a> {
     pkg_dep_graph: &'a PackageGraph,
 }
 
-impl<'a> DefaultPackageDetector<'a> {
+impl<'a> DefaultPackageChangeMapper<'a> {
     pub fn new(pkg_dep_graph: &'a PackageGraph) -> Self {
         Self { pkg_dep_graph }
     }
@@ -47,7 +47,7 @@ impl<'a> DefaultPackageDetector<'a> {
     }
 }
 
-impl<'a> PackageChangeMapper for DefaultPackageDetector<'a> {
+impl<'a> PackageChangeMapper for DefaultPackageChangeMapper<'a> {
     fn detect_package(&self, file: &AnchoredSystemPath) -> PackageMapping {
         for (name, entry) in self.pkg_dep_graph.packages() {
             if name == &PackageName::Root {
@@ -228,7 +228,7 @@ mod test {
     use test_case::test_case;
 
     use super::ChangeMapper;
-    use crate::change_mapper::DefaultPackageDetector;
+    use crate::change_mapper::DefaultPackageChangeMapper;
 
     #[cfg(unix)]
     #[test_case("/a/b/c", &["package.lock"], "/a/b/c/package.lock", true ; "simple")]
@@ -245,7 +245,7 @@ mod test {
             .iter()
             .map(|s| turbopath::AnchoredSystemPathBuf::from_raw(s).unwrap())
             .collect();
-        let changes = ChangeMapper::<DefaultPackageDetector>::lockfile_changed(
+        let changes = ChangeMapper::<DefaultPackageChangeMapper>::lockfile_changed(
             &turbo_root,
             &changed_files,
             &lockfile_path,
@@ -269,7 +269,7 @@ mod test {
             .iter()
             .map(|s| turbopath::AnchoredSystemPathBuf::from_raw(s).unwrap())
             .collect();
-        let changes = ChangeMapper::<DefaultPackageDetector>::lockfile_changed(
+        let changes = ChangeMapper::<DefaultPackageChangeMapper>::lockfile_changed(
             &turbo_root,
             &changed_files,
             &lockfile_path,
