@@ -58,6 +58,7 @@ jobs:
           - host: windows-latest
             target: "x86_64-pc-windows-msvc"
 
+    name: "Build ${{ matrix.settings.target }}"
     runs-on: ${{ matrix.settings.host }}
     steps:
       - name: Checkout
