@@ -45,6 +45,7 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::too_many_lines)]
 #![allow(clippy::type_complexity)]
+#![allow(unused_imports)]
 
 mod attrs;
 mod callbacks;
