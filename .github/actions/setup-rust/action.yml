@@ -13,7 +13,8 @@ inputs:
     required: false
   github-token:
     description: "GitHub token. You can pass secrets.GITHUB_TOKEN"
-    required: true
+    required: false
+    default: ${{ github.token }}
   shared-cache-key:
     description: "A cache key that is used instead of the automatic `job`-based key, and is stable over multiple jobs."
     required: false
