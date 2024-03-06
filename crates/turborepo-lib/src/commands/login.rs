@@ -62,7 +62,8 @@ pub async fn login(
     telemetry: CommandEventBuilder,
     force: bool,
 ) -> Result<(), Error> {
-    telemetry.track_login_method(LoginMethod::Standard);
+    let mut login_telemetry = LoginTelemetry::new(&telemetry, LoginMethod::Standard);
+
     let api_client: APIClient = base.api_client()?;
     let ui = base.ui;
     let login_url_config = base.config()?.login_url().to_string();
@@ -102,5 +103,32 @@ pub async fn login(
             error: e,
         })?;
 
+    login_telemetry.set_success(true);
     Ok(())
+}
+
+struct LoginTelemetry<'a> {
+    telemetry: &'a CommandEventBuilder,
+    method: LoginMethod,
+    success: bool,
+}
+impl<'a> LoginTelemetry<'a> {
+    fn new(telemetry: &'a CommandEventBuilder, method: LoginMethod) -> Self {
+        Self {
+            telemetry,
+            method,
+            success: false,
+        }
+    }
+    fn set_success(&mut self, success: bool) {
+        self.success = success;
+    }
+}
+// If we get an early return, we still want to track the login attempt as a
+// failure.
+impl<'a> Drop for LoginTelemetry<'a> {
+    fn drop(&mut self) {
+        self.telemetry.track_login_method(self.method);
+        self.telemetry.track_login_success(self.success);
+    }
 }
