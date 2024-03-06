@@ -1,3 +1,5 @@
+use turborepo_vt100 as vt100;
+
 use std::io::Read as _;
 
 fn get_file_contents(name: &str) -> Vec<u8> {
