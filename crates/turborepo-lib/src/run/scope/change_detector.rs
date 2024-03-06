@@ -2,10 +2,14 @@ use std::collections::HashSet;
 
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
-    change_mapper::{ChangeMapError, ChangeMapper, LockfileChange, PackageChanges},
+    change_mapper::{
+        ChangeMapError, ChangeMapper, DefaultPackageDetector, LockfileChange, PackageChanges,
+    },
     package_graph::{PackageGraph, PackageName},
 };
 use turborepo_scm::SCM;
+
+use crate::global_deps_package_detector::{Error, GlobalDepsPackageDetector};
 
 /// Given two git refs, determine which packages have changed between them.
 pub trait GitChangeDetector {
@@ -18,7 +22,7 @@ pub trait GitChangeDetector {
 
 pub struct ScopeChangeDetector<'a> {
     turbo_root: &'a AbsoluteSystemPath,
-    change_mapper: ChangeMapper<'a>,
+    change_mapper: ChangeMapper<'a, GlobalDepsPackageDetector<'a>>,
     scm: &'a SCM,
     pkg_graph: &'a PackageGraph,
 }
@@ -28,17 +32,18 @@ impl<'a> ScopeChangeDetector<'a> {
         turbo_root: &'a AbsoluteSystemPath,
         scm: &'a SCM,
         pkg_graph: &'a PackageGraph,
-        global_deps: Vec<String>,
+        global_deps: impl Iterator<Item = &'a str>,
         ignore_patterns: Vec<String>,
-    ) -> Self {
-        let change_mapper = ChangeMapper::new(pkg_graph, global_deps, ignore_patterns);
+    ) -> Result<Self, Error> {
+        let pkg_detector = GlobalDepsPackageDetector::new(pkg_graph, global_deps)?;
+        let change_mapper = ChangeMapper::new(pkg_graph, ignore_patterns, pkg_detector);
 
-        Self {
+        Ok(Self {
             turbo_root,
             change_mapper,
             scm,
             pkg_graph,
-        }
+        })
     }
 
     /// Gets the lockfile content from SCM if it has changed.
@@ -54,7 +59,11 @@ impl<'a> ScopeChangeDetector<'a> {
             .package_manager()
             .lockfile_path(self.turbo_root);
 
-        if !ChangeMapper::lockfile_changed(self.turbo_root, changed_files, &lockfile_path) {
+        if !ChangeMapper::<DefaultPackageDetector>::lockfile_changed(
+            self.turbo_root,
+            changed_files,
+            &lockfile_path,
+        ) {
             return None;
         }
 
