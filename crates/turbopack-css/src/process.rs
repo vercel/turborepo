@@ -21,8 +21,9 @@ use swc_core::{
     common::{BytePos, FileName, LineCol, Span},
     css::{
         ast::{
-            CompoundSelector, PseudoClassSelectorChildren, PseudoElementSelectorChildren,
-            SubclassSelector, TypeSelector, UrlValue,
+            ComplexSelector, ComplexSelectorChildren, CompoundSelector, ForgivingComplexSelector,
+            ForgivingRelativeSelector, PseudoClassSelectorChildren, PseudoElementSelectorChildren,
+            RelativeSelector, SubclassSelector, TypeSelector, UrlValue,
         },
         codegen::{writer::basic::BasicCssWriter, CodeGenerator},
         modules::{CssClassName, TransformConfig},
@@ -710,15 +711,19 @@ const CSS_MODULE_ERROR: &str =
 
 /// We only vist top-level selectors.
 impl swc_core::css::visit::Visit for CssValidator {
-    fn visit_complex_selector(&mut self, n: &swc_core::css::ast::ComplexSelector) {
-        fn is_complex_not_pure(sel: &swc_core::css::ast::ComplexSelector) -> bool {
+    fn visit_complex_selector(&mut self, n: &ComplexSelector) {
+        fn is_complex_not_pure(sel: &ComplexSelector) -> bool {
             sel.children.iter().all(|sel| match sel {
-                swc_core::css::ast::ComplexSelectorChildren::CompoundSelector(sel) => {
-                    is_compound_not_pure(sel)
-                }
-                swc_core::css::ast::ComplexSelectorChildren::Combinator(_) => true,
+                ComplexSelectorChildren::CompoundSelector(sel) => is_compound_not_pure(sel),
+                ComplexSelectorChildren::Combinator(_) => true,
             })
         }
+
+        fn is_forgiving_selector_not_pure(sel: &ForgivingComplexSelector) -> bool {}
+
+        fn is_forgiving_relative_selector_not_pure(sel: &ForgivingRelativeSelector) -> bool {}
+
+        fn is_relative_selector_not_pure(sel: &RelativeSelector) -> bool {}
 
         fn is_compound_not_pure(sel: &CompoundSelector) -> bool {
             sel.subclass_selectors.iter().all(|sel| match sel {
@@ -736,7 +741,32 @@ impl swc_core::css::visit::Visit for CssValidator {
                                     is_compound_not_pure(sel)
                                 }
 
-                                _ => false,
+                                PseudoClassSelectorChildren::SelectorList(sels) => {
+                                    sels.children.iter().all(|sel| is_complex_not_pure(sel))
+                                }
+                                PseudoClassSelectorChildren::ForgivingSelectorList(sels) => sels
+                                    .children
+                                    .iter()
+                                    .all(|sel| is_forgiving_selector_not_pure(sel)),
+                                PseudoClassSelectorChildren::CompoundSelectorList(sels) => {
+                                    sels.children.iter().all(|sel| is_compound_not_pure(sel))
+                                }
+                                PseudoClassSelectorChildren::RelativeSelectorList(sels) => sels
+                                    .children
+                                    .iter()
+                                    .all(|sel| is_relative_selector_not_pure(sel)),
+                                PseudoClassSelectorChildren::ForgivingRelativeSelectorList(
+                                    sels,
+                                ) => sels
+                                    .children
+                                    .iter()
+                                    .all(|sel| is_forgiving_relative_selector_not_pure(sel)),
+
+                                PseudoClassSelectorChildren::Ident(_)
+                                | PseudoClassSelectorChildren::Str(_)
+                                | PseudoClassSelectorChildren::Delimiter(_)
+                                | PseudoClassSelectorChildren::PreservedToken(_)
+                                | PseudoClassSelectorChildren::AnPlusB(_) => false,
                             })
                         } else {
                             true
