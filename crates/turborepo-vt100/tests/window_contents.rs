@@ -1,3 +1,4 @@
+#![allow(unused_imports)]
 mod helpers;
 
 use std::io::Read as _;

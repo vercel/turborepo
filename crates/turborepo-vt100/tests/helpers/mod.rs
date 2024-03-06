@@ -1,3 +1,4 @@
+#![allow(unused_imports)]
 mod fixtures;
 pub use fixtures::fixture;
 pub use fixtures::FixtureScreen;
