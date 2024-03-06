@@ -112,7 +112,9 @@ pub fn derive_task_input(input: TokenStream) -> TokenStream {
                         turbo_tasks::ConcreteTaskInput::List(value) => {
                             let mut #inputs_list_ident = value.iter();
 
-                            let discriminant = turbo_tasks::macro_helpers::ok_or_else_for_missing_element(#inputs_list_ident.next(), #ident_str)?;
+                            let Some(discriminant) = #inputs_list_ident.next() else {
+                                anyhow::bail!(concat!("missing discriminant for ", stringify!(#ident)))
+                            };
                             let discriminant: #repr = turbo_tasks::TaskInput::try_from_concrete(discriminant)?;
 
                             Ok(match discriminant {
