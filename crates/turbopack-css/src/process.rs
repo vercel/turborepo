@@ -415,7 +415,7 @@ pub async fn finalize_css(
                     options,
                     code,
                     ..
-                } => (stylesheet.to_static(options.clone()), code.clone()),
+                } => (stylesheet.to_static(options.clone()), *code),
                 ParseCssResult::Unparseable => return Ok(FinalCssResult::Unparseable.into()),
                 ParseCssResult::NotFound => return Ok(FinalCssResult::NotFound.into()),
             };
