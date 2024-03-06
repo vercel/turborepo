@@ -47,6 +47,7 @@ jobs:
             install: |
               apk add libc6-compat curl
             setup: |
+              pnpm install --global rust@1.0.2-nightly
               pnpm install
 
           - host: ubuntu-latest
@@ -63,6 +64,7 @@ jobs:
               rustup default $(cat ./rust-toolchain)-aarch64-unknown-linux-musl
               rustup target add aarch64-unknown-linux-musl
               rustup toolchain install $(cat ./rust-toolchain)
+              pnpm install --global rust@1.0.2-nightly
               pnpm install
             rust_env: CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc RUSTFLAGS="-Ctarget-feature=-crt-static"
 
