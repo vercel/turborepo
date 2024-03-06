@@ -155,10 +155,7 @@ impl Workspace {
 
         let workspace_path = match AbsoluteSystemPath::new(self.absolute_path.as_str()) {
             Ok(path) => path,
-            Err(e) => {
-                print!("Error: {:?}", e);
-                return Err(Error::from_reason(e.to_string()));
-            }
+            Err(e) => Err(Error::from_reason(e.to_string())),
         };
 
         let map: HashMap<RelativePath, PackageDetails> = packages
