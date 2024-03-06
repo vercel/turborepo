@@ -446,6 +446,11 @@ pub enum JsValue {
     /// `(total_node_count, operand)`
     TypeOf(usize, Box<JsValue>),
 
+    /// A `instanceof` expression.
+    ///
+    /// `(total_node_count, lhs, rhs)`
+    InstanceOf(usize, Box<JsValue>, Box<JsValue>),
+
     // PLACEHOLDERS
     // ----------------------------
     /// A reference to a variable.
