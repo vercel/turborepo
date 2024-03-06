@@ -66,7 +66,7 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         // get filtered files and add the packages that contain them
         let filtered_changed_files = self.filter_ignored_files(changed_files.iter())?;
         let PackageChanges::Some(mut changed_pkgs) =
-            self.get_changed_packages(filtered_changed_files.into_iter())?
+            self.get_changed_packages(filtered_changed_files.into_iter())
         else {
             return Ok(PackageChanges::All);
         };
@@ -102,7 +102,7 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
     fn get_changed_packages<'b>(
         &self,
         files: impl Iterator<Item = &'b AnchoredSystemPathBuf>,
-    ) -> Result<PackageChanges, turborepo_scm::Error> {
+    ) -> PackageChanges {
         let mut changed_packages = HashSet::new();
         for file in files {
             match self.package_detector.detect_package(file) {
@@ -110,13 +110,13 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                     changed_packages.insert(pkg);
                 }
                 PackageMapping::All => {
-                    return Ok(PackageChanges::All);
+                    return PackageChanges::All;
                 }
                 PackageMapping::None => {}
             }
         }
 
-        Ok(PackageChanges::Some(changed_packages))
+        PackageChanges::Some(changed_packages)
     }
 
     fn get_changed_packages_from_lockfile(

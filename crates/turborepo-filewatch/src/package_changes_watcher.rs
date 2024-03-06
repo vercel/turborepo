@@ -120,6 +120,7 @@ impl Subscriber {
             self.package_change_events_tx
                 .send(PackageChangeEvent::Rediscover)
                 .ok();
+
             // TODO: Pass in global_deps and ignore_patterns
             let mut change_mapper = ChangeMapper::new(
                 &repo_state.pkg_dep_graph,
@@ -197,7 +198,7 @@ impl Subscriber {
                                         change_mapper = ChangeMapper::new(
                                             &repo_state.pkg_dep_graph,
                                             vec![],
-                                            vec![],
+                                            DefaultPackageDetector::new(&repo_state.pkg_dep_graph),
                                         );
                                     }
                                     None => {
