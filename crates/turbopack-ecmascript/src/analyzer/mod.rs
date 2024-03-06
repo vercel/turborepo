@@ -643,6 +643,7 @@ impl Display for JsValue {
             }
             JsValue::Iterated(_, iterable) => write!(f, "Iterated({})", iterable),
             JsValue::TypeOf(_, operand) => write!(f, "typeof({})", operand),
+            JsValue::InstanceOf(_, lhs, rhs) => write!(f, "{} instanceof {}", lhs, rhs),
         }
     }
 }
@@ -715,7 +716,8 @@ impl JsValue {
             | JsValue::Tenary(..)
             | JsValue::MemberCall(..)
             | JsValue::Iterated(..)
-            | JsValue::TypeOf(..) => JsValueMetaKind::Operation,
+            | JsValue::TypeOf(..)
+            | JsValue::InstanceOf(..) => JsValueMetaKind::Operation,
             JsValue::Variable(..)
             | JsValue::Argument(..)
             | JsValue::FreeVar(..)
@@ -930,7 +932,8 @@ impl JsValue {
             | JsValue::Member(c, _, _)
             | JsValue::Function(c, _, _)
             | JsValue::Iterated(c, ..)
-            | JsValue::TypeOf(c, ..) => *c,
+            | JsValue::TypeOf(c, ..)
+            | JsValue::InstanceOf(c, ..) => *c,
         }
     }
 
@@ -1003,6 +1006,10 @@ impl JsValue {
 
             JsValue::TypeOf(c, operand) => {
                 *c = 1 + operand.total_nodes();
+            }
+
+            JsValue::InstanceOf(c, l, r) => {
+                *c = 1 + l.total_nodes() + r.total_nodes();
             }
         }
     }
@@ -1339,6 +1346,13 @@ impl JsValue {
                 format!(
                     "typeof({})",
                     operand.explain_internal_inner(hints, indent_depth, depth, unknown_depth)
+                )
+            }
+            JsValue::InstanceOf(_, lhs, rhs) => {
+                format!(
+                    "{} instanceof {}",
+                    lhs.explain_internal_inner(hints, indent_depth, depth, unknown_depth),
+                    rhs.explain_internal_inner(hints, indent_depth, depth, unknown_depth)
                 )
             }
             JsValue::Call(_, callee, list) => {
