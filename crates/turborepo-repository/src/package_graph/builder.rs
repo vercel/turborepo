@@ -84,7 +84,6 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
         self
     }
 
-    #[allow(dead_code)]
     pub fn with_package_jsons(
         mut self,
         package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
@@ -93,7 +92,6 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
         self
     }
 
-    #[allow(dead_code)]
     pub fn with_lockfile(mut self, lockfile: Option<Box<dyn Lockfile>>) -> Self {
         self.lockfile = lockfile;
         self

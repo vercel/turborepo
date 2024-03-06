@@ -258,9 +258,13 @@ fn is_token_active(metadata: &ResponseTokenMetadata, current_time: u128) -> bool
 
 #[cfg(test)]
 mod tests {
+    use std::backtrace::Backtrace;
+
+    use async_trait::async_trait;
+    use reqwest::{Method, Response};
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
-    use turborepo_vercel_api::token::Scope;
+    use turborepo_vercel_api::{token::Scope, CachingStatus, CachingStatusResponse};
 
     use super::*;
 
@@ -371,5 +375,150 @@ mod tests {
         let result = Token::from_file(&file_path);
 
         assert!(matches!(result, Err(Error::TokenNotFound)));
+    }
+
+    enum MockErrorType {
+        Error,
+        Forbidden,
+    }
+    enum MockCachingResponse {
+        CachingStatus(bool),
+        Error(MockErrorType),
+    }
+
+    struct MockCacheClient {
+        pub response: MockCachingResponse,
+    }
+
+    #[async_trait]
+    impl CacheClient for MockCacheClient {
+        async fn get_artifact(
+            &self,
+            _hash: &str,
+            _token: &str,
+            _team_id: Option<&str>,
+            _team_slug: Option<&str>,
+            _method: Method,
+        ) -> Result<Option<Response>, turborepo_api_client::Error> {
+            unimplemented!()
+        }
+
+        async fn fetch_artifact(
+            &self,
+            _hash: &str,
+            _token: &str,
+            _team_id: Option<&str>,
+            _team_slug: Option<&str>,
+        ) -> Result<Option<Response>, turborepo_api_client::Error> {
+            unimplemented!()
+        }
+
+        async fn put_artifact(
+            &self,
+            _hash: &str,
+            _artifact_body: &[u8],
+            _duration: u64,
+            _tag: Option<&str>,
+            _token: &str,
+            _team_id: Option<&str>,
+            _team_slug: Option<&str>,
+        ) -> Result<(), turborepo_api_client::Error> {
+            unimplemented!()
+        }
+
+        async fn artifact_exists(
+            &self,
+            _hash: &str,
+            _token: &str,
+            _team_id: Option<&str>,
+            _team_slug: Option<&str>,
+        ) -> Result<Option<Response>, turborepo_api_client::Error> {
+            unimplemented!()
+        }
+
+        async fn get_caching_status(
+            &self,
+            _token: &str,
+            _team_id: Option<&str>,
+            _team_slug: Option<&str>,
+        ) -> Result<CachingStatusResponse, turborepo_api_client::Error> {
+            match self.response {
+                MockCachingResponse::CachingStatus(status) => {
+                    let caching_status = if status {
+                        CachingStatus::Enabled
+                    } else {
+                        CachingStatus::Disabled
+                    };
+                    Ok(CachingStatusResponse {
+                        status: caching_status,
+                    })
+                }
+                MockCachingResponse::Error(MockErrorType::Error) => {
+                    Err(turborepo_api_client::Error::UnknownStatus {
+                        code: "error".to_string(),
+                        message: "Error fetching caching status".to_string(),
+                        backtrace: Backtrace::capture(),
+                    })
+                }
+                MockCachingResponse::Error(MockErrorType::Forbidden) => {
+                    Err(turborepo_api_client::Error::UnknownStatus {
+                        code: "forbidden".to_string(),
+                        message: "Forbidden from accessing cache".to_string(),
+                        backtrace: Backtrace::capture(),
+                    })
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_has_cache_access_granted() {
+        let mock = MockCacheClient {
+            response: MockCachingResponse::CachingStatus(true),
+        };
+
+        let token = Token::Existing("existing_token".to_string());
+        let team_info = Some(TeamInfo {
+            id: "team_id",
+            slug: "team_slug",
+        });
+
+        let result = token.has_cache_access(&mock, team_info).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_cache_access_denied() {
+        let mock = MockCacheClient {
+            response: MockCachingResponse::Error(MockErrorType::Forbidden),
+        };
+
+        let token = Token::Existing("existing_token".to_string());
+        let team_info = Some(TeamInfo {
+            id: "team_id",
+            slug: "team_slug",
+        });
+
+        let result = token.has_cache_access(&mock, team_info).await;
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_caching_status_errored() {
+        let mock = MockCacheClient {
+            response: MockCachingResponse::Error(MockErrorType::Error),
+        };
+
+        let token = Token::Existing("existing_token".to_string());
+        let team_info = Some(TeamInfo {
+            id: "team_id",
+            slug: "team_slug",
+        });
+
+        let result = token.has_cache_access(&mock, team_info).await;
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), Error::APIError(_)));
     }
 }
