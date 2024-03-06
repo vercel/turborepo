@@ -10,6 +10,16 @@ export class Package {
   /** The relative path from the workspace root to the package root. */
   readonly relativePath: string;
 }
+/**
+ * Wrapper for dependents and dependencies.
+ * Each are a list of package paths, relative to the workspace root.
+ */
+export class PackageDetails {
+  /** the package's dependencies */
+  readonly dependencies: Array<string>;
+  /** the packages that depend on this package */
+  readonly dependents: Array<string>;
+}
 export class PackageManager {
   /** The package manager name in lower case. */
   readonly name: string;
@@ -29,10 +39,16 @@ export class Workspace {
   /** Finds and returns packages within the workspace. */
   findPackages(): Promise<Array<Package>>;
   /**
-   * Finds and returns a map of packages within the workspace and its
-   * dependents (i.e. the packages that depend on each of those packages).
+   * Returns a map of packages within the workspace, its dependencies and
+   * dependents. The response looks like this:
+   *  {
+   *    "package-path": {
+   *      "dependents": ["dependent1_path", "dependent2_path"],
+   *      "dependencies": ["dependency1_path", "dependency2_path"]
+   *      }
+   *  }
    */
-  findPackagesAndDependents(): Promise<Record<string, Array<string>>>;
+  findPackagesWithGraph(): Promise<Record<string, PackageDetails>>;
   /**
    * Given a set of "changed" files, returns a set of packages that are
    * "affected" by the changes. The `files` argument is expected to be a list

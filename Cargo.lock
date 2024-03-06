@@ -6384,6 +6384,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a993555f31e5a609f617c12db6250dedcac1b0a85076912c436e6fc9b2c8e6a3"
 
 [[package]]
+name = "quickcheck"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "588f6378e4dd99458b60ec275b4477add41ce4fa9f64dcba6f15adccb19b50d6"
+dependencies = [
+ "env_logger 0.8.4",
+ "log 0.4.20",
+ "rand 0.8.5",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11985,10 +11996,12 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "tempfile",
  "test-case",
  "thiserror",
  "tokio",
  "tracing",
+ "turbopath",
  "turborepo-api-client",
  "turborepo-dirs",
  "turborepo-ui",
@@ -12044,6 +12057,21 @@ dependencies = [
  "tempfile",
  "tokio",
  "turborepo-vercel-api",
+]
+
+[[package]]
+name = "turborepo-vt100"
+version = "0.15.2"
+dependencies = [
+ "itoa",
+ "log 0.4.20",
+ "quickcheck",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "terminal_size 0.2.6",
+ "unicode-width",
+ "vte 0.11.1",
 ]
 
 [[package]]

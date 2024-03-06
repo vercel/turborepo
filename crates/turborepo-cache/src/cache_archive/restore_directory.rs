@@ -1,7 +1,7 @@
-use std::{backtrace::Backtrace, ffi::OsString};
+use std::{backtrace::Backtrace, ffi::OsString, io};
 
 use camino::Utf8Component;
-use tar::Header;
+use tar::Entry;
 use tracing::debug;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
@@ -12,11 +12,11 @@ use crate::CacheError;
 pub fn restore_directory(
     dir_cache: &mut CachedDirTree,
     anchor: &AbsoluteSystemPath,
-    header: &Header,
+    entry: &Entry<impl io::Read>,
 ) -> Result<AnchoredSystemPathBuf, CacheError> {
-    let processed_name = AnchoredSystemPathBuf::from_system_path(&header.path()?)?;
+    let processed_name = AnchoredSystemPathBuf::from_system_path(&entry.path()?)?;
 
-    dir_cache.safe_mkdir_all(anchor, &processed_name, header.mode()?)?;
+    dir_cache.safe_mkdir_all(anchor, &processed_name, entry.header().mode()?)?;
 
     Ok(processed_name)
 }

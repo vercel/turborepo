@@ -32,6 +32,6 @@ pub fn resolve_packages(
         pkg_inference,
         scm,
         root_turbo_json,
-    )
+    )?
     .resolve(&opts.get_filters())
 }
