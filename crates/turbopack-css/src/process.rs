@@ -756,25 +756,23 @@ impl swc_core::css::visit::Visit for CssValidator {
                                 }
 
                                 PseudoClassSelectorChildren::SelectorList(sels) => {
-                                    sels.children.iter().all(|sel| is_complex_not_pure(sel))
+                                    sels.children.iter().all(is_complex_not_pure)
                                 }
-                                PseudoClassSelectorChildren::ForgivingSelectorList(sels) => sels
-                                    .children
-                                    .iter()
-                                    .all(|sel| is_forgiving_selector_not_pure(sel)),
+                                PseudoClassSelectorChildren::ForgivingSelectorList(sels) => {
+                                    sels.children.iter().all(is_forgiving_selector_not_pure)
+                                }
                                 PseudoClassSelectorChildren::CompoundSelectorList(sels) => {
-                                    sels.children.iter().all(|sel| is_compound_not_pure(sel))
+                                    sels.children.iter().all(is_compound_not_pure)
                                 }
-                                PseudoClassSelectorChildren::RelativeSelectorList(sels) => sels
-                                    .children
-                                    .iter()
-                                    .all(|sel| is_relative_selector_not_pure(sel)),
+                                PseudoClassSelectorChildren::RelativeSelectorList(sels) => {
+                                    sels.children.iter().all(is_relative_selector_not_pure)
+                                }
                                 PseudoClassSelectorChildren::ForgivingRelativeSelectorList(
                                     sels,
                                 ) => sels
                                     .children
                                     .iter()
-                                    .all(|sel| is_forgiving_relative_selector_not_pure(sel)),
+                                    .all(is_forgiving_relative_selector_not_pure),
 
                                 PseudoClassSelectorChildren::Ident(_)
                                 | PseudoClassSelectorChildren::Str(_)
@@ -828,8 +826,7 @@ impl lightningcss::visitor::Visitor<'_> for CssValidator {
         selector: &mut lightningcss::selector::Selector<'_>,
     ) -> Result<(), Self::Error> {
         fn is_selector_problematic(sel: &lightningcss::selector::Selector) -> bool {
-            sel.iter_raw_parse_order_from(0)
-                .all(|component| is_problematic(&component))
+            sel.iter_raw_parse_order_from(0).all(is_problematic)
         }
 
         fn is_problematic(c: &lightningcss::selector::Component) -> bool {
@@ -856,7 +853,7 @@ impl lightningcss::visitor::Visitor<'_> for CssValidator {
             }
         }
 
-        if is_selector_problematic(&selector) {
+        if is_selector_problematic(selector) {
             self.errors
                 .push(CssError::LightningCssSelectorInModuleNotPure {
                     selector: format!("{selector:?}"),
