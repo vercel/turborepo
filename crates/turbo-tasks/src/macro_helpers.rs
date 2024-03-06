@@ -1,5 +1,4 @@
 //! Runtime helpers for [turbo-tasks-macro].
-use anyhow::{Error, Result};
 pub use once_cell::sync::{Lazy, OnceCell};
 pub use tracing;
 
