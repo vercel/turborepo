@@ -782,7 +782,12 @@ impl lightningcss::visitor::Visitor<'_> for CssValidator {
         &mut self,
         selector: &mut lightningcss::selector::Selector<'_>,
     ) -> Result<(), Self::Error> {
-        fn is_pure(c: &lightningcss::selector::Component) -> bool {
+        fn is_selector_problematic(sel: &lightningcss::selector::Selector) -> bool {
+            sel.iter_raw_parse_order_from(0)
+                .all(|component| is_problematic(&component))
+        }
+
+        fn is_problematic(c: &lightningcss::selector::Component) -> bool {
             match c {
                 parcel_selectors::parser::Component::ID(..)
                 | parcel_selectors::parser::Component::Class(..) => false,
@@ -794,6 +799,10 @@ impl lightningcss::visitor::Visitor<'_> for CssValidator {
                 | parcel_selectors::parser::Component::ExplicitUniversalType
                 | parcel_selectors::parser::Component::Negation(..) => true,
 
+                parcel_selectors::parser::Component::Where(sel) => {
+                    sel.iter().all(is_selector_problematic)
+                }
+
                 parcel_selectors::parser::Component::LocalName(local) => {
                     // Allow html and body. They are not pure selectors but are allowed.
                     !matches!(&*local.name.0, "html" | "body")
@@ -802,10 +811,7 @@ impl lightningcss::visitor::Visitor<'_> for CssValidator {
             }
         }
 
-        if selector
-            .iter_raw_parse_order_from(0)
-            .all(|component| is_pure(&component))
-        {
+        if is_selector_problematic(&selector) {
             self.errors
                 .push(CssError::LightningCssSelectorInModuleNotPure {
                     selector: format!("{selector:?}"),
