@@ -782,9 +782,8 @@ impl lightningcss::visitor::Visitor<'_> for CssValidator {
         &mut self,
         selector: &mut lightningcss::selector::Selector<'_>,
     ) -> Result<(), Self::Error> {
-        if selector
-            .iter_raw_parse_order_from(0)
-            .all(|component| match component {
+        fn is_pure(c: &lightningcss::selector::Component) -> bool {
+            match c {
                 parcel_selectors::parser::Component::ID(..)
                 | parcel_selectors::parser::Component::Class(..) => false,
 
@@ -800,7 +799,12 @@ impl lightningcss::visitor::Visitor<'_> for CssValidator {
                     !matches!(&*local.name.0, "html" | "body")
                 }
                 _ => false,
-            })
+            }
+        }
+
+        if selector
+            .iter_raw_parse_order_from(0)
+            .all(|component| is_pure(&component))
         {
             self.errors
                 .push(CssError::LightningCssSelectorInModuleNotPure {
