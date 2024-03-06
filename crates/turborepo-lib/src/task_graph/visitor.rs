@@ -97,7 +97,6 @@ impl<'a> Visitor<'a> {
         global_hash: &'a str,
         global_env_mode: EnvMode,
         ui: UI,
-        silent: bool,
         manager: ProcessManager,
         repo_root: &'a AbsoluteSystemPath,
         global_env: EnvironmentVariableMap,
@@ -108,7 +107,7 @@ impl<'a> Visitor<'a> {
             env_at_execution_start,
             global_hash,
         );
-        let sink = Self::sink(run_opts, silent);
+        let sink = Self::sink(run_opts);
         let color_cache = ColorSelector::default();
 
         Self {
@@ -354,10 +353,8 @@ impl<'a> Visitor<'a> {
             .await?)
     }
 
-    fn sink(run_opts: &RunOpts, silent: bool) -> OutputSink<StdWriter> {
-        let (out, err) = if silent {
-            (std::io::sink().into(), std::io::sink().into())
-        } else if run_opts.should_redirect_stderr_to_stdout() {
+    fn sink(run_opts: &RunOpts) -> OutputSink<StdWriter> {
+        let (out, err) = if run_opts.should_redirect_stderr_to_stdout() {
             (std::io::stdout().into(), std::io::stdout().into())
         } else {
             (std::io::stdout().into(), std::io::stderr().into())

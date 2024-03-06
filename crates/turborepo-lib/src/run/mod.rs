@@ -512,7 +512,6 @@ impl Run {
             &global_hash,
             global_env_mode,
             self.ui,
-            false,
             self.processes.clone(),
             &self.repo_root,
             global_env,
