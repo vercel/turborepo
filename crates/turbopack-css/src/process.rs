@@ -719,11 +719,25 @@ impl swc_core::css::visit::Visit for CssValidator {
             })
         }
 
-        fn is_forgiving_selector_not_pure(sel: &ForgivingComplexSelector) -> bool {}
+        fn is_forgiving_selector_not_pure(sel: &ForgivingComplexSelector) -> bool {
+            match sel {
+                ForgivingComplexSelector::ComplexSelector(sel) => is_complex_not_pure(sel),
+                ForgivingComplexSelector::ListOfComponentValues(_) => false,
+            }
+        }
 
-        fn is_forgiving_relative_selector_not_pure(sel: &ForgivingRelativeSelector) -> bool {}
+        fn is_forgiving_relative_selector_not_pure(sel: &ForgivingRelativeSelector) -> bool {
+            match sel {
+                ForgivingRelativeSelector::RelativeSelector(sel) => {
+                    is_relative_selector_not_pure(sel)
+                }
+                ForgivingRelativeSelector::ListOfComponentValues(_) => false,
+            }
+        }
 
-        fn is_relative_selector_not_pure(sel: &RelativeSelector) -> bool {}
+        fn is_relative_selector_not_pure(sel: &RelativeSelector) -> bool {
+            is_complex_not_pure(&sel.selector)
+        }
 
         fn is_compound_not_pure(sel: &CompoundSelector) -> bool {
             sel.subclass_selectors.iter().all(|sel| match sel {
