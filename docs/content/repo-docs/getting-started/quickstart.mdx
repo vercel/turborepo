@@ -3,12 +3,12 @@ title: Quickstart
 description: Get started with Turborepo in a few moments.
 ---
 
-import { Tabs, Tab } from "#/components/Tabs";
+import {PackageManagerTabs, Tab } from "#/components/Tabs";
 import { ExamplesTable } from "#/components/ExamplesTable";
 
 To get started with Turborepo in a few moments, you can quickly scaffold a starter monorepo using:
 
-<Tabs items={["npm", "yarn", "pnpm"]}>
+<PackageManagerTabs>
 <Tab value="npm">
 ```bash title="Terminal"
 npx create-turbo@latest
@@ -16,21 +16,21 @@ npx create-turbo@latest
 
 </Tab>
 
-<Tab value="yarn">
+<Tab>
 ```bash title="Terminal"
 yarn dlx create-turbo@latest
 ```
 
 </Tab>
 
-<Tab value="pnpm">
+<Tab>
 ```bash title="Terminal"
 pnpm dlx create-turbo@latest
 ```
 
 </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 You'll end up with two deployable applications and three shared libraries for use in the rest of the monorepo. For more details on the starter, [visit the README for the basic starter on GitHub](https://github.com/vercel/turbo/tree/main/examples/basic).
 
@@ -38,29 +38,29 @@ You'll end up with two deployable applications and three shared libraries for us
 
 The community curates a set of examples to showcase ways to use common tools and libraries with Turborepo. To bootstrap your monorepo with one of the examples, use the `--example` flag:
 
-<Tabs items={["npm", "yarn", "pnpm"]}>
-<Tab value="npm">
+<PackageManagerTabs>
+<Tab>
 ```bash title="Terminal"
 npx create-turbo@latest --example $(example-name)
 ```
 
 </Tab>
 
-<Tab value="yarn">
+<Tab>
 ```bash title="Terminal"
 yarn dlx create-turbo@latest --example $(example-name)
 ```
 
 </Tab>
 
-<Tab value="pnpm">
+<Tab>
 ```bash title="Terminal"
 pnpm dlx create-turbo@latest --example $(example-name)
 ```
 
 </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 Use any of the example's names below:
 
