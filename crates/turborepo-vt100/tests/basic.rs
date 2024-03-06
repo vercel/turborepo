@@ -1,3 +1,5 @@
+use turborepo_vt100 as vt100;
+
 #[test]
 fn object_creation() {
     let parser = vt100::Parser::default();

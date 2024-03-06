@@ -1,5 +1,7 @@
 mod helpers;
 
+use turborepo_vt100 as vt100;
+
 #[test]
 fn bel() {
     struct State {

@@ -3,6 +3,8 @@ mod fixtures;
 pub use fixtures::fixture;
 pub use fixtures::FixtureScreen;
 
+use turborepo_vt100 as vt100;
+
 pub static mut QUIET: bool = false;
 
 macro_rules! is {

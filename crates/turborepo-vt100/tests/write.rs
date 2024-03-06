@@ -1,3 +1,5 @@
+use turborepo_vt100 as vt100;
+
 use std::io::Write as _;
 
 #[test]

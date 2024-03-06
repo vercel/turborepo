@@ -12049,6 +12049,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-vt100"
+version = "0.15.2"
+dependencies = [
+ "itoa",
+ "log 0.4.20",
+ "quickcheck",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "terminal_size 0.2.6",
+ "unicode-width",
+ "vte 0.11.1",
+]
+
+[[package]]
 name = "twox-hash"
 version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12459,21 +12474,6 @@ name = "vlq"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "65dd7eed29412da847b0f78bcec0ac98588165988a8cfe41d4ea1d429f8ccfff"
-
-[[package]]
-name = "vt100"
-version = "0.15.2"
-dependencies = [
- "itoa",
- "log 0.4.20",
- "quickcheck",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "terminal_size 0.2.6",
- "unicode-width",
- "vte 0.11.1",
-]
 
 [[package]]
 name = "vte"
