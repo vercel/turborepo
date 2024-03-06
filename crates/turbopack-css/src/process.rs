@@ -726,8 +726,8 @@ impl swc_core::css::visit::Visit for CssValidator {
                 SubclassSelector::PseudoClass(cls) => {
                     cls.name.value == "not"
                         || cls.name.value == "has"
-                        || match &cls.children {
-                            Some(c) => c.iter().all(|c| match c {
+                        || if let Some(c) = &cls.children {
+                            c.iter().all(|c| match c {
                                 PseudoClassSelectorChildren::ComplexSelector(sel) => {
                                     is_complex_not_pure(sel)
                                 }
@@ -737,8 +737,9 @@ impl swc_core::css::visit::Visit for CssValidator {
                                 }
 
                                 _ => false,
-                            }),
-                            None => true,
+                            })
+                        } else {
+                            true
                         }
                 }
                 SubclassSelector::PseudoElement(el) => match &el.children {
