@@ -34,6 +34,16 @@ jobs:
 
           - host: ubuntu-latest
             target: "x86_64-unknown-linux-gnu"
+            container: amazon/aws-lambda-nodejs:18
+            install: |
+              yum install -y gcc gcc-c++ git
+
+              curl https://sh.rustup.rs -sSf | bash -s -- -y
+              source "$HOME/.cargo/env"
+
+              npm i -g pnpm@8.14.0
+            setup: |
+              pnpm install
 
           - host: ubuntu-latest
             target: "x86_64-unknown-linux-musl"
@@ -60,7 +70,13 @@ jobs:
 
     name: "Build ${{ matrix.settings.target }}"
     runs-on: ${{ matrix.settings.host }}
+    container:
+      image: ${{ matrix.settings.container }}
     steps:
+      - name: Install Packages
+        run: ${{ matrix.settings.install }}
+        if: ${{ matrix.settings.install }}
+
       - name: Checkout
         uses: actions/checkout@v3
         with:
@@ -70,9 +86,13 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           targets: ${{ matrix.settings.target }}
+        if: ${{ !matrix.settings.install }}
 
       - name: Setup Node
         uses: ./.github/actions/setup-node
+        with:
+          enable-corepack: false
+        if: ${{ !matrix.settings.install }}
 
       - name: Setup toolchain
         shell: bash
