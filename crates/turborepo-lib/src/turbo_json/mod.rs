@@ -667,6 +667,12 @@ impl TurboJson {
         let global_dot_env = self.global_dot_env.as_deref();
         telemetry.track_global_dot_env(global_dot_env);
     }
+
+    pub fn has_root_tasks(&self) -> bool {
+        self.pipeline
+            .iter()
+            .any(|(task_name, _)| task_name.package() == Some(ROOT_PKG_NAME))
+    }
 }
 
 type TurboJSONValidation = fn(&TurboJson) -> Vec<Error>;

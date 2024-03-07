@@ -551,10 +551,11 @@ impl proto::turbod_server::Turbod for TurboGrpcServiceInner {
                         error!("package changes stream closed: {}", err);
                         break;
                     }
-                    Ok(PackageChangeEvent::Package { name }) => proto::PackageChangeEvent {
+                    Ok(PackageChangeEvent::Package { name, path }) => proto::PackageChangeEvent {
                         event: Some(proto::package_change_event::Event::PackageChanged(
                             proto::PackageChanged {
                                 package_name: name.to_string(),
+                                package_path: path.to_string(),
                             },
                         )),
                     },

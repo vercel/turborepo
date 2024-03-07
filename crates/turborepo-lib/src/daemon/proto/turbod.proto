@@ -110,6 +110,7 @@ message PackageChangeError {
 
 message PackageChanged {
   string package_name = 1;
+  string package_path = 2;
 }
 
 message RediscoverPackages {}
@@ -122,7 +123,6 @@ message DiscoverPackagesResponse {
 message PackageFiles {
   string package_json = 1;
   optional string turbo_json = 2;
-
 }
 
 enum PackageManager {

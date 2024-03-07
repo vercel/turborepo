@@ -7,7 +7,7 @@ use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf
 use turborepo_filewatch::{NotifyError, OptionalWatch};
 use turborepo_repository::{
     change_mapper::{ChangeMapper, GlobalDepsPackageChangeMapper, PackageChanges},
-    package_graph::{PackageGraph, PackageGraphBuilder, PackageName},
+    package_graph::{PackageGraph, PackageGraphBuilder, PackageName, WorkspacePackage},
     package_json::PackageJson,
 };
 
@@ -16,7 +16,10 @@ use crate::turbo_json::TurboJson;
 #[derive(Clone)]
 pub enum PackageChangeEvent {
     // We might want to make this just String
-    Package { name: PackageName },
+    Package {
+        name: PackageName,
+        path: AnchoredSystemPathBuf,
+    },
     Rediscover,
 }
 
@@ -145,6 +148,7 @@ impl Subscriber {
 
     async fn watch(mut self, exit_rx: oneshot::Receiver<()>) {
         let process = async {
+            let root_pkg = WorkspacePackage::root();
             let Ok(mut file_events) = self.file_events_lazy.get().await.map(|r| r.resubscribe())
             else {
                 // if we get here, it means that file watching has not started, so we should
@@ -213,16 +217,33 @@ impl Subscriber {
                                     }
                                 }
                             }
-                            Ok(PackageChanges::Some(changed_pkgs)) => {
-                                tracing::debug!(
-                                    "changed files: {:?} changed packages: {:?}",
-                                    changed_files,
-                                    changed_pkgs
-                                );
+                            Ok(PackageChanges::Some(mut changed_pkgs)) => {
+                                if !changed_pkgs.is_empty() {
+                                    tracing::debug!(
+                                        "changed files: {:?} changed packages: {:?}",
+                                        changed_files,
+                                        changed_pkgs
+                                    );
+                                }
+
+                                // If the root package has changed, we only send it if we have root
+                                // tasks. Otherwise it's not worth sending as it will only
+                                // pollute up the output logs
+                                if changed_pkgs.contains(&root_pkg) {
+                                    let has_root_tasks = repo_state
+                                        .root_turbo_json
+                                        .as_ref()
+                                        .map_or(false, |turbo| turbo.has_root_tasks());
+                                    if !has_root_tasks {
+                                        changed_pkgs.remove(&root_pkg);
+                                    }
+                                }
+
                                 for pkg in changed_pkgs {
                                     let _ = self.package_change_events_tx.send(
                                         PackageChangeEvent::Package {
                                             name: pkg.name.clone(),
+                                            path: pkg.path.clone(),
                                         },
                                     );
                                 }
