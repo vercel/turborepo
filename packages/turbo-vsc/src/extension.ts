@@ -67,9 +67,9 @@ export function activate(context: ExtensionContext) {
     encoding: "utf8",
   };
 
-  let turboPath: string | undefined = workspace
-    .getConfiguration("turbo")
-    .get("path");
+  const turboSettings = workspace.getConfiguration("turbo");
+  let turboPath: string | undefined = turboSettings.get("path");
+  const useLocalTurbo: boolean = turboSettings.get("useLocalTurbo") ?? false;
 
   if (turboPath && !fs.existsSync(turboPath)) {
     window.showErrorMessage(
@@ -93,10 +93,8 @@ export function activate(context: ExtensionContext) {
       e.message.includes("which: no turbo in")
     ) {
       // attempt to find local turbo instead
+      promptGlobalTurbo(useLocalTurbo);
       turboPath = findLocalTurbo();
-      if (!turboPath) {
-        promptGlobalTurbo();
-      }
     } else {
       window.showErrorMessage(e.message);
     }
@@ -107,7 +105,7 @@ export function activate(context: ExtensionContext) {
       cp.exec(`${turboPath} daemon start`, options, (err) => {
         if (err) {
           if (err.message.includes("command not found")) {
-            promptGlobalTurbo();
+            promptGlobalTurbo(useLocalTurbo);
           } else {
             window.showErrorMessage(JSON.stringify(err));
           }
@@ -124,7 +122,7 @@ export function activate(context: ExtensionContext) {
       cp.exec(`${turboPath} daemon stop`, options, (err) => {
         if (err) {
           if (err.message.includes("command not found")) {
-            promptGlobalTurbo();
+            promptGlobalTurbo(useLocalTurbo);
           } else {
             window.showErrorMessage(err.message);
           }
@@ -141,7 +139,7 @@ export function activate(context: ExtensionContext) {
       cp.exec(`${turboPath} daemon status`, options, (err) => {
         if (err) {
           if (err.message.includes("command not found")) {
-            promptGlobalTurbo();
+            promptGlobalTurbo(useLocalTurbo);
           } else {
             window.showErrorMessage(err.message);
             updateStatusBarItem(false);
@@ -343,7 +341,11 @@ function updateJSONDecorations(editor?: TextEditor) {
   });
 }
 
-async function promptGlobalTurbo() {
+async function promptGlobalTurbo(useLocalTurbo: boolean) {
+  if (useLocalTurbo) {
+    return;
+  }
+
   const answer = await window.showErrorMessage(
     "turbo not found. Please see the docs to install, or set the path manually in the settings.",
     "Install Now",
