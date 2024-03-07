@@ -65,6 +65,10 @@ fn ancestors_is_ignored(gitignore: &Gitignore, path: &AnchoredSystemPath) -> boo
     })
 }
 
+fn is_in_git_folder(path: &AnchoredSystemPath) -> bool {
+    path.components().any(|c| c.as_str() == ".git")
+}
+
 struct RepoState {
     root_turbo_json: Option<TurboJson>,
     pkg_dep_graph: PackageGraph,
@@ -76,8 +80,7 @@ impl RepoState {
             &self.pkg_dep_graph,
             self.root_turbo_json
                 .iter()
-                .map(|turbo| turbo.global_deps.iter())
-                .flatten()
+                .flat_map(|turbo| turbo.global_deps.iter())
                 .map(|s| s.as_str()),
         ) else {
             tracing::debug!("package change mapper not available, package watcher not available");
@@ -175,7 +178,10 @@ impl Subscriber {
                                 let p = AbsoluteSystemPathBuf::try_from(p).ok()?;
                                 self.repo_root.anchor(p).ok()
                             })
-                            .filter(|p| !ancestors_is_ignored(&root_gitignore, p))
+                            .filter(|p| {
+                                // If in .gitignore or in .git, filter out
+                                !(ancestors_is_ignored(&root_gitignore, p) || is_in_git_folder(p))
+                            })
                             .collect();
 
                         let changes = change_mapper.changed_packages(changed_files.clone(), None);
