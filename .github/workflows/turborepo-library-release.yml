@@ -95,12 +95,10 @@ jobs:
         if: ${{ !matrix.settings.install }}
 
       - name: Setup toolchain
-        shell: bash
         run: ${{ matrix.settings.setup }}
         if: ${{ matrix.settings.setup }}
 
       - name: Build native library
-        shell: bash
         run: |
           cd packages/turbo-repository
           ${{ matrix.settings.rust_env }} pnpm build:release --target=${{ matrix.settings.target }}
