@@ -72,6 +72,7 @@ pub async fn login(
         force,
         ..LoginOptions::new(&ui, &login_url_config, &api_client, &DefaultLoginServer)
     };
+    println!("existing token: {:?}", base.config()?.token());
 
     let token = auth_login(&options).await?;
 

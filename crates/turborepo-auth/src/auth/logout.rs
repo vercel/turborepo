@@ -1,53 +1,83 @@
 use tracing::error;
 use turbopath::AbsoluteSystemPath;
 use turborepo_api_client::TokenClient;
+use turborepo_dirs::{config_dir, vercel_config_dir};
 use turborepo_ui::{cprintln, GREY};
 
-use crate::{Error, LogoutOptions, Token};
+use crate::{
+    Error, LogoutOptions, Token, TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, VERCEL_TOKEN_DIR,
+    VERCEL_TOKEN_FILE,
+};
 
-pub async fn logout<T: TokenClient>(options: &LogoutOptions<'_, T>) -> Result<(), Error> {
-    let LogoutOptions {
-        ui,
-        api_client,
-        path,
-        invalidate,
-    } = *options;
-
-    if invalidate {
-        Token::from_file(path)?.invalidate(api_client).await?;
-    }
-
-    if let Err(err) = remove_token(path) {
+pub async fn logout<T: TokenClient>(options: &LogoutOptions<T>) -> Result<(), Error> {
+    if let Err(err) = options.remove_tokens().await {
         error!("could not logout. Something went wrong: {}", err);
         return Err(err);
     }
 
-    cprintln!(ui, GREY, ">>> Logged out");
+    cprintln!(options.ui, GREY, ">>> Logged out");
     Ok(())
 }
 
-fn remove_token(path: &AbsoluteSystemPath) -> Result<(), Error> {
-    let content = path.read_to_string()?;
+impl<T: TokenClient> LogoutOptions<T> {
+    async fn try_remove_token(&self, path: &AbsoluteSystemPath) -> Result<(), Error> {
+        // Read the existing content from the global configuration path
+        let Ok(content) = path.read_to_string() else {
+            return Ok(());
+        };
 
-    // Attempt to deserialize the content into a serde_json::Value
-    let mut data: serde_json::Value = serde_json::from_str(&content)?;
+        if self.invalidate {
+            match Token::from_file(path) {
+                Ok(token) => token.invalidate(&self.api_client).await?,
+                // If token doesn't exist, don't do anything.
+                Err(Error::TokenNotFound) => {}
+                Err(err) => return Err(err),
+            }
+        }
 
-    // Check if the data is an object and remove the "token" field if present
-    if let Some(obj) = data.as_object_mut() {
-        if obj.remove("token").is_none() {
+        // Attempt to deserialize the content into a serde_json::Value
+        let mut data: serde_json::Value = serde_json::from_str(&content)?;
+
+        // Check if the data is an object and remove the "token" field if present
+        if let Some(obj) = data.as_object_mut() {
+            if obj.remove("token").is_none() {
+                return Ok(());
+            }
+        } else {
             return Ok(());
         }
-    } else {
-        return Ok(());
+
+        // Serialize the updated data back to a string
+        let new_content = serde_json::to_string_pretty(&data)?;
+
+        // Write the updated content back to the file
+        path.create_with_contents(new_content)?;
+
+        Ok(())
     }
 
-    // Serialize the updated data back to a string
-    let new_content = serde_json::to_string_pretty(&data)?;
-    path.create_with_contents(new_content)?;
+    async fn remove_tokens(&self) -> Result<(), Error> {
+        #[cfg(test)]
+        if let Some(path) = &self.path {
+            return self.try_remove_token(path).await;
+        }
 
-    Ok(())
+        if let Some(vercel_config_dir) = vercel_config_dir()? {
+            self.try_remove_token(
+                &vercel_config_dir.join_components(&[VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE]),
+            )
+            .await?;
+        }
+        if let Some(turbo_config_dir) = config_dir()? {
+            self.try_remove_token(
+                &turbo_config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]),
+            )
+            .await?;
+        }
+
+        Ok(())
+    }
 }
-
 #[cfg(test)]
 mod tests {
     use std::backtrace::Backtrace;
@@ -57,6 +87,7 @@ mod tests {
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_api_client::Client;
+    use turborepo_ui::UI;
     use turborepo_vercel_api::{
         token::ResponseTokenMetadata, SpacesResponse, Team, TeamsResponse, UserResponse,
         VerifiedSsoUser,
@@ -133,8 +164,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_remove_token() {
+    #[tokio::test]
+    async fn test_remove_token() {
         let tmp_dir = tempdir().unwrap();
         let path = AbsoluteSystemPathBuf::try_from(tmp_dir.path().join("config.json"))
             .expect("could not create path");
@@ -142,7 +173,16 @@ mod tests {
         path.create_with_contents(content)
             .expect("could not create file");
 
-        remove_token(&path).unwrap();
+        let logout_options = LogoutOptions {
+            ui: UI::new(false),
+            api_client: MockApiClient {
+                succeed_delete_request: true,
+            },
+            invalidate: false,
+            path: Some(path.clone()),
+        };
+
+        logout_options.remove_tokens().await.unwrap();
 
         let new_content = path.read_to_string().unwrap();
         assert_eq!(new_content, "{}");
@@ -162,9 +202,9 @@ mod tests {
         };
 
         let options = LogoutOptions {
-            ui: &turborepo_ui::UI::new(false),
-            api_client: &api_client,
-            path: &path,
+            ui: UI::new(false),
+            api_client,
+            path: Some(path.clone()),
             invalidate: true,
         };
 
