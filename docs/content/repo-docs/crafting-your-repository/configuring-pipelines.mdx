@@ -120,11 +120,11 @@ You can also specify an individual task in a specific workspace to depend on. In
 
 #### No dependencies
 
-Some tasks may not have any dependencies. For example, a task for finding typos in Markdown files likely doesn't need to care about the status of your other tasks. In this caes, you can omit the `dependsOn` key or provide an empty array.
+Some tasks may not have any dependencies. For example, a task for finding typos in Markdown files likely doesn't need to care about the status of your other tasks. In this case, you can omit the `dependsOn` key or provide an empty array.
 
 ### Specifying `outputs`
 
-The `outputs` key tells Turborepo **what files and directories** it should cache when the task has successfully completed. **Without this key defined, Turborpeo will not cache any files.** Below are are a few examples of outputs for common tools:
+The `outputs` key tells Turborepo **what files and directories** it should cache when the task has successfully completed. **Without this key defined, Turborepo will not cache any files.** Below are a few examples of outputs for common tools:
 
 <Tabs items={["Next.js", "Vite", "tsc"]} storageKey="outputs-tools">
 <Tab value="Next.js">
@@ -163,6 +163,8 @@ The `outputs` key tells Turborepo **what files and directories** it should cache
 </Tab>
 </Tabs>
 
+For more on building globbing patterns for the `outputs` key, see [the globbing specification](/repo/docs/reference/globs).
+
 ### Specifying `inputs`
 
 The `inputs` key is used to specify the files that you want to include in the task's hash fingerprint. Any changes to your source code that are not included in the file globs that you provide will not cause the task to miss cache. As an example, a task for finding typos in Markdown files might be defined as follows:
@@ -176,6 +178,8 @@ The `inputs` key is used to specify the files that you want to include in the ta
   }
 }
 ```
+
+Now **only** changes in Markdown files will cause the `spell-check` task to miss cache.
 
 <Callout type="error">
 This feature opts out of all of Turborepo's default `inputs` behavior, including following along with changes tracked by Git. This means that your `.gitignore` file will no longer be respected, and you will need to ensure that you do not capture those files manually.
@@ -204,7 +208,7 @@ In this task definition, Turborepo will use the default `inputs` behavior for th
 
 ### Defining root tasks
 
-You can also run tasks in `package.json` of the workspace root using `turbo`. For example, you may want to run a `lint` task for the files in your workspace's root directory in addition to the `lint` task in each package:
+You can also run scripts in the `package.json` in the workspace root using `turbo`. For example, you may want to run a `lint` task for the files in your workspace's root directory in addition to the `lint` task in each package:
 
 <Tabs items={["turbo.json", "package.json"]}>
 <Tab value="turbo.json">
@@ -214,7 +218,7 @@ You can also run tasks in `package.json` of the workspace root using `turbo`. Fo
     "lint": {
       "dependsOn": ["^lint"]
     },
-    "//#lint": {}
+    "//#lint:root": {}
   }
 }
 ```
@@ -224,6 +228,7 @@ You can also run tasks in `package.json` of the workspace root using `turbo`. Fo
 ```json title="./package.json"
 {
   "scripts": {
+    "lint": "turbo run lint",
     "lint": "eslint ."
   }
 }
@@ -241,4 +246,4 @@ TODO: Let's see how the rest of the pages unfold and then revisit here.
 
 ## Next steps
 
-There are many more options available in [the Configuring `turbo.json` documentation](/repo/docs/reference/configuration) that you will explore in the coming guides. For now, you can start running a few tasks to see how the basics work.
+There are more options available in [the Configuring `turbo.json` documentation](/repo/docs/reference/configuration) that you will explore in the coming guides. For now, you can start running a few tasks to see how the basics work.
