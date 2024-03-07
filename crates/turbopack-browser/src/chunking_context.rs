@@ -141,7 +141,7 @@ impl BrowserChunkingContext {
                 enable_hot_module_replacement: false,
                 environment,
                 runtime_type: Default::default(),
-                minify_type: MinifyType::Minify,
+                minify_type: MinifyType::NoMinify,
                 manifest_chunks: false,
             },
         }
