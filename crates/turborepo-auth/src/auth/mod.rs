@@ -50,6 +50,8 @@ pub struct LogoutOptions<'a, T> {
 
     /// The path where we should look for the token to logout.
     pub path: &'a AbsoluteSystemPath,
+    /// If we should invalidate the token on the server.
+    pub invalidate: bool,
 }
 
 fn extract_vercel_token() -> Result<Option<String>, Error> {

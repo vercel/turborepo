@@ -96,8 +96,8 @@ impl Token {
         // passed in a user's email if the token is valid.
         valid_message_fn: Option<impl FnOnce(&str)>,
     ) -> Result<bool, Error> {
-        let is_active = self.is_active(client).await?;
-        let has_cache_access = self.has_cache_access(client, None).await?;
+        let (is_active, has_cache_access) =
+            tokio::try_join!(self.is_active(client), self.has_cache_access(client, None))?;
         if !is_active || !has_cache_access {
             return Ok(false);
         }
@@ -219,6 +219,12 @@ impl Token {
             .get_metadata(self.into_inner())
             .await
             .map_err(Error::from)
+    }
+
+    /// Invalidates the token on the server.
+    pub async fn invalidate<T: TokenClient>(&self, client: &T) -> Result<(), Error> {
+        client.delete_token(self.into_inner()).await?;
+        Ok(())
     }
     /// Returns the underlying token string.
     pub fn into_inner(&self) -> &str {

@@ -1,22 +1,33 @@
 use tracing::error;
-use turborepo_api_client::Client;
+use turbopath::AbsoluteSystemPath;
+use turborepo_api_client::TokenClient;
 use turborepo_ui::{cprintln, GREY};
 
-use crate::{Error, LogoutOptions};
+use crate::{Error, LogoutOptions, Token};
 
-pub fn logout<T: Client>(options: &LogoutOptions<T>) -> Result<(), Error> {
-    if let Err(err) = remove_token(options) {
+pub async fn logout<T: TokenClient>(options: &LogoutOptions<'_, T>) -> Result<(), Error> {
+    let LogoutOptions {
+        ui,
+        api_client,
+        path,
+        invalidate,
+    } = *options;
+
+    if invalidate {
+        Token::from_file(path)?.invalidate(api_client).await?;
+    }
+
+    if let Err(err) = remove_token(path) {
         error!("could not logout. Something went wrong: {}", err);
         return Err(err);
     }
 
-    cprintln!(options.ui, GREY, ">>> Logged out");
+    cprintln!(ui, GREY, ">>> Logged out");
     Ok(())
 }
 
-fn remove_token<T: Client>(options: &LogoutOptions<T>) -> Result<(), Error> {
-    // Read the existing content from the global configuration path
-    let content = options.path.read_to_string()?;
+fn remove_token(path: &AbsoluteSystemPath) -> Result<(), Error> {
+    let content = path.read_to_string()?;
 
     // Attempt to deserialize the content into a serde_json::Value
     let mut data: serde_json::Value = serde_json::from_str(&content)?;
@@ -32,33 +43,30 @@ fn remove_token<T: Client>(options: &LogoutOptions<T>) -> Result<(), Error> {
 
     // Serialize the updated data back to a string
     let new_content = serde_json::to_string_pretty(&data)?;
-
-    // Write the updated content back to the file
-    options.path.create_with_contents(new_content)?;
+    path.create_with_contents(new_content)?;
 
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
+    use std::backtrace::Backtrace;
+
     use async_trait::async_trait;
     use reqwest::{RequestBuilder, Response};
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
-    use turborepo_ui::UI;
+    use turborepo_api_client::Client;
     use turborepo_vercel_api::{
-        SpacesResponse, Team, TeamsResponse, UserResponse, VerifiedSsoUser,
+        token::ResponseTokenMetadata, SpacesResponse, Team, TeamsResponse, UserResponse,
+        VerifiedSsoUser,
     };
     use url::Url;
 
     use super::*;
 
-    struct MockApiClient {}
-
-    impl MockApiClient {
-        fn new() -> Self {
-            Self {}
-        }
+    struct MockApiClient {
+        pub succeed_delete_request: bool,
     }
 
     #[async_trait]
@@ -104,6 +112,27 @@ mod tests {
         }
     }
 
+    #[async_trait]
+    impl TokenClient for MockApiClient {
+        async fn delete_token(&self, _token: &str) -> turborepo_api_client::Result<()> {
+            if self.succeed_delete_request {
+                Ok(())
+            } else {
+                Err(turborepo_api_client::Error::UnknownStatus {
+                    code: "code".to_string(),
+                    message: "this failed".to_string(),
+                    backtrace: Backtrace::capture(),
+                })
+            }
+        }
+        async fn get_metadata(
+            &self,
+            _token: &str,
+        ) -> turborepo_api_client::Result<ResponseTokenMetadata> {
+            unimplemented!("get_metadata")
+        }
+    }
+
     #[test]
     fn test_remove_token() {
         let tmp_dir = tempdir().unwrap();
@@ -113,13 +142,33 @@ mod tests {
         path.create_with_contents(content)
             .expect("could not create file");
 
-        let options = LogoutOptions {
-            ui: &UI::new(false),
-            api_client: &MockApiClient::new(),
-            path: &path,
+        remove_token(&path).unwrap();
+
+        let new_content = path.read_to_string().unwrap();
+        assert_eq!(new_content, "{}");
+    }
+
+    #[tokio::test]
+    async fn test_invalidate_token() {
+        let tmp_dir = tempdir().unwrap();
+        let path = AbsoluteSystemPathBuf::try_from(tmp_dir.path().join("config.json"))
+            .expect("could not create path");
+        let content = r#"{"token":"some-token"}"#;
+        path.create_with_contents(content)
+            .expect("could not create file");
+
+        let api_client = MockApiClient {
+            succeed_delete_request: true,
         };
 
-        remove_token(&options).unwrap();
+        let options = LogoutOptions {
+            ui: &turborepo_ui::UI::new(false),
+            api_client: &api_client,
+            path: &path,
+            invalidate: true,
+        };
+
+        logout(&options).await.unwrap();
 
         let new_content = path.read_to_string().unwrap();
         assert_eq!(new_content, "{}");

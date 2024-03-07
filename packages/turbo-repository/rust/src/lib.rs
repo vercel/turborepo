@@ -7,7 +7,7 @@ use napi::Error;
 use napi_derive::napi;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
-    change_mapper::{ChangeMapper, DefaultPackageDetector, PackageChanges},
+    change_mapper::{ChangeMapper, DefaultPackageChangeMapper, PackageChanges},
     inference::RepoState as WorkspaceState,
     package_graph::{PackageGraph, PackageName, PackageNode, WorkspacePackage, ROOT_PKG_NAME},
 };
@@ -203,7 +203,7 @@ impl Workspace {
             .collect();
 
         // Create a ChangeMapper with no ignore patterns
-        let default_package_detector = DefaultPackageDetector::new(&self.graph);
+        let default_package_detector = DefaultPackageChangeMapper::new(&self.graph);
         let mapper = ChangeMapper::new(&self.graph, vec![], default_package_detector);
         let package_changes = match mapper.changed_packages(hash_set_of_paths, None) {
             Ok(changes) => changes,
