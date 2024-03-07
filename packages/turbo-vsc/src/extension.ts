@@ -139,7 +139,7 @@ export function activate(context: ExtensionContext) {
 
   context.subscriptions.push(
     commands.registerCommand("turbo.run", (args) => {
-      let terminal = window.createTerminal({
+      const terminal = window.createTerminal({
         name: `${args}`,
         isTransient: true,
         iconPath: Uri.joinPath(context.extensionUri, "resources", "icon.svg"),
@@ -151,7 +151,7 @@ export function activate(context: ExtensionContext) {
 
   context.subscriptions.push(
     commands.registerCommand("turbo.codemod", (args) => {
-      let terminal = window.createTerminal({
+      const terminal = window.createTerminal({
         name: "Turbo Codemod",
         isTransient: true,
         iconPath: Uri.joinPath(context.extensionUri, "resources", "icon.svg"),
@@ -163,16 +163,16 @@ export function activate(context: ExtensionContext) {
 
   context.subscriptions.push(
     commands.registerCommand("turbo.install", (args) => {
-      let terminal = window.createTerminal({
+      const terminal = window.createTerminal({
         name: "Install Turbo",
         isTransient: true,
         iconPath: Uri.joinPath(context.extensionUri, "resources", "icon.svg"),
       });
-      terminal.sendText(`npm i -g turbo && exit`);
+      terminal.sendText("npm i -g turbo && exit");
       terminal.show();
 
       return new Promise((resolve) => {
-        let dispose = window.onDidCloseTerminal((terminal) => {
+        const dispose = window.onDidCloseTerminal((terminal) => {
           if (terminal.name === "Install Turbo") {
             dispose.dispose();
             resolve(terminal.exitStatus?.code);
@@ -216,7 +216,7 @@ export function activate(context: ExtensionContext) {
   // If the extension is launched in debug mode then the debug server options are used
   // Otherwise the run options are used
 
-  let lspPath = Uri.joinPath(
+  const lspPath = Uri.joinPath(
     context.extensionUri,
     "out",
     `turborepo-lsp-${process.platform}-${process.arch}${
@@ -270,7 +270,7 @@ export function deactivate(): Thenable<void> | undefined {
 
 function updateStatusBarItem(running: boolean) {
   toolbar.command = running ? "turbo.daemon.stop" : "turbo.daemon.start";
-  toolbar.text = running ? `turbo Running` : "turbo Stopped";
+  toolbar.text = running ? "turbo Running" : "turbo Stopped";
   toolbar.show();
 }
 
@@ -291,7 +291,7 @@ function updateJSONDecorations(editor?: TextEditor) {
       if (property === "pipeline") {
         isPipelineKey = true;
         for (let i = 1; i < 9; i++) {
-          let index = i + offset;
+          const index = i + offset;
           editor.setDecorations(pipelineColors[i], [
             new Range(
               editor.document.positionAt(index),
@@ -327,7 +327,7 @@ function updateJSONDecorations(editor?: TextEditor) {
 }
 
 async function promptGlobalTurbo() {
-  let answer = await window.showErrorMessage(
+  const answer = await window.showErrorMessage(
     "turbo not found. Please see the docs to install, or set the path manually in the settings.",
     "Install Now",
     "Open Docs",
@@ -335,12 +335,12 @@ async function promptGlobalTurbo() {
   );
 
   if (answer === "Install Now") {
-    let exitCode = await commands.executeCommand("turbo.install");
+    const exitCode = await commands.executeCommand("turbo.install");
     if (exitCode === 0) {
       window.showInformationMessage("turbo installed");
       await commands.executeCommand("turbo.daemon.start");
     } else {
-      let message = await window.showErrorMessage(
+      const message = await window.showErrorMessage(
         "Unable to install turbo. Please install manually.",
         "Open Docs"
       );
