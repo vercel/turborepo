@@ -164,7 +164,11 @@ impl Diagnostic for GitDaemonDiagnostic {
                     // get the current setting
                     let stdout = Stdio::piped();
 
-                    let command = Command::new("git")
+                    let Ok(git_path) = Git::find_bin() else {
+                        return Err("git not found");
+                    };
+
+                    let command = Command::new(git_path.as_path())
                         .args(args)
                         .stdout(stdout)
                         .spawn()
