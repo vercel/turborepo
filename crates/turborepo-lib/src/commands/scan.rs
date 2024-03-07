@@ -1,7 +1,8 @@
 use std::{sync::LazyLock, time::Duration};
 
 use console::{style, Style};
-use indicatif::ProgressBar;
+use futures::StreamExt;
+use tokio_stream::StreamMap;
 use turborepo_ui::*;
 
 use super::CommandBase;
@@ -35,104 +36,99 @@ pub async fn run(base: CommandBase) {
     println!(
         "Turborepo does a lot of work behind the scenes to make your monorepo fast,
 however, there are some things you can do to make it even faster. {}\n",
-        BOLD_GREEN.apply_to("Let's go!")
+        color!(ui, BOLD_GREEN, "Let's go!")
     );
 
-    let (tx, mut rx) = tokio::sync::mpsc::channel(100);
+    let mut all_events = StreamMap::new();
 
-    // NUM_TASKS needs to line up with the below. we could _potentially_ use a vec
-    // of tasks with dyn traits but trait object safety is a pain
-    const NUM_TASKS: usize = 5;
-    DaemonDiagnostic(&paths).execute(tx.clone());
-    LSPDiagnostic(&paths).execute(tx.clone());
-    GitDaemonDiagnostic.execute(tx.clone());
-    RemoteCacheDiagnostic::new(base).execute(tx.clone());
-    UpdateDiagnostic.execute(tx.clone());
+    let d1 = Box::new(DaemonDiagnostic(paths.clone()));
+    let d2 = Box::new(LSPDiagnostic(paths));
+    let d3 = Box::new(GitDaemonDiagnostic);
+    let d5 = Box::new(UpdateDiagnostic(base.repo_root.clone()));
+    let d4 = Box::new(RemoteCacheDiagnostic::new(base));
+
+    let diags: Vec<Box<dyn Diagnostic>> = vec![d1, d2, d3, d4, d5];
+    let num_tasks: usize = diags.len();
+    for diag in diags {
+        let name = diag.name();
+        let (tx, rx) = DiagnosticChannel::new();
+        diag.execute(tx);
+        let wrapper = tokio_stream::wrappers::ReceiverStream::new(rx);
+        all_events.insert(name, wrapper);
+    }
 
     let mut complete = 0;
     let mut failed = 0;
     let mut not_applicable = 0;
 
-    let mut state: Option<(String, ProgressBar)> = None;
-
-    while let Some(message) = rx.recv().await {
+    while let Some((diag, message)) = all_events.next().await {
         use DiagnosticMessage::*;
-        match (message, &state) {
-            (Started(id, name), None) => {
-                let bar = start_spinner(&name);
-                state = Some((id, bar));
-            }
-            (Started(id1, _), Some((id2, _))) if id1 == *id2 => {} // ignore duplicate start events
-            (LogLine(id1, line), Some((id2, bar))) if id1 == *id2 => {
-                bar.println(format!("    {}", GREY.apply_to(line)));
-            }
-            (Done(id1, message), Some((id2, bar))) if id1 == *id2 => {
-                bar.finish_with_message(BOLD_GREEN.apply_to(message).to_string());
-                complete += 1;
-                state = None;
-            }
-            (NotApplicable(_, name), None) => {
-                let bar = start_spinner(&name);
-                let n_a = GREY.apply_to("n/a").to_string();
-                let style = bar.style().tick_strings(&[&n_a, &n_a]);
-                bar.set_style(style);
-                bar.finish_with_message(format!("{}", BOLD_GREY.apply_to(name)));
-                not_applicable += 1;
-            }
-            (NotApplicable(id1, name), Some((id2, bar))) if id1 == *id2 => {
-                let n_a = GREY.apply_to("n/a").to_string();
-                let style = bar.style().tick_strings(&[&n_a, &n_a]);
-                bar.set_style(style);
-                bar.finish_with_message(format!("{}", BOLD_GREY.apply_to(name)));
-                not_applicable += 1;
-                state = None;
-            }
-            (Failed(id1, message), Some((id2, bar))) if id1 == *id2 => {
-                bar.finish_with_message(BOLD_RED.apply_to(message).to_string());
-                failed += 1;
-                state = None;
-            }
-            (Request(id1, prompt, mut options, chan), Some((id2, bar))) if id1 == *id2 => {
-                let opt = bar.suspend(|| {
-                    dialoguer::Select::with_theme(&*DIALOGUER_THEME)
-                        .with_prompt(prompt)
-                        .items(&options)
-                        .default(0)
-                        .interact()
-                        .unwrap()
-                });
 
-                chan.send(options.swap_remove(opt)).unwrap();
+        let mut diag_events = all_events.remove(diag).expect("stream not found in map");
+
+        // the allowed opening message is 'started'
+        let human_name = match message {
+            Started(human_name) => human_name,
+            _other => {
+                panic!("this is a programming error, please report an issue");
             }
-            (Suspend(id1, stopped, resume), Some((id2, bar))) if id1 == *id2 => {
-                let bar = bar.clone();
-                let handle = tokio::task::spawn_blocking(move || {
-                    bar.suspend(|| {
-                        resume.blocking_recv().ok(); // sender is dropped, so we
-                                                     // can unsuspend
+        };
+
+        let bar = start_spinner(&human_name);
+
+        while let Some(message) = diag_events.next().await {
+            match message {
+                Started(_) => {} // ignore duplicate start events
+                LogLine(line) => {
+                    bar.println(color!(ui, GREY, "    {}", line).to_string());
+                }
+                Request(prompt, mut options, chan) => {
+                    let opt = bar.suspend(|| {
+                        dialoguer::Select::with_theme(&*DIALOGUER_THEME)
+                            .with_prompt(prompt)
+                            .items(&options)
+                            .default(0)
+                            .interact()
+                            .unwrap()
                     });
-                });
-                stopped.send(()).ok(); // suspender doesn't need to be notified so failing ok
-                handle.await.unwrap();
+
+                    chan.send(options.swap_remove(opt)).unwrap();
+                }
+                Suspend(stopped, resume) => {
+                    let bar = bar.clone();
+                    let handle = tokio::task::spawn_blocking(move || {
+                        bar.suspend(|| {
+                            // sender is dropped, so we can unsuspend
+                            resume.blocking_recv().ok();
+                        });
+                    });
+                    stopped.send(()).ok(); // suspender doesn't need to be notified so failing ok
+                    handle.await.expect("panic in suspend task");
+                }
+                Done(message) => {
+                    bar.finish_with_message(color!(ui, BOLD_GREEN, "{}", message).to_string());
+                    complete += 1;
+                }
+                Failed(message) => {
+                    bar.finish_with_message(color!(ui, BOLD_RED, "{}", message).to_string());
+                    failed += 1;
+                }
+                NotApplicable(name) => {
+                    let n_a = color!(ui, GREY, "n/a").to_string();
+                    let style = bar.style().tick_strings(&[&n_a, &n_a]);
+                    bar.set_style(style);
+                    bar.finish_with_message(color!(ui, BOLD_GREY, "{}", name).to_string());
+                    not_applicable += 1;
+                }
+            };
+            if complete + not_applicable + failed == num_tasks {
+                break;
             }
-            // any interleaved events will be requeued such that we only process one id at a
-            // time. we list them explicitly to support exhaustiveness checking. for a very large
-            // number of events, we may want to consider a StreamMap instead of re-queuing
-            (
-                event @ (Failed(..) | Done(..) | LogLine(..) | NotApplicable(..) | Started(..)
-                | Request(..) | Suspend(..)),
-                _,
-            ) => {
-                tx.send(event).await.unwrap();
-            }
+            tokio::time::sleep(INTER_MESSAGE_DELAY).await;
         }
-        if complete + not_applicable + failed == NUM_TASKS {
-            break;
-        }
-        tokio::time::sleep(INTER_MESSAGE_DELAY).await;
     }
 
-    if complete + not_applicable == NUM_TASKS {
+    if complete + not_applicable == num_tasks {
         println!("\n\n{}", ui.rainbow(">>> FULL TURBO"));
     }
 }
