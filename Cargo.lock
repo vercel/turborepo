@@ -10932,12 +10932,11 @@ dependencies = [
  "turbo-updater",
  "turbopack",
  "turbopack-bench",
- "turbopack-build",
+ "turbopack-browser",
  "turbopack-cli-utils",
  "turbopack-core",
  "turbopack-create-test-app",
  "turbopack-css",
- "turbopack-dev",
  "turbopack-dev-server",
  "turbopack-ecmascript",
  "turbopack-ecmascript-hmr-protocol",
@@ -10948,6 +10947,7 @@ dependencies = [
  "turbopack-json",
  "turbopack-mdx",
  "turbopack-node",
+ "turbopack-nodejs",
  "turbopack-static",
  "turbopack-swc-utils",
  "turbopack-test-utils",
@@ -10956,7 +10956,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "turbopack-build"
+name = "turbopack-browser"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -10965,17 +10965,18 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_qs",
- "sourcemap",
  "swc_core",
  "tracing",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
  "turbo-tasks-hash",
+ "turbopack",
  "turbopack-core",
  "turbopack-css",
  "turbopack-ecmascript",
  "turbopack-ecmascript-runtime",
+ "turbopack-resolve",
  "urlencoding",
 ]
 
@@ -11008,15 +11009,15 @@ dependencies = [
  "turbo-tasks-memory",
  "turbopack",
  "turbopack-bench",
- "turbopack-build",
+ "turbopack-browser",
  "turbopack-cli-utils",
  "turbopack-core",
- "turbopack-dev",
  "turbopack-dev-server",
  "turbopack-ecmascript-plugins",
  "turbopack-ecmascript-runtime",
  "turbopack-env",
  "turbopack-node",
+ "turbopack-nodejs",
  "turbopack-resolve",
  "turbopack-trace-utils",
  "webbrowser",
@@ -11127,31 +11128,6 @@ dependencies = [
  "turbopack-core",
  "turbopack-ecmascript",
  "turbopack-swc-utils",
- "urlencoding",
-]
-
-[[package]]
-name = "turbopack-dev"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "indexmap 1.9.3",
- "indoc",
- "serde",
- "serde_json",
- "serde_qs",
- "swc_core",
- "tracing",
- "turbo-tasks",
- "turbo-tasks-build",
- "turbo-tasks-fs",
- "turbo-tasks-hash",
- "turbopack",
- "turbopack-core",
- "turbopack-css",
- "turbopack-ecmascript",
- "turbopack-ecmascript-runtime",
- "turbopack-resolve",
  "urlencoding",
 ]
 
@@ -11381,6 +11357,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "turbopack-nodejs"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "indexmap 1.9.3",
+ "indoc",
+ "serde",
+ "serde_json",
+ "serde_qs",
+ "sourcemap",
+ "swc_core",
+ "tracing",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-fs",
+ "turbo-tasks-hash",
+ "turbopack-core",
+ "turbopack-css",
+ "turbopack-ecmascript",
+ "turbopack-ecmascript-runtime",
+ "urlencoding",
+]
+
+[[package]]
 name = "turbopack-resolve"
 version = "0.1.0"
 dependencies = [
@@ -11462,14 +11462,14 @@ dependencies = [
  "turbo-tasks-fs",
  "turbo-tasks-memory",
  "turbopack",
- "turbopack-build",
+ "turbopack-browser",
  "turbopack-cli-utils",
  "turbopack-core",
- "turbopack-dev",
  "turbopack-ecmascript-plugins",
  "turbopack-ecmascript-runtime",
  "turbopack-env",
  "turbopack-node",
+ "turbopack-nodejs",
  "turbopack-resolve",
  "turbopack-test-utils",
 ]
