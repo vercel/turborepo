@@ -628,12 +628,11 @@ impl NodeJsPoolStats {
         let remaining_tasks = self
             .queued_tasks
             .saturating_sub(expected_completed_task_until_full_workers);
-        let expected_completion = if remaining_tasks > 0 {
+        if remaining_tasks > 0 {
             expected_full_workers_in + warm_process_time * remaining_tasks / workers
         } else {
             warm_process_time * self.queued_tasks / workers
-        };
-        expected_completion
+        }
     }
 }
 
@@ -751,12 +750,7 @@ impl NodeJsPool {
 
         let bootup = async {
             let permit = self.bootup_semaphore.clone().acquire_owned().await;
-            // let wait_time = stats.wait_time_before_bootup();
-            let wait_time = {
-                let stats = &self.stats.lock();
-                let wait_time = stats.wait_time_before_bootup();
-                wait_time
-            };
+            let wait_time = self.stats.lock().wait_time_before_bootup();
             tokio::time::sleep(wait_time).await;
             permit
         };
@@ -769,7 +763,7 @@ impl NodeJsPool {
                     processes.pop().unwrap()
                 };
                 idle_process_permit.forget();
-                return Ok((process, AcquiredPermits::Idle { concurrency_permit }))
+                Ok((process, AcquiredPermits::Idle { concurrency_permit }))
             },
             bootup_permit = bootup => {
                 let bootup_permit = bootup_permit.context("acquiring bootup permit")?;
@@ -785,7 +779,7 @@ impl NodeJsPool {
                 }
                 // Increase the allowed booting up processes
                 self.bootup_semaphore.add_permits(1);
-                return Ok((process, AcquiredPermits::Fresh { concurrency_permit, bootup_permit }))
+                Ok((process, AcquiredPermits::Fresh { concurrency_permit, bootup_permit }))
             }
         }
     }
