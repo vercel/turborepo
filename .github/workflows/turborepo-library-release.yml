@@ -89,6 +89,7 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           targets: ${{ matrix.settings.target }}
+          github-token: ${{ github.token }}
         if: ${{ !matrix.settings.install }}
 
       - name: Setup Node
