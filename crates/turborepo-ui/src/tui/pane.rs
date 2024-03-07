@@ -19,14 +19,14 @@ struct TerminalOutput<W> {
     stdin: Option<W>,
 }
 impl<W> TerminalPane<W> {
-    pub fn new(rows: u16, cols: u16, tasks: impl IntoIterator<Item = (String, Option<W>)>) -> Self {
+    pub fn new(rows: u16, cols: u16, tasks: impl IntoIterator<Item = String>) -> Self {
         // We trim 2 from rows and cols as we use them for borders
         let rows = rows.saturating_sub(2);
         let cols = cols.saturating_sub(2);
         Self {
             tasks: tasks
                 .into_iter()
-                .map(|(name, stdin)| (name, TerminalOutput::new(rows, cols, stdin)))
+                .map(|name| (name, TerminalOutput::new(rows, cols, None)))
                 .collect(),
             displayed: None,
             rows,
@@ -143,7 +143,7 @@ mod test {
 
     #[test]
     fn test_basic() {
-        let mut pane: TerminalPane<()> = TerminalPane::new(6, 8, vec![("foo".into(), None)]);
+        let mut pane: TerminalPane<()> = TerminalPane::new(6, 8, vec!["foo".into()]);
         pane.select("foo").unwrap();
         pane.process_output("foo", b"1\r\n2\r\n3\r\n4\r\n5\r\n")
             .unwrap();
