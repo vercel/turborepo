@@ -2,9 +2,7 @@ use std::collections::HashSet;
 
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
-    change_mapper::{
-        ChangeMapError, ChangeMapper, DefaultPackageChangeMapper, LockfileChange, PackageChanges,
-    },
+    change_mapper::{ChangeMapper, DefaultPackageChangeMapper, LockfileChange, PackageChanges},
     package_graph::{PackageGraph, PackageName},
 };
 use turborepo_scm::SCM;

@@ -3,14 +3,15 @@ use std::collections::HashSet;
 use ignore::gitignore::Gitignore;
 use notify::Event;
 use tokio::sync::{broadcast, oneshot, watch};
-use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
+use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf};
+use turborepo_filewatch::{NotifyError, OptionalWatch};
 use turborepo_repository::{
-    change_mapper::{ChangeMapper, DefaultPackageChangeMapper, PackageChanges},
+    change_mapper::{ChangeMapper, GlobalDepsPackageChangeMapper, PackageChanges},
     package_graph::{PackageGraph, PackageGraphBuilder, PackageName},
     package_json::PackageJson,
 };
 
-use crate::{NotifyError, OptionalWatch};
+use crate::turbo_json::TurboJson;
 
 pub enum PackageChangeEvent {
     // We might want to make this just String
@@ -65,8 +66,30 @@ fn ancestors_is_ignored(gitignore: &Gitignore, path: &AnchoredSystemPath) -> boo
 }
 
 struct RepoState {
-    file_events: broadcast::Receiver<Result<Event, NotifyError>>,
+    root_turbo_json: Option<TurboJson>,
     pkg_dep_graph: PackageGraph,
+}
+
+impl RepoState {
+    fn get_change_mapper(&self) -> Option<ChangeMapper<GlobalDepsPackageChangeMapper>> {
+        let Ok(package_change_mapper) = GlobalDepsPackageChangeMapper::new(
+            &self.pkg_dep_graph,
+            self.root_turbo_json
+                .iter()
+                .map(|turbo| turbo.global_deps.iter())
+                .flatten()
+                .map(|s| s.as_str()),
+        ) else {
+            tracing::debug!("package change mapper not available, package watcher not available");
+            return None;
+        };
+        // TODO: Pass in global_deps and ignore_patterns
+        Some(ChangeMapper::new(
+            &self.pkg_dep_graph,
+            vec![],
+            package_change_mapper,
+        ))
+    }
 }
 
 impl Subscriber {
@@ -83,19 +106,20 @@ impl Subscriber {
     }
 
     async fn initialize_repo_state(&mut self) -> Option<RepoState> {
-        let Ok(file_events) = self.file_events_lazy.get().await.map(|r| r.resubscribe()) else {
-            // if we get here, it means that file watching has not started, so we should
-            // just report that the package watcher is not available
-            tracing::debug!("file watching shut down, package watcher not available");
-            return None;
-        };
-
         let Ok(root_package_json) =
             PackageJson::load(&self.repo_root.join_component("package.json"))
         else {
             tracing::debug!("no package.json found, package watcher not available");
             return None;
         };
+
+        let root_turbo_json = TurboJson::load(
+            &self.repo_root,
+            &AnchoredSystemPathBuf::default(),
+            &root_package_json,
+            false,
+        )
+        .ok();
 
         let Ok(pkg_dep_graph) = PackageGraphBuilder::new(&self.repo_root, root_package_json)
             .build()
@@ -106,30 +130,38 @@ impl Subscriber {
         };
 
         Some(RepoState {
-            file_events,
+            root_turbo_json,
             pkg_dep_graph,
         })
     }
 
     async fn watch(mut self, exit_rx: oneshot::Receiver<()>) {
         let process = async {
+            let Ok(mut file_events) = self.file_events_lazy.get().await.map(|r| r.resubscribe())
+            else {
+                // if we get here, it means that file watching has not started, so we should
+                // just report that the package watcher is not available
+                tracing::debug!("file watching shut down, package watcher not available");
+                return;
+            };
+
             let Some(mut repo_state) = self.initialize_repo_state().await else {
                 return;
+            };
+
+            let mut change_mapper = match repo_state.get_change_mapper() {
+                Some(change_mapper) => change_mapper,
+                None => {
+                    return;
+                }
             };
 
             self.package_change_events_tx
                 .send(PackageChangeEvent::Rediscover)
                 .ok();
 
-            // TODO: Pass in global_deps and ignore_patterns
-            let mut change_mapper = ChangeMapper::new(
-                &repo_state.pkg_dep_graph,
-                vec![],
-                DefaultPackageChangeMapper::new(&repo_state.pkg_dep_graph),
-            );
-
             loop {
-                match repo_state.file_events.recv().await {
+                match file_events.recv().await {
                     Ok(Ok(Event { paths, .. })) => {
                         // No point in raising an error for an invalid .gitignore
                         // This is slightly incorrect because we should also search for the
@@ -158,13 +190,12 @@ impl Subscriber {
                                 match self.initialize_repo_state().await {
                                     Some(new_repo_state) => {
                                         repo_state = new_repo_state;
-                                        change_mapper = ChangeMapper::new(
-                                            &repo_state.pkg_dep_graph,
-                                            vec![],
-                                            DefaultPackageChangeMapper::new(
-                                                &repo_state.pkg_dep_graph,
-                                            ),
-                                        );
+                                        change_mapper = match repo_state.get_change_mapper() {
+                                            Some(change_mapper) => change_mapper,
+                                            None => {
+                                                break;
+                                            }
+                                        };
                                     }
                                     None => {
                                         break;
@@ -195,11 +226,12 @@ impl Subscriber {
                                 match self.initialize_repo_state().await {
                                     Some(new_repo_state) => {
                                         repo_state = new_repo_state;
-                                        change_mapper = ChangeMapper::new(
-                                            &repo_state.pkg_dep_graph,
-                                            vec![],
-                                            DefaultPackageDetector::new(&repo_state.pkg_dep_graph),
-                                        );
+                                        change_mapper = match repo_state.get_change_mapper() {
+                                            Some(change_mapper) => change_mapper,
+                                            None => {
+                                                break;
+                                            }
+                                        }
                                     }
                                     None => {
                                         break;

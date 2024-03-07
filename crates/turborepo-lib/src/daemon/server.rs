@@ -29,16 +29,18 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_filewatch::{
     cookies::CookieWriter,
     globwatcher::{Error as GlobWatcherError, GlobError, GlobSet, GlobWatcher},
-    package_changes_watcher::{PackageChangeEvent, PackageChangesWatcher},
     package_watcher::{PackageWatchError, PackageWatcher},
     FileSystemWatcher, WatchError,
 };
 use turborepo_repository::package_manager;
 
 use super::{bump_timeout::BumpTimeout, endpoint::SocketOpenError, proto};
-use crate::daemon::{
-    bump_timeout_layer::BumpTimeoutLayer, default_timeout_layer::DefaultTimeoutLayer,
-    endpoint::listen_socket, Paths,
+use crate::{
+    daemon::{
+        bump_timeout_layer::BumpTimeoutLayer, default_timeout_layer::DefaultTimeoutLayer,
+        endpoint::listen_socket, Paths,
+    },
+    package_changes_watcher::{PackageChangeEvent, PackageChangesWatcher},
 };
 
 #[derive(Debug)]
