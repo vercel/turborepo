@@ -20,7 +20,7 @@ pub use crate::{
     logs::{replay_logs, LogWriter},
     output::{OutputClient, OutputClientBehavior, OutputSink, OutputWriter},
     prefixed::{PrefixedUI, PrefixedWriter},
-    tui::TaskTable,
+    tui::{TaskTable, TerminalPane},
 };
 
 #[derive(Debug, Error)]

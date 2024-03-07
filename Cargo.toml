@@ -35,7 +35,7 @@ default-members = [
   "crates/turbopack-core",
   "crates/turbopack-create-test-app",
   "crates/turbopack-css",
-  "crates/turbopack-dev",
+  "crates/turbopack-browser",
   "crates/turbopack-dev-server",
   "crates/turbopack-ecmascript",
   "crates/turbopack-env",
@@ -131,13 +131,13 @@ turbo-tasks-testing = { path = "crates/turbo-tasks-testing" }
 turbo-updater = { path = "crates/turborepo-updater" }
 turbopack = { path = "crates/turbopack" }
 turbopack-bench = { path = "crates/turbopack-bench" }
-turbopack-build = { path = "crates/turbopack-build" }
+turbopack-nodejs = { path = "crates/turbopack-nodejs" }
 turbopack-cli = { path = "crates/turbopack-cli" }
 turbopack-cli-utils = { path = "crates/turbopack-cli-utils" }
 turbopack-core = { path = "crates/turbopack-core" }
 turbopack-create-test-app = { path = "crates/turbopack-create-test-app" }
 turbopack-css = { path = "crates/turbopack-css" }
-turbopack-dev = { path = "crates/turbopack-dev" }
+turbopack-browser = { path = "crates/turbopack-browser" }
 turbopack-dev-server = { path = "crates/turbopack-dev-server" }
 turbopack-ecmascript = { path = "crates/turbopack-ecmascript" }
 turbopack-ecmascript-plugins = { path = "crates/turbopack-ecmascript-plugins", default-features = false }

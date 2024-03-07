@@ -6,7 +6,7 @@ use turbo_tasks::{ReadRef, TryJoinIterExt, Vc};
 use turbo_tasks_fs::File;
 use turbopack_core::{
     asset::AssetContent,
-    chunk::{ChunkItemExt, ChunkingContext, ModuleId},
+    chunk::{ChunkItemExt, ChunkingContext, MinifyType, ModuleId},
     code_builder::{Code, CodeBuilder},
     output::OutputAsset,
     source_map::{GenerateSourceMap, OptionSourceMap},
@@ -18,12 +18,12 @@ use turbopack_ecmascript::{
 };
 
 use super::{chunk::EcmascriptBuildNodeChunk, version::EcmascriptBuildNodeChunkVersion};
-use crate::{chunking_context::MinifyType, ecmascript::minify::minify, BuildChunkingContext};
+use crate::{ecmascript::minify::minify, NodeJsChunkingContext};
 
 #[turbo_tasks::value]
 pub(super) struct EcmascriptBuildNodeChunkContent {
     pub(super) content: Vc<EcmascriptChunkContent>,
-    pub(super) chunking_context: Vc<BuildChunkingContext>,
+    pub(super) chunking_context: Vc<NodeJsChunkingContext>,
     pub(super) chunk: Vc<EcmascriptBuildNodeChunk>,
 }
 
@@ -31,7 +31,7 @@ pub(super) struct EcmascriptBuildNodeChunkContent {
 impl EcmascriptBuildNodeChunkContent {
     #[turbo_tasks::function]
     pub(crate) async fn new(
-        chunking_context: Vc<BuildChunkingContext>,
+        chunking_context: Vc<NodeJsChunkingContext>,
         chunk: Vc<EcmascriptBuildNodeChunk>,
         content: Vc<EcmascriptChunkContent>,
     ) -> Result<Vc<Self>> {

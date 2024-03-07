@@ -10555,6 +10555,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b3e06c9b9d80ed6b745c7159c40b311ad2916abb34a49e9be2653b90db0d8dd"
 
 [[package]]
+name = "tui-term"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a3a054e8a92d4b51f9c28e04712e18ef3721ea25552577e944ee9870cb7445b"
+dependencies = [
+ "ratatui",
+ "vt100",
+]
+
+[[package]]
 name = "tungstenite"
 version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10932,12 +10942,11 @@ dependencies = [
  "turbo-updater",
  "turbopack",
  "turbopack-bench",
- "turbopack-build",
+ "turbopack-browser",
  "turbopack-cli-utils",
  "turbopack-core",
  "turbopack-create-test-app",
  "turbopack-css",
- "turbopack-dev",
  "turbopack-dev-server",
  "turbopack-ecmascript",
  "turbopack-ecmascript-hmr-protocol",
@@ -10948,6 +10957,7 @@ dependencies = [
  "turbopack-json",
  "turbopack-mdx",
  "turbopack-node",
+ "turbopack-nodejs",
  "turbopack-static",
  "turbopack-swc-utils",
  "turbopack-test-utils",
@@ -10956,7 +10966,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "turbopack-build"
+name = "turbopack-browser"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -10965,17 +10975,18 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_qs",
- "sourcemap",
  "swc_core",
  "tracing",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
  "turbo-tasks-hash",
+ "turbopack",
  "turbopack-core",
  "turbopack-css",
  "turbopack-ecmascript",
  "turbopack-ecmascript-runtime",
+ "turbopack-resolve",
  "urlencoding",
 ]
 
@@ -11008,15 +11019,15 @@ dependencies = [
  "turbo-tasks-memory",
  "turbopack",
  "turbopack-bench",
- "turbopack-build",
+ "turbopack-browser",
  "turbopack-cli-utils",
  "turbopack-core",
- "turbopack-dev",
  "turbopack-dev-server",
  "turbopack-ecmascript-plugins",
  "turbopack-ecmascript-runtime",
  "turbopack-env",
  "turbopack-node",
+ "turbopack-nodejs",
  "turbopack-resolve",
  "turbopack-trace-utils",
  "webbrowser",
@@ -11127,31 +11138,6 @@ dependencies = [
  "turbopack-core",
  "turbopack-ecmascript",
  "turbopack-swc-utils",
- "urlencoding",
-]
-
-[[package]]
-name = "turbopack-dev"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "indexmap 1.9.3",
- "indoc",
- "serde",
- "serde_json",
- "serde_qs",
- "swc_core",
- "tracing",
- "turbo-tasks",
- "turbo-tasks-build",
- "turbo-tasks-fs",
- "turbo-tasks-hash",
- "turbopack",
- "turbopack-core",
- "turbopack-css",
- "turbopack-ecmascript",
- "turbopack-ecmascript-runtime",
- "turbopack-resolve",
  "urlencoding",
 ]
 
@@ -11381,6 +11367,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "turbopack-nodejs"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "indexmap 1.9.3",
+ "indoc",
+ "serde",
+ "serde_json",
+ "serde_qs",
+ "sourcemap",
+ "swc_core",
+ "tracing",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-fs",
+ "turbo-tasks-hash",
+ "turbopack-core",
+ "turbopack-css",
+ "turbopack-ecmascript",
+ "turbopack-ecmascript-runtime",
+ "urlencoding",
+]
+
+[[package]]
 name = "turbopack-resolve"
 version = "0.1.0"
 dependencies = [
@@ -11462,14 +11472,14 @@ dependencies = [
  "turbo-tasks-fs",
  "turbo-tasks-memory",
  "turbopack",
- "turbopack-build",
+ "turbopack-browser",
  "turbopack-cli-utils",
  "turbopack-core",
- "turbopack-dev",
  "turbopack-ecmascript-plugins",
  "turbopack-ecmascript-runtime",
  "turbopack-env",
  "turbopack-node",
+ "turbopack-nodejs",
  "turbopack-resolve",
  "turbopack-test-utils",
 ]
@@ -12016,6 +12026,7 @@ dependencies = [
  "test-case",
  "thiserror",
  "tracing",
+ "tui-term",
  "turbopath",
  "turborepo-ci",
 ]
@@ -12473,6 +12484,18 @@ name = "vlq"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "65dd7eed29412da847b0f78bcec0ac98588165988a8cfe41d4ea1d429f8ccfff"
+
+[[package]]
+name = "vt100"
+version = "0.15.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84cd863bf0db7e392ba3bd04994be3473491b31e66340672af5d11943c6274de"
+dependencies = [
+ "itoa",
+ "log 0.4.20",
+ "unicode-width",
+ "vte 0.11.1",
+]
 
 [[package]]
 name = "vte"

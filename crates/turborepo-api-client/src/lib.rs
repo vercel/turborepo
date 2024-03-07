@@ -89,6 +89,7 @@ pub trait CacheClient {
 #[async_trait]
 pub trait TokenClient {
     async fn get_metadata(&self, token: &str) -> Result<ResponseTokenMetadata>;
+    async fn delete_token(&self, token: &str) -> Result<()>;
 }
 
 #[derive(Clone)]
@@ -416,22 +417,111 @@ impl CacheClient for APIClient {
 #[async_trait]
 impl TokenClient for APIClient {
     async fn get_metadata(&self, token: &str) -> Result<ResponseTokenMetadata> {
-        let url = self.make_url("/v5/user/tokens/current")?;
+        let endpoint = "/v5/user/tokens/current";
+        let url = self.make_url(endpoint)?;
         let request_builder = self
             .client
             .get(url)
             .header("User-Agent", self.user_agent.clone())
             .header("Authorization", format!("Bearer {}", token))
             .header("Content-Type", "application/json");
-        let response = retry::make_retryable_request(request_builder).await?;
 
         #[derive(Deserialize, Debug)]
         struct Response {
             #[serde(rename = "token")]
             metadata: ResponseTokenMetadata,
         }
-        let body = response.json::<Response>().await?;
-        Ok(body.metadata)
+        #[derive(Deserialize, Debug)]
+        struct ErrorResponse {
+            error: ErrorDetails,
+        }
+        #[derive(Deserialize, Debug)]
+        struct ErrorDetails {
+            message: String,
+            #[serde(rename = "invalidToken", default)]
+            invalid_token: bool,
+        }
+
+        let response = retry::make_retryable_request(request_builder).await?;
+        let status = response.status();
+        // Give a better error message for invalid tokens. This endpoint returns the
+        // following statuses:
+        // 200: OK
+        // 400: Bad Request
+        // 403: Forbidden
+        // 404: Not Found
+        match status {
+            StatusCode::OK => Ok(response.json::<Response>().await?.metadata),
+            // If we're forbidden, check to see if the token is invalid. If so, give back a nice
+            // error message.
+            StatusCode::FORBIDDEN => {
+                let body = response.json::<ErrorResponse>().await?;
+                if body.error.invalid_token {
+                    return Err(Error::InvalidToken {
+                        status: status.as_u16(),
+                        // Call make_url again since url is moved.
+                        url: self.make_url(endpoint)?.to_string(),
+                        message: body.error.message,
+                    });
+                }
+                return Err(Error::ForbiddenToken {
+                    url: self.make_url(endpoint)?.to_string(),
+                });
+            }
+            _ => Err(response.error_for_status().unwrap_err().into()),
+        }
+    }
+
+    /// Invalidates the given token on the server.
+    async fn delete_token(&self, token: &str) -> Result<()> {
+        let endpoint = "/v3/user/tokens/current";
+        let url = self.make_url(endpoint)?;
+        let request_builder = self
+            .client
+            .delete(url)
+            .header("User-Agent", self.user_agent.clone())
+            .header("Authorization", format!("Bearer {}", token))
+            .header("Content-Type", "application/json");
+
+        #[derive(Deserialize, Debug)]
+        struct ErrorResponse {
+            error: ErrorDetails,
+        }
+        #[derive(Deserialize, Debug)]
+        struct ErrorDetails {
+            message: String,
+            #[serde(rename = "invalidToken", default)]
+            invalid_token: bool,
+        }
+
+        let response = retry::make_retryable_request(request_builder).await?;
+        let status = response.status();
+        // Give a better error message for invalid tokens. This endpoint returns the
+        // following statuses:
+        // 200: OK
+        // 400: Bad Request
+        // 403: Forbidden
+        // 404: Not Found
+        match status {
+            StatusCode::OK => Ok(()),
+            // If we're forbidden, check to see if the token is invalid. If so, give back a nice
+            // error message.
+            StatusCode::FORBIDDEN => {
+                let body = response.json::<ErrorResponse>().await?;
+                if body.error.invalid_token {
+                    return Err(Error::InvalidToken {
+                        status: status.as_u16(),
+                        // Call make_url again since url is moved.
+                        url: self.make_url(endpoint)?.to_string(),
+                        message: body.error.message,
+                    });
+                }
+                return Err(Error::ForbiddenToken {
+                    url: self.make_url(endpoint)?.to_string(),
+                });
+            }
+            _ => Err(response.error_for_status().unwrap_err().into()),
+        }
     }
 }
 
