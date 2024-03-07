@@ -212,9 +212,9 @@ impl TaskTable {
     }
 
     /// Convenience method which renders and updates scroll state
-    pub fn stateful_render(&mut self, frame: &mut ratatui::Frame) {
+    pub fn stateful_render(&mut self, frame: &mut ratatui::Frame, area: Rect) {
         let mut scroll = self.scroll.clone();
-        frame.render_stateful_widget(&*self, frame.size(), &mut scroll);
+        frame.render_stateful_widget(&*self, area, &mut scroll);
         self.scroll = scroll;
     }
 
