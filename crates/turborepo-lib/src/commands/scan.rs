@@ -19,7 +19,7 @@ static DIALOGUER_THEME: LazyLock<DialoguerTheme> = LazyLock::new(|| DialoguerThe
 
 /// diagnostics run in parallel however to prevent messages from appearing too
 /// quickly we introduce a minimum delay between each message
-const INTER_MESSAGE_DELAY: Duration = Duration::from_millis(300);
+const INTER_MESSAGE_DELAY: Duration = Duration::from_millis(30);
 
 /// Start a diagnostic session. This command will run a series of diagnostics to
 /// help you identify potential performance bottlenecks in your monorepo.
