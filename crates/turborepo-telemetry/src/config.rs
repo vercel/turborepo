@@ -228,18 +228,13 @@ impl TelemetryConfig {
 }
 
 fn default_config_path() -> Result<AbsoluteSystemPathBuf, ConfigError> {
-    let config_dir = config_dir().ok_or(ConfigError::Message(
-        "Unable to find telemetry config directory".to_string(),
-    ))?;
-    let abs_config_dir = AbsoluteSystemPathBuf::try_from(config_dir.as_path()).map_err(|e| {
-        ConfigError::Message(format!(
-            "Invalid config directory {}: {}",
-            config_dir.display(),
-            e
-        ))
-    })?;
+    let config_dir = config_dir()
+        .map_err(|e| ConfigError::Message(format!("Invalid config directory: {}", e)))?
+        .ok_or(ConfigError::Message(
+            "Unable to find telemetry config directory".to_string(),
+        ))?;
     // stored as a sibling to the turbo global config
-    Ok(abs_config_dir.join_components(&["turborepo", "telemetry.json"]))
+    Ok(config_dir.join_components(&["turborepo", "telemetry.json"]))
 }
 
 fn write_new_config(file_path: &AbsoluteSystemPath) -> Result<(), ConfigError> {
