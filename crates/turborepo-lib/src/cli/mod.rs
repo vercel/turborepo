@@ -1082,8 +1082,11 @@ pub async fn run(
         }
         Command::Scan {} => {
             let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
-            scan::run(base).await;
-            Ok(0)
+            if scan::run(base).await {
+                Ok(0)
+            } else {
+                Ok(1)
+            }
         }
         Command::Info { workspace, json } => {
             CommandEventBuilder::new("info")

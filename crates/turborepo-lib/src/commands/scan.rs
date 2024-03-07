@@ -28,7 +28,7 @@ const INTER_MESSAGE_DELAY: Duration = Duration::from_millis(30);
 /// Note: all lints happen in parallel. For the purposes of displaying output,
 ///       we demultiplex the output and display it in a single stream, meaning
 ///       to the user, it looks like the lints are running serially.
-pub async fn run(base: CommandBase) {
+pub async fn run(base: CommandBase) -> bool {
     let paths = DaemonPaths::from_repo_root(&base.repo_root);
     let ui = base.ui;
 
@@ -130,5 +130,8 @@ however, there are some things you can do to make it even faster. {}\n",
 
     if complete + not_applicable == num_tasks {
         println!("\n\n{}", ui.rainbow(">>> FULL TURBO"));
+        true
+    } else {
+        false
     }
 }
