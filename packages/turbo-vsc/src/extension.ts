@@ -62,24 +62,41 @@ const pipelineColors = [...Array(10).keys()].map(rainbowRgb).map((color) =>
 const refreshDecorations = useDebounce(updateJSONDecorations, 1000);
 
 export function activate(context: ExtensionContext) {
-  const options: cp.ExecOptions = {
+  const options: cp.ExecSyncOptionsWithStringEncoding = {
     cwd: workspace.workspaceFolders?.[0].uri.path,
+    encoding: "utf8",
   };
 
-  let turboPath = workspace.getConfiguration("turbo").get("path");
+  let turboPath: string | undefined = workspace
+    .getConfiguration("turbo")
+    .get("path");
+
+  if (turboPath && !fs.existsSync(turboPath)) {
+    window.showErrorMessage(
+      `turbo does not exist at path \`${turboPath}\`, attempting to locate it`
+    );
+    turboPath = undefined;
+  }
+
   try {
     if (turboPath == null) {
       turboPath = cp.execSync(
-        "bash -c 'source ~/.nvm/nvm.sh; which turbo'",
+        // attempt to source two well known version managers
+        'sh -c \'source "$HOME/.nvm/nvm.sh" > /dev/null 2>&1; source "$HOME/.asdf/asdf.sh" > /dev/null 2>&1; which turbo\'',
         options
       );
     }
   } catch (e: any) {
     if (
       e.message.includes("command not found") ||
-      e.message.includes("Command failed")
+      e.message.includes("Command failed") ||
+      e.message.includes("which: no turbo in")
     ) {
-      promptGlobalTurbo();
+      // attempt to find local turbo instead
+      turboPath = findLocalTurbo();
+      if (!turboPath) {
+        promptGlobalTurbo();
+      }
     } else {
       window.showErrorMessage(e.message);
     }
@@ -353,5 +370,52 @@ async function promptGlobalTurbo() {
     env.openExternal(Uri.parse("https://turbo.build/repo/docs/installing"));
   } else if (answer === "Open Settings") {
     commands.executeCommand("workbench.action.openSettings", "turbo.path");
+  }
+}
+
+function findLocalTurbo(): string | undefined {
+  const options: cp.ExecSyncOptionsWithStringEncoding = {
+    encoding: "utf8",
+    cwd: workspace.workspaceFolders?.[0].uri.path,
+  };
+
+  const checks = [
+    () => {
+      const npmList = cp.execSync("npm ls turbo --json", options);
+      const npmData = JSON.parse(npmList);
+
+      // this is relative to node_modules
+      const packagePath = npmData?.dependencies?.turbo?.resolved;
+
+      const PREFIX = "file:"; // npm ls returns a file: prefix
+
+      if (packagePath?.startsWith(PREFIX)) {
+        return path.join(
+          "node_modules",
+          packagePath.slice(PREFIX.length),
+          "bin",
+          "turbo"
+        );
+      }
+    },
+    () => {
+      const turboBin = cp.execSync("yarn bin turbo", options);
+      return turboBin.trim();
+    },
+    () => {
+      const binFolder = cp.execSync("pnpm bin", options).trim();
+      return path.join(binFolder, "turbo");
+    },
+  ];
+
+  for (const potentialPath of checks) {
+    try {
+      const potential = potentialPath();
+      if (potential && fs.existsSync(potential)) {
+        return potential;
+      }
+    } catch (e) {
+      // no-op
+    }
   }
 }
