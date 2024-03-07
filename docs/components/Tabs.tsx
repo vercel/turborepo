@@ -9,10 +9,6 @@ export const Tabs: FC<{
   items: string[];
   children: ReactElement;
 }> = function ({ storageKey, items, children = null, ...props }) {
-  if (!storageKey) {
-    throw new Error("storageKey is required for Tabs component.");
-  }
-
   return (
     <FumaTabs id={storageKey} items={items} {...props}>
       {children}

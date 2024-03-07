@@ -8,6 +8,7 @@
     "dev": "next dev",
     "start": "next start",
     "check-types": "tsc --noEmit",
+    "check-spelling": "spellchecker --files '**/*.mdx' --files '!content/blog/*.mdx' --dictionaries 'dictionary.txt' --no-suggestions --quiet",
     "lint": "eslint . --max-warnings 0",
     "lint:prettier": "prettier -c . --cache --ignore-path=../.prettierignore"
   },
@@ -46,6 +47,7 @@
     "autoprefixer": "10.4.18",
     "eslint": "^8.57.0",
     "postcss": "8.4.35",
+    "spellchecker-cli": "^6.2.0",
     "tailwindcss": "3.4.1",
     "typescript": "5.3.3"
   },

@@ -1,6 +1,244 @@
 ---
 title: Configuring pipelines
-description: Describe the workflows in your repository to get them done as fast as possible.
+description: Learn how to describe the workflows in your repository to get them done as fast as possible.
 ---
 
-TODO
+import {LinkToDocumentation} from "#/components/LinkToDocumentation";
+import { Callout } from "#/components/Callout";
+import {Tabs, Tab} from "#/components/Tabs";
+import {Files, File, Folder} from 'fumadocs-ui/components/files';
+
+With your repo structured and your dependencies installed, you're ready to start describing the workflows that you want to create in your repository.
+
+Turborepo will always run tasks in the order you've described in `turbo.json`, parallelizing work whenever possible to ensure everything runs as fast as possible. This is faster than running tasks one at a time like most tools, and it's a big part of what makes Turborepo so fast.
+
+For example, `yarn workspaces run lint && yarn workspaces run test && yarn workspaces run build` would look like this:
+
+![A graphical representation of `yarn workspaces run lint && yarn workspaces run test && yarn workspaces run build`. It shows all tasks running serially with lots of empty space showing where time is being wasted to run all of the scripts.](/images/docs/yarn-workspaces-excalidraw.png)
+
+But, to get the same work done **faster** with Turborepo, we can use `turbo run lint test build`:
+
+![A graphical representation of `turbo run lint test build`. It shows all tasks running in parallel, with much less empty space where scripts are not being ran.](/images/docs/turborepo-excalidraw.png)
+
+## Getting started
+
+The root `turbo.json` file is where you'll define the tasks for Turborepo to run. Once you have your tasks defined, you'll be able to run one or more tasks in pipelines using `turbo run`.
+
+If you don't have one yet, create a `turbo.json` file in the root of your workspace. You'll be using it to learn about the rest of the configuration options in this guide.
+
+<Files>
+<File name="turbo.json" className="text-green-400" />
+<File name="package.json" />
+<Folder name="apps" />
+<Folder name="packages" />
+</Files>
+
+In the sections below, we'll create a few tasks and describe how each key that we use for the task affects how they work. For instance, you'll know how to build a task that:
+
+- caches the outputs found in `dist`,
+- only cares about the files in `src` for inputs,
+- depends on the `build` task of its dependencies,
+- and only logs errors to the console.
+
+```json title="./turbo.json"
+{
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"],
+      "inputs": ["src/**"],
+      "outputMode": "errors-only"
+    },
+  }
+}
+
+```
+
+## Defining tasks
+
+Each key in the `pipeline` object is a task that can be executed by `turbo run`. Turborepo will search the packages described in your package's `package.json` for a script with the name of the task.
+
+To define a task, use [the `pipeline` object](/repo/docs/reference/configuration#pipeline) in `turbo.json`. For example, a task named `build` might look like this:
+
+```json title="./turbo.json"
+{
+  "pipeline": {
+    "build": {}
+  }
+}
+```
+
+If you run `turbo run build` at this point, Turborepo will run the `build` task in all packages in parallel - and you're likely to see errors. You're missing a few important pieces to make this work correctly.
+
+### Running tasks in the right order
+
+[The `dependsOn` key](/repo/docs/reference/configuration#dependson) is used to specify the tasks that must complete before a task begins running. For example, in most cases, you want the `build` script for your libraries to build before your application's `build` script runs. To do this, you'd use the following `turbo.json`:
+
+```json title="./turbo.json"
+{
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"]
+    }
+  }
+}
+```
+
+#### Depending on tasks in dependencies with `^`
+
+The `^` microsyntax tells Turborepo to run the task starting at the bottom of the dependency graph. If your application depends on a library named `ui` and the library has a `build` task, the `build` task in `ui` will run first. Once it has successfully completed, the `build` task in your application will run.
+
+This is an important pattern as it ensures that your application's `build` task will have all of the necessary dependencies that it needs to compile and run successfully. This concept also applies as your dependency graph grows to a more complex structure with many levels of dependencies.
+
+#### Depending on tasks in the same package
+
+Sometimes, you may need to ensure that a two tasks in the same package run in a specific order. For example, you may need to run a `build` task in your application before running a `test` task in your library. To do this, specify the script in the `depeondsOn` key as a plain string (without the `^`).
+
+```json title="./turbo.json"
+{
+  "pipeline": {
+    "test": {
+      "dependsOn": ["build"]
+    }
+  }
+}
+```
+
+#### Depending on a specific task in a specific workspace
+
+You can also specify an individual task in a specific workspace to depend on. In the example below, the `build` task in `utils` must be ran before other `build` tasks.
+
+```json title="./turbo.json"
+{
+  "pipeline": {
+    "build": {
+      "dependsOn": ["utils#build"]
+    }
+  }
+}
+```
+
+#### No dependencies
+
+Some tasks may not have any dependencies. For example, a task for finding typos in Markdown files likely doesn't need to care about the status of your other tasks. In this caes, you can omit the `dependsOn` key or provide an empty array.
+
+### Specifying `outputs`
+
+The `outputs` key tells Turborepo **what files and directories** it should cache when the task has successfully completed. **Without this key defined, Turborpeo will not cache any files.** Below are are a few examples of outputs for common tools:
+
+<Tabs items={["Next.js", "Vite", "tsc"]} storageKey="outputs-tools">
+<Tab value="Next.js">
+```json title="./turbo.json"
+{
+  "pipeline": {
+    "build": {
+      "outputs": [".next/**", "!.next/cache/**"]
+    }
+  }
+}
+```
+</Tab>
+
+<Tab value="Vite">
+```json title="./turbo.json"
+{
+  "pipeline": {
+    "build": {
+      "outputs": ["dist/**"]
+    }
+  }
+}
+```
+</Tab>
+<Tab value="tsc">
+```json title="./turbo.json"
+{
+  "pipeline": {
+    "build": {
+      "outputs": ["dist/**"]
+    }
+  }
+}
+```
+</Tab>
+</Tabs>
+
+### Specifying `inputs`
+
+The `inputs` key is used to specify the files that you want to include in the task's hash fingerprint. Any changes to your source code that are not included in the file globs that you provide will not cause the task to miss cache. As an example, a task for finding typos in Markdown files might be defined as follows:
+
+```json title="./turbo.json"
+{
+  "pipeline": {
+    "spell-check": {
+      "inputs": ["**/*.md", "**/*.mdx"]
+    }
+  }
+}
+```
+
+<Callout type="error">
+This feature opts out of all of Turborepo's default `inputs` behavior, including following along with changes tracked by Git. This means that your `.gitignore` file will no longer be respected, and you will need to ensure that you do not capture those files manually.
+
+To restore the default behavior, use [the `$TURBO_DEFAULT$` microsyntax](#restoring-defaults-with-turbo-default).
+
+</Callout>
+
+#### Restoring defaults with `$TURBO_DEFAULT$`
+
+Most of the time, the default `inputs` behavior is what you will want for your tasks. However, you can increase your cache hit ratios for certain tasks by fine-tuning your `inputs` to ignore changes to files that are known to not affect the task's output.
+
+For this reason, we've created the `$TURBO_DEFAULT$` microsyntax so you can make fine-tune the default `inputs` behavior.
+
+```json title="./turbo.json"
+{
+  "pipeline": {
+    "build": {
+      "inputs": ["$TURBO_DEFAULT$", "!README.md"]
+    }
+  }
+}
+```
+
+In this task definition, Turborepo will use the default `inputs` behavior for the `build` task, but will ignore changes to the `README.md` file. If the `README.md` file is changed, the task will still hit cache.
+
+### Defining root tasks
+
+You can also run tasks in `package.json` of the workspace root using `turbo`. For example, you may want to run a `lint` task for the files in your workspace's root directory in addition to the `lint` task in each package:
+
+<Tabs items={["turbo.json", "package.json"]}>
+<Tab value="turbo.json">
+```json title="./turbo.json"
+{
+  "pipeline": {
+    "lint": {
+      "dependsOn": ["^lint"]
+    },
+    "//#lint": {}
+  }
+}
+```
+
+</Tab>
+<Tab value="package.json">
+```json title="./package.json"
+{
+  "scripts": {
+    "lint": "eslint ."
+  }
+}
+```
+</Tab>
+</Tabs>
+
+## Example use cases
+
+TODO: Let's see how the rest of the pages unfold and then revisit here.
+
+- Running a setup task before `persistent` tasks
+- Performing side-effects
+- "Dependencies outside of a task"
+
+## Next steps
+
+There are many more options available in [the Configuring `turbo.json` documentation](/repo/docs/reference/configuration) that you will explore in the coming guides. For now, you can start running a few tasks to see how the basics work.

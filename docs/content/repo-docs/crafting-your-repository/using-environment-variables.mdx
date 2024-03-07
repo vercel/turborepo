@@ -1,6 +1,10 @@
 ---
 title: Using environment variables
-description: Learn how to handle environments in for your applications.
+description: Learn how to handle environments for your applications.
 ---
 
-TODO
+Environment variable inputs are not a part of your source code but are still of vital important to your applications. Because they're an essential part of configuring your application, you'll need to account for them in your Turborepo configuration.
+
+<Callout type="error">
+Failing to account for environment variables in your configuration can result in your shipping your application with the wrong configuration. This can cause serious issues like shipping your preview deployments to production.
+</Callout>

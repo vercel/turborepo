@@ -280,7 +280,7 @@ A list of file glob patterns relative to the package's `package.json` to conside
   Using the `inputs` key opts you out of `turbo`'s default behavior of considering `.gitignore`. You must reconstruct the globs from `.gitignore` as desired or use `$TURBO_DEFAULT$` to build off of the default behavior.
 </Callout>
 
-#### Fine-tuning inputs using `$TURBO_DEFAULT$`
+#### `$TURBO_DEFAULT$`
 
 Because specifying an `inputs` key immediately opts out of the default behavior, you may use
 the special string `$TURBO_DEFAULT$` within the `inputs` array to restore `turbo`'s default behavior. This allows you to tweak the default behavior more granularly.

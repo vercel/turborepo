@@ -15,7 +15,7 @@ export default function Page({ params }: { params: { slug?: string[] } }) {
   return (
     <DocsPage toc={page.data.exports.toc}>
       <DocsBody>
-        <h1>{page.data.title}</h1>
+        <h1 className="text-left">{page.data.title}</h1>
         <Mdx />
       </DocsBody>
     </DocsPage>
