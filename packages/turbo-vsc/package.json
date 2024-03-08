@@ -74,6 +74,12 @@
           "required": false,
           "default": null,
           "description": "The path to your global `turbo` executable, if you'd rather not rely on auto-detection."
+        },
+        "turbo.useLocalTurbo": {
+          "type": "boolean",
+          "required": false,
+          "default": false,
+          "description": "Silence the 'install global turbo' prompt and always use local turbo."
         }
       }
     }
