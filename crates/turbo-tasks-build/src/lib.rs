@@ -21,6 +21,21 @@ use turbo_tasks_macros_shared::{
     get_type_ident, GenericTypeInput, PrimitiveInput, ValueTraitArguments,
 };
 
+/// the same module exists in turbo-tasks-macros but due to its size we
+/// just copy the relevant parts in both places
+mod ignored {
+    use std::{cell::OnceCell, collections::HashSet};
+    // a newline-separated list of task names to opt-out of turbo tracking
+    const IGNORE_TASKS_RAW: Option<&str> = std::option_env!("TURBO_IGNORE_TASKS");
+    const IGNORE_TASKS: OnceCell<HashSet<&'static str>> = OnceCell::new();
+
+    pub fn task_ignored(name: &str) -> bool {
+        IGNORE_TASKS
+            .get_or_init(|| IGNORE_TASKS_RAW.unwrap_or_default().split(',').collect())
+            .contains(name)
+    }
+}
+
 pub fn generate_register() {
     println!("cargo:rerun-if-changed=build.rs");
 
@@ -221,7 +236,9 @@ impl<'a> RegisterContext<'a> {
     }
 
     fn process_fn(&mut self, fn_item: ItemFn) -> Result<()> {
-        if has_attribute(&fn_item.attrs, "function") {
+        if has_attribute(&fn_item.attrs, "function")
+            && !ignored::task_ignored(&fn_item.sig.ident.to_string())
+        {
             let ident = &fn_item.sig.ident;
             let type_ident = get_native_function_ident(ident);
 
