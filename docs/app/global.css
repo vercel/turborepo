@@ -81,6 +81,15 @@ thead th:empty {
   text-wrap: initial;
 }
 
+/* Inline code snippets. Prevents line-wrapping and inherits font-weight from parent */
 .prose :where(code):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
   text-wrap: nowrap;
+  font-weight: inherit;
+}
+
+/* Make inline code snippet in headers same size as rest of line */
+.prose :where(h3):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+  code {
+    font-size: inherit;
+  }
 }

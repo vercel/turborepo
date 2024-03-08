@@ -2,10 +2,10 @@ import { readdirSync, lstatSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 export const getExamplesList = () => {
-  // path to examples directory at the monorepo root.
+  // Path to examples directory at the monorepo root.
   const examplesDirectory = path.join(
     __dirname,
-    process.env.VERCEL
+    process.env.NODE_ENV === "production"
       ? "../../../../examples"
       : "../../../../../../../../examples"
   );

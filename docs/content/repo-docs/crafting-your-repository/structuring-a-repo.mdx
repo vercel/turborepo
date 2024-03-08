@@ -1,5 +1,5 @@
 ---
-title: Structuring a repo
+title: Structuring a repository
 description: Start by creating a repository using the conventions of the ecosystem.
 ---
 
@@ -8,9 +8,9 @@ import {PackageManagerTabs, Tab, Tabs} from '#/components/Tabs'
 import {Step, Steps} from 'fumadocs-ui/components/steps'
 import { File, Folder, Files } from 'fumadocs-ui/components/files';
 
-`turbo` is built on top of Workspaces, a feature of the major package managers in the JavaScript ecosystem. This is important because it allows you to:
+`turbo` is built on top of [Workspaces](https://vercel.com/docs/vercel-platform/glossary#workspace), a feature of package managers in the JavaScript ecosystem that allows you to group multiple packages in one repository. Following these conventions is important because it allows you to:
 
-- Use the conventions of the JavaScript and Node.js ecosystem when starting a new repository
+- Lean on those conventions for all your repo's tooling
 - Quickly, incrementally adopt Turborepo into an existing repository
 
 In this guide, we'll walk through setting up a multi-package workspace (monorepo) so we can set the groundwork for `turbo`.
@@ -23,7 +23,7 @@ Setting up a workspace's structure can be tedious to do by hand. If you're new t
 
 In JavaScript, a workspace can either be a single package or a collection of packages. In these guides, we'll be focusing on a multi-package workspace, often called a "monorepo" (we prefer [a more specific definition](https://vercel.com/docs/vercel-platform/glossary#monorepo)).
 
-Below are the structural keys of `create-turbo` that make it a valid workspace with Turborepo on top.
+Below are the structural elements of `create-turbo` that make it a valid workspace with Turborepo on top.
 
 <PackageManagerTabs>
 <Tab>
@@ -98,13 +98,13 @@ Below are the structural keys of `create-turbo` that make it a valid workspace w
 - [Root `turbo.json`](#root-turbojson)
 - [`package.json` in each package](#packagejson-in-each-package)
 
-### Establishing packages in your monorepo
+### Specifying packages in your monorepo
 
 <Steps>
 <Step>
-#### Specifying directories for packages
+#### Declaring directories for packages
 
-First, your package manager needs to describe the locations of your packages.
+First, your package manager needs to describe the locations of your packages. We recommend starting with splitting your packages into `apps/` for applications and services and `packages/` for everything else, like libraries and tooling.
 
 <PackageManagerTabs>
   <Tab>
@@ -145,7 +145,7 @@ First, your package manager needs to describe the locations of your packages.
 Using this configuration, every directory **with a `package.json`** in the `apps` or `packages` directories will be considered a package.
 
 <Callout type="error">
-Turborepo does not support deeply nested workspaces like `apps/**` or `packages/**`.
+Turborepo does not support nested workspaces like `apps/**` or `packages/**`. Using a structure that would put a package at `apps/a` and another at `apps/a/b` will result in an error.
 </Callout>
 </Step>
 
@@ -157,7 +157,7 @@ In the directory of the package, there must be a `package.json` to make the pack
 </Step>
 </Steps>
 
-### Root package.json
+### Root `package.json`
 
 The root `package.json` is the hub for your workspace. Below is a common example of what you would find in a root `package.json`:
 
@@ -176,13 +176,13 @@ The root `package.json` is the hub for your workspace. Below is a common example
 }
 ```
 
-### Root turbo.json
+### Root `turbo.json`
 
 `turbo.json` is used to configure the behavior of `turbo`. To learn more about how to configure your pipelines and tasks, visit the [Configuring pipelines](/repo/docs/crafting-your-repository/configuring-pipelines) page.
 
 ## Using a lockfile
 
-A lockfile must be present for `turbo` to fully understand your repository. You already should have a lockfile commited to source control already for reasons outside of `turbo` so this shouldn't be a problem.
+A lockfile is key to reproducible behavior for both your package manager and `turbo`. Without one, there is no information about if a dependency has changed since the last time you ran `turbo` or if it was installed in a different version.
 
 <Callout type="warn">
 If you do not have a lockfile present when you run `turbo`, you may see unpredictable behavior.
@@ -190,9 +190,9 @@ If you do not have a lockfile present when you run `turbo`, you may see unpredic
 
 ## Anatomy of a package
 
-It's often best to starting thinking about designing a package as its own, unit within the workspace. At a high-level, each package is almost like it's own project, with its own `package.json`, tooling configuration, and source code. There are limits to this idea - but its a good mental model to _start_ from.
+It's often best to start thinking about designing a package as its own unit within the workspace. At a high-level, each package is almost like its own project, with its own `package.json`, tooling configuration, and source code. There are limits to this idea—but its a good mental model to _start_ from.
 
-Additionally, it has specific entrypoints that other packages in your workspace can use to access the package, specified by [`exports`](#exports).
+Additionally, a package has specific entrypoints that other packages in your workspace can use to access the package, specified by [`exports`](#exports).
 
 ### `package.json` for a package
 
@@ -206,9 +206,10 @@ It's best practice to use a namespace prefix for your Internal Packages to avoid
 We use `@repo` in our docs and examples. You can choose to keep it or use your own prefix.
 
 </Callout>
-  #### `scripts`
 
-The `scripts` field is used to define scripts that can be run from the command line in the package. We'll talk more about these scripts when it comes time to discuss [Running Tasks](/repo/docs/crafting-your-repository/running-tasks).
+#### `scripts`
+
+The `scripts` field is used to define scripts that can be run from the command line in the package's context. We'll talk more about these scripts when it comes time to discuss [Running Tasks](/repo/docs/crafting-your-repository/running-tasks).
 
 #### `exports`
 
@@ -240,7 +241,8 @@ This would allow you to import `add` and `subtract` functions from the `@repo/ma
 
 Using exports this way provides two major benefits:
 
-- **Avoiding barrel files**: Barrel files are files that re-export other files in the same package, creating one entrypoint for the entire package. While they might appear convenient at a glance, they're extremely difficult for compilers and bundlers to understand and can quickly lead to performance problems. `exports` also has other powerful features compared to [the `main` field](https://nodejs.org/api/packages.html#main).
+- **Avoiding barrel files**: Barrel files are files that re-export other files in the same package, creating one entrypoint for the entire package. While they might appear convenient, they're extremely difficult for compilers and bundlers to understand and can quickly lead to performance problems.
+- **More powerful features**: `exports` also has other powerful features compared to [the `main` field](https://nodejs.org/api/packages.html#main) like [Conditional Exports](https://nodejs.org/api/packages.html#conditional-exports). In general, we recommend using `exports` over `main` whenever possible as it is the more modern option.
 - **IDE autocompletion**: By specifying the entrypoints for your package using `exports`, you can ensure that your code editor can provide auto-completion for the package's exports.
 
 <Callout type="good-to-know">
@@ -304,8 +306,8 @@ Of course, you'll want some source code in your package. Packages commonly use a
 
 ## Common pitfalls
 
-- If you're using TypeScript, you likely don't need a `tsconfig.json` in the root of your workspace. Packages should independently specify their own TypeScript configuration, usually building off of a shared `tsconfig.json` from a separate package in the workspace. For more information, visit our [TypeScript guide](/repo/docs/guides/linting/typescript).
-- You want to avoid pathing across package boundaries as much as possible. If you ever find yourself writing `../` to get from one package to another, you likely have an opportunity to re-think your approach.
+- If you're using TypeScript, you likely don't need a `tsconfig.json` in the root of your workspace. Packages should independently specify their own configurations, usually building off of a shared `tsconfig.json` from a separate package in the workspace. For more information, visit our [TypeScript guide](/repo/docs/guides/linting/typescript).
+- You want to avoid accessing files across package boundaries as much as possible. If you ever find yourself writing `../` to get from one package to another, you likely have an opportunity to re-think your approach by installing the package where it's needed and importing it into your code.
 
 ## Next steps
 
