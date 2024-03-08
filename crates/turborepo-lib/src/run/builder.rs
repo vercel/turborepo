@@ -5,7 +5,7 @@ use std::{
     time::SystemTime,
 };
 
-use chrono::{DateTime, Local};
+use chrono::Local;
 use rayon::iter::ParallelBridge;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
@@ -27,6 +27,15 @@ use turborepo_telemetry::events::{
     EventBuilder, TrackedErrors,
 };
 use turborepo_ui::{ColorSelector, UI};
+#[cfg(feature = "daemon-package-discovery")]
+use {
+    crate::run::package_discovery::DaemonPackageDiscovery,
+    std::time::Duration,
+    turborepo_repository::discovery::{
+        Error as DiscoveryError, FallbackPackageDiscovery, LocalPackageDiscoveryBuilder,
+        PackageDiscoveryBuilder,
+    },
+};
 
 use crate::{
     cli::{DryRunMode, EnvMode},
@@ -109,7 +118,7 @@ impl RunBuilder {
 
     #[tracing::instrument(skip(self, signal_handler, api_client))]
     pub async fn build(
-        self,
+        mut self,
         signal_handler: &SignalHandler,
         telemetry: CommandEventBuilder,
         api_client: APIClient,
@@ -130,33 +139,6 @@ impl RunBuilder {
         let (analytics_sender, analytics_handle) =
             Self::initialize_analytics(self.api_auth.clone(), api_client.clone()).unzip();
 
-        let result = self
-            .run_with_analytics(
-                start_at,
-                api_client,
-                analytics_sender,
-                signal_handler,
-                telemetry,
-            )
-            .await;
-
-        if let Some(analytics_handle) = analytics_handle {
-            analytics_handle.close_with_timeout().await;
-        }
-
-        result
-    }
-
-    // We split this into a separate function because we need
-    // to close the AnalyticsHandle regardless of whether the run succeeds or not
-    async fn run_with_analytics(
-        mut self,
-        start_at: DateTime<Local>,
-        api_client: APIClient,
-        analytics_sender: Option<AnalyticsSender>,
-        signal_handler: &SignalHandler,
-        telemetry: CommandEventBuilder,
-    ) -> Result<Run, Error> {
         let scm = {
             let repo_root = self.repo_root.clone();
             tokio::task::spawn_blocking(move || SCM::new(&repo_root))
@@ -232,45 +214,47 @@ impl RunBuilder {
                 .with_single_package_mode(self.opts.run_opts.single_package);
 
             #[cfg(feature = "daemon-package-discovery")]
-            let graph = match (&daemon, self.opts.run_opts.daemon) {
-                (None, Some(true)) => {
-                    // We've asked for the daemon, but it's not available. This is an error
-                    return Err(turborepo_repository::package_graph::Error::Discovery(
-                        DiscoveryError::Unavailable,
-                    )
-                    .into());
-                }
-                (Some(daemon), Some(true)) => {
-                    // We have the daemon, and have explicitly asked to only use that
-                    let daemon_discovery = DaemonPackageDiscovery::new(daemon.clone());
-                    builder
-                        .with_package_discovery(daemon_discovery)
-                        .build()
-                        .await
-                }
-                (_, Some(false)) | (None, _) => {
-                    // We have explicitly requested to not use the daemon, or we don't have it
-                    // No change to default.
-                    builder.build().await
-                }
-                (Some(daemon), None) => {
-                    // We have the daemon, and it's not flagged off. Use the fallback strategy
-                    let daemon_discovery = DaemonPackageDiscovery::new(daemon.clone());
-                    let local_discovery = LocalPackageDiscoveryBuilder::new(
-                        self.repo_root.clone(),
-                        None,
-                        Some(root_package_json.clone()),
-                    )
-                    .build()?;
-                    let fallback_discover = FallbackPackageDiscovery::new(
-                        daemon_discovery,
-                        local_discovery,
-                        Duration::from_millis(10),
-                    );
-                    builder
-                        .with_package_discovery(fallback_discover)
-                        .build()
-                        .await
+            let graph = {
+                match (&daemon, self.opts.run_opts.daemon) {
+                    (None, Some(true)) => {
+                        // We've asked for the daemon, but it's not available. This is an error
+                        return Err(turborepo_repository::package_graph::Error::Discovery(
+                            DiscoveryError::Unavailable,
+                        )
+                        .into());
+                    }
+                    (Some(daemon), Some(true)) => {
+                        // We have the daemon, and have explicitly asked to only use that
+                        let daemon_discovery = DaemonPackageDiscovery::new(daemon.clone());
+                        builder
+                            .with_package_discovery(daemon_discovery)
+                            .build()
+                            .await
+                    }
+                    (_, Some(false)) | (None, _) => {
+                        // We have explicitly requested to not use the daemon, or we don't have it
+                        // No change to default.
+                        builder.build().await
+                    }
+                    (Some(daemon), None) => {
+                        // We have the daemon, and it's not flagged off. Use the fallback strategy
+                        let daemon_discovery = DaemonPackageDiscovery::new(daemon.clone());
+                        let local_discovery = LocalPackageDiscoveryBuilder::new(
+                            self.repo_root.clone(),
+                            None,
+                            Some(root_package_json.clone()),
+                        )
+                        .build()?;
+                        let fallback_discover = FallbackPackageDiscovery::new(
+                            daemon_discovery,
+                            local_discovery,
+                            Duration::from_millis(10),
+                        );
+                        builder
+                            .with_package_discovery(fallback_discover)
+                            .build()
+                            .await
+                    }
                 }
             };
             #[cfg(not(feature = "daemon-package-discovery"))]
@@ -387,6 +371,7 @@ impl RunBuilder {
         Ok(Run {
             version: self.version,
             ui: self.ui,
+            analytics_handle,
             start_at,
             processes: self.processes,
             run_telemetry,

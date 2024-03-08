@@ -17,11 +17,10 @@ pub use cache::{ConfigCache, RunCache, TaskCache};
 use chrono::{DateTime, Local};
 use tracing::debug;
 use turbopath::AbsoluteSystemPathBuf;
+use turborepo_analytics::AnalyticsHandle;
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
-#[cfg(feature = "daemon-package-discovery")]
-use turborepo_repository::discovery::PackageDiscoveryBuilder;
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_scm::SCM;
 use turborepo_telemetry::events::generic::GenericEventBuilder;
@@ -60,6 +59,7 @@ pub struct Run {
     signal_handler: SignalHandler,
     engine: Arc<Engine>,
     task_access: TaskAccess,
+    analytics_handle: Option<AnalyticsHandle>,
 }
 
 impl Run {
@@ -94,7 +94,20 @@ impl Run {
         }
     }
 
-    pub async fn run(self) -> Result<i32, Error> {
+    pub async fn run(mut self) -> Result<i32, Error> {
+        let analytics_handle = self.analytics_handle.take();
+        let result = self.run_with_analytics().await;
+
+        if let Some(analytics_handle) = analytics_handle {
+            analytics_handle.close_with_timeout().await;
+        }
+
+        result
+    }
+
+    // We split this into a separate function because we need
+    // to close the AnalyticsHandle regardless of whether the run succeeds or not
+    async fn run_with_analytics(self) -> Result<i32, Error> {
         if self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none() {
             self.print_run_prelude();
         }
