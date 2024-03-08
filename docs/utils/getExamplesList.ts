@@ -3,7 +3,12 @@ import path from "node:path";
 
 export const getExamplesList = () => {
   // path to examples directory at the monorepo root.
-  const examplesDirectory = path.join(__dirname, "../../../../examples");
+  const examplesDirectory = path.join(
+    __dirname,
+    process.env.VERCEL
+      ? "../../../../examples"
+      : "../../../../../../../../examples"
+  );
   const examples: {
     slug: string;
     name: string;
