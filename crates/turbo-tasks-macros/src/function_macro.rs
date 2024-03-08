@@ -6,8 +6,34 @@ use turbo_tasks_macros_shared::{get_native_function_id_ident, get_native_functio
 
 use crate::func::{DefinitionContext, NativeFn, TurboFn};
 
+/// the same module exists in turbo-tasks-build but due to its size we
+/// just copy the relevant parts in both places
+mod ignored {
+    use std::{cell::OnceCell, collections::HashSet};
+    // a newline-separated list of task names to opt-out of turbo tracking
+    const IGNORE_TASKS_RAW: Option<&str> = std::option_env!("TURBO_IGNORE_TASKS");
+    const IGNORE_TASKS: OnceCell<HashSet<&'static str>> = OnceCell::new();
+
+    pub fn task_ignored(name: &str) -> bool {
+        IGNORE_TASKS
+            .get_or_init(|| IGNORE_TASKS_RAW.unwrap_or_default().split(',').collect())
+            .contains(name)
+    }
+}
+
 pub fn function(_args: TokenStream, input: TokenStream) -> TokenStream {
     let item = parse_macro_input!(input as ItemFn);
+
+    // TODO: ideally here we would be able to match on the entire module path
+    //       however macros are evaluated in a different context and we don't
+    //       have access to it. in the mean time, just use the function name.
+    //       the likelihood that two functions with the same name exist is low
+    //       and, if we do need to disable just one of them, can be mitigated
+    //       through naming
+    let name = item.sig.ident.to_string();
+    if ignored::task_ignored(&name) {
+        return quote! { #item }.into();
+    }
 
     let ItemFn {
         attrs,
