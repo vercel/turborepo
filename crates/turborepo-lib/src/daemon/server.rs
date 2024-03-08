@@ -102,19 +102,24 @@ impl FileWatching {
         let watcher = Arc::new(FileSystemWatcher::new_with_default_cookie_dir(&repo_root)?);
         let recv = watcher.watch();
 
-        let cookie_watcher = CookieWriter::new(
+        let cookie_writer = CookieWriter::new(
             watcher.cookie_dir(),
             Duration::from_millis(100),
             recv.clone(),
         );
         let glob_watcher = Arc::new(GlobWatcher::new(
             repo_root.clone(),
-            cookie_watcher,
+            cookie_writer.clone(),
             recv.clone(),
         ));
         let package_watcher = Arc::new(
-            PackageWatcher::new(repo_root.clone(), recv.clone(), backup_discovery)
-                .map_err(|e| WatchError::Setup(format!("{:?}", e)))?,
+            PackageWatcher::new(
+                repo_root.clone(),
+                recv.clone(),
+                backup_discovery,
+                cookie_writer,
+            )
+            .map_err(|e| WatchError::Setup(format!("{:?}", e)))?,
         );
 
         Ok(FileWatching {
