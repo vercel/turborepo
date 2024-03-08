@@ -198,6 +198,8 @@ lazy_static! {
 
 pub const RESET: &str = "\x1b[0m";
 
+pub use dialoguer::theme::ColorfulTheme as DialoguerTheme;
+
 #[cfg(test)]
 mod test {
     use super::*;
