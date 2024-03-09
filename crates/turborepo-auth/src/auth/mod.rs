@@ -5,7 +5,7 @@ mod sso;
 pub use login::*;
 pub use logout::*;
 pub use sso::*;
-use turbopath::AbsoluteSystemPath;
+use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::{CacheClient, Client, TokenClient};
 use turborepo_ui::UI;
 
@@ -44,21 +44,22 @@ impl<'a, T: Client + TokenClient + CacheClient> LoginOptions<'a, T> {
 }
 
 /// Options for logging out.
-pub struct LogoutOptions<'a, T> {
-    pub ui: &'a UI,
-    pub api_client: &'a T,
-
-    /// The path where we should look for the token to logout.
-    pub path: &'a AbsoluteSystemPath,
+pub struct LogoutOptions<T> {
+    pub ui: UI,
+    pub api_client: T,
+    /// If we should invalidate the token on the server.
+    pub invalidate: bool,
+    /// Path override for testing
+    #[cfg(test)]
+    pub path: Option<AbsoluteSystemPathBuf>,
 }
 
 fn extract_vercel_token() -> Result<Option<String>, Error> {
     let vercel_config_dir =
-        turborepo_dirs::vercel_config_dir().ok_or_else(|| Error::ConfigDirNotFound)?;
+        turborepo_dirs::vercel_config_dir()?.ok_or_else(|| Error::ConfigDirNotFound)?;
 
-    let vercel_token_path = vercel_config_dir
-        .join(VERCEL_TOKEN_DIR)
-        .join(VERCEL_TOKEN_FILE);
+    let vercel_token_path =
+        vercel_config_dir.join_components(&[VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE]);
     let contents = std::fs::read_to_string(vercel_token_path)?;
 
     #[derive(serde::Deserialize)]

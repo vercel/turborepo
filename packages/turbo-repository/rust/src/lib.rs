@@ -7,7 +7,7 @@ use napi::Error;
 use napi_derive::napi;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
-    change_mapper::{ChangeMapper, DefaultPackageDetector, PackageChanges},
+    change_mapper::{ChangeMapper, DefaultPackageChangeMapper, PackageChanges},
     inference::RepoState as WorkspaceState,
     package_graph::{PackageGraph, PackageName, PackageNode, WorkspacePackage, ROOT_PKG_NAME},
 };
@@ -25,9 +25,21 @@ pub struct Package {
     pub relative_path: String,
 }
 
+/// Wrapper for dependents and dependencies.
+/// Each are a list of package paths, relative to the workspace root.
+#[napi]
+#[derive(Debug)]
+pub struct PackageDetails {
+    /// the package's dependencies
+    #[napi(readonly)]
+    pub dependencies: Vec<String>,
+    /// the packages that depend on this package
+    #[napi(readonly)]
+    pub dependents: Vec<String>,
+}
+
 #[derive(Clone)]
 #[napi]
-
 pub struct PackageManager {
     /// The package manager name in lower case.
     #[napi(readonly)]
@@ -73,13 +85,36 @@ impl Package {
         workspace_path: &AbsoluteSystemPath,
     ) -> Vec<Package> {
         let node = PackageNode::Workspace(PackageName::Other(self.name.clone()));
-        let ancestors = match graph.immediate_ancestors(&node) {
-            Some(ancestors) => ancestors,
+        let pkgs = match graph.immediate_ancestors(&node) {
+            Some(pkgs) => pkgs,
             None => return vec![],
         };
 
-        ancestors
-            .iter()
+        pkgs.iter()
+            .filter_map(|node| {
+                let info = graph.package_info(node.as_package_name())?;
+                // If we don't get a package name back, we'll just skip it.
+                let name = info.package_name()?;
+                let anchored_package_path = info.package_path();
+                let package_path = workspace_path.resolve(anchored_package_path);
+                Some(Package::new(name, workspace_path, &package_path))
+            })
+            .collect()
+    }
+
+    fn dependencies(
+        &self,
+        graph: &PackageGraph,
+        workspace_path: &AbsoluteSystemPath,
+    ) -> Vec<Package> {
+        let node = PackageNode::Workspace(PackageName::Other(self.name.clone()));
+        let pkgs = match graph.immediate_dependencies(&node) {
+            Some(pkgs) => pkgs,
+            None => return vec![],
+        };
+
+        pkgs.iter()
+            .filter(|node| !matches!(node, PackageNode::Root))
             .filter_map(|node| {
                 let info = graph.package_info(node.as_package_name())?;
                 // If we don't get a package name back, we'll just skip it.
@@ -107,12 +142,16 @@ impl Workspace {
         self.packages_internal().await.map_err(|e| e.into())
     }
 
-    /// Finds and returns a map of packages within the workspace and its
-    /// dependents (i.e. the packages that depend on each of those packages).
+    /// Returns a map of packages within the workspace, its dependencies and
+    /// dependents. The response looks like this:
+    ///  {
+    ///    "package-path": {
+    ///      "dependents": ["dependent1_path", "dependent2_path"],
+    ///      "dependencies": ["dependency1_path", "dependency2_path"]
+    ///      }
+    ///  }
     #[napi]
-    pub async fn find_packages_and_dependents(
-        &self,
-    ) -> Result<HashMap<String, Vec<String>>, Error> {
+    pub async fn find_packages_with_graph(&self) -> Result<HashMap<String, PackageDetails>, Error> {
         let packages = self.find_packages().await?;
 
         let workspace_path = match AbsoluteSystemPath::new(self.absolute_path.as_str()) {
@@ -120,16 +159,23 @@ impl Workspace {
             Err(e) => return Err(Error::from_reason(e.to_string())),
         };
 
-        let map: HashMap<String, Vec<String>> = packages
+        let map: HashMap<String, PackageDetails> = packages
             .into_iter()
             .map(|package| {
-                let deps = package.dependents(&self.graph, workspace_path);
-                let dep_names = deps
-                    .into_iter()
-                    .map(|p| p.relative_path)
-                    .collect::<Vec<String>>();
+                let details = PackageDetails {
+                    dependencies: package
+                        .dependencies(&self.graph, workspace_path)
+                        .into_iter()
+                        .map(|p| p.relative_path)
+                        .collect(),
+                    dependents: package
+                        .dependents(&self.graph, workspace_path)
+                        .into_iter()
+                        .map(|p| p.relative_path)
+                        .collect(),
+                };
 
-                (package.relative_path, dep_names)
+                (package.relative_path, details)
             })
             .collect();
 
@@ -157,7 +203,7 @@ impl Workspace {
             .collect();
 
         // Create a ChangeMapper with no ignore patterns
-        let default_package_detector = DefaultPackageDetector::new(&self.graph);
+        let default_package_detector = DefaultPackageChangeMapper::new(&self.graph);
         let mapper = ChangeMapper::new(&self.graph, vec![], default_package_detector);
         let package_changes = match mapper.changed_packages(hash_set_of_paths, None) {
             Ok(changes) => changes,

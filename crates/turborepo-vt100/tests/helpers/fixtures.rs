@@ -1,3 +1,5 @@
+use turborepo_vt100 as vt100;
+
 use serde::de::Deserialize as _;
 use std::io::Read as _;
 

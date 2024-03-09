@@ -45,7 +45,8 @@ use {
     crate::run::package_discovery::DaemonPackageDiscovery,
     std::time::Duration,
     turborepo_repository::discovery::{
-        FallbackPackageDiscovery, LocalPackageDiscoveryBuilder, PackageDiscoveryBuilder,
+        Error as DiscoveryError, FallbackPackageDiscovery, LocalPackageDiscoveryBuilder,
+        PackageDiscoveryBuilder,
     },
 };
 
@@ -286,32 +287,51 @@ impl Run {
                 .with_single_package_mode(self.opts.run_opts.single_package);
 
             #[cfg(feature = "daemon-package-discovery")]
-            let builder = {
-                // if we are forcing the daemon, we don't want to fallback to local discovery
-                let (fallback, duration) = if let Some(true) = self.opts.run_opts.daemon {
-                    (None, Duration::MAX)
-                } else {
-                    (
-                        Some(
-                            LocalPackageDiscoveryBuilder::new(
-                                self.repo_root.clone(),
-                                None,
-                                Some(root_package_json.clone()),
-                            )
-                            .build()?,
-                        ),
-                        Duration::from_millis(10),
+            let graph = match (&daemon, self.opts.run_opts.daemon) {
+                (None, Some(true)) => {
+                    // We've asked for the daemon, but it's not available. This is an error
+                    return Err(package_graph::builder::Error::Discovery(
+                        DiscoveryError::Unavailable,
                     )
-                };
-                let fallback_discovery = FallbackPackageDiscovery::new(
-                    daemon.clone().map(DaemonPackageDiscovery::new),
-                    fallback,
-                    duration,
-                );
-                builder.with_package_discovery(fallback_discovery)
+                    .into());
+                }
+                (Some(daemon), Some(true)) => {
+                    // We have the daemon, and have explicitly asked to only use that
+                    let daemon_discovery = DaemonPackageDiscovery::new(daemon.clone());
+                    builder
+                        .with_package_discovery(daemon_discovery)
+                        .build()
+                        .await
+                }
+                (_, Some(false)) | (None, _) => {
+                    // We have explicitly requested to not use the daemon, or we don't have it
+                    // No change to default.
+                    builder.build().await
+                }
+                (Some(daemon), None) => {
+                    // We have the daemon, and it's not flagged off. Use the fallback strategy
+                    let daemon_discovery = DaemonPackageDiscovery::new(daemon.clone());
+                    let local_discovery = LocalPackageDiscoveryBuilder::new(
+                        self.repo_root.clone(),
+                        None,
+                        Some(root_package_json.clone()),
+                    )
+                    .build()?;
+                    let fallback_discover = FallbackPackageDiscovery::new(
+                        daemon_discovery,
+                        local_discovery,
+                        Duration::from_millis(10),
+                    );
+                    builder
+                        .with_package_discovery(fallback_discover)
+                        .build()
+                        .await
+                }
             };
+            #[cfg(not(feature = "daemon-package-discovery"))]
+            let graph = builder.build().await;
 
-            match builder.build().await {
+            match graph {
                 Ok(graph) => graph,
                 // if we can't find the package.json, it is a bug, and we should report it.
                 // likely cause is that package discovery watching is not up to date.
@@ -512,7 +532,6 @@ impl Run {
             &global_hash,
             global_env_mode,
             self.ui,
-            false,
             self.processes.clone(),
             &self.repo_root,
             global_env,
