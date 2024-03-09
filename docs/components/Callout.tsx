@@ -1,4 +1,4 @@
-import React, { Children } from "react";
+import React, { Children, Fragment } from "react";
 import { Callout as FumaCallout } from "fumadocs-ui/components/callout";
 
 export type FumaCalloutProps =
@@ -88,18 +88,13 @@ const ICONS = {
       <path d="M12 17h.01" />
     </svg>
   ),
-  "good-to-know": (
-    <></>
-    // <p className={`m-0 ${THEMES["good-to-know"].text} font-medium`}>
-    //   Good to know:
-    // </p>
-  ),
+  "good-to-know": <></>,
 };
 
 export function Callout({ type, ...props }: FumaCalloutProps) {
   const childrenToArray = Children.toArray(props.children);
   const goodToKnowChildren = [
-    <p className="inline font-medium" key="good-to-know">
+    <p className="inline font-medium good-to-know" key="good-to-know">
       Good to know:
     </p>,
     ...childrenToArray,
@@ -113,7 +108,13 @@ export function Callout({ type, ...props }: FumaCalloutProps) {
       type={type}
       {...props}
     >
-      {type === "good-to-know" ? goodToKnowChildren : props.children}
+      {type === "good-to-know" ? (
+        <div className="[&>p]:inline [&>p:nth-child(2)]:ps-1">
+          {goodToKnowChildren}
+        </div>
+      ) : (
+        props.children
+      )}
     </FumaCallout>
   );
 }
