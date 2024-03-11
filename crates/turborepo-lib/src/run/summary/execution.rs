@@ -4,6 +4,7 @@ use chrono::{DateTime, Local};
 use serde::Serialize;
 use tokio::sync::mpsc;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
+use turborepo_cache::CacheSource;
 use turborepo_ui::{color, cprintln, BOLD, BOLD_GREEN, BOLD_RED, MAGENTA, UI, YELLOW};
 
 use super::TurboDuration;
@@ -36,6 +37,8 @@ pub struct ExecutionSummary<'a> {
     failed: usize,
     // number of tasks that had a cache hit
     cached: usize,
+    // number of cache hits that came from the remote cache
+    cached_remote: usize,
     // number of tasks that started
     attempted: usize,
     pub(crate) start_time: i64,
@@ -59,7 +62,8 @@ impl<'a> ExecutionSummary<'a> {
             command,
             success: state.success,
             failed: state.failed,
-            cached: state.cached,
+            cached: state.cached_local + state.cached_remote,
+            cached_remote: state.cached_remote,
             attempted: state.attempted,
             // We're either at some path in the repo, or at the root, which is an empty path
             repo_path: package_inference_root.unwrap_or_else(|| AnchoredSystemPath::empty()),
@@ -82,6 +86,12 @@ impl<'a> ExecutionSummary<'a> {
             String::new()
         };
 
+        let cache_line = if self.cached_remote > 0 {
+            format!("{} (of which {} remote)", self.cached, self.cached_remote)
+        } else {
+            self.cached.to_string()
+        };
+
         let mut line_data = vec![
             (
                 "Tasks",
@@ -95,10 +105,9 @@ impl<'a> ExecutionSummary<'a> {
                 "Cached",
                 format!(
                     "{}, {} total",
-                    color!(ui, BOLD, "{} cached", self.cached),
+                    color!(ui, BOLD, "{} cached", cache_line),
                     self.attempted
-                )
-                .to_string(),
+                ),
             ),
             (
                 "Time",
@@ -159,6 +168,14 @@ impl<'a> ExecutionSummary<'a> {
     fn successful(&self) -> usize {
         self.success + self.cached
     }
+
+    fn add_cached(&mut self, source: CacheSource) {
+        self.cached += 1;
+        match source {
+            CacheSource::Remote => self.cached_remote += 1,
+            CacheSource::Local => {}
+        }
+    }
 }
 
 /// The final states of all task executions
@@ -166,7 +183,8 @@ impl<'a> ExecutionSummary<'a> {
 pub struct SummaryState {
     pub attempted: usize,
     pub failed: usize,
-    pub cached: usize,
+    pub cached_local: usize,
+    pub cached_remote: usize,
     pub success: usize,
     pub tasks: Vec<TaskState>,
 }
@@ -182,7 +200,8 @@ impl SummaryState {
         match event {
             Event::Building => self.attempted += 1,
             Event::BuildFailed => self.failed += 1,
-            Event::Cached => self.cached += 1,
+            Event::Cached(CacheSource::Local) => self.cached_local += 1,
+            Event::Cached(CacheSource::Remote) => self.cached_remote += 1,
             Event::Built => self.success += 1,
             Event::Canceled => (),
         }
@@ -208,7 +227,7 @@ struct TrackerMessage {
 enum Event {
     Building,
     BuildFailed,
-    Cached,
+    Cached(CacheSource),
     Built,
     // Canceled due to external signal or internal failure
     Canceled,
@@ -329,7 +348,7 @@ impl TaskTracker<chrono::DateTime<Local>> {
     // internal turbo error
     pub fn cancel(self) {}
 
-    pub async fn cached(self) -> TaskExecutionSummary {
+    pub async fn cached(self, source: CacheSource) -> TaskExecutionSummary {
         let Self {
             sender,
             started_at,
@@ -351,7 +370,7 @@ impl TaskTracker<chrono::DateTime<Local>> {
         };
         sender
             .send(TrackerMessage {
-                event: Event::Cached,
+                event: Event::Cached(source),
                 state: Some(state),
             })
             .await
@@ -449,7 +468,7 @@ mod test {
             let tracker = summary.task_tracker(bar.clone());
             tasks.push(tokio::spawn(async move {
                 let tracker = tracker.start().await;
-                tracker.cached().await;
+                tracker.cached(CacheSource::Local).await;
             }));
         }
         {
@@ -472,7 +491,7 @@ mod test {
 
         let state = summary.finish().await.unwrap();
         assert_eq!(state.attempted, 4);
-        assert_eq!(state.cached, 1);
+        assert_eq!(state.cached_local, 1);
         assert_eq!(state.failed, 1);
         assert_eq!(state.success, 1);
         let foo_state = state.tasks.iter().find(|task| task.task_id == foo).unwrap();
