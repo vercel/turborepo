@@ -5,7 +5,7 @@ description: Learn how to manage dependencies in your monorepo's workspace.
 
 import {PackageManagerTabs, Tab} from '#/components/Tabs'
 
-- **External dependencies** come from [the npm registry](https://www.npmjs.com/), allowing you to leverage valuable code from the ecosystem to build your applications and libraries faster.
+- **External dependencies** are packages that are uploaded to the [the npm registry](https://www.npmjs.com/), allowing you to leverage valuable code from the ecosystem to build your applications and libraries faster.
 - **Internal dependencies** let you share functionality within your repository, dramatically improving discoverability and usability of shared code. We will discuss how to build an Internal Package in [the next guide](/repo/docs/crafting-your-repository/creating-an-internal-package).
 
 <PackageManagerTabs>
@@ -50,7 +50,7 @@ When you install a dependency in your repository, you should install it directly
 This practice has several benefits:
 
 - **Improved clarity**: It's easier to understand what a package depends on when its dependencies are listed in its `package.json`. Developers working in the repository can see at a glance what dependencies will be available within the package.
-- **Enhanced flexibility**: In a monorepo at scale, it can be unrealistic to expect each package to use the same version of an external dependency. When there are many teams working in the same codebase, there will be differing priorities, timelines, and needs due to the realities of operating at scale. By installing dependencies in the package that uses them, you can allow your `web` team to bump to the latest version of TypeScript, while your `ui` team can prioritize shipping new feautres and bumping TypeScript later, for example. Additionally, if you still want to keep dependency versions in lockstep, [you can do that, too](/repo/docs/crafting-your-repository/managing-dependencies#keeping-dependencies-on-the-same-version).
+- **Enhanced flexibility**: In a monorepo at scale, it can be unrealistic to expect each package to use the same version of an external dependency. When there are many teams working in the same codebase, there will be differing priorities, timelines, and needs due to the realities of operating at scale. By installing dependencies in the package that uses them, you can allow your `web` team to bump to the latest version of TypeScript, while your `ui` team can prioritize shipping new features and bumping TypeScript later. Additionally, if you still want to keep dependency versions in sync, [you can do that, too](/repo/docs/crafting-your-repository/managing-dependencies#keeping-dependencies-on-the-same-version).
 - **Better caching ability**: If you install too many dependencies in the root of your repository, you'll be changing the workspace root whenever you add, update, or delete a dependency, leading to a lot of unnecessary cache invalidation.
 - **Pruning unused dependencies**: For Docker users, [Turborepo's pruning feature](/TODO-LINK) can remove unused dependencies from Docker images to create lighter images. When dependencies are installed in the packages that they are meant for, Turborepo can read your lockfile and remove dependencies that aren't used in the package from your image.
 
