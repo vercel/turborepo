@@ -111,11 +111,11 @@ pnpm up --recursive typescript@latest
 </Tab>
 </PackageManagerTabs>
 
-### Using refactoring tools
+#### Using refactoring tools
 
 Your IDE's refactoring tools can find and replace the version of a dependency across all `package.json` files in your repository at once. Try using a regex like `"next": ".*"` on `package.json` files to find all instances of the `next` package and replace them with the version you want. When you're done, make sure to run your package manager's install command to update your lockfile.
 
-### Using purpose-built tooling
+#### Using purpose-built tooling
 
 Tools like [`syncpack`](https://www.npmjs.com/package/syncpack), [`manypkg`](https://www.npmjs.com/package/@manypkg/cli), and [`sherif`](https://www.npmjs.com/package/sherif) can be used for this specific purpose.
 
