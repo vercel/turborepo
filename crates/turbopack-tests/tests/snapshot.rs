@@ -20,24 +20,23 @@ use turbo_tasks_fs::{
 };
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
-    condition::ContextCondition,
     ecmascript::{EcmascriptInputTransform, EcmascriptModuleAsset},
     module_options::{
         JsxTransformOptions, ModuleOptionsContext, ModuleRule, ModuleRuleCondition,
         ModuleRuleEffect,
     },
-    resolve_options_context::ResolveOptionsContext,
     ModuleAssetContext,
 };
-use turbopack_build::{BuildChunkingContext, MinifyType};
+use turbopack_browser::BrowserChunkingContext;
 use turbopack_core::{
     asset::Asset,
     chunk::{
         availability_info::AvailabilityInfo, ChunkableModule, ChunkingContext, ChunkingContextExt,
-        EvaluatableAssetExt, EvaluatableAssets,
+        EvaluatableAssetExt, EvaluatableAssets, MinifyType,
     },
     compile_time_defines,
     compile_time_info::CompileTimeInfo,
+    condition::ContextCondition,
     context::AssetContext,
     environment::{BrowserEnvironment, Environment, ExecutionEnvironment, NodeJsEnvironment},
     file_source::FileSource,
@@ -48,13 +47,14 @@ use turbopack_core::{
     reference_type::{EntryReferenceSubType, ReferenceType},
     source::Source,
 };
-use turbopack_dev::DevChunkingContext;
 use turbopack_ecmascript_plugins::transform::{
     emotion::{EmotionTransformConfig, EmotionTransformer},
     styled_components::{StyledComponentsTransformConfig, StyledComponentsTransformer},
 };
 use turbopack_ecmascript_runtime::RuntimeType;
 use turbopack_env::ProcessEnvAsset;
+use turbopack_nodejs::NodeJsChunkingContext;
+use turbopack_resolve::resolve_options_context::ResolveOptionsContext;
 use turbopack_test_utils::snapshot::{diff, expected, matches_expected, snapshot_issues};
 
 use crate::util::REPO_ROOT;
@@ -64,11 +64,12 @@ fn register() {
     turbo_tasks_env::register();
     turbo_tasks_fs::register();
     turbopack::register();
-    turbopack_build::register();
-    turbopack_dev::register();
+    turbopack_nodejs::register();
+    turbopack_browser::register();
     turbopack_env::register();
     turbopack_ecmascript_plugins::register();
     turbopack_ecmascript_runtime::register();
+    turbopack_resolve::register();
     include!(concat!(env!("OUT_DIR"), "/register_test_snapshot.rs"));
 }
 
@@ -260,6 +261,7 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
                 ..Default::default()
             })),
             preset_env_versions: Some(env),
+            ignore_dynamic_requests: true,
             rules: vec![(
                 ContextCondition::InDirectory("node_modules".to_string()),
                 ModuleOptionsContext {
@@ -300,7 +302,7 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
 
     let chunking_context: Vc<Box<dyn ChunkingContext>> = match options.runtime {
         Runtime::Dev => Vc::upcast(
-            DevChunkingContext::builder(
+            BrowserChunkingContext::builder(
                 project_root,
                 path,
                 path,
@@ -312,7 +314,7 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
             .build(),
         ),
         Runtime::Build => Vc::upcast(
-            BuildChunkingContext::builder(
+            NodeJsChunkingContext::builder(
                 project_root,
                 path,
                 path,
@@ -353,7 +355,7 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
             ),
             Runtime::Build => {
                 Vc::cell(vec![
-                    Vc::try_resolve_downcast_type::<BuildChunkingContext>(chunking_context)
+                    Vc::try_resolve_downcast_type::<NodeJsChunkingContext>(chunking_context)
                         .await?
                         .unwrap()
                         .entry_chunk_group(

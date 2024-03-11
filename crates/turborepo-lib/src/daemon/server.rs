@@ -31,8 +31,9 @@ use turborepo_filewatch::{
     package_watcher::{PackageWatcher, WatchingPackageDiscovery},
     FileSystemWatcher, WatchError,
 };
-use turborepo_repository::discovery::{
-    LocalPackageDiscoveryBuilder, PackageDiscovery, PackageDiscoveryBuilder,
+use turborepo_repository::{
+    discovery::{LocalPackageDiscoveryBuilder, PackageDiscovery, PackageDiscoveryBuilder},
+    package_manager,
 };
 
 use super::{bump_timeout::BumpTimeout, endpoint::SocketOpenError, proto};
@@ -101,19 +102,24 @@ impl FileWatching {
         let watcher = Arc::new(FileSystemWatcher::new_with_default_cookie_dir(&repo_root)?);
         let recv = watcher.watch();
 
-        let cookie_watcher = CookieWriter::new(
+        let cookie_writer = CookieWriter::new(
             watcher.cookie_dir(),
             Duration::from_millis(100),
             recv.clone(),
         );
         let glob_watcher = Arc::new(GlobWatcher::new(
             repo_root.clone(),
-            cookie_watcher,
+            cookie_writer.clone(),
             recv.clone(),
         ));
         let package_watcher = Arc::new(
-            PackageWatcher::new(repo_root.clone(), recv.clone(), backup_discovery)
-                .map_err(|e| WatchError::Setup(format!("{:?}", e)))?,
+            PackageWatcher::new(
+                repo_root.clone(),
+                recv.clone(),
+                backup_discovery,
+                cookie_writer,
+            )
+            .map_err(|e| WatchError::Setup(format!("{:?}", e)))?,
         );
 
         Ok(FileWatching {
@@ -127,16 +133,16 @@ impl FileWatching {
 /// Timeout for every RPC the server handles
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
-pub struct TurboGrpcService<S, PDB> {
+pub struct TurboGrpcService<S> {
     repo_root: AbsoluteSystemPathBuf,
     paths: Paths,
     timeout: Duration,
     external_shutdown: S,
 
-    package_discovery_backup: PDB,
+    package_discovery_backup: LocalPackageDiscoveryBuilder,
 }
 
-impl<S> TurboGrpcService<S, LocalPackageDiscoveryBuilder>
+impl<S> TurboGrpcService<S>
 where
     S: Future<Output = CloseReason>,
 {
@@ -168,28 +174,11 @@ where
     }
 }
 
-impl<S, PDB> TurboGrpcService<S, PDB>
+impl<S> TurboGrpcService<S>
 where
     S: Future<Output = CloseReason>,
-    PDB: PackageDiscoveryBuilder,
-    PDB::Output: PackageDiscovery + Send + Sync + 'static,
 {
-    /// If errors are encountered when loading the package discovery, this
-    /// builder will be used as a backup to refresh the state.
-    pub fn with_package_discovery_backup<PDB2: PackageDiscoveryBuilder>(
-        self,
-        package_discovery_backup: PDB2,
-    ) -> TurboGrpcService<S, PDB2> {
-        TurboGrpcService {
-            external_shutdown: self.external_shutdown,
-            paths: self.paths,
-            repo_root: self.repo_root,
-            timeout: self.timeout,
-            package_discovery_backup,
-        }
-    }
-
-    pub async fn serve(self) -> Result<CloseReason, PDB::Error> {
+    pub async fn serve(self) -> Result<CloseReason, package_manager::Error> {
         let Self {
             external_shutdown,
             paths,
@@ -270,19 +259,19 @@ where
     }
 }
 
-struct TurboGrpcServiceInner<PD> {
+struct TurboGrpcServiceInner {
     shutdown: mpsc::Sender<()>,
     file_watching: FileWatching,
     times_saved: Arc<Mutex<HashMap<String, u64>>>,
     start_time: Instant,
     log_file: AbsoluteSystemPathBuf,
-    package_discovery: PD,
+    package_discovery: Arc<WatchingPackageDiscovery>,
 }
 
 // we have a grpc service that uses watching package discovery, and where the
 // watching package hasher also uses watching package discovery as well as
 // falling back to a local package hasher
-impl TurboGrpcServiceInner<Arc<WatchingPackageDiscovery>> {
+impl TurboGrpcServiceInner {
     pub fn new<PD: Sync + PackageDiscovery + Send + 'static>(
         package_discovery_backup: PD,
         repo_root: AbsoluteSystemPathBuf,
@@ -324,12 +313,7 @@ impl TurboGrpcServiceInner<Arc<WatchingPackageDiscovery>> {
             watch_root_handle,
         )
     }
-}
 
-impl<PD> TurboGrpcServiceInner<PD>
-where
-    PD: PackageDiscovery + Send + Sync + 'static,
-{
     async fn trigger_shutdown(&self) {
         info!("triggering shutdown");
         let _ = self.shutdown.send(()).await;
@@ -421,9 +405,7 @@ async fn watch_root(
 }
 
 #[tonic::async_trait]
-impl<PD: PackageDiscovery + Send + Sync + 'static> proto::turbod_server::Turbod
-    for TurboGrpcServiceInner<PD>
-{
+impl proto::turbod_server::Turbod for TurboGrpcServiceInner {
     async fn hello(
         &self,
         request: tonic::Request<proto::HelloRequest>,
@@ -591,7 +573,7 @@ fn compare_versions(client: Version, server: Version, constraint: proto::Version
     }
 }
 
-impl<PD> NamedService for TurboGrpcServiceInner<PD> {
+impl NamedService for TurboGrpcServiceInner {
     const NAME: &'static str = "turborepo.Daemon";
 }
 
@@ -689,14 +671,19 @@ mod test {
             paths.clone(),
             Duration::from_secs(60 * 60),
             exit_signal,
-        )
-        .with_package_discovery_backup(MockDiscovery);
+        );
 
         // the package watcher reads data from the package.json file
         // so we need to create it
         repo_root.create_dir_all().unwrap();
         let package_json = repo_root.join_component("package.json");
-        std::fs::write(package_json, r#"{"workspaces": ["packages/*"]}"#).unwrap();
+        package_json
+            .create_with_contents(r#"{"workspaces": ["packages/*"]}"#)
+            .unwrap();
+        repo_root
+            .join_component("package-lock.json")
+            .create_with_contents("")
+            .unwrap();
 
         let handle = tokio::task::spawn(service.serve());
 
@@ -741,14 +728,19 @@ mod test {
             paths.clone(),
             Duration::from_millis(10),
             exit_signal,
-        )
-        .with_package_discovery_backup(MockDiscovery);
+        );
 
         // the package watcher reads data from the package.json file
         // so we need to create it
         repo_root.create_dir_all().unwrap();
         let package_json = repo_root.join_component("package.json");
-        std::fs::write(package_json, r#"{"workspaces": ["packages/*"]}"#).unwrap();
+        package_json
+            .create_with_contents(r#"{"workspaces": ["packages/*"]}"#)
+            .unwrap();
+        repo_root
+            .join_component("package-lock.json")
+            .create_with_contents("")
+            .unwrap();
 
         let close_reason = server.serve().await;
 
@@ -774,6 +766,15 @@ mod test {
             .unwrap();
 
         let repo_root = path.join_component("repo");
+        repo_root.create_dir_all().unwrap();
+        let package_json = repo_root.join_component("package.json");
+        package_json
+            .create_with_contents(r#"{"workspaces": ["packages/*"]}"#)
+            .unwrap();
+        repo_root
+            .join_component("package-lock.json")
+            .create_with_contents("")
+            .unwrap();
         let paths = Paths::from_repo_root(&repo_root);
 
         let (_tx, rx) = oneshot::channel::<CloseReason>();
@@ -784,8 +785,7 @@ mod test {
             paths,
             Duration::from_secs(60 * 60),
             exit_signal,
-        )
-        .with_package_discovery_backup(MockDiscovery);
+        );
 
         let handle = tokio::task::spawn(server.serve());
 

@@ -1,7 +1,9 @@
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{trace::TraceRawVcs, ValueDefault, Vc};
-use turbopack_core::{environment::Environment, resolve::options::ImportMapping};
+use turbopack_core::{
+    condition::ContextCondition, environment::Environment, resolve::options::ImportMapping,
+};
 use turbopack_ecmascript::{references::esm::UrlRewriteBehavior, TreeShakingMode};
 use turbopack_node::{
     execution_context::ExecutionContext,
@@ -9,7 +11,6 @@ use turbopack_node::{
 };
 
 use super::ModuleRule;
-use crate::condition::ContextCondition;
 
 #[derive(Clone, PartialEq, Eq, Debug, TraceRawVcs, Serialize, Deserialize)]
 pub struct LoaderRuleItem {
@@ -152,8 +153,12 @@ pub struct ModuleOptionsContext {
     /// References to externals from ESM imports should use `import()` and make
     /// async modules.
     pub import_externals: bool,
+    /// Ignore very dynamic requests which doesn't have any static known part.
+    /// If false, they will reference the whole directory. If true, they won't
+    /// reference anything and lead to an runtime error instead.
+    pub ignore_dynamic_requests: bool,
 
-    pub use_lightningcss: bool,
+    pub use_swc_css: bool,
 }
 
 #[turbo_tasks::value_impl]

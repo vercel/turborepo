@@ -50,10 +50,24 @@ pub enum Error {
         #[source_code]
         text: NamedSource,
     },
-    #[error("Could not find workspace \"{package}\" from task \"{task_id}\" in project")]
-    MissingWorkspaceFromTask { package: String, task_id: String },
-    #[error("Could not find \"{task_id}\" in root turbo.json or \"{task_name}\" in workspace")]
-    MissingWorkspaceTask { task_id: String, task_name: String },
+    #[error("Could not find package \"{package}\" from task \"{task_id}\" in project")]
+    MissingPackageFromTask {
+        #[label]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+        package: String,
+        task_id: String,
+    },
+    #[error("Could not find \"{task_id}\" in root turbo.json or \"{task_name}\" in package")]
+    MissingPackageTask {
+        #[label]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+        task_id: String,
+        task_name: String,
+    },
     #[error(transparent)]
     #[diagnostic(transparent)]
     Config(#[from] crate::config::Error),
@@ -64,8 +78,15 @@ pub enum Error {
     },
     #[error(transparent)]
     Graph(#[from] graph::Error),
-    #[error("Invalid task name {task_name}: {reason}")]
-    InvalidTaskName { task_name: String, reason: String },
+    #[error("invalid task name: {reason}")]
+    InvalidTaskName {
+        #[label]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+        task_name: String,
+        reason: String,
+    },
 }
 
 pub struct EngineBuilder<'a> {
@@ -160,7 +181,8 @@ impl<'a> EngineBuilder<'a> {
                 //   workspace is acceptable)
                 if !matches!(workspace, PackageName::Root) || self.root_enabled_tasks.contains(task)
                 {
-                    traversal_queue.push_back(task.to(task_id));
+                    let task_id = task.to(task_id);
+                    traversal_queue.push_back(task_id);
                 }
             }
         }
@@ -187,6 +209,11 @@ impl<'a> EngineBuilder<'a> {
         let mut engine = Engine::default();
 
         while let Some(task_id) = traversal_queue.pop_front() {
+            {
+                let (task_id, span) = task_id.clone().split();
+                engine.add_task_location(task_id.into_owned(), span);
+            }
+
             if task_id.package() == ROOT_PKG_NAME
                 && !self
                     .root_enabled_tasks
@@ -200,7 +227,7 @@ impl<'a> EngineBuilder<'a> {
                 });
             }
 
-            validate_task_name(task_id.task())?;
+            validate_task_name(task_id.to(task_id.task()))?;
 
             if task_id.package() != ROOT_PKG_NAME
                 && self
@@ -210,9 +237,12 @@ impl<'a> EngineBuilder<'a> {
             {
                 // If we have a pkg it should be in PackageGraph.
                 // If we're hitting this error something has gone wrong earlier when building
-                // PackageGraph or the workspace really doesn't exist and
+                // PackageGraph or the package really doesn't exist and
                 // turbo.json is misconfigured.
-                return Err(Error::MissingWorkspaceFromTask {
+                let (span, text) = task_id.span_and_text("turbo.json");
+                return Err(Error::MissingPackageFromTask {
+                    span,
+                    text,
                     package: task_id.package().to_string(),
                     task_id: task_id.to_string(),
                 });
@@ -275,7 +305,8 @@ impl<'a> EngineBuilder<'a> {
                         engine
                             .task_graph
                             .add_edge(to_task_index, from_task_index, ());
-                        traversal_queue.push_back(span.to(from_task_id));
+                        let from_task_id = span.to(from_task_id);
+                        traversal_queue.push_back(from_task_id);
                     }
                 });
 
@@ -289,11 +320,11 @@ impl<'a> EngineBuilder<'a> {
                 engine
                     .task_graph
                     .add_edge(to_task_index, from_task_index, ());
-                traversal_queue.push_back(span.to(from_task_id));
+                let from_task_id = span.to(from_task_id);
+                traversal_queue.push_back(from_task_id);
             }
 
             engine.add_definition(task_id.as_inner().clone().into_owned(), task_definition);
-
             if !has_deps && !has_topo_deps {
                 engine.connect_to_root(&to_task_id);
             }
@@ -395,7 +426,10 @@ impl<'a> EngineBuilder<'a> {
         }
 
         if task_definitions.is_empty() {
-            return Err(Error::MissingWorkspaceTask {
+            let (span, text) = task_id.span_and_text("turbo.json");
+            return Err(Error::MissingPackageTask {
+                span,
+                text,
                 task_id: task_id.to_string(),
                 task_name: task_name.to_string(),
             });
@@ -447,12 +481,15 @@ impl Error {
 // we can expand the patterns here.
 const INVALID_TOKENS: &[&str] = &["$colon$"];
 
-fn validate_task_name(task: &str) -> Result<(), Error> {
+fn validate_task_name(task: Spanned<&str>) -> Result<(), Error> {
     INVALID_TOKENS
         .iter()
         .find(|token| task.contains(**token))
         .map(|found_token| {
+            let (span, text) = task.span_and_text("turbo.json");
             Err(Error::InvalidTaskName {
+                span,
+                text,
                 task_name: task.to_string(),
                 reason: format!("task contains invalid string '{found_token}'"),
             })
@@ -1106,7 +1143,7 @@ mod test {
     #[test_case("build:prod", None)]
     #[test_case("build$colon$prod", Some("task contains invalid string '$colon$'"))]
     fn test_validate_task_name(task_name: &str, reason: Option<&str>) {
-        let result = validate_task_name(task_name)
+        let result = validate_task_name(Spanned::new(task_name))
             .map_err(|e| {
                 if let Error::InvalidTaskName { reason, .. } = e {
                     reason

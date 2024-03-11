@@ -15,6 +15,7 @@ use crate::{
 };
 
 pub mod builder;
+mod dep_splitter;
 
 pub use builder::{Error, PackageGraphBuilder};
 
@@ -36,7 +37,7 @@ pub struct PackageGraph {
 /// There are other structs in this module that have "Workspace" in the name,
 /// but they do NOT follow the glossary, and instead mean "package" when they
 /// say Workspace. Some of these are labeled as such.
-#[derive(Eq, PartialEq, Hash)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub struct WorkspacePackage {
     pub name: PackageName,
     pub path: AnchoredSystemPathBuf,

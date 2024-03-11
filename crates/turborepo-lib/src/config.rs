@@ -6,7 +6,8 @@ use serde::Deserialize;
 use struct_iterable::Iterable;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
-use turborepo_dirs::config_dir;
+use turborepo_auth::{TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE};
+use turborepo_dirs::{config_dir, vercel_config_dir};
 use turborepo_errors::TURBO_SITE;
 use turborepo_repository::package_json::{Error as PackageJsonError, PackageJson};
 
@@ -38,6 +39,8 @@ pub enum Error {
     NoGlobalConfigPath,
     #[error("Global auth file path not found")]
     NoGlobalAuthFilePath,
+    #[error("Global config directory not found")]
+    NoGlobalConfigDir,
     #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(
@@ -452,13 +455,31 @@ impl TurborepoConfigBuilder {
             return Ok(global_config_path);
         }
 
-        let config_dir = config_dir().ok_or(Error::NoGlobalConfigPath)?;
-        let global_config_path = config_dir.join("turborepo").join("config.json");
-        AbsoluteSystemPathBuf::try_from(global_config_path).map_err(Error::PathError)
+        let config_dir = config_dir()?.ok_or(Error::NoGlobalConfigPath)?;
+
+        Ok(config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]))
+    }
+    fn global_auth_path(&self) -> Result<AbsoluteSystemPathBuf, Error> {
+        #[cfg(test)]
+        if let Some(global_config_path) = self.global_config_path.clone() {
+            return Ok(global_config_path);
+        }
+
+        let vercel_config_dir = vercel_config_dir()?.ok_or(Error::NoGlobalConfigDir)?;
+        // Check for both Vercel and Turbo paths. Vercel takes priority.
+        let vercel_path = vercel_config_dir.join_components(&[VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE]);
+        if vercel_path.exists() {
+            return Ok(vercel_path);
+        }
+
+        let turbo_config_dir = config_dir()?.ok_or(Error::NoGlobalConfigDir)?;
+
+        Ok(turbo_config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]))
     }
     fn local_config_path(&self) -> AbsoluteSystemPathBuf {
         self.repo_root.join_components(&[".turbo", "config.json"])
     }
+
     #[allow(dead_code)]
     fn root_package_json_path(&self) -> AbsoluteSystemPathBuf {
         self.repo_root.join_component("package.json")
@@ -508,6 +529,33 @@ impl TurborepoConfigBuilder {
         Ok(local_config)
     }
 
+    fn get_global_auth(&self) -> Result<ConfigurationOptions, Error> {
+        let global_auth_path = self.global_auth_path()?;
+        let token = match turborepo_auth::Token::from_file(&global_auth_path) {
+            Ok(token) => token,
+            // Multiple ways this can go wrong. Don't error out if we can't find the token - it
+            // just might not be there.
+            Err(e) => {
+                if matches!(e, turborepo_auth::Error::TokenNotFound) {
+                    return Ok(ConfigurationOptions::default());
+                }
+
+                return Err(e.into());
+            }
+        };
+
+        // No auth token found in either Vercel or Turbo config.
+        if token.into_inner().is_empty() {
+            return Ok(ConfigurationOptions::default());
+        }
+
+        let global_auth: ConfigurationOptions = ConfigurationOptions {
+            token: Some(token.into_inner().to_owned()),
+            ..Default::default()
+        };
+        Ok(global_auth)
+    }
+
     create_builder!(with_api_url, api_url, Option<String>);
     create_builder!(with_login_url, login_url, Option<String>);
     create_builder!(with_team_slug, team_slug, Option<String>);
@@ -552,6 +600,7 @@ impl TurborepoConfigBuilder {
             Err(e)
         })?;
         let global_config = self.get_global_config()?;
+        let global_auth = self.get_global_auth()?;
         let local_config = self.get_local_config()?;
         let env_vars = self.get_environment();
         let env_var_config = get_env_var_config(&env_vars)?;
@@ -561,6 +610,7 @@ impl TurborepoConfigBuilder {
             root_package_json.get_configuration_options(),
             turbo_json.get_configuration_options(),
             global_config.get_configuration_options(),
+            global_auth.get_configuration_options(),
             local_config.get_configuration_options(),
             env_var_config.get_configuration_options(),
             Ok(self.override_config.clone()),

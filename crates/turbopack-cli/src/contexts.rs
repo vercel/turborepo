@@ -4,23 +4,22 @@ use anyhow::Result;
 use turbo_tasks::{Value, Vc};
 use turbo_tasks_fs::{FileSystem, FileSystemPath};
 use turbopack::{
-    condition::ContextCondition,
     ecmascript::{EcmascriptInputTransform, TreeShakingMode},
     module_options::{
         JsxTransformOptions, ModuleOptionsContext, ModuleRule, ModuleRuleCondition,
         ModuleRuleEffect,
     },
-    resolve_options_context::ResolveOptionsContext,
     ModuleAssetContext,
 };
+use turbopack_browser::react_refresh::assert_can_resolve_react_refresh;
 use turbopack_core::{
     compile_time_defines,
     compile_time_info::{CompileTimeDefines, CompileTimeInfo},
+    condition::ContextCondition,
     context::AssetContext,
     environment::{BrowserEnvironment, Environment, ExecutionEnvironment},
     resolve::options::{ImportMap, ImportMapping},
 };
-use turbopack_dev::react_refresh::assert_can_resolve_react_refresh;
 use turbopack_ecmascript_plugins::transform::{
     emotion::{EmotionTransformConfig, EmotionTransformer},
     styled_components::{StyledComponentsTransformConfig, StyledComponentsTransformer},
@@ -29,6 +28,7 @@ use turbopack_ecmascript_plugins::transform::{
 use turbopack_node::{
     execution_context::ExecutionContext, transforms::postcss::PostCssTransformOptions,
 };
+use turbopack_resolve::resolve_options_context::ResolveOptionsContext;
 
 #[turbo_tasks::value(shared)]
 pub enum NodeEnv {
@@ -145,7 +145,7 @@ async fn get_client_module_options_context(
                     StyledComponentsTransformer::new(&StyledComponentsTransformConfig::default()),
                 ) as _)),
                 EcmascriptInputTransform::Plugin(Vc::cell(Box::new(StyledJsxTransformer::new(
-                    module_options_context.use_lightningcss,
+                    !module_options_context.use_swc_css,
                     versions,
                 )) as _)),
             ]),

@@ -1,7 +1,7 @@
 //! This module hosts the `PackageWatcher` type, which is used to watch the
 //! filesystem for changes to packages.
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc};
 
 use notify::Event;
 use tokio::{
@@ -113,9 +113,10 @@ impl PackageWatcher {
         root: AbsoluteSystemPathBuf,
         recv: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
         backup_discovery: T,
+        cookie_writer: CookieWriter,
     ) -> Result<Self, package_manager::Error> {
         let (exit_tx, exit_rx) = oneshot::channel();
-        let subscriber = Subscriber::new(root, recv, backup_discovery)?;
+        let subscriber = Subscriber::new(root, recv, backup_discovery, cookie_writer)?;
         let package_manager_lazy = subscriber.manager_receiver();
         let package_data = subscriber.package_data();
         let handle = tokio::spawn(subscriber.watch(exit_rx));
@@ -217,8 +218,8 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
         repo_root: AbsoluteSystemPathBuf,
         mut recv: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
         backup_discovery: T,
+        writer: CookieWriter,
     ) -> Result<Self, Error> {
-        let writer = CookieWriter::new(&repo_root, Duration::from_secs(1), recv.clone());
         let (package_data_tx, cookie_tx, package_data_lazy) = CookiedOptionalWatch::new(writer);
         let package_data_tx = Arc::new(package_data_tx);
         let (package_manager_tx, package_manager_lazy) = package_data_lazy.new_sibling();
@@ -680,7 +681,10 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
 
 #[cfg(test)]
 mod test {
-    use std::sync::{Arc, Mutex};
+    use std::{
+        sync::{Arc, Mutex},
+        time::Duration,
+    };
 
     use itertools::Itertools;
     use tokio::{join, sync::broadcast};
@@ -691,7 +695,7 @@ mod test {
     };
 
     use super::Subscriber;
-    use crate::OptionalWatch;
+    use crate::{cookies::CookieWriter, OptionalWatch};
 
     #[derive(Debug)]
     struct MockDiscovery {
@@ -758,8 +762,11 @@ mod test {
             manager,
             package_data: Arc::new(Mutex::new(package_data)),
         };
+        let cookie_writer =
+            CookieWriter::new_with_default_cookie_dir(&root, Duration::from_secs(2), rx.clone());
 
-        let subscriber = Subscriber::new(root.clone(), rx, mock_discovery).unwrap();
+        let subscriber =
+            Subscriber::new(root.clone(), rx, mock_discovery, cookie_writer.clone()).unwrap();
 
         let mut package_data = subscriber.package_data();
 
@@ -778,7 +785,7 @@ mod test {
                     // simulate fs round trip
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-                    let path = root.join_component("1.cookie").as_std_path().to_owned();
+                    let path = cookie_writer.cookie_dir().join_component("1.cookie").as_std_path().to_owned();
                     tracing::info!("writing cookie at {}", path.to_string_lossy());
                     tx.send(Ok(notify::Event {
                         kind: notify::EventKind::Create(notify::event::CreateKind::File),
@@ -838,7 +845,7 @@ mod test {
                     // simulate fs round trip
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-                    let path = root.join_component("2.cookie").as_std_path().to_owned();
+                    let path = cookie_writer.cookie_dir().join_component("2.cookie").as_std_path().to_owned();
                     tracing::info!("writing cookie at {}", path.to_string_lossy());
                     tx.send(Ok(notify::Event {
                         kind: notify::EventKind::Create(notify::event::CreateKind::File),
@@ -913,7 +920,10 @@ mod test {
             package_data: package_data_raw.clone(),
         };
 
-        let subscriber = Subscriber::new(root.clone(), rx, mock_discovery).unwrap();
+        let cookie_writer =
+            CookieWriter::new_with_default_cookie_dir(&root, Duration::from_secs(2), rx.clone());
+        let subscriber =
+            Subscriber::new(root.clone(), rx, mock_discovery, cookie_writer.clone()).unwrap();
 
         let mut package_data = subscriber.package_data();
 
@@ -925,7 +935,7 @@ mod test {
                     // simulate fs round trip
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-                    let path = root.join_component("1.cookie").as_std_path().to_owned();
+                    let path = cookie_writer.cookie_dir().join_component("1.cookie").as_std_path().to_owned();
                     tracing::info!("writing cookie at {}", path.to_string_lossy());
                     tx.send(Ok(notify::Event {
                         kind: notify::EventKind::Create(notify::event::CreateKind::File),
@@ -998,7 +1008,7 @@ mod test {
                     // simulate fs round trip
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-                    let path = root.join_component("2.cookie").as_std_path().to_owned();
+                    let path = cookie_writer.cookie_dir().join_component("2.cookie").as_std_path().to_owned();
                     tracing::info!("writing cookie at {}", path.to_string_lossy());
                     tx.send(Ok(notify::Event {
                         kind: notify::EventKind::Create(notify::event::CreateKind::File),

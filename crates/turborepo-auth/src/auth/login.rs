@@ -45,6 +45,7 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
             ui::print_cli_authorized(user_email, &ui);
         }
     };
+
     // Check if passed in token exists first.
     if !force {
         if let Some(token) = existing_token {
@@ -58,13 +59,11 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
             {
                 return Ok(token);
             }
-        }
-
         // If the user is logging into Vercel, check for an existing `vc` token.
-        if login_url_configuration.contains("vercel.com") {
+        } else if login_url_configuration.contains("vercel.com") {
             // The extraction can return an error, but we don't want to fail the login if
             // the token is not found.
-            if let Ok(token) = extract_vercel_token() {
+            if let Ok(Some(token)) = extract_vercel_token() {
                 let token = Token::existing(token);
                 if token
                     .is_valid(
@@ -81,7 +80,15 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
 
     let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{DEFAULT_PORT}");
     let mut login_url = Url::parse(login_url_configuration)?;
+    let mut success_url = login_url.clone();
+    success_url
+        .path_segments_mut()
+        .map_err(|_: ()| Error::LoginUrlCannotBeABase {
+            value: login_url_configuration.to_string(),
+        })?
+        .extend(["turborepo", "success"]);
 
+    // Create the full login URL.
     login_url
         .path_segments_mut()
         .map_err(|_: ()| Error::LoginUrlCannotBeABase {
@@ -107,7 +114,7 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
         .run(
             DEFAULT_PORT,
             crate::LoginType::Basic {
-                login_url_configuration: login_url.to_string(),
+                success_redirect: success_url.to_string(),
             },
             token_cell.clone(),
         )
@@ -290,6 +297,9 @@ mod tests {
                 active_at: 0,
                 created_at: 123456,
             })
+        }
+        async fn delete_token(&self, _token: &str) -> turborepo_api_client::Result<()> {
+            Ok(())
         }
     }
 

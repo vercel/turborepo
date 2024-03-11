@@ -1,6 +1,7 @@
 use std::io;
 
 use thiserror::Error;
+use turbopath::{AbsoluteSystemPathBuf, PathError};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -22,16 +23,30 @@ pub enum Error {
     FailedToFetchUser(#[source] turborepo_api_client::Error),
     #[error("url is invalid: {0}")]
     InvalidUrl(#[from] url::ParseError),
+
     #[error("failed to validate sso token")]
     FailedToValidateSSOToken(#[source] turborepo_api_client::Error),
     #[error("failed to make sso token name")]
     FailedToMakeSSOTokenName(#[source] io::Error),
-    #[error("config directory not found")]
-    ConfigDirNotFound,
     #[error("sso team cannot be empty for login")]
     EmptySSOTeam,
     #[error("sso team not found: {0}")]
     SSOTeamNotFound(String),
     #[error("sso token expired for team: {0}")]
     SSOTokenExpired(String),
+    #[error("token not found")]
+    TokenNotFound,
+    #[error("invalid token file format: {0}")]
+    InvalidTokenFileFormat(#[source] serde_json::Error),
+
+    #[error("config directory not found")]
+    ConfigDirNotFound,
+    #[error("failed to read auth file path: {path}")]
+    FailedToReadAuthFilePath {
+        path: AbsoluteSystemPathBuf,
+        error: io::Error,
+    },
+
+    #[error(transparent)]
+    Path(#[from] PathError),
 }

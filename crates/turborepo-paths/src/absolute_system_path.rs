@@ -232,14 +232,20 @@ impl AbsoluteSystemPath {
         self.0.as_str()
     }
 
-    pub fn join_unix_path(
-        &self,
-        unix_path: impl AsRef<RelativeUnixPath>,
-    ) -> Result<AbsoluteSystemPathBuf, PathError> {
+    pub fn join_unix_path(&self, unix_path: impl AsRef<RelativeUnixPath>) -> AbsoluteSystemPathBuf {
         let tail = unix_path.as_ref().to_system_path_buf();
-        Ok(AbsoluteSystemPathBuf(
-            self.0.join(tail).as_std_path().clean().try_into()?,
-        ))
+        AbsoluteSystemPathBuf(
+            self.0
+                .join(tail)
+                .as_std_path()
+                .clean()
+                // The unwrap here should never panic as `try_into` will only panic if
+                // - path isn't absolute: self is already absolute, appending to it won't change
+                //   that
+                // - path isn't valid utf8: self and unix_path are both utf8 already
+                .try_into()
+                .expect("joined path is absolute and valid utf8"),
+        )
     }
 
     pub fn anchor(&self, path: &AbsoluteSystemPath) -> Result<AnchoredSystemPathBuf, PathError> {
@@ -445,9 +451,18 @@ impl AbsoluteSystemPath {
     where
         I: Into<String>,
     {
-        fs::read_to_string(&self.0).or_else(|e| {
+        match self.read_existing_to_string()? {
+            Some(contents) => Ok(contents),
+            None => default_value.map(|value| value.into()),
+        }
+    }
+
+    /// Attempts to read a file returning None if the file does not exist
+    /// For all other scenarios passes through the `read_to_string` results.
+    pub fn read_existing_to_string(&self) -> Result<Option<String>, io::Error> {
+        fs::read_to_string(&self.0).map(Some).or_else(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
-                default_value.map(|intoable| intoable.into())
+                Ok(None)
             } else {
                 Err(e)
             }
@@ -583,6 +598,28 @@ mod tests {
         .unwrap();
 
         assert_eq!(base.contains(&other), expected);
+    }
+
+    #[test]
+    fn test_read_non_existing_to_string() -> Result<()> {
+        let test_dir = tempdir::TempDir::new("read-existing")?;
+        let test_path = test_dir.path().join("foo");
+        let path = AbsoluteSystemPathBuf::new(test_path.to_str().unwrap())?;
+        assert_eq!(path.read_existing_to_string()?, None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_existing_to_string() -> Result<()> {
+        let test_dir = tempdir::TempDir::new("read-existing")?;
+        let test_path = test_dir.path().join("foo");
+        let path = AbsoluteSystemPathBuf::new(test_path.to_str().unwrap())?;
+        path.create_with_contents("hi there!")?;
+        assert_eq!(
+            path.read_existing_to_string()?.as_deref(),
+            Some("hi there!")
+        );
+        Ok(())
     }
 
     // Constructing a windows permissions struct is only possible by calling

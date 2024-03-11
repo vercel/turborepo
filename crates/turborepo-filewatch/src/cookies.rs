@@ -68,7 +68,8 @@ pub enum CookieError {
 /// for a downstream, filewatching-backed service.
 #[derive(Clone)]
 pub struct CookieWriter {
-    root: AbsoluteSystemPathBuf,
+    // Where we put the cookie files, usually `<repo_root>/.turbo/cookies`
+    cookie_root: AbsoluteSystemPathBuf,
     timeout: Duration,
     cookie_request_sender_lazy:
         OptionalWatch<mpsc::Sender<oneshot::Sender<Result<usize, CookieError>>>>,
@@ -112,7 +113,8 @@ impl<T> Ord for CookiedRequest<T> {
 /// CookieWatcher is used by downstream filewatching-backed services to
 /// know when it is safe to handle a particular request.
 pub(crate) struct CookieWatcher<T> {
-    root: AbsoluteSystemPathBuf,
+    // Where we expect to find the cookie files, usually `<repo_root>/.turbo/cookies`
+    cookie_root: AbsoluteSystemPathBuf,
     // We don't necessarily get requests in serial-order, but we want to keep them
     // in order so we don't have to scan all requests every time we get a new cookie.
     pending_requests: BinaryHeap<CookiedRequest<T>>,
@@ -120,9 +122,9 @@ pub(crate) struct CookieWatcher<T> {
 }
 
 impl<T> CookieWatcher<T> {
-    pub(crate) fn new(root: AbsoluteSystemPathBuf) -> Self {
+    pub(crate) fn new(cookie_root: AbsoluteSystemPathBuf) -> Self {
         Self {
-            root,
+            cookie_root,
             pending_requests: BinaryHeap::new(),
             latest: 0,
         }
@@ -153,7 +155,7 @@ impl<T> CookieWatcher<T> {
         if !matches!(event_kind, EventKind::Create(_)) {
             return None;
         }
-        if let Some(serial) = serial_for_path(&self.root, path) {
+        if let Some(serial) = serial_for_path(&self.cookie_root, path) {
             self.latest = serial;
             let mut ready_requests = Vec::new();
             while let Some(cookied_request) = self.pending_requests.pop() {
@@ -181,15 +183,30 @@ fn serial_for_path(root: &AbsoluteSystemPath, path: &AbsoluteSystemPath) -> Opti
 }
 
 impl CookieWriter {
+    #[cfg(test)]
+    pub fn new_with_default_cookie_dir(
+        repo_root: &AbsoluteSystemPath,
+        timeout: Duration,
+        recv: OptionalWatch<broadcast::Receiver<Result<notify::Event, NotifyError>>>,
+    ) -> Self {
+        let cookie_root = repo_root.join_components(&[".turbo", "cookies"]);
+        Self::new(&cookie_root, timeout, recv)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn cookie_dir(&self) -> &AbsoluteSystemPath {
+        &self.cookie_root
+    }
+
     pub fn new(
-        root: &AbsoluteSystemPath,
+        cookie_root: &AbsoluteSystemPath,
         timeout: Duration,
         mut recv: OptionalWatch<broadcast::Receiver<Result<notify::Event, NotifyError>>>,
     ) -> Self {
         let (cookie_request_sender_tx, cookie_request_sender_lazy) = OptionalWatch::new();
         let (exit_ch, exit_signal) = mpsc::channel(16);
         tokio::spawn({
-            let root = root.to_owned();
+            let root = cookie_root.to_owned();
             async move {
                 if recv.get().await.is_err() {
                     // here we need to wait for confirmation that the watching end is ready
@@ -213,7 +230,7 @@ impl CookieWriter {
             }
         });
         Self {
-            root: root.to_owned(),
+            cookie_root: cookie_root.to_owned(),
             timeout,
             cookie_request_sender_lazy,
             _exit_ch: exit_ch,
@@ -221,7 +238,7 @@ impl CookieWriter {
     }
 
     pub(crate) fn root(&self) -> &AbsoluteSystemPath {
-        &self.root
+        &self.cookie_root
     }
 
     /// Sends a request to make a cookie file to the
@@ -421,7 +438,7 @@ impl<T, U: CookieReady + Clone> CookiedOptionalWatch<T, U> {
             .await?
             .serial;
         self.ready(next_id).await;
-        tracing::debug!("waiting for data");
+        tracing::debug!("got cookie, waiting for data");
         Ok(self.get_inner().await?)
     }
 

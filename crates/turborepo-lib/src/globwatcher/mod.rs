@@ -394,15 +394,12 @@ mod test {
 
         for dir in directories.iter() {
             let dir = RelativeUnixPathBuf::new(*dir).unwrap();
-            tmp.join_unix_path(&dir).unwrap().create_dir_all().unwrap();
+            tmp.join_unix_path(&dir).create_dir_all().unwrap();
         }
 
         for file in files.iter() {
             let file = RelativeUnixPathBuf::new(*file).unwrap();
-            tmp.join_unix_path(&file)
-                .unwrap()
-                .create_with_contents("")
-                .unwrap();
+            tmp.join_unix_path(&file).create_with_contents("").unwrap();
         }
     }
 

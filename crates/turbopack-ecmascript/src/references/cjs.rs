@@ -11,6 +11,7 @@ use turbopack_core::{
     reference::ModuleReference,
     resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult},
 };
+use turbopack_resolve::ecmascript::{cjs_resolve, try_to_severity};
 
 use super::pattern_mapping::{PatternMapping, ResolveType::ChunkItem};
 use crate::{
@@ -18,7 +19,6 @@ use crate::{
     code_gen::{CodeGenerateable, CodeGeneration},
     create_visitor,
     references::AstPath,
-    resolve::{cjs_resolve, try_to_severity},
 };
 
 #[turbo_tasks::value]
@@ -268,7 +268,7 @@ impl CodeGenerateable for CjsRequireResolveAssetReference {
             if let Expr::Call(call_expr) = expr {
                 let args = std::mem::take(&mut call_expr.args);
                 *expr = match args.into_iter().next() {
-                    Some(ExprOrSpread { expr, spread: None }) => pm.create_require(*expr),
+                    Some(ExprOrSpread { expr, spread: None }) => pm.create_id(*expr),
                     other => {
                         let message = match other {
                             // These are SWC bugs: https://github.com/swc-project/swc/issues/5394

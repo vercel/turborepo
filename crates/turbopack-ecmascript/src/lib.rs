@@ -14,10 +14,10 @@ pub mod code_gen;
 mod errors;
 pub mod magic_identifier;
 pub mod manifest;
+pub mod minify;
 pub mod parse;
 mod path_visitor;
 pub mod references;
-pub mod resolve;
 pub mod side_effect_optimization;
 pub(crate) mod special_cases;
 pub(crate) mod static_code;
@@ -74,6 +74,8 @@ use turbopack_core::{
     source::Source,
     source_map::{GenerateSourceMap, OptionSourceMap, SourceMap},
 };
+// TODO remove this
+pub use turbopack_resolve::ecmascript as resolve;
 
 use self::{
     chunk::{EcmascriptChunkItemContent, EcmascriptChunkType, EcmascriptExports},
@@ -130,6 +132,10 @@ pub struct EcmascriptOptions {
     /// External imports should used `__turbopack_import__` instead of
     /// `__turbopack_require__` and become async module references.
     pub import_externals: bool,
+    /// Ignore very dynamic requests which doesn't have any static known part.
+    /// If false, they will reference the whole directory. If true, they won't
+    /// reference anything and lead to an runtime error instead.
+    pub ignore_dynamic_requests: bool,
 }
 
 #[turbo_tasks::value(serialization = "auto_for_input")]

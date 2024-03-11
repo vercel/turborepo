@@ -19,13 +19,14 @@ use turbo_tasks_fs::{
 };
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
-    condition::ContextCondition, ecmascript::TreeShakingMode, module_options::ModuleOptionsContext,
-    resolve_options_context::ResolveOptionsContext, ModuleAssetContext,
+    ecmascript::TreeShakingMode, module_options::ModuleOptionsContext, ModuleAssetContext,
 };
+use turbopack_browser::BrowserChunkingContext;
 use turbopack_core::{
     chunk::{EvaluatableAssetExt, EvaluatableAssets},
     compile_time_defines,
     compile_time_info::CompileTimeInfo,
+    condition::ContextCondition,
     context::{AssetContext, ProcessResult},
     environment::{Environment, ExecutionEnvironment, NodeJsEnvironment},
     file_source::FileSource,
@@ -33,8 +34,8 @@ use turbopack_core::{
     reference_type::{EntryReferenceSubType, ReferenceType},
     source::Source,
 };
-use turbopack_dev::DevChunkingContext;
 use turbopack_node::{debug::should_debug, evaluate::evaluate};
+use turbopack_resolve::resolve_options_context::ResolveOptionsContext;
 use turbopack_test_utils::jest::JestRunResult;
 
 use crate::util::REPO_ROOT;
@@ -65,9 +66,10 @@ fn register() {
     turbo_tasks_env::register();
     turbo_tasks_fs::register();
     turbopack::register();
-    turbopack_dev::register();
+    turbopack_browser::register();
     turbopack_env::register();
     turbopack_ecmascript_plugins::register();
+    turbopack_resolve::register();
     include!(concat!(env!("OUT_DIR"), "/register_test_execution.rs"));
 }
 
@@ -280,17 +282,20 @@ async fn run_test(prepared_test: Vc<PreparedTest>) -> Result<Vc<RunTestResult>> 
                 ResolveOptionsContext {
                     enable_node_modules: Some(project_root),
                     custom_conditions: vec!["development".to_string()],
+                    browser: true,
                     ..Default::default()
                 }
                 .cell(),
             )],
+            browser: true,
+            module: true,
             ..Default::default()
         }
         .cell(),
         Vc::cell("test".to_string()),
     ));
 
-    let chunking_context = DevChunkingContext::builder(
+    let chunking_context = BrowserChunkingContext::builder(
         project_root,
         chunk_root_path,
         static_root_path,

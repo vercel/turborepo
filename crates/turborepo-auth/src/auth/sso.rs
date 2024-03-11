@@ -68,12 +68,10 @@ pub async fn sso_login<'a, T: Client + TokenClient + CacheClient>(
             {
                 return Ok(token);
             }
-        }
-
-        // No existing turbo token found. If the user is logging into Vercel, check for
-        // an existing `vc` token with correct scope.
-        if login_url_configuration.contains("vercel.com") {
-            if let Ok(token) = extract_vercel_token() {
+        // No existing turbo token found. If the user is logging into Vercel,
+        // check for an existing `vc` token with correct scope.
+        } else if login_url_configuration.contains("vercel.com") {
+            if let Ok(Some(token)) = extract_vercel_token() {
                 let token = Token::existing(token);
                 if token
                     .is_valid_sso(
@@ -296,6 +294,9 @@ mod tests {
                 active_at: 0,
                 created_at: 123456,
             })
+        }
+        async fn delete_token(&self, _token: &str) -> turborepo_api_client::Result<()> {
+            Ok(())
         }
     }
 
