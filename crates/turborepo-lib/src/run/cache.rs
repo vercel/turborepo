@@ -136,9 +136,10 @@ pub struct TaskCache {
 }
 
 impl TaskCache {
-    pub fn replay_log_file(&self, prefixed_ui: &mut PrefixedUI<impl Write>) -> Result<(), Error> {
+    /// Will read log file and write to output a line at a time
+    pub fn replay_log_file(&self, output: impl Write) -> Result<(), Error> {
         if self.log_file_path.exists() {
-            replay_logs(prefixed_ui, &self.log_file_path)?;
+            replay_logs(output, &self.log_file_path)?;
         }
 
         Ok(())
@@ -150,7 +151,7 @@ impl TaskCache {
                 "cache miss, executing {}",
                 color!(self.ui, GREY, "{}", self.hash)
             ));
-            self.replay_log_file(prefixed_ui)?;
+            self.replay_log_file(prefixed_ui.output_prefixed_writer())?;
         }
 
         Ok(())
@@ -304,7 +305,7 @@ impl TaskCache {
                     more_context,
                     color!(self.ui, GREY, "{}", self.hash)
                 ));
-                self.replay_log_file(prefixed_ui)?;
+                self.replay_log_file(prefixed_ui.output_prefixed_writer())?;
             }
             // Note that if we're restoring from cache, the task succeeded
             // so we know we don't need to print anything for errors

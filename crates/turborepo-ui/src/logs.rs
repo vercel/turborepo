@@ -6,7 +6,7 @@ use std::{
 use tracing::{debug, warn};
 use turbopath::AbsoluteSystemPath;
 
-use crate::{prefixed::PrefixedUI, Error};
+use crate::Error;
 
 /// Receives logs and multiplexes them to a log file and/or a prefixed
 /// writer
@@ -78,7 +78,7 @@ impl<W: Write> Write for LogWriter<W> {
 }
 
 pub fn replay_logs<W: Write>(
-    output: &mut PrefixedUI<W>,
+    mut output: W,
     log_file_name: &AbsoluteSystemPath,
 ) -> Result<(), Error> {
     debug!("start replaying logs");
@@ -90,7 +90,6 @@ pub fn replay_logs<W: Write>(
 
     // Construct a PrefixedWriter which allows for non UTF-8 bytes to be written to
     // it.
-    let mut prefixed_writer = output.output_prefixed_writer();
     let mut log_reader = BufReader::new(log_file);
 
     let mut buffer = Vec::new();
@@ -107,9 +106,7 @@ pub fn replay_logs<W: Write>(
         if !buffer.ends_with(b"\n") {
             buffer.push(b'\n');
         }
-        prefixed_writer
-            .write_all(&buffer)
-            .map_err(Error::CannotReadLogs)?;
+        output.write_all(&buffer).map_err(Error::CannotReadLogs)?;
 
         buffer.clear();
     }
@@ -127,10 +124,7 @@ mod tests {
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use crate::{
-        logs::{replay_logs, PrefixedUI},
-        LogWriter, PrefixedWriter, BOLD, CYAN, UI,
-    };
+    use crate::{logs::replay_logs, LogWriter, PrefixedUI, PrefixedWriter, BOLD, CYAN, UI};
 
     #[test]
     fn test_log_writer() -> Result<()> {
@@ -181,7 +175,7 @@ mod tests {
         let dir = tempdir()?;
         let log_file_path = AbsoluteSystemPathBuf::try_from(dir.path().join("test.txt"))?;
         fs::write(&log_file_path, "\none fish\ntwo fish\nred fish\nblue fish")?;
-        replay_logs(&mut prefixed_ui, &log_file_path)?;
+        replay_logs(prefixed_ui.output_prefixed_writer(), &log_file_path)?;
 
         assert_eq!(
             String::from_utf8(output)?,
@@ -203,7 +197,7 @@ mod tests {
         let dir = tempdir()?;
         let log_file_path = AbsoluteSystemPathBuf::try_from(dir.path().join("test.txt"))?;
         fs::write(&log_file_path, [0, 159, 146, 150, b'\n'])?;
-        replay_logs(&mut prefixed_ui, &log_file_path)?;
+        replay_logs(prefixed_ui.output_prefixed_writer(), &log_file_path)?;
 
         assert_eq!(output, [b'>', 0, 159, 146, 150, b'\n']);
         Ok(())
