@@ -1,54 +1,42 @@
-// @ts-check
 import { context, getOctokit } from "@actions/github";
 import { setFailed, info } from "@actions/core";
 import fs from "node:fs";
 
-const dirToWriteSlackPayloadIn = process.argv[2];
+const outputDir = process.argv[2];
 
-if (!dirToWriteSlackPayloadIn) {
+if (!outputDir) {
   throw new Error("Pass a directory to write the slack payload in");
 }
+const outputPath = `${outputDir}/slack-payload.json`;
 
-console.log("dirToWriteSlackPayloadIn: ", dirToWriteSlackPayloadIn);
-const fileToWriteSlackPayloadIn = `${dirToWriteSlackPayloadIn}/slack-payload.json`;
+console.log("outputDir: ", outputDir);
+console.log("outputPath: ", outputPath);
 
-function generateBlocks(issues) {
-  const prelude =
-    "*A list of the top 15 issues sorted by most :+1: reactions over the last 90 days.*\n_Note: This :github2: workflow will run every Monday at 1PM UTC (9AM EST)._";
+const NUM_OF_DAYS = 30;
+const NUM_OF_ISSUES = 5;
 
-  // Slack Markup language
-  // <https://www.google.com|Click here to visit Google>
+// context.repo is the current repo
+const { owner: _OWNER, repo: _REPO } = context.repo;
+const OWNER = "vercel";
+const REPO = "turbo";
 
-  const lines = issues.map((issue, i) => {
-    const url = issue.html_url;
-    const number = issue.number;
-    const link = `<${url}|${number}>`;
-    const count = issue.reactions["+1"];
-    const line = `${i + 1}. ${link} (:+1: ${count}): ${issue.title}`;
-    return line;
-  });
-
-  return [prelude, ...lines].join("\n");
-}
+console.log({ OWNER, REPO, _OWNER, _REPO });
 
 async function run() {
-  try {
-    if (!process.env.GITHUB_TOKEN) throw new TypeError("GITHUB_TOKEN not set");
+  if (!process.env.GITHUB_TOKEN) throw new TypeError("GITHUB_TOKEN not set");
 
+  try {
     const octoClient = getOctokit(process.env.GITHUB_TOKEN);
 
-    // Get the date 90 days ago (YYYY-MM-DD)
+    // Get the date (YYYY-MM-DD)
     const date = new Date();
-    date.setDate(date.getDate() - 90);
-    const ninetyDaysAgo = date.toISOString().split("T")[0];
+    date.setDate(date.getDate() - NUM_OF_DAYS);
+    const daysAgo = date.toISOString().split("T")[0];
 
-    // const { owner, repo } = context.repo;
-    const owner = "vercel";
-    const repo = "turbo";
     const { data } = await octoClient.rest.search.issuesAndPullRequests({
       order: "desc",
-      per_page: 15,
-      q: `repo:${owner}/${repo} is:issue is:open created:>=${ninetyDaysAgo}`,
+      per_page: NUM_OF_ISSUES,
+      q: `repo:${OWNER}/${REPO} is:issue is:open created:>=${daysAgo}`,
       sort: "reactions-+1",
     });
 
@@ -59,14 +47,28 @@ async function run() {
       return;
     }
 
-    const text = generateBlocks(data.items);
-    fs.writeFileSync(
-      fileToWriteSlackPayloadIn,
-      JSON.stringify({ text }, null, 2)
-    );
+    const payload = generateWorkflowPayload(data.items);
+
+    fs.writeFileSync(outputPath, JSON.stringify(payload, null, 2));
   } catch (error) {
     setFailed(error);
   }
+}
+
+function generateWorkflowPayload(issues) {
+  const payload = {
+    prelude: `*Top ${NUM_OF_ISSUES} issues sorted by :+1: reactions (last ${NUM_OF_DAYS} days).*\nNote: This :github2: workflow will run every Monday at 1PM UTC (9AM EST)._"`,
+  };
+
+  issues.forEach((issue, index) => {
+    payload[`issue${index + 1}`] = issue.title;
+    payload[`issue${index + 1}URL`] = issue.html_url;
+
+    const count = issue.reactions["+1"];
+    payload[`issue${index + 1}Text`] = `(:+1: ${count}) ${issue.title}`;
+  });
+
+  return payload;
 }
 
 run();
