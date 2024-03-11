@@ -16,7 +16,7 @@ jobs:
           node-version: 18
       - run: corepack enable
       - name: "Get Top Issues"
-        run: node ./packages/top-issues/index.mjs packages/top-issues
+        run: node ./packages/top-issues/src/index.mjs packages/top-issues
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Show slack payload"
