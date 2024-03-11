@@ -18,7 +18,7 @@ use serde::Deserialize;
 use thiserror::Error;
 use tiny_gradient::{GradientStr, RGB};
 use tracing::debug;
-use turbo_updater::check_for_updates;
+use turbo_updater::display_update_check;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_repository::{
     inference::{RepoMode, RepoState},
@@ -716,7 +716,7 @@ fn try_check_for_updates(args: &ShimArgs, current_version: &str) {
             None
         };
         // check for updates
-        let _ = check_for_updates(
+        let _ = display_update_check(
             "turbo",
             "https://github.com/vercel/turbo",
             Some(&footer),

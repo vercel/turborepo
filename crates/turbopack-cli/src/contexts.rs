@@ -11,6 +11,7 @@ use turbopack::{
     },
     ModuleAssetContext,
 };
+use turbopack_browser::react_refresh::assert_can_resolve_react_refresh;
 use turbopack_core::{
     compile_time_defines,
     compile_time_info::{CompileTimeDefines, CompileTimeInfo},
@@ -19,7 +20,6 @@ use turbopack_core::{
     environment::{BrowserEnvironment, Environment, ExecutionEnvironment},
     resolve::options::{ImportMap, ImportMapping},
 };
-use turbopack_dev::react_refresh::assert_can_resolve_react_refresh;
 use turbopack_ecmascript_plugins::transform::{
     emotion::{EmotionTransformConfig, EmotionTransformer},
     styled_components::{StyledComponentsTransformConfig, StyledComponentsTransformer},
@@ -145,7 +145,7 @@ async fn get_client_module_options_context(
                     StyledComponentsTransformer::new(&StyledComponentsTransformConfig::default()),
                 ) as _)),
                 EcmascriptInputTransform::Plugin(Vc::cell(Box::new(StyledJsxTransformer::new(
-                    module_options_context.use_lightningcss,
+                    !module_options_context.use_swc_css,
                     versions,
                 )) as _)),
             ]),

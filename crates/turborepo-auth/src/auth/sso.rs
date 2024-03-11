@@ -295,6 +295,9 @@ mod tests {
                 created_at: 123456,
             })
         }
+        async fn delete_token(&self, _token: &str) -> turborepo_api_client::Result<()> {
+            Ok(())
+        }
     }
 
     #[async_trait]

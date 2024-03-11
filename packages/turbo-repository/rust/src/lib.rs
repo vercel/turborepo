@@ -7,7 +7,7 @@ use napi::Error;
 use napi_derive::napi;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
-    change_mapper::{ChangeMapper, DefaultPackageDetector, PackageChanges},
+    change_mapper::{ChangeMapper, DefaultPackageChangeMapper, PackageChanges},
     inference::RepoState as WorkspaceState,
     package_graph::{PackageGraph, PackageName, PackageNode, WorkspacePackage, ROOT_PKG_NAME},
 };
@@ -25,17 +25,18 @@ pub struct Package {
     pub relative_path: String,
 }
 
-type RelativePath = String;
-
+/// Wrapper for dependents and dependencies.
+/// Each are a list of package paths, relative to the workspace root.
 #[napi]
 #[derive(Debug)]
 pub struct PackageDetails {
+    /// the package's dependencies
     #[napi(readonly)]
-    pub dependencies: Vec<RelativePath>,
+    pub dependencies: Vec<String>,
+    /// the packages that depend on this package
     #[napi(readonly)]
-    pub dependents: Vec<RelativePath>,
+    pub dependents: Vec<String>,
 }
-type SerializablePackages = HashMap<RelativePath, PackageDetails>;
 
 #[derive(Clone)]
 #[napi]
@@ -150,7 +151,7 @@ impl Workspace {
     ///      }
     ///  }
     #[napi]
-    pub async fn find_packages_with_graph(&self) -> Result<SerializablePackages, Error> {
+    pub async fn find_packages_with_graph(&self) -> Result<HashMap<String, PackageDetails>, Error> {
         let packages = self.find_packages().await?;
 
         let workspace_path = match AbsoluteSystemPath::new(self.absolute_path.as_str()) {
@@ -158,7 +159,7 @@ impl Workspace {
             Err(e) => return Err(Error::from_reason(e.to_string())),
         };
 
-        let map: HashMap<RelativePath, PackageDetails> = packages
+        let map: HashMap<String, PackageDetails> = packages
             .into_iter()
             .map(|package| {
                 let details = PackageDetails {
@@ -202,7 +203,7 @@ impl Workspace {
             .collect();
 
         // Create a ChangeMapper with no ignore patterns
-        let default_package_detector = DefaultPackageDetector::new(&self.graph);
+        let default_package_detector = DefaultPackageChangeMapper::new(&self.graph);
         let mapper = ChangeMapper::new(&self.graph, vec![], default_package_detector);
         let package_changes = match mapper.changed_packages(hash_set_of_paths, None) {
             Ok(changes) => changes,

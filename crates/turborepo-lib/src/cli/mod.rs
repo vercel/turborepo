@@ -24,7 +24,7 @@ use turborepo_ui::UI;
 
 use crate::{
     commands::{
-        bin, daemon, generate, info, link, login, logout, prune, run, telemetry, unlink,
+        bin, daemon, generate, info, link, login, logout, prune, run, scan, telemetry, unlink,
         CommandBase,
     },
     get_version,
@@ -465,6 +465,9 @@ pub enum Command {
         #[serde(flatten)]
         command: Option<TelemetryCommand>,
     },
+    /// Turbo your monorepo by running a number of 'repo lints' to
+    /// identify common issues, suggest fixes, and improve performance.
+    Scan {},
     #[clap(hide = true)]
     Info {
         workspace: Option<String>,
@@ -493,7 +496,11 @@ pub enum Command {
         force: bool,
     },
     /// Logout to your Vercel account
-    Logout {},
+    Logout {
+        /// Invalidate the token on the server
+        #[clap(long)]
+        invalidate: bool,
+    },
     /// Prepare a subset of your monorepo.
     Prune {
         #[clap(hide = true, long)]
@@ -1089,6 +1096,14 @@ pub async fn run(
             telemetry::configure(command, &mut base, child_event);
             Ok(0)
         }
+        Command::Scan {} => {
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
+            if scan::run(base).await {
+                Ok(0)
+            } else {
+                Ok(1)
+            }
+        }
         Command::Info { workspace, json } => {
             CommandEventBuilder::new("info")
                 .with_parent(&root_telemetry)
@@ -1122,12 +1137,15 @@ pub async fn run(
 
             Ok(0)
         }
-        Command::Logout { .. } => {
+        Command::Logout { invalidate } => {
             let event = CommandEventBuilder::new("logout").with_parent(&root_telemetry);
             event.track_call();
+            let invalidate = *invalidate;
+
             let mut base = CommandBase::new(cli_args, repo_root, version, ui);
             let event_child = event.child();
-            logout::logout(&mut base, event_child)?;
+
+            logout::logout(&mut base, invalidate, event_child).await?;
 
             Ok(0)
         }
@@ -2015,7 +2033,7 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "logout"]).unwrap(),
             Args {
-                command: Some(Command::Logout {}),
+                command: Some(Command::Logout { invalidate: false }),
                 ..Args::default()
             }
         );
@@ -2025,7 +2043,7 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
-                command: Some(Command::Logout {}),
+                command: Some(Command::Logout { invalidate: false }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },

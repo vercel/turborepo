@@ -20,7 +20,7 @@ pub use crate::{
     logs::{replay_logs, LogWriter},
     output::{OutputClient, OutputClientBehavior, OutputSink, OutputWriter},
     prefixed::{PrefixedUI, PrefixedWriter},
-    tui::TaskTable,
+    tui::{TaskTable, TerminalPane},
 };
 
 #[derive(Debug, Error)]
@@ -197,6 +197,8 @@ lazy_static! {
 }
 
 pub const RESET: &str = "\x1b[0m";
+
+pub use dialoguer::theme::ColorfulTheme as DialoguerTheme;
 
 #[cfg(test)]
 mod test {

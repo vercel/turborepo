@@ -45,6 +45,7 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
             ui::print_cli_authorized(user_email, &ui);
         }
     };
+
     // Check if passed in token exists first.
     if !force {
         if let Some(token) = existing_token {
@@ -296,6 +297,9 @@ mod tests {
                 active_at: 0,
                 created_at: 123456,
             })
+        }
+        async fn delete_token(&self, _token: &str) -> turborepo_api_client::Result<()> {
+            Ok(())
         }
     }
 

@@ -19,13 +19,13 @@ use turbo_tasks_fs::FileSystem;
 use turbo_tasks_malloc::TurboMalloc;
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::evaluate_context::node_build_environment;
+use turbopack_browser::BrowserChunkingContext;
 use turbopack_cli_utils::issue::{ConsoleUi, LogOptions};
 use turbopack_core::{
     issue::{IssueReporter, IssueSeverity},
     resolve::parse::Request,
     server_fs::ServerFileSystem,
 };
-use turbopack_dev::DevChunkingContext;
 use turbopack_dev_server::{
     introspect::IntrospectionSource,
     source::{
@@ -248,7 +248,7 @@ async fn source(
     let env = load_env(project_path);
     let build_output_root = output_fs.root().join(".turbopack/build".to_string());
 
-    let build_chunking_context = DevChunkingContext::builder(
+    let build_chunking_context = BrowserChunkingContext::builder(
         project_path,
         build_output_root,
         build_output_root,
