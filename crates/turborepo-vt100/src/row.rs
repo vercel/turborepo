@@ -29,6 +29,10 @@ impl Row {
         self.wrapped = false;
     }
 
+    pub fn is_blank(&self) -> bool {
+        self.cells().all(|cell| !cell.has_contents())
+    }
+
     fn cells(&self) -> impl Iterator<Item = &crate::Cell> {
         self.cells.iter()
     }
