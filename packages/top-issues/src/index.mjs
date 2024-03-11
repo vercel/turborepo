@@ -31,7 +31,6 @@ function generateBlocks(issues) {
 async function run() {
   try {
     if (!process.env.GITHUB_TOKEN) throw new TypeError("GITHUB_TOKEN not set");
-    if (!process.env.SLACK_TOKEN) throw new TypeError("SLACK_TOKEN not set");
 
     const octoClient = getOctokit(process.env.GITHUB_TOKEN);
 
