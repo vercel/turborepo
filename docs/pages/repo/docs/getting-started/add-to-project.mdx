@@ -100,15 +100,15 @@ Add `.turbo` to your `.gitignore` file. The CLI uses these folders for logs and 
 + .turbo
 ```
 
-4. **Run the `build` and `lint` tasks with `turbo`:**
+4. **Run the `type-check` and `build` tasks with `turbo`:**
 
 ```bash
 turbo type-check build
 ```
 
-This runs `build` and `lint` at the same time.
+This runs `type-check` and `build` at the same time.
 
-5. **Without making any changes to the code, try running `build` and `lint` again:**
+5. **Without making any changes to the code, try running `type-check` and `build` again:**
 
 ```bash
 turbo type-check build
@@ -122,7 +122,7 @@ Cached:    2 cached, 2 total
   Time:    185ms >>> FULL TURBO
 ```
 
-Congratulations - **you just completed a build and lint in under 200ms**.
+Congratulations - **you just completed a type check and build in under 200ms**.
 
 To learn how this is possible, check out our [core concepts docs](/repo/docs/core-concepts/caching).
 
