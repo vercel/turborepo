@@ -21,11 +21,9 @@ pub fn get_signal() -> Result<impl Future<Output = Option<()>>, run::Error> {
     Ok(async move {
         tokio::select! {
             res = sigint.recv() => {
-                println!("Received SIGINT");
                 res
             }
             res = sigterm.recv() => {
-                println!("Received SIGTERM");
                 res
             }
         }
