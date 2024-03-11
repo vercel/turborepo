@@ -1,4 +1,4 @@
-name: Notify about the top 15 issues (most reacted) in the last 90 days
+name: Turborepo Top Issues
 
 on:
   schedule:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   popular-issues:
-    if: github.repository_owner == 'vercel'
+    # if: github.repository_owner == 'vercel'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
