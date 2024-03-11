@@ -47,6 +47,7 @@ async function run() {
 
     fs.writeFileSync(outputPath, JSON.stringify(payload, null, 2));
   } catch (error) {
+    console.error(error);
     setFailed(error);
   }
 }
