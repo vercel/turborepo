@@ -51,6 +51,11 @@ async function run() {
 
     console.log("Found issues: ", data.items.length);
 
+    if (data.items.length === 0) {
+      info("No issues found");
+      return;
+    }
+
     const text = generateBlocks(data.items);
     fs.writeFileSync(
       fileToWriteSlackPayloadIn,
