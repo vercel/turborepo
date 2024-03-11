@@ -101,25 +101,13 @@ impl WatchClient {
                     base.args().get_tasks().join(", "),
                     package_name
                 );
-                let dependents: Vec<_> = base
-                    .args()
-                    .get_tasks()
-                    .iter()
-                    .flat_map(|task| {
-                        let task_id = TaskId::new(&package_name, task);
-                        run.engine.dependents(&task_id)
-                    })
-                    .collect();
-
-                println!("Dependents: {:?}", dependents);
-                let args = Args {
-                    command: Some(Command::Run(Box::new(RunArgs {
-                        tasks: base.args().get_tasks().to_owned(),
-                        filter: vec![format!("...{}", package_name)],
-                        ..Default::default()
-                    }))),
-                    ..Args::default()
-                };
+                let mut args = base.args().clone();
+                args.command.as_mut().map(|c| {
+                    if let Command::Run(run_args) = c {
+                        run_args.tasks = base.args().get_tasks().to_owned();
+                        run_args.filter = vec![format!("...{}", package_name)];
+                    }
+                });
 
                 let new_base =
                     CommandBase::new(args, base.repo_root.clone(), get_version(), base.ui.clone());
@@ -129,19 +117,26 @@ impl WatchClient {
                     run.abort();
                 }
 
+                let telemetry = telemetry.clone();
+                let handler = handler.clone();
                 current_runs.insert(
                     package_name,
-                    tokio::spawn(commands::run::run(new_base, telemetry.clone())),
+                    tokio::spawn(async move {
+                        let run = RunBuilder::new(new_base)?
+                            .build(&handler, telemetry)
+                            .await?;
+                        run.run().await
+                    }),
                 );
             }
             proto::package_change_event::Event::RediscoverPackages(_) => {
-                let args = Args {
-                    command: Some(Command::Run(Box::new(RunArgs {
-                        tasks: base.args().get_tasks().to_owned(),
-                        ..Default::default()
-                    }))),
-                    ..Args::default()
-                };
+                let mut args = base.args().clone();
+                args.command.as_mut().map(|c| {
+                    if let Command::Run(run_args) = c {
+                        run_args.watch = false;
+                    }
+                });
+
                 let new_base =
                     CommandBase::new(args, base.repo_root.clone(), get_version(), base.ui.clone());
 
@@ -151,7 +146,10 @@ impl WatchClient {
                 }
 
                 // and then run everything
-                commands::run::run(new_base, telemetry.clone()).await?;
+                let run = RunBuilder::new(new_base)?
+                    .build(&handler, telemetry.clone())
+                    .await?;
+                run.run().await?;
             }
             proto::package_change_event::Event::Error(proto::PackageChangeError { message }) => {
                 return Err(DaemonError::Unavailable(message).into());
