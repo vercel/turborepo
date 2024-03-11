@@ -63,7 +63,7 @@ function generateWorkflowPayload(issues) {
     payload[`issue${index + 1}URL`] = issue.html_url;
 
     const count = issue.reactions["+1"];
-    payload[`issue${index + 1}Text`] = `(:+1: ${count}) ${issue.title}`;
+    payload[`issue${index + 1}Text`] = `:+1: ${count} ${issue.title}`;
   });
 
   return payload;
