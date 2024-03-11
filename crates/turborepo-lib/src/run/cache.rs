@@ -9,9 +9,7 @@ use turborepo_cache::{AsyncCache, CacheError, CacheHitMetadata, CacheSource};
 use turborepo_repository::package_graph::PackageInfo;
 use turborepo_scm::SCM;
 use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
-use turborepo_ui::{
-    color, replay_logs, ColorSelector, LogWriter, PrefixedUI, PrefixedWriter, GREY, UI,
-};
+use turborepo_ui::{color, replay_logs, ColorSelector, LogWriter, PrefixedWriter, GREY, UI};
 
 use crate::{
     cli::OutputLogsMode,
@@ -145,13 +143,16 @@ impl TaskCache {
         Ok(())
     }
 
-    pub fn on_error(&self, prefixed_ui: &mut PrefixedUI<impl Write>) -> Result<(), Error> {
+    pub fn on_error(&self, mut terminal_output: impl Write) -> Result<(), Error> {
         if self.task_output_mode == OutputLogsMode::ErrorsOnly {
-            prefixed_ui.output(format!(
-                "cache miss, executing {}",
-                color!(self.ui, GREY, "{}", self.hash)
-            ));
-            self.replay_log_file(prefixed_ui.output_prefixed_writer())?;
+            failable_write(
+                &mut terminal_output,
+                &format!(
+                    "cache miss, executing {}",
+                    color!(self.ui, GREY, "{}", self.hash)
+                ),
+            );
+            self.replay_log_file(terminal_output)?;
         }
 
         Ok(())

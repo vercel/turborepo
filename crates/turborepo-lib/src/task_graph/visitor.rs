@@ -912,7 +912,10 @@ impl ExecContext {
                 if let Err(e) = stdout_writer.flush() {
                     error!("error flushing logs: {e}");
                 }
-                if let Err(e) = self.task_cache.on_error(&mut prefixed_ui) {
+                if let Err(e) = self
+                    .task_cache
+                    .on_error(prefixed_ui.output_prefixed_writer())
+                {
                     error!("error reading logs: {e}");
                 }
                 let error = TaskErrorCause::from_execution(process.label().to_string(), code);
