@@ -6,13 +6,11 @@ use tokio::{select, task::JoinHandle};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
 use crate::{
-    cli::{Command, OutputLogsMode, RunArgs},
+    cli::{Command, RunArgs},
     commands,
     commands::CommandBase,
     daemon::{proto, DaemonConnectorError, DaemonError},
-    get_version,
-    opts::Opts,
-    run,
+    get_version, run,
     run::{builder::RunBuilder, task_id::TaskId, Run},
     signal::SignalHandler,
     Args, DaemonConnector, DaemonPaths,
@@ -60,7 +58,6 @@ impl WatchClient {
         let mut current_runs: HashMap<String, JoinHandle<Result<i32, run::Error>>> = HashMap::new();
         let event_fut = async {
             while let Some(event) = events.next().await {
-                println!("event: {:?}", event);
                 let event = event.unwrap();
                 Self::handle_change_event(
                     &run,
@@ -119,7 +116,6 @@ impl WatchClient {
                     command: Some(Command::Run(Box::new(RunArgs {
                         tasks: base.args().get_tasks().to_owned(),
                         filter: vec![format!("...{}", package_name)],
-                        output_logs: Some(OutputLogsMode::None),
                         ..Default::default()
                     }))),
                     ..Args::default()
@@ -135,18 +131,13 @@ impl WatchClient {
 
                 current_runs.insert(
                     package_name,
-                    tokio::spawn(commands::run::run_with_signal_handler(
-                        new_base,
-                        telemetry.clone(),
-                        handler.clone(),
-                    )),
+                    tokio::spawn(commands::run::run(new_base, telemetry.clone())),
                 );
             }
             proto::package_change_event::Event::RediscoverPackages(_) => {
                 let args = Args {
                     command: Some(Command::Run(Box::new(RunArgs {
                         tasks: base.args().get_tasks().to_owned(),
-                        output_logs: Some(OutputLogsMode::None),
                         ..Default::default()
                     }))),
                     ..Args::default()
@@ -160,12 +151,7 @@ impl WatchClient {
                 }
 
                 // and then run everything
-                commands::run::run_with_signal_handler(
-                    new_base,
-                    telemetry.clone(),
-                    handler.clone(),
-                )
-                .await?;
+                commands::run::run(new_base, telemetry.clone()).await?;
             }
             proto::package_change_event::Event::Error(proto::PackageChangeError { message }) => {
                 return Err(DaemonError::Unavailable(message).into());
