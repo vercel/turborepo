@@ -1,6 +1,5 @@
 use std::{io::Write, sync::Arc, time::Duration};
 
-use console::StyledObject;
 use tracing::{debug, error};
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
@@ -9,7 +8,7 @@ use turborepo_cache::{AsyncCache, CacheError, CacheHitMetadata, CacheSource};
 use turborepo_repository::package_graph::PackageInfo;
 use turborepo_scm::SCM;
 use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
-use turborepo_ui::{color, replay_logs, ColorSelector, LogWriter, PrefixedWriter, GREY, UI};
+use turborepo_ui::{color, replay_logs, ColorSelector, LogWriter, GREY, UI};
 
 use crate::{
     cli::OutputLogsMode,
@@ -158,16 +157,11 @@ impl TaskCache {
         Ok(())
     }
 
-    pub fn output_writer<W: Write>(
-        &self,
-        prefix: StyledObject<String>,
-        writer: W,
-    ) -> Result<LogWriter<PrefixedWriter<W>>, Error> {
+    pub fn output_writer<W: Write>(&self, writer: W) -> Result<LogWriter<W>, Error> {
         let mut log_writer = LogWriter::default();
-        let prefixed_writer = PrefixedWriter::new(self.run_cache.ui, prefix, writer);
 
         if self.caching_disabled || self.run_cache.writes_disabled {
-            log_writer.with_writer(prefixed_writer);
+            log_writer.with_writer(writer);
             return Ok(log_writer);
         }
 
@@ -177,7 +171,7 @@ impl TaskCache {
             self.task_output_mode,
             OutputLogsMode::None | OutputLogsMode::HashOnly | OutputLogsMode::ErrorsOnly
         ) {
-            log_writer.with_writer(prefixed_writer);
+            log_writer.with_writer(writer);
         }
 
         Ok(log_writer)

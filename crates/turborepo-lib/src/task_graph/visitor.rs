@@ -833,7 +833,7 @@ impl ExecContext {
 
         let mut stdout_writer = match self
             .task_cache
-            .output_writer(self.pretty_prefix.clone(), output_client.stdout())
+            .output_writer(prefixed_ui.output_prefixed_writer())
         {
             Ok(w) => w,
             Err(e) => {
