@@ -39,7 +39,9 @@ async function run() {
     date.setDate(date.getDate() - 90);
     const ninetyDaysAgo = date.toISOString().split("T")[0];
 
-    const { owner, repo } = context.repo;
+    // const { owner, repo } = context.repo;
+    const owner = "vercel";
+    const repo = "turbo";
     const { data } = await octoClient.rest.search.issuesAndPullRequests({
       order: "desc",
       per_page: 15,
