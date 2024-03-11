@@ -6,12 +6,15 @@ description: Learn how to create an Internal Package for your monorepo.
 import {Callout} from '#/components/Callout'
 import {Steps, Step} from 'fumadocs-ui/components/steps'
 import {PackageManagerTabs, Tabs, Tab} from '#/components/Tabs'
+import {Files, File, Folder} from 'fumadocs-ui/components/files';
 
-Internal Packages are the building blocks of your workspace, giving you a powerful way to share code and functionality across your repo. Additionally, where you choose to install your Internal Packages creates a dependency graph for Turborepo to understand your workspace.
+Internal Packages are the building blocks of your workspace, giving you a powerful way to share code and functionality across your repo. They also create a dependency graph for Turborepo to understand your workspace so it can follow the relationships between the packages in your repository.
+
+TODO [IMAGERY]: Definitely a nice little dependency graph image goes here.
 
 ## Create your first Internal Package
 
-Let's create your first Internal Package for sharing math utilities in your repo using the guidance in the [Anatomy of a package](/repo/docs/crafting-your-repository/structuring-a-repo#anatomy-of-a-package) section. In the steps below, we're going to assume you've run `npx create-turbo@latest` or are using a similarly structured repository.
+Let's create your first Internal Package for sharing math utilities in your repo using the guidance in the [Anatomy of a package](/repo/docs/crafting-your-repository/structuring-a-repo#anatomy-of-a-package) section. In the steps below, we assume you've created a new repository with `npx create-turbo@latest` or are using a similarly structured repository.
 
 <Callout type="good-to-know">
 These steps include details specific to TypeScript. If you're using JavaScript, you can ignore the TypeScript-specific information.
@@ -23,22 +26,58 @@ These steps include details specific to TypeScript. If you're using JavaScript, 
 
 You'll need a directory to build the package in so let's create one at `./packages/math`.
 
+<Files>
+<File name="package.json" />
+<File name="turbo.json" />
+<Folder name="apps" />
+<Folder name="packages" defaultOpen>
+  <Folder name="math" className="text-green-400" defaultOpen />
+  <Folder name="ui">
+    <File name="package.json" />
+  </Folder>
+  <Folder name="eslint-config">
+    <File name="package.json" />
+  </Folder>
+  <Folder name="typescript-config">
+    <File name="package.json" />
+  </Folder>
+</Folder>
+</Files>
+
 </Step>
 <Step>
-  ### Add a `tsconfig.json` (optional)
+  ### Add a `tsconfig.json`
 
-If you're using TypeScript...
+Let's specify the TypeScript configuration for this package by adding a `tsconfig.json` file to the root of the package. TypeScript has [an `extends` key](https://www.typescriptlang.org/tsconfig#extends), allowing you to use a base configuration throughout your repository and overwrite with different options as needed.
+
+```json title="./packages/math/tsconfig.json"
+{
+  "extends": "@repo/typescript-config/base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
+}
+```
+
+You've done three important things here:
+
+- Used the `@repo/typescript-config/base.json` configuration that lives in `./packages/typescript-config`
+- Defined [the `rootDir` key](https://www.typescriptlang.org/tsconfig#rootDir) so the TypeScript compiler knows what to use for the root directory of compilation output
+- Specified the `include` and `exclude` options so the TypeScript compiler knows which files to use
+
+Note that it is important to define the `rootDir`, `include`, and `exclude` options in the `tsconfig.json` file because these options are not inherited from the base configuration.
+
+<Callout type="info">
+There's a lot more to learn about TypeScript configuration, but this is a good place to start for now. If you'd like to learn more, visit [the official TypeScript documentation](https://www.typescriptlang.org/tsconfig) or [our TypeScript guide](/repo/docs/guides/linting/typescript).
+</Callout>
 
 </Step>
 <Step>
 ### Add a package.json
 
-Next, we'll create the `package.json` for the package. By adding this file, you'll fulfill the two requirements for an Internal Package making it discoverable to the rest of your workspace and Turborepo:
-
-- Exists in a directory identified in your Workspace's configuration
-- Directory contains a `package.json`
-
-TODO: has to get tabbed because of workspace:\*
+Next, we'll create the `package.json` for the package. By adding this file, you'll fulfill the two requirements for an Internal Package making it discoverable to Turborepo and the rest of your Workspace:
 
 <PackageManagerTabs>
 <Tab>
@@ -61,7 +100,33 @@ TODO: has to get tabbed because of workspace:\*
   },
   "devDependencies": {
     "@repo/typescript-config": "*",
-    "typescript": "^4.3.5"
+    "typescript": "latest"
+  }
+}
+````
+
+</Tab>
+<Tab>
+```json title="./packages/math/package.json"
+{
+  "name": "@repo/math",
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "tsc"
+  },
+  "exports": {
+    "./add": {
+      "types": "./src/add.ts",
+      "default": "./dist/add.js"
+    },
+    "./subtract": {
+      "types": "./src/subtract.ts",
+      "default": "./dist/subtract.js"
+    }
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "latest"
   }
 }
 ```
@@ -86,61 +151,34 @@ TODO: has to get tabbed because of workspace:\*
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
-    "typescript": "^4.3.5"
-  }
-}
-```
-</Tab>
-<Tab>
-```json title="./packages/math/package.json"
-{
-  "name": "@repo/math",
-  "scripts": {
-    "dev": "tsc --watch",
-    "build": "tsc"
-  },
-  "exports": {
-    "./add": {
-      "types": "./src/add.ts",
-      "default": "./dist/add.js"
-    },
-    "./subtract": {
-      "types": "./src/subtract.ts",
-      "default": "./dist/subtract.js"
-    }
-  },
-  "devDependencies": {
-    "@repo/typescript-config": "workspace:*",
-    "typescript": "^4.3.5"
+    "typescript": "latest"
   }
 }
 ```
 </Tab>
 </PackageManagerTabs>
 
-<Callout type="info">
-The `@repo/typescript-config` devDependency is an Internal Package in `create-turbo` that we're using to manage our TypeScript configuration.
-</Callout>
+Let's break down this `package.json` piece-by-piece:
 
-Let's break down this `package.json` a bit:
-
-- **`scripts`**: The `dev` and `build` script that are used to compile the package. We're using [the Typescript compiler](https://www.typescriptlang.org/docs/handbook/compiler-options.html), the [recommended compiler for packages](/TODO-LINK).
+- **`scripts`**: The `dev` and `build` script compile the package using [the TypeScript compiler](https://www.typescriptlang.org/docs/handbook/compiler-options.html). The `dev` script will watch for changes to source code and automatically recompile the package.
 - **`exports`**: Defines multiple entrypoints for the package so it can be used in other packages (`import { add } from '@repo/math'`).
-  - The `"types"` field is used to tell TypeScript where to find the type definitions for the package. We're pointing it directly to where we will write our source code so we don't have to generate declaration maps.
+  - The `"types"` field tells TypeScript where to find the type definitions for the package. We recommend pointing directly to source code so that you don't have to generate declaration maps and the types shown in your editor are always up to date with your source code.
   - The `"default"` field is used to tell Node.js where to find the runtime code for the package. Once we compile our Typescript with `tsc`, the output will be in the `dist` directory.
-- `**devDependencies**`: Install `typescript` as a devDependency so we can compile it. In a real-world package, you will likely have more `devDependencies` and `dependencies` - but we can keep it simple for now.
+- **`devDependencies`**: Install `typescript` and `@repo/typescript-confg` as `devDependencies` so you can compile the package. In a real-world package, you will likely have more `devDependencies` and `dependencies` - but we can keep it simple for now.
+
+Notably, this `package.json` has a `deveDependencies` key, creating a relationship between two of our Internal Packages and adding dependencies to the repository. For this reason, you'll need to run the install command for your package manager to update your lockfile.
 
 <Callout>
 If you're using Typescript, you'll need to ensure that your `tsconfig.json` is using `"module": "ESNext"` and `"moduleResolution": "Bundler"`.
 
-For more information, visit the [dedicated Typescript page](/TODO-LINK).
+For more information, visit [the dedicated Typescript guide](/TODO-LINK).
 
 </Callout>
 </Step>
 <Step>
 ### Add an `src` directory with source code
 
-We can now write some code for our package. We'll create two files:
+You can now write some code for your package. Let's create the two files that we referenced in `package.json`:
 
 <Tabs items={["add.ts", "subtract.ts"]}>
 <Tab value="add.ts">
@@ -156,10 +194,75 @@ We can now write some code for our package. We'll create two files:
 </Tabs>
 
 </Step>
+
+<Step>
+### Add the package to an application
+
+You're ready to use your new package in an application. Let's add it to the `web` application.
+
+<PackageManagerTabs>
+<Tab>
+```diff title="apps/web/package.json"
+  "dependencies": {
++   "@repo/math": "*",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest"
+  },
+```
+</Tab>
+<Tab>
+```diff title="apps/web/package.json"
+  "dependencies": {
++   "@repo/math": "workspace:*",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest"
+  },
+```
+</Tab>
+<Tab>
+```diff title="apps/web/package.json"
+  "dependencies": {
++   "@repo/math": "workspace:*",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest"
+  },
+```
+</Tab>
+</PackageManagerTabs>
+
+<Callout type="warn">
+You just changed the dependencies in your repo. Make sure to run your package manager's install command to update your lockfile.
+</Callout>
+
+With `@repo/math` now available in the `web` application, you can use it in your code:
+
+```tsx title="apps/web/src/app/page.tsx"
+import { add } from "@repo/math"
+
+function Page() {
+  return <div>{add(1, 2)}</div>
+}
+
+export default Page
+```
+
+</Step>
+
 <Step>
 ### Run `turbo build`
 
-We can now run `turbo build` to compile our package to the `dist` directory, making it available to other packages in the workspace.
+Run `turbo build` in your terminal at the root of your repository.
+
+TODO [IMAGERY]: Terminal logs image?
+
+The `@repo/math` package build before the `web` application builds so that the runtime code in `./packages/math/dist` is available to the `web` application.
+
+<Callout type="info">
+We'll discuss this at length in [the Caching guide](/TODO-LINK) but you can run `turbo build` again to see your `web` application rebuild in **milliseconds**.
+</Callout>
 
 </Step>
 </Steps>
@@ -168,9 +271,13 @@ We can now run `turbo build` to compile our package to the `dist` directory, mak
 
 ### One "purpose" per package
 
-When you're creating internal dependencies, it's best to create packages that have a single purpose. This makes it easier to understand what a package does and how it can be used. It also makes it easier to manage the dependencies of a package, as you can be sure that the dependencies are only used for the purpose of the package.
+When you're creating Internal Packages, it's best to create packages that have a single "purpose". This practice has several advantages:
 
-The "purpose" of a package can be anything that makes sense for your repository. Some examples include:
+- **Easier to understand**: It's easier to understand what a package does and how it can be used. This is important as a repository scales, as developers in the repository will be able to know where to find the code they need.
+- **Faster pipelines**: Being more granular about what a package does can mean it changes less often. If the source code doesn't change as often, the package will hit cache more often.
+- **Reducing dependencies per package**: Using fewer dependencies per package makes it so Turborepo can more effectively [prune the dependencies of your package graph](/TODO-LINK).
+
+What "purpose" means depends on your repository, your scale, developer needs, and more, depending on your use case. Some examples include:
 
 - **`@repo/ui`**: A package containing all of your shared UI components
 - **`@repo/tool-specific-config`**: A package for managing configuration of a specific tool
@@ -188,4 +295,4 @@ There are exceptions to this rule where it can make sense to install an Applicat
 
 ## Next steps
 
-TODO
+With a

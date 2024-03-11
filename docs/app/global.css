@@ -96,3 +96,7 @@ thead th:empty {
     font-size: inherit;
   }
 }
+
+.prose :where(ul):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+  padding-left: 1rem;
+}
