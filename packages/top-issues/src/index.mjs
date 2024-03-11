@@ -56,14 +56,14 @@ async function run() {
 
 function generateWorkflowPayload(issues) {
   const payload = {
-    prelude: `*Top ${NUM_OF_ISSUES} issues sorted by :+1: reactions (last ${NUM_OF_DAYS} days).*\nNote: This :github2: workflow will run every Monday at 1PM UTC (9AM EST)._"`,
+    prelude: `Top ${NUM_OF_ISSUES} issues sorted by :+1: reactions (last ${NUM_OF_DAYS} days).*\nNote: This :github2: workflow will run every Monday at 1PM UTC (9AM EST)._"`,
   };
 
   issues.forEach((issue, index) => {
     payload[`issue${index + 1}URL`] = issue.html_url;
 
     const count = issue.reactions["+1"];
-    payload[`issue${index + 1}Text`] = `:+1: ${count} ${issue.title}`;
+    payload[`issue${index + 1}Text`] = `:+1: ${count}: ${issue.title}`;
   });
 
   return payload;
