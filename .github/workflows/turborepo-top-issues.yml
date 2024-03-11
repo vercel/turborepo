@@ -15,6 +15,7 @@ jobs:
         with:
           node-version: 18
       - run: corepack enable
+      - run: pnpm install
       - name: "Get Top Issues"
         run: node ./packages/top-issues/src/index.mjs packages/top-issues
         env:
