@@ -14,7 +14,7 @@ TODO [IMAGERY]: Definitely a nice little dependency graph image goes here.
 
 ## Create your first Internal Package
 
-Let's create your first Internal Package for sharing math utilities in your repo using the guidance in the [Anatomy of a package](/repo/docs/crafting-your-repository/structuring-a-repo#anatomy-of-a-package) section. In the steps below, we assume you've created a new repository with `npx create-turbo@latest` or are using a similarly structured repository.
+Let's create your first Internal Package for sharing math utilities in your repo using the guidance in the [Anatomy of a package](/repo/docs/crafting-your-repository/structuring-a-repo#anatomy-of-a-package) section. In the steps below, we assume you've [created a new repository using `create-turbo`](/repo/docs/getting-started/quickstart) or are using a similarly structured repository.
 
 <Callout type="good-to-know">
 These steps include details specific to TypeScript. If you're using JavaScript, you can ignore the TypeScript-specific information.
@@ -287,7 +287,7 @@ What "purpose" means depends on your repository, your scale, developer needs, an
 
 When you're creating packages for your applications, it's best to avoid putting shared code in those packages. Instead, you should create a separate package for the shared code and have the application packages depend on that package.
 
-Additionally, application packages are not meant to be installed into other packages. Instead, they should be thought of as the "endpoint" of your Package Graph.
+Additionally, application packages are not meant to be installed into other packages. Instead, they should be thought of as an "endpoint" of your Package Graph.
 
 <Callout type="info">
 There are exceptions to this rule where it can make sense to install an Application Package into another package. We've discussed these in the [Advanced section](/TODO-LINK).
@@ -295,4 +295,4 @@ There are exceptions to this rule where it can make sense to install an Applicat
 
 ## Next steps
 
-With a
+With a new Internal Package now in place, we can start configuring pipelines.

@@ -8,11 +8,9 @@ import { Callout } from "#/components/Callout";
 import {Tabs, Tab} from "#/components/Tabs";
 import {Files, File, Folder} from 'fumadocs-ui/components/files';
 
-With your repo structured and your dependencies installed, you're ready to start describing the workflows that you want to create in your repository.
-
 Turborepo will always run tasks in the order you've described in `turbo.json`, parallelizing work whenever possible to ensure everything runs as fast as possible. This is faster than running tasks one at a time like most tools, and it's a big part of what makes Turborepo so fast.
 
-For example, `yarn workspaces run lint && yarn workspaces run test && yarn workspaces run build` would look like this:
+For example, <code style={{textWrap: "wrap"}}>yarn workspaces run lint && yarn workspaces run test && yarn workspaces run build</code> would look like this:
 
 ![A graphical representation of `yarn workspaces run lint && yarn workspaces run test && yarn workspaces run build`. It shows all tasks running serially with lots of empty space showing where time is being wasted to run all of the scripts.](/images/docs/yarn-workspaces-excalidraw.png)
 
@@ -24,7 +22,8 @@ But, to get the same work done **faster** with Turborepo, we can use `turbo run 
 
 The root `turbo.json` file is where you'll define the tasks for Turborepo to run. Once you have your tasks defined, you'll be able to run one or more tasks in pipelines using `turbo run`.
 
-If you don't have one yet, create a `turbo.json` file in the root of your workspace. You'll be using it to learn about the rest of the configuration options in this guide.
+- If you're starting from scratch, we recommend [creating a new repository using `create-turbo`](/repo/docs/getting-started/quickstart) and editing the `turbo.json` file.
+- If you're adopting Turborepo in an existing repository, create a `turbo.json` file in the root of your repository. You'll be using it to learn about the rest of the configuration options in this guide.
 
 <Files>
 <File name="turbo.json" className="text-green-400" />
@@ -33,30 +32,9 @@ If you don't have one yet, create a `turbo.json` file in the root of your worksp
 <Folder name="packages" />
 </Files>
 
-In the sections below, we'll create a few tasks and describe how each key that we use for the task affects how they work. For instance, you'll know how to build a task that:
-
-- caches the outputs found in `dist`,
-- only cares about the files in `src` for inputs,
-- depends on the `build` task of its dependencies,
-- and only logs errors to the console.
-
-```json title="./turbo.json"
-{
-  "pipeline": {
-    "build": {
-      "dependsOn": ["^build"],
-      "outputs": ["dist/**"],
-      "inputs": ["src/**"],
-      "outputMode": "errors-only"
-    },
-  }
-}
-
-```
-
 ## Defining tasks
 
-Each key in the `pipeline` object is a task that can be executed by `turbo run`. Turborepo will search the packages described in your package's `package.json` for a script with the name of the task.
+Each key in the `pipeline` object is a task that can be executed by `turbo run`. Turborepo will search your packages for **scripts in `package.json` that have the same name as the task**.
 
 To define a task, use [the `pipeline` object](/repo/docs/reference/configuration#pipeline) in `turbo.json`. For example, a task named `build` might look like this:
 
@@ -68,7 +46,7 @@ To define a task, use [the `pipeline` object](/repo/docs/reference/configuration
 }
 ```
 
-If you run `turbo run build` at this point, Turborepo will run the `build` task in all packages in parallel - and you're likely to see errors. You're missing a few important pieces to make this work correctly.
+If you run `turbo run build` at this point, Turborepo will run the `build` task in all packages in parallel - and you're likely to see errors. You're missing a few important pieces to make this work how you'd expect.
 
 ### Running tasks in the right order
 

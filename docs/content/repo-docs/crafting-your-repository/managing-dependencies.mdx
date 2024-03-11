@@ -6,7 +6,7 @@ description: Learn how to manage dependencies in your monorepo's workspace.
 import {PackageManagerTabs, Tab} from '#/components/Tabs'
 
 - **External dependencies** come from [the npm registry](https://www.npmjs.com/), allowing you to leverage valuable code from the ecosystem to build your applications and libraries faster.
-- **Internal dependencies** let you share code and functionality across your repo. We will discuss them on [the next page](/repo/docs/crafting-your-repository/creating-an-internal-package).
+- **Internal dependencies** let you share functionality within your repository, dramatically improving discoverability and usability of shared code. We will discuss how to build an Internal Package in [the next guide](/repo/docs/crafting-your-repository/creating-an-internal-package).
 
 <PackageManagerTabs>
 <Tab>
@@ -45,17 +45,20 @@ import {PackageManagerTabs, Tab} from '#/components/Tabs'
 
 ### Install dependencies where they're used
 
-When you install a dependency, you should install it in the package that uses it. This is true for both internal and external dependencies. This practice has several benefits:
+When you install a dependency in your repository, you should install it directly in the package that uses it. The package's `package.json` will have every dependency that the package needs. This is true for both external and internal dependencies.
+
+This practice has several benefits:
 
 - **Improved clarity**: It's easier to understand what a package depends on when its dependencies are listed in its `package.json`. Developers working in the repository can see at a glance what dependencies will be available within the package.
-- **Better caching ability**: If you install too many dependencies in the root of your repository, you'll be changing the workspace root whenever you add, update, or delete a dependency, leading to a lot of unnecessary cache invalidation. Instead, we can install dependencies in the package that uses them, which will only invalidate the cache for that package and the packages that depend on it.
-- **Pruning unused dependencies**: For Docker users, [Turborepo's pruning feature](/TODO-LINK) can remove unused dependencies from Docker images to create lighter images. When dependencies are installed in the packages that they are meant for, Turborepo can read your lockfile and remove dependencies that aren't used in the package from your final image.
+- **Enhanced flexibility**: In a monorepo at scale, it can be unrealistic to expect each package to use the same version of an external dependency. When there are many teams working in the same codebase, there will be differing priorities, timelines, and needs due to the realities of operating at scale. By installing dependencies in the package that uses them, you can allow your `web` team to bump to the latest version of TypeScript, while your `ui` team can prioritize shipping new feautres and bumping TypeScript later, for example. Additionally, if you still want to keep dependency versions in lockstep, [you can do that, too](/repo/docs/crafting-your-repository/managing-dependencies#keeping-dependencies-on-the-same-version).
+- **Better caching ability**: If you install too many dependencies in the root of your repository, you'll be changing the workspace root whenever you add, update, or delete a dependency, leading to a lot of unnecessary cache invalidation.
+- **Pruning unused dependencies**: For Docker users, [Turborepo's pruning feature](/TODO-LINK) can remove unused dependencies from Docker images to create lighter images. When dependencies are installed in the packages that they are meant for, Turborepo can read your lockfile and remove dependencies that aren't used in the package from your image.
 
 ### Few dependencies in the root
 
-Following the first principle above to [install dependencies in the package where they're used](#install-dependencies-where-theyre-used), you'll find that you naturally end up with very few dependencies in the root of your workspace.
+Following the first principle above to [install dependencies in the package where they're used](#install-dependencies-where-theyre-used), you'll find that you naturally end up with few dependencies in the root of your workspace.
 
-In this mental model, dependencies in the workspace root are for repository-level management whereas dependencies for building applications and libraries are installed in packages. Some examples of dependencies that make sense to install in the root are [`turbo`](https://www.npmjs.com/package/turbo), [`husky`](https://www.npmjs.com/package/husky), or [`lint-staged`](https://www.npmjs.com/package/lint-staged).
+In this mental model, dependencies in the workspace root are **tools for managing the repository** whereas dependencies for building applications and libraries are installed in their respective packages. Some examples of dependencies that make sense to install in the root are [`turbo`](https://www.npmjs.com/package/turbo), [`husky`](https://www.npmjs.com/package/husky), or [`lint-staged`](https://www.npmjs.com/package/lint-staged).
 
 ## Managing dependencies
 
@@ -63,7 +66,7 @@ In this mental model, dependencies in the workspace root are for repository-leve
 
 Note that Turborepo does not play a role in managing your dependencies, leaving that work up to your package manager of choice.
 
-It's up to the package manager to properly handle versioning, symlinking, resolving modules, and other dependency-related work. The recommendations on this page are best practices for managing dependencies in a monorepo, and are not enforced by Turborepo.
+It's up to the package manager to handle things like downloading the right external dependency version, symlinking, and resolving modules. The recommendations on this page are best practices for managing dependencies in a Workspace, and are not enforced by Turborepo.
 
 ### Keeping dependencies on the same version
 
@@ -114,7 +117,7 @@ Your IDE's refactoring tools can find and replace the version of a dependency ac
 
 ### Using purpose-built tooling
 
-Tools like [`syncpack`](https://www.npmjs.com/package/syncpack), [`manypkg`](https://www.npmjs.com/package/@manypkg/cli), and [`sherif`](https://www.npmjs.com/package/sherif) can be used for the specific purpose of keep dependencies in lockstep.
+Tools like [`syncpack`](https://www.npmjs.com/package/syncpack), [`manypkg`](https://www.npmjs.com/package/@manypkg/cli), and [`sherif`](https://www.npmjs.com/package/sherif) can be used for this specific purpose.
 
 ## Next steps
 
