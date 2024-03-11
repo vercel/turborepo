@@ -773,7 +773,7 @@ impl ExecContext {
 
         match self
             .task_cache
-            .restore_outputs(&mut prefixed_ui, telemetry)
+            .restore_outputs(prefixed_ui.output_prefixed_writer(), telemetry)
             .await
         {
             Ok(Some(status)) => {

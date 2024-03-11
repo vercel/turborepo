@@ -1,7 +1,7 @@
 use std::{io::Write, sync::Arc, time::Duration};
 
 use console::StyledObject;
-use tracing::debug;
+use tracing::{debug, error};
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
@@ -188,7 +188,7 @@ impl TaskCache {
 
     pub async fn restore_outputs(
         &mut self,
-        prefixed_ui: &mut PrefixedUI<impl Write>,
+        mut terminal_output: impl Write,
         telemetry: &PackageTaskEventBuilder,
     ) -> Result<Option<CacheHitMetadata>, Error> {
         if self.caching_disabled || self.run_cache.reads_disabled {
@@ -196,10 +196,13 @@ impl TaskCache {
                 self.task_output_mode,
                 OutputLogsMode::None | OutputLogsMode::ErrorsOnly
             ) {
-                prefixed_ui.output(format!(
-                    "cache bypass, force executing {}",
-                    color!(self.ui, GREY, "{}", self.hash)
-                ));
+                failable_write(
+                    &mut terminal_output,
+                    &format!(
+                        "cache bypass, force executing {}\n",
+                        color!(self.ui, GREY, "{}", self.hash)
+                    ),
+                );
             }
 
             return Ok(None);
@@ -244,10 +247,13 @@ impl TaskCache {
                     self.task_output_mode,
                     OutputLogsMode::None | OutputLogsMode::ErrorsOnly
                 ) {
-                    prefixed_ui.output(format!(
-                        "cache miss, executing {}",
-                        color!(self.ui, GREY, "{}", self.hash)
-                    ));
+                    failable_write(
+                        &mut terminal_output,
+                        &format!(
+                            "cache miss, executing {}\n",
+                            color!(self.ui, GREY, "{}", self.hash)
+                        ),
+                    );
                 }
 
                 return Ok(None);
@@ -292,20 +298,26 @@ impl TaskCache {
 
         match self.task_output_mode {
             OutputLogsMode::HashOnly | OutputLogsMode::NewOnly => {
-                prefixed_ui.output(format!(
-                    "cache hit{}, suppressing logs {}",
-                    more_context,
-                    color!(self.ui, GREY, "{}", self.hash)
-                ));
+                failable_write(
+                    &mut terminal_output,
+                    &format!(
+                        "cache hit{}, suppressing logs {}\n",
+                        more_context,
+                        color!(self.ui, GREY, "{}", self.hash)
+                    ),
+                );
             }
             OutputLogsMode::Full => {
                 debug!("log file path: {}", self.log_file_path);
-                prefixed_ui.output(format!(
-                    "cache hit{}, replaying logs {}",
-                    more_context,
-                    color!(self.ui, GREY, "{}", self.hash)
-                ));
-                self.replay_log_file(prefixed_ui.output_prefixed_writer())?;
+                failable_write(
+                    &mut terminal_output,
+                    &format!(
+                        "cache hit{}, replaying logs {}\n",
+                        more_context,
+                        color!(self.ui, GREY, "{}", self.hash)
+                    ),
+                );
+                self.replay_log_file(&mut terminal_output)?;
             }
             // Note that if we're restoring from cache, the task succeeded
             // so we know we don't need to print anything for errors
@@ -462,5 +474,12 @@ impl ConfigCache {
 
         // return the hash
         Ok(FileHashes(hash_object).hash())
+    }
+}
+
+// attempt to write message to writer, swallowing any errors encountered
+fn failable_write(mut writer: impl Write, message: &str) {
+    if let Err(err) = writer.write_all(message.as_bytes()) {
+        error!("cannot write to logs: {:?}", err);
     }
 }
