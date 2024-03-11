@@ -13,6 +13,7 @@ use crate::{
     get_version,
     opts::Opts,
     run,
+    run::{builder::RunBuilder, task_id::TaskId, Run},
     signal::SignalHandler,
     Args, DaemonConnector, DaemonPaths,
 };
@@ -37,6 +38,13 @@ pub enum Error {
 
 impl WatchClient {
     pub async fn start(base: CommandBase, telemetry: CommandEventBuilder) -> Result<(), Error> {
+        let signal = commands::run::get_signal()?;
+        let handler = SignalHandler::new(signal);
+        let Some(subscriber) = handler.subscribe() else {
+            tracing::warn!("failed to subscribe to signal handler, shutting down");
+            return Ok(());
+        };
+
         let connector = DaemonConnector {
             can_start_server: true,
             can_kill_server: true,
@@ -44,45 +52,41 @@ impl WatchClient {
         };
 
         let mut client = connector.connect().await?;
+        let run = RunBuilder::new(base.clone())?
+            .build(&handler, telemetry.clone())
+            .await?;
 
         let mut events = client.package_changes().await?;
         let mut current_runs: HashMap<String, JoinHandle<Result<i32, run::Error>>> = HashMap::new();
+        let event_fut = async {
+            while let Some(event) = events.next().await {
+                println!("event: {:?}", event);
+                let event = event.unwrap();
+                Self::handle_change_event(
+                    &run,
+                    event.event.unwrap(),
+                    &mut current_runs,
+                    &base,
+                    &telemetry,
+                    &handler,
+                )
+                .await?;
+            }
 
-        loop {
-            let signal = commands::run::get_signal()?;
-            let handler = SignalHandler::new(signal);
+            Ok::<(), Error>(())
+        };
 
-            let Some(subscriber) = handler.subscribe() else {
-                tracing::warn!("failed to subscribe to signal handler, shutting down");
-                break;
-            };
-            select! {
-                Some(event) = events.next() => {
-                    let event = event.unwrap();
-                    Self::handle_change_event(
-                        event.event.unwrap(),
-                        &mut current_runs,
-                        &base,
-                        &telemetry,
-                        &handler,
-                    ).await?;
-                }
-                _ = subscriber.listen() => {
-                    println!("got shutdown signal");
-                    break;
-                }
-                proto::package_change_event::Event::Error(proto::PackageChangeError {
-                    message,
-                }) => {
-                    return Err(DaemonError::Unavailable(message));
-                }
+        select! {
+            _ = event_fut => {}
+            _ = subscriber.listen() => {
+                tracing::info!("shutting down");
             }
         }
-
         Ok(())
     }
 
     async fn handle_change_event(
+        run: &Run,
         event: proto::package_change_event::Event,
         current_runs: &mut HashMap<String, JoinHandle<Result<i32, run::Error>>>,
         base: &CommandBase,
@@ -93,13 +97,24 @@ impl WatchClient {
         match event {
             proto::package_change_event::Event::PackageChanged(proto::PackageChanged {
                 package_name,
-                package_path,
+                package_path: _,
             }) => {
                 println!(
                     "Spawning {} on package {}",
                     base.args().get_tasks().join(", "),
                     package_name
                 );
+                let dependents: Vec<_> = base
+                    .args()
+                    .get_tasks()
+                    .iter()
+                    .flat_map(|task| {
+                        let task_id = TaskId::new(&package_name, task);
+                        run.engine.dependents(&task_id)
+                    })
+                    .collect();
+
+                println!("Dependents: {:?}", dependents);
                 let args = Args {
                     command: Some(Command::Run(Box::new(RunArgs {
                         tasks: base.args().get_tasks().to_owned(),
@@ -151,6 +166,9 @@ impl WatchClient {
                     handler.clone(),
                 )
                 .await?;
+            }
+            proto::package_change_event::Event::Error(proto::PackageChangeError { message }) => {
+                return Err(DaemonError::Unavailable(message).into());
             }
         }
 
