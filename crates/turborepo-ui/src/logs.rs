@@ -6,13 +6,13 @@ use std::{
 use tracing::{debug, warn};
 use turbopath::AbsoluteSystemPath;
 
-use crate::{prefixed::PrefixedUI, Error, PrefixedWriter};
+use crate::{prefixed::PrefixedUI, Error};
 
 /// Receives logs and multiplexes them to a log file and/or a prefixed
 /// writer
 pub struct LogWriter<W> {
     log_file: Option<BufWriter<File>>,
-    prefixed_writer: Option<PrefixedWriter<W>>,
+    writer: Option<W>,
 }
 
 /// Derive didn't work here.
@@ -21,7 +21,7 @@ impl<W> Default for LogWriter<W> {
     fn default() -> Self {
         Self {
             log_file: None,
-            prefixed_writer: None,
+            writer: None,
         }
     }
 }
@@ -43,14 +43,14 @@ impl<W: Write> LogWriter<W> {
         Ok(())
     }
 
-    pub fn with_prefixed_writer(&mut self, prefixed_writer: PrefixedWriter<W>) {
-        self.prefixed_writer = Some(prefixed_writer);
+    pub fn with_writer(&mut self, writer: W) {
+        self.writer = Some(writer);
     }
 }
 
 impl<W: Write> Write for LogWriter<W> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        match (&mut self.log_file, &mut self.prefixed_writer) {
+        match (&mut self.log_file, &mut self.writer) {
             (Some(log_file), Some(prefixed_writer)) => {
                 let _ = prefixed_writer.write(buf)?;
                 log_file.write(buf)
@@ -69,7 +69,7 @@ impl<W: Write> Write for LogWriter<W> {
         if let Some(log_file) = &mut self.log_file {
             log_file.flush()?;
         }
-        if let Some(prefixed_writer) = &mut self.prefixed_writer {
+        if let Some(prefixed_writer) = &mut self.writer {
             prefixed_writer.flush()?;
         }
 
@@ -141,7 +141,7 @@ mod tests {
         let ui = UI::new(false);
 
         log_writer.with_log_file(&log_file_path)?;
-        log_writer.with_prefixed_writer(PrefixedWriter::new(
+        log_writer.with_writer(PrefixedWriter::new(
             ui,
             CYAN.apply_to(">".to_string()),
             &mut prefixed_writer_output,
