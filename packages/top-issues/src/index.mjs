@@ -13,19 +13,22 @@ console.log("dirToWriteSlackPayloadIn: ", dirToWriteSlackPayloadIn);
 const fileToWriteSlackPayloadIn = `${dirToWriteSlackPayloadIn}/slack-payload.json`;
 
 function generateBlocks(issues) {
-  const lines = [
-    "*A list of the top 15 issues sorted by most :+1: reactions over the last 90 days.*\n_Note: This :github2: workflow will run every Monday at 1PM UTC (9AM EST)._",
-  ];
+  const prelude =
+    "*A list of the top 15 issues sorted by most :+1: reactions over the last 90 days.*\n_Note: This :github2: workflow will run every Monday at 1PM UTC (9AM EST)._";
 
-  issues.forEach((issue, i) => {
-    const line = `${i + 1}. [<${issue.html_url}|#${issue.number}>, :+1: ${
-      issue.reactions["+1"]
-    }]: ${issue.title}`;
+  // Slack Markup language
+  // <https://www.google.com|Click here to visit Google>
 
-    lines.push(line);
+  const lines = issues.map((issue, i) => {
+    const url = issue.html_url;
+    const number = issue.number;
+    const link = `<${url}|${number}>`;
+    const count = issue.reactions["+1"];
+    const line = `${i + 1}. [${link}, :+1: ${count}]: ${issue.title}`;
+    return line;
   });
 
-  return lines.join("\n");
+  return [prelude, ...lines].join("\n");
 }
 
 async function run() {
