@@ -88,7 +88,10 @@ thead th:empty {
 }
 
 /* Make inline code snippet in headers same size as rest of line */
-.prose :where(h3):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+.prose
+  :where(h1, h2, h3, h3, h4, h5, h6):not(
+    :where([class~="not-prose"], [class~="not-prose"] *)
+  ) {
   code {
     font-size: inherit;
   }

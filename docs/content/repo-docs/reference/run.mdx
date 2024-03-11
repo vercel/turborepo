@@ -98,11 +98,11 @@ Controls the available environment variables in the task's runtime.
 `PATH`, `SHELL`, and `SYSTEMROOT` are always available to the task.
 </Callout>
 
-| option            | description                                                                                                                    |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| [infer](#infer)   | Infers strict mode or loose mode based on configuration                                                                        |
-| [loose](#loose)   | Allow **all** environment variables to be available                                                                            |
-| [strict](#strict) | Only allow environment variables listed in [the `env` key](/repo/docs/reference/configuration#env) for the task to be availabe |
+| option            | description                                                                                                                     |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| [infer](#infer)   | Infers strict mode or loose mode based on configuration                                                                         |
+| [loose](#loose)   | Allow **all** environment variables to be available                                                                             |
+| [strict](#strict) | Only allow environment variables listed in [the `env` key](/repo/docs/reference/configuration#env) for the task to be available |
 
 #### `infer`
 
@@ -137,11 +137,11 @@ Specify targets to execute from your repository's graph. Multiple filters can be
 
 Targets can be a combination of workspaces, directories, and git commits.
 
-| Target type | Description                                                                    | Example                            |
-| ----------- | ------------------------------------------------------------------------------ | ---------------------------------- |
-| Package     | Select a package by its name in `package.json`                                 | `turbo run build --filter=acme-ui` |
-| Directory   | Specify directories to capture a list of packages to run tasks                 | `turbo run build --filter=apps/*`  |
-| Git commits | Using Git specifiers, specify packages with changes accordin to source control | `turbo run build --filter=HEAD^1`  |
+| Target type | Description                                                                     | Example                            |
+| ----------- | ------------------------------------------------------------------------------- | ---------------------------------- |
+| Package     | Select a package by its name in `package.json`                                  | `turbo run build --filter=acme-ui` |
+| Directory   | Specify directories to capture a list of packages to run tasks                  | `turbo run build --filter=apps/*`  |
+| Git commits | Using Git specifiers, specify packages with changes according to source control | `turbo run build --filter=HEAD^1`  |
 
 #### Combining filters
 
