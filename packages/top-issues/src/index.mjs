@@ -16,11 +16,7 @@ const NUM_OF_DAYS = 30;
 const NUM_OF_ISSUES = 5;
 
 // context.repo is the current repo
-const { owner: _OWNER, repo: _REPO } = context.repo;
-const OWNER = "vercel";
-const REPO = "turbo";
-
-console.log({ OWNER, REPO, _OWNER, _REPO });
+const { owner: OWNER, repo: REPO } = context.repo;
 
 async function run() {
   if (!process.env.GITHUB_TOKEN) throw new TypeError("GITHUB_TOKEN not set");
