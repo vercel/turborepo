@@ -61,7 +61,6 @@ function generateWorkflowPayload(issues) {
   };
 
   issues.forEach((issue, index) => {
-    payload[`issue${index + 1}`] = issue.title;
     payload[`issue${index + 1}URL`] = issue.html_url;
 
     const count = issue.reactions["+1"];
