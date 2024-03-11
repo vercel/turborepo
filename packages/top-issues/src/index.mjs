@@ -24,7 +24,7 @@ function generateBlocks(issues) {
     const number = issue.number;
     const link = `<${url}|${number}>`;
     const count = issue.reactions["+1"];
-    const line = `${i + 1}. [${link}, :+1: ${count}]: ${issue.title}`;
+    const line = `${i + 1}. ${link} (:+1: ${count}): ${issue.title}`;
     return line;
   });
 
