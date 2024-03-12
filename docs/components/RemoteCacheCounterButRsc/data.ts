@@ -1,4 +1,4 @@
-import axios from "axios";
+import { unstable_cache } from "next/cache";
 
 export interface QueryResponse {
   meta: { name: string; type: string }[];
@@ -15,14 +15,23 @@ export interface QueryResponse {
   };
 }
 
-export const REMOTE_CACHE_MINUTES_SAVED_KEY =
-  "https://api.us-east.tinybird.co/v0/pipes/turborepo_time_saved_ticker.json?token=p.eyJ1IjogIjAzYzA0Y2MyLTM1YTAtNDhhNC05ZTZjLThhMWE0NGNhNjhkZiIsICJpZCI6ICJmOWIzMTU5Yi0wOTVjLTQyM2UtOWIwNS04ZDZlNzIyNjEwNzIifQ.A3TOPdm3Lhmn-1x5m6jNvulCQbbgUeQfAIO3IaaAt5k";
+export const REMOTE_CACHE_MINUTES_SAVED_URL = `https://api.us-east.tinybird.co/v0/pipes/turborepo_time_saved_ticker.json?token=${process.env.NEXT_PUBLIC_TINYBIRD_TIME_SAVED_PUBLIC_TOKEN}`;
 
-const fetcher = (url: string) =>
-  axios.get(url).then((res) => res.data as QueryResponse);
+export const fetchTimeSaved = async (url: string) => {
+  const response = await fetch(url, {
+    next: { tags: [REMOTE_CACHE_TIME_TAG] },
+  });
+  const data = (await response.json()) as unknown as QueryResponse;
+  return data;
+};
 
-export const remoteCacheTimeSavedQuery = () =>
-  fetcher(REMOTE_CACHE_MINUTES_SAVED_KEY);
+export const REMOTE_CACHE_TIME_TAG = "REMOTE_CACHE_MINUTES_SAVED";
+
+export const remoteCacheTimeSavedQuery = unstable_cache(
+  async (url: string) => fetchTimeSaved(url),
+  [REMOTE_CACHE_TIME_TAG],
+  { revalidate: 5 }
+);
 
 export const computeTimeSaved = (metrics: QueryResponse): number => {
   const data = metrics.data[0];

@@ -1,8 +1,5 @@
-import type { Metadata } from "next";
-import { DocsPage, DocsBody } from "fumadocs-ui/page";
 import { notFound } from "next/navigation";
-import { getPage, getPages } from "@/app/source";
-import { RemoteCacheCounterButRsc } from "@/components/RemoteCacheCounterButRsc";
+import { getPage } from "@/app/source";
 
 export default function Page({ params }: { params: { slug?: string[] } }) {
   const page = getPage(params.slug);
@@ -14,38 +11,9 @@ export default function Page({ params }: { params: { slug?: string[] } }) {
   const Mdx = page.data.exports.default;
 
   return (
-    <DocsPage
-      toc={page.data.exports.toc}
-      tableOfContent={{
-        header: (
-          <>
-            {/* @ts-expect-error */}
-            <RemoteCacheCounterButRsc />
-          </>
-        ),
-      }}
-    >
-      <DocsBody>
-        <h1 className="text-left">{page.data.title}</h1>
-        <Mdx />
-      </DocsBody>
-    </DocsPage>
+    <>
+      <h1 className="text-left">{page.data.title}</h1>
+      <Mdx />
+    </>
   );
-}
-
-export function generateStaticParams() {
-  return getPages().map((page) => ({
-    slug: page.slugs,
-  }));
-}
-
-export function generateMetadata({ params }: { params: { slug?: string[] } }) {
-  const page = getPage(params.slug);
-
-  if (!page) notFound();
-
-  return {
-    title: page.data.title,
-    description: page.data.description,
-  } satisfies Metadata;
 }
