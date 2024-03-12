@@ -147,7 +147,7 @@ impl TaskCache {
             failable_write(
                 &mut terminal_output,
                 &format!(
-                    "cache miss, executing {}",
+                    "cache miss, executing {}\n",
                     color!(self.ui, GREY, "{}", self.hash)
                 ),
             );
