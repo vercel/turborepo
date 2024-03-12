@@ -7,7 +7,7 @@ use struct_iterable::Iterable;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_auth::{TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE};
-use turborepo_dirs::config_dir;
+use turborepo_dirs::{config_dir, vercel_config_dir};
 use turborepo_errors::TURBO_SITE;
 use turborepo_repository::package_json::{Error as PackageJsonError, PackageJson};
 
@@ -455,9 +455,9 @@ impl TurborepoConfigBuilder {
             return Ok(global_config_path);
         }
 
-        let config_dir = config_dir().ok_or(Error::NoGlobalConfigPath)?;
-        let global_config_path = config_dir.join("turborepo").join("config.json");
-        AbsoluteSystemPathBuf::try_from(global_config_path).map_err(Error::PathError)
+        let config_dir = config_dir()?.ok_or(Error::NoGlobalConfigPath)?;
+
+        Ok(config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]))
     }
     fn global_auth_path(&self) -> Result<AbsoluteSystemPathBuf, Error> {
         #[cfg(test)]
@@ -465,16 +465,16 @@ impl TurborepoConfigBuilder {
             return Ok(global_config_path);
         }
 
-        let config_dir = config_dir().ok_or(Error::NoGlobalConfigDir)?;
-
+        let vercel_config_dir = vercel_config_dir()?.ok_or(Error::NoGlobalConfigDir)?;
         // Check for both Vercel and Turbo paths. Vercel takes priority.
-        let vercel_path = config_dir.join(VERCEL_TOKEN_DIR).join(VERCEL_TOKEN_FILE);
-        if vercel_path.try_exists().is_ok_and(|exists| exists) {
-            return AbsoluteSystemPathBuf::try_from(vercel_path).map_err(Error::PathError);
+        let vercel_path = vercel_config_dir.join_components(&[VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE]);
+        if vercel_path.exists() {
+            return Ok(vercel_path);
         }
 
-        let turbo_path = config_dir.join(TURBO_TOKEN_DIR).join(TURBO_TOKEN_FILE);
-        AbsoluteSystemPathBuf::try_from(turbo_path).map_err(Error::PathError)
+        let turbo_config_dir = config_dir()?.ok_or(Error::NoGlobalConfigDir)?;
+
+        Ok(turbo_config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]))
     }
     fn local_config_path(&self) -> AbsoluteSystemPathBuf {
         self.repo_root.join_components(&[".turbo", "config.json"])

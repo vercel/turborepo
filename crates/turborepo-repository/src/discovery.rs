@@ -9,8 +9,6 @@
 //! these strategies will implement some sort of monad-style composition so that
 //! we can track areas of run that are performing sub-optimally.
 
-use std::sync::Arc;
-
 use tokio::time::error::Elapsed;
 use tokio_stream::{iter, StreamExt};
 use turbopath::AbsoluteSystemPathBuf;
@@ -66,42 +64,6 @@ pub trait PackageDiscoveryBuilder {
     type Error: std::error::Error;
 
     fn build(self) -> Result<Self::Output, Self::Error>;
-}
-
-impl<T: PackageDiscovery + Send + Sync> PackageDiscovery for Option<T> {
-    async fn discover_packages(&self) -> Result<DiscoveryResponse, Error> {
-        tracing::debug!("discovering packages using optional strategy");
-
-        match self {
-            Some(d) => d.discover_packages().await,
-            None => {
-                tracing::debug!("no strategy available");
-                Err(Error::Unavailable)
-            }
-        }
-    }
-
-    async fn discover_packages_blocking(&self) -> Result<DiscoveryResponse, Error> {
-        tracing::debug!("discovering packages using optional strategy");
-
-        match self {
-            Some(d) => d.discover_packages_blocking().await,
-            None => {
-                tracing::debug!("no strategy available");
-                Err(Error::Unavailable)
-            }
-        }
-    }
-}
-
-impl<T: PackageDiscovery + Send + Sync> PackageDiscovery for Arc<T> {
-    async fn discover_packages(&self) -> Result<DiscoveryResponse, Error> {
-        self.as_ref().discover_packages().await
-    }
-
-    async fn discover_packages_blocking(&self) -> Result<DiscoveryResponse, Error> {
-        self.as_ref().discover_packages_blocking().await
-    }
 }
 
 pub struct LocalPackageDiscovery {
@@ -206,13 +168,15 @@ impl PackageDiscovery for LocalPackageDiscovery {
 
 /// Attempts to run the `primary` strategy for an amount of time
 /// specified by `timeout` before falling back to `fallback`
-pub struct FallbackPackageDiscovery<P, F> {
+pub struct FallbackPackageDiscovery<P: PackageDiscovery + Send + Sync, F> {
     primary: P,
     fallback: F,
     timeout: std::time::Duration,
 }
 
-impl<P: PackageDiscovery, F: PackageDiscovery> FallbackPackageDiscovery<P, F> {
+impl<P: PackageDiscovery + Send + Sync, F: PackageDiscovery + Send + Sync>
+    FallbackPackageDiscovery<P, F>
+{
     pub fn new(primary: P, fallback: F, timeout: std::time::Duration) -> Self {
         Self {
             primary,

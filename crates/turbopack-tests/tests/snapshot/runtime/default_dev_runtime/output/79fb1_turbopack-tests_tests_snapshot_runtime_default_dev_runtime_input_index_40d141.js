@@ -448,6 +448,14 @@ async function loadChunkPath(source, chunkPath) {
         } : undefined);
     }
 }
+/**
+ * Returns an absolute url to an asset.
+ */ function createResolvePathFromModule(resolver) {
+    return function resolvePathFromModule(moduleId) {
+        const exported = resolver(moduleId);
+        return exported?.default ?? exported;
+    };
+}
 function instantiateModule(id, source) {
     const moduleFactory = moduleFactories[id];
     if (typeof moduleFactory !== "function") {
@@ -506,6 +514,7 @@ function instantiateModule(id, source) {
             parentId: id
         };
         runModuleExecutionHooks(module, (refresh)=>{
+            const r = commonJsRequire.bind(null, module);
             moduleFactory.call(module.exports, augmentContext({
                 a: asyncModule.bind(null, module),
                 e: module.exports,
@@ -526,6 +535,7 @@ function instantiateModule(id, source) {
                 g: globalThis,
                 U: relativeURL,
                 k: refresh,
+                R: createResolvePathFromModule(r),
                 __dirname: module.id.replace(/(^|\/)\/+$/, "")
             }));
         });
@@ -1520,7 +1530,7 @@ async function loadWebAssemblyModule(_source, wasmChunkPath) {
     }
 })();
 function _eval({ code, url, map }) {
-    code += `\n\n//# sourceURL=${location.origin}/${CHUNK_BASE_PATH}${url}`;
+    code += `\n\n//# sourceURL=${encodeURI(location.origin + CHUNK_BASE_PATH + url)}`;
     if (map) code += `\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${btoa(map)}`;
     return eval(code);
 }

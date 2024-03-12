@@ -97,7 +97,6 @@ impl<'a> Visitor<'a> {
         global_hash: &'a str,
         global_env_mode: EnvMode,
         ui: UI,
-        silent: bool,
         manager: ProcessManager,
         repo_root: &'a AbsoluteSystemPath,
         global_env: EnvironmentVariableMap,
@@ -108,7 +107,7 @@ impl<'a> Visitor<'a> {
             env_at_execution_start,
             global_hash,
         );
-        let sink = Self::sink(run_opts, silent);
+        let sink = Self::sink(run_opts);
         let color_cache = ColorSelector::default();
 
         Self {
@@ -354,10 +353,8 @@ impl<'a> Visitor<'a> {
             .await?)
     }
 
-    fn sink(run_opts: &RunOpts, silent: bool) -> OutputSink<StdWriter> {
-        let (out, err) = if silent {
-            (std::io::sink().into(), std::io::sink().into())
-        } else if run_opts.should_redirect_stderr_to_stdout() {
+    fn sink(run_opts: &RunOpts) -> OutputSink<StdWriter> {
+        let (out, err) = if run_opts.should_redirect_stderr_to_stdout() {
             (std::io::stdout().into(), std::io::stdout().into())
         } else {
             (std::io::stdout().into(), std::io::stderr().into())
@@ -776,7 +773,7 @@ impl ExecContext {
 
         match self
             .task_cache
-            .restore_outputs(&mut prefixed_ui, telemetry)
+            .restore_outputs(prefixed_ui.output_prefixed_writer(), telemetry)
             .await
         {
             Ok(Some(status)) => {
@@ -836,7 +833,7 @@ impl ExecContext {
 
         let mut stdout_writer = match self
             .task_cache
-            .output_writer(self.pretty_prefix.clone(), output_client.stdout())
+            .output_writer(prefixed_ui.output_prefixed_writer())
         {
             Ok(w) => w,
             Err(e) => {
@@ -915,7 +912,10 @@ impl ExecContext {
                 if let Err(e) = stdout_writer.flush() {
                     error!("error flushing logs: {e}");
                 }
-                if let Err(e) = self.task_cache.on_error(&mut prefixed_ui) {
+                if let Err(e) = self
+                    .task_cache
+                    .on_error(prefixed_ui.output_prefixed_writer())
+                {
                     error!("error reading logs: {e}");
                 }
                 let error = TaskErrorCause::from_execution(process.label().to_string(), code);

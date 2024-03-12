@@ -85,7 +85,7 @@ impl<W: Write> PrefixedUI<W> {
 
     /// Construct a PrefixedWriter which will behave the same as `output`, but
     /// without the requirement that messages be valid UTF-8
-    pub(crate) fn output_prefixed_writer(&mut self) -> PrefixedWriter<&mut W> {
+    pub fn output_prefixed_writer(&mut self) -> PrefixedWriter<&mut W> {
         PrefixedWriter {
             prefix: self
                 .output_prefix
