@@ -1,6 +1,7 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
 use futures::StreamExt;
+use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 use tokio::{select, task::JoinHandle};
 use turborepo_telemetry::events::command::CommandEventBuilder;
@@ -10,15 +11,20 @@ use crate::{
     commands,
     commands::CommandBase,
     daemon::{proto, DaemonConnectorError, DaemonError},
-    get_version, run,
-    run::{builder::RunBuilder, task_id::TaskId, Run},
+    get_version, opts,
+    opts::Opts,
+    run,
+    run::{
+        builder::RunBuilder,
+        scope::target_selector::{InvalidSelectorError, TargetSelector},
+    },
     signal::SignalHandler,
-    Args, DaemonConnector, DaemonPaths,
+    DaemonConnector, DaemonPaths,
 };
 
 pub struct WatchClient {}
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum Error {
     #[error("failed to connect to daemon")]
     Daemon(#[from] DaemonError),
@@ -32,16 +38,58 @@ pub enum Error {
     Start(std::io::Error),
     #[error(transparent)]
     Run(#[from] run::Error),
+    #[error("`--since` is not supported in watch mode")]
+    SinceNotSupported,
+    #[error(transparent)]
+    Opts(#[from] opts::Error),
+    #[error("invalid filter pattern")]
+    InvalidSelector(#[from] InvalidSelectorError),
+    #[error("filter cannot contain a git range in watch mode")]
+    GitRangeInFilter {
+        #[source_code]
+        filter: String,
+        #[label]
+        span: SourceSpan,
+    },
 }
 
 impl WatchClient {
-    pub async fn start(base: CommandBase, telemetry: CommandEventBuilder) -> Result<(), Error> {
+    fn validate_filter(opts: &Opts, filters: &[String]) -> Result<(), Error> {
+        if opts.scope_opts.legacy_filter.since.is_some() {
+            return Err(Error::SinceNotSupported);
+        }
+
+        let selectors = filters
+            .iter()
+            .map(|f| TargetSelector::from_str(f))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        for selector in selectors {
+            if !selector.from_ref.is_empty() || !selector.to_ref_override.is_empty() {
+                let filter = format!("--filter={}", selector.raw);
+                let span: SourceSpan = (0, filter.len()).into();
+
+                return Err(Error::GitRangeInFilter { filter, span });
+            }
+        }
+
+        Ok(())
+    }
+    pub async fn start(
+        base: CommandBase,
+        run_args: &RunArgs,
+        telemetry: CommandEventBuilder,
+    ) -> Result<(), Error> {
         let signal = commands::run::get_signal()?;
         let handler = SignalHandler::new(signal);
         let Some(subscriber) = handler.subscribe() else {
             tracing::warn!("failed to subscribe to signal handler, shutting down");
             return Ok(());
         };
+
+        let opts = Opts::try_from(base.args())?;
+
+        Self::validate_filter(&opts, &run_args.filter)?;
 
         let connector = DaemonConnector {
             can_start_server: true,
@@ -91,16 +139,12 @@ impl WatchClient {
                 package_name,
                 package_path: _,
             }) => {
-                println!(
-                    "Spawning {} on package {}",
-                    base.args().get_tasks().join(", "),
-                    package_name
-                );
                 let mut args = base.args().clone();
                 args.command.as_mut().map(|c| {
                     if let Command::Run(run_args) = c {
                         run_args.tasks = base.args().get_tasks().to_owned();
                         run_args.filter = vec![format!("...{}", package_name)];
+                        run_args.no_cache = true;
                     }
                 });
 
@@ -129,6 +173,7 @@ impl WatchClient {
                 args.command.as_mut().map(|c| {
                     if let Command::Run(run_args) = c {
                         run_args.watch = false;
+                        run_args.no_cache = true;
                     }
                 });
 
