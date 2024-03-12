@@ -1,8 +1,7 @@
-import { getPage, getPages } from "@/app/source";
+import { getPage } from "@/app/source";
 import { DocsPage, DocsBody } from "fumadocs-ui/page";
 import { notFound } from "next/navigation";
-import { Metadata } from "next";
-import { RemoteCacheCounterButRsc } from "@/components/RemoteCacheCounterButRsc";
+import { RemoteCacheCounter } from "@/components/RemoteCacheCounter";
 
 export default async function SlugLayout({
   children,
@@ -21,7 +20,7 @@ export default async function SlugLayout({
     <DocsPage
       toc={page.data.exports.toc}
       tableOfContent={{
-        header: <RemoteCacheCounterButRsc />,
+        header: <RemoteCacheCounter />,
       }}
     >
       <DocsBody>{children}</DocsBody>

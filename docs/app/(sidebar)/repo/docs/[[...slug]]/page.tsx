@@ -1,6 +1,6 @@
-import {} from "fumadocs-ui/page";
 import { notFound } from "next/navigation";
 import { getPage, getPages } from "@/app/source";
+import { Metadata } from "next";
 
 export default function Page({ params }: { params: { slug?: string[] } }) {
   const page = getPage(params.slug);
