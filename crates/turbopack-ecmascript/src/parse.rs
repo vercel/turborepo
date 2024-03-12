@@ -324,7 +324,6 @@ async fn parse_content(
                 let mut parser = Parser::new_from(lexer);
                 let program_result = parser.parse_program();
 
-                //let mut has_errors = false;
                 let mut has_errors = vec![];
                 for e in parser.take_errors() {
                     let mut e = e.into_diagnostic(&parser_handler);

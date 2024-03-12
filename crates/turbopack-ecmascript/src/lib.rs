@@ -875,12 +875,12 @@ async fn gen_content_with_visitors(
         }
         ParseResult::Unparseable { messages } => Ok(EcmascriptModuleContent {
             inner_code: format!(
-                "const e = new Error(\"Could not parse module \
-                 '{path}'{error_messages}\");\ne.code = 'MODULE_UNPARSEABLE';\nthrow e;",
+                "const e = new Error(`Could not parse module \
+                 '{path}'\n{error_messages}`);\ne.code = 'MODULE_UNPARSEABLE';\nthrow e;",
                 path = ident.path().to_string().await?,
                 error_messages = messages
                     .as_ref()
-                    .and_then(|m| { m.first().map(|f| format!("\\n{}", f)) })
+                    .and_then(|m| { m.first().map(|f| format!("\n{}", f)) })
                     .unwrap_or("".to_string())
             )
             .into(),
