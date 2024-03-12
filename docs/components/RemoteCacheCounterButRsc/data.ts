@@ -17,19 +17,19 @@ export interface QueryResponse {
 
 export const REMOTE_CACHE_MINUTES_SAVED_URL = `https://api.us-east.tinybird.co/v0/pipes/turborepo_time_saved_ticker.json?token=${process.env.NEXT_PUBLIC_TINYBIRD_TIME_SAVED_PUBLIC_TOKEN}`;
 
+export const REMOTE_CACHE_METRIC_TAG = "remote-cache-minutes-saved";
+
 export const fetchTimeSaved = async (url: string) => {
   const response = await fetch(url, {
-    next: { tags: [REMOTE_CACHE_TIME_TAG] },
+    next: { tags: [REMOTE_CACHE_METRIC_TAG] },
   });
   const data = (await response.json()) as unknown as QueryResponse;
   return data;
 };
 
-export const REMOTE_CACHE_TIME_TAG = "REMOTE_CACHE_MINUTES_SAVED";
-
 export const remoteCacheTimeSavedQuery = unstable_cache(
   async (url: string) => fetchTimeSaved(url),
-  [REMOTE_CACHE_TIME_TAG],
+  [REMOTE_CACHE_METRIC_TAG],
   { revalidate: 5 }
 );
 

@@ -1,5 +1,6 @@
+import {} from "fumadocs-ui/page";
 import { notFound } from "next/navigation";
-import { getPage } from "@/app/source";
+import { getPage, getPages } from "@/app/source";
 
 export default function Page({ params }: { params: { slug?: string[] } }) {
   const page = getPage(params.slug);
@@ -16,4 +17,21 @@ export default function Page({ params }: { params: { slug?: string[] } }) {
       <Mdx />
     </>
   );
+}
+
+export function generateStaticParams() {
+  return getPages().map((page) => ({
+    slug: page.slugs,
+  }));
+}
+
+export function generateMetadata({ params }: { params: { slug?: string[] } }) {
+  const page = getPage(params.slug);
+
+  if (!page) notFound();
+
+  return {
+    title: page.data.title,
+    description: page.data.description,
+  } satisfies Metadata;
 }
