@@ -20,7 +20,7 @@ tui-term = ["dep:tui-term", "dep:ratatui"]
 [dependencies]
 itoa = "1.0.9"
 log = "0.4.19"
-ratatui = { version = "0.26.1", optional = true }
+ratatui = { workspace = true, optional = true }
 tui-term = { workspace = true, optional = true }
 unicode-width = "0.1.10"
 vte = "0.11.1"
