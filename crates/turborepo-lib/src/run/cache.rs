@@ -144,7 +144,7 @@ impl TaskCache {
 
     pub fn on_error(&self, mut terminal_output: impl Write) -> Result<(), Error> {
         if self.task_output_mode == OutputLogsMode::ErrorsOnly {
-            failable_write(
+            fallible_write(
                 &mut terminal_output,
                 &format!(
                     "cache miss, executing {}\n",
@@ -191,7 +191,7 @@ impl TaskCache {
                 self.task_output_mode,
                 OutputLogsMode::None | OutputLogsMode::ErrorsOnly
             ) {
-                failable_write(
+                fallible_write(
                     &mut terminal_output,
                     &format!(
                         "cache bypass, force executing {}\n",
@@ -242,7 +242,7 @@ impl TaskCache {
                     self.task_output_mode,
                     OutputLogsMode::None | OutputLogsMode::ErrorsOnly
                 ) {
-                    failable_write(
+                    fallible_write(
                         &mut terminal_output,
                         &format!(
                             "cache miss, executing {}\n",
@@ -293,7 +293,7 @@ impl TaskCache {
 
         match self.task_output_mode {
             OutputLogsMode::HashOnly | OutputLogsMode::NewOnly => {
-                failable_write(
+                fallible_write(
                     &mut terminal_output,
                     &format!(
                         "cache hit{}, suppressing logs {}\n",
@@ -304,7 +304,7 @@ impl TaskCache {
             }
             OutputLogsMode::Full => {
                 debug!("log file path: {}", self.log_file_path);
-                failable_write(
+                fallible_write(
                     &mut terminal_output,
                     &format!(
                         "cache hit{}, replaying logs {}\n",
@@ -473,7 +473,7 @@ impl ConfigCache {
 }
 
 // attempt to write message to writer, swallowing any errors encountered
-fn failable_write(mut writer: impl Write, message: &str) {
+fn fallible_write(mut writer: impl Write, message: &str) {
     if let Err(err) = writer.write_all(message.as_bytes()) {
         error!("cannot write to logs: {:?}", err);
     }
