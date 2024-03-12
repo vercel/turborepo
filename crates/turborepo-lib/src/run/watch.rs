@@ -50,9 +50,6 @@ impl WatchClient {
         };
 
         let mut client = connector.connect().await?;
-        let run = RunBuilder::new(base.clone())?
-            .build(&handler, telemetry.clone())
-            .await?;
 
         let mut events = client.package_changes().await?;
         let mut current_runs: HashMap<String, JoinHandle<Result<i32, run::Error>>> = HashMap::new();
@@ -60,7 +57,6 @@ impl WatchClient {
             while let Some(event) = events.next().await {
                 let event = event.unwrap();
                 Self::handle_change_event(
-                    &run,
                     event.event.unwrap(),
                     &mut current_runs,
                     &base,
@@ -83,7 +79,6 @@ impl WatchClient {
     }
 
     async fn handle_change_event(
-        run: &Run,
         event: proto::package_change_event::Event,
         current_runs: &mut HashMap<String, JoinHandle<Result<i32, run::Error>>>,
         base: &CommandBase,
