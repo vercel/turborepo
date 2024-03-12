@@ -1,0 +1,30 @@
+name: Turborepo Top Issues
+
+on:
+  schedule:
+    - cron: "0 13 * * 1" # Every Monday at 1PM UTC (9AM EST)
+  workflow_dispatch:
+
+jobs:
+  run:
+    # if: github.repository_owner == 'vercel'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: corepack enable
+      - run: pnpm install
+      - name: "Get Top Issues"
+        run: node ./packages/top-issues/src/index.mjs packages/top-issues
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: "Show slack payload"
+        run: cat packages/top-issues/slack-payload.json
+      - name: Send payload to slack
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          payload-file-path: "packages/top-issues/slack-payload.json"
+        env:
+          SLACK_WEBHOOK_URL: "${{ secrets.TURBOREPO_REPO_STATS_SLACK_WEBHOOK_URL }}"
