@@ -20,6 +20,7 @@ Validate that there was a failed task and exitCode is 1 (which is what we get fr
     "success": 0,
     "failed": 1,
     "cached": 0,
+    "cachedRemote": 0,
     "attempted": 1,
     "startTime": [0-9]+, (re)
     "endTime": [0-9]+, (re)
@@ -102,6 +103,7 @@ success should be 1, and attempted should be 2
     "success": 1,
     "failed": 1,
     "cached": 0,
+    "cachedRemote": 0,
     "attempted": 2,
     "startTime": [0-9]+, (re)
     "endTime": [0-9]+, (re)

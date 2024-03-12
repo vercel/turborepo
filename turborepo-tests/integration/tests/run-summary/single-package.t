@@ -19,6 +19,7 @@ Check
   [
     "attempted",
     "cached",
+    "cachedRemote",
     "command",
     "endTime",
     "exitCode",
@@ -130,6 +131,7 @@ Check Rust implementation
   [
     "attempted",
     "cached",
+    "cachedRemote",
     "command",
     "endTime",
     "exitCode",
