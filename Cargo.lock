@@ -127,28 +127,14 @@ dependencies = [
 
 [[package]]
 name = "anstream"
-version = "0.5.0"
+version = "0.6.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1f58811cfac344940f1a400b6e6231ce35171f614f26439e80f8c1465c5cc0c"
+checksum = "d96bd03f33fe50a863e394ee9718a706f988b9079b20c3784fb726e7678b62fb"
 dependencies = [
  "anstyle",
  "anstyle-parse",
  "anstyle-query",
- "anstyle-wincon 2.1.0",
- "colorchoice",
- "utf8parse",
-]
-
-[[package]]
-name = "anstream"
-version = "0.6.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ab91ebe16eb252986481c5b62f6098f3b698a45e34b5b98200cf20dd2484a44"
-dependencies = [
- "anstyle",
- "anstyle-parse",
- "anstyle-query",
- "anstyle-wincon 3.0.1",
+ "anstyle-wincon",
  "colorchoice",
  "utf8parse",
 ]
@@ -174,16 +160,6 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5ca11d4be1bab0c8bc8734a9aa7bf4ee8316d462a08c6ac5052f888fef5b494b"
 dependencies = [
- "windows-sys 0.48.0",
-]
-
-[[package]]
-name = "anstyle-wincon"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58f54d10c6dfa51283a066ceab3ec1ab78d13fae00aa49243a45e4571fb79dfd"
-dependencies = [
- "anstyle",
  "windows-sys 0.48.0",
 ]
 
@@ -1558,9 +1534,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.4.2"
+version = "4.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a13b88d2c62ff462f88e4a121f17a82c1af05693a2f192b5c38d14de73c19f6"
+checksum = "b230ab84b0ffdf890d5a10abdbc8b83ae1c4918275daea1ab8801f71536b2651"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -1568,31 +1544,31 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.4.2"
+version = "4.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bb9faaa7c2ef94b2743a21f5a29e6f0010dff4caa69ac8e9d6cf8b6fa74da08"
+checksum = "ae129e2e766ae0ec03484e609954119f123cc1fe650337e155d03b022f24f7b4"
 dependencies = [
- "anstream 0.5.0",
+ "anstream",
  "anstyle",
- "clap_lex 0.5.1",
- "strsim 0.10.0",
- "terminal_size 0.2.6",
+ "clap_lex 0.7.0",
+ "strsim 0.11.0",
+ "terminal_size 0.3.0",
 ]
 
 [[package]]
 name = "clap_complete"
-version = "4.4.1"
+version = "4.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4110a1e6af615a9e6d0a36f805d5c99099f8bab9b8042f5bc1fa220a4a89e36f"
+checksum = "885e4d7d5af40bfb99ae6f9433e292feac98d452dcb3ec3d25dfe7552b77da8c"
 dependencies = [
- "clap 4.4.2",
+ "clap 4.5.2",
 ]
 
 [[package]]
 name = "clap_derive"
-version = "4.4.2"
+version = "4.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0862016ff20d69b84ef8247369fabf5c008a7417002411897d40ee1f4532b873"
+checksum = "307bc0538d5f0f83b8248db3087aa92fe504e4691294d0c96c0eabc33f47ba47"
 dependencies = [
  "heck 0.4.1",
  "proc-macro2",
@@ -1611,9 +1587,9 @@ dependencies = [
 
 [[package]]
 name = "clap_lex"
-version = "0.5.1"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd7cc57abe963c6d3b9d8be5b06ba7c8957a930305ca90304f24ef040aa6f961"
+checksum = "98cc8fbded0c607b7ba9dd60cd98df59af97e84d24e49c8557331cfc26d301ce"
 
 [[package]]
 name = "cloudabi"
@@ -3676,7 +3652,7 @@ version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b82da652938b83f94cfdaaf9ae7aaadb8430d84b0dfda226998416318727eac2"
 dependencies = [
- "anstream 0.6.4",
+ "anstream",
  "anstyle",
  "backtrace",
  "os_info",
@@ -5198,7 +5174,7 @@ name = "node-file-trace"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap 4.4.2",
+ "clap 4.5.2",
  "console-subscriber",
  "serde",
  "serde_json",
@@ -6235,9 +6211,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.66"
+version = "1.0.79"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18fb31db3f9bddb2ea821cde30a9f70117e3f119938b5ee630b7403aa6e2ead9"
+checksum = "e835ff2298f5721608eb1a980ecaee1aef2c132bf95ecc026a11b7bf3c01c02e"
 dependencies = [
  "unicode-ident",
 ]
@@ -6599,7 +6575,7 @@ dependencies = [
  "built",
  "cc",
  "cfg-if 1.0.0",
- "clap 4.4.2",
+ "clap 4.5.2",
  "clap_complete",
  "console",
  "const_fn_assert",
@@ -7991,6 +7967,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
+name = "strsim"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ee073c9e4cd00e28217186dbe12796d692868f432bf2e97ee73bed0c56dfa01"
+
+[[package]]
 name = "struct_iterable"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8218,7 +8200,7 @@ name = "swc-ast-explorer"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap 4.4.2",
+ "clap 4.5.2",
  "owo-colors",
  "regex",
  "swc_core",
@@ -9706,6 +9688,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "terminal_size"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21bebf2b7c9e0a515f6e0f8c51dc0f8e4696391e6f1ff30379559f8365fb0df7"
+dependencies = [
+ "rustix 0.38.31",
+ "windows-sys 0.48.0",
+]
+
+[[package]]
 name = "termios"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10590,7 +10582,7 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "build-target",
- "clap 4.4.2",
+ "clap 4.5.2",
  "clap_complete",
  "command-group",
  "dunce",
@@ -10886,7 +10878,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chromiumoxide",
- "clap 4.4.2",
+ "clap 4.5.2",
  "console-subscriber",
  "criterion",
  "dunce",
@@ -10995,7 +10987,7 @@ name = "turbopack-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap 4.4.2",
+ "clap 4.5.2",
  "console-subscriber",
  "criterion",
  "dunce",
@@ -11038,7 +11030,7 @@ name = "turbopack-cli-utils"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap 4.4.2",
+ "clap 4.5.2",
  "crossterm 0.26.1",
  "once_cell",
  "owo-colors",
@@ -11056,7 +11048,7 @@ name = "turbopack-convert-trace"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap 4.4.2",
+ "clap 4.5.2",
  "futures 0.3.28",
  "indexmap 1.9.3",
  "intervaltree",
@@ -11107,7 +11099,7 @@ name = "turbopack-create-test-app"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap 4.4.2",
+ "clap 4.5.2",
  "indoc",
  "pathdiff",
  "serde_json",
@@ -11489,7 +11481,7 @@ name = "turbopack-trace-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap 4.4.2",
+ "clap 4.5.2",
  "either",
  "futures 0.3.28",
  "indexmap 1.9.3",
@@ -11769,7 +11761,7 @@ dependencies = [
  "capnp 0.17.2",
  "capnpc",
  "chrono",
- "clap 4.4.2",
+ "clap 4.5.2",
  "clap_complete",
  "command-group",
  "console",
@@ -13594,7 +13586,7 @@ dependencies = [
  "anyhow",
  "cargo-lock",
  "chrono",
- "clap 4.4.2",
+ "clap 4.5.2",
  "indexmap 1.9.3",
  "inquire",
  "num-format",
