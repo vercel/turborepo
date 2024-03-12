@@ -274,7 +274,7 @@ pub struct LegacyFilter {
     // entrypoints is a list of package entrypoints
     entrypoints: Vec<String>,
     // since is the git ref used to calculate changed packages
-    since: Option<String>,
+    pub since: Option<String>,
 }
 
 impl LegacyFilter {

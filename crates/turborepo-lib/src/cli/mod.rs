@@ -1215,7 +1215,7 @@ pub async fn run(
             args.track(&event);
             event.track_run_code_path(CodePath::Rust);
             if args.watch {
-                WatchClient::start(base, event).await?;
+                WatchClient::start(base, args, event).await?;
 
                 return Ok(0);
             }
