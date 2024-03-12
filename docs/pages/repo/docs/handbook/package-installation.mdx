@@ -11,6 +11,7 @@ Turborepo is compatible with four package managers:
 - [npm](https://docs.npmjs.com/cli/v8/using-npm/workspaces/#description)
 - [pnpm](https://pnpm.io/workspaces)
 - [Yarn 1](https://classic.yarnpkg.com/lang/en/docs/workspaces/)
+- [bun](https://bun.sh/guides/install/workspaces)
 - Yarn >=2 (docs coming soon)
 
 You should use whichever you feel most comfortable with - but **if you're a monorepo beginner, we recommend npm**.
@@ -24,7 +25,7 @@ When you first clone or create your monorepo, you'll need to:
 1. Make sure you're in the root directory of your monorepo
 2. Run the install command:
 
-<Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
+<Tabs items={["npm", "yarn", "pnpm", "bun"]} storageKey="selected-pkg-manager">
   <Tab>
 
     ```bash
@@ -46,6 +47,13 @@ When you first clone or create your monorepo, you'll need to:
     ```
 
   </Tab>
+  <Tab>
+
+    ```bash
+    bun install
+    ```
+
+  </Tab>
 </Tabs>
 
 You'll now see `node_modules` folders appear in the root of your repository, and in each workspace.
@@ -54,7 +62,7 @@ You'll now see `node_modules` folders appear in the root of your repository, and
 
 You can add, remove and upgrade packages from within your monorepo using your package manager's built-in commands:
 
-<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+<Tabs items={['npm', 'yarn', 'pnpm', 'bun']} storageKey="selected-pkg-manager">
   <Tab>
 
     **Install a package in a workspace**
@@ -151,6 +159,39 @@ You can add, remove and upgrade packages from within your monorepo using your pa
     Example:
     ```bash
     pnpm update react --filter web
+    ```
+
+  </Tab>
+  <Tab>
+
+    **Install a package in a workspace**
+    ```bash
+    bun install <package> --workspace=<workspace>
+    ```
+
+    Example:
+    ```bash
+    bun install react --workspace=web
+    ```
+
+    **Remove a package from a workspace**
+    ```bash
+    bun uninstall <package> --workspace=<workspace>
+    ```
+
+    Example:
+    ```bash
+    bun uninstall react --workspace=web
+    ```
+
+    **Upgrade a package in a workspace**
+    ```bash
+    bun update <package> --workspace=<workspace>
+    ```
+
+    Example:
+    ```bash
+    bun update react --workspace=web
     ```
 
   </Tab>

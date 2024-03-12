@@ -37,7 +37,7 @@ npx @turbo/codemod <transform> <path>
   Introduced in v1.1.0
 </Callout>
 
-Transforms the root `package.json` so that `packageManager` key as the detected package manager (`yarn`, `npm`, `pnpm`) and version (e.g. `yarn@1.22.17`). This key is now [supported by Node.js](https://nodejs.org/dist/latest-v17.x/docs/api/packages.html#packagemanager) and is used by Turborepo for faster package manager detection (vs. inferring from just the filesystem alone).
+Transforms the root `package.json` so that `packageManager` key as the detected package manager (`yarn`, `npm`, `pnpm`, `bun`) and version (e.g. `yarn@1.22.17`). This key is now [supported by Node.js](https://nodejs.org/dist/latest-v17.x/docs/api/packages.html#packagemanager) and is used by Turborepo for faster package manager detection (vs. inferring from just the filesystem alone).
 
 For example, for Yarn v1:
 

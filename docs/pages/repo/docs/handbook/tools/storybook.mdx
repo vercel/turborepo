@@ -25,7 +25,7 @@ npx create-turbo@latest
 
 Storybook needs a builder to use so we will create a Vite app.
 
-<Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
+<Tabs items={["npm", "yarn", "pnpm", "bun"]} storageKey="selected-pkg-manager">
   <Tab>
     ```shell
     cd apps
@@ -44,13 +44,19 @@ Storybook needs a builder to use so we will create a Vite app.
     pnpm create vite
     ```
   </Tab>
+  <Tab>
+    ```shell
+    cd apps
+    bun create vite
+    ```
+  </Tab>
 </Tabs>
 
 Follow the prompts to create an app named "workshop" as a React, TypeScript app.
 
 Next, we need to scaffold Storybook:
 
-<Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
+<Tabs items={["npm", "yarn", "pnpm", "bun"]} storageKey="selected-pkg-manager">
   <Tab>
     ```shell
     cd workshop
@@ -82,6 +88,12 @@ Next, we need to scaffold Storybook:
       pnpm install --save-dev @storybook/cli   # Manually install deps and CLI
       ```
 
+  </Tab>
+  <Tab>
+    ```shell
+    cd workshop
+    bunx storybook init
+    ```
   </Tab>
 </Tabs>
 
@@ -118,7 +130,7 @@ export const Button = ({
 
 2. Add your `ui` package to the `workshop` app:
 
-<Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
+<Tabs items={["npm", "yarn", "pnpm", "bun"]} storageKey="selected-pkg-manager">
   <Tab>
 ```json filename="apps/workshop/package.json"
 {
@@ -164,6 +176,20 @@ And `yarn install` to make sure that your `ui` package is installed in the `work
 }
 ```
 And `pnpm install` one more time to make sure that your `ui` package is installed in the `workshop` app.
+  </Tab>
+  <Tab>
+```json filename="apps/workshop/package.json"
+{
+  // ...
+  {
+    "dependencies": {
+      "ui": "workspace:*",
+      // ...
+    }
+  }
+}
+```
+And `bun install` one more time to make sure that your `ui` package is installed in the `workshop` app.
   </Tab>
 </Tabs>
 

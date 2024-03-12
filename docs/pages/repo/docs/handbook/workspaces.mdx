@@ -18,7 +18,7 @@ The `apps` folder should contain workspaces for launchable apps, such as a [Next
 
 The `packages` folder should contain workspaces for packages used by either an app or another package.
 
-<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+<Tabs items={['npm', 'yarn', 'pnpm', 'bun']} storageKey="selected-pkg-manager">
   <Tab>
 
     Add the folders you want to configure as workspaces to the `workspaces` field in your root `package.json` file. This field contains a list of workspace folders in the form of globs:
@@ -63,6 +63,23 @@ The `packages` folder should contain workspaces for packages used by either an a
       - "docs"
       - "apps/*"
       - "packages/*"
+    ```
+
+  </Tab>
+  <Tab>
+
+    Add the folders you want to configure as workspaces to the `workspaces` field in your root `package.json` file. This field contains a list of workspace folders in the form of globs:
+
+    ```json
+    {
+      "name": "my-monorepo",
+      "version": "1.0.0",
+      "workspaces": [
+        "docs",
+        "apps/*",
+        "packages/*"
+      ]
+    }
     ```
 
   </Tab>
