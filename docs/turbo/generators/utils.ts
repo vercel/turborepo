@@ -7,9 +7,13 @@ interface Answers {
 const MINUTES_IN_YEAR = 60 * 24 * 365;
 
 const PUBLIC_TB_TOKEN =
-  "p.eyJ1IjogIjAzYzA0Y2MyLTM1YTAtNDhhNC05ZTZjLThhMWE0NGNhNjhkZiIsICJpZCI6ICJmOWIzMTU5Yi0wOTVjLTQyM2UtOWIwNS04ZDZlNzIyNjEwNzIifQ.A3TOPdm3Lhmn-1x5m6jNvulCQbbgUeQfAIO3IaaAt5k";
+  process.env.NEXT_PUBLIC_TINYBIRD_TIME_SAVED_PUBLIC_TOKEN;
 
 export async function releasePostStats(answers: Answers): Promise<string> {
+  if (!PUBLIC_TB_TOKEN) {
+    throw new Error("Missing NEXT_PUBLIC_TINYBIRD_TIME_SAVED_PUBLIC_TOKEN");
+  }
+
   const [starsResponse, downloadsResponse, timeSavedResponse] =
     await Promise.all([
       fetch("https://api.github.com/repos/vercel/turbo"),
