@@ -100,7 +100,7 @@ execute their build tasks? Should _anything_ happen here?
 
 Turborepo's mental model is that all nodes in the Task Graph are the same. In other words,
 Transit Nodes are included in the graph regardless of where they appear in the graph.
-This mental can have unexpected consequences. For example, let's say you've configured
+This model can have unexpected consequences. For example, let's say you've configured
 your `build` task to depend on `^test`:
 
 ```json

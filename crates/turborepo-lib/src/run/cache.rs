@@ -160,12 +160,12 @@ impl TaskCache {
         &self,
         prefix: StyledObject<String>,
         writer: W,
-    ) -> Result<LogWriter<W>, Error> {
+    ) -> Result<LogWriter<PrefixedWriter<W>>, Error> {
         let mut log_writer = LogWriter::default();
         let prefixed_writer = PrefixedWriter::new(self.run_cache.ui, prefix, writer);
 
         if self.caching_disabled || self.run_cache.writes_disabled {
-            log_writer.with_prefixed_writer(prefixed_writer);
+            log_writer.with_writer(prefixed_writer);
             return Ok(log_writer);
         }
 
@@ -175,7 +175,7 @@ impl TaskCache {
             self.task_output_mode,
             OutputLogsMode::None | OutputLogsMode::HashOnly | OutputLogsMode::ErrorsOnly
         ) {
-            log_writer.with_prefixed_writer(prefixed_writer);
+            log_writer.with_writer(prefixed_writer);
         }
 
         Ok(log_writer)
