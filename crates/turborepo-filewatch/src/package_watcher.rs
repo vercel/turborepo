@@ -5,6 +5,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use futures::FutureExt;
 use notify::Event;
+use thiserror::Error;
 use tokio::{
     join,
     sync::{
@@ -90,6 +91,16 @@ impl PackageDiscovery for WatchingPackageDiscovery {
     }
 }
 
+#[derive(Debug, Error)]
+enum PackageWatcherError {
+    #[error("failed to discover packages {0}")]
+    Discovery(#[from] discovery::Error),
+    #[error("failed to resolve package manager {0}")]
+    PackageManager(#[from] package_manager::Error),
+    #[error("filewatching shut down, package manager not available")]
+    Filewatching(watch::error::RecvError),
+}
+
 /// Watches the filesystem for changes to packages and package managers.
 pub struct PackageWatcher {
     // _exit_ch exists to trigger a close on the receiver when an instance
@@ -117,10 +128,10 @@ impl PackageWatcher {
         cookie_writer: CookieWriter,
     ) -> Result<Self, package_manager::Error> {
         let (exit_tx, exit_rx) = oneshot::channel();
-        let subscriber = Subscriber::new(root, recv, backup_discovery, cookie_writer)?;
+        let subscriber = Subscriber::new(root, backup_discovery, cookie_writer)?;
         let package_manager_lazy = subscriber.manager_receiver();
         let package_data = subscriber.package_data();
-        let handle = tokio::spawn(subscriber.watch(exit_rx));
+        let handle = tokio::spawn(subscriber.watch(exit_rx, recv));
         Ok(Self {
             _exit_tx: exit_tx,
             _handle: handle,
@@ -179,23 +190,15 @@ impl PackageWatcher {
 /// The underlying task that listens to file system events and updates the
 /// internal package state.
 struct Subscriber<T: PackageDiscovery> {
-    /// we need to hold on to this. dropping it will close the downstream
-    /// data dependencies
-    #[allow(clippy::type_complexity)]
-    #[allow(dead_code)]
-    file_event_receiver_tx:
-        Arc<watch::Sender<Option<broadcast::Receiver<Result<Event, NotifyError>>>>>,
-
-    file_event_receiver_lazy: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
-    backup_discovery: Arc<T>,
+    backup_discovery: T,
 
     repo_root: AbsoluteSystemPathBuf,
     root_package_json_path: AbsoluteSystemPathBuf,
 
     // package manager data
-    package_manager_tx: Arc<watch::Sender<Option<PackageManagerState>>>,
+    package_manager_tx: watch::Sender<Option<PackageManagerState>>,
     package_manager_lazy: CookiedOptionalWatch<PackageManagerState, ()>,
-    package_data_tx: Arc<watch::Sender<Option<HashMap<AbsoluteSystemPathBuf, WorkspaceData>>>>,
+    package_data_tx: watch::Sender<Option<HashMap<AbsoluteSystemPathBuf, WorkspaceData>>>,
     package_data_lazy: CookiedOptionalWatch<HashMap<AbsoluteSystemPathBuf, WorkspaceData>, ()>,
     cookie_tx: CookieRegister,
 }
@@ -217,109 +220,18 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
     /// data up to date.
     fn new(
         repo_root: AbsoluteSystemPathBuf,
-        mut recv: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
         backup_discovery: T,
         writer: CookieWriter,
     ) -> Result<Self, Error> {
         let (package_data_tx, cookie_tx, package_data_lazy) = CookiedOptionalWatch::new(writer);
-        let package_data_tx = Arc::new(package_data_tx);
         let (package_manager_tx, package_manager_lazy) = package_data_lazy.new_sibling();
-        let package_manager_tx = Arc::new(package_manager_tx);
 
         // we create a second optional watch here so that we can ensure it is ready and
         // pass it down stream after the initial discovery, otherwise our package
         // discovery watcher will consume events before we have our initial state
-        let (file_event_receiver_tx, file_event_receiver_lazy) = OptionalWatch::new();
-        let file_event_receiver_tx = Arc::new(file_event_receiver_tx);
-
-        let backup_discovery = Arc::new(backup_discovery);
-
         let package_json_path = repo_root.join_component("package.json");
 
-        let _task = tokio::spawn({
-            let package_data_tx = package_data_tx.clone();
-            let manager_tx = package_manager_tx.clone();
-            let backup_discovery = backup_discovery.clone();
-            let repo_root = repo_root.clone();
-            let package_json_path = package_json_path.clone();
-            let recv_tx = file_event_receiver_tx.clone();
-            async move {
-                // wait for the watcher, so we can process events that happen during discovery
-                let Ok(recv) = recv.get().await.map(|r| r.resubscribe()) else {
-                    // if we get here, it means that file watching has not started, so we should
-                    // just report that the package watcher is not available
-                    tracing::debug!("file watching shut down, package watcher not available");
-                    return;
-                };
-
-                let initial_discovery = backup_discovery.discover_packages().await;
-
-                let Ok(initial_discovery) = initial_discovery else {
-                    // if initial discovery fails, there is nothing we can do. we should just report
-                    // that the package watcher is not available
-                    //
-                    // NOTE: in the future, if we decide to differentiate between 'not ready' and
-                    // unavailable, we MUST update the status here to unavailable or the client will
-                    // hang
-                    return;
-                };
-
-                let Ok((workspace_config_path, filter)) = Self::update_package_manager(
-                    &initial_discovery.package_manager,
-                    &repo_root,
-                    &package_json_path,
-                ) else {
-                    // similar story here, if the package manager cannot be read, we should just
-                    // report that the package watcher is not available
-                    return;
-                };
-
-                // now that the two pieces of data are available, we can send the package
-                // manager and set the packages
-
-                let state = PackageManagerState {
-                    manager: initial_discovery.package_manager,
-                    filter: Arc::new(filter),
-                    workspace_config_path,
-                };
-
-                // if either of these fail, it means that there are no more subscribers and we
-                // should just ignore it, since we are likely closing
-                let manager_listeners = if manager_tx.send(Some(state)).is_err() {
-                    tracing::debug!("no listeners for package manager");
-                    false
-                } else {
-                    true
-                };
-
-                let package_data_listeners = if package_data_tx
-                    .send(Some(
-                        initial_discovery
-                            .workspaces
-                            .into_iter()
-                            .map(|p| (p.package_json.parent().expect("non-root").to_owned(), p))
-                            .collect::<HashMap<_, _>>(),
-                    ))
-                    .is_err()
-                {
-                    tracing::debug!("no listeners for package data");
-                    false
-                } else {
-                    true
-                };
-
-                // if we have no listeners for either, we should just exit
-                if manager_listeners || package_data_listeners {
-                    _ = recv_tx.send(Some(recv));
-                } else {
-                    tracing::debug!("no listeners for file events, exiting");
-                }
-            }
-        });
-
         Ok(Self {
-            file_event_receiver_tx,
-            file_event_receiver_lazy,
             backup_discovery,
             repo_root,
             root_package_json_path: package_json_path,
@@ -331,45 +243,90 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
         })
     }
 
-    async fn watch(mut self, exit_rx: oneshot::Receiver<()>) {
-        let process = async move {
-            tracing::debug!("starting package watcher");
-            let Ok(mut recv) = self
-                .file_event_receiver_lazy
-                .get()
-                .await
-                .map(|r| r.resubscribe())
-            else {
-                // if the channel is closed, we should just exit
-                tracing::debug!("file watcher shut down, exiting");
-                return;
-            };
+    async fn init_watch(
+        &mut self,
+        mut recv: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
+    ) -> Result<broadcast::Receiver<Result<Event, NotifyError>>, PackageWatcherError> {
+        // wait for the watcher, so we can process events that happen during discovery
+        let recv = recv
+            .get()
+            .await
+            .map(|r| r.resubscribe())
+            .map_err(PackageWatcherError::Filewatching)?;
 
-            tracing::debug!("package watcher ready");
-            loop {
-                let file_event = recv.recv().await;
-                match file_event {
-                    Ok(Ok(event)) => match self.handle_file_event(&event).await {
-                        Ok(()) => {}
-                        Err(()) => {
-                            tracing::debug!("package watching is closing, exiting");
-                            return;
-                        }
-                    },
-                    // if we get an error, we need to re-discover the packages
-                    Ok(Err(_)) => self.rediscover_packages().await,
-                    Err(RecvError::Closed) => return,
-                    // if we end up lagging, warn and rediscover packages
-                    Err(RecvError::Lagged(count)) => {
-                        tracing::warn!("lagged behind {count} processing file watching events");
-                        self.rediscover_packages().await;
-                    }
-                }
-            }
+        // if initial discovery fails, there is nothing we can do. we should just report
+        // that the package watcher is not available
+        //
+        // NOTE: in the future, if we decide to differentiate between 'not ready' and
+        // unavailable, we MUST update the status here to unavailable or the client will
+        // hang
+        let initial_discovery = self.backup_discovery.discover_packages().await?;
+
+        let (workspace_config_path, filter) = Self::update_package_manager(
+            &initial_discovery.package_manager,
+            &self.repo_root,
+            &self.root_package_json_path,
+        )?;
+
+        // now that the two pieces of data are available, we can send the package
+        // manager and set the packages
+
+        let state = PackageManagerState {
+            manager: initial_discovery.package_manager,
+            filter: Arc::new(filter),
+            workspace_config_path,
         };
 
-        // respond to changes
+        // if either of these fail, it means that there are no more subscribers and we
+        // should just ignore it, since we are likely closing
+        let _ = self.package_manager_tx.send(Some(state));
+        let _ = self.package_data_tx.send(Some(
+            initial_discovery
+                .workspaces
+                .into_iter()
+                .map(|p| (p.package_json.parent().expect("non-root").to_owned(), p))
+                .collect::<HashMap<_, _>>(),
+        ));
 
+        Ok(recv)
+    }
+
+    async fn watch_process(
+        mut self,
+        recv: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
+    ) -> Result<(), PackageWatcherError> {
+        tracing::debug!("starting package watcher");
+        let mut recv = self.init_watch(recv).await.unwrap();
+
+        tracing::debug!("package watcher ready");
+        loop {
+            let file_event = recv.recv().await;
+            match file_event {
+                Ok(Ok(event)) => match self.handle_file_event(&event).await {
+                    Ok(()) => {}
+                    Err(()) => {
+                        tracing::debug!("package watching is closing, exiting");
+                        return Ok(());
+                    }
+                },
+                // if we get an error, we need to re-discover the packages
+                Ok(Err(_)) => self.rediscover_packages().await,
+                Err(RecvError::Closed) => return Ok(()),
+                // if we end up lagging, warn and rediscover packages
+                Err(RecvError::Lagged(count)) => {
+                    tracing::warn!("lagged behind {count} processing file watching events");
+                    self.rediscover_packages().await;
+                }
+            }
+        }
+    }
+
+    async fn watch(
+        self,
+        exit_rx: oneshot::Receiver<()>,
+        recv: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
+    ) {
+        let process = tokio::spawn(self.watch_process(recv));
         tokio::select! {
             biased;
             _ = exit_rx => {
@@ -773,11 +730,11 @@ mod test {
             CookieWriter::new_with_default_cookie_dir(&root, Duration::from_secs(2), rx.clone());
 
         let subscriber =
-            Subscriber::new(root.clone(), rx, mock_discovery, cookie_writer.clone()).unwrap();
+            Subscriber::new(root.clone(), mock_discovery, cookie_writer.clone()).unwrap();
 
         let mut package_data = subscriber.package_data();
 
-        let _handle = tokio::spawn(subscriber.watch(exit_rx));
+        let _handle = tokio::spawn(subscriber.watch(exit_rx, rx));
 
         tx.send(Ok(notify::Event {
             kind: notify::EventKind::Create(notify::event::CreateKind::File),
@@ -978,11 +935,11 @@ mod test {
         let cookie_writer =
             CookieWriter::new_with_default_cookie_dir(&root, Duration::from_secs(2), rx.clone());
         let subscriber =
-            Subscriber::new(root.clone(), rx, mock_discovery, cookie_writer.clone()).unwrap();
+            Subscriber::new(root.clone(), mock_discovery, cookie_writer.clone()).unwrap();
 
         let mut package_data = subscriber.package_data();
 
-        let _handle = tokio::spawn(subscriber.watch(exit_rx));
+        let _handle = tokio::spawn(subscriber.watch(exit_rx, rx));
 
         let (data, _) = join! {
                 package_data.get(),
