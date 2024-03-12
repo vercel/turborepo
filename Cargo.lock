@@ -10433,7 +10433,6 @@ version = "0.1.8"
 source = "git+https://github.com/a-kenji/tui-term.git?rev=96da15fb9974bb8f77b0e937abbdb2c3b8e932aa#96da15fb9974bb8f77b0e937abbdb2c3b8e932aa"
 dependencies = [
  "ratatui",
- "vt100",
 ]
 
 [[package]]
@@ -11903,6 +11902,7 @@ dependencies = [
  "tui-term",
  "turbopath",
  "turborepo-ci",
+ "turborepo-vt100",
 ]
 
 [[package]]
@@ -12354,18 +12354,6 @@ name = "vlq"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "65dd7eed29412da847b0f78bcec0ac98588165988a8cfe41d4ea1d429f8ccfff"
-
-[[package]]
-name = "vt100"
-version = "0.15.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84cd863bf0db7e392ba3bd04994be3473491b31e66340672af5d11943c6274de"
-dependencies = [
- "itoa",
- "log 0.4.20",
- "unicode-width",
- "vte 0.11.1",
-]
 
 [[package]]
 name = "vte"
