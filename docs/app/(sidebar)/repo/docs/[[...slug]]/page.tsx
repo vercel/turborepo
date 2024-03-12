@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import { DocsPage, DocsBody } from "fumadocs-ui/page";
-import * as Base from "fumadocs-core/toc";
 import { notFound } from "next/navigation";
 import { getPage, getPages } from "@/app/source";
-import { RemoteCacheCounter } from "@/components/RemoteCacheCounter";
+import { RemoteCacheCounterButRsc } from "@/components/RemoteCacheCounterButRsc";
 
 export default function Page({ params }: { params: { slug?: string[] } }) {
   const page = getPage(params.slug);
@@ -18,7 +17,12 @@ export default function Page({ params }: { params: { slug?: string[] } }) {
     <DocsPage
       toc={page.data.exports.toc}
       tableOfContent={{
-        header: <RemoteCacheCounter />,
+        header: (
+          <>
+            {/* @ts-expect-error */}
+            <RemoteCacheCounterButRsc />
+          </>
+        ),
       }}
     >
       <DocsBody>
