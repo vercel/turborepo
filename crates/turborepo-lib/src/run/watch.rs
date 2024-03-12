@@ -4,6 +4,7 @@ use futures::StreamExt;
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 use tokio::{select, task::JoinHandle};
+use turborepo_repository::package_graph::PackageName;
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
 use crate::{
@@ -17,6 +18,7 @@ use crate::{
     run::{
         builder::RunBuilder,
         scope::target_selector::{InvalidSelectorError, TargetSelector},
+        Run,
     },
     signal::SignalHandler,
     DaemonConnector, DaemonPaths,
@@ -90,6 +92,12 @@ impl WatchClient {
         let opts = Opts::try_from(base.args())?;
 
         Self::validate_filter(&opts, &run_args.filter)?;
+        // We currently don't actually need the whole Run struct, just the filtered
+        // packages. But in the future we'll likely need it to more efficiently
+        // spawn tasks.
+        let mut run = RunBuilder::new(base.clone())?
+            .build(&handler, telemetry.clone())
+            .await?;
 
         let connector = DaemonConnector {
             can_start_server: true,
@@ -100,11 +108,13 @@ impl WatchClient {
         let mut client = connector.connect().await?;
 
         let mut events = client.package_changes().await?;
-        let mut current_runs: HashMap<String, JoinHandle<Result<i32, run::Error>>> = HashMap::new();
+        let mut current_runs: HashMap<PackageName, JoinHandle<Result<i32, run::Error>>> =
+            HashMap::new();
         let event_fut = async {
             while let Some(event) = events.next().await {
                 let event = event.unwrap();
                 Self::handle_change_event(
+                    &mut run,
                     event.event.unwrap(),
                     &mut current_runs,
                     &base,
@@ -127,8 +137,9 @@ impl WatchClient {
     }
 
     async fn handle_change_event(
+        run: &mut Run,
         event: proto::package_change_event::Event,
-        current_runs: &mut HashMap<String, JoinHandle<Result<i32, run::Error>>>,
+        current_runs: &mut HashMap<PackageName, JoinHandle<Result<i32, run::Error>>>,
         base: &CommandBase,
         telemetry: &CommandEventBuilder,
         handler: &SignalHandler,
@@ -139,6 +150,12 @@ impl WatchClient {
                 package_name,
                 package_path: _,
             }) => {
+                let package_name = PackageName::from(package_name);
+                // If not in the filtered pkgs, ignore
+                if !run.filtered_pkgs.contains(&package_name) {
+                    return Ok(());
+                }
+
                 let mut args = base.args().clone();
                 args.command.as_mut().map(|c| {
                     if let Command::Run(run_args) = c {
@@ -161,7 +178,7 @@ impl WatchClient {
                 current_runs.insert(
                     package_name,
                     tokio::spawn(async move {
-                        let run = RunBuilder::new(new_base)?
+                        let mut run = RunBuilder::new(new_base)?
                             .build(&handler, telemetry)
                             .await?;
                         run.run().await
@@ -177,18 +194,17 @@ impl WatchClient {
                     }
                 });
 
-                let new_base =
-                    CommandBase::new(args, base.repo_root.clone(), get_version(), base.ui.clone());
-
                 // When we rediscover, stop all current runs
                 for (_, run) in current_runs.drain() {
                     run.abort();
                 }
 
-                // and then run everything
-                let run = RunBuilder::new(new_base)?
+                // rebuild run struct
+                *run = RunBuilder::new(base.clone())?
                     .build(&handler, telemetry.clone())
                     .await?;
+
+                // Execute run
                 run.run().await?;
             }
             proto::package_change_event::Event::Error(proto::PackageChangeError { message }) => {
