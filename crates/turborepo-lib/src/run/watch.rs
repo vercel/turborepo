@@ -148,7 +148,6 @@ impl WatchClient {
         match event {
             proto::package_change_event::Event::PackageChanged(proto::PackageChanged {
                 package_name,
-                package_path: _,
             }) => {
                 let package_name = PackageName::from(package_name);
                 // If not in the filtered pkgs, ignore

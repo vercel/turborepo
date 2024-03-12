@@ -15,11 +15,7 @@ use crate::turbo_json::TurboJson;
 
 #[derive(Clone)]
 pub enum PackageChangeEvent {
-    // We might want to make this just String
-    Package {
-        name: PackageName,
-        path: AnchoredSystemPathBuf,
-    },
+    Package { name: PackageName },
     Rediscover,
 }
 
@@ -243,7 +239,6 @@ impl Subscriber {
                                     let _ = self.package_change_events_tx.send(
                                         PackageChangeEvent::Package {
                                             name: pkg.name.clone(),
-                                            path: pkg.path.clone(),
                                         },
                                     );
                                 }
