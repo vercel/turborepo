@@ -87,3 +87,48 @@ it("should handle globs in sideEffects field", () => {
   expect(b9).toBe("b");
   expect(effects).toEqual(["file.side.js", "dir/file.js"]);
 });
+
+it("should generate a correct facade from async modules", async () => {
+  expect(await import("tla/local")).toEqual(
+    expect.objectContaining({
+      tla: "tla",
+      reexported: "reexported",
+    })
+  );
+  expect(await import("tla/reexport")).toEqual(
+    expect.objectContaining({
+      local: "local",
+      tlaReexported: "tla-reexported",
+    })
+  );
+  expect(await import("tla/both")).toEqual(
+    expect.objectContaining({
+      tla: "tla",
+      tlaReexported: "tla-reexported",
+    })
+  );
+});
+
+import * as tlaLocal from "tla/local";
+import * as tlaReexport from "tla/reexport";
+import * as tlaBoth from "tla/both";
+it("should generate a correct namespace object from async modules", async () => {
+  expect(tlaLocal).toEqual(
+    expect.objectContaining({
+      tla: "tla",
+      reexported: "reexported",
+    })
+  );
+  expect(tlaReexport).toEqual(
+    expect.objectContaining({
+      local: "local",
+      tlaReexported: "tla-reexported",
+    })
+  );
+  expect(tlaBoth).toEqual(
+    expect.objectContaining({
+      tla: "tla",
+      tlaReexported: "tla-reexported",
+    })
+  );
+});
