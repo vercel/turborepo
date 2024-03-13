@@ -57,6 +57,13 @@ impl Parser {
     pub fn screen_mut(&mut self) -> &mut crate::Screen {
         &mut self.screen.0
     }
+
+    /// Returns a reference to an `EntireScreen` object containing the
+    /// terminal state where all contents including scrollback and displayed.
+    #[must_use]
+    pub fn entire_screen(&self) -> crate::EntireScreen {
+        crate::EntireScreen(self.screen())
+    }
 }
 
 impl Default for Parser {

@@ -760,7 +760,7 @@ impl Backend {
                                 diagnostics.push(Diagnostic {
                                     message: format!(
                                         "The '^' means \"run the `{}` task in the package's \
-                                         depencies before this one\"",
+                                         dependencies before this one\"",
                                         &suffix.value,
                                     ),
                                     range: convert_ranges(

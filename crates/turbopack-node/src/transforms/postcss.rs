@@ -370,8 +370,19 @@ impl PostCssTransformedAsset {
 
         let postcss_executor =
             postcss_executor(evaluate_context, project_path, config_path).module();
-        let css_fs_path = this.source.ident().path().await?;
-        let css_path = css_fs_path.path.as_str();
+        let css_fs_path = this.source.ident().path();
+
+        // We need to get a path relative to the project because the postcss loader
+        // runs with the project as the current working directory.
+        let css_path = if let Some(css_path) = project_path
+            .await?
+            .get_relative_path_to(&*css_fs_path.await?)
+        {
+            css_path
+        } else {
+            // This shouldn't be an error since it can happen on virtual assets
+            "".to_string()
+        };
 
         let config_value = evaluate_webpack_loader(WebpackLoaderContext {
             module_asset: postcss_executor,
