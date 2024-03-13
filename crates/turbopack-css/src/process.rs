@@ -539,10 +539,10 @@ async fn process_content(
             CssModuleAssetType::Module => Some(lightningcss::css_modules::Config {
                 pattern: Pattern {
                     segments: smallvec![
-                        Segment::Literal("__"),
                         Segment::Name,
                         Segment::Literal("__"),
                         Segment::Hash,
+                        Segment::Literal("__"),
                         Segment::Local,
                     ],
                 },
