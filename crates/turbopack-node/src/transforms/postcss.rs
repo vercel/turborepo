@@ -375,15 +375,14 @@ impl PostCssTransformedAsset {
 
         // We need to get a path relative to the project because the postcss loader
         // runs with the project as the current working directory.
-        let Some(css_path) = project_path
+        let css_path = if let Some(css_path) = project_path
             .await?
             .get_relative_path_to(&*css_fs_path.await?)
-        else {
-            bail!(
-                "CSS path {} is outside of the project {}",
-                css_fs_path.to_string().await?,
-                project_path.to_string().await?
-            );
+        {
+            css_path
+        } else {
+            // This shouldn't be an error since it can happen on virtual assets
+            "".to_string()
         };
 
         let config_value = evaluate_webpack_loader(WebpackLoaderContext {
