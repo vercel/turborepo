@@ -3,6 +3,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
+use futures::FutureExt;
 use notify::Event;
 use tokio::{
     join,
@@ -502,13 +503,17 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
             let turbo_json = path_workspace.join_component("turbo.json");
 
             let (package_exists, turbo_exists) = join!(
-                tokio::fs::try_exists(&package_json),
+                // It's possible that an IO error could occur other than the file not existing, but
+                // we will treat it like the file doesn't exist. It's possible we'll need to
+                // revisit this, depending on what kind of errors occur.
+                tokio::fs::try_exists(&package_json).map(|result| result.unwrap_or(false)),
                 tokio::fs::try_exists(&turbo_json)
             );
 
             self.package_data_tx
                 .send_modify(|mut data| match (&mut data, package_exists) {
-                    (Some(data), Ok(true)) => {
+                    // We have initial data, and this workspace exists
+                    (Some(data), true) => {
                         data.insert(
                             path_workspace.to_owned(),
                             WorkspaceData {
@@ -517,10 +522,12 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
                             },
                         );
                     }
-                    (Some(data), Ok(false)) => {
+                    // we have initial data, and this workspace does not exist
+                    (Some(data), false) => {
                         data.remove(path_workspace);
                     }
-                    (None, Ok(true)) => {
+                    // this is our first workspace, and it exists
+                    (None, true) => {
                         let mut map = HashMap::new();
                         map.insert(
                             path_workspace.to_owned(),
@@ -531,8 +538,9 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
                         );
                         *data = Some(map);
                     }
-                    (None, Ok(false)) => {} // do nothing
-                    (_, Err(_)) => todo!(),
+                    // we have no workspaces, and this one does not exist,
+                    // so there's nothing to do.
+                    (None, false) => {}
                 });
         }
 
