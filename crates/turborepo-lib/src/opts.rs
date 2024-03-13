@@ -110,9 +110,9 @@ pub struct RunCacheOpts {
 impl<'a> From<&'a RunArgs> for RunCacheOpts {
     fn from(args: &'a RunArgs) -> Self {
         RunCacheOpts {
-            skip_reads: args.force.flatten().is_some_and(|f| f),
+            skip_reads: args.execution_args.force.flatten().is_some_and(|f| f),
             skip_writes: args.no_cache,
-            task_output_mode_override: args.output_logs,
+            task_output_mode_override: args.execution_args.output_logs,
         }
     }
 }
@@ -180,6 +180,7 @@ impl<'a> TryFrom<&'a RunArgs> for RunOpts {
 
     fn try_from(args: &'a RunArgs) -> Result<Self, Self::Error> {
         let concurrency = args
+            .execution_args
             .concurrency
             .as_deref()
             .map(parse_concurrency)
@@ -191,39 +192,45 @@ impl<'a> TryFrom<&'a RunArgs> for RunOpts {
             f => GraphOpts::File(f.to_string()),
         });
 
-        let (is_github_actions, log_order, log_prefix) = match args.log_order {
+        let (is_github_actions, log_order, log_prefix) = match args.execution_args.log_order {
             LogOrder::Auto if turborepo_ci::Vendor::get_constant() == Some("GITHUB_ACTIONS") => (
                 true,
                 ResolvedLogOrder::Grouped,
-                match args.log_prefix {
+                match args.execution_args.log_prefix {
                     LogPrefix::Task => ResolvedLogPrefix::Task,
                     _ => ResolvedLogPrefix::None,
                 },
             ),
 
             // Streaming is the default behavior except when running on GitHub Actions
-            LogOrder::Auto | LogOrder::Stream => {
-                (false, ResolvedLogOrder::Stream, args.log_prefix.into())
-            }
-            LogOrder::Grouped => (false, ResolvedLogOrder::Grouped, args.log_prefix.into()),
+            LogOrder::Auto | LogOrder::Stream => (
+                false,
+                ResolvedLogOrder::Stream,
+                args.execution_args.log_prefix.into(),
+            ),
+            LogOrder::Grouped => (
+                false,
+                ResolvedLogOrder::Grouped,
+                args.execution_args.log_prefix.into(),
+            ),
         };
 
         Ok(Self {
-            tasks: args.tasks.clone(),
+            tasks: args.execution_args.tasks.clone(),
             log_prefix,
             log_order,
             summarize: args.summarize,
             experimental_space_id: args.experimental_space_id.clone(),
-            framework_inference: args.framework_inference,
-            env_mode: args.env_mode,
+            framework_inference: args.execution_args.framework_inference,
+            env_mode: args.execution_args.env_mode,
             concurrency,
             parallel: args.parallel,
             profile: args.profile.clone(),
-            continue_on_error: args.continue_execution,
-            pass_through_args: args.pass_through_args.clone(),
-            only: args.only,
+            continue_on_error: args.execution_args.continue_execution,
+            pass_through_args: args.execution_args.pass_through_args.clone(),
+            only: args.execution_args.only,
             daemon: args.daemon(),
-            single_package: args.single_package,
+            single_package: args.execution_args.single_package,
             graph,
             dry_run: args.dry_run,
             is_github_actions,
@@ -320,23 +327,24 @@ impl<'a> TryFrom<&'a RunArgs> for ScopeOpts {
 
     fn try_from(args: &'a RunArgs) -> Result<Self, Self::Error> {
         let pkg_inference_root = args
+            .execution_args
             .pkg_inference_root
             .as_ref()
             .map(AnchoredSystemPathBuf::from_raw)
             .transpose()?;
 
         let legacy_filter = LegacyFilter {
-            include_dependencies: args.include_dependencies,
-            skip_dependents: args.no_deps,
-            entrypoints: args.scope.clone(),
-            since: args.since.clone(),
+            include_dependencies: args.execution_args.include_dependencies,
+            skip_dependents: args.execution_args.no_deps,
+            entrypoints: args.execution_args.scope.clone(),
+            since: args.execution_args.since.clone(),
         };
         Ok(Self {
-            global_deps: args.global_deps.clone(),
+            global_deps: args.execution_args.global_deps.clone(),
             pkg_inference_root,
             legacy_filter,
-            filter_patterns: args.filter.clone(),
-            ignore_patterns: args.ignore.clone(),
+            filter_patterns: args.execution_args.filter.clone(),
+            ignore_patterns: args.execution_args.ignore.clone(),
         })
     }
 }
@@ -344,8 +352,8 @@ impl<'a> TryFrom<&'a RunArgs> for ScopeOpts {
 impl<'a> From<&'a RunArgs> for CacheOpts {
     fn from(run_args: &'a RunArgs) -> Self {
         CacheOpts {
-            override_dir: run_args.cache_dir.clone(),
-            skip_filesystem: run_args.remote_only,
+            override_dir: run_args.execution_args.cache_dir.clone(),
+            skip_filesystem: run_args.execution_args.remote_only,
             remote_cache_read_only: run_args.remote_cache_read_only,
             workers: run_args.cache_workers,
             ..CacheOpts::default()

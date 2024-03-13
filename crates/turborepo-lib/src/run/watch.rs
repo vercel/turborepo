@@ -8,7 +8,7 @@ use turborepo_repository::package_graph::PackageName;
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
 use crate::{
-    cli::{Command, RunArgs},
+    cli::{Command, ExecutionArgs, RunArgs},
     commands,
     commands::CommandBase,
     daemon::{proto, DaemonConnectorError, DaemonError},
@@ -77,11 +77,7 @@ impl WatchClient {
 
         Ok(())
     }
-    pub async fn start(
-        base: CommandBase,
-        run_args: &RunArgs,
-        telemetry: CommandEventBuilder,
-    ) -> Result<(), Error> {
+    pub async fn start(base: CommandBase, telemetry: CommandEventBuilder) -> Result<(), Error> {
         let signal = commands::run::get_signal()?;
         let handler = SignalHandler::new(signal);
         let Some(subscriber) = handler.subscribe() else {
@@ -89,9 +85,13 @@ impl WatchClient {
             return Ok(());
         };
 
+        let Some(Command::Watch(args)) = &base.args().command else {
+            unreachable!();
+        };
+
         let opts = Opts::try_from(base.args())?;
 
-        Self::validate_filter(&opts, &run_args.filter)?;
+        Self::validate_filter(&opts, &args.filter)?;
         // We currently don't actually need the whole Run struct, just the filtered
         // packages. But in the future we'll likely need it to more efficiently
         // spawn tasks.
@@ -156,11 +156,19 @@ impl WatchClient {
                 }
 
                 let mut args = base.args().clone();
-                args.command.as_mut().map(|c| {
-                    if let Command::Run(run_args) = c {
-                        run_args.tasks = base.args().get_tasks().to_owned();
-                        run_args.filter = vec![format!("...{}", package_name)];
-                        run_args.no_cache = true;
+                args.command = args.command.map(|c| {
+                    if let Command::Watch(execution_args) = c {
+                        Command::Run(Box::new(RunArgs {
+                            execution_args: ExecutionArgs {
+                                filter: vec![format!("...{}", package_name)],
+                                ..*execution_args
+                            },
+                            no_cache: true,
+                            daemon: true,
+                            ..Default::default()
+                        }))
+                    } else {
+                        unreachable!()
                     }
                 });
 
@@ -186,12 +194,21 @@ impl WatchClient {
             }
             proto::package_change_event::Event::RediscoverPackages(_) => {
                 let mut args = base.args().clone();
-                args.command.as_mut().map(|c| {
-                    if let Command::Run(run_args) = c {
-                        run_args.watch = false;
-                        run_args.no_cache = true;
+                args.command = args.command.map(|c| {
+                    if let Command::Watch(execution_args) = c {
+                        Command::Run(Box::new(RunArgs {
+                            execution_args: *execution_args,
+                            no_cache: true,
+                            daemon: true,
+                            ..Default::default()
+                        }))
+                    } else {
+                        unreachable!()
                     }
                 });
+
+                let base =
+                    CommandBase::new(args, base.repo_root.clone(), get_version(), base.ui.clone());
 
                 // When we rediscover, stop all current runs
                 for (_, run) in current_runs.drain() {
