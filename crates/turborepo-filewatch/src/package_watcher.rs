@@ -3,6 +3,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
+use futures::FutureExt;
 use notify::Event;
 use tokio::{
     join,
@@ -468,69 +469,79 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
             .filter_map(|p| p.as_os_str().to_str())
         {
             let path_file = AbsoluteSystemPathBuf::new(path).expect("watched paths are absolute");
-
-            // the path to the workspace this file is in is the parent
-            let path_workspace = path_file
-                .parent()
-                .expect("watched paths will not be at the root")
-                .to_owned();
-
-            let is_workspace = match state
-                .filter
-                .target_is_workspace(&self.repo_root, &path_workspace)
-            {
-                Ok(is_workspace) => is_workspace,
-                Err(e) => {
-                    // this will only error if `repo_root` is not an anchor of `path_workspace`.
-                    // if we hit this case, we can safely ignore it
-                    tracing::debug!("yielded path not in workspace: {:?}", e);
+            let path_workspace: &AbsoluteSystemPath =
+                if path_file.file_name() == Some("package.json") {
+                    // The file event is for a package.json file. Check if the parent is a workspace
+                    let path_parent = path_file
+                        .parent()
+                        .expect("watched paths will not be at the root");
+                    if state
+                        .filter
+                        .target_is_workspace(&self.repo_root, path_parent)
+                        .unwrap_or(false)
+                    {
+                        path_parent
+                    } else {
+                        // irrelevant package.json file update, it's not in a directory
+                        // matching workspace globs
+                        continue;
+                    }
+                } else if state
+                    .filter
+                    .target_is_workspace(&self.repo_root, &path_file)
+                    .unwrap_or(false)
+                {
+                    // The file event is for a workspace directory itself
+                    &path_file
+                } else {
+                    // irrelevant file update, it's not a package.json file or a workspace directory
                     continue;
-                }
-            };
+                };
 
-            if is_workspace {
-                tracing::debug!("tracing file in package: {:?}", path_file);
-                let package_json = path_workspace.join_component("package.json");
-                let turbo_json = path_workspace.join_component("turbo.json");
+            tracing::debug!("handling change to workspace {path_workspace}");
+            let package_json = path_workspace.join_component("package.json");
+            let turbo_json = path_workspace.join_component("turbo.json");
 
-                let (package_exists, turbo_exists) = join!(
-                    tokio::fs::try_exists(&package_json),
-                    tokio::fs::try_exists(&turbo_json)
-                );
+            let (package_exists, turbo_exists) = join!(
+                // It's possible that an IO error could occur other than the file not existing, but
+                // we will treat it like the file doesn't exist. It's possible we'll need to
+                // revisit this, depending on what kind of errors occur.
+                tokio::fs::try_exists(&package_json).map(|result| result.unwrap_or(false)),
+                tokio::fs::try_exists(&turbo_json)
+            );
 
-                self.package_data_tx
-                    .send_modify(|mut data| match (&mut data, package_exists) {
-                        (Some(data), Ok(true)) => {
-                            data.insert(
-                                path_workspace,
-                                WorkspaceData {
-                                    package_json,
-                                    turbo_json: turbo_exists
-                                        .unwrap_or_default()
-                                        .then_some(turbo_json),
-                                },
-                            );
-                        }
-                        (Some(data), Ok(false)) => {
-                            data.remove(&path_workspace);
-                        }
-                        (None, Ok(true)) => {
-                            let mut map = HashMap::new();
-                            map.insert(
-                                path_workspace,
-                                WorkspaceData {
-                                    package_json,
-                                    turbo_json: turbo_exists
-                                        .unwrap_or_default()
-                                        .then_some(turbo_json),
-                                },
-                            );
-                            *data = Some(map);
-                        }
-                        (None, Ok(false)) => {} // do nothing
-                        (_, Err(_)) => todo!(),
-                    });
-            }
+            self.package_data_tx
+                .send_modify(|mut data| match (&mut data, package_exists) {
+                    // We have initial data, and this workspace exists
+                    (Some(data), true) => {
+                        data.insert(
+                            path_workspace.to_owned(),
+                            WorkspaceData {
+                                package_json,
+                                turbo_json: turbo_exists.unwrap_or_default().then_some(turbo_json),
+                            },
+                        );
+                    }
+                    // we have initial data, and this workspace does not exist
+                    (Some(data), false) => {
+                        data.remove(path_workspace);
+                    }
+                    // this is our first workspace, and it exists
+                    (None, true) => {
+                        let mut map = HashMap::new();
+                        map.insert(
+                            path_workspace.to_owned(),
+                            WorkspaceData {
+                                package_json,
+                                turbo_json: turbo_exists.unwrap_or_default().then_some(turbo_json),
+                            },
+                        );
+                        *data = Some(map);
+                    }
+                    // we have no workspaces, and this one does not exist,
+                    // so there's nothing to do.
+                    (None, false) => {}
+                });
         }
 
         Ok(())
@@ -734,29 +745,25 @@ mod test {
                 turbo_json: None,
             },
             WorkspaceData {
-                package_json: root
-                    .join_component("packages")
-                    .join_component("foo")
-                    .join_component("package.json"),
+                package_json: root.join_components(&["packages", "foo", "package.json"]),
+                turbo_json: None,
+            },
+            WorkspaceData {
+                package_json: root.join_components(&["packages", "bar", "package.json"]),
                 turbo_json: None,
             },
         ];
 
         // create folders and files
         for data in &package_data {
-            tokio::fs::create_dir_all(data.package_json.parent().unwrap())
-                .await
-                .unwrap();
-            tokio::fs::write(&data.package_json, b"{}").await.unwrap();
+            data.package_json.ensure_dir().unwrap();
+            data.package_json.create_with_contents("{}").unwrap();
         }
 
         // write workspaces to root
-        tokio::fs::write(
-            root.join_component("package.json"),
-            r#"{"workspaces":["packages/*"]}"#,
-        )
-        .await
-        .unwrap();
+        root.join_component("package.json")
+            .create_with_contents(r#"{"workspaces":["packages/*"]}"#)
+            .unwrap();
 
         let mock_discovery = MockDiscovery {
             manager,
@@ -807,10 +814,11 @@ mod test {
                     turbo_json: None,
                 },
                 WorkspaceData {
-                    package_json: root
-                        .join_component("packages")
-                        .join_component("foo")
-                        .join_component("package.json"),
+                    package_json: root.join_components(&["packages", "bar", "package.json",]),
+                    turbo_json: None,
+                },
+                WorkspaceData {
+                    package_json: root.join_components(&["packages", "foo", "package.json",]),
                     turbo_json: None,
                 },
             ]
@@ -819,20 +827,14 @@ mod test {
         tracing::info!("removing subpackage");
 
         // delete package.json in foo
-        tokio::fs::remove_file(
-            root.join_component("packages")
-                .join_component("foo")
-                .join_component("package.json"),
-        )
-        .await
-        .unwrap();
+        root.join_components(&["packages", "foo", "package.json"])
+            .remove_file()
+            .unwrap();
 
         tx.send(Ok(notify::Event {
             kind: notify::EventKind::Remove(notify::event::RemoveKind::File),
             paths: vec![root
-                .join_component("packages")
-                .join_component("foo")
-                .join_component("package.json")
+                .join_components(&["packages", "foo", "package.json"])
                 .as_std_path()
                 .to_owned()],
             ..Default::default()
@@ -856,11 +858,64 @@ mod test {
         };
 
         assert_eq!(
-            data.unwrap().values().cloned().collect::<Vec<_>>(),
+            data.unwrap()
+                .values()
+                .cloned()
+                .sorted_by_key(|f| f.package_json.clone())
+                .collect::<Vec<_>>(),
+            vec![
+                WorkspaceData {
+                    package_json: root.join_component("package.json"),
+                    turbo_json: None,
+                },
+                WorkspaceData {
+                    package_json: root.join_components(&["packages", "bar", "package.json"]),
+                    turbo_json: None,
+                }
+            ]
+        );
+
+        // move package bar
+        root.join_components(&["packages", "bar"])
+            .rename(&root.join_component("bar"))
+            .unwrap();
+
+        tx.send(Ok(notify::Event {
+            kind: notify::EventKind::Modify(notify::event::ModifyKind::Any),
+            paths: vec![root
+                .join_components(&["packages", "bar"])
+                .as_std_path()
+                .to_owned()],
+            ..Default::default()
+        }))
+        .unwrap();
+
+        let (data, _) = join! {
+                package_data.get(),
+                async {
+                    // simulate fs round trip
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+                    let path = cookie_writer.cookie_dir().join_component("3.cookie").as_std_path().to_owned();
+                    tracing::info!("writing cookie at {}", path.to_string_lossy());
+                    tx.send(Ok(notify::Event {
+                        kind: notify::EventKind::Create(notify::event::CreateKind::File),
+                        paths: vec![path],
+                        ..Default::default()
+                    })).unwrap();
+                }
+        };
+
+        assert_eq!(
+            data.unwrap()
+                .values()
+                .cloned()
+                .sorted_by_key(|f| f.package_json.clone())
+                .collect::<Vec<_>>(),
             vec![WorkspaceData {
                 package_json: root.join_component("package.json"),
                 turbo_json: None,
-            },]
+            }]
         );
     }
 
