@@ -544,6 +544,7 @@ async fn process_content(
                         Segment::Name,
                         Segment::Literal("__"),
                         Segment::Hash,
+                        Segment::Local,
                     ],
                 },
                 dashed_idents: false,
