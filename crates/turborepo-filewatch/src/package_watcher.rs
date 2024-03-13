@@ -16,7 +16,7 @@ use tokio::{
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_repository::{
     discovery::{self, DiscoveryResponse, PackageDiscovery, WorkspaceData},
-    package_manager::{self, Error, PackageManager, WorkspaceGlobs},
+    package_manager::{self, PackageManager, WorkspaceGlobs},
 };
 
 use crate::{
@@ -97,8 +97,12 @@ enum PackageWatcherError {
     Discovery(#[from] discovery::Error),
     #[error("failed to resolve package manager {0}")]
     PackageManager(#[from] package_manager::Error),
-    #[error("filewatching shut down, package manager not available")]
+    #[error("filewatching not available, so package watching is not available")]
     Filewatching(watch::error::RecvError),
+    #[error("filewatching closed, package watching no longer available")]
+    FilewatchingClosed(broadcast::error::RecvError),
+    #[error("failed to get internal state {0}")]
+    InternalState(watch::error::RecvError),
 }
 
 /// Watches the filesystem for changes to packages and package managers.
@@ -222,7 +226,7 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
         repo_root: AbsoluteSystemPathBuf,
         backup_discovery: T,
         writer: CookieWriter,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, package_manager::Error> {
         let (package_data_tx, cookie_tx, package_data_lazy) = CookiedOptionalWatch::new(writer);
         let (package_manager_tx, package_manager_lazy) = package_data_lazy.new_sibling();
 
@@ -294,28 +298,36 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
     async fn watch_process(
         mut self,
         recv: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
-    ) -> Result<(), PackageWatcherError> {
+    ) -> PackageWatcherError {
         tracing::debug!("starting package watcher");
-        let mut recv = self.init_watch(recv).await.unwrap();
+        let mut recv = match self.init_watch(recv).await {
+            Ok(r) => r,
+            Err(e) => return e,
+        };
 
         tracing::debug!("package watcher ready");
         loop {
             let file_event = recv.recv().await;
             match file_event {
-                Ok(Ok(event)) => match self.handle_file_event(&event).await {
-                    Ok(()) => {}
-                    Err(()) => {
+                Ok(Ok(event)) => {
+                    if let Err(e) = self.handle_file_event(&event).await {
                         tracing::debug!("package watching is closing, exiting");
-                        return Ok(());
+                        return e;
                     }
-                },
+                }
                 // if we get an error, we need to re-discover the packages
-                Ok(Err(_)) => self.rediscover_packages().await,
-                Err(RecvError::Closed) => return Ok(()),
+                Ok(Err(_)) => {
+                    if let Err(e) = self.rediscover_packages().await {
+                        return e;
+                    }
+                }
+                Err(e @ RecvError::Closed) => return PackageWatcherError::FilewatchingClosed(e),
                 // if we end up lagging, warn and rediscover packages
                 Err(RecvError::Lagged(count)) => {
                     tracing::warn!("lagged behind {count} processing file watching events");
-                    self.rediscover_packages().await;
+                    if let Err(e) = self.rediscover_packages().await {
+                        return e;
+                    }
                 }
             }
         }
@@ -332,8 +344,12 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
             _ = exit_rx => {
                 tracing::debug!("exiting package watcher due to signal");
             },
-            _ = process => {
-                tracing::debug!("exiting package watcher due to process end");
+            err = process => {
+                if let Ok(err) = err {
+                    tracing::debug!("exiting package watcher due to {err}");
+                } else {
+                    tracing::debug!("package watcher process exited");
+                }
             }
         }
     }
@@ -342,7 +358,7 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
         manager: &PackageManager,
         repo_root: &AbsoluteSystemPath,
         package_json_path: &AbsoluteSystemPath,
-    ) -> Result<(AbsoluteSystemPathBuf, WorkspaceGlobs), Error> {
+    ) -> Result<(AbsoluteSystemPathBuf, WorkspaceGlobs), package_manager::Error> {
         let workspace_config_path = manager.workspace_configuration_path().map_or_else(
             || package_json_path.to_owned(),
             |p| repo_root.join_component(p),
@@ -364,7 +380,7 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
 
     /// Returns Err(()) if the package manager channel is closed, indicating
     /// that the entire watching task should exit.
-    async fn handle_file_event(&mut self, file_event: &Event) -> Result<(), ()> {
+    async fn handle_file_event(&mut self, file_event: &Event) -> Result<(), PackageWatcherError> {
         tracing::trace!("file event: {:?} {:?}", file_event.kind, file_event.paths);
 
         if file_event
@@ -377,17 +393,12 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
             }
         }
 
-        let out = match self.have_workspace_globs_changed(file_event).await {
-            Ok(true) => {
-                self.rediscover_packages().await;
-                Ok(())
-            }
-            Ok(false) => {
-                // it is the end of the function so we are going to return regardless
-                self.handle_package_json_change(file_event).await
-            }
-            Err(()) => Err(()),
-        };
+        let globs_have_changed = self.have_workspace_globs_changed(file_event).await?;
+        if globs_have_changed {
+            self.rediscover_packages().await?;
+        } else {
+            self.handle_package_json_change(file_event).await?;
+        }
 
         tracing::trace!("updating the cookies");
 
@@ -401,21 +412,23 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
                 .collect::<Vec<_>>(),
         );
 
-        out
+        Ok(())
     }
 
     /// Returns Err(()) if the package manager channel is closed, indicating
     /// that the entire watching task should exit.
-    async fn handle_package_json_change(&mut self, file_event: &Event) -> Result<(), ()> {
-        let Ok(state) = self
+    async fn handle_package_json_change(
+        &mut self,
+        file_event: &Event,
+    ) -> Result<(), PackageWatcherError> {
+        // we can only fail receiving if the channel is closed,
+        // which indicated that the entire watching task should exit
+        let state = self
             .package_manager_lazy
             .get_raw("this is called from the file event loop")
             .await
-            .map(|x| x.to_owned())
-        else {
-            // the channel is closed, so there is no state to write into, return
-            return Err(());
-        };
+            .map(|s| s.to_owned())
+            .map_err(PackageWatcherError::InternalState)?;
 
         // here, we can only update if we have a valid package state
 
@@ -509,18 +522,19 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
     ///
     /// Returns Err(()) if the package manager channel is closed, indicating
     /// that the entire watching task should exit.
-    async fn have_workspace_globs_changed(&mut self, file_event: &Event) -> Result<bool, ()> {
+    async fn have_workspace_globs_changed(
+        &mut self,
+        file_event: &Event,
+    ) -> Result<bool, PackageWatcherError> {
         // here, we can only update if we have a valid package state
-        let Ok(state) = self
+        // we can only fail receiving if the channel is closed,
+        // which indicated that the entire watching task should exit
+        let state = self
             .package_manager_lazy
             .get_raw("this is called from the file event loop")
             .await
             .map(|s| s.to_owned())
-        else {
-            // we can only fail receiving if the channel is closed,
-            // which indicated that the entire watching task should exit
-            return Err(());
-        };
+            .map_err(PackageWatcherError::InternalState)?;
 
         if file_event
             .paths
@@ -559,7 +573,7 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
     /// todo: we can probably improve the uptime here by splitting the package
     ///       manager out of the package discovery. if the package manager has
     ///       not changed, we probably do not need to re-walk the packages
-    async fn handle_root_package_json_change(&mut self) -> Result<(), discovery::Error> {
+    async fn handle_root_package_json_change(&mut self) -> Result<(), PackageWatcherError> {
         {
             // clear all data
             self.package_manager_tx.send(None).ok();
@@ -567,83 +581,66 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
         }
         tracing::debug!("root package.json changed, refreshing package manager and globs");
         let resp = self.backup_discovery.discover_packages().await?;
-        let new_manager = Self::update_package_manager(
+        let (new_manager, workspace_config_path, filter) = Self::update_package_manager(
             &resp.package_manager,
             &self.repo_root,
             &self.root_package_json_path,
         )
-        .map(move |(a, b)| (resp, a, b));
+        .map(move |(a, b)| (resp, a, b))?;
 
         // if the package.json changed, we need to re-infer the package manager
         // and update the glob list
+        tracing::debug!(
+            "new package manager data: {:?}, {:?}",
+            new_manager.package_manager,
+            filter
+        );
 
-        match new_manager {
-            Ok((new_manager, workspace_config_path, filter)) => {
-                tracing::debug!(
-                    "new package manager data: {:?}, {:?}",
-                    new_manager.package_manager,
-                    filter
-                );
+        let state = PackageManagerState {
+            manager: new_manager.package_manager,
+            filter: Arc::new(filter),
+            workspace_config_path,
+        };
 
-                let state = PackageManagerState {
-                    manager: new_manager.package_manager,
-                    filter: Arc::new(filter),
-                    workspace_config_path,
-                };
-
-                {
-                    // if this fails, we are closing anyways so ignore
-                    self.package_manager_tx.send(Some(state)).ok();
-                    self.package_data_tx.send_modify(move |mut d| {
-                        let new_data = new_manager
-                            .workspaces
-                            .into_iter()
-                            .map(|p| (p.package_json.parent().expect("non-root").to_owned(), p))
-                            .collect::<HashMap<_, _>>();
-                        if let Some(data) = &mut d {
-                            *data = new_data;
-                        } else {
-                            *d = Some(new_data);
-                        }
-                    });
-                }
+        // if this fails, we are closing anyways so ignore
+        self.package_manager_tx.send(Some(state)).ok();
+        self.package_data_tx.send_modify(move |mut d| {
+            let new_data = new_manager
+                .workspaces
+                .into_iter()
+                .map(|p| (p.package_json.parent().expect("non-root").to_owned(), p))
+                .collect::<HashMap<_, _>>();
+            if let Some(data) = &mut d {
+                *data = new_data;
+            } else {
+                *d = Some(new_data);
             }
-            Err(e) => {
-                // if we cannot update the package manager, we should just leave
-                // the package manager as None and make the package data unavailable
-                tracing::error!("error getting package manager: {}", e);
-            }
-        }
+        });
 
         Ok(())
     }
 
-    async fn rediscover_packages(&mut self) {
+    async fn rediscover_packages(&mut self) -> Result<(), PackageWatcherError> {
         tracing::debug!("rediscovering packages");
 
         // make sure package data is unavailable while we are updating
-        // if this fails, we have no subscribers so we can just exit
-        if self.package_data_tx.send(None).is_err() {
-            return;
-        }
+        // Failure here means we have no listeners, which is fine
+        self.package_data_tx.send(None).ok();
 
-        if let Ok(response) = self.backup_discovery.discover_packages().await {
-            self.package_data_tx.send_modify(|d| {
-                let new_data = response
-                    .workspaces
-                    .into_iter()
-                    .map(|p| (p.package_json.parent().expect("non-root").to_owned(), p))
-                    .collect::<HashMap<_, _>>();
-                if let Some(data) = d {
-                    *data = new_data;
-                } else {
-                    *d = Some(new_data);
-                }
-            });
-        } else {
-            // package data stays unavailable
-            tracing::error!("error discovering packages");
-        }
+        let response = self.backup_discovery.discover_packages().await?;
+        self.package_data_tx.send_modify(|d| {
+            let new_data = response
+                .workspaces
+                .into_iter()
+                .map(|p| (p.package_json.parent().expect("non-root").to_owned(), p))
+                .collect::<HashMap<_, _>>();
+            if let Some(data) = d {
+                *data = new_data;
+            } else {
+                *d = Some(new_data);
+            }
+        });
+        Ok(())
     }
 }
 
