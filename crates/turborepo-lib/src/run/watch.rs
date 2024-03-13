@@ -158,15 +158,17 @@ impl WatchClient {
                 let mut args = base.args().clone();
                 args.command = args.command.map(|c| {
                     if let Command::Watch(execution_args) = c {
-                        Command::Run(Box::new(RunArgs {
-                            execution_args: ExecutionArgs {
+                        Command::Run {
+                            execution_args: Box::new(ExecutionArgs {
                                 filter: vec![format!("...{}", package_name)],
                                 ..*execution_args
-                            },
-                            no_cache: true,
-                            daemon: true,
-                            ..Default::default()
-                        }))
+                            }),
+                            run_args: Box::new(RunArgs {
+                                no_cache: true,
+                                daemon: true,
+                                ..Default::default()
+                            }),
+                        }
                     } else {
                         unreachable!()
                     }
@@ -196,12 +198,14 @@ impl WatchClient {
                 let mut args = base.args().clone();
                 args.command = args.command.map(|c| {
                     if let Command::Watch(execution_args) = c {
-                        Command::Run(Box::new(RunArgs {
-                            execution_args: *execution_args,
-                            no_cache: true,
-                            daemon: true,
-                            ..Default::default()
-                        }))
+                        Command::Run {
+                            run_args: Box::new(RunArgs {
+                                no_cache: true,
+                                daemon: true,
+                                ..Default::default()
+                            }),
+                            execution_args,
+                        }
                     } else {
                         unreachable!()
                     }
