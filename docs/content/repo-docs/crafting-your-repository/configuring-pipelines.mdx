@@ -8,7 +8,7 @@ import { Callout } from "#/components/Callout";
 import {Tabs, Tab} from "#/components/Tabs";
 import {Files, File, Folder} from 'fumadocs-ui/components/files';
 
-Turborepo will always run tasks in the order you've described in your [`turbo.json` configuration](/repo/docs/reference/configuration), parallelizing work whenever possible to ensure everything runs as fast as possible. This is faster than running tasks one at a time like most tools, and it's a big part of what makes Turborepo so fast.
+Turborepo will always run tasks in the order you've described in your [`turbo.json` configuration](/repo/docs/reference/configuration), parallelizing work whenever possible to ensure everything runs as fast as possible. This is faster than running tasks one at a time like most tools, and it's a part of what makes Turborepo so fast.
 
 For example, <code style={{textWrap: "wrap"}}>yarn workspaces run lint && yarn workspaces run test && yarn workspaces run build</code> would look like this:
 
@@ -36,12 +36,12 @@ The root `turbo.json` file is where you'll define the tasks that Turborepo will 
 
 Each key in the `pipeline` object is a task that can be executed by `turbo run`. Turborepo will search your packages for **scripts in their `package.json` that have the same name as the task**.
 
-To define a task, use [the `pipeline` object](/repo/docs/reference/configuration#pipeline) in `turbo.json`. For example, a task named `build` might look like this:
+To define a task, use [the `pipeline` object](/repo/docs/reference/configuration#pipeline) in `turbo.json`. For example, a basic task named `build` might look like this:
 
 ```json title="./turbo.json"
 {
   "pipeline": {
-    "build": {} // [!code highlight]
+    "build": {} // [!code highlight] // Likely to cause errors without more configuration!
   }
 }
 ```
@@ -61,6 +61,10 @@ If you run `turbo run build` at this point, Turborepo will run any `build` scrip
   }
 }
 ```
+
+You now have the build order you would expect, building dependencies before dependents.
+
+**But be careful.** At this point, we haven't marked the build outputs for caching. To do so, jump to the [Specifying outputs](#specifying-options) section.
 
 #### Depending on tasks in dependencies with `^`
 

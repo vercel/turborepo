@@ -52,7 +52,7 @@ Let's specify the TypeScript configuration for this package by adding a `tsconfi
 {
   "extends": "@repo/typescript-config/base.json",
   "compilerOptions": {
-    "rootDir": "src",
+    "outDir": "dist"
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist"]
@@ -61,11 +61,9 @@ Let's specify the TypeScript configuration for this package by adding a `tsconfi
 
 You've done three important things here:
 
-- Used the `@repo/typescript-config/base.json` configuration that lives in `./packages/typescript-config`
-- Defined [the `rootDir` key](https://www.typescriptlang.org/tsconfig#rootDir) so the TypeScript compiler knows what to use for the root directory of compilation output
-- Specified the `include` and `exclude` options so the TypeScript compiler knows which files to use
-
-Note that it is important to define the `rootDir`, `include`, and `exclude` options in the `tsconfig.json` file because these options are not inherited from the base configuration.
+- The `@repo/typescript-config/base.json` configuration that lives in `./packages/typescript-config` has all the configuration you need so you can extend from it.
+- The `outDir` key in `compilerOptions` tells TypeScript where to put the compiled output. We'll be using this directory in the next step.
+- The `include` and `exclude` are not inherited from the base configuration, according to the TypeScript specification, so you've included them here.
 
 <Callout type="info">
 There's a lot more to learn about TypeScript configuration, but this is a good place to start for now. If you'd like to learn more, visit [the official TypeScript documentation](https://www.typescriptlang.org/tsconfig) or [our TypeScript guide](/repo/docs/guides/linting/typescript).
@@ -159,19 +157,22 @@ Next, we'll create the `package.json` for the package. By adding this file, you'
 Let's break down this `package.json` piece-by-piece:
 
 - **`scripts`**: The `dev` and `build` script compile the package using [the TypeScript compiler](https://www.typescriptlang.org/docs/handbook/compiler-options.html). The `dev` script will watch for changes to source code and automatically recompile the package.
+- **`devDependencies`**: Install `typescript` and `@repo/typescript-config` as `devDependencies` so you can compile the package. In a real-world package, you will likely have more `devDependencies` and `dependencies` - but we can keep it simple for now.
 - **`exports`**: Defines multiple entrypoints for the package so it can be used in other packages (`import { add } from '@repo/math'`).
-  - The `"types"` field tells TypeScript where to find the type definitions for the package. We recommend pointing directly to source code so that you don't have to generate declaration maps and the types shown in your editor are always up to date with your source code.
+  - The `"types"` field tells TypeScript where to find the type definitions for the package. We recommend pointing directly to source code so that you don't have to generate declaration maps. The types shown in your editor are always up to date with your source code.
   - The `"default"` field is used to tell Node.js where to find the runtime code for the package. Once we compile our Typescript with `tsc`, the output will be in the `dist` directory.
-- **`devDependencies`**: Install `typescript` and `@repo/typescript-confg` as `devDependencies` so you can compile the package. In a real-world package, you will likely have more `devDependencies` and `dependencies` - but we can keep it simple for now.
-
-Notably, this `package.json` has a `deveDependencies` key, creating a relationship between two of our Internal Packages and adding dependencies to the repository. For this reason, you'll need to run the install command for your package manager to update your lockfile.
 
 <Callout>
-If you're using Typescript, you'll need to ensure that your `tsconfig.json` is using `"module": "ESNext"` and `"moduleResolution": "Bundler"`.
+If you're using Typescript, you'll need to ensure that your `tsconfig.json` is using `"module": "ESNext"` and `"moduleResolution": "Bundler"` to resolve the `exports` above.
 
 For more information, visit [the dedicated Typescript guide](/TODO-LINK).
 
 </Callout>
+
+Notably, this `package.json` references an Internal Package, `@repo/typescript-config`. This relationship from Turborepo's perspective, as it creates a dependency relationship between two of your packages. `@repo/math` is now a dependent of `@repo/typescript-config`.
+
+TODO [IMAGERY]: Dependency graph image?
+
 </Step>
 <Step>
 ### Add an `src` directory with source code
@@ -232,13 +233,13 @@ You're ready to use your new package in an application. Let's add it to the `web
 </PackageManagerTabs>
 
 <Callout type="warn">
-You just changed the dependencies in your repo. Make sure to run your package manager's install command to update your lockfile.
+You just changed the dependencies in your repo. Make sure to run your package manager's installation command to update your lockfile.
 </Callout>
 
 With `@repo/math` now available in the `web` application, you can use it in your code:
 
 ```tsx title="apps/web/src/app/page.tsx"
-import { add } from "@repo/math"
+import { add } from "@repo/math/add"
 
 function Page() {
   return <div>{add(1, 2)}</div>
@@ -256,10 +257,10 @@ Run `turbo build` in your terminal at the root of your repository.
 
 TODO [IMAGERY]: Terminal logs image?
 
-The `@repo/math` package build before the `web` application builds so that the runtime code in `./packages/math/dist` is available to the `web` application.
+The `@repo/math` package built before the `web` application built so that the runtime code in `./packages/math/dist` is available to the `web` application when it bundles.
 
 <Callout type="info">
-We'll discuss this at length in [the Caching guide](/TODO-LINK) but you can run `turbo build` again to see your `web` application rebuild in **milliseconds**.
+You can run `turbo build` again to see your `web` application rebuild in **milliseconds**. We'll discuss this at length in [the Caching guide](/TODO-LINK).
 </Callout>
 
 </Step>
@@ -271,7 +272,7 @@ We'll discuss this at length in [the Caching guide](/TODO-LINK) but you can run 
 
 When you're creating Internal Packages, it's best to create packages that have a single "purpose". This practice has several advantages:
 
-- **Easier to understand**: It's easier to understand what a package does and how it can be used. This is important as a repository scales, as developers in the repository will be able to know where to find the code they need.
+- **Easier to understand**: As a repository scales, developers working in the repository will more easily be able to find the code they need.
 - **Faster pipelines**: Being more granular about what a package does can mean it changes less often. If the source code doesn't change as often, the package will hit cache more often.
 - **Reducing dependencies per package**: Using fewer dependencies per package makes it so Turborepo can more effectively [prune the dependencies of your package graph](/TODO-LINK).
 
@@ -288,7 +289,7 @@ When you're creating packages for your applications, it's best to avoid putting 
 Additionally, application packages are not meant to be installed into other packages. Instead, they should be thought of as an "endpoint" of your Package Graph.
 
 <Callout type="info">
-There are exceptions to this rule where it can make sense to install an Application Package into another package. We've discussed these in the [Advanced section](/TODO-LINK).
+There are rare exceptions to this rule where it can make sense to install an Application Package into another package. We've discussed these in the [Advanced section](/TODO-LINK).
 </Callout>
 
 ## Next steps
