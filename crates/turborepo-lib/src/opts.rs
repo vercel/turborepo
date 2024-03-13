@@ -5,7 +5,9 @@ use turbopath::AnchoredSystemPathBuf;
 use turborepo_cache::CacheOpts;
 
 use crate::{
-    cli::{Command, DryRunMode, EnvMode, LogOrder, LogPrefix, OutputLogsMode, RunArgs},
+    cli::{
+        Command, DryRunMode, EnvMode, ExecutionArgs, LogOrder, LogPrefix, OutputLogsMode, RunArgs,
+    },
     run::task_id::TaskId,
     Args,
 };
@@ -83,13 +85,21 @@ impl<'a> TryFrom<&'a Args> for Opts {
     type Error = self::Error;
 
     fn try_from(args: &'a Args) -> Result<Self, Self::Error> {
-        let Some(Command::Run(run_args)) = &args.command else {
+        let Some(Command::Run {
+            run_args,
+            execution_args,
+        }) = &args.command
+        else {
             return Err(Error::ExpectedRun);
         };
-        let run_opts = RunOpts::try_from(run_args.as_ref())?;
-        let cache_opts = CacheOpts::from(run_args.as_ref());
-        let scope_opts = ScopeOpts::try_from(run_args.as_ref())?;
-        let runcache_opts = RunCacheOpts::from(run_args.as_ref());
+        let run_and_execution_args = RunAndExecutionArgs {
+            run_args: run_args.as_ref(),
+            execution_args: execution_args.as_ref(),
+        };
+        let run_opts = RunOpts::try_from(run_and_execution_args)?;
+        let cache_opts = CacheOpts::from(run_and_execution_args);
+        let scope_opts = ScopeOpts::try_from(run_and_execution_args)?;
+        let runcache_opts = RunCacheOpts::from(run_and_execution_args);
 
         Ok(Self {
             run_opts,
@@ -100,6 +110,13 @@ impl<'a> TryFrom<&'a Args> for Opts {
     }
 }
 
+// This is not ideal, but it allows us to impl From
+#[derive(Debug, Clone, Copy)]
+struct RunAndExecutionArgs<'a> {
+    run_args: &'a RunArgs,
+    execution_args: &'a ExecutionArgs,
+}
+
 #[derive(Debug, Default)]
 pub struct RunCacheOpts {
     pub(crate) skip_reads: bool,
@@ -107,11 +124,11 @@ pub struct RunCacheOpts {
     pub(crate) task_output_mode_override: Option<OutputLogsMode>,
 }
 
-impl<'a> From<&'a RunArgs> for RunCacheOpts {
-    fn from(args: &'a RunArgs) -> Self {
+impl<'a> From<RunAndExecutionArgs<'a>> for RunCacheOpts {
+    fn from(args: RunAndExecutionArgs<'a>) -> Self {
         RunCacheOpts {
             skip_reads: args.execution_args.force.flatten().is_some_and(|f| f),
-            skip_writes: args.no_cache,
+            skip_writes: args.run_args.no_cache,
             task_output_mode_override: args.execution_args.output_logs,
         }
     }
@@ -175,10 +192,10 @@ pub enum ResolvedLogPrefix {
 
 const DEFAULT_CONCURRENCY: u32 = 10;
 
-impl<'a> TryFrom<&'a RunArgs> for RunOpts {
+impl<'a> TryFrom<RunAndExecutionArgs<'a>> for RunOpts {
     type Error = self::Error;
 
-    fn try_from(args: &'a RunArgs) -> Result<Self, Self::Error> {
+    fn try_from(args: RunAndExecutionArgs) -> Result<Self, Self::Error> {
         let concurrency = args
             .execution_args
             .concurrency
@@ -187,7 +204,7 @@ impl<'a> TryFrom<&'a RunArgs> for RunOpts {
             .transpose()?
             .unwrap_or(DEFAULT_CONCURRENCY);
 
-        let graph = args.graph.as_deref().map(|file| match file {
+        let graph = args.run_args.graph.as_deref().map(|file| match file {
             "" => GraphOpts::Stdout,
             f => GraphOpts::File(f.to_string()),
         });
@@ -219,20 +236,20 @@ impl<'a> TryFrom<&'a RunArgs> for RunOpts {
             tasks: args.execution_args.tasks.clone(),
             log_prefix,
             log_order,
-            summarize: args.summarize,
-            experimental_space_id: args.experimental_space_id.clone(),
+            summarize: args.run_args.summarize,
+            experimental_space_id: args.run_args.experimental_space_id.clone(),
             framework_inference: args.execution_args.framework_inference,
             env_mode: args.execution_args.env_mode,
             concurrency,
-            parallel: args.parallel,
-            profile: args.profile.clone(),
+            parallel: args.run_args.parallel,
+            profile: args.run_args.profile.clone(),
             continue_on_error: args.execution_args.continue_execution,
             pass_through_args: args.execution_args.pass_through_args.clone(),
             only: args.execution_args.only,
-            daemon: args.daemon(),
+            daemon: args.run_args.daemon(),
             single_package: args.execution_args.single_package,
             graph,
-            dry_run: args.dry_run,
+            dry_run: args.run_args.dry_run,
             is_github_actions,
         })
     }
@@ -322,10 +339,10 @@ pub struct ScopeOpts {
     pub ignore_patterns: Vec<String>,
 }
 
-impl<'a> TryFrom<&'a RunArgs> for ScopeOpts {
+impl<'a> TryFrom<RunAndExecutionArgs<'a>> for ScopeOpts {
     type Error = self::Error;
 
-    fn try_from(args: &'a RunArgs) -> Result<Self, Self::Error> {
+    fn try_from(args: RunAndExecutionArgs<'a>) -> Result<Self, Self::Error> {
         let pkg_inference_root = args
             .execution_args
             .pkg_inference_root
@@ -349,13 +366,13 @@ impl<'a> TryFrom<&'a RunArgs> for ScopeOpts {
     }
 }
 
-impl<'a> From<&'a RunArgs> for CacheOpts {
-    fn from(run_args: &'a RunArgs) -> Self {
+impl<'a> From<RunAndExecutionArgs<'a>> for CacheOpts {
+    fn from(args: RunAndExecutionArgs<'a>) -> Self {
         CacheOpts {
-            override_dir: run_args.execution_args.cache_dir.clone(),
-            skip_filesystem: run_args.execution_args.remote_only,
-            remote_cache_read_only: run_args.remote_cache_read_only,
-            workers: run_args.cache_workers,
+            override_dir: args.execution_args.cache_dir.clone(),
+            skip_filesystem: args.execution_args.remote_only,
+            remote_cache_read_only: args.run_args.remote_cache_read_only,
+            workers: args.run_args.cache_workers,
             ..CacheOpts::default()
         }
     }
@@ -363,7 +380,7 @@ impl<'a> From<&'a RunArgs> for CacheOpts {
 
 impl RunOpts {
     pub fn should_redirect_stderr_to_stdout(&self) -> bool {
-        // If we're running on Github Actions, force everything to stdout
+        // If we're running on GitHub Actions, force everything to stdout
         // so as not to have out-of-order log lines
         matches!(self.log_order, ResolvedLogOrder::Grouped) && self.is_github_actions
     }
