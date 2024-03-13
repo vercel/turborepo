@@ -7,7 +7,6 @@ import {
   addMessageListener as turboSocketAddMessageListener,
   sendMessage as turboSocketSendMessage,
 } from "./websocket";
-import { UpdateApplyError } from "../../dev/runtime/base/runtime-base";
 type SendMessage = typeof import("./websocket").sendMessage;
 
 export type ClientOptions = {
