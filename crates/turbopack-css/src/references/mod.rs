@@ -232,9 +232,8 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
     /// See https://github.com/vercel/next.js/issues/63102
     fn visit_supports_condition(
         &mut self,
-
         _: &mut lightningcss::rules::supports::SupportsCondition<'_>,
-    ) -> std::prelude::v1::Result<(), Self::Error> {
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 }
