@@ -718,12 +718,12 @@ pub struct RunArgs {
     // we set the long name as [no-]daemon with an alias of daemon such
     // that we can merge the help text together for both flags
     // -----------------------
-    /// Force turbo to either use or not use the local daemon. If unset
-    /// turbo will use the default detection logic.
-    #[clap(long = "[no-]daemon", alias = "daemon", group = "daemon-group")]
+    #[clap(long = "daemon", group = "daemon-group")]
     daemon: bool,
 
-    #[clap(long, group = "daemon-group", hide = true)]
+    /// Force turbo to either use or not use the local daemon. If unset
+    /// turbo will use the default detection logic.
+    #[clap(long, group = "daemon-group")]
     no_daemon: bool,
 
     /// Set type of process output logging. Use "full" to show

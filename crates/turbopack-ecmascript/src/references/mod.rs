@@ -517,11 +517,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
     let handler = Handler::with_emitter(
         true,
         false,
-        Box::new(IssueEmitter {
-            source,
-            source_map: source_map.clone(),
-            title: None,
-        }),
+        Box::new(IssueEmitter::new(source, source_map.clone(), None)),
     );
 
     let mut var_graph =
@@ -740,7 +736,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
     if eval_context.is_esm() || specified_type == SpecifiedModuleType::EcmaScript {
         let async_module = AsyncModule {
             placeable: Vc::upcast(module),
-            references: import_references.iter().copied().collect(),
+            references: Vc::cell(import_references.iter().map(|&r| Vc::upcast(r)).collect()),
             has_top_level_await,
             import_externals,
         }

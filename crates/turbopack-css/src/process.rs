@@ -539,11 +539,11 @@ async fn process_content(
             CssModuleAssetType::Module => Some(lightningcss::css_modules::Config {
                 pattern: Pattern {
                     segments: smallvec![
-                        Segment::Local,
-                        Segment::Literal("__"),
                         Segment::Name,
                         Segment::Literal("__"),
                         Segment::Hash,
+                        Segment::Literal("__"),
+                        Segment::Local,
                     ],
                 },
                 dashed_idents: false,
@@ -636,11 +636,11 @@ async fn process_content(
         let handler = swc_core::common::errors::Handler::with_emitter(
             true,
             false,
-            Box::new(IssueEmitter {
+            Box::new(IssueEmitter::new(
                 source,
-                source_map: cm.clone(),
-                title: Some("Parsing css source code failed".to_string()),
-            }),
+                cm.clone(),
+                Some("Parsing css source code failed".to_string()),
+            )),
         );
 
         let fm = cm.new_source_file(FileName::Custom(ident_str.to_string()), code.clone());
