@@ -82,7 +82,7 @@ fn echo_task(
     // log file
     let mut task_logger = LogWriter::default();
     task_logger.with_log_file(log_file).unwrap();
-    task_logger.with_prefixed_writer(PrefixedWriter::new(ui, output_prefix, client.stdout()));
+    task_logger.with_writer(PrefixedWriter::new(ui, output_prefix, client.stdout()));
 
     let mut cmd = Command::new("echo");
     cmd.args(["hello", "from", task_name]);

@@ -1,3 +1,5 @@
+use turborepo_vt100 as vt100;
+
 mod helpers;
 
 #[test]
@@ -12,7 +14,7 @@ fn attrs() {
 
 #[test]
 fn attributes_formatted() {
-    let mut parser = vt100::Parser::default();
+    let mut parser = turborepo_vt100::Parser::default();
     assert_eq!(parser.screen().attributes_formatted(), b"\x1b[m");
     parser.process(b"\x1b[32mfoo\x1b[41mbar\x1b[33mbaz");
     assert_eq!(parser.screen().attributes_formatted(), b"\x1b[m\x1b[33;41m");

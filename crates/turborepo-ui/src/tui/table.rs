@@ -153,6 +153,24 @@ impl TaskTable {
         self.scroll.select(Some(i));
     }
 
+    pub fn selected(&self) -> Option<&str> {
+        let i = self.scroll.selected()?;
+        if i < self.finished.len() {
+            let task = self.finished.get(i)?;
+            Some(task.name())
+        } else if i < self.finished.len() + self.running.len() {
+            let task = self.running.get(i - self.finished.len())?;
+            Some(task.name())
+        } else if i < self.finished.len() + self.running.len() + self.planned.len() {
+            let task = self
+                .planned
+                .get(i - (self.finished.len() + self.running.len()))?;
+            Some(task.name())
+        } else {
+            None
+        }
+    }
+
     fn finished_rows(&self, duration_width: u16) -> impl Iterator<Item = Row> + '_ {
         self.finished.iter().map(move |task| {
             Row::new(vec![
@@ -288,12 +306,16 @@ mod test {
         table.next();
         table.next();
         assert_eq!(table.scroll.selected(), Some(1), "selected b");
+        assert_eq!(table.selected(), Some("b"), "selected b");
         table.start_task("b").unwrap();
         assert_eq!(table.scroll.selected(), Some(0), "b stays selected");
+        assert_eq!(table.selected(), Some("b"), "selected b");
         table.start_task("a").unwrap();
         assert_eq!(table.scroll.selected(), Some(0), "b stays selected");
+        assert_eq!(table.selected(), Some("b"), "selected b");
         table.finish_task("a").unwrap();
         assert_eq!(table.scroll.selected(), Some(1), "b stays selected");
+        assert_eq!(table.selected(), Some("b"), "selected b");
     }
 
     #[test]
@@ -302,22 +324,28 @@ mod test {
         table.next();
         table.next();
         assert_eq!(table.scroll.selected(), Some(1), "selected b");
+        assert_eq!(table.selected(), Some("b"), "selected b");
         // start c which moves it to "running" which is before "planned"
         table.start_task("c").unwrap();
         assert_eq!(table.scroll.selected(), Some(2), "selection stays on b");
+        assert_eq!(table.selected(), Some("b"), "selected b");
         table.start_task("a").unwrap();
         assert_eq!(table.scroll.selected(), Some(2), "selection stays on b");
+        assert_eq!(table.selected(), Some("b"), "selected b");
         // c
         // a
         // b <-
         table.previous();
         table.previous();
         assert_eq!(table.scroll.selected(), Some(0), "selected c");
+        assert_eq!(table.selected(), Some("c"), "selected c");
         table.finish_task("a").unwrap();
         assert_eq!(table.scroll.selected(), Some(1), "c stays selected");
+        assert_eq!(table.selected(), Some("c"), "selected c");
         table.previous();
         table.finish_task("c").unwrap();
         assert_eq!(table.scroll.selected(), Some(0), "a stays selected");
+        assert_eq!(table.selected(), Some("a"), "selected a");
     }
 
     #[test]

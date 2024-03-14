@@ -186,6 +186,12 @@ const nextConfig = withNextra({
         permanent: true,
       },
       {
+        source: "/pack/docs/features/customizing-turbopack",
+        destination:
+          "https://nextjs.org/docs/app/api-reference/next-config-js/turbo",
+        permanent: true,
+      },
+      {
         // Redirect old blog posts to new blog.
         source: "/posts/:path*",
         destination: "/blog/:path*",

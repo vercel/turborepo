@@ -10,9 +10,9 @@ use std::{
 #[cfg(not(test))]
 use console::Style;
 use console::StyledObject;
+use dialoguer::Confirm;
 #[cfg(not(test))]
 use dialoguer::FuzzySelect;
-use dialoguer::{theme::ColorfulTheme, Confirm};
 use dirs_next::home_dir;
 #[cfg(test)]
 use rand::Rng;
@@ -20,7 +20,7 @@ use thiserror::Error;
 use turborepo_api_client::{CacheClient, Client};
 #[cfg(not(test))]
 use turborepo_ui::CYAN;
-use turborepo_ui::{BOLD, GREY, UNDERLINE};
+use turborepo_ui::{DialoguerTheme, BOLD, GREY, UNDERLINE};
 use turborepo_vercel_api::{CachingStatus, Space, Team};
 
 use crate::{
@@ -374,7 +374,7 @@ pub async fn link(
 }
 
 fn should_enable_caching() -> Result<bool, Error> {
-    let theme = ColorfulTheme::default();
+    let theme = DialoguerTheme::default();
 
     Confirm::with_theme(&theme)
         .with_prompt(
@@ -410,12 +410,12 @@ fn select_team<'a>(
     let mut team_names = vec![user_display_name];
     team_names.extend(teams.iter().map(|team| team.name.as_str()));
 
-    let theme = ColorfulTheme {
+    let theme = DialoguerTheme {
         active_item_style: Style::new().cyan().bold(),
         active_item_prefix: Style::new().cyan().bold().apply_to(">".to_string()),
         prompt_prefix: Style::new().dim().bold().apply_to("?".to_string()),
         values_style: Style::new().cyan(),
-        ..ColorfulTheme::default()
+        ..DialoguerTheme::default()
     };
 
     let prompt = format!(
@@ -455,12 +455,12 @@ fn select_space<'a>(base: &CommandBase, spaces: &'a [Space]) -> Result<SelectedS
         .map(|space| space.name.as_str())
         .collect::<Vec<_>>();
 
-    let theme = ColorfulTheme {
+    let theme = DialoguerTheme {
         active_item_style: Style::new().cyan().bold(),
         active_item_prefix: Style::new().cyan().bold().apply_to(">".to_string()),
         prompt_prefix: Style::new().dim().bold().apply_to("?".to_string()),
         values_style: Style::new().cyan(),
-        ..ColorfulTheme::default()
+        ..DialoguerTheme::default()
     };
 
     let prompt = format!(

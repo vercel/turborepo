@@ -1,5 +1,5 @@
 [package]
-name = "vt100"
+name = "turborepo-vt100"
 version = "0.15.2"
 authors = ["Jesse Luehrs <doy@tozt.net>"]
 edition = "2021"
@@ -13,9 +13,15 @@ categories = ["command-line-interface", "encoding"]
 license = "MIT"
 include = ["src/**/*", "LICENSE", "README.md", "CHANGELOG.md"]
 
+[features]
+default = ["tui-term"]
+tui-term = ["dep:tui-term", "dep:ratatui"]
+
 [dependencies]
 itoa = "1.0.9"
 log = "0.4.19"
+ratatui = { workspace = true, optional = true }
+tui-term = { workspace = true, optional = true }
 unicode-width = "0.1.10"
 vte = "0.11.1"
 

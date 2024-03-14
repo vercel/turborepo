@@ -12,13 +12,13 @@
 //! # Synopsis
 //!
 //! ```
-//! let mut parser = vt100::Parser::new(24, 80, 0);
+//! let mut parser = turborepo_vt100::Parser::new(24, 80, 0);
 //!
 //! let screen = parser.screen().clone();
 //! parser.process(b"this text is \x1b[31mRED\x1b[m");
 //! assert_eq!(
 //!     parser.screen().cell(0, 13).unwrap().fgcolor(),
-//!     vt100::Color::Idx(1),
+//!     turborepo_vt100::Color::Idx(1),
 //! );
 //!
 //! let screen = parser.screen().clone();
@@ -45,19 +45,24 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::too_many_lines)]
 #![allow(clippy::type_complexity)]
+#![allow(unused_imports)]
 
 mod attrs;
 mod callbacks;
 mod cell;
+mod entire_screen;
 mod grid;
 mod parser;
 mod perform;
 mod row;
 mod screen;
 mod term;
+#[cfg(feature = "tui-term")]
+mod tui_term;
 
 pub use attrs::Color;
 pub use callbacks::Callbacks;
 pub use cell::Cell;
+pub use entire_screen::EntireScreen;
 pub use parser::Parser;
 pub use screen::{MouseProtocolEncoding, MouseProtocolMode, Screen};

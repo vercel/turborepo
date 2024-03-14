@@ -63,6 +63,22 @@ impl Grid {
         self.size
     }
 
+    /// Size of screen without trailing blank rows
+    pub fn size_with_contents(&self) -> (usize, u16) {
+        let cols = self.size.cols;
+        let last_row_with_content = self.all_rows().enumerate().fold(
+            0,
+            |last_row_with_contents, (row_index, row)| {
+                if row.is_blank() {
+                    last_row_with_contents
+                } else {
+                    row_index
+                }
+            },
+        );
+        (last_row_with_content + 1, cols)
+    }
+
     pub fn set_size(&mut self, size: Size) {
         if size.cols != self.size.cols {
             for row in &mut self.rows {
@@ -129,6 +145,21 @@ impl Grid {
         self.rows.iter()
     }
 
+    pub fn all_rows(&self) -> impl Iterator<Item = &crate::row::Row> {
+        self.scrollback.iter().chain(self.rows.iter())
+    }
+
+    pub(crate) fn all_row(&self, row: u16) -> Option<&crate::row::Row> {
+        let row = usize::from(row);
+        if row < self.scrollback.len() {
+            self.scrollback.get(row)
+        } else if row < self.scrollback.len() + self.rows.len() {
+            self.rows.get(row - self.scrollback.len())
+        } else {
+            None
+        }
+    }
+
     pub fn drawing_rows_mut(
         &mut self,
     ) -> impl Iterator<Item = &mut crate::row::Row> {
@@ -184,6 +215,21 @@ impl Grid {
     pub fn write_contents(&self, contents: &mut String) {
         let mut wrapping = false;
         for row in self.visible_rows() {
+            row.write_contents(contents, 0, self.size.cols, wrapping);
+            if !row.wrapped() {
+                contents.push('\n');
+            }
+            wrapping = row.wrapped();
+        }
+
+        while contents.ends_with('\n') {
+            contents.truncate(contents.len() - 1);
+        }
+    }
+
+    pub fn write_full_contents(&self, contents: &mut String) {
+        let mut wrapping = false;
+        for row in self.all_rows() {
             row.write_contents(contents, 0, self.size.cols, wrapping);
             if !row.wrapped() {
                 contents.push('\n');
