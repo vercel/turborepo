@@ -245,11 +245,14 @@ impl EcmascriptChunkPlaceable for EcmascriptModuleFacadeModule {
     }
 
     #[turbo_tasks::function]
-    async fn is_marked_as_side_effect_free(&self) -> Result<Vc<bool>> {
+    async fn is_marked_as_side_effect_free(
+        &self,
+        optimized_packages: Vc<Vec<String>>,
+    ) -> Result<Vc<bool>> {
         Ok(match *self.ty.await? {
-            ModulePart::Evaluation | ModulePart::Facade => {
-                self.module.is_marked_as_side_effect_free()
-            }
+            ModulePart::Evaluation | ModulePart::Facade => self
+                .module
+                .is_marked_as_side_effect_free(optimized_packages),
             ModulePart::Exports
             | ModulePart::RenamedExport { .. }
             | ModulePart::RenamedNamespace { .. } => Vc::cell(true),
