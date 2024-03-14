@@ -45,7 +45,8 @@ async fn side_effects_from_package_json(
         if let Some(pacakge_name) = content.get("name").and_then(|v| v.as_str()) {
             if side_effect_free_packages
                 .await?
-                .contains(&pacakge_name.to_string())
+                .iter()
+                .any(|v| pacakge_name == v)
             {
                 return Ok(SideEffectsValue::Constant(false).cell());
             }
