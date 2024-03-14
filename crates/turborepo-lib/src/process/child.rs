@@ -609,31 +609,36 @@ impl Child {
         // across a channel
         let (byte_tx, mut byte_rx) = mpsc::channel(48);
         tokio::task::spawn_blocking(move || {
-            let mut buffer = Vec::new();
+            let mut buffer = [0; 1024];
+            let mut last_byte = None;
             loop {
-                match stdout_lines.read_until(b'\n', &mut buffer) {
-                    Ok(0) => break,
-                    Ok(_) => {
-                        if byte_tx.blocking_send(buffer.clone()).is_err() {
+                match stdout_lines.read(&mut buffer) {
+                    Ok(0) => {
+                        if !matches!(last_byte, Some(b'\n')) {
+                            // Ignore as this fails as we already are shutting down
+                            byte_tx.blocking_send(vec![b'\n']).ok();
+                        }
+                        break;
+                    }
+                    Ok(n) => {
+                        let mut bytes = Vec::with_capacity(n);
+                        bytes.extend_from_slice(&buffer[..n]);
+                        last_byte = bytes.last().copied();
+                        if byte_tx.blocking_send(bytes).is_err() {
                             // A dropped receiver indicates that there was an issue writing to the
                             // pipe. We can stop reading output.
                             break;
                         }
-                        buffer.clear();
                     }
                     Err(e) => return Err(e),
                 }
-            }
-            if !buffer.is_empty() {
-                byte_tx.blocking_send(buffer).ok();
             }
             Ok(())
         });
 
         let writer_fut = async {
             let mut result = Ok(());
-            while let Some(mut bytes) = byte_rx.recv().await {
-                add_trailing_newline(&mut bytes);
+            while let Some(bytes) = byte_rx.recv().await {
                 if let Err(err) = stdout_pipe.write_all(&bytes) {
                     result = Err(err);
                     break;
