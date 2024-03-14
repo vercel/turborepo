@@ -46,6 +46,24 @@ fn ctrl_c() -> Option<Event> {
 
 #[cfg(windows)]
 fn ctrl_c() -> Option<Event> {
-    // TODO: properly send Ctrl-C event to console
-    Some(Event::Stop)
+    use winapi::{
+        shared::minwindef::{BOOL, DWORD, TRUE},
+        um::wincon,
+    };
+    // First parameter corresponds to what event to generate, 0 is a Ctrl-C
+    let ctrl_c_event: DWORD = 0x0;
+    // Second parameter corresponds to which process group to send the event to.
+    // If 0 is passed the event gets sent to every process connected to the current
+    // Console.
+    let process_group_id: DWORD = 0x0;
+    let success: BOOL = unsafe {
+        // See docs https://learn.microsoft.com/en-us/windows/console/generateconsolectrlevent
+        wincon::GenerateConsoleCtrlEvent(ctrl_c_event, process_group_id)
+    };
+    if success == TRUE {
+        None
+    } else {
+        // We're unable to send the Ctrl-C event, stop rendering to force shutdown
+        Some(Event::Stop)
+    }
 }
