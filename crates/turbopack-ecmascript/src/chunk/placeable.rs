@@ -47,7 +47,7 @@ async fn side_effects_from_package_json(
                 .await?
                 .contains(&pacakge_name.to_string())
             {
-                return Ok(SideEffectsValue::Constant(true).cell());
+                return Ok(SideEffectsValue::Constant(false).cell());
             }
         }
 
