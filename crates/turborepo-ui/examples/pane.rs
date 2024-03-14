@@ -7,7 +7,7 @@ use crossterm::{
 use ratatui::{
     backend::{Backend, CrosstermBackend},
     text::Text,
-    widgets::{Paragraph, Widget},
+    widgets::Widget,
     Terminal, TerminalOptions, Viewport,
 };
 use turborepo_ui::TerminalPane;
