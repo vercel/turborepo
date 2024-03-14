@@ -21,8 +21,11 @@ pub trait EcmascriptChunkPlaceable: ChunkableModule + Module + Asset {
     fn get_async_module(self: Vc<Self>) -> Vc<OptionAsyncModule> {
         Vc::cell(None)
     }
-    fn is_marked_as_side_effect_free(self: Vc<Self>) -> Vc<bool> {
-        is_marked_as_side_effect_free(self.ident().path())
+    fn is_marked_as_side_effect_free(
+        self: Vc<Self>,
+        optimized_packages: Vc<Vec<String>>,
+    ) -> Vc<bool> {
+        is_marked_as_side_effect_free(self.ident().path(), optimized_packages)
     }
 }
 
@@ -147,7 +150,10 @@ impl Issue for SideEffectsInPackageJsonIssue {
 }
 
 #[turbo_tasks::function]
-pub async fn is_marked_as_side_effect_free(path: Vc<FileSystemPath>) -> Result<Vc<bool>> {
+pub async fn is_marked_as_side_effect_free(
+    path: Vc<FileSystemPath>,
+    optimized_packages: Vc<Vec<String>>,
+) -> Result<Vc<bool>> {
     let find_package_json: turbo_tasks::ReadRef<FindContextFileResult> =
         find_context_file(path.parent(), package_json()).await?;
 
