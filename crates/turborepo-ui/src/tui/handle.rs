@@ -114,6 +114,16 @@ impl TuiTask {
         self.logs.lock().expect("logs lock poisoned").clone()
     }
 
+    pub fn set_stdin(&self, stdin: Box<dyn std::io::Write + Send>) {
+        self.handle
+            .primary
+            .send(Event::SetStdin {
+                task: self.name.clone(),
+                stdin,
+            })
+            .ok();
+    }
+
     /// Return a `PersistedWriter` which will properly write provided bytes to
     /// a persisted section of the terminal.
     ///

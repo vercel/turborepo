@@ -567,12 +567,20 @@ impl Child {
         self.pid
     }
 
-    fn stdin(&mut self) -> Option<ChildInput> {
+    fn stdin_inner(&mut self) -> Option<ChildInput> {
         self.stdin.lock().unwrap().take()
     }
 
     fn outputs(&mut self) -> Option<ChildOutput> {
         self.output.lock().unwrap().take()
+    }
+
+    pub fn stdin(&mut self) -> Option<Box<dyn Write + Send>> {
+        let stdin = self.stdin_inner()?;
+        match stdin {
+            ChildInput::Std(_) => None,
+            ChildInput::Pty(stdin) => Some(stdin),
+        }
     }
 
     /// Wait for the `Child` to exit and pipe any stdout and stderr to the
@@ -942,7 +950,7 @@ mod test {
         let input = "hello world";
         // drop stdin to close the pipe
         {
-            match child.stdin().unwrap() {
+            match child.stdin_inner().unwrap() {
                 ChildInput::Std(mut stdin) => stdin.write_all(input.as_bytes()).await.unwrap(),
                 ChildInput::Pty(mut stdin) => stdin.write_all(input.as_bytes()).unwrap(),
             }

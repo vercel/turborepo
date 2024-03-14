@@ -1,6 +1,9 @@
 use std::{collections::BTreeMap, io::Write};
 
-use ratatui::widgets::{Block, Borders, Widget};
+use ratatui::{
+    style::Style,
+    widgets::{Block, Borders, Widget},
+};
 use tui_term::{vt100, widget::PseudoTerminal};
 
 use super::Error;
@@ -10,6 +13,7 @@ pub struct TerminalPane<W> {
     displayed: Option<String>,
     rows: u16,
     cols: u16,
+    highlight: bool,
 }
 
 struct TerminalOutput<W> {
@@ -31,7 +35,12 @@ impl<W> TerminalPane<W> {
             displayed: None,
             rows,
             cols,
+            highlight: false,
         }
+    }
+
+    pub fn highlight(&mut self, highlight: bool) {
+        self.highlight = highlight;
     }
 
     pub fn process_output(&mut self, task: &str, output: &[u8]) -> Result<(), Error> {
@@ -83,6 +92,13 @@ impl<W> TerminalPane<W> {
 }
 
 impl<W: Write> TerminalPane<W> {
+    /// Insert a stdin to be associated with a task
+    pub fn insert_stdin(&mut self, task_name: &str, stdin: Option<W>) -> Result<(), Error> {
+        let task = self.task_mut(task_name)?;
+        task.stdin = stdin;
+        Ok(())
+    }
+
     pub fn process_input(&mut self, task: &str, input: &[u8]) -> Result<(), Error> {
         let task_output = self.task_mut(task)?;
         if let Some(stdin) = &mut task_output.stdin {
@@ -123,11 +139,13 @@ impl<W> Widget for &TerminalPane<W> {
             return;
         };
         let screen = task.parser.screen();
-        let term = PseudoTerminal::new(screen).block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(format!(" {task_name} >")),
-        );
+        let mut block = Block::default()
+            .borders(Borders::ALL)
+            .title(format!(" {task_name} >"));
+        if self.highlight {
+            block = block.border_style(Style::new().fg(ratatui::style::Color::Yellow));
+        }
+        let term = PseudoTerminal::new(screen).block(block);
         term.render(area, buf)
     }
 }

@@ -21,6 +21,7 @@ pub struct App<I> {
     table: TaskTable,
     pane: TerminalPane<I>,
     done: bool,
+    interact: bool,
 }
 
 impl<I> App<I> {
@@ -29,6 +30,7 @@ impl<I> App<I> {
             table: TaskTable::new(tasks.clone()),
             pane: TerminalPane::new(rows, cols, tasks),
             done: false,
+            interact: false,
         };
         // Start with first task selected
         this.next();
@@ -48,6 +50,26 @@ impl<I> App<I> {
             self.pane.select(task).unwrap();
         }
     }
+
+    pub fn interact(&mut self, interact: bool) {
+        self.interact = interact;
+        self.pane.highlight(interact);
+    }
+}
+
+impl<I: std::io::Write> App<I> {
+    pub fn forward_input(&mut self, bytes: &[u8]) -> Result<(), Error> {
+        // If we aren't in interactive mode, ignore input
+        if !self.interact {
+            return Ok(());
+        }
+        let selected_task = self
+            .table
+            .selected()
+            .expect("table should always have task selected");
+        self.pane.process_input(selected_task, bytes)?;
+        Ok(())
+    }
 }
 
 /// Handle the rendering of the `App` widget based on events received by
@@ -56,7 +78,7 @@ pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
     let mut terminal = startup()?;
     let size = terminal.size()?;
 
-    let app: App<()> = App::new(PANE_HEIGHT, size.width, tasks);
+    let app: App<Box<dyn io::Write + Send>> = App::new(PANE_HEIGHT, size.width, tasks);
 
     let result = run_app_inner(&mut terminal, app, receiver);
 
@@ -67,16 +89,16 @@ pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
 
 // Break out inner loop so we can use `?` without worrying about cleaning up the
 // terminal.
-fn run_app_inner<I, B: Backend>(
+fn run_app_inner<B: Backend>(
     terminal: &mut Terminal<B>,
-    mut app: App<I>,
+    mut app: App<Box<dyn io::Write + Send>>,
     receiver: AppReceiver,
 ) -> Result<(), Error> {
     // Render initial state to paint the screen
     terminal.draw(|f| view(&mut app, f))?;
     let mut last_render = Instant::now();
 
-    while let Some(event) = poll(&receiver, last_render + FRAMERATE) {
+    while let Some(event) = poll(app.interact, &receiver, last_render + FRAMERATE) {
         if let Some(message) = update(&mut app, event)? {
             // TODO: use term emulator to properly render this, blocked by PR #7713
             terminal.insert_before(1, |buf| {
@@ -97,8 +119,8 @@ fn run_app_inner<I, B: Backend>(
 
 /// Blocking poll for events, will only return None if app handle has been
 /// dropped
-fn poll(receiver: &AppReceiver, deadline: Instant) -> Option<Event> {
-    match input() {
+fn poll(interact: bool, receiver: &AppReceiver, deadline: Instant) -> Option<Event> {
+    match input(interact) {
         Ok(Some(event)) => Some(event),
         Ok(None) => receiver.recv(deadline).ok(),
         // Unable to read from stdin, shut down and attempt to clean up
@@ -129,7 +151,10 @@ fn cleanup<B: Backend>(mut terminal: Terminal<B>) -> io::Result<()> {
     Ok(())
 }
 
-fn update<I>(app: &mut App<I>, event: Event) -> Result<Option<Vec<u8>>, Error> {
+fn update(
+    app: &mut App<Box<dyn io::Write + Send>>,
+    event: Event,
+) -> Result<Option<Vec<u8>>, Error> {
     match event {
         Event::StartTask { task } => {
             app.table.start_task(&task)?;
@@ -154,6 +179,18 @@ fn update<I>(app: &mut App<I>, event: Event) -> Result<Option<Vec<u8>>, Error> {
         }
         Event::Down => {
             app.next();
+        }
+        Event::EnterInteractive => {
+            app.interact(true);
+        }
+        Event::ExitInteractive => {
+            app.interact(false);
+        }
+        Event::Input { bytes } => {
+            app.forward_input(&bytes)?;
+        }
+        Event::SetStdin { task, stdin } => {
+            app.pane.insert_stdin(&task, Some(stdin))?;
         }
     }
     Ok(None)
