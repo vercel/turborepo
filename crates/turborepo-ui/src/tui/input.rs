@@ -28,8 +28,24 @@ fn translate_key_event(key_event: KeyEvent) -> Option<Event> {
         crossterm::event::KeyCode::Char('c')
             if key_event.modifiers == crossterm::event::KeyModifiers::CONTROL =>
         {
-            Some(Event::Stop)
+            ctrl_c()
         }
         _ => None,
     }
+}
+
+#[cfg(unix)]
+fn ctrl_c() -> Option<Event> {
+    use nix::sys::signal;
+    match signal::raise(signal::SIGINT) {
+        Ok(_) => None,
+        // We're unable to send the signal, stop rendering to force shutdown
+        Err(_) => Some(Event::Stop),
+    }
+}
+
+#[cfg(windows)]
+fn ctrl_c() -> Option<Event> {
+    // TODO: properly send Ctrl-C event to console
+    Some(Event::Stop)
 }
