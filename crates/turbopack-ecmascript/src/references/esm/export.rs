@@ -62,9 +62,9 @@ pub struct FollowExportsResult {
 pub async fn follow_reexports(
     module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
     export_name: String,
-    optimized_packages: Vc<Vec<String>>,
+    side_effect_free_packages: Vc<Vec<String>>,
 ) -> Vc<FollowExportsResult> {
-    follow_reexports_internal(module, export_name, true, optimized_packages)
+    follow_reexports_internal(module, export_name, true, side_effect_free_packages)
 }
 
 #[turbo_tasks::function]
@@ -72,11 +72,11 @@ pub async fn follow_reexports_internal(
     mut module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
     mut export_name: String,
     stop_on_side_effects: bool,
-    optimized_packages: Vc<Vec<String>>,
+    side_effect_free_packages: Vc<Vec<String>>,
 ) -> Result<Vc<FollowExportsResult>> {
     if stop_on_side_effects
         && !*module
-            .is_marked_as_side_effect_free(optimized_packages)
+            .is_marked_as_side_effect_free(side_effect_free_packages)
             .await?
     {
         return Ok(FollowExportsResult::cell(FollowExportsResult {
@@ -104,7 +104,7 @@ pub async fn follow_reexports_internal(
                 export_name,
                 export,
                 stop_on_side_effects,
-                optimized_packages,
+                side_effect_free_packages,
             )
             .await?
             {
@@ -126,7 +126,7 @@ pub async fn follow_reexports_internal(
                 export_name,
                 &exports.star_exports,
                 stop_on_side_effects,
-                optimized_packages,
+                side_effect_free_packages,
             )
             .await;
         }
@@ -144,7 +144,7 @@ async fn handle_declared_export(
     export_name: String,
     export: &EsmExport,
     stop_on_side_effects: bool,
-    optimized_packages: Vc<Vec<String>>,
+    side_effect_free_packages: Vc<Vec<String>>,
 ) -> Result<ControlFlow<FollowExportsResult, (Vc<Box<dyn EcmascriptChunkPlaceable>>, String)>> {
     match export {
         EsmExport::ImportedBinding(reference, name) => {
@@ -153,7 +153,7 @@ async fn handle_declared_export(
             {
                 if stop_on_side_effects
                     && !*module
-                        .is_marked_as_side_effect_free(optimized_packages)
+                        .is_marked_as_side_effect_free(side_effect_free_packages)
                         .await?
                 {
                     return Ok(ControlFlow::Break(FollowExportsResult {
@@ -210,7 +210,7 @@ async fn get_all_export_names(
     export_name: String,
     star_exports: &[Vc<Box<dyn ModuleReference>>],
     stop_on_side_effects: bool,
-    optimized_packages: Vc<Vec<String>>,
+    side_effect_free_packages: Vc<Vec<String>>,
 ) -> Result<Vc<FollowExportsResult>> {
     let mut potential_modules = Vec::new();
     for star_export in star_exports {
@@ -218,12 +218,16 @@ async fn get_all_export_names(
             *ReferencedAsset::from_resolve_result(star_export.resolve_reference()).await?
         {
             let result =
-                follow_reexports_internal(m, export_name.clone(), false, optimized_packages);
+                follow_reexports_internal(m, export_name.clone(), false, side_effect_free_packages);
             let result_ref = result.await?;
             match result_ref.ty {
                 FoundExportType::Found => {
                     if stop_on_side_effects {
-                        return Ok(follow_reexports(m, export_name.clone(), optimized_packages));
+                        return Ok(follow_reexports(
+                            m,
+                            export_name.clone(),
+                            side_effect_free_packages,
+                        ));
                     } else {
                         return Ok(result);
                     }

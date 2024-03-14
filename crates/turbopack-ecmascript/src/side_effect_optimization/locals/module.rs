@@ -94,9 +94,12 @@ impl EcmascriptChunkPlaceable for EcmascriptModuleLocalsModule {
     }
 
     #[turbo_tasks::function]
-    fn is_marked_as_side_effect_free(&self, optimized_packages: Vc<Vec<String>>) -> Vc<bool> {
+    fn is_marked_as_side_effect_free(
+        &self,
+        side_effect_free_packages: Vc<Vec<String>>,
+    ) -> Vc<bool> {
         self.module
-            .is_marked_as_side_effect_free(optimized_packages)
+            .is_marked_as_side_effect_free(side_effect_free_packages)
     }
 
     #[turbo_tasks::function]
