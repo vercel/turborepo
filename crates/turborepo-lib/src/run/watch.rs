@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::FromStr};
+use std::collections::HashMap;
 
 use futures::StreamExt;
 use miette::{Diagnostic, SourceSpan};
@@ -12,14 +12,8 @@ use crate::{
     commands,
     commands::CommandBase,
     daemon::{proto, DaemonConnectorError, DaemonError},
-    get_version, opts,
-    opts::Opts,
-    run,
-    run::{
-        builder::RunBuilder,
-        scope::target_selector::{InvalidSelectorError, TargetSelector},
-        Run,
-    },
+    get_version, opts, run,
+    run::{builder::RunBuilder, scope::target_selector::InvalidSelectorError, Run},
     signal::SignalHandler,
     DaemonConnector, DaemonPaths,
 };
@@ -53,45 +47,21 @@ pub enum Error {
         #[label]
         span: SourceSpan,
     },
+    #[error("daemon connection closed")]
+    ConnectionClosed,
+    #[error("watch interrupted due to signal")]
+    SignalInterrupt,
 }
 
 impl WatchClient {
-    fn validate_filter(opts: &Opts, filters: &[String]) -> Result<(), Error> {
-        if opts.scope_opts.legacy_filter.since.is_some() {
-            return Err(Error::SinceNotSupported);
-        }
-
-        let selectors = filters
-            .iter()
-            .map(|f| TargetSelector::from_str(f))
-            .collect::<Result<Vec<_>, _>>()?;
-
-        for selector in selectors {
-            if !selector.from_ref.is_empty() || !selector.to_ref_override.is_empty() {
-                let filter = format!("--filter={}", selector.raw);
-                let span: SourceSpan = (0, filter.len()).into();
-
-                return Err(Error::GitRangeInFilter { filter, span });
-            }
-        }
-
-        Ok(())
-    }
     pub async fn start(base: CommandBase, telemetry: CommandEventBuilder) -> Result<(), Error> {
         let signal = commands::run::get_signal()?;
         let handler = SignalHandler::new(signal);
-        let Some(subscriber) = handler.subscribe() else {
+        let Some(signal_subscriber) = handler.subscribe() else {
             tracing::warn!("failed to subscribe to signal handler, shutting down");
             return Ok(());
         };
 
-        let Some(Command::Watch(args)) = &base.args().command else {
-            unreachable!();
-        };
-
-        let opts = Opts::try_from(base.args())?;
-
-        Self::validate_filter(&opts, &args.filter)?;
         // We currently don't actually need the whole Run struct, just the filtered
         // packages. But in the future we'll likely need it to more efficiently
         // spawn tasks.
@@ -124,16 +94,20 @@ impl WatchClient {
                 .await?;
             }
 
-            Ok::<(), Error>(())
+            Err(Error::ConnectionClosed)
         };
 
         select! {
-            _ = event_fut => {}
-            _ = subscriber.listen() => {
+            biased;
+            _ = signal_subscriber.listen() => {
                 tracing::info!("shutting down");
+
+                Err(Error::SignalInterrupt)
+            }
+            result = event_fut => {
+                result
             }
         }
-        Ok(())
     }
 
     async fn handle_change_event(
@@ -175,7 +149,7 @@ impl WatchClient {
                 });
 
                 let new_base =
-                    CommandBase::new(args, base.repo_root.clone(), get_version(), base.ui.clone());
+                    CommandBase::new(args, base.repo_root.clone(), get_version(), base.ui);
 
                 // TODO: Add logic on when to abort vs wait
                 if let Some(run) = current_runs.remove(&package_name) {
@@ -211,8 +185,7 @@ impl WatchClient {
                     }
                 });
 
-                let base =
-                    CommandBase::new(args, base.repo_root.clone(), get_version(), base.ui.clone());
+                let base = CommandBase::new(args, base.repo_root.clone(), get_version(), base.ui);
 
                 // When we rediscover, stop all current runs
                 for (_, run) in current_runs.drain() {
@@ -221,7 +194,7 @@ impl WatchClient {
 
                 // rebuild run struct
                 *run = RunBuilder::new(base.clone())?
-                    .build(&handler, telemetry.clone())
+                    .build(handler, telemetry.clone())
                     .await?;
 
                 // Execute run

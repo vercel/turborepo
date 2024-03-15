@@ -1267,8 +1267,8 @@ pub async fn run(
             let base = CommandBase::new(cli_args, repo_root, version, ui);
 
             WatchClient::start(base, event).await?;
-
-            return Ok(0);
+            // We only exit if we get a signal, so we return a non-zero exit code
+            return Ok(1);
         }
         Command::Prune {
             scope,
@@ -2216,6 +2216,44 @@ mod test {
         "multiple tasks no run prefix"
     )]
     fn test_parse_run(args: &[&str], expected: Args) {
+        assert_eq!(Args::try_parse_from(args).unwrap(), expected);
+    }
+
+    #[test_case::test_case(
+        &["turbo", "watch", "build"],
+        Args {
+            command: Some(Command::Watch(Box::new(ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                ..get_default_execution_args()
+            }))),
+            ..Args::default()
+        };
+        "default watch"
+    )]
+    #[test_case::test_case(
+        &["turbo", "watch", "build", "--cache-dir", "foobar"],
+        Args {
+            command: Some(Command::Watch(Box::new(ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                cache_dir: Some(Utf8PathBuf::from("foobar")),
+                ..get_default_execution_args()
+            }))),
+            ..Args::default()
+        };
+        "with cache-dir"
+    )]
+    #[test_case::test_case(
+        &["turbo", "watch", "build", "lint", "check"],
+        Args {
+            command: Some(Command::Watch(Box::new(ExecutionArgs {
+                tasks: vec!["build".to_string(), "lint".to_string(), "check".to_string()],
+                ..get_default_execution_args()
+            }))),
+            ..Args::default()
+        };
+        "with multiple tasks"
+    )]
+    fn test_parse_watch(args: &[&str], expected: Args) {
         assert_eq!(Args::try_parse_from(args).unwrap(), expected);
     }
 
