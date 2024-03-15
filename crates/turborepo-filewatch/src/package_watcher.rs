@@ -604,17 +604,13 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
 
         // if this fails, we are closing anyways so ignore
         self.package_manager_tx.send(Some(state)).ok();
-        self.package_data_tx.send_modify(move |mut d| {
+        self.package_data_tx.send_modify(move |d| {
             let new_data = new_manager
                 .workspaces
                 .into_iter()
                 .map(|p| (p.package_json.parent().expect("non-root").to_owned(), p))
                 .collect::<HashMap<_, _>>();
-            if let Some(data) = &mut d {
-                *data = new_data;
-            } else {
-                *d = Some(new_data);
-            }
+            let _ = d.insert(new_data);
         });
 
         Ok(())
@@ -634,11 +630,7 @@ impl<T: PackageDiscovery + Send + Sync + 'static> Subscriber<T> {
                 .into_iter()
                 .map(|p| (p.package_json.parent().expect("non-root").to_owned(), p))
                 .collect::<HashMap<_, _>>();
-            if let Some(data) = d {
-                *data = new_data;
-            } else {
-                *d = Some(new_data);
-            }
+            let _ = d.insert(new_data);
         });
         Ok(())
     }
