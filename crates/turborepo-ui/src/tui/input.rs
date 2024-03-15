@@ -133,9 +133,6 @@ fn encode_key(key: KeyEvent) -> Vec<u8> {
                 buf.push(0x1b as char);
             }
             buf.push(c);
-            if code == Enter {
-                buf.push('\n');
-            }
         }
 
         Tab => {
@@ -181,7 +178,7 @@ fn encode_key(key: KeyEvent) -> Vec<u8> {
                 buf.push_str(&(1 + encode_modifiers(mods)).to_string());
                 buf.push(c);
             } else {
-                buf.push_str("\x1b[1;");
+                buf.push_str("\x1b[");
                 buf.push(c);
             }
         }
