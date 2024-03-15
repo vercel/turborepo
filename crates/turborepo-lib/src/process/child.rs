@@ -881,6 +881,7 @@ mod test {
         let script = find_script_dir().join_component("hello_world.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
 
         tokio::time::sleep(STARTUP_DELAY).await;
@@ -1085,6 +1086,7 @@ mod test {
         let script = find_script_dir().join_component("hello_world.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
 
         let mut out = Vec::new();
@@ -1106,6 +1108,7 @@ mod test {
         let script = find_script_dir().join_component("hello_world_hello_moon.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
 
         let mut buffer = Vec::new();
@@ -1129,6 +1132,7 @@ mod test {
         let script = find_script_dir().join_component("hello_non_utf8.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
 
         let mut out = Vec::new();
@@ -1149,6 +1153,7 @@ mod test {
         let script = find_script_dir().join_component("hello_no_line.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
 
         let mut out = Vec::new();
