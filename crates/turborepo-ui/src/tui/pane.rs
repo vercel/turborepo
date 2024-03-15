@@ -4,7 +4,8 @@ use ratatui::{
     style::Style,
     widgets::{Block, Borders, Widget},
 };
-use tui_term::{vt100, widget::PseudoTerminal};
+use tui_term::widget::PseudoTerminal;
+use turborepo_vt100 as vt100;
 
 use super::Error;
 
@@ -123,7 +124,7 @@ impl<W> TerminalOutput<W> {
 
     fn resize(&mut self, rows: u16, cols: u16) {
         if self.rows != rows || self.cols != cols {
-            self.parser.set_size(rows, cols);
+            self.parser.screen_mut().set_size(rows, cols);
         }
         self.rows = rows;
         self.cols = cols;
