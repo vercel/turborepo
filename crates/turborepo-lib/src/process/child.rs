@@ -603,7 +603,7 @@ impl Child {
                 match stdout_lines.read(&mut buffer) {
                     Ok(0) => {
                         if !matches!(last_byte, Some(b'\n')) {
-                            // Ignore as this fails as we already are shutting down
+                            // Ignore if this fails as we already are shutting down
                             byte_tx.blocking_send(vec![b'\n']).ok();
                         }
                         break;
