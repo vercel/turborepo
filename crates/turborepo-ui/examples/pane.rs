@@ -7,7 +7,7 @@ use crossterm::{
 use ratatui::{
     backend::{Backend, CrosstermBackend},
     text::Text,
-    widgets::{Paragraph, Widget},
+    widgets::Widget,
     Terminal, TerminalOptions, Viewport,
 };
 use turborepo_ui::TerminalPane;
@@ -37,11 +37,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let pane = TerminalPane::new(
         size.height,
         size.width,
-        vec![
-            ("foo".into(), None),
-            ("bar".into(), None),
-            ("baz".into(), None),
-        ],
+        vec!["foo".into(), "bar".into(), "baz".into()],
     );
 
     run_app(&mut terminal, pane, rx)?;

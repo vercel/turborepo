@@ -65,7 +65,10 @@ Because of this difference, we recommend specifying **two separate Turborepo tas
 
 Here's an example:
 
+Inside your individual `package.json` files for each workspace:
+
 <Tabs items={["Jest", "Vitest"]} storageKey="selected-test-runner">
+
   <Tab>
 ```json filename="apps/web/package.json"
 {
@@ -88,6 +91,8 @@ Here's an example:
     </Tab>
 </Tabs>
 
+Inside the root `turbo.json`:
+
 ```json filename="turbo.json"
 {
   "pipeline": {
@@ -98,6 +103,8 @@ Here's an example:
   }
 }
 ```
+
+Inside the root `package.json`:
 
 ```json filename="package.json"
 {
