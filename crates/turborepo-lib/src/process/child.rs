@@ -161,26 +161,6 @@ impl ChildHandle {
         let controller = pair.master;
         let receiver = pair.slave;
 
-        #[cfg(unix)]
-        {
-            use nix::sys::termios;
-            if let Some((file_desc, mut termios)) = controller
-                .as_raw_fd()
-                .and_then(|fd| Some(fd).zip(termios::tcgetattr(fd).ok()))
-            {
-                // We unset ECHOCTL to disable rendering of the closing of stdin
-                // as ^D
-                termios.local_flags &= !nix::sys::termios::LocalFlags::ECHOCTL;
-                if let Err(e) = nix::sys::termios::tcsetattr(
-                    file_desc,
-                    nix::sys::termios::SetArg::TCSANOW,
-                    &termios,
-                ) {
-                    debug!("unable to unset ECHOCTL: {e}");
-                }
-            }
-        }
-
         let child = receiver
             .spawn_command(command)
             .map_err(|err| match err.downcast() {
@@ -567,12 +547,20 @@ impl Child {
         self.pid
     }
 
-    fn stdin(&mut self) -> Option<ChildInput> {
+    fn stdin_inner(&mut self) -> Option<ChildInput> {
         self.stdin.lock().unwrap().take()
     }
 
     fn outputs(&mut self) -> Option<ChildOutput> {
         self.output.lock().unwrap().take()
+    }
+
+    pub fn stdin(&mut self) -> Option<Box<dyn Write + Send>> {
+        let stdin = self.stdin_inner()?;
+        match stdin {
+            ChildInput::Std(_) => None,
+            ChildInput::Pty(stdin) => Some(stdin),
+        }
     }
 
     /// Wait for the `Child` to exit and pipe any stdout and stderr to the
@@ -893,6 +881,7 @@ mod test {
         let script = find_script_dir().join_component("hello_world.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
 
         tokio::time::sleep(STARTUP_DELAY).await;
@@ -942,7 +931,7 @@ mod test {
         let input = "hello world";
         // drop stdin to close the pipe
         {
-            match child.stdin().unwrap() {
+            match child.stdin_inner().unwrap() {
                 ChildInput::Std(mut stdin) => stdin.write_all(input.as_bytes()).await.unwrap(),
                 ChildInput::Pty(mut stdin) => stdin.write_all(input.as_bytes()).unwrap(),
             }
@@ -1097,6 +1086,7 @@ mod test {
         let script = find_script_dir().join_component("hello_world.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
 
         let mut out = Vec::new();
@@ -1118,6 +1108,7 @@ mod test {
         let script = find_script_dir().join_component("hello_world_hello_moon.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
 
         let mut buffer = Vec::new();
@@ -1141,6 +1132,7 @@ mod test {
         let script = find_script_dir().join_component("hello_non_utf8.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
 
         let mut out = Vec::new();
@@ -1161,6 +1153,7 @@ mod test {
         let script = find_script_dir().join_component("hello_no_line.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
 
         let mut out = Vec::new();
