@@ -26,7 +26,9 @@ fn translate_key_event(interact: bool, key_event: KeyEvent) -> Option<Event> {
             ctrl_c()
         }
         // Interactive branches
-        KeyCode::Char('z') if key_event.modifiers == crossterm::event::KeyModifiers::CONTROL => {
+        KeyCode::Char('z')
+            if interact && key_event.modifiers == crossterm::event::KeyModifiers::CONTROL =>
+        {
             Some(Event::ExitInteractive)
         }
         // If we're in interactive mode, convert the key event to bytes to send to stdin
