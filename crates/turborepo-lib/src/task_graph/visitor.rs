@@ -487,6 +487,8 @@ impl<'a> Visitor<'a> {
 
     pub fn dry_run(&mut self) {
         self.dry = true;
+        // No need to start a TUI on dry run
+        self.experimental_ui = false;
     }
 }
 
