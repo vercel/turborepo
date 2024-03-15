@@ -7,6 +7,7 @@ use std::{
 };
 
 use console::{Style, StyledObject};
+use either::Either;
 use futures::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
 use tokio::sync::{mpsc, oneshot};
@@ -21,7 +22,10 @@ use turborepo_repository::{
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,
 };
-use turborepo_ui::{ColorSelector, OutputClient, OutputSink, OutputWriter, PrefixedUI, UI};
+use turborepo_ui::{
+    tui::{self, TuiTask},
+    ColorSelector, OutputClient, OutputSink, OutputWriter, PrefixedUI, UI,
+};
 use which::which;
 
 use crate::{
@@ -58,6 +62,7 @@ pub struct Visitor<'a> {
     sink: OutputSink<StdWriter>,
     task_hasher: TaskHasher<'a>,
     ui: UI,
+    experimental_ui: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -107,6 +112,13 @@ impl<'a> Visitor<'a> {
             env_at_execution_start,
             global_hash,
         );
+
+        let experimental_ui = atty::is(atty::Stream::Stdout)
+            && std::env::var("TURBO_EXPERIMENTAL_UI")
+                .ok()
+                .map(|val| matches!(val.as_str(), "true" | "1"))
+                .unwrap_or_default();
+
         let sink = Self::sink(run_opts);
         let color_cache = ColorSelector::default();
 
@@ -125,6 +137,7 @@ impl<'a> Visitor<'a> {
             task_hasher,
             ui,
             global_env,
+            experimental_ui,
         }
     }
 
@@ -136,6 +149,17 @@ impl<'a> Visitor<'a> {
     ) -> Result<Vec<TaskError>, Error> {
         let concurrency = self.run_opts.concurrency as usize;
         let (node_sender, mut node_stream) = mpsc::channel(concurrency);
+
+        let (ui, render_thread_handle) = if self.experimental_ui {
+            let task_names = engine.tasks_with_command(&self.package_graph);
+
+            let (handle, receiver) = tui::AppSender::new();
+            let app = tokio::task::spawn_blocking(move || tui::run_app(task_names, receiver));
+            (Some(handle), Some(app))
+        } else {
+            (None, None)
+        };
+
         let engine_handle = {
             let engine = engine.clone();
             tokio::spawn(engine.execute(ExecutionOptions::new(false, concurrency), node_sender))
@@ -263,7 +287,11 @@ impl<'a> Visitor<'a> {
                     let vendor_behavior =
                         Vendor::infer().and_then(|vendor| vendor.behavior.as_ref());
 
-                    let output_client = self.output_client(&info, vendor_behavior);
+                    let output_client = if let Some(handle) = &ui {
+                        TaskOutput::UI(handle.task(info.to_string()))
+                    } else {
+                        TaskOutput::Direct(self.output_client(&info, vendor_behavior))
+                    };
                     let tracker = self.run_tracker.track_task(info.clone().into_owned());
                     let spaces_client = self.run_tracker.spaces_task_client();
                     let parent_span = Span::current();
@@ -289,9 +317,19 @@ impl<'a> Visitor<'a> {
         engine_handle.await.expect("engine execution panicked")?;
         // This will poll the futures until they are all completed
         while let Some(result) = tasks.next().await {
-            result.expect("task executor panicked");
+            result.unwrap_or_else(|e| panic!("task executor panicked: {e}"));
         }
         drop(factory);
+        if let Some(handle) = ui {
+            handle.stop();
+            if let Err(e) = render_thread_handle
+                .unwrap()
+                .await
+                .expect("render thread panicked")
+            {
+                error!("error encountered rendering tui: {e}");
+            }
+        }
 
         // Write out the traced-config.json file if we have one
         self.task_access.save().await;
@@ -422,10 +460,11 @@ impl<'a> Visitor<'a> {
     fn prefixed_ui<W: Write>(
         ui: UI,
         is_github_actions: bool,
-        client: &OutputClient<W>,
+        stdout: W,
+        stderr: W,
         prefix: StyledObject<String>,
-    ) -> PrefixedUI<OutputWriter<'_, W>> {
-        let mut prefixed_ui = PrefixedUI::new(ui, client.stdout(), client.stderr())
+    ) -> PrefixedUI<W> {
+        let mut prefixed_ui = PrefixedUI::new(ui, stdout, stderr)
             .with_output_prefix(prefix.clone())
             // TODO: we can probably come up with a more ergonomic way to achieve this
             .with_error_prefix(
@@ -448,6 +487,8 @@ impl<'a> Visitor<'a> {
 
     pub fn dry_run(&mut self) {
         self.dry = true;
+        // No need to start a TUI on dry run
+        self.experimental_ui = false;
     }
 }
 
@@ -495,6 +536,13 @@ impl std::io::Write for StdWriter {
     fn flush(&mut self) -> std::io::Result<()> {
         self.writer().flush()
     }
+}
+
+/// Small wrapper over our two output types that defines a shared interface for
+/// interacting with them.
+enum TaskOutput<W> {
+    Direct(OutputClient<W>),
+    UI(tui::TuiTask),
 }
 
 fn turbo_regex() -> &'static Regex {
@@ -594,6 +642,7 @@ impl<'a> ExecContextFactory<'a> {
         ExecContext {
             engine: self.engine.clone(),
             ui: self.visitor.ui,
+            experimental_ui: self.visitor.experimental_ui,
             is_github_actions: self.visitor.run_opts.is_github_actions,
             pretty_prefix: self
                 .visitor
@@ -632,6 +681,7 @@ impl<'a> ExecContextFactory<'a> {
 struct ExecContext {
     engine: Arc<Engine>,
     ui: UI,
+    experimental_ui: bool,
     is_github_actions: bool,
     pretty_prefix: StyledObject<String>,
     task_id: TaskId<'static>,
@@ -680,7 +730,7 @@ impl ExecContext {
         &mut self,
         parent_span_id: Option<tracing::Id>,
         tracker: TaskTracker<()>,
-        output_client: OutputClient<impl std::io::Write>,
+        output_client: TaskOutput<impl std::io::Write>,
         callback: oneshot::Sender<Result<(), StopExecution>>,
         spaces_client: Option<SpacesTaskClient>,
         telemetry: &PackageTaskEventBuilder,
@@ -760,14 +810,15 @@ impl ExecContext {
 
     async fn execute_inner(
         &mut self,
-        output_client: &OutputClient<impl std::io::Write>,
+        output_client: &TaskOutput<impl std::io::Write>,
         telemetry: &PackageTaskEventBuilder,
     ) -> ExecOutcome {
         let task_start = Instant::now();
         let mut prefixed_ui = Visitor::prefixed_ui(
             self.ui,
             self.is_github_actions,
-            output_client,
+            output_client.stdout(),
+            output_client.stderr(),
             self.pretty_prefix.clone(),
         );
 
@@ -831,10 +882,11 @@ impl ExecContext {
             cmd.open_stdin();
         }
 
-        let mut stdout_writer = match self
-            .task_cache
-            .output_writer(prefixed_ui.output_prefixed_writer())
-        {
+        let mut stdout_writer = match self.task_cache.output_writer(if self.experimental_ui {
+            Either::Left(output_client.stdout())
+        } else {
+            Either::Right(prefixed_ui.output_prefixed_writer())
+        }) {
             Ok(w) => w,
             Err(e) => {
                 telemetry.track_error(TrackedErrors::FailedToCaptureOutputs);
@@ -864,6 +916,14 @@ impl ExecContext {
                 return ExecOutcome::Internal;
             }
         };
+        if self.experimental_ui {
+            if let TaskOutput::UI(task) = output_client {
+                task.start();
+                if let Some(stdin) = process.stdin() {
+                    task.set_stdin(stdin);
+                }
+            }
+        }
 
         let exit_status = match process.wait_with_piped_outputs(&mut stdout_writer).await {
             Ok(Some(exit_status)) => exit_status,
@@ -977,5 +1037,35 @@ impl DryRunExecContext {
                 .insert_cache_status(self.task_id.clone(), status);
         }
         tracker.dry_run().await;
+    }
+}
+
+impl<W: Write> TaskOutput<W> {
+    pub fn finish(self, use_error: bool) -> std::io::Result<Option<Vec<u8>>> {
+        match self {
+            TaskOutput::Direct(client) => client.finish(use_error),
+            TaskOutput::UI(client) => Ok(Some(client.finish())),
+        }
+    }
+
+    pub fn stdout(&self) -> Either<OutputWriter<W>, TuiTask> {
+        match self {
+            TaskOutput::Direct(client) => Either::Left(client.stdout()),
+            TaskOutput::UI(client) => Either::Right(client.clone()),
+        }
+    }
+
+    pub fn stderr(&self) -> Either<OutputWriter<W>, TuiTask> {
+        match self {
+            TaskOutput::Direct(client) => Either::Left(client.stderr()),
+            TaskOutput::UI(client) => Either::Right(client.clone()),
+        }
+    }
+
+    pub fn task_logs(&self) -> Either<OutputWriter<W>, TuiTask> {
+        match self {
+            TaskOutput::Direct(client) => Either::Left(client.stdout()),
+            TaskOutput::UI(client) => Either::Right(client.clone()),
+        }
     }
 }

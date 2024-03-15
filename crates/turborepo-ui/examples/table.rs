@@ -66,7 +66,7 @@ fn run_app<B: Backend>(
             Event::Down => table.next(),
             Event::Stop => break,
         }
-        terminal.draw(|f| table.stateful_render(f))?;
+        terminal.draw(|f| table.stateful_render(f, f.size()))?;
     }
 
     Ok(())
