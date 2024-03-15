@@ -58,8 +58,8 @@ pub async fn fetch(
 
     let client_builder = reqwest::Client::builder();
     let client_builder = match proxy_option {
-        Some(ProxyConfig::Http(proxy)) => client_builder.proxy(reqwest::Proxy::http(proxy)?),
-        Some(ProxyConfig::Https(proxy)) => client_builder.proxy(reqwest::Proxy::https(proxy)?),
+        Some(ProxyConfig::Http(proxy)) => client_builder.proxy(reqwest::Proxy::all(proxy)?),
+        Some(ProxyConfig::Https(proxy)) => client_builder.proxy(reqwest::Proxy::all(proxy)?),
         _ => client_builder,
     };
 
