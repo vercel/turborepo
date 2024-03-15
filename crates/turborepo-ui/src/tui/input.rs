@@ -28,8 +28,42 @@ fn translate_key_event(key_event: KeyEvent) -> Option<Event> {
         crossterm::event::KeyCode::Char('c')
             if key_event.modifiers == crossterm::event::KeyModifiers::CONTROL =>
         {
-            Some(Event::Stop)
+            ctrl_c()
         }
         _ => None,
+    }
+}
+
+#[cfg(unix)]
+fn ctrl_c() -> Option<Event> {
+    use nix::sys::signal;
+    match signal::raise(signal::SIGINT) {
+        Ok(_) => None,
+        // We're unable to send the signal, stop rendering to force shutdown
+        Err(_) => Some(Event::Stop),
+    }
+}
+
+#[cfg(windows)]
+fn ctrl_c() -> Option<Event> {
+    use winapi::{
+        shared::minwindef::{BOOL, DWORD, TRUE},
+        um::wincon,
+    };
+    // First parameter corresponds to what event to generate, 0 is a Ctrl-C
+    let ctrl_c_event: DWORD = 0x0;
+    // Second parameter corresponds to which process group to send the event to.
+    // If 0 is passed the event gets sent to every process connected to the current
+    // Console.
+    let process_group_id: DWORD = 0x0;
+    let success: BOOL = unsafe {
+        // See docs https://learn.microsoft.com/en-us/windows/console/generateconsolectrlevent
+        wincon::GenerateConsoleCtrlEvent(ctrl_c_event, process_group_id)
+    };
+    if success == TRUE {
+        None
+    } else {
+        // We're unable to send the Ctrl-C event, stop rendering to force shutdown
+        Some(Event::Stop)
     }
 }
