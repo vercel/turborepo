@@ -788,7 +788,6 @@ impl ExecContext {
                     (None, false) => self.manager.stop().await,
                     // Send task
                     (Some(client), true) => {
-                        // TODO don't do this
                         let logs = logs.expect("spaced enabled logs should be collected");
                         let info = self.spaces_task_info(self.task_id.clone(), task_summary, logs);
                         client.finish_task(info).await.ok();
