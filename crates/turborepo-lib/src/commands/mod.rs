@@ -67,6 +67,7 @@ impl CommandBase {
             .with_team_slug(self.args.team.clone())
             .with_token(self.args.token.clone())
             .with_timeout(self.args.remote_cache_timeout)
+            .with_preflight(self.args.preflight.then_some(true))
             .build()
     }
 
@@ -117,12 +118,10 @@ impl CommandBase {
 
     pub fn api_client(&self) -> Result<APIClient, ConfigError> {
         let config = self.config()?;
-        let args = self.args();
-
         let api_url = config.api_url();
         let timeout = config.timeout();
 
-        APIClient::new(api_url, timeout, self.version, args.preflight)
+        APIClient::new(api_url, timeout, self.version, config.preflight())
             .map_err(ConfigError::ApiClient)
     }
 
