@@ -176,6 +176,8 @@ pub struct ConfigurationOptions {
     pub(crate) timeout: Option<u64>,
     pub(crate) enabled: Option<bool>,
     pub(crate) spaces_id: Option<String>,
+    #[serde(rename = "experimentalUI")]
+    pub(crate) experimental_ui: Option<bool>,
 }
 
 #[derive(Default)]
@@ -232,6 +234,10 @@ impl ConfigurationOptions {
     pub fn spaces_id(&self) -> Option<&str> {
         self.spaces_id.as_deref()
     }
+
+    pub fn experimental_ui(&self) -> bool {
+        self.experimental_ui.unwrap_or_default() && atty::is(atty::Stream::Stdout)
+    }
 }
 
 // Maps Some("") to None to emulate how Go handles empty strings
@@ -271,6 +277,7 @@ impl ResolvedConfigurationOptions for RawTurboJson {
             .experimental_spaces
             .and_then(|spaces| spaces.id)
             .map(|spaces_id| spaces_id.into());
+        opts.experimental_ui = self.experimental_ui;
         Ok(opts)
     }
 }
@@ -298,6 +305,7 @@ fn get_env_var_config(
     turbo_mapping.insert(OsString::from("turbo_teamid"), "team_id");
     turbo_mapping.insert(OsString::from("turbo_token"), "token");
     turbo_mapping.insert(OsString::from("turbo_remote_cache_timeout"), "timeout");
+    turbo_mapping.insert(OsString::from("turbo_experimental_ui"), "experimental_ui");
 
     // We do not enable new config sources:
     // turbo_mapping.insert(String::from("turbo_signature"), "signature"); // new
@@ -367,6 +375,15 @@ fn get_env_var_config(
         None
     };
 
+    // Process experimentalUI
+    let experimental_ui = output_map
+        .get("experimental_ui")
+        .and_then(|val| match val.as_str() {
+            "true" | "1" => Some(true),
+            "false" | "0" => Some(false),
+            _ => None,
+        });
+
     // We currently don't pick up a Spaces ID via env var, we likely won't
     // continue using the Spaces name, we can add an env var when we have the
     // name we want to stick with.
@@ -383,6 +400,7 @@ fn get_env_var_config(
         signature,
         preflight,
         enabled,
+        experimental_ui,
 
         // Processed numbers
         timeout,
@@ -429,6 +447,7 @@ fn get_override_env_var_config(
         signature: None,
         preflight: None,
         enabled: None,
+        experimental_ui: None,
         timeout: None,
         spaces_id: None,
     };
@@ -565,6 +584,7 @@ impl TurborepoConfigBuilder {
     create_builder!(with_enabled, enabled, Option<bool>);
     create_builder!(with_preflight, preflight, Option<bool>);
     create_builder!(with_timeout, timeout, Option<u64>);
+    create_builder!(with_experimental_ui, experimental_ui, Option<bool>);
 
     pub fn build(&self) -> Result<ConfigurationOptions, Error> {
         // Priority, from least significant to most significant:
@@ -651,6 +671,9 @@ impl TurborepoConfigBuilder {
                     if let Some(spaces_id) = current_source_config.spaces_id {
                         acc.spaces_id = Some(spaces_id);
                     }
+                    if let Some(experimental_ui) = current_source_config.experimental_ui {
+                        acc.experimental_ui = Some(experimental_ui);
+                    }
 
                     acc
                 })
@@ -706,6 +729,7 @@ mod test {
             "turbo_remote_cache_timeout".into(),
             turbo_remote_cache_timeout.to_string().into(),
         );
+        env.insert("turbo_experimental_ui".into(), "true".into());
 
         let config = get_env_var_config(&env).unwrap();
         assert_eq!(turbo_api, config.api_url.unwrap());
@@ -714,6 +738,7 @@ mod test {
         assert_eq!(turbo_teamid, config.team_id.unwrap());
         assert_eq!(turbo_token, config.token.unwrap());
         assert_eq!(turbo_remote_cache_timeout, config.timeout.unwrap());
+        assert_eq!(Some(true), config.experimental_ui);
     }
 
     #[test]
@@ -724,6 +749,7 @@ mod test {
         env.insert("turbo_team".into(), "".into());
         env.insert("turbo_teamid".into(), "".into());
         env.insert("turbo_token".into(), "".into());
+        env.insert("turbo_experimental_ui".into(), "".into());
 
         let config = get_env_var_config(&env).unwrap();
         assert_eq!(config.api_url(), DEFAULT_API_URL);
@@ -731,6 +757,7 @@ mod test {
         assert_eq!(config.team_slug(), None);
         assert_eq!(config.team_id(), None);
         assert_eq!(config.token(), None);
+        assert!(!config.experimental_ui());
     }
 
     #[test]

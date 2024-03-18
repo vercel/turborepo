@@ -105,6 +105,7 @@ impl<'a> Visitor<'a> {
         manager: ProcessManager,
         repo_root: &'a AbsoluteSystemPath,
         global_env: EnvironmentVariableMap,
+        experimental_ui: bool,
     ) -> Self {
         let task_hasher = TaskHasher::new(
             package_inputs_hashes,
@@ -112,12 +113,6 @@ impl<'a> Visitor<'a> {
             env_at_execution_start,
             global_hash,
         );
-
-        let experimental_ui = atty::is(atty::Stream::Stdout)
-            && std::env::var("TURBO_EXPERIMENTAL_UI")
-                .ok()
-                .map(|val| matches!(val.as_str(), "true" | "1"))
-                .unwrap_or_default();
 
         let sink = Self::sink(run_opts);
         let color_cache = ColorSelector::default();

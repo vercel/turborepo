@@ -399,11 +399,6 @@ impl DeserializationVisitor for RawRemoteCacheOptionsVisitor {
                         result.timeout = Some(timeout);
                     }
                 }
-                "enabled" => {
-                    if let Some(enabled) = bool::deserialize(&value, &key_text, diagnostics) {
-                        result.enabled = Some(enabled);
-                    }
-                }
                 unknown_key => diagnostics.push(create_unknown_key_diagnostic_from_struct(
                     &result,
                     unknown_key,
@@ -593,6 +588,12 @@ impl DeserializationVisitor for RawTurboJsonVisitor {
                         RawRemoteCacheOptions::deserialize(&value, &key_text, diagnostics)
                     {
                         result.remote_cache = Some(remote_cache);
+                    }
+                }
+                "experimentalUI" => {
+                    if let Some(experimental_ui) = bool::deserialize(&value, &key_text, diagnostics)
+                    {
+                        result.experimental_ui = Some(experimental_ui);
                     }
                 }
                 // Allow for faux-comments at the top level

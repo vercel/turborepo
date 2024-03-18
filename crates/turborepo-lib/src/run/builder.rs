@@ -58,6 +58,7 @@ pub struct RunBuilder {
     repo_root: AbsoluteSystemPathBuf,
     ui: UI,
     version: &'static str,
+    experimental_ui: bool,
 }
 
 impl RunBuilder {
@@ -86,6 +87,7 @@ impl RunBuilder {
             opts.run_opts.experimental_space_id = config.spaces_id().map(|s| s.to_owned());
         }
         let version = base.version();
+        let experimental_ui = config.experimental_ui();
         let CommandBase { repo_root, ui, .. } = base;
         Ok(Self {
             processes,
@@ -94,6 +96,7 @@ impl RunBuilder {
             repo_root,
             ui,
             version,
+            experimental_ui,
         })
     }
 
@@ -371,6 +374,7 @@ impl RunBuilder {
         Ok(Run {
             version: self.version,
             ui: self.ui,
+            experimental_ui: self.experimental_ui,
             analytics_handle,
             start_at,
             processes: self.processes,
