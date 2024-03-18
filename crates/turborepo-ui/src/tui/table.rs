@@ -13,6 +13,7 @@ use ratatui::{
 use super::{
     task::{Finished, Planned, Running, Task},
     task_duration::TaskDuration,
+    Error,
 };
 
 const FOOTER_TEXT: &str = "Use arrow keys to navigate";
@@ -73,11 +74,11 @@ impl TaskTable {
 
     /// Mark the given planned task as started
     /// Errors if given task wasn't a planned task
-    pub fn start_task(&mut self, task: &str) -> Result<(), &'static str> {
+    pub fn start_task(&mut self, task: &str) -> Result<(), Error> {
         let planned_idx = self
             .planned
             .binary_search_by(|planned_task| planned_task.name().cmp(task))
-            .map_err(|_| "no task found")?;
+            .map_err(|_| Error::TaskNotFound { name: task.into() })?;
         let planned = self.planned.remove(planned_idx);
         let old_row_idx = self.finished.len() + self.running.len() + planned_idx;
         let new_row_idx = self.finished.len() + self.running.len();
@@ -101,12 +102,12 @@ impl TaskTable {
 
     /// Mark the given running task as finished
     /// Errors if given task wasn't a running task
-    pub fn finish_task(&mut self, task: &str) -> Result<(), &'static str> {
+    pub fn finish_task(&mut self, task: &str) -> Result<(), Error> {
         let running_idx = self
             .running
             .iter()
             .position(|running| running.name() == task)
-            .ok_or("no task found")?;
+            .ok_or_else(|| Error::TaskNotFound { name: task.into() })?;
         let old_row_idx = self.finished.len() + running_idx;
         let new_row_idx = self.finished.len();
         let running = self.running.remove(running_idx);
@@ -153,6 +154,24 @@ impl TaskTable {
         self.scroll.select(Some(i));
     }
 
+    pub fn selected(&self) -> Option<&str> {
+        let i = self.scroll.selected()?;
+        if i < self.finished.len() {
+            let task = self.finished.get(i)?;
+            Some(task.name())
+        } else if i < self.finished.len() + self.running.len() {
+            let task = self.running.get(i - self.finished.len())?;
+            Some(task.name())
+        } else if i < self.finished.len() + self.running.len() + self.planned.len() {
+            let task = self
+                .planned
+                .get(i - (self.finished.len() + self.running.len()))?;
+            Some(task.name())
+        } else {
+            None
+        }
+    }
+
     fn finished_rows(&self, duration_width: u16) -> impl Iterator<Item = Row> + '_ {
         self.finished.iter().map(move |task| {
             Row::new(vec![
@@ -193,9 +212,9 @@ impl TaskTable {
     }
 
     /// Convenience method which renders and updates scroll state
-    pub fn stateful_render(&mut self, frame: &mut ratatui::Frame) {
+    pub fn stateful_render(&mut self, frame: &mut ratatui::Frame, area: Rect) {
         let mut scroll = self.scroll.clone();
-        frame.render_stateful_widget(&*self, frame.size(), &mut scroll);
+        frame.render_stateful_widget(&*self, area, &mut scroll);
         self.scroll = scroll;
     }
 
@@ -288,12 +307,16 @@ mod test {
         table.next();
         table.next();
         assert_eq!(table.scroll.selected(), Some(1), "selected b");
+        assert_eq!(table.selected(), Some("b"), "selected b");
         table.start_task("b").unwrap();
         assert_eq!(table.scroll.selected(), Some(0), "b stays selected");
+        assert_eq!(table.selected(), Some("b"), "selected b");
         table.start_task("a").unwrap();
         assert_eq!(table.scroll.selected(), Some(0), "b stays selected");
+        assert_eq!(table.selected(), Some("b"), "selected b");
         table.finish_task("a").unwrap();
         assert_eq!(table.scroll.selected(), Some(1), "b stays selected");
+        assert_eq!(table.selected(), Some("b"), "selected b");
     }
 
     #[test]
@@ -302,22 +325,28 @@ mod test {
         table.next();
         table.next();
         assert_eq!(table.scroll.selected(), Some(1), "selected b");
+        assert_eq!(table.selected(), Some("b"), "selected b");
         // start c which moves it to "running" which is before "planned"
         table.start_task("c").unwrap();
         assert_eq!(table.scroll.selected(), Some(2), "selection stays on b");
+        assert_eq!(table.selected(), Some("b"), "selected b");
         table.start_task("a").unwrap();
         assert_eq!(table.scroll.selected(), Some(2), "selection stays on b");
+        assert_eq!(table.selected(), Some("b"), "selected b");
         // c
         // a
         // b <-
         table.previous();
         table.previous();
         assert_eq!(table.scroll.selected(), Some(0), "selected c");
+        assert_eq!(table.selected(), Some("c"), "selected c");
         table.finish_task("a").unwrap();
         assert_eq!(table.scroll.selected(), Some(1), "c stays selected");
+        assert_eq!(table.selected(), Some("c"), "selected c");
         table.previous();
         table.finish_task("c").unwrap();
         assert_eq!(table.scroll.selected(), Some(0), "a stays selected");
+        assert_eq!(table.selected(), Some("a"), "selected a");
     }
 
     #[test]

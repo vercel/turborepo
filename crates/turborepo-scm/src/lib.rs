@@ -159,19 +159,24 @@ enum GitError {
 
 impl Git {
     fn find(path_in_repo: &AbsoluteSystemPath) -> Result<Self, GitError> {
-        let bin = which::which("git")?;
         // If which produces an invalid absolute path, it's not an execution error, it's
         // a programming error. We expect it to always give us an absolute path
         // if it gives us any path. If that's not the case, we should crash.
-        let bin = AbsoluteSystemPathBuf::try_from(bin.as_path()).unwrap_or_else(|_| {
-            panic!(
-                "which git produced an invalid absolute path {}",
-                bin.display()
-            )
-        });
+        let bin = Self::find_bin()?;
         let root =
             find_git_root(path_in_repo).map_err(|e| GitError::Root(path_in_repo.to_owned(), e))?;
         Ok(Self { root, bin })
+    }
+
+    pub fn find_bin() -> Result<AbsoluteSystemPathBuf, which::Error> {
+        which::which("git").map(|path| {
+            AbsoluteSystemPathBuf::try_from(path.as_path()).unwrap_or_else(|_| {
+                panic!(
+                    "which git produced an invalid absolute path {}",
+                    path.display()
+                )
+            })
+        })
     }
 }
 

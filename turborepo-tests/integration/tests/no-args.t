@@ -13,6 +13,7 @@ Make sure exit code is 2 when no args are passed
     daemon      Runs the Turborepo background daemon
     generate    Generate a new app / package
     telemetry   Enable or disable anonymous telemetry
+    scan        Turbo your monorepo by running a number of 'repo lints' to identify common issues, suggest fixes, and improve performance
     link        Link your local directory to a Vercel organization and enable remote caching
     login       Login to your Vercel account
     logout      Logout to your Vercel account
@@ -76,7 +77,9 @@ Make sure exit code is 2 when no args are passed
             DEPRECATED: Exclude dependent task consumers from execution
         --no-cache
             Avoid saving task results to the cache. Useful for development/watch tasks
-        --[no-]daemon
+        --daemon
+            
+        --no-daemon
             Force turbo to either use or not use the local daemon. If unset turbo will use the default detection logic
         --output-logs <OUTPUT_LOGS>
             Set type of process output logging. Use "full" to show all output. Use "hash-only" to show only turbo-computed task hashes. Use "new-only" to show only new output with only hashes for cached tasks. Use "none" to hide process output. (default full) [possible values: full, none, hash-only, new-only, errors-only]

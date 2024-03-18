@@ -1,7 +1,7 @@
 use std::io;
 
 use thiserror::Error;
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::{AbsoluteSystemPathBuf, PathError};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -46,4 +46,7 @@ pub enum Error {
         path: AbsoluteSystemPathBuf,
         error: io::Error,
     },
+
+    #[error(transparent)]
+    Path(#[from] PathError),
 }

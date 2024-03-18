@@ -2,6 +2,7 @@ use std::cell::OnceCell;
 
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::{APIAuth, APIClient};
+use turborepo_auth::{TURBO_TOKEN_DIR, TURBO_TOKEN_FILE};
 use turborepo_dirs::config_dir;
 use turborepo_ui::UI;
 
@@ -19,6 +20,7 @@ pub(crate) mod login;
 pub(crate) mod logout;
 pub(crate) mod prune;
 pub(crate) mod run;
+pub(crate) mod scan;
 pub(crate) mod telemetry;
 pub(crate) mod unlink;
 
@@ -79,9 +81,9 @@ impl CommandBase {
             return Ok(global_config_path);
         }
 
-        let config_dir = config_dir().ok_or(ConfigError::NoGlobalConfigPath)?;
-        let global_config_path = config_dir.join("turborepo").join("config.json");
-        AbsoluteSystemPathBuf::try_from(global_config_path).map_err(ConfigError::PathError)
+        let config_dir = config_dir()?.ok_or(ConfigError::NoGlobalConfigPath)?;
+
+        Ok(config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]))
     }
     fn local_config_path(&self) -> AbsoluteSystemPathBuf {
         self.repo_root.join_components(&[".turbo", "config.json"])
