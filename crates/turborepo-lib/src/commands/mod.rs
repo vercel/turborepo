@@ -67,6 +67,7 @@ impl CommandBase {
             .with_team_slug(self.args.team.clone())
             .with_token(self.args.token.clone())
             .with_timeout(self.args.remote_cache_timeout)
+            .with_preflight(self.args.preflight.then_some(true))
             .build()
     }
 
