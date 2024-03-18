@@ -37,7 +37,7 @@ impl PackageInference {
     pub fn calculate(
         turbo_root: &AbsoluteSystemPath,
         pkg_inference_path: &AnchoredSystemPathBuf,
-        pkg_graph: &package_graph::PackageGraph,
+        pkg_graph: &PackageGraph,
     ) -> Self {
         debug!(
             "Using {} as a basis for selecting packages",
@@ -78,16 +78,15 @@ impl PackageInference {
         };
 
         if let Some(name) = &self.package_name {
-            name.clone_into(&mut selector.name_pattern);
+            selector.name_pattern.clone_from(name);
         }
 
-        if selector.parent_dir != turbopath::AnchoredSystemPathBuf::default() {
+        if selector.parent_dir != AnchoredSystemPathBuf::default() {
             let repo_relative_parent_dir = self.directory_root.join(&selector.parent_dir);
-            let clean_parent_dir =
-                path_clean::clean(std::path::Path::new(repo_relative_parent_dir.as_path()))
-                    .into_os_string()
-                    .into_string()
-                    .expect("path was valid utf8 before cleaning");
+            let clean_parent_dir = path_clean::clean(Path::new(repo_relative_parent_dir.as_path()))
+                .into_os_string()
+                .into_string()
+                .expect("path was valid utf8 before cleaning");
             selector.parent_dir = AnchoredSystemPathBuf::try_from(clean_parent_dir.as_str())
                 .expect("path wasn't absolute before cleaning");
         } else if self.package_name.is_none() {
