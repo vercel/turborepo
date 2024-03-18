@@ -2377,4 +2377,15 @@ mod test {
         assert!(Args::try_parse_from(["turbo", "build", "--cache-dir="]).is_err());
         assert!(Args::try_parse_from(["turbo", "build", "--cache-dir", ""]).is_err());
     }
+
+    #[test]
+    fn test_preflight() {
+        assert!(!Args::try_parse_from(["turbo", "build",]).unwrap().preflight);
+        assert!(
+            Args::try_parse_from(["turbo", "build", "--preflight"])
+                .unwrap()
+                .preflight
+        );
+        assert!(Args::try_parse_from(["turbo", "build", "--preflight=true"]).is_err());
+    }
 }
