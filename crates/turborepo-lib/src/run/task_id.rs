@@ -13,7 +13,7 @@ pub struct TaskId<'a> {
     task: Cow<'a, str>,
 }
 
-/// A task name as it appears in in a `turbo.json` it might be for all
+/// A task name as it appears in a `turbo.json` it might be for all
 /// workspaces or just one.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Hash)]
 #[serde(try_from = "String", into = "String")]
