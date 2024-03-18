@@ -190,8 +190,13 @@ impl SourceMap {
     }
 
     pub async fn new_from_file(file: Vc<FileSystemPath>) -> Result<Option<Self>> {
-        let read = file.read().await?;
-        let Some(contents) = read.as_content() else {
+        let read = file.read();
+        Self::new_from_file_content(read).await
+    }
+
+    pub async fn new_from_file_content(content: Vc<FileContent>) -> Result<Option<Self>> {
+        let content = &content.await?;
+        let Some(contents) = content.as_content() else {
             return Ok(None);
         };
         let Ok(map) = DecodedMap::from_reader(contents.read()) else {

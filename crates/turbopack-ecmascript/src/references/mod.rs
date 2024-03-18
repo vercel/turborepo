@@ -2935,7 +2935,7 @@ fn maybe_decode_data_url(url: String) -> Vc<OptionSourceMap> {
 }
 
 #[turbo_tasks::function]
-async fn convert_to_turbopack_source_map(
+pub async fn convert_to_turbopack_source_map(
     source_map: Vc<OptionSourceMap>,
     origin: Vc<FileSystemPath>,
 ) -> Result<Vc<OptionSourceMap>> {

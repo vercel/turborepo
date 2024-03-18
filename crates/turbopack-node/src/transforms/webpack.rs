@@ -29,9 +29,11 @@ use turbopack_core::{
         resolve,
     },
     source::Source,
+    source_map::{GenerateSourceMap, OptionSourceMap, SourceMap},
     source_transform::SourceTransform,
     virtual_source::VirtualSource,
 };
+use turbopack_ecmascript::references::convert_to_turbopack_source_map;
 use turbopack_resolve::{
     ecmascript::get_condition_maps, resolve::resolve_options,
     resolve_options_context::ResolveOptionsContext,
@@ -144,9 +146,18 @@ impl Asset for WebpackLoadersProcessedAsset {
     }
 }
 
+#[turbo_tasks::value_impl]
+impl GenerateSourceMap for WebpackLoadersProcessedAsset {
+    #[turbo_tasks::function]
+    async fn generate_source_map(self: Vc<Self>) -> Result<Vc<OptionSourceMap>> {
+        Ok(self.process().await?.source_map)
+    }
+}
+
 #[turbo_tasks::value]
 struct ProcessWebpackLoadersResult {
     content: Vc<AssetContent>,
+    source_map: Vc<OptionSourceMap>,
     assets: Vec<Vc<VirtualSource>>,
 }
 
@@ -180,6 +191,7 @@ impl WebpackLoadersProcessedAsset {
             return Ok(ProcessWebpackLoadersResult {
                 content: AssetContent::File(FileContent::NotFound.cell()).cell(),
                 assets: Vec::new(),
+                source_map: Vc::cell(None),
             }
             .cell());
         };
@@ -187,8 +199,11 @@ impl WebpackLoadersProcessedAsset {
         let evaluate_context = transform.evaluate_context;
 
         let webpack_loaders_executor = webpack_loaders_executor(evaluate_context).module();
-        let resource_fs_path = this.source.ident().path().await?;
-        let Some(resource_path) = project_path.await?.get_relative_path_to(&resource_fs_path)
+        let resource_fs_path = this.source.ident().path();
+        let resource_fs_path_ref = resource_fs_path.await?;
+        let Some(resource_path) = project_path
+            .await?
+            .get_relative_path_to(&resource_fs_path_ref)
         else {
             bail!("Resource path need to be on project filesystem");
         };
@@ -215,6 +230,7 @@ impl WebpackLoadersProcessedAsset {
             return Ok(ProcessWebpackLoadersResult {
                 content: AssetContent::File(FileContent::NotFound.cell()).cell(),
                 assets: Vec::new(),
+                source_map: Vc::cell(None),
             }
             .cell());
         };
@@ -223,11 +239,32 @@ impl WebpackLoadersProcessedAsset {
         )
         .context("Unable to deserializate response from webpack loaders transform operation")?;
 
-        // TODO handle SourceMap
+        // handle SourceMap
+        let source_map = if let Some(source_map) = processed.map {
+            if let Some(source_map) = SourceMap::new_from_file_content(
+                FileContent::Content(File::from(source_map)).cell(),
+            )
+            .await?
+            {
+                convert_to_turbopack_source_map(
+                    Vc::cell(Some(source_map.cell())),
+                    resource_fs_path.parent(),
+                )
+            } else {
+                Vc::cell(None)
+            }
+        } else {
+            Vc::cell(None)
+        };
         let file = File::from(processed.source);
         let assets = emitted_assets_to_virtual_sources(processed.assets);
         let content = AssetContent::File(FileContent::Content(file).cell()).cell();
-        Ok(ProcessWebpackLoadersResult { content, assets }.cell())
+        Ok(ProcessWebpackLoadersResult {
+            content,
+            assets,
+            source_map,
+        }
+        .cell())
     }
 }
 
