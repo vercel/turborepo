@@ -98,7 +98,6 @@ mod tests {
     use tracing::info;
 
     use super::*;
-    use crate::Vendor;
 
     fn get_vendor(name: &str) -> Vendor {
         for v in get_vendors() {
