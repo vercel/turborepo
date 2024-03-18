@@ -822,6 +822,12 @@ impl ExecContext {
             self.pretty_prefix.clone(),
         );
 
+        if self.experimental_ui {
+            if let TaskOutput::UI(task) = output_client {
+                task.start();
+            }
+        }
+
         match self
             .task_cache
             .restore_outputs(prefixed_ui.output_prefixed_writer(), telemetry)
@@ -916,9 +922,9 @@ impl ExecContext {
                 return ExecOutcome::Internal;
             }
         };
+
         if self.experimental_ui {
             if let TaskOutput::UI(task) = output_client {
-                task.start();
                 if let Some(stdin) = process.stdin() {
                     task.set_stdin(stdin);
                 }
