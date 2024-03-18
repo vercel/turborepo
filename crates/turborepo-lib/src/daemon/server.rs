@@ -529,7 +529,11 @@ impl proto::turbod_server::Turbod for TurboGrpcServiceInner {
         &self,
         _request: tonic::Request<proto::PackageChangesRequest>,
     ) -> Result<tonic::Response<Self::PackageChangesStream>, tonic::Status> {
-        let mut package_changes_rx = self.file_watching.package_changes_watcher.package_changes();
+        let mut package_changes_rx = self
+            .file_watching
+            .package_changes_watcher
+            .package_changes()
+            .await;
         let (tx, rx) = mpsc::channel(1);
 
         tx.send(Ok(proto::PackageChangeEvent {
@@ -542,20 +546,19 @@ impl proto::turbod_server::Turbod for TurboGrpcServiceInner {
 
         tokio::spawn(async move {
             loop {
-                if let Err(err) = package_changes_rx.changed().await {
-                    error!("package changes stream closed: {}", err);
-                    break;
-                }
-
-                let event = match &*package_changes_rx.borrow() {
-                    PackageChangeEvent::Package { name } => proto::PackageChangeEvent {
+                let event = match package_changes_rx.recv().await {
+                    Err(err) => {
+                        error!("package changes stream closed: {}", err);
+                        break;
+                    }
+                    Ok(PackageChangeEvent::Package { name }) => proto::PackageChangeEvent {
                         event: Some(proto::package_change_event::Event::PackageChanged(
                             proto::PackageChanged {
                                 package_name: name.to_string(),
                             },
                         )),
                     },
-                    PackageChangeEvent::Rediscover => proto::PackageChangeEvent {
+                    Ok(PackageChangeEvent::Rediscover) => proto::PackageChangeEvent {
                         event: Some(proto::package_change_event::Event::RediscoverPackages(
                             proto::RediscoverPackages {},
                         )),

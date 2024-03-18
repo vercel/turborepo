@@ -109,11 +109,6 @@ message PackageChanged {
 
 message RediscoverPackages {}
 
-enum PackageChangeType {
-  Package = 0;
-  Rediscover = 1;
-}
-
 message DiscoverPackagesResponse {
   repeated PackageFiles package_files = 1;
   PackageManager package_manager = 2;

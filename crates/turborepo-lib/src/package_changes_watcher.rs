@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use ignore::gitignore::Gitignore;
 use notify::Event;
-use tokio::sync::{broadcast, oneshot, watch};
+use tokio::sync::{broadcast, oneshot};
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_filewatch::{NotifyError, OptionalWatch};
 use turborepo_repository::{
@@ -13,6 +13,7 @@ use turborepo_repository::{
 
 use crate::turbo_json::TurboJson;
 
+#[derive(Clone)]
 pub enum PackageChangeEvent {
     // We might want to make this just String
     Package { name: PackageName },
@@ -23,8 +24,12 @@ pub enum PackageChangeEvent {
 pub struct PackageChangesWatcher {
     _exit_tx: oneshot::Sender<()>,
     _handle: tokio::task::JoinHandle<()>,
-    package_change_events_rx: watch::Receiver<PackageChangeEvent>,
+    package_change_events_rx: broadcast::Receiver<PackageChangeEvent>,
 }
+
+/// The number of events that can be buffered in the channel.
+/// A little arbitrary, so feel free to tune accordingly.
+const CHANGE_EVENT_CHANNEL_CAPACITY: usize = 50;
 
 impl PackageChangesWatcher {
     pub fn new(
@@ -33,7 +38,7 @@ impl PackageChangesWatcher {
     ) -> Self {
         let (exit_tx, exit_rx) = oneshot::channel();
         let (package_change_events_tx, package_change_events_rx) =
-            watch::channel(PackageChangeEvent::Rediscover);
+            broadcast::channel(CHANGE_EVENT_CHANNEL_CAPACITY);
         let subscriber = Subscriber::new(repo_root, file_events_lazy, package_change_events_tx);
 
         let _handle = tokio::spawn(subscriber.watch(exit_rx));
@@ -44,15 +49,15 @@ impl PackageChangesWatcher {
         }
     }
 
-    pub fn package_changes(&self) -> watch::Receiver<PackageChangeEvent> {
-        self.package_change_events_rx.clone()
+    pub async fn package_changes(&self) -> broadcast::Receiver<PackageChangeEvent> {
+        self.package_change_events_rx.resubscribe()
     }
 }
 
 struct Subscriber {
     file_events_lazy: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
     repo_root: AbsoluteSystemPathBuf,
-    package_change_events_tx: watch::Sender<PackageChangeEvent>,
+    package_change_events_tx: broadcast::Sender<PackageChangeEvent>,
 }
 
 // This is a workaround because `ignore` doesn't match against a path's
@@ -99,7 +104,7 @@ impl Subscriber {
     fn new(
         repo_root: AbsoluteSystemPathBuf,
         file_events_lazy: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
-        package_change_events_tx: watch::Sender<PackageChangeEvent>,
+        package_change_events_tx: broadcast::Sender<PackageChangeEvent>,
     ) -> Self {
         Subscriber {
             repo_root,
