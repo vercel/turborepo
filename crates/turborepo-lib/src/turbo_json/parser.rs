@@ -399,6 +399,11 @@ impl DeserializationVisitor for RawRemoteCacheOptionsVisitor {
                         result.timeout = Some(timeout);
                     }
                 }
+                "enabled" => {
+                    if let Some(enabled) = bool::deserialize(&value, &key_text, diagnostics) {
+                        result.enabled = Some(enabled);
+                    }
+                }
                 unknown_key => diagnostics.push(create_unknown_key_diagnostic_from_struct(
                     &result,
                     unknown_key,
