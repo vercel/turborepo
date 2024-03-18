@@ -118,12 +118,10 @@ impl CommandBase {
 
     pub fn api_client(&self) -> Result<APIClient, ConfigError> {
         let config = self.config()?;
-        let args = self.args();
-
         let api_url = config.api_url();
         let timeout = config.timeout();
 
-        APIClient::new(api_url, timeout, self.version, args.preflight)
+        APIClient::new(api_url, timeout, self.version, config.preflight())
             .map_err(ConfigError::ApiClient)
     }
 
