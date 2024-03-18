@@ -306,10 +306,10 @@ fn get_env_var_config(
     turbo_mapping.insert(OsString::from("turbo_token"), "token");
     turbo_mapping.insert(OsString::from("turbo_remote_cache_timeout"), "timeout");
     turbo_mapping.insert(OsString::from("turbo_experimental_ui"), "experimental_ui");
+    turbo_mapping.insert(OsString::from("turbo_preflight"), "preflight");
 
     // We do not enable new config sources:
     // turbo_mapping.insert(String::from("turbo_signature"), "signature"); // new
-    // turbo_mapping.insert(String::from("turbo_preflight"), "preflight"); // new
     // turbo_mapping.insert(String::from("turbo_remote_cache_enabled"), "enabled");
 
     let mut output_map = HashMap::new();
@@ -345,8 +345,9 @@ fn get_env_var_config(
     // Process preflight
     let preflight = if let Some(preflight) = output_map.get("preflight") {
         match preflight.as_str() {
-            "0" => Some(false),
-            "1" => Some(true),
+            "0" | "false" => Some(false),
+            "1" | "true" => Some(true),
+            "" => None,
             _ => return Err(Error::InvalidPreflight),
         }
     } else {
@@ -730,8 +731,10 @@ mod test {
             turbo_remote_cache_timeout.to_string().into(),
         );
         env.insert("turbo_experimental_ui".into(), "true".into());
+        env.insert("turbo_preflight".into(), "true".into());
 
         let config = get_env_var_config(&env).unwrap();
+        assert!(config.preflight());
         assert_eq!(turbo_api, config.api_url.unwrap());
         assert_eq!(turbo_login, config.login_url.unwrap());
         assert_eq!(turbo_team, config.team_slug.unwrap());
@@ -750,6 +753,7 @@ mod test {
         env.insert("turbo_teamid".into(), "".into());
         env.insert("turbo_token".into(), "".into());
         env.insert("turbo_experimental_ui".into(), "".into());
+        env.insert("turbo_preflight".into(), "".into());
 
         let config = get_env_var_config(&env).unwrap();
         assert_eq!(config.api_url(), DEFAULT_API_URL);
@@ -758,6 +762,7 @@ mod test {
         assert_eq!(config.team_id(), None);
         assert_eq!(config.token(), None);
         assert!(!config.experimental_ui());
+        assert!(!config.preflight());
     }
 
     #[test]
