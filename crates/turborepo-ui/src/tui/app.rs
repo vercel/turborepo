@@ -10,6 +10,7 @@ use ratatui::{
     widgets::Widget,
     Frame, Terminal,
 };
+use tracing::debug;
 
 const HEIGHT: u16 = 60;
 const PANE_HEIGHT: u16 = 40;
@@ -26,6 +27,7 @@ pub struct App<I> {
 
 impl<I> App<I> {
     pub fn new(rows: u16, cols: u16, tasks: Vec<String>) -> Self {
+        debug!("tasks: {tasks:?}");
         let mut this = Self {
             table: TaskTable::new(tasks.clone()),
             pane: TerminalPane::new(rows, cols, tasks),
