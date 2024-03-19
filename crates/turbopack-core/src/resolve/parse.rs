@@ -235,11 +235,17 @@ impl Request {
     }
 
     #[turbo_tasks::function]
-    pub fn raw(request: Value<Pattern>, query: Vc<String>, force_in_lookup_dir: bool) -> Vc<Self> {
+    pub fn raw(
+        request: Value<Pattern>,
+        query: Vc<String>,
+        force_in_lookup_dir: bool,
+        fragment: Value<Pattern>,
+    ) -> Vc<Self> {
         Self::cell(Request::Raw {
             path: request.into_value(),
             force_in_lookup_dir,
             query,
+            fragment: fragment.into_value(),
         })
     }
 
@@ -248,20 +254,28 @@ impl Request {
         request: Value<Pattern>,
         query: Vc<String>,
         force_in_lookup_dir: bool,
+        fragment: Value<Pattern>,
     ) -> Vc<Self> {
         Self::cell(Request::Relative {
             path: request.into_value(),
             force_in_lookup_dir,
             query,
+            fragment: fragment.into_value(),
         })
     }
 
     #[turbo_tasks::function]
-    pub fn module(module: String, path: Value<Pattern>, query: Vc<String>) -> Vc<Self> {
+    pub fn module(
+        module: String,
+        path: Value<Pattern>,
+        query: Vc<String>,
+        fragment: Value<Pattern>,
+    ) -> Vc<Self> {
         Self::cell(Request::Module {
             module,
             path: path.into_value(),
             query,
+            fragment: fragment.into_value(),
         })
     }
 

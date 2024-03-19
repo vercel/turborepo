@@ -1603,7 +1603,11 @@ async fn resolve_internal_inline(
                 )
                 .await?
             }
-            Request::ServerRelative { path, query } => {
+            Request::ServerRelative {
+                path,
+                query,
+                fragment,
+            } => {
                 let mut new_pat = path.clone();
                 new_pat.push_front(".".to_string().into());
                 let relative = Request::relative(Value::new(new_pat), *query, true);
@@ -1907,6 +1911,7 @@ async fn apply_in_package(
     options_value: &ResolveOptions,
     get_request: impl Fn(&FileSystemPath) -> Option<String>,
     query: Vc<String>,
+    fragment: Vc<String>,
 ) -> Result<Option<Vc<ResolveResult>>> {
     // Check alias field for module aliases first
     for in_package in options_value.in_package.iter() {
@@ -2255,6 +2260,7 @@ async fn resolved(
     options_value: &ResolveOptions,
     options: Vc<ResolveOptions>,
     query: Vc<String>,
+    fragment: Vc<String>,
 ) -> Result<Vc<ResolveResult>> {
     let RealPathResult { path, symlinks } = &*fs_path.realpath_with_links().await?;
 
