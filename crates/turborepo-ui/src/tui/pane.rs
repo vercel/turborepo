@@ -53,6 +53,13 @@ impl<W> TerminalPane<W> {
         Ok(())
     }
 
+    pub fn has_stdin(&self, task: &str) -> bool {
+        self.tasks
+            .get(task)
+            .map(|task| task.stdin.is_some())
+            .unwrap_or_default()
+    }
+
     pub fn resize(&mut self, rows: u16, cols: u16) -> Result<(), Error> {
         let changed = self.rows != rows || self.cols != cols;
         self.rows = rows;

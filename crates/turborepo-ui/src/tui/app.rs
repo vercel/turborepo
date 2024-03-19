@@ -54,8 +54,13 @@ impl<I> App<I> {
     }
 
     pub fn interact(&mut self, interact: bool) {
-        self.interact = interact;
-        self.pane.highlight(interact);
+        let Some(selected_task) = self.table.selected() else {
+            return;
+        };
+        if self.pane.has_stdin(selected_task) {
+            self.interact = interact;
+            self.pane.highlight(interact);
+        }
     }
 }
 
