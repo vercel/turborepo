@@ -33,7 +33,6 @@ use turbopack_core::{
     source_transform::SourceTransform,
     virtual_source::VirtualSource,
 };
-use turbopack_ecmascript::references::convert_to_turbopack_source_map;
 use turbopack_resolve::{
     ecmascript::get_condition_maps, resolve::resolve_options,
     resolve_options_context::ResolveOptionsContext,
@@ -150,14 +149,14 @@ impl Asset for WebpackLoadersProcessedAsset {
 impl GenerateSourceMap for WebpackLoadersProcessedAsset {
     #[turbo_tasks::function]
     async fn generate_source_map(self: Vc<Self>) -> Result<Vc<OptionSourceMap>> {
-        Ok(self.process().await?.source_map)
+        Ok(Vc::cell(self.process().await?.source_map))
     }
 }
 
 #[turbo_tasks::value]
 struct ProcessWebpackLoadersResult {
     content: Vc<AssetContent>,
-    source_map: Vc<OptionSourceMap>,
+    source_map: Option<Vc<SourceMap>>,
     assets: Vec<Vc<VirtualSource>>,
 }
 
@@ -191,7 +190,7 @@ impl WebpackLoadersProcessedAsset {
             return Ok(ProcessWebpackLoadersResult {
                 content: AssetContent::File(FileContent::NotFound.cell()).cell(),
                 assets: Vec::new(),
-                source_map: Vc::cell(None),
+                source_map: None,
             }
             .cell());
         };
@@ -230,7 +229,7 @@ impl WebpackLoadersProcessedAsset {
             return Ok(ProcessWebpackLoadersResult {
                 content: AssetContent::File(FileContent::NotFound.cell()).cell(),
                 assets: Vec::new(),
-                source_map: Vc::cell(None),
+                source_map: None,
             }
             .cell());
         };
@@ -246,15 +245,12 @@ impl WebpackLoadersProcessedAsset {
             )
             .await?
             {
-                convert_to_turbopack_source_map(
-                    Vc::cell(Some(source_map.cell())),
-                    resource_fs_path.parent(),
-                )
+                Some(source_map.cell())
             } else {
-                Vc::cell(None)
+                None
             }
         } else {
-            Vc::cell(None)
+            None
         };
         let file = File::from(processed.source);
         let assets = emitted_assets_to_virtual_sources(processed.assets);
