@@ -12,24 +12,29 @@ pub enum Request {
         path: Pattern,
         query: Vc<String>,
         force_in_lookup_dir: bool,
+        fragment: Pattern,
     },
     Relative {
         path: Pattern,
         query: Vc<String>,
         force_in_lookup_dir: bool,
+        fragment: Pattern,
     },
     Module {
         module: String,
         path: Pattern,
         query: Vc<String>,
+        fragment: Pattern,
     },
     ServerRelative {
         path: Pattern,
         query: Vc<String>,
+        fragment: Pattern,
     },
     Windows {
         path: Pattern,
         query: Vc<String>,
+        fragment: Pattern,
     },
     Empty,
     PackageInternal {
@@ -38,6 +43,8 @@ pub enum Request {
     Uri {
         protocol: String,
         remainder: String,
+        query: Pattern,
+        fragment: Pattern,
     },
     Unknown {
         path: Pattern,
