@@ -80,7 +80,7 @@ impl TaskTable {
             .planned
             .binary_search_by(|planned_task| planned_task.name().cmp(task))
             .map_err(|_| {
-                debug!("no task found on start");
+                debug!("could not find '{task}' to start");
                 Error::TaskNotFound { name: task.into() }
             })?;
         let planned = self.planned.remove(planned_idx);
@@ -112,7 +112,7 @@ impl TaskTable {
             .iter()
             .position(|running| running.name() == task)
             .ok_or_else(|| {
-                debug!("can't find task on finish");
+                debug!("could not find '{task}' to finish");
                 Error::TaskNotFound { name: task.into() }
             })?;
         let old_row_idx = self.finished.len() + running_idx;
