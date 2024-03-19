@@ -423,7 +423,11 @@ impl RunBuilder {
 
         if !self.opts.run_opts.parallel {
             engine
-                .validate(pkg_dep_graph, self.opts.run_opts.concurrency)
+                .validate(
+                    pkg_dep_graph,
+                    self.opts.run_opts.concurrency,
+                    self.experimental_ui,
+                )
                 .map_err(Error::EngineValidation)?;
         }
 
