@@ -175,6 +175,9 @@ impl Request {
                             return Request::Uri {
                                 protocol: protocol.as_str().to_string(),
                                 remainder: remainder.as_str().to_string(),
+                                // TODO: query and fragment
+                                query: Pattern::Constant(String::new()),
+                                fragment: Pattern::Constant(String::new()),
                             };
                         }
                     }
