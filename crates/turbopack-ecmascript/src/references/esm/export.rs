@@ -62,23 +62,8 @@ pub struct FollowExportsResult {
 pub async fn follow_reexports(
     module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
     export_name: String,
-    side_effect_free_packages: Vc<Vec<String>>,
-) -> Vc<FollowExportsResult> {
-    follow_reexports_internal(module, export_name, true, side_effect_free_packages)
-}
-
-#[turbo_tasks::function]
-pub async fn follow_reexports_internal(
-    mut module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
-    mut export_name: String,
-    stop_on_side_effects: bool,
-    side_effect_free_packages: Vc<Vec<String>>,
 ) -> Result<Vc<FollowExportsResult>> {
-    if stop_on_side_effects
-        && !*module
-            .is_marked_as_side_effect_free(side_effect_free_packages)
-            .await?
-    {
+    if !*module.is_marked_as_side_effect_free().await? {
         return Ok(FollowExportsResult::cell(FollowExportsResult {
             module,
             export_name: Some(export_name),
@@ -98,16 +83,9 @@ pub async fn follow_reexports_internal(
         };
 
         // Try to find the export in the local exports
-        if let Some(export) = exports.exports.get(&export_name) {
-            match handle_declared_export(
-                module,
-                export_name,
-                export,
-                stop_on_side_effects,
-                side_effect_free_packages,
-            )
-            .await?
-            {
+        let exports_ref = exports.await?;
+        if let Some(export) = exports_ref.exports.get(&export_name) {
+            match handle_declared_export(module, export_name, export).await? {
                 ControlFlow::Continue((m, n)) => {
                     module = m;
                     export_name = n;
@@ -120,15 +98,32 @@ pub async fn follow_reexports_internal(
         }
 
         // Try to find the export in the star exports
-        if export_name != "default" {
-            return handle_star_reexports(
-                module,
-                export_name,
-                &exports.star_exports,
-                stop_on_side_effects,
-                side_effect_free_packages,
-            )
-            .await;
+        if !exports_ref.star_exports.is_empty() && export_name != "default" {
+            let result = get_all_export_names(module).await?;
+            if let Some(m) = result.esm_exports.get(&export_name) {
+                module = *m;
+                continue;
+            }
+            return match &result.dynamic_exporting_modules[..] {
+                [] => Ok(FollowExportsResult {
+                    module,
+                    export_name: Some(export_name),
+                    ty: FoundExportType::NotFound,
+                }
+                .cell()),
+                [module] => Ok(FollowExportsResult {
+                    module: *module,
+                    export_name: Some(export_name),
+                    ty: FoundExportType::Dynamic,
+                }
+                .cell()),
+                _ => Ok(FollowExportsResult {
+                    module,
+                    export_name: Some(export_name),
+                    ty: FoundExportType::Dynamic,
+                }
+                .cell()),
+            };
         }
 
         return Ok(FollowExportsResult::cell(FollowExportsResult {
@@ -143,19 +138,13 @@ async fn handle_declared_export(
     module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
     export_name: String,
     export: &EsmExport,
-    stop_on_side_effects: bool,
-    side_effect_free_packages: Vc<Vec<String>>,
 ) -> Result<ControlFlow<FollowExportsResult, (Vc<Box<dyn EcmascriptChunkPlaceable>>, String)>> {
     match export {
         EsmExport::ImportedBinding(reference, name) => {
             if let ReferencedAsset::Some(module) =
                 *ReferencedAsset::from_resolve_result(reference.resolve_reference()).await?
             {
-                if stop_on_side_effects
-                    && !*module
-                        .is_marked_as_side_effect_free(side_effect_free_packages)
-                        .await?
-                {
+                if !*module.is_marked_as_side_effect_free().await? {
                     return Ok(ControlFlow::Break(FollowExportsResult {
                         module,
                         export_name: Some(name.to_string()),
@@ -207,52 +196,12 @@ struct AllExportNamesResult {
 #[turbo_tasks::function]
 async fn get_all_export_names(
     module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
-    export_name: String,
-    star_exports: &[Vc<Box<dyn ModuleReference>>],
-    stop_on_side_effects: bool,
-    side_effect_free_packages: Vc<Vec<String>>,
-) -> Result<Vc<FollowExportsResult>> {
-    let mut potential_modules = Vec::new();
-    for star_export in star_exports {
-        if let ReferencedAsset::Some(m) =
-            *ReferencedAsset::from_resolve_result(star_export.resolve_reference()).await?
-        {
-            let result =
-                follow_reexports_internal(m, export_name.clone(), false, side_effect_free_packages);
-            let result_ref = result.await?;
-            match result_ref.ty {
-                FoundExportType::Found => {
-                    if stop_on_side_effects {
-                        return Ok(follow_reexports(
-                            m,
-                            export_name.clone(),
-                            side_effect_free_packages,
-                        ));
-                    } else {
-                        return Ok(result);
-                    }
-                }
-                FoundExportType::SideEffects => {
-                    unreachable!();
-                }
-                FoundExportType::Dynamic => {
-                    potential_modules.push(result);
-                }
-                FoundExportType::NotFound => {}
-                FoundExportType::Unknown => {
-                    return Ok(FollowExportsResult::cell(FollowExportsResult {
-                        module,
-                        export_name: Some(export_name),
-                        ty: FoundExportType::Unknown,
-                    }));
-                }
-            }
-        } else {
-            return Ok(FollowExportsResult::cell(FollowExportsResult {
-                module,
-                export_name: Some(export_name),
-                ty: FoundExportType::Unknown,
-            }));
+) -> Result<Vc<AllExportNamesResult>> {
+    let exports = module.get_exports().await?;
+    let EcmascriptExports::EsmExports(exports) = &*exports else {
+        return Ok(AllExportNamesResult {
+            esm_exports: IndexMap::new(),
+            dynamic_exporting_modules: vec![module],
         }
         .cell());
     };
