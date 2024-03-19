@@ -264,9 +264,12 @@ impl SourceMap {
                 }
 
                 // My kingdom for a decent dedent macro with interpolation!
+                // NOTE: The empty `sources` array is technically incorrect, but there is a bug
+                // in Node.js that requires sectioned source maps to have a `sources` array.
                 let mut rope = RopeBuilder::from(
                     r#"{
   "version": 3,
+  "sources": [],
   "sections": ["#,
                 );
 
