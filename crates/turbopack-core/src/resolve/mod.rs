@@ -1888,6 +1888,7 @@ async fn resolve_relative_request(
                                 options_value,
                                 options,
                                 query,
+                                fragment,
                             )
                             .await?,
                         );
@@ -1905,6 +1906,7 @@ async fn resolve_relative_request(
                         options_value,
                         options,
                         query,
+                        fragment,
                     )
                     .await?,
                 );

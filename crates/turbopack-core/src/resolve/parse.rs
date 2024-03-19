@@ -324,40 +324,56 @@ impl Request {
                 path,
                 query: _,
                 force_in_lookup_dir,
+                fragment,
             } => Request::Raw {
                 path: path.clone(),
                 query,
                 force_in_lookup_dir: *force_in_lookup_dir,
+                fragment: fragment.clone(),
             }
             .cell(),
             Request::Relative {
                 path,
                 query: _,
                 force_in_lookup_dir,
+                fragment,
             } => Request::Relative {
                 path: path.clone(),
                 query,
                 force_in_lookup_dir: *force_in_lookup_dir,
+                fragment: fragment.clone(),
             }
             .cell(),
             Request::Module {
                 module,
                 path,
                 query: _,
+                fragment,
             } => Request::Module {
                 module: module.clone(),
                 path: path.clone(),
                 query,
+                fragment: fragment.clone(),
             }
             .cell(),
-            Request::ServerRelative { path, query: _ } => Request::ServerRelative {
+            Request::ServerRelative {
+                path,
+                query: _,
+                fragment,
+            } => Request::ServerRelative {
                 path: path.clone(),
                 query,
+                fragment: fragment.clone(),
             }
             .cell(),
-            Request::Windows { path, query: _ } => Request::Windows {
+            Request::Windows {
+                path,
+                query: _,
+                fragment,
+            } => Request::Windows {
                 path: path.clone(),
                 query,
+                fragment: fragment.clone(),
             }
             .cell(),
             Request::Empty => self,
