@@ -422,7 +422,7 @@ impl Request {
                     Value::new(pat),
                     *query,
                     *force_in_lookup_dir,
-                    Value::new(fragment),
+                    Value::new(fragment.clone()),
                 )
             }
             Request::Module {
