@@ -399,44 +399,72 @@ impl Request {
                 path,
                 query,
                 force_in_lookup_dir,
+                fragment,
             } => {
                 let mut pat = Pattern::concat([path.clone(), suffix.into()]);
                 pat.normalize();
-                Self::raw(Value::new(pat), *query, *force_in_lookup_dir)
+                Self::raw(
+                    Value::new(pat),
+                    *query,
+                    *force_in_lookup_dir,
+                    Value::new(fragment.clone()),
+                )
             }
             Request::Relative {
                 path,
                 query,
                 force_in_lookup_dir,
+                fragment,
             } => {
                 let mut pat = Pattern::concat([path.clone(), suffix.into()]);
                 pat.normalize();
-                Self::relative(Value::new(pat), *query, *force_in_lookup_dir)
+                Self::relative(
+                    Value::new(pat),
+                    *query,
+                    *force_in_lookup_dir,
+                    Value::new(fragment),
+                )
             }
             Request::Module {
                 module,
                 path,
                 query,
+                fragment,
             } => {
                 let mut pat = Pattern::concat([path.clone(), suffix.into()]);
                 pat.normalize();
-                Self::module(module.clone(), Value::new(pat), *query)
+                Self::module(
+                    module.clone(),
+                    Value::new(pat),
+                    *query,
+                    Value::new(fragment.clone()),
+                )
             }
-            Request::ServerRelative { path, query } => {
+            Request::ServerRelative {
+                path,
+                query,
+                fragment,
+            } => {
                 let mut pat = Pattern::concat([path.clone(), suffix.into()]);
                 pat.normalize();
                 Self::ServerRelative {
                     path: pat,
                     query: *query,
+                    fragment: fragment.clone(),
                 }
                 .cell()
             }
-            Request::Windows { path, query } => {
+            Request::Windows {
+                path,
+                query,
+                fragment,
+            } => {
                 let mut pat = Pattern::concat([path.clone(), suffix.into()]);
                 pat.normalize();
                 Self::Windows {
                     path: pat,
                     query: *query,
+                    fragment: fragment.clone(),
                 }
                 .cell()
             }
@@ -449,11 +477,15 @@ impl Request {
             Request::Uri {
                 protocol,
                 remainder,
+                query,
+                fragment,
             } => {
                 let remainder = format!("{}{}", remainder, suffix);
                 Self::Uri {
                     protocol: protocol.clone(),
                     remainder,
+                    query: query.clone(),
+                    fragment: fragment.clone(),
                 }
                 .cell()
             }
