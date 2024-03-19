@@ -98,7 +98,9 @@ impl Request {
             Request::Uri {
                 protocol,
                 remainder,
-            } => format!("{protocol}{remainder}"),
+                query,
+                fragment,
+            } => format!("{protocol}{remainder}?{query}#{fragment}"),
             Request::Unknown {
                 path: Pattern::Constant(path),
             } => path.to_string(),
@@ -294,6 +296,7 @@ impl Request {
                 module,
                 path,
                 query: _,
+                fragment: _,
             } => {
                 let mut pat = Pattern::Constant(format!("./{module}"));
                 pat.push(path.clone());
