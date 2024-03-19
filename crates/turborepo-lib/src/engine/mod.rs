@@ -158,6 +158,21 @@ impl Engine<Built> {
         self.task_graph.node_weights()
     }
 
+    /// Return all tasks that have a command to be run
+    pub fn tasks_with_command(&self, pkg_graph: &PackageGraph) -> Vec<String> {
+        self.tasks()
+            .filter_map(|node| match node {
+                TaskNode::Root => None,
+                TaskNode::Task(task) => Some(task),
+            })
+            .filter_map(|task| {
+                let pkg_name = PackageName::from(task.package());
+                let json = pkg_graph.package_json(&pkg_name)?;
+                json.command(task.task()).map(|_| task.to_string())
+            })
+            .collect()
+    }
+
     pub fn task_definitions(&self) -> &HashMap<TaskId<'static>, TaskDefinition> {
         &self.task_definitions
     }

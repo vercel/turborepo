@@ -9,10 +9,12 @@ use ratatui::{
         Block, BorderType, Borders, Cell, Paragraph, Row, StatefulWidget, Table, TableState, Widget,
     },
 };
+use tracing::debug;
 
 use super::{
     task::{Finished, Planned, Running, Task},
     task_duration::TaskDuration,
+    Error,
 };
 
 const FOOTER_TEXT: &str = "Use arrow keys to navigate";
@@ -73,11 +75,14 @@ impl TaskTable {
 
     /// Mark the given planned task as started
     /// Errors if given task wasn't a planned task
-    pub fn start_task(&mut self, task: &str) -> Result<(), &'static str> {
+    pub fn start_task(&mut self, task: &str) -> Result<(), Error> {
         let planned_idx = self
             .planned
             .binary_search_by(|planned_task| planned_task.name().cmp(task))
-            .map_err(|_| "no task found")?;
+            .map_err(|_| {
+                debug!("could not find '{task}' to start");
+                Error::TaskNotFound { name: task.into() }
+            })?;
         let planned = self.planned.remove(planned_idx);
         let old_row_idx = self.finished.len() + self.running.len() + planned_idx;
         let new_row_idx = self.finished.len() + self.running.len();
@@ -101,12 +106,15 @@ impl TaskTable {
 
     /// Mark the given running task as finished
     /// Errors if given task wasn't a running task
-    pub fn finish_task(&mut self, task: &str) -> Result<(), &'static str> {
+    pub fn finish_task(&mut self, task: &str) -> Result<(), Error> {
         let running_idx = self
             .running
             .iter()
             .position(|running| running.name() == task)
-            .ok_or("no task found")?;
+            .ok_or_else(|| {
+                debug!("could not find '{task}' to finish");
+                Error::TaskNotFound { name: task.into() }
+            })?;
         let old_row_idx = self.finished.len() + running_idx;
         let new_row_idx = self.finished.len();
         let running = self.running.remove(running_idx);
@@ -211,9 +219,9 @@ impl TaskTable {
     }
 
     /// Convenience method which renders and updates scroll state
-    pub fn stateful_render(&mut self, frame: &mut ratatui::Frame) {
+    pub fn stateful_render(&mut self, frame: &mut ratatui::Frame, area: Rect) {
         let mut scroll = self.scroll.clone();
-        frame.render_stateful_widget(&*self, frame.size(), &mut scroll);
+        frame.render_stateful_widget(&*self, area, &mut scroll);
         self.scroll = scroll;
     }
 

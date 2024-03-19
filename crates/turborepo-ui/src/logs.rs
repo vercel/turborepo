@@ -88,8 +88,6 @@ pub fn replay_logs<W: Write>(
         Error::CannotReadLogs(err)
     })?;
 
-    // Construct a PrefixedWriter which allows for non UTF-8 bytes to be written to
-    // it.
     let mut log_reader = BufReader::new(log_file);
 
     let mut buffer = Vec::new();

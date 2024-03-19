@@ -1,6 +1,10 @@
 use std::{collections::BTreeMap, io::Write};
 
-use ratatui::widgets::{Block, Borders, Widget};
+use ratatui::{
+    style::Style,
+    widgets::{Block, Borders, Widget},
+};
+use tracing::debug;
 use tui_term::widget::PseudoTerminal;
 use turborepo_vt100 as vt100;
 
@@ -11,6 +15,7 @@ pub struct TerminalPane<W> {
     displayed: Option<String>,
     rows: u16,
     cols: u16,
+    highlight: bool,
 }
 
 struct TerminalOutput<W> {
@@ -20,23 +25,30 @@ struct TerminalOutput<W> {
     stdin: Option<W>,
 }
 impl<W> TerminalPane<W> {
-    pub fn new(rows: u16, cols: u16, tasks: impl IntoIterator<Item = (String, Option<W>)>) -> Self {
+    pub fn new(rows: u16, cols: u16, tasks: impl IntoIterator<Item = String>) -> Self {
         // We trim 2 from rows and cols as we use them for borders
         let rows = rows.saturating_sub(2);
         let cols = cols.saturating_sub(2);
         Self {
             tasks: tasks
                 .into_iter()
-                .map(|(name, stdin)| (name, TerminalOutput::new(rows, cols, stdin)))
+                .map(|name| (name, TerminalOutput::new(rows, cols, None)))
                 .collect(),
             displayed: None,
             rows,
             cols,
+            highlight: false,
         }
     }
 
+    pub fn highlight(&mut self, highlight: bool) {
+        self.highlight = highlight;
+    }
+
     pub fn process_output(&mut self, task: &str, output: &[u8]) -> Result<(), Error> {
-        let task = self.task_mut(task)?;
+        let task = self
+            .task_mut(task)
+            .inspect_err(|_| debug!("cannot find task on process output"))?;
         task.parser.process(output);
         Ok(())
     }
@@ -84,6 +96,13 @@ impl<W> TerminalPane<W> {
 }
 
 impl<W: Write> TerminalPane<W> {
+    /// Insert a stdin to be associated with a task
+    pub fn insert_stdin(&mut self, task_name: &str, stdin: Option<W>) -> Result<(), Error> {
+        let task = self.task_mut(task_name)?;
+        task.stdin = stdin;
+        Ok(())
+    }
+
     pub fn process_input(&mut self, task: &str, input: &[u8]) -> Result<(), Error> {
         let task_output = self.task_mut(task)?;
         if let Some(stdin) = &mut task_output.stdin {
@@ -124,11 +143,13 @@ impl<W> Widget for &TerminalPane<W> {
             return;
         };
         let screen = task.parser.screen();
-        let term = PseudoTerminal::new(screen).block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(format!(" {task_name} >")),
-        );
+        let mut block = Block::default()
+            .borders(Borders::ALL)
+            .title(format!(" {task_name} >"));
+        if self.highlight {
+            block = block.border_style(Style::new().fg(ratatui::style::Color::Yellow));
+        }
+        let term = PseudoTerminal::new(screen).block(block);
         term.render(area, buf)
     }
 }
@@ -144,7 +165,7 @@ mod test {
 
     #[test]
     fn test_basic() {
-        let mut pane: TerminalPane<()> = TerminalPane::new(6, 8, vec![("foo".into(), None)]);
+        let mut pane: TerminalPane<()> = TerminalPane::new(6, 8, vec!["foo".into()]);
         pane.select("foo").unwrap();
         pane.process_output("foo", b"1\r\n2\r\n3\r\n4\r\n5\r\n")
             .unwrap();
