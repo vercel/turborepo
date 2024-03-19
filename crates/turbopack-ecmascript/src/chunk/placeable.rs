@@ -23,7 +23,7 @@ pub trait EcmascriptChunkPlaceable: ChunkableModule + Module + Asset {
     }
     fn is_marked_as_side_effect_free(
         self: Vc<Self>,
-        side_effect_free_packages: Vc<Vec<String>>,
+        side_effect_free_packages: Vc<Glob>,
     ) -> Vc<bool> {
         is_marked_as_side_effect_free(self.ident().path(), side_effect_free_packages)
     }
@@ -39,7 +39,7 @@ enum SideEffectsValue {
 #[turbo_tasks::function]
 async fn side_effects_from_package_json(
     package_json: Vc<FileSystemPath>,
-    side_effect_free_packages: Vc<Vec<String>>,
+    side_effect_free_packages: Vc<Glob>,
 ) -> Result<Vc<SideEffectsValue>> {
     if let FileJsonContent::Content(content) = &*package_json.read_json().await? {
         if let Some(pacakge_name) = content.get("name").and_then(|v| v.as_str()) {
@@ -163,7 +163,7 @@ impl Issue for SideEffectsInPackageJsonIssue {
 #[turbo_tasks::function]
 pub async fn is_marked_as_side_effect_free(
     path: Vc<FileSystemPath>,
-    side_effect_free_packages: Vc<Vec<String>>,
+    side_effect_free_packages: Vc<Glob>,
 ) -> Result<Vc<bool>> {
     let find_package_json: turbo_tasks::ReadRef<FindContextFileResult> =
         find_context_file(path.parent(), package_json()).await?;

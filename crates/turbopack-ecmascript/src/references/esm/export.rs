@@ -15,6 +15,7 @@ use swc_core::{
     quote, quote_expr,
 };
 use turbo_tasks::{trace::TraceRawVcs, TryFlatJoinIterExt, ValueToString, Vc};
+use turbo_tasks_fs::glob::Glob;
 use turbopack_core::{
     ident::AssetIdent,
     issue::{analyze::AnalyzeIssue, IssueExt, IssueSeverity, StyledString},
@@ -62,7 +63,7 @@ pub struct FollowExportsResult {
 pub async fn follow_reexports(
     module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
     export_name: String,
-    side_effect_free_packages: Vc<Vec<String>>,
+    side_effect_free_packages: Vc<Glob>,
 ) -> Result<Vc<FollowExportsResult>> {
     if !*module
         .is_marked_as_side_effect_free(side_effect_free_packages)

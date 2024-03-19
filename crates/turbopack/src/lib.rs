@@ -31,7 +31,7 @@ use graph::{aggregate, AggregatedGraph, AggregatedGraphNodeContent};
 use module_options::{ModuleOptions, ModuleOptionsContext, ModuleRuleEffect, ModuleType};
 use tracing::Instrument;
 use turbo_tasks::{Completion, Value, ValueToString, Vc};
-use turbo_tasks_fs::FileSystemPath;
+use turbo_tasks_fs::{glob::Glob, FileSystemPath};
 pub use turbopack_core::condition;
 use turbopack_core::{
     asset::Asset,
@@ -405,12 +405,21 @@ impl ModuleAssetContext {
     }
 
     #[turbo_tasks::function]
-    pub async fn side_effect_free_packages(self: Vc<Self>) -> Result<Vc<Vec<String>>> {
-        Ok(self
+    pub async fn side_effect_free_packages(self: Vc<Self>) -> Result<Vc<Glob>> {
+        let pkgs = self
             .await?
             .module_options_context
             .await?
-            .side_effect_free_packages)
+            .side_effect_free_packages
+            .await?;
+
+        let mut globs = Vec::with_capacity(pkgs.len());
+
+        for pkg in pkgs {
+            globs.push(Glob::parse(&format!("node_modules/{pkg}/**"))?);
+        }
+
+        Ok(Glob::alternatives(globs))
     }
 }
 
