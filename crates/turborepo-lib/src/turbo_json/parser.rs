@@ -595,6 +595,12 @@ impl DeserializationVisitor for RawTurboJsonVisitor {
                         result.remote_cache = Some(remote_cache);
                     }
                 }
+                "experimentalUI" => {
+                    if let Some(experimental_ui) = bool::deserialize(&value, &key_text, diagnostics)
+                    {
+                        result.experimental_ui = Some(experimental_ui);
+                    }
+                }
                 // Allow for faux-comments at the top level
                 "//" => {}
                 unknown_key => {
