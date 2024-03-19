@@ -128,6 +128,8 @@ pub struct RawTurboJson {
     // Configuration options when interfacing with the remote cache
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) remote_cache: Option<RawRemoteCacheOptions>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "experimentalUI")]
+    pub experimental_ui: Option<bool>,
 }
 
 #[derive(Serialize, Default, Debug, PartialEq, Clone)]
@@ -1089,5 +1091,13 @@ mod tests {
             .and_then(|build| build.value.output_mode.clone())
             .map(|mode| mode.into_inner());
         assert_eq!(actual, expected);
+    }
+
+    #[test_case(r#"{ "experimentalUI": true }"#, Some(true) ; "t")]
+    #[test_case(r#"{ "experimentalUI": false }"#, Some(false) ; "f")]
+    #[test_case(r#"{}"#, None ; "missing")]
+    fn test_experimental_ui(json: &str, expected: Option<bool>) {
+        let json = RawTurboJson::parse(json, AnchoredSystemPath::new("").unwrap()).unwrap();
+        assert_eq!(json.experimental_ui, expected);
     }
 }
