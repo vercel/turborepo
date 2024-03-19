@@ -277,7 +277,7 @@ async fn apply_module_type(
 async fn apply_reexport_tree_shaking(
     module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
     part: Vc<ModulePart>,
-    side_effect_free_packages: Vc<Vec<String>>,
+    side_effect_free_packages: Vc<Glob>,
 ) -> Result<Vc<Box<dyn Module>>> {
     if let ModulePart::Export(export) = *part.await? {
         let export = export.await?;
@@ -416,7 +416,7 @@ impl ModuleAssetContext {
         let mut globs = Vec::with_capacity(pkgs.len());
 
         for pkg in pkgs {
-            globs.push(Glob::parse(&format!("node_modules/{pkg}/**"))?);
+            globs.push(Glob::new(format!("node_modules/{pkg}/**")));
         }
 
         Ok(Glob::alternatives(globs))
