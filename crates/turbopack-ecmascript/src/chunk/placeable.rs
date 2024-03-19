@@ -39,19 +39,8 @@ enum SideEffectsValue {
 #[turbo_tasks::function]
 async fn side_effects_from_package_json(
     package_json: Vc<FileSystemPath>,
-    side_effect_free_packages: Vc<Glob>,
 ) -> Result<Vc<SideEffectsValue>> {
     if let FileJsonContent::Content(content) = &*package_json.read_json().await? {
-        if let Some(pacakge_name) = content.get("name").and_then(|v| v.as_str()) {
-            if side_effect_free_packages
-                .await?
-                .iter()
-                .any(|v| pacakge_name == v)
-            {
-                return Ok(SideEffectsValue::Constant(false).cell());
-            }
-        }
-
         if let Some(side_effects) = content.get("sideEffects") {
             if let Some(side_effects) = side_effects.as_bool() {
                 return Ok(SideEffectsValue::Constant(side_effects).cell());
@@ -165,11 +154,15 @@ pub async fn is_marked_as_side_effect_free(
     path: Vc<FileSystemPath>,
     side_effect_free_packages: Vc<Glob>,
 ) -> Result<Vc<bool>> {
+    if side_effect_free_packages.await?.execute(&*path.await?.path) {
+        return Ok(Vc::cell(true));
+    }
+
     let find_package_json: turbo_tasks::ReadRef<FindContextFileResult> =
         find_context_file(path.parent(), package_json()).await?;
 
     if let FindContextFileResult::Found(package_json, _) = *find_package_json {
-        match *side_effects_from_package_json(package_json, side_effect_free_packages).await? {
+        match *side_effects_from_package_json(package_json).await? {
             SideEffectsValue::None => {}
             SideEffectsValue::Constant(side_effects) => return Ok(Vc::cell(!side_effects)),
             SideEffectsValue::Glob(glob) => {
