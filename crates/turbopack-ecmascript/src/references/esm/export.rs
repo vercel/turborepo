@@ -62,8 +62,12 @@ pub struct FollowExportsResult {
 pub async fn follow_reexports(
     module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
     export_name: String,
+    side_effect_free_packages: Vc<Vec<String>>,
 ) -> Result<Vc<FollowExportsResult>> {
-    if !*module.is_marked_as_side_effect_free().await? {
+    if !*module
+        .is_marked_as_side_effect_free(side_effect_free_packages)
+        .await?
+    {
         return Ok(FollowExportsResult::cell(FollowExportsResult {
             module,
             export_name: Some(export_name),
@@ -85,7 +89,9 @@ pub async fn follow_reexports(
         // Try to find the export in the local exports
         let exports_ref = exports.await?;
         if let Some(export) = exports_ref.exports.get(&export_name) {
-            match handle_declared_export(module, export_name, export).await? {
+            match handle_declared_export(module, export_name, export, side_effect_free_packages)
+                .await?
+            {
                 ControlFlow::Continue((m, n)) => {
                     module = m;
                     export_name = n;
@@ -138,13 +144,17 @@ async fn handle_declared_export(
     module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
     export_name: String,
     export: &EsmExport,
+    side_effect_free_packages: Vc<Vec<String>>,
 ) -> Result<ControlFlow<FollowExportsResult, (Vc<Box<dyn EcmascriptChunkPlaceable>>, String)>> {
     match export {
         EsmExport::ImportedBinding(reference, name) => {
             if let ReferencedAsset::Some(module) =
                 *ReferencedAsset::from_resolve_result(reference.resolve_reference()).await?
             {
-                if !*module.is_marked_as_side_effect_free().await? {
+                if !*module
+                    .is_marked_as_side_effect_free(side_effect_free_packages)
+                    .await?
+                {
                     return Ok(ControlFlow::Break(FollowExportsResult {
                         module,
                         export_name: Some(name.to_string()),
