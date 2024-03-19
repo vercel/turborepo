@@ -55,14 +55,29 @@ pub enum Request {
     },
 }
 
-fn split_off_query(raw: String) -> (Pattern, Vc<String>) {
+fn split_off_query_fragment(raw: String) -> (Pattern, Vc<String>, Pattern) {
     let Some((raw, query)) = raw.split_once('?') else {
-        return (Pattern::Constant(raw), Vc::<String>::default());
+        if let Some((raw, fragment)) = raw.split_once('#') {
+            return (
+                Pattern::Constant(raw.to_string()),
+                Vc::<String>::default(),
+                Pattern::Constant(fragment.to_string()),
+            );
+        }
+
+        return (
+            Pattern::Constant(raw),
+            Vc::<String>::default(),
+            Pattern::Constant(String::new()),
+        );
     };
+
+    let (query, fragment) = query.split_once('#').unwrap_or((query, ""));
 
     (
         Pattern::Constant(raw.to_string()),
         Vc::cell(format!("?{}", query)),
+        Pattern::Constant(fragment.to_string()),
     )
 }
 
@@ -116,20 +131,25 @@ impl Request {
                 if r.is_empty() {
                     Request::Empty
                 } else if r.starts_with('/') {
-                    let (path, query) = split_off_query(r);
+                    let (path, query, fragment) = split_off_query_fragment(r);
 
-                    Request::ServerRelative { path, query }
+                    Request::ServerRelative {
+                        path,
+                        query,
+                        fragment,
+                    }
                 } else if r.starts_with('#') {
                     Request::PackageInternal {
                         path: Pattern::Constant(r),
                     }
                 } else if r.starts_with("./") || r.starts_with("../") || r == "." || r == ".." {
-                    let (path, query) = split_off_query(r);
+                    let (path, query, fragment) = split_off_query_fragment(r);
 
                     Request::Relative {
                         path,
                         force_in_lookup_dir: false,
                         query,
+                        fragment,
                     }
                 } else {
                     lazy_static! {
@@ -140,9 +160,13 @@ impl Request {
                     }
 
                     if WINDOWS_PATH.is_match(&r) {
-                        let (path, query) = split_off_query(r);
+                        let (path, query, fragment) = split_off_query_fragment(r);
 
-                        return Request::Windows { path, query };
+                        return Request::Windows {
+                            path,
+                            query,
+                            fragment,
+                        };
                     }
 
                     if let Some(caps) = URI_PATH.captures(&r) {
@@ -159,12 +183,14 @@ impl Request {
                         .captures(&r)
                         .and_then(|caps| caps.get(1).zip(caps.get(2)))
                     {
-                        let (path, query) = split_off_query(path.as_str().to_string());
+                        let (path, query, fragment) =
+                            split_off_query_fragment(path.as_str().to_string());
 
                         return Request::Module {
                             module: module.as_str().to_string(),
                             path,
                             query,
+                            fragment,
                         };
                     }
 
