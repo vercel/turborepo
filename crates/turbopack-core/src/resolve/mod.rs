@@ -1534,6 +1534,7 @@ async fn resolve_internal_inline(
                 path,
                 query,
                 force_in_lookup_dir,
+                fragment,
             } => {
                 let mut results = Vec::new();
                 let matches = read_matches(
@@ -1556,6 +1557,7 @@ async fn resolve_internal_inline(
                                     options_value,
                                     options,
                                     *query,
+                                    Value::new(fragment.clone()),
                                 )
                                 .await?,
                             );
@@ -1575,6 +1577,7 @@ async fn resolve_internal_inline(
                 path,
                 query,
                 force_in_lookup_dir,
+                fragment,
             } => {
                 resolve_relative_request(
                     lookup_path,
@@ -1584,6 +1587,7 @@ async fn resolve_internal_inline(
                     path,
                     *query,
                     *force_in_lookup_dir,
+                    Value::new(fragment.clone()),
                 )
                 .await?
             }
@@ -1807,6 +1811,7 @@ async fn resolve_relative_request(
     path_pattern: &Pattern,
     query: Vc<String>,
     force_in_lookup_dir: bool,
+    fragment: Value<Pattern>,
 ) -> Result<Vc<ResolveResult>> {
     // Check alias field for aliases first
     let lookup_path_ref = &*lookup_path.await?;
@@ -1821,6 +1826,7 @@ async fn resolve_relative_request(
             Some(request)
         },
         query,
+        fragment,
     )
     .await?
     {
@@ -1911,7 +1917,7 @@ async fn apply_in_package(
     options_value: &ResolveOptions,
     get_request: impl Fn(&FileSystemPath) -> Option<String>,
     query: Vc<String>,
-    fragment: Vc<String>,
+    fragment: Value<Pattern>,
 ) -> Result<Option<Vc<ResolveResult>>> {
     // Check alias field for module aliases first
     for in_package in options_value.in_package.iter() {
@@ -2260,7 +2266,7 @@ async fn resolved(
     options_value: &ResolveOptions,
     options: Vc<ResolveOptions>,
     query: Vc<String>,
-    fragment: Vc<String>,
+    fragment: Value<Pattern>,
 ) -> Result<Vc<ResolveResult>> {
     let RealPathResult { path, symlinks } = &*fs_path.realpath_with_links().await?;
 
