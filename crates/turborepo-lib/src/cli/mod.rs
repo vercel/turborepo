@@ -627,7 +627,7 @@ fn path_non_empty(s: &str) -> Result<Utf8PathBuf, String> {
 ])]
 pub struct RunArgs {
     /// Override the filesystem cache directory.
-    #[clap(long, value_parser = path_non_empty)]
+    #[clap(long, value_parser = path_non_empty, env = "TURBO_CACHE_DIR")]
     pub cache_dir: Option<Utf8PathBuf>,
     /// Set the number of concurrent cache operations (default 10)
     #[clap(long, default_value_t = DEFAULT_NUM_WORKERS)]
