@@ -145,7 +145,7 @@ async fn handle_declared_export(
     module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
     export_name: String,
     export: &EsmExport,
-    side_effect_free_packages: Vc<Vec<String>>,
+    side_effect_free_packages: Vc<Glob>,
 ) -> Result<ControlFlow<FollowExportsResult, (Vc<Box<dyn EcmascriptChunkPlaceable>>, String)>> {
     match export {
         EsmExport::ImportedBinding(reference, name) => {
