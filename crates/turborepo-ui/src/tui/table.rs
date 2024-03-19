@@ -9,6 +9,7 @@ use ratatui::{
         Block, BorderType, Borders, Cell, Paragraph, Row, StatefulWidget, Table, TableState, Widget,
     },
 };
+use tracing::debug;
 
 use super::{
     task::{Finished, Planned, Running, Task},
@@ -78,7 +79,10 @@ impl TaskTable {
         let planned_idx = self
             .planned
             .binary_search_by(|planned_task| planned_task.name().cmp(task))
-            .map_err(|_| Error::TaskNotFound { name: task.into() })?;
+            .map_err(|_| {
+                debug!("could not find '{task}' to start");
+                Error::TaskNotFound { name: task.into() }
+            })?;
         let planned = self.planned.remove(planned_idx);
         let old_row_idx = self.finished.len() + self.running.len() + planned_idx;
         let new_row_idx = self.finished.len() + self.running.len();
@@ -107,7 +111,10 @@ impl TaskTable {
             .running
             .iter()
             .position(|running| running.name() == task)
-            .ok_or_else(|| Error::TaskNotFound { name: task.into() })?;
+            .ok_or_else(|| {
+                debug!("could not find '{task}' to finish");
+                Error::TaskNotFound { name: task.into() }
+            })?;
         let old_row_idx = self.finished.len() + running_idx;
         let new_row_idx = self.finished.len();
         let running = self.running.remove(running_idx);

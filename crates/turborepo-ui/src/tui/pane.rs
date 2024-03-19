@@ -4,6 +4,7 @@ use ratatui::{
     style::Style,
     widgets::{Block, Borders, Widget},
 };
+use tracing::debug;
 use tui_term::widget::PseudoTerminal;
 use turborepo_vt100 as vt100;
 
@@ -45,7 +46,9 @@ impl<W> TerminalPane<W> {
     }
 
     pub fn process_output(&mut self, task: &str, output: &[u8]) -> Result<(), Error> {
-        let task = self.task_mut(task)?;
+        let task = self
+            .task_mut(task)
+            .inspect_err(|_| debug!("cannot find task on process output"))?;
         task.parser.process(output);
         Ok(())
     }
