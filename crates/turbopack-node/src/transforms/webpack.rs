@@ -240,15 +240,9 @@ impl WebpackLoadersProcessedAsset {
 
         // handle SourceMap
         let source_map = if let Some(source_map) = processed.map {
-            if let Some(source_map) = SourceMap::new_from_file_content(
-                FileContent::Content(File::from(source_map)).cell(),
-            )
-            .await?
-            {
-                Some(source_map.cell())
-            } else {
-                None
-            }
+            SourceMap::new_from_file_content(FileContent::Content(File::from(source_map)).cell())
+                .await?
+                .map(|source_map| source_map.cell())
         } else {
             None
         };
