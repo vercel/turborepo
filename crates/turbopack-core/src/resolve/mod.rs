@@ -1595,6 +1595,7 @@ async fn resolve_internal_inline(
                 module,
                 path,
                 query,
+                fragment,
             } => {
                 resolve_module_request(
                     lookup_path,
@@ -1604,6 +1605,7 @@ async fn resolve_internal_inline(
                     module,
                     path,
                     *query,
+                    Value::new(fragment.clone()),
                 )
                 .await?
             }
@@ -1614,7 +1616,12 @@ async fn resolve_internal_inline(
             } => {
                 let mut new_pat = path.clone();
                 new_pat.push_front(".".to_string().into());
-                let relative = Request::relative(Value::new(new_pat), *query, true);
+                let relative = Request::relative(
+                    Value::new(new_pat),
+                    *query,
+                    true,
+                    Value::new(fragment.clone()),
+                );
 
                 ResolvingIssue {
                     severity: IssueSeverity::Error.cell(),
@@ -1639,7 +1646,11 @@ async fn resolve_internal_inline(
                 )
                 .await?
             }
-            Request::Windows { path: _, query: _ } => {
+            Request::Windows {
+                path: _,
+                query: _,
+                fragment: _,
+            } => {
                 ResolvingIssue {
                     severity: IssueSeverity::Error.cell(),
                     request_type: "windows import: not implemented yet".to_string(),
@@ -2019,6 +2030,7 @@ async fn resolve_module_request(
     module: &str,
     path: &Pattern,
     query: Vc<String>,
+    fragment: Value<Pattern>,
 ) -> Result<Vc<ResolveResult>> {
     // Check alias field for module aliases first
     if let Some(result) = apply_in_package(
@@ -2030,6 +2042,7 @@ async fn resolve_module_request(
             full_pattern.into_string()
         },
         query,
+        fragment,
     )
     .await?
     {
