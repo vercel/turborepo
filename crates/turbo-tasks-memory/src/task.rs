@@ -176,6 +176,7 @@ struct TaskState {
 
     /// Children are only modified from execution
     children: TaskIdSet,
+    children_copy: TaskIdSet,
 
     /// Collectibles are only modified from execution
     collectibles: MaybeCollectibles,
@@ -207,6 +208,7 @@ impl TaskState {
             },
             stateful: false,
             children: Default::default(),
+            children_copy: Default::default(),
             collectibles: Default::default(),
             output: Default::default(),
             prepared_type: PrepareTaskType::None,
@@ -230,6 +232,7 @@ impl TaskState {
             },
             stateful: false,
             children: Default::default(),
+            children_copy: Default::default(),
             collectibles: Default::default(),
             output: Default::default(),
             prepared_type: PrepareTaskType::None,
@@ -262,6 +265,7 @@ impl PartialTaskState {
             },
             stateful: false,
             children: Default::default(),
+            children_copy: Default::default(),
             collectibles: Default::default(),
             prepared_type: PrepareTaskType::None,
             output: Default::default(),
@@ -296,6 +300,7 @@ impl UnloadedTaskState {
             },
             stateful: false,
             children: Default::default(),
+            children_copy: Default::default(),
             collectibles: Default::default(),
             prepared_type: PrepareTaskType::None,
             output: Default::default(),
@@ -720,6 +725,7 @@ impl Task {
                     let event = event.take();
                     dependencies = take(outdated_dependencies);
                     let outdated_children = take(&mut state.children);
+                    take(&mut state.children_copy);
                     let outdated_collectibles = take(&mut state.collectibles);
                     #[cfg(not(feature = "lazy_remove_children"))]
                     {
@@ -1515,6 +1521,7 @@ impl Task {
                 let TaskGuard { guard, .. } = guard;
                 let mut state = TaskMetaStateWriteGuard::full_from(guard.into_inner(), self);
                 if state.children.insert(child_id) {
+                    state.children_copy.insert(child_id);
                     #[cfg(feature = "lazy_remove_children")]
                     if let TaskStateType::InProgress {
                         outdated_children, ..
@@ -2062,6 +2069,7 @@ impl Task {
         );
         let TaskState {
             children,
+            children_copy: _,
             cells,
             output,
             collectibles,
