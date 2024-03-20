@@ -13,7 +13,7 @@ use crate::{
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error("invalid persistent task configuration")]
+    #[error("invalid task configuration")]
     EngineValidation(#[related] Vec<ValidateError>),
     #[error(transparent)]
     Graph(#[from] graph_visualizer::Error),
