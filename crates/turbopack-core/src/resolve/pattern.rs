@@ -715,6 +715,12 @@ enum NextConstantUntilResult<'a, 'b> {
 
 impl From<String> for Pattern {
     fn from(s: String) -> Self {
+        Pattern::Constant(Arc::new(s))
+    }
+}
+
+impl From<Arc<String>> for Pattern {
+    fn from(s: Arc<String>) -> Self {
         Pattern::Constant(s)
     }
 }
