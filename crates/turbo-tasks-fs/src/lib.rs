@@ -97,8 +97,8 @@ pub trait FileSystem: ValueToString {
 
 #[turbo_tasks::value(cell = "new", eq = "manual")]
 pub struct DiskFileSystem {
-    pub name: String,
-    pub root: String,
+    pub name: Arc<String>,
+    pub root: Arc<String>,
     #[turbo_tasks(debug_ignore, trace_ignore)]
     #[serde(skip)]
     mutex_map: MutexMap<PathBuf>,
@@ -288,13 +288,13 @@ impl DiskFileSystem {
     ///   subpaths from each.
     #[turbo_tasks::function]
     pub async fn new(
-        name: String,
-        root: String,
-        ignored_subpaths: Vec<String>,
+        name: Arc<String>,
+        root: Arc<String>,
+        ignored_subpaths: Vec<Arc<String>>,
     ) -> Result<Vc<Self>> {
         mark_stateful();
         // create the directory for the filesystem on disk, if it doesn't exist
-        fs::create_dir_all(&root).await?;
+        fs::create_dir_all(&**root).await?;
 
         let instance = DiskFileSystem {
             name,
@@ -1506,6 +1506,12 @@ impl From<String> for File {
 
 impl From<ReadRef<String>> for File {
     fn from(s: ReadRef<String>) -> Self {
+        File::from_bytes(s.as_bytes().to_vec())
+    }
+}
+
+impl From<Arc<String>> for File {
+    fn from(s: Arc<String>) -> Self {
         File::from_bytes(s.as_bytes().to_vec())
     }
 }

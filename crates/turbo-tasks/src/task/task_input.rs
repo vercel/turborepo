@@ -31,7 +31,7 @@ impl TaskInput for ConcreteTaskInput {
     }
 }
 
-impl TaskInput for String {
+impl TaskInput for Arc<String> {
     fn try_from_concrete(input: &ConcreteTaskInput) -> Result<Self> {
         match input {
             ConcreteTaskInput::String(s) => {
@@ -411,7 +411,7 @@ mod tests {
     #[test]
     fn test_multiple_unnamed_fields() -> Result<()> {
         #[derive(Clone, TaskInput, Eq, PartialEq, Debug)]
-        struct MultipleUnnamedFields(u32, String);
+        struct MultipleUnnamedFields(u32, Arc<String>);
 
         test_conversion!(MultipleUnnamedFields(42, "42".into()));
         Ok(())

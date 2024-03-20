@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::{bail, Result};
 use include_dir::{Dir, DirEntry};
 use turbo_tasks::{Completion, TransientInstance, ValueToString, Vc};
@@ -9,7 +11,7 @@ use crate::{
 
 #[turbo_tasks::value(serialization = "none")]
 pub struct EmbeddedFileSystem {
-    name: String,
+    name: Arc<String>,
     #[turbo_tasks(trace_ignore)]
     dir: TransientInstance<&'static Dir<'static>>,
 }
@@ -18,7 +20,7 @@ pub struct EmbeddedFileSystem {
 impl EmbeddedFileSystem {
     #[turbo_tasks::function]
     pub(super) fn new(
-        name: String,
+        name: Arc<String>,
         dir: TransientInstance<&'static Dir<'static>>,
     ) -> Vc<EmbeddedFileSystem> {
         EmbeddedFileSystem { name, dir }.cell()
