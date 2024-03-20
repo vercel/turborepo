@@ -325,6 +325,8 @@ task_inputs_impl! { A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 A14 A15 A16 A17 }
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
     use crate::{VcCellNewMode, VcDefaultRead};
 
@@ -350,17 +352,17 @@ mod tests {
             todo!()
         }
 
-        fn with_recv_and_str(_a: &i32, _s: String) -> crate::Vc<i32> {
+        fn with_recv_and_str(_a: &i32, _s: Arc<String>) -> crate::Vc<i32> {
             todo!()
         }
 
-        async fn async_with_recv_and_str(_a: &i32, _s: String) -> crate::Vc<i32> {
+        async fn async_with_recv_and_str(_a: &i32, _s: Arc<String>) -> crate::Vc<i32> {
             todo!()
         }
 
         async fn async_with_recv_and_str_and_result(
             _a: &i32,
-            _s: String,
+            _s: Arc<String>,
         ) -> Result<crate::Vc<i32>> {
             todo!()
         }
