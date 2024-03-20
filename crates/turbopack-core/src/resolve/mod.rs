@@ -2660,20 +2660,20 @@ impl ModulePart {
     }
     #[turbo_tasks::function]
     pub fn export(export: Arc<String>) -> Vc<Self> {
-        ModulePart::Export(Vc::cell(export)).cell()
+        ModulePart::Export(Vc::cell((*export).clone())).cell()
     }
     #[turbo_tasks::function]
     pub fn renamed_export(original_export: Arc<String>, export: Arc<String>) -> Vc<Self> {
         ModulePart::RenamedExport {
-            original_export: Vc::cell(original_export),
-            export: Vc::cell(export),
+            original_export: Vc::cell((*original_export).clone()),
+            export: Vc::cell((*export).clone()),
         }
         .cell()
     }
     #[turbo_tasks::function]
     pub fn renamed_namespace(export: Arc<String>) -> Vc<Self> {
         ModulePart::RenamedNamespace {
-            export: Vc::cell(export),
+            export: Vc::cell((*export).clone()),
         }
         .cell()
     }

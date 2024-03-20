@@ -75,7 +75,7 @@ pub fn node_esm_resolve_options(root: Vc<FileSystemPath>) -> Vc<ResolveOptions> 
             conditions,
             unspecified_conditions: ConditionValue::Unset,
         }],
-        default_files: vec!["index".to_string()],
+        default_files: vec!["index".to_string().into()],
         ..Default::default()
     }
     .cell()

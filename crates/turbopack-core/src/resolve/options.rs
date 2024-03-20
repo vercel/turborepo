@@ -103,7 +103,7 @@ pub enum ImportMapping {
 
 impl ImportMapping {
     pub fn primary_alternatives(
-        list: Vec<String>,
+        list: Vec<Arc<String>>,
         lookup_path: Option<Vc<FileSystemPath>>,
     ) -> ImportMapping {
         if list.is_empty() {
@@ -154,7 +154,7 @@ impl AliasTemplate for Vc<ImportMapping> {
                         .await?,
                 ),
                 ImportMapping::Dynamic(replacement) => {
-                    (*replacement.replace(capture.to_string()).await?).clone()
+                    (*replacement.replace(capture.to_string().into()).await?).clone()
                 }
             }
             .cell())
