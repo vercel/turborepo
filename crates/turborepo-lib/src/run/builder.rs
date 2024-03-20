@@ -63,7 +63,6 @@ pub struct RunBuilder {
 
 impl RunBuilder {
     pub fn new(base: CommandBase, api_auth: Option<APIAuth>) -> Result<Self, Error> {
-        let processes = ProcessManager::infer();
         let mut opts: Opts = base.args().try_into()?;
         let config = base.config()?;
         let is_linked = turborepo_api_client::is_linked(&api_auth);
@@ -88,6 +87,13 @@ impl RunBuilder {
         }
         let version = base.version();
         let experimental_ui = config.experimental_ui();
+        let processes = ProcessManager::new(
+            // We currently only use a pty if the following are met:
+            // - we're attached to a tty
+            atty::is(atty::Stream::Stdout) &&
+            // - if we're on windows, we're using the UI
+            (!cfg!(windows) || experimental_ui),
+        );
         let CommandBase { repo_root, ui, .. } = base;
         Ok(Self {
             processes,
