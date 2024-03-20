@@ -24,18 +24,23 @@ pub(crate) enum Cell {
     /// tracking is still active. Any update will invalidate dependent tasks.
     /// Assigning a value will transition to the Value state.
     /// Reading this cell will transition to the Recomputing state.
-    TrackedValueless { dependent_tasks: TaskIdSet },
+    TrackedValueless {
+        dependent_tasks: TaskIdSet,
+        dependent_tasks_copy: TaskIdSet,
+    },
     /// Someone wanted to read the content and it was not available. The content
     /// is now being recomputed.
     /// Assigning a value will transition to the Value state.
     Recomputing {
         dependent_tasks: TaskIdSet,
+        dependent_tasks_copy: TaskIdSet,
         event: Event,
     },
     /// The content was set only once and is tracked.
     /// GC operation will transition to the TrackedValueless state.
     Value {
         dependent_tasks: TaskIdSet,
+        dependent_tasks_copy: TaskIdSet,
         content: CellContent,
     },
 }
@@ -62,15 +67,22 @@ impl Cell {
         match self {
             Cell::Empty => {}
             Cell::Value {
-                dependent_tasks, ..
+                dependent_tasks,
+                dependent_tasks_copy,
+                ..
             }
             | Cell::TrackedValueless {
-                dependent_tasks, ..
+                dependent_tasks,
+                dependent_tasks_copy,
+                ..
             }
             | Cell::Recomputing {
-                dependent_tasks, ..
+                dependent_tasks,
+                dependent_tasks_copy,
+                ..
             } => {
                 dependent_tasks.remove(&task);
+                dependent_tasks_copy.remove(&task);
             }
         }
     }
@@ -114,6 +126,7 @@ impl Cell {
     fn recompute(
         &mut self,
         dependent_tasks: TaskIdSet,
+        dependent_tasks_copy: TaskIdSet,
         description: impl Fn() -> String + Sync + Send + 'static,
         note: impl Fn() -> String + Sync + Send + 'static,
     ) -> EventListener {
@@ -122,6 +135,7 @@ impl Cell {
         *self = Cell::Recomputing {
             event,
             dependent_tasks,
+            dependent_tasks_copy,
         };
         listener
     }
@@ -138,10 +152,12 @@ impl Cell {
         if let Cell::Value {
             content,
             dependent_tasks,
+            dependent_tasks_copy,
             ..
         } = self
         {
             dependent_tasks.insert(reader);
+            dependent_tasks_copy.insert(reader);
             return Ok(content.clone());
         }
         // Same behavior for all other states, so we reuse the same code.
@@ -161,7 +177,8 @@ impl Cell {
     ) -> Result<CellContent, RecomputingCell> {
         match self {
             Cell::Empty => {
-                let listener = self.recompute(AutoSet::default(), description, note);
+                let listener =
+                    self.recompute(AutoSet::default(), AutoSet::default(), description, note);
                 Err(RecomputingCell {
                     listener,
                     schedule: true,
@@ -176,9 +193,12 @@ impl Cell {
             }
             &mut Cell::TrackedValueless {
                 ref mut dependent_tasks,
+                ref mut dependent_tasks_copy,
             } => {
                 let dependent_tasks = take(dependent_tasks);
-                let listener = self.recompute(dependent_tasks, description, note);
+                let dependent_tasks_copy = take(dependent_tasks_copy);
+                let listener =
+                    self.recompute(dependent_tasks, dependent_tasks_copy, description, note);
                 Err(RecomputingCell {
                     listener,
                     schedule: true,
@@ -213,20 +233,24 @@ impl Cell {
                 *self = Cell::Value {
                     content,
                     dependent_tasks: AutoSet::default(),
+                    dependent_tasks_copy: AutoSet::default(),
                 };
             }
             &mut Cell::Recomputing {
                 ref mut event,
                 ref mut dependent_tasks,
+                ref mut dependent_tasks_copy,
             } => {
                 event.notify(usize::MAX);
                 *self = Cell::Value {
                     content,
                     dependent_tasks: take(dependent_tasks),
+                    dependent_tasks_copy: take(dependent_tasks_copy),
                 };
             }
             &mut Cell::TrackedValueless {
                 ref mut dependent_tasks,
+                ..
             } => {
                 // Assigning to a cell will invalidate all dependent tasks as the content might
                 // have changed.
@@ -236,16 +260,19 @@ impl Cell {
                 *self = Cell::Value {
                     content,
                     dependent_tasks: AutoSet::default(),
+                    dependent_tasks_copy: AutoSet::default(),
                 };
             }
             Cell::Value {
                 content: ref mut cell_content,
                 dependent_tasks,
+                dependent_tasks_copy,
             } => {
                 if content != *cell_content {
                     if !dependent_tasks.is_empty() {
                         turbo_tasks.schedule_notify_tasks_set(dependent_tasks);
                         dependent_tasks.clear();
+                        dependent_tasks_copy.clear();
                     }
                     *cell_content = content;
                 }
@@ -258,15 +285,22 @@ impl Cell {
         match self {
             Cell::Empty => {}
             Cell::TrackedValueless {
-                dependent_tasks, ..
+                dependent_tasks,
+                dependent_tasks_copy,
+                ..
             }
             | Cell::Recomputing {
-                dependent_tasks, ..
+                dependent_tasks,
+                dependent_tasks_copy,
+                ..
             }
             | Cell::Value {
-                dependent_tasks, ..
+                dependent_tasks,
+                dependent_tasks_copy,
+                ..
             } => {
                 dependent_tasks.shrink_to_fit();
+                dependent_tasks_copy.shrink_to_fit();
             }
         }
     }
@@ -278,12 +312,19 @@ impl Cell {
         match self {
             Cell::Empty | Cell::Recomputing { .. } | Cell::TrackedValueless { .. } => None,
             Cell::Value {
-                dependent_tasks, ..
+                dependent_tasks,
+                dependent_tasks_copy,
+                ..
             } => {
                 let dependent_tasks = take(dependent_tasks);
-                let Cell::Value { content, .. } =
-                    replace(self, Cell::TrackedValueless { dependent_tasks })
-                else {
+                let dependent_tasks_copy = take(dependent_tasks_copy);
+                let Cell::Value { content, .. } = replace(
+                    self,
+                    Cell::TrackedValueless {
+                        dependent_tasks,
+                        dependent_tasks_copy,
+                    },
+                ) else {
                     unreachable!()
                 };
                 Some(content)
