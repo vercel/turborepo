@@ -154,7 +154,7 @@ pub async fn is_marked_as_side_effect_free(
     path: Vc<FileSystemPath>,
     side_effect_free_packages: Vc<Glob>,
 ) -> Result<Vc<bool>> {
-    if side_effect_free_packages.await?.execute(&*path.await?.path) {
+    if side_effect_free_packages.await?.execute(&path.await?.path) {
         return Ok(Vc::cell(true));
     }
 
