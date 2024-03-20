@@ -7,6 +7,8 @@ use crate::{
 
 pub type SpanId = NonZeroUsize;
 
+const CUT_OFF_DEPTH: u32 = 150;
+
 pub struct Store {
     pub(crate) spans: Vec<Span>,
 }
@@ -15,6 +17,7 @@ fn new_root_span() -> Span {
     Span {
         index: SpanIndex::MAX,
         parent: None,
+        depth: 0,
         start: 0,
         ignore_self_time: false,
         self_end: 0,
@@ -71,6 +74,7 @@ impl Store {
         self.spans.push(Span {
             index: id,
             parent,
+            depth: 0,
             start,
             ignore_self_time: &name == "thread",
             self_end: start,
@@ -106,7 +110,12 @@ impl Store {
         } else {
             &mut self.spans[0]
         };
-        parent.events.push(SpanEvent::Child { id });
+        let depth = parent.depth + 1;
+        if depth < CUT_OFF_DEPTH {
+            parent.events.push(SpanEvent::Child { id });
+        }
+        let span = &mut self.spans[id.get()];
+        span.depth = depth;
         id
     }
 
