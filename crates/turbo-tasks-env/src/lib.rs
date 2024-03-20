@@ -5,7 +5,10 @@ mod custom;
 mod dotenv;
 mod filter;
 
-use std::{env, sync::Mutex};
+use std::{
+    env,
+    sync::{Arc, Mutex},
+};
 
 use anyhow::Result;
 use indexmap::IndexMap;
@@ -35,7 +38,7 @@ impl ProcessEnv for EnvMap {
     }
 
     #[turbo_tasks::function]
-    async fn read(self: Vc<Self>, name: String) -> Vc<Option<String>> {
+    async fn read(self: Vc<Self>, name: Arc<String>) -> Vc<Option<String>> {
         case_insensitive_read(self, name)
     }
 }
@@ -51,7 +54,7 @@ pub trait ProcessEnv {
     fn read_all(self: Vc<Self>) -> Vc<EnvMap>;
 
     /// Reads a single env variable. Ignores casing.
-    fn read(self: Vc<Self>, name: String) -> Vc<Option<String>> {
+    fn read(self: Vc<Self>, name: Arc<String>) -> Vc<Option<String>> {
         case_insensitive_read(self.read_all(), name)
     }
 }
@@ -63,7 +66,10 @@ pub fn sorted_env_vars() -> IndexMap<String, String> {
 }
 
 #[turbo_tasks::function]
-pub async fn case_insensitive_read(map: Vc<EnvMap>, name: String) -> Result<Vc<Option<String>>> {
+pub async fn case_insensitive_read(
+    map: Vc<EnvMap>,
+    name: Arc<String>,
+) -> Result<Vc<Option<String>>> {
     Ok(Vc::cell(
         to_uppercase_map(map)
             .await?

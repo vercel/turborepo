@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use turbo_tasks::Vc;
 
@@ -32,7 +34,7 @@ impl ProcessEnv for CustomProcessEnv {
     }
 
     #[turbo_tasks::function]
-    async fn read(&self, name: String) -> Result<Vc<Option<String>>> {
+    async fn read(&self, name: Arc<String>) -> Result<Vc<Option<String>>> {
         let custom = case_insensitive_read(self.custom, name.clone());
         match &*custom.await? {
             Some(_) => Ok(custom),
