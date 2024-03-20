@@ -268,14 +268,14 @@ impl<'a> Visitor<'a> {
 
                     let workspace_directory = self.repo_root.resolve(workspace_info.package_path());
 
-                    let interactive = task_definition.interactive || task_definition.persistent;
+                    let takes_input = task_definition.interactive || task_definition.persistent;
                     let mut exec_context = factory.exec_context(
                         info.clone(),
                         task_hash,
                         task_cache,
                         workspace_directory,
                         execution_env,
-                        interactive,
+                        takes_input,
                         self.task_access.clone(),
                     );
 
@@ -629,7 +629,7 @@ impl<'a> ExecContextFactory<'a> {
         task_cache: TaskCache,
         workspace_directory: AbsoluteSystemPathBuf,
         execution_env: EnvironmentVariableMap,
-        interactive: bool,
+        takes_input: bool,
         task_access: TaskAccess,
     ) -> ExecContext {
         let task_id_for_display = self.visitor.display_task_id(&task_id);
@@ -655,7 +655,7 @@ impl<'a> ExecContextFactory<'a> {
             continue_on_error: self.visitor.run_opts.continue_on_error,
             pass_through_args,
             errors: self.errors.clone(),
-            interactive,
+            takes_input,
             task_access,
         }
     }
@@ -691,7 +691,7 @@ struct ExecContext {
     continue_on_error: bool,
     pass_through_args: Option<Vec<String>>,
     errors: Arc<Mutex<Vec<TaskError>>>,
-    interactive: bool,
+    takes_input: bool,
     task_access: TaskAccess,
 }
 
@@ -900,7 +900,7 @@ impl ExecContext {
             }
         };
 
-        if self.experimental_ui && self.interactive {
+        if self.experimental_ui && self.takes_input {
             if let TaskOutput::UI(task) = output_client {
                 if let Some(stdin) = process.stdin() {
                     task.set_stdin(stdin);

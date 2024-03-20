@@ -4,12 +4,12 @@ Setup
 Verify we error on interactive task that hasn't been marked as cache: false
   $ ${TURBO} build
     x Tasks cannot be marked as interactive and cacheable
-     ,-[turbo.json:7:1]
-   7 |       "env": ["NODE_ENV"],
-   8 |       "interactive": true,
+     ,-[turbo.json:6:1]
+   6 |     "build": {
+   7 |       "interactive": true
      :                      ^^|^
      :                        `-- marked interactive here
-   9 |       "outputs": []
+   8 |     }
      `----
   
   [1]

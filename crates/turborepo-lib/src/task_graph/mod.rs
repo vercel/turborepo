@@ -74,9 +74,9 @@ pub struct TaskDefinition {
     // Tasks marked Persistent do not exit (e.g. --watch mode or dev servers)
     pub persistent: bool,
 
-    // Interactive marks that a task can be interacted with
-    // Tasks that can be interacted with cannot be cached as their outputs may depend on the
-    // interaction.
+    // Interactive marks that a task can have it's stdin written to.
+    // Tasks that take stdin input cannot be cached as their outputs may depend on the
+    // input.
     pub interactive: bool,
 }
 
