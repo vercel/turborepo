@@ -27,13 +27,13 @@ async fn main() -> Result<()> {
     let task = tt.spawn_root_task(|| {
         Box::pin(async {
             let root = current_dir().unwrap().to_str().unwrap().to_string();
-            let disk_fs = DiskFileSystem::new("project".to_string(), root, vec![]);
+            let disk_fs = DiskFileSystem::new("project".to_string().into(), root.into(), vec![]);
             disk_fs.await?.start_watching()?;
 
             // Smart Pointer cast
             let fs: Vc<Box<dyn FileSystem>> = Vc::upcast(disk_fs);
-            let input = fs.root().join("crates".to_string());
-            let glob = Glob::new("**/*.rs".to_string());
+            let input = fs.root().join("crates".to_string().into());
+            let glob = Glob::new("**/*.rs".to_string().into());
             let glob_result = input.read_glob(glob, true);
             let dir_hash = hash_glob_result(glob_result);
             print_hash(dir_hash).await?;
