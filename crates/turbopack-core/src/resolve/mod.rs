@@ -1932,7 +1932,7 @@ async fn apply_in_package(
     options_value: &ResolveOptions,
     get_request: impl Fn(&FileSystemPath) -> Option<String>,
     query: Vc<String>,
-    _fragment: Value<Pattern>,
+    fragment: Value<Pattern>,
 ) -> Result<Option<Vc<ResolveResult>>> {
     // Check alias field for module aliases first
     for in_package in options_value.in_package.iter() {
@@ -1998,7 +1998,8 @@ async fn apply_in_package(
                 resolve_internal(
                     package_path,
                     Request::parse(Value::new(Pattern::Constant(value.to_string())))
-                        .with_query(query),
+                        .with_query(query)
+                        .with_fragment(fragment),
                     options,
                 )
                 .with_replaced_request_key(value.to_string(), Value::new(request_key))

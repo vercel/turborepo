@@ -425,6 +425,81 @@ impl Request {
     }
 
     #[turbo_tasks::function]
+    pub async fn with_fragment(self: Vc<Self>, fragment: Value<Pattern>) -> Result<Vc<Self>> {
+        Ok(match &*self.await? {
+            Request::Raw {
+                path,
+                query,
+                force_in_lookup_dir,
+                fragment: _,
+            } => Request::Raw {
+                path: path.clone(),
+                query: *query,
+                force_in_lookup_dir: *force_in_lookup_dir,
+                fragment: fragment.into_value(),
+            }
+            .cell(),
+            Request::Relative {
+                path,
+                query,
+                force_in_lookup_dir,
+                fragment: _,
+            } => Request::Relative {
+                path: path.clone(),
+                query: *query,
+                force_in_lookup_dir: *force_in_lookup_dir,
+                fragment: fragment.into_value(),
+            }
+            .cell(),
+            Request::Module {
+                module,
+                path,
+                query,
+                fragment: _,
+            } => Request::Module {
+                module: module.clone(),
+                path: path.clone(),
+                query: *query,
+                fragment: fragment.into_value(),
+            }
+            .cell(),
+            Request::ServerRelative {
+                path,
+                query,
+                fragment: _,
+            } => Request::ServerRelative {
+                path: path.clone(),
+                query: *query,
+                fragment: fragment.into_value(),
+            }
+            .cell(),
+            Request::Windows {
+                path,
+                query,
+                fragment: _,
+            } => Request::Windows {
+                path: path.clone(),
+                query: *query,
+                fragment: fragment.into_value(),
+            }
+            .cell(),
+            Request::Empty => self,
+            Request::PackageInternal { .. } => self,
+            Request::Uri { .. } => self,
+            Request::Unknown { .. } => self,
+            Request::Dynamic => self,
+            Request::Alternatives { requests } => {
+                let requests = requests
+                    .iter()
+                    .copied()
+                    .map(|req| req.with_fragment(fragment.clone()))
+                    .collect();
+                Request::Alternatives { requests }.cell()
+            }
+        })
+    }
+
+    #[turbo_tasks::function]
     pub async fn append_path(self: Vc<Self>, suffix: String) -> Result<Vc<Self>> {
         Ok(match &*self.await? {
             Request::Raw {
