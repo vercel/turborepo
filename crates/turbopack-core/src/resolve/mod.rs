@@ -1692,8 +1692,10 @@ async fn resolve_internal_inline(
             Request::Uri {
                 protocol,
                 remainder,
+                query,
+                fragment,
             } => {
-                let uri = format!("{}{}", protocol, remainder);
+                let uri = format!("{}{}?{}#{}", protocol, remainder, query, fragment);
                 ResolveResult::primary_with_key(
                     RequestKey::new(uri.clone()),
                     ResolveResultItem::External(uri, ExternalType::Url),
@@ -1837,7 +1839,7 @@ async fn resolve_relative_request(
             Some(request)
         },
         query,
-        fragment,
+        fragment.clone(),
     )
     .await?
     {
@@ -1888,7 +1890,7 @@ async fn resolve_relative_request(
                                 options_value,
                                 options,
                                 query,
-                                fragment,
+                                fragment.clone(),
                             )
                             .await?,
                         );
@@ -1906,7 +1908,7 @@ async fn resolve_relative_request(
                         options_value,
                         options,
                         query,
-                        fragment,
+                        fragment.clone(),
                     )
                     .await?,
                 );
@@ -2079,6 +2081,7 @@ async fn resolve_module_request(
                     Value::new(path.clone()),
                     package_path,
                     query,
+                    fragment.clone(),
                     options,
                 ));
             }
@@ -2092,6 +2095,7 @@ async fn resolve_module_request(
                         options_value,
                         options,
                         query,
+                        fragment,
                     )
                     .await?;
                     results.push(resolved)
@@ -2114,7 +2118,7 @@ async fn resolve_module_request(
             "/".to_string().into(),
             path.clone(),
         ]);
-        let relative = Request::relative(Value::new(pattern), query, true);
+        let relative = Request::relative(Value::new(pattern), query, true, fragment);
         let relative_result =
             resolve_internal_boxed(lookup_path, relative.resolve().await?, options).await?;
         let relative_result = relative_result.with_replaced_request_key(
@@ -2133,6 +2137,7 @@ async fn resolve_into_package(
     path: Value<Pattern>,
     package_path: Vc<FileSystemPath>,
     query: Vc<String>,
+    fragment: Value<Pattern>,
     options: Vc<ResolveOptions>,
 ) -> Result<Vc<ResolveResult>> {
     let path = path.into_value();
@@ -2197,7 +2202,7 @@ async fn resolve_into_package(
         let mut new_pat = path.clone();
         new_pat.push_front(".".to_string().into());
 
-        let relative = Request::relative(Value::new(new_pat), query, true);
+        let relative = Request::relative(Value::new(new_pat), query, true, fragment);
         results
             .push(resolve_internal_inline(package_path, relative.resolve().await?, options).await?);
     }
@@ -2293,6 +2298,7 @@ async fn resolved(
         options_value,
         |package_path| package_path.get_relative_path_to(path_ref),
         query,
+        fragment.clone(),
     )
     .await?
     {
