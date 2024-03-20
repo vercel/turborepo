@@ -25,7 +25,7 @@ pub struct LockedVersions {}
 pub enum ResolveModules {
     /// when inside of path, use the list of directories to
     /// resolve inside these
-    Nested(Vc<FileSystemPath>, Vec<String>),
+    Nested(Vc<FileSystemPath>, Vec<Arc<String>>),
     /// look into that directory
     Path(Vc<FileSystemPath>),
     /// lookup versions based on lockfile in the registry filesystem
@@ -68,14 +68,14 @@ pub enum ResolveIntoPackage {
     /// [main]: https://nodejs.org/api/packages.html#main
     /// [module]: https://esbuild.github.io/api/#main-fields
     /// [browser]: https://esbuild.github.io/api/#main-fields
-    MainField { field: String },
+    MainField { field: Arc<String> },
 }
 
 // The different ways to resolve a request withing a package
 #[derive(TraceRawVcs, Hash, PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
 pub enum ResolveInPackage {
     /// Using a alias field which allows to map requests
-    AliasField(String),
+    AliasField(Arc<String>),
     /// Using the [imports] field.
     ///
     /// [imports]: https://nodejs.org/api/packages.html#imports

@@ -32,7 +32,7 @@ impl OutputAsset for SourceMapAsset {
         // NOTE(alexkirsz) We used to include the asset's version id in the path,
         // but this caused `all_assets_map` to be recomputed on every change.
         Ok(AssetIdent::from_path(
-            self.asset.ident().path().append(".map".to_string()),
+            self.asset.ident().path().append(".map".to_string().into()),
         ))
     }
 }

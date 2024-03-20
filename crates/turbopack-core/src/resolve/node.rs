@@ -18,7 +18,7 @@ pub fn node_cjs_resolve_options(root: Vc<FileSystemPath>) -> Vc<ResolveOptions> 
         extensions,
         modules: vec![ResolveModules::Nested(
             root,
-            vec!["node_modules".to_string()],
+            vec!["node_modules".to_string().into()],
         )],
         into_package: vec![
             ResolveIntoPackage::ExportsField {
@@ -33,7 +33,7 @@ pub fn node_cjs_resolve_options(root: Vc<FileSystemPath>) -> Vc<ResolveOptions> 
             conditions,
             unspecified_conditions: ConditionValue::Unset,
         }],
-        default_files: vec!["index".to_string()],
+        default_files: vec!["index".to_string().into()],
         ..Default::default()
     }
     .cell()

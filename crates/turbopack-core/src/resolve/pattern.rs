@@ -784,7 +784,7 @@ pub async fn read_matches(
     force_in_lookup_dir: bool,
     pattern: Vc<Pattern>,
 ) -> Result<Vc<PatternMatches>> {
-    let mut prefix = prefix;
+    let mut prefix = (*prefix).clone();
     let pat = pattern.await?;
     let mut results = Vec::new();
     let mut nested = Vec::new();
@@ -833,14 +833,17 @@ pub async fn read_matches(
                                                 results.push((
                                                     index,
                                                     PatternMatch::Directory(
-                                                        prefix.clone(),
+                                                        prefix.clone().into(),
                                                         fs_path,
                                                     ),
                                                 ));
                                             } else {
                                                 results.push((
                                                     index,
-                                                    PatternMatch::File(prefix.clone(), fs_path),
+                                                    PatternMatch::File(
+                                                        prefix.clone().into(),
+                                                        fs_path,
+                                                    ),
                                                 ))
                                             }
                                         }
@@ -928,12 +931,15 @@ pub async fn read_matches(
             }
             if prefix.is_empty() {
                 if let Some(pos) = pat.match_position("./") {
-                    results.push((pos, PatternMatch::Directory("./".to_string(), lookup_dir)));
+                    results.push((
+                        pos,
+                        PatternMatch::Directory("./".to_string().into(), lookup_dir),
+                    ));
                 }
                 if let Some(pos) = pat.could_match_position("./") {
                     nested.push((
                         pos,
-                        read_matches(lookup_dir, "./".to_string(), false, pattern),
+                        read_matches(lookup_dir, "./".to_string().into(), false, pattern),
                     ));
                 }
             } else {
@@ -942,7 +948,7 @@ pub async fn read_matches(
                 if let Some(pos) = pat.could_match_position(&prefix) {
                     nested.push((
                         pos,
-                        read_matches(lookup_dir, prefix.to_string(), false, pattern),
+                        read_matches(lookup_dir, prefix.to_string().into(), false, pattern),
                     ));
                 }
                 prefix.pop();
@@ -951,7 +957,7 @@ pub async fn read_matches(
                 if let Some(pos) = pat.could_match_position(&prefix) {
                     nested.push((
                         pos,
-                        read_matches(lookup_dir, prefix.to_string(), false, pattern),
+                        read_matches(lookup_dir, prefix.to_string().into(), false, pattern),
                     ));
                 }
                 prefix.pop();
