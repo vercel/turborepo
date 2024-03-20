@@ -1932,7 +1932,7 @@ async fn apply_in_package(
     options_value: &ResolveOptions,
     get_request: impl Fn(&FileSystemPath) -> Option<String>,
     query: Vc<String>,
-    fragment: Value<Pattern>,
+    _fragment: Value<Pattern>,
 ) -> Result<Option<Vc<ResolveResult>>> {
     // Check alias field for module aliases first
     for in_package in options_value.in_package.iter() {
