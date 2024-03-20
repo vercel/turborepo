@@ -2,12 +2,13 @@ use std::{collections::HashMap, fmt};
 
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPath, RelativeUnixPathBuf};
 
-use super::{PackageInfo, PackageName};
+use super::{npmrc::NpmRc, PackageInfo, PackageName};
 
 pub struct DependencySplitter<'a> {
     repo_root: &'a AbsoluteSystemPath,
     workspace_dir: &'a AbsoluteSystemPath,
     workspaces: &'a HashMap<PackageName, PackageInfo>,
+    link_workspace_packages: bool,
 }
 
 impl<'a> DependencySplitter<'a> {
@@ -15,15 +16,26 @@ impl<'a> DependencySplitter<'a> {
         repo_root: &'a AbsoluteSystemPath,
         workspace_dir: &'a AbsoluteSystemPath,
         workspaces: &'a HashMap<PackageName, PackageInfo>,
+        npmrc: Option<&'a NpmRc>,
     ) -> Self {
         Self {
             repo_root,
             workspace_dir,
             workspaces,
+            // TODO: default needs to depend on package manager as pnpm 9 changes the default to
+            // false
+            link_workspace_packages: npmrc
+                .and_then(|npmrc| npmrc.link_workspace_packages)
+                .unwrap_or(true),
         }
     }
 
     pub fn is_internal(&self, name: &str, version: &str) -> Option<PackageName> {
+        // If link_workspace_packages isn't set any version wihtout workspace protocol
+        // is considered external.
+        if !self.link_workspace_packages && !version.starts_with("workspace:") {
+            return None;
+        }
         let workspace_specifier = WorkspacePackageSpecifier::new(version)
             .unwrap_or(WorkspacePackageSpecifier::Alias(name));
         let (workspace_name, info) = self.find_package(workspace_specifier)?;
@@ -187,33 +199,36 @@ mod test {
     use super::*;
     use crate::package_json::PackageJson;
 
-    #[test_case("1.2.3", None, "1.2.3", Some("@scope/foo") ; "handles exact match")]
-    #[test_case("1.2.3", None, "^1.0.0", Some("@scope/foo") ; "handles semver range satisfied")]
-    #[test_case("2.3.4", None, "^1.0.0", None ; "handles semver range not satisfied")]
-    #[test_case("1.2.3", None, "workspace:1.2.3", Some("@scope/foo") ; "handles workspace protocol with version")]
-    #[test_case("1.2.3", None, "workspace:*", Some("@scope/foo") ; "handles workspace protocol with no version")]
-    #[test_case("1.2.3", None, "workspace:../@scope/foo", Some("@scope/foo") ; "handles workspace protocol with scoped relative path")]
-    #[test_case("1.2.3", Some("bar"), "workspace:../baz", Some("baz") ; "handles workspace protocol with path to differing package")]
-    #[test_case("1.2.3", None, "npm:^1.2.3", Some("@scope/foo") ; "handles npm protocol with satisfied semver range")]
-    #[test_case("2.3.4", None, "npm:^1.2.3", None ; "handles npm protocol with not satisfied semver range")]
-    #[test_case("1.2.3", None, "1.2.2-alpha-123abcd.0", None ; "handles pre-release versions")]
+    #[test_case("1.2.3", None, "1.2.3", Some("@scope/foo"), true ; "handles exact match")]
+    #[test_case("1.2.3", None, "^1.0.0", Some("@scope/foo"), true ; "handles semver range satisfied")]
+    #[test_case("2.3.4", None, "^1.0.0", None, true ; "handles semver range not satisfied")]
+    #[test_case("1.2.3", None, "workspace:1.2.3", Some("@scope/foo"), true ; "handles workspace protocol with version")]
+    #[test_case("1.2.3", None, "workspace:*", Some("@scope/foo"), true ; "handles workspace protocol with no version")]
+    #[test_case("1.2.3", None, "workspace:../@scope/foo", Some("@scope/foo"), true ; "handles workspace protocol with scoped relative path")]
+    #[test_case("1.2.3", Some("bar"), "workspace:../baz", Some("baz"), true ; "handles workspace protocol with path to differing package")]
+    #[test_case("1.2.3", None, "npm:^1.2.3", Some("@scope/foo"), true ; "handles npm protocol with satisfied semver range")]
+    #[test_case("2.3.4", None, "npm:^1.2.3", None, true ; "handles npm protocol with not satisfied semver range")]
+    #[test_case("1.2.3", None, "1.2.2-alpha-123abcd.0", None, true ; "handles pre-release versions")]
     // for backwards compatability with the code before versions were verified
-    #[test_case("sometag", None, "1.2.3", Some("@scope/foo") ; "handles non-semver package version")]
+    #[test_case("sometag", None, "1.2.3", Some("@scope/foo"), true ; "handles non-semver package version")]
     // for backwards compatability with the code before versions were verified
-    #[test_case("1.2.3", None, "sometag", Some("@scope/foo") ; "handles non-semver dependency version")]
-    #[test_case("1.2.3", None, "file:../libB", Some("@scope/foo") ; "handles file:.. inside repo")]
-    #[test_case("1.2.3", None, "file:../../../otherproject", None ; "handles file:.. outside repo")]
-    #[test_case("1.2.3", None, "link:../libB", Some("@scope/foo") ; "handles link:.. inside repo")]
-    #[test_case("1.2.3", None, "link:../../../otherproject", None ; "handles link:.. outside repo")]
-    #[test_case("0.0.0-development", None, "*", Some("@scope/foo") ; "handles development versions")]
-    #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@*", Some("@scope/foo") ; "handles pnpm alias star")]
-    #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@~", Some("@scope/foo") ; "handles pnpm alias tilda")]
-    #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@^", Some("@scope/foo") ; "handles pnpm alias caret")]
+    #[test_case("1.2.3", None, "sometag", Some("@scope/foo"), true ; "handles non-semver dependency version")]
+    #[test_case("1.2.3", None, "file:../libB", Some("@scope/foo"), true ; "handles file:.. inside repo")]
+    #[test_case("1.2.3", None, "file:../../../otherproject", None, true ; "handles file:.. outside repo")]
+    #[test_case("1.2.3", None, "link:../libB", Some("@scope/foo"), true ; "handles link:.. inside repo")]
+    #[test_case("1.2.3", None, "link:../../../otherproject", None, true ; "handles link:.. outside repo")]
+    #[test_case("0.0.0-development", None, "*", Some("@scope/foo"), true ; "handles development versions")]
+    #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@*", Some("@scope/foo"), true ; "handles pnpm alias star")]
+    #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@~", Some("@scope/foo"), true ; "handles pnpm alias tilda")]
+    #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@^", Some("@scope/foo"), true ; "handles pnpm alias caret")]
+    #[test_case("1.2.3", None, "1.2.3", None, false ; "no workspace linking")]
+    #[test_case("1.2.3", None, "workspace:1.2.3", Some("@scope/foo"), false ; "no workspace linking with protocol")]
     fn test_matches_workspace_package(
         package_version: &str,
         dependency_name: Option<&str>,
         range: &str,
         expected: Option<&str>,
+        link_workspace_packages: bool,
     ) {
         let root = AbsoluteSystemPathBuf::new(if cfg!(windows) {
             "C:\\some\\repo"
@@ -277,6 +292,7 @@ mod test {
             repo_root: &root,
             workspace_dir: &pkg_dir,
             workspaces: &workspaces,
+            link_workspace_packages,
         };
 
         assert_eq!(
