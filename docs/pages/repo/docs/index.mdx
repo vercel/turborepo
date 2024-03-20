@@ -3,44 +3,13 @@ title: Turborepo Quickstart
 description: Create your first monorepo or add Turborepo to an existing project.
 ---
 
-import { readdirSync, lstatSync, readFileSync } from 'fs';
-import path from 'path';
-import { QuickStartArea, LearnMoreArea, MonoreposArea } from "../../../components/QuickStart";
+import {
+  QuickStartArea,
+  LearnMoreArea,
+  MonoreposArea,
+} from "../../../components/QuickStart";
 import { ExamplesArea } from "../../../components/ExamplesArea";
 import { FullTurboCTA } from "../../../components/FullTurboCTA";
-
-export const getStaticProps = ({ params }) => {
-  // path to examples directory at the monorepo root.
-  const examplesDirectory = path.join(__dirname, '../../../../../examples')
-  const examples = [];
-  readdirSync(examplesDirectory).forEach(file => {
-    if (lstatSync(path.join(examplesDirectory, file)).isDirectory()) {
-      try {
-        examples.push({
-          slug: file,
-          ...JSON.parse(readFileSync(path.join(examplesDirectory, file, "meta.json")).toString())
-          }
-        );
-      } catch (err) {
-        console.log(`No meta.json found for ${file}, excluding from docs`);
-      }
-    }
-  });
-  // throw an error if no examples are found
-  if (examples.length === 0) {
-    throw new Error(
-      `No examples found in ${examplesDirectory}! Make sure you have updated the path if moving this file.`
-    )
-  }
-  return {
-    props: {
-      ssg: {
-        examples
-      }
-    },
-    revalidate: 60 * 60 * 24
-  }
-}
 
 # Turborepo Quickstart
 
