@@ -374,6 +374,7 @@ pub async fn type_resolve(
         module: m,
         path: p,
         query: _,
+        fragment: _,
     } = &*request.await?
     {
         let m = if let Some(stripped) = m.strip_prefix('@') {
@@ -385,6 +386,7 @@ pub async fn type_resolve(
             format!("@types/{m}"),
             Value::new(p.clone()),
             Vc::<String>::default(),
+            Value::default(),
         ))
     } else {
         None
