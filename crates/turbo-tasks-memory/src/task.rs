@@ -80,11 +80,7 @@ enum TaskType {
     Once(Box<OnceTaskFn>),
 
     /// A normal persistent task
-    Persistent {
-        ty: Arc<PersistentTaskType>,
-        #[allow(dead_code)]
-        ty_copy: Box<PersistentTaskType>,
-    },
+    Persistent { ty: Arc<PersistentTaskType> },
 }
 
 enum TaskTypeForDescription {
@@ -434,10 +430,7 @@ impl Task {
         task_type: Arc<PersistentTaskType>,
         stats_type: StatsType,
     ) -> Self {
-        let ty = TaskType::Persistent {
-            ty_copy: Box::new((&*task_type).clone()),
-            ty: task_type,
-        };
+        let ty = TaskType::Persistent { ty: task_type };
         let description = Self::get_event_description_static(id, &ty);
         Self {
             id,
