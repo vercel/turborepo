@@ -2046,7 +2046,7 @@ async fn resolve_module_request(
             full_pattern.into_string()
         },
         query,
-        fragment,
+        fragment.clone(),
     )
     .await?
     {
@@ -2095,7 +2095,7 @@ async fn resolve_module_request(
                         options_value,
                         options,
                         query,
-                        fragment,
+                        fragment.clone(),
                     )
                     .await?;
                     results.push(resolved)
@@ -2118,7 +2118,7 @@ async fn resolve_module_request(
             "/".to_string().into(),
             path.clone(),
         ]);
-        let relative = Request::relative(Value::new(pattern), query, true, fragment);
+        let relative = Request::relative(Value::new(pattern), query, true, fragment.clone());
         let relative_result =
             resolve_internal_boxed(lookup_path, relative.resolve().await?, options).await?;
         let relative_result = relative_result.with_replaced_request_key(

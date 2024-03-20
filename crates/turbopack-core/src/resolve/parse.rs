@@ -597,7 +597,9 @@ impl ValueToString for Request {
             Request::Uri {
                 protocol,
                 remainder,
-            } => format!("uri \"{protocol}\" \"{remainder}\""),
+                query,
+                fragment,
+            } => format!("uri \"{protocol}\" \"{remainder}\" ?{query} #{fragment}"),
             Request::Unknown { path } => format!("unknown {path}"),
             Request::Dynamic => "dynamic".to_string(),
             Request::Alternatives { requests } => {
