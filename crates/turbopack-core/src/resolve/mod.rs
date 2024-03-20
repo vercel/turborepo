@@ -65,7 +65,7 @@ use crate::{error::PrettyPrintError, issue::IssueSeverity};
 pub enum ModuleResolveResultItem {
     Module(Vc<Box<dyn Module>>),
     OutputAsset(Vc<Box<dyn OutputAsset>>),
-    External(String, ExternalType),
+    External(Arc<String>, ExternalType),
     Ignore,
     Error(Vc<String>),
     Empty,
@@ -415,7 +415,7 @@ impl Display for ExternalType {
 #[derive(Clone, Debug)]
 pub enum ResolveResultItem {
     Source(Vc<Box<dyn Source>>),
-    External(String, ExternalType),
+    External(Arc<String>, ExternalType),
     Ignore,
     Error(Vc<String>),
     Empty,
@@ -430,7 +430,7 @@ pub enum ResolveResultItem {
 #[derive(Clone, Debug, Default, Hash, Ord, PartialOrd)]
 #[turbo_tasks::value(serialization = "auto_for_input")]
 pub struct RequestKey {
-    pub request: Option<String>,
+    pub request: Option<Arc<String>>,
     pub conditions: BTreeMap<String, bool>,
 }
 
@@ -456,7 +456,7 @@ impl Display for RequestKey {
 }
 
 impl RequestKey {
-    pub fn new(request: String) -> Self {
+    pub fn new(request: Arc<String>) -> Self {
         RequestKey {
             request: Some(request),
             ..Default::default()
@@ -712,7 +712,7 @@ impl ResolveResult {
 
     /// Returns a new [ResolveResult] where all [RequestKey]s are set to the
     /// passed `request`.
-    pub fn with_request_ref(&self, request: String) -> Self {
+    pub fn with_request_ref(&self, request: Arc<String>) -> Self {
         let new_primary = self
             .primary
             .iter()
@@ -896,7 +896,7 @@ impl ResolveResult {
     #[turbo_tasks::function]
     pub async fn with_replaced_request_key(
         self: Vc<Self>,
-        old_request_key: String,
+        old_request_key: Arc<String>,
         request_key: Value<RequestKey>,
     ) -> Result<Vc<Self>> {
         let this = self.await?;
@@ -905,13 +905,13 @@ impl ResolveResult {
             .primary
             .iter()
             .filter_map(|(k, v)| {
-                let remaining = k.request.as_ref()?.strip_prefix(&old_request_key)?;
+                let remaining = k.request.as_ref()?.strip_prefix(&*old_request_key)?;
                 Some((
                     RequestKey {
                         request: request_key
                             .request
                             .as_ref()
-                            .map(|r| format!("{}{}", r, remaining)),
+                            .map(|r| format!("{}{}", r, remaining).into()),
                         conditions: request_key.conditions.clone(),
                     },
                     v.clone(),
@@ -928,7 +928,7 @@ impl ResolveResult {
     /// Returns a new [ResolveResult] where all [RequestKey]s are set to the
     /// passed `request`.
     #[turbo_tasks::function]
-    pub async fn with_request(self: Vc<Self>, request: String) -> Result<Vc<Self>> {
+    pub async fn with_request(self: Vc<Self>, request: Arc<String>) -> Result<Vc<Self>> {
         let this = self.await?;
         let new_primary = this
             .primary
@@ -1258,7 +1258,7 @@ pub async fn resolve_raw(
     async fn to_result(request: &str, path: Vc<FileSystemPath>) -> Result<Vc<ResolveResult>> {
         let RealPathResult { path, symlinks } = &*path.realpath_with_links().await?;
         Ok(ResolveResult::source_with_affecting_sources(
-            RequestKey::new(request.to_string()),
+            RequestKey::new(request.to_string().into()),
             Vc::upcast(FileSource::new(*path)),
             symlinks
                 .iter()
@@ -1279,7 +1279,8 @@ pub async fn resolve_raw(
         .and_then(|pat| pat.filter_could_not_match("/ROOT/fsd8nz8og54z"))
     {
         let path = Pattern::new(pat);
-        let matches = read_matches(lookup_dir.root(), "/ROOT/".to_string(), true, path).await?;
+        let matches =
+            read_matches(lookup_dir.root(), "/ROOT/".to_string().into(), true, path).await?;
         if matches.len() > 10000 {
             let path_str = path.to_string().await?;
             println!(
@@ -1298,7 +1299,8 @@ pub async fn resolve_raw(
     }
 
     {
-        let matches = read_matches(lookup_dir, "".to_string(), force_in_lookup_dir, path).await?;
+        let matches =
+            read_matches(lookup_dir, "".to_string().into(), force_in_lookup_dir, path).await?;
         if matches.len() > 10000 {
             println!(
                 "WARN: resolving pattern {} in {} leads to {} results",
@@ -1592,7 +1594,7 @@ async fn resolve_internal_inline(
                 let mut results = Vec::new();
                 let matches = read_matches(
                     lookup_path,
-                    "".to_string(),
+                    "".to_string().into(),
                     *force_in_lookup_dir,
                     Pattern::new(path.clone()).resolve().await?,
                 )
@@ -1764,7 +1766,7 @@ async fn resolve_internal_inline(
                 query: _,
                 fragment: _,
             } => {
-                let uri = format!("{}{}", protocol, remainder);
+                let uri = Arc::new(format!("{}{}", protocol, remainder));
                 ResolveResult::primary_with_key(
                     RequestKey::new(uri.clone()),
                     ResolveResultItem::External(uri, ExternalType::Url),
@@ -1850,7 +1852,7 @@ async fn resolve_into_folder(
                         // we are not that strict when a main field fails to resolve
                         // we continue to try other alternatives
                         if !result.is_unresolveable_ref() {
-                            let mut result = result.with_request_ref(".".to_string());
+                            let mut result = result.with_request_ref(".".to_string().into());
                             result.add_affecting_source_ref(Vc::upcast(FileSource::new(
                                 package_json_path,
                             )));
@@ -1870,11 +1872,11 @@ async fn resolve_into_folder(
     // fall back to dir/index.[js,ts,...]
     let pattern = match &options_value.default_files[..] {
         [] => return Ok(ResolveResult::unresolveable().into()),
-        [file] => Pattern::Constant(format!("./{file}")),
+        [file] => Pattern::Constant(format!("./{file}").into()),
         files => Pattern::Alternatives(
             files
                 .iter()
-                .map(|file| Pattern::Constant(format!("./{file}")))
+                .map(|file| Pattern::Constant(format!("./{file}").into()))
                 .collect(),
         ),
     };
@@ -1884,7 +1886,7 @@ async fn resolve_into_folder(
     Ok(
         resolve_internal_inline(package_path, request.resolve().await?, options)
             .await?
-            .with_request(".".to_string()),
+            .with_request(".".to_string().into()),
     )
 }
 
@@ -1909,7 +1911,7 @@ async fn resolve_relative_request(
             let request = path_pattern.as_string()?;
             let prefix_path = package_path.get_path_to(lookup_path_ref)?;
             let request = normalize_request(&format!("./{prefix_path}/{request}"));
-            Some(request)
+            Some(request.into())
         },
         query,
         fragment,
@@ -1935,7 +1937,7 @@ async fn resolve_relative_request(
         // Add the extensions as alternatives to the path
         // read_matches keeps the order of alternatives intact
         new_path.push(Pattern::Alternatives(
-            once(Pattern::Constant("".to_string()))
+            once(Pattern::Constant("".to_string().into()))
                 .chain(
                     options_value
                         .extensions
@@ -1951,7 +1953,7 @@ async fn resolve_relative_request(
     let mut results = Vec::new();
     let matches = read_matches(
         lookup_path,
-        "".to_string(),
+        "".to_string().into(),
         force_in_lookup_dir,
         Pattern::new(new_path).resolve().await?,
     )
@@ -1992,7 +1994,7 @@ async fn resolve_relative_request(
                     if !pushed && path_pattern.is_match(matched_pattern) {
                         results.push(
                             resolved(
-                                RequestKey::new(matched_pattern.to_string()),
+                                RequestKey::new(matched_pattern.to_string().into()),
                                 *path,
                                 lookup_path,
                                 request,
@@ -2062,7 +2064,7 @@ async fn apply_in_package(
     lookup_path: Vc<FileSystemPath>,
     options: Vc<ResolveOptions>,
     options_value: &ResolveOptions,
-    get_request: impl Fn(&FileSystemPath) -> Option<String>,
+    get_request: impl Fn(&FileSystemPath) -> Option<Arc<String>>,
     query: Vc<String>,
     fragment: Vc<String>,
 ) -> Result<Option<Vc<ResolveResult>>> {
@@ -2096,7 +2098,7 @@ async fn apply_in_package(
             continue;
         };
 
-        let value = if let Some(value) = field_value.get(&request) {
+        let value = if let Some(value) = field_value.get(&*request) {
             value
         } else if let Some(request) = request.strip_prefix("./") {
             let Some(value) = field_value.get(request) else {
@@ -2122,7 +2124,7 @@ async fn apply_in_package(
         }
 
         if let Some(value) = value.as_str() {
-            if value == request {
+            if value == &**request {
                 // This would be a cycle, so we ignore it
                 return Ok(None);
             }
@@ -2134,7 +2136,7 @@ async fn apply_in_package(
                         .with_fragment(fragment),
                     options,
                 )
-                .with_replaced_request_key(value.to_string(), Value::new(request_key))
+                .with_replaced_request_key(value.to_string().into(), Value::new(request_key))
                 .with_affecting_sources(refs),
             ));
         }

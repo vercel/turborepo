@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fmt::Display, mem::take};
+use std::{collections::HashSet, fmt::Display, mem::take, sync::Arc};
 
 use anyhow::Result;
 use lazy_static::lazy_static;
@@ -13,7 +13,7 @@ use turbo_tasks_fs::{
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(PartialOrd, Ord, Hash, Clone, Debug, Default)]
 pub enum Pattern {
-    Constant(String),
+    Constant(Arc<String>),
     #[default]
     Dynamic,
     Alternatives(Vec<Pattern>),
@@ -55,7 +55,7 @@ fn concatenation_extend_or_merge_items(
 
 impl Pattern {
     // TODO this should be removed in favor of pattern resolving
-    pub fn into_string(self) -> Option<String> {
+    pub fn into_string(self) -> Option<Arc<String>> {
         match self {
             Pattern::Constant(str) => Some(str),
             _ => None,
@@ -754,8 +754,8 @@ impl ValueToString for Pattern {
 
 #[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, TraceRawVcs, Serialize, Deserialize)]
 pub enum PatternMatch {
-    File(String, Vc<FileSystemPath>),
-    Directory(String, Vc<FileSystemPath>),
+    File(Arc<String>, Vc<FileSystemPath>),
+    Directory(Arc<String>, Vc<FileSystemPath>),
 }
 
 // TODO this isn't super efficient
@@ -774,7 +774,7 @@ pub struct PatternMatches(Vec<PatternMatch>);
 #[turbo_tasks::function]
 pub async fn read_matches(
     lookup_dir: Vc<FileSystemPath>,
-    prefix: String,
+    prefix: Arc<String>,
     force_in_lookup_dir: bool,
     pattern: Vc<Pattern>,
 ) -> Result<Vc<PatternMatches>> {
@@ -812,12 +812,12 @@ pub async fn read_matches(
                                     FileSystemEntryType::File => {
                                         results.push((
                                             index,
-                                            PatternMatch::File(prefix.to_string(), fs_path),
+                                            PatternMatch::File(prefix.to_string().into(), fs_path),
                                         ));
                                     }
                                     FileSystemEntryType::Directory => results.push((
                                         index,
-                                        PatternMatch::Directory(prefix.to_string(), fs_path),
+                                        PatternMatch::Directory(prefix.to_string().into(), fs_path),
                                     )),
                                     FileSystemEntryType::Symlink => {
                                         if let LinkContent::Link { link_type, .. } =

@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, future::Future, pin::Pin};
+use std::{collections::BTreeMap, future::Future, pin::Pin, sync::Arc};
 
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
@@ -88,13 +88,13 @@ pub enum ResolveInPackage {
 #[turbo_tasks::value(shared)]
 #[derive(Clone)]
 pub enum ImportMapping {
-    External(Option<String>, ExternalType),
+    External(Option<Arc<String>>, ExternalType),
     /// An already resolved result that will be returned directly.
     Direct(Vc<ResolveResult>),
     /// A request alias that will be resolved first, and fall back to resolving
     /// the original request if it fails. Useful for the tsconfig.json
     /// `compilerOptions.paths` option and Next aliases.
-    PrimaryAlternative(String, Option<Vc<FileSystemPath>>),
+    PrimaryAlternative(Arc<String>, Option<Vc<FileSystemPath>>),
     Ignore,
     Empty,
     Alternatives(Vec<Vc<ImportMapping>>),
@@ -129,13 +129,19 @@ impl AliasTemplate for Vc<ImportMapping> {
             Ok(match this {
                 ImportMapping::External(name, ty) => {
                     if let Some(name) = name {
-                        ImportMapping::External(Some(name.clone().replace('*', capture)), *ty)
+                        ImportMapping::External(
+                            Some(name.clone().replace('*', capture).into()),
+                            *ty,
+                        )
                     } else {
                         ImportMapping::External(None, *ty)
                     }
                 }
                 ImportMapping::PrimaryAlternative(name, context) => {
-                    ImportMapping::PrimaryAlternative(name.clone().replace('*', capture), *context)
+                    ImportMapping::PrimaryAlternative(
+                        name.clone().replace('*', capture).into(),
+                        *context,
+                    )
                 }
                 ImportMapping::Direct(_) | ImportMapping::Ignore | ImportMapping::Empty => {
                     this.clone()
@@ -269,9 +275,9 @@ async fn import_mapping_to_result(
         ImportMapping::Direct(result) => ImportMapResult::Result(*result),
         ImportMapping::External(name, ty) => ImportMapResult::Result(
             ResolveResult::primary(if let Some(name) = name {
-                ResolveResultItem::External(name.to_string(), *ty)
+                ResolveResultItem::External(name.clone(), *ty)
             } else if let Some(request) = request.await?.request() {
-                ResolveResultItem::External(request, *ty)
+                ResolveResultItem::External(request.into(), *ty)
             } else {
                 bail!("Cannot resolve external reference without request")
             })
@@ -420,7 +426,7 @@ pub struct ResolveOptions {
     /// request first.
     pub prefer_relative: bool,
     /// The extensions that should be added to a request when resolving.
-    pub extensions: Vec<String>,
+    pub extensions: Vec<Arc<String>>,
     /// The locations where to resolve modules.
     pub modules: Vec<ResolveModules>,
     /// How to resolve packages.
@@ -428,7 +434,7 @@ pub struct ResolveOptions {
     /// How to resolve in packages.
     pub in_package: Vec<ResolveInPackage>,
     /// The default files to resolve in a folder.
-    pub default_files: Vec<String>,
+    pub default_files: Vec<Arc<String>>,
     /// An import map to use before resolving a request.
     pub import_map: Option<Vc<ImportMap>>,
     /// An import map to use when a request is otherwise unresolveable.
