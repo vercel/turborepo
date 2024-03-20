@@ -506,7 +506,7 @@ impl ResolveOptions {
 #[derive(Hash, Clone, Debug)]
 pub struct ResolveModulesOptions {
     pub modules: Vec<ResolveModules>,
-    pub extensions: Vec<String>,
+    pub extensions: Vec<Arc<String>>,
 }
 
 #[turbo_tasks::function]
@@ -523,7 +523,7 @@ pub async fn resolve_modules_options(
 
 #[turbo_tasks::value_trait]
 pub trait ImportMappingReplacement {
-    fn replace(self: Vc<Self>, capture: String) -> Vc<ImportMapping>;
+    fn replace(self: Vc<Self>, capture: Arc<String>) -> Vc<ImportMapping>;
     fn result(
         self: Vc<Self>,
         lookup_path: Vc<FileSystemPath>,

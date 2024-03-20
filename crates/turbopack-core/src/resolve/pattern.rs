@@ -855,9 +855,11 @@ pub async fn read_matches(
                     let subpath = &str[..=str.rfind('/').unwrap()];
                     if handled.insert(subpath) {
                         if let Some(fs_path) = &*if force_in_lookup_dir {
-                            lookup_dir.try_join_inside(subpath.to_string()).await?
+                            lookup_dir
+                                .try_join_inside(subpath.to_string().into())
+                                .await?
                         } else {
-                            lookup_dir.try_join(subpath.to_string()).await?
+                            lookup_dir.try_join(subpath.to_string().into()).await?
                         } {
                             let fs_path = fs_path.resolve().await?;
                             let len = prefix.len();
@@ -866,7 +868,7 @@ pub async fn read_matches(
                                 0,
                                 read_matches(
                                     fs_path,
-                                    prefix.to_string(),
+                                    prefix.to_string().into(),
                                     force_in_lookup_dir,
                                     pattern,
                                 ),

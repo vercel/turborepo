@@ -325,18 +325,18 @@ impl Request {
                 query: _,
                 fragment: _,
             } => {
-                let mut pat = Pattern::Constant(format!("./{module}"));
+                let mut pat = Pattern::Constant(format!("./{module}").into());
                 pat.push(path.clone());
                 // TODO add query
                 Self::parse(Value::new(pat))
             }
             Request::PackageInternal { path } => {
-                let mut pat = Pattern::Constant("./".to_string());
+                let mut pat = Pattern::Constant("./".to_string().into());
                 pat.push(path.clone());
                 Self::parse(Value::new(pat))
             }
             Request::Unknown { path } => {
-                let mut pat = Pattern::Constant("./".to_string());
+                let mut pat = Pattern::Constant("./".to_string().into());
                 pat.push(path.clone());
                 Self::parse(Value::new(pat))
             }
