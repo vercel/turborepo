@@ -124,9 +124,9 @@ impl DiskWatcher {
     /// - Doesn't emit Modify events after a Create event
     pub(crate) fn start_watching(
         self: Arc<Self>,
-        name: String,
+        name: Arc<String>,
         root_path: PathBuf,
-        report_invalidation_reason: Option<(String, PathBuf)>,
+        report_invalidation_reason: Option<(Arc<String>, PathBuf)>,
         invalidation_lock: Arc<RwLock<()>>,
         invalidator_map: Arc<InvalidatorMap>,
         dir_invalidator_map: Arc<InvalidatorMap>,
@@ -209,7 +209,7 @@ impl DiskWatcher {
         &self,
         rx: Receiver<DebounceEventResult>,
         root_path: PathBuf,
-        report_invalidation_reason: Option<(String, PathBuf)>,
+        report_invalidation_reason: Option<(Arc<String>, PathBuf)>,
         invalidation_lock: Arc<RwLock<()>>,
         invalidator_map: Arc<InvalidatorMap>,
         dir_invalidator_map: Arc<InvalidatorMap>,
@@ -428,7 +428,7 @@ impl DiskWatcher {
 
 #[instrument(parent = None, level = "info", name = "DiskFileSystem file change", skip_all, fields(name = display(path.display())))]
 fn invalidate(
-    report_invalidation_reason: &Option<(String, PathBuf)>,
+    report_invalidation_reason: &Option<(Arc<String>, PathBuf)>,
     path: &Path,
     invalidator: Invalidator,
 ) {
@@ -442,7 +442,7 @@ fn invalidate(
 }
 
 fn invalidate_path(
-    report_invalidation_reason: &Option<(String, PathBuf)>,
+    report_invalidation_reason: &Option<(Arc<String>, PathBuf)>,
     invalidator_map: &mut HashMap<String, HashSet<Invalidator>>,
     paths: impl Iterator<Item = PathBuf>,
 ) {
@@ -457,7 +457,7 @@ fn invalidate_path(
 }
 
 fn invalidate_path_and_children_execute(
-    report_invalidation_reason: &Option<(String, PathBuf)>,
+    report_invalidation_reason: &Option<(Arc<String>, PathBuf)>,
     invalidator_map: &mut HashMap<String, HashSet<Invalidator>>,
     paths: impl Iterator<Item = PathBuf>,
 ) {

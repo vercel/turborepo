@@ -1,4 +1,7 @@
-use std::fmt::{Display, Formatter};
+use std::{
+    fmt::{Display, Formatter},
+    sync::Arc,
+};
 
 use indexmap::IndexSet;
 use turbo_tasks::{util::StaticOrArc, InvalidationReason, InvalidationReasonKind};
@@ -50,7 +53,7 @@ impl InvalidationReasonKind for WatchChangeKind {
 /// before.
 #[derive(PartialEq, Eq, Hash)]
 pub struct WatchStart {
-    pub name: String,
+    pub name: Arc<String>,
 }
 
 impl InvalidationReason for WatchStart {

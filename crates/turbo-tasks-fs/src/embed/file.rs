@@ -1,7 +1,4 @@
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{path::Path, sync::Arc};
 
 use anyhow::{Context, Result};
 use dunce::canonicalize;
@@ -25,7 +22,7 @@ pub async fn content_from_relative_path(
     let disk_fs = DiskFileSystem::new(root_path_str.clone(), root_path_str, vec![]);
     disk_fs.await?.start_watching()?;
 
-    let fs_path = disk_fs.root().join(path.to_string());
+    let fs_path = disk_fs.root().join(path.to_string().into());
     Ok(fs_path.read())
 }
 

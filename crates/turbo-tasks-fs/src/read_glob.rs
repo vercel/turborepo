@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
 use turbo_tasks::Vc;
@@ -27,7 +27,7 @@ pub async fn read_glob(
 
 #[turbo_tasks::function]
 async fn read_glob_inner(
-    prefix: String,
+    prefix: Arc<String>,
     directory: Vc<FileSystemPath>,
     glob: Vc<Glob>,
     include_dot_files: bool,
@@ -59,7 +59,12 @@ async fn read_glob_internal(
                         if glob_value.execute(&full_path_prefix) {
                             result.inner.insert(
                                 full_path,
-                                read_glob_inner(full_path_prefix, *path, glob, include_dot_files),
+                                read_glob_inner(
+                                    full_path_prefix.into(),
+                                    *path,
+                                    glob,
+                                    include_dot_files,
+                                ),
                             );
                         }
                     }

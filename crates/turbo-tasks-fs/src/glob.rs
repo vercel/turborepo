@@ -1,4 +1,4 @@
-use std::mem::take;
+use std::{mem::take, sync::Arc};
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
@@ -395,7 +395,7 @@ impl TryFrom<&str> for Glob {
 #[turbo_tasks::value_impl]
 impl Glob {
     #[turbo_tasks::function]
-    pub fn new(glob: String) -> Result<Vc<Self>> {
+    pub fn new(glob: Arc<String>) -> Result<Vc<Self>> {
         Ok(Self::cell(Glob::try_from(glob.as_str())?))
     }
 
