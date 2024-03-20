@@ -14,7 +14,6 @@ pub struct Output {
     pub(crate) content: OutputContent,
     updates: u32,
     pub(crate) dependent_tasks: TaskIdSet,
-    pub(crate) dependent_tasks_copy: TaskIdSet,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -41,7 +40,6 @@ impl Display for OutputContent {
 impl Output {
     pub fn read(&mut self, reader: TaskId) -> Result<RawVc> {
         self.dependent_tasks.insert(reader);
-        self.dependent_tasks_copy.insert(reader);
         self.read_untracked()
     }
 
@@ -68,7 +66,6 @@ impl Output {
         // notify
         if !self.dependent_tasks.is_empty() {
             turbo_tasks.schedule_notify_tasks_set(&take(&mut self.dependent_tasks));
-            take(&mut self.dependent_tasks_copy);
         }
     }
 
@@ -82,7 +79,6 @@ impl Output {
         // notify
         if !self.dependent_tasks.is_empty() {
             turbo_tasks.schedule_notify_tasks_set(&take(&mut self.dependent_tasks));
-            take(&mut self.dependent_tasks_copy);
         }
     }
 
@@ -96,7 +92,6 @@ impl Output {
         // notify
         if !self.dependent_tasks.is_empty() {
             turbo_tasks.schedule_notify_tasks_set(&take(&mut self.dependent_tasks));
-            take(&mut self.dependent_tasks_copy);
         }
     }
 

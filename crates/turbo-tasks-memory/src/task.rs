@@ -616,7 +616,6 @@ impl Task {
                 backend.with_task(task, |task| {
                     task.with_output_mut_if_available(|output| {
                         output.dependent_tasks.remove(&reader);
-                        output.dependent_tasks_copy.remove(&reader);
                     });
                 });
             }
@@ -1914,7 +1913,6 @@ impl Task {
 
                         // always shrinking memory
                         state.output.dependent_tasks.shrink_to_fit();
-                        state.output.dependent_tasks_copy.shrink_to_fit();
                         if active && (has_unused_cells || has_used_cells) {
                             new_priority = GcPriority::EmptyCells {
                                 total_compute_duration: total_compute_duration_u8,
