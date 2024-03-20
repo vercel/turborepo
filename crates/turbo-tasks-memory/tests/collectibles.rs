@@ -119,7 +119,7 @@ struct Collectibles(AutoSet<Vc<Box<dyn ValueToString>>>);
 
 #[turbo_tasks::function]
 async fn my_collecting_function() -> Result<Vc<Thing>> {
-    let result = my_transitive_emitting_function("".to_string(), "".to_string());
+    let result = my_transitive_emitting_function("".to_string().into(), "".to_string().into());
     result.take_collectibles::<Box<dyn ValueToString>>();
     Ok(result)
 }
@@ -137,9 +137,9 @@ async fn my_collecting_function_indirect() -> Result<Vc<Thing>> {
 
 #[turbo_tasks::function]
 async fn my_multi_emitting_function() -> Result<Vc<Thing>> {
-    my_transitive_emitting_function("".to_string(), "a".to_string()).await?;
-    my_transitive_emitting_function("".to_string(), "b".to_string()).await?;
-    my_emitting_function("".to_string()).await?;
+    my_transitive_emitting_function("".to_string().into(), "a".to_string().into()).await?;
+    my_transitive_emitting_function("".to_string().into(), "b".to_string().into()).await?;
+    my_emitting_function("".to_string().into()).await?;
     Ok(Thing::cell(Thing(0)))
 }
 
