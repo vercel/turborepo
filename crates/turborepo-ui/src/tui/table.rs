@@ -17,7 +17,8 @@ use super::{
     Error,
 };
 
-const FOOTER_TEXT: &str = "Use arrow keys to navigate";
+const FOOTER_TEXT: &str = "Use arrow keys to navigate. Press `Enter` to interact with a task and \
+                           `Ctrl-Z` to stop interacting";
 
 /// A widget that renders a table of their tasks and their current status
 ///
