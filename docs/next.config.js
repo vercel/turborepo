@@ -1,9 +1,5 @@
-// @ts-check
-
 const { withSentryConfig } = require("@sentry/nextjs");
-// @ts-expect-error
 const withVercelToolbar = require("@vercel/toolbar/plugins/next")();
-// @ts-expect-error
 const withNextra = require("nextra")({
   theme: "nextra-theme-docs",
   themeConfig: "./theme.config.tsx",
@@ -58,7 +54,6 @@ const OLD_TURBOREPO_ROUTES = [
   "/docs/upgrading-to-v1",
 ];
 
-/** @type {import('next').NextConfig}  */
 const nextConfig = withNextra({
   sentry: {
     autoInstrumentServerFunctions: false,
@@ -66,7 +61,7 @@ const nextConfig = withNextra({
   },
   reactStrictMode: true,
   experimental: {
-    mdxRs: true,
+    legacyBrowsers: false,
   },
   eslint: {
     ignoreDuringBuilds: true,
