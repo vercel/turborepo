@@ -1,5 +1,5 @@
-const { promises: fs, statSync } = require("fs");
-const path = require("path");
+const { promises: fs, statSync } = require("node:fs");
+const path = require("node:path");
 const RSS = require("rss");
 const matter = require("gray-matter");
 
@@ -43,11 +43,11 @@ async function generate() {
     );
     feed.item({
       title: frontmatter.data.title,
-      url: "https://turbo.build/blog/" + frontmatter.slug, // intentionally including slash here
+      url: `https://turbo.build/blog/${frontmatter.slug}`, // intentionally including slash here
       date: frontmatter.data.date,
       description: frontmatter.data.description,
       enclosure: {
-        url: "https://turbo.build" + frontmatter.data.ogImage, // intentionally omitting slash here
+        url: `https://turbo.build${frontmatter.data.ogImage}`, // intentionally omitting slash here
         type: "image/png",
         size: stat.size,
       },

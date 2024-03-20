@@ -4,7 +4,7 @@ import { RepoHero } from "./RepoHero";
 import { RepoFeatures } from "./RepoFeatures";
 import { RepoLetter } from "./RepoLetter";
 
-export default function Home() {
+export function TurborepoHome() {
   return (
     <>
       <LandingPageGlobalStyles />

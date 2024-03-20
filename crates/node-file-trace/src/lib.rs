@@ -35,7 +35,7 @@ use turbo_tasks_memory::{
 };
 use turbopack::{
     emit_asset, emit_with_completion, module_options::ModuleOptionsContext, rebase::RebasedAsset,
-    resolve_options_context::ResolveOptionsContext, ModuleAssetContext,
+    ModuleAssetContext,
 };
 use turbopack_cli_utils::issue::{ConsoleUi, IssueSeverityCliOption, LogOptions};
 use turbopack_core::{
@@ -46,9 +46,10 @@ use turbopack_core::{
     issue::{IssueDescriptionExt, IssueReporter, IssueSeverity},
     module::{Module, Modules},
     output::OutputAsset,
-    reference::all_modules,
+    reference::all_modules_and_affecting_sources,
     resolve::options::{ImportMapping, ResolvedMap},
 };
+use turbopack_resolve::resolve_options_context::ResolveOptionsContext;
 
 use crate::nft_json::NftJsonAsset;
 
@@ -195,7 +196,7 @@ impl Args {
 }
 
 async fn create_fs(name: &str, root: &str, watch: bool) -> Result<Vc<Box<dyn FileSystem>>> {
-    let fs = DiskFileSystem::new(name.to_string(), root.to_string());
+    let fs = DiskFileSystem::new(name.to_string(), root.to_string(), vec![]);
     if watch {
         fs.await?.start_watching()?;
     } else {
@@ -249,7 +250,7 @@ async fn input_to_modules(
     let root = fs.root();
     let process_cwd = process_cwd
         .clone()
-        .map(|p| p.trim_start_matches(&context_directory).to_owned());
+        .map(|p| format!("/ROOT{}", p.trim_start_matches(&context_directory)));
 
     let asset_context: Vc<Box<dyn AssetContext>> = Vc::upcast(create_module_asset(
         root,
@@ -567,7 +568,7 @@ async fn main_operation(
             )
             .await?;
             for module in modules.iter() {
-                let set = all_modules(*module)
+                let set = all_modules_and_affecting_sources(*module)
                     .issue_file_path(module.ident().path(), "gathering list of assets")
                     .await?;
                 for asset in set.await?.iter() {
@@ -694,5 +695,6 @@ fn register() {
     turbo_tasks_fs::register();
     turbopack::register();
     turbopack_cli_utils::register();
+    turbopack_resolve::register();
     include!(concat!(env!("OUT_DIR"), "/register.rs"));
 }

@@ -1,4 +1,4 @@
-import Callout from "../../../../components/Callout";
+import { Callout } from "../../../../components/Callout";
 
 # Sharing Code in a monorepo
 
@@ -19,16 +19,17 @@ The fact is that they're very similar. A package is just a piece of shared code.
 
 Each package contains a `package.json`. You're likely familiar with using these to manage dependencies and scripts in your applications.
 
-However, you may not have noticed the `main` and `name` fields before:
+However, you may not have noticed the `name` and `exports` fields before:
 
 ```jsonc filename="packages/my-lib/package.json"
 {
   // The name of your package
   "name": "my-lib",
 
-  // When this package is used, this file is actually
-  // the thing that gets imported
-  "main": "./index.js"
+  // When this package is used, this file is what gets imported
+  "exports": {
+    ".": "./src/index.ts"
+  },
 }
 ```
 
@@ -50,15 +51,13 @@ myFunc(); // Hello!
 
 Then we'll be able to use the code inside the `my-lib` folder inside our applications.
 
-To summarize, **each package must have a `name` and a `main`** declared inside its `package.json`.
+To summarize, **each package must have a `name` and `exports`** declared inside its `package.json`.
 
 <Callout type="info">
 
-Package resolution in `package.json` is a very complicated topic, and we can't do justice to it here. Other fields in your `package.json` may take precedence over `main` depending on how the package is being imported.
+Package resolution in `package.json` is a very complicated topic, and we can't do justice to it here. Other fields in your `package.json` may take precedence over `exports` depending on how the package is being imported - but you should be good to go in the majority of cases.
 
-Check the [npm docs](https://docs.npmjs.com/cli/v8/configuring-npm/package-json/#main) for a guide.
-
-For our purposes, using `main` will be good enough.
+Check the [Node.js docs](https://nodejs.org/api/packages.html#package-entry-points) for a guide.
 
 </Callout>
 

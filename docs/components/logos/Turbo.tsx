@@ -3,7 +3,7 @@ interface LogoProps {
   height?: number;
 }
 
-function Turbo({ height = 32, className = "" }: LogoProps) {
+export function Turbo({ height = 32, className = "" }: LogoProps) {
   return (
     <svg
       className={className}
@@ -60,5 +60,3 @@ function Turbo({ height = 32, className = "" }: LogoProps) {
     </svg>
   );
 }
-
-export default Turbo;

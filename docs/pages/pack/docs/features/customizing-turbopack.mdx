@@ -3,7 +3,7 @@ title: Customizing Turbopack
 description: Learn about how to customize Turbopack to your needs
 ---
 
-import Callout from "../../../../components/Callout";
+import { Callout } from "../../../../components/Callout";
 
 # Customizing Turbopack
 
@@ -112,5 +112,31 @@ module.exports = {
 ```
 
 This aliases imports of the `underscore` package to the `lodash` package. In other words, `import underscore from 'underscore'` will load the `lodash` module instead of `underscore`.
+
+## Resolve Extensions
+
+Through `next.config.js`, Turbopack can be configured to resolve modules with custom extensions, similar to webpack's [`resolve.extensions`](https://webpack.js.org/configuration/resolve/#resolveextensions) configuration.
+
+To configure resolve extension, use the `resolveExtensions` field in `next.config.js`:
+
+```js filename="next.config.js"
+module.exports = {
+  experimental: {
+    turbo: {
+      resolveExtensions: [
+        '.mdx',
+        '.tsx',
+        '.ts',
+        '.jsx',
+        '.js',
+        '.mjs',
+        '.json',
+      ],
+    },
+  },
+}
+```
+
+This overwrites the original resolve extensions with the provided list. Make sure to include the default extensions listed in the above config.
 
 Turbopack also supports conditional aliasing through this field, similar to Node.js's [conditional exports](https://nodejs.org/docs/latest-v18.x/api/packages.html#conditional-exports). At the moment only the `browser` condition is supported. In the case above, imports of the `mocha` module will be aliased to `mocha/browser-entry.js` when Turbopack targets browser environments.

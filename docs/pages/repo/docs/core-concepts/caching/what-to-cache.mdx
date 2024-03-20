@@ -3,7 +3,7 @@ title: What to Cache?
 description: The configuration of Turborepo `outputs`
 ---
 
-import Callout from "../../../../../components/Callout";
+import { Callout } from "../../../../../components/Callout";
 
 # What to Cache?
 
@@ -11,7 +11,7 @@ By default, the console output from all tasks is _always_ captured by Turborepo.
 
 ## Configuring Cache Outputs
 
-You configure cache outputs in Turborepo by passing specifying an array of globs inside [`pipeline.<task>.outputs`](/repo/docs/reference/configuration#outputs) as seen in this example:
+You configure cache outputs in Turborepo by specifying an array of globs inside [`pipeline.<task>.outputs`](/repo/docs/reference/configuration#outputs) as seen in this example:
 
 ```jsonc filename="/turbo.json"
 {

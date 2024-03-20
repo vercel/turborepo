@@ -20,8 +20,8 @@ const OUTPUT_ROOT = "crates/turbopack-tests/tests/snapshot/runtime/default_dev_r
 const REEXPORTED_OBJECTS = Symbol("reexported objects");
 const hasOwnProperty = Object.prototype.hasOwnProperty;
 const toStringTag = typeof Symbol !== "undefined" && Symbol.toStringTag;
-function defineProp(obj, name, options) {
-    if (!hasOwnProperty.call(obj, name)) Object.defineProperty(obj, name, options);
+function defineProp(obj, name1, options) {
+    if (!hasOwnProperty.call(obj, name1)) Object.defineProperty(obj, name1, options);
 }
 /**
  * Adds the getters to the exports object.
@@ -126,7 +126,7 @@ function esmImport(sourceModule, id) {
     if (module.namespaceObject) return module.namespaceObject;
     // only ESM can be an async module, so we don't need to worry about exports being a promise here.
     const raw = module.exports;
-    return module.namespaceObject = interopEsm(raw, {}, raw.__esModule);
+    return module.namespaceObject = interopEsm(raw, {}, raw && raw.__esModule);
 }
 // Add a simple runtime require so that environments without one can still pass
 // `typeof require` CommonJS checks so that exports are correctly registered.
@@ -138,25 +138,32 @@ function commonJsRequire(sourceModule, id) {
     if (module.error) throw module.error;
     return module.exports;
 }
-function requireContext(sourceModule, map) {
-    function requireContext(id) {
-        const entry = map[id];
-        if (!entry) {
-            throw new Error(`module ${id} is required from a require.context, but is not in the context`);
+/**
+ * `require.context` and require/import expression runtime.
+ */ function moduleContext(map) {
+    function moduleContext(id) {
+        if (hasOwnProperty.call(map, id)) {
+            return map[id].module();
         }
-        return commonJsRequireContext(entry, sourceModule);
+        const e = new Error(`Cannot find module '${name}'`);
+        e.code = "MODULE_NOT_FOUND";
+        throw e;
     }
-    requireContext.keys = ()=>{
+    moduleContext.keys = ()=>{
         return Object.keys(map);
     };
-    requireContext.resolve = (id)=>{
-        const entry = map[id];
-        if (!entry) {
-            throw new Error(`module ${id} is resolved from a require.context, but is not in the context`);
+    moduleContext.resolve = (id)=>{
+        if (hasOwnProperty.call(map, id)) {
+            return map[id].id();
         }
-        return entry.id();
+        const e = new Error(`Cannot find module '${name}'`);
+        e.code = "MODULE_NOT_FOUND";
+        throw e;
     };
-    return requireContext;
+    moduleContext.import = async (id)=>{
+        return await moduleContext(id);
+    };
+    return moduleContext;
 }
 /**
  * Returns the path of a chunk defined by its data.
@@ -276,22 +283,23 @@ function asyncModule(module, body, hasAwait) {
     }
 }
 /**
- * A pseudo, `fake` URL object to resolve to the its relative path.
- * When urlrewritebehavior is set to relative, calls to the `new URL()` will construct url without base using this
+ * A pseudo "fake" URL object to resolve to its relative path.
+ *
+ * When UrlRewriteBehavior is set to relative, calls to the `new URL()` will construct url without base using this
  * runtime function to generate context-agnostic urls between different rendering context, i.e ssr / client to avoid
  * hydration mismatch.
  *
- * This is largely based on the webpack's existing implementation at
+ * This is based on webpack's existing implementation:
  * https://github.com/webpack/webpack/blob/87660921808566ef3b8796f8df61bd79fc026108/lib/runtime/RelativeUrlRuntimeModule.js
- */ var relativeURL = function(inputUrl) {
+ */ const relativeURL = function relativeURL(inputUrl) {
     const realUrl = new URL(inputUrl, "x:/");
     const values = {};
-    for(var key in realUrl)values[key] = realUrl[key];
+    for(const key in realUrl)values[key] = realUrl[key];
     values.href = inputUrl;
     values.pathname = inputUrl.replace(/[?#].*/, "");
     values.origin = values.protocol = "";
     values.toString = values.toJSON = (..._args)=>inputUrl;
-    for(var key in values)Object.defineProperty(this, key, {
+    for(const key in values)Object.defineProperty(this, key, {
         enumerable: true,
         configurable: true,
         value: values[key]
@@ -503,7 +511,7 @@ function instantiateModule(id, source) {
                 e: module.exports,
                 r: commonJsRequire.bind(null, module),
                 t: runtimeRequire,
-                f: requireContext.bind(null, module),
+                f: moduleContext,
                 i: esmImport.bind(null, module),
                 s: esmExport.bind(null, module, module.exports),
                 j: dynamicExport.bind(null, module, module.exports),
@@ -511,6 +519,7 @@ function instantiateModule(id, source) {
                 n: exportNamespace.bind(null, module),
                 m: module,
                 c: moduleCache,
+                M: moduleFactories,
                 l: loadChunk.bind(null, sourceInfo),
                 w: loadWebAssembly.bind(null, sourceInfo),
                 u: loadWebAssemblyModule.bind(null, sourceInfo),
@@ -603,7 +612,7 @@ function instantiateModule(id, source) {
             // re-execute the importing modules, and force those components to
             // re-render. Similarly, if you convert a class component to a
             // function, we want to invalidate the boundary.
-            if (helpers.shouldInvalidateReactRefreshBoundary(prevExports, currentExports)) {
+            if (helpers.shouldInvalidateReactRefreshBoundary(helpers.getRefreshBoundarySignature(prevExports), helpers.getRefreshBoundarySignature(currentExports))) {
                 module.hot.invalidate();
             } else {
                 helpers.scheduleUpdate();
@@ -804,21 +813,21 @@ function applyPhase(outdatedSelfAcceptedModules, newModuleFactories, outdatedMod
  */ function invariant(never, computeMessage) {
     throw new Error(`Invariant: ${computeMessage(never)}`);
 }
-function applyUpdate(chunkListPath, update) {
+function applyUpdate(update) {
     switch(update.type){
         case "ChunkListUpdate":
-            applyChunkListUpdate(chunkListPath, update);
+            applyChunkListUpdate(update);
             break;
         default:
             invariant(update, (update)=>`Unknown update type: ${update.type}`);
     }
 }
-function applyChunkListUpdate(chunkListPath, update) {
+function applyChunkListUpdate(update) {
     if (update.merged != null) {
         for (const merged of update.merged){
             switch(merged.type){
                 case "EcmascriptMergedUpdate":
-                    applyEcmascriptMergedUpdate(chunkListPath, merged);
+                    applyEcmascriptMergedUpdate(merged);
                     break;
                 default:
                     invariant(merged, (merged)=>`Unknown merged type: ${merged.type}`);
@@ -847,7 +856,7 @@ function applyChunkListUpdate(chunkListPath, update) {
         }
     }
 }
-function applyEcmascriptMergedUpdate(chunkPath, update) {
+function applyEcmascriptMergedUpdate(update) {
     const { entries = {}, chunks = {} } = update;
     const { added, modified, chunksAdded, chunksDeleted } = computeChangedModules(entries, chunks);
     const { outdatedModules, newModuleFactories } = computeOutdatedModules(added, modified);
@@ -1024,7 +1033,7 @@ function handleApply(chunkListPath, update) {
         case "partial":
             {
                 // This indicates that the update is can be applied to the current state of the application.
-                applyUpdate(chunkListPath, update.instruction);
+                applyUpdate(update.instruction);
                 break;
             }
         case "restart":
@@ -1238,7 +1247,7 @@ function createModuleHot(moduleId, hotData) {
 /**
  * Returns the URL relative to the origin where a chunk can be fetched from.
  */ function getChunkRelativeUrl(chunkPath) {
-    return `${CHUNK_BASE_PATH}${chunkPath}`.split("/").map((p)=>encodeURIComponent(p)).join("/");
+    return `${CHUNK_BASE_PATH}${chunkPath.split("/").map((p)=>encodeURIComponent(p)).join("/")}`;
 }
 /**
  * Subscribes to chunk list updates from the update server and applies them.
@@ -1299,12 +1308,10 @@ globalThis.TURBOPACK_CHUNK_LISTS = {
  *
  * It will be appended to the base development runtime code.
  */ /// <reference path="../base/runtime-base.ts" />
+/// <reference path="../../../shared/require-type.d.ts" />
 let BACKEND;
 function augmentContext(context) {
     return context;
-}
-function commonJsRequireContext(entry, sourceModule) {
-    return commonJsRequire(sourceModule, entry.id());
 }
 function fetchWebAssembly(wasmChunkPath) {
     return fetch(getChunkRelativeUrl(wasmChunkPath));
@@ -1348,8 +1355,10 @@ async function loadWebAssemblyModule(_source, wasmChunkPath) {
         unloadChunk (chunkPath) {
             deleteResolver(chunkPath);
             const chunkUrl = getChunkRelativeUrl(chunkPath);
+            // TODO(PACK-2140): remove this once all filenames are guaranteed to be escaped.
+            const decodedChunkUrl = decodeURI(chunkUrl);
             if (chunkPath.endsWith(".css")) {
-                const links = document.querySelectorAll(`link[href="${chunkUrl}"],link[href^="${chunkUrl}?"]`);
+                const links = document.querySelectorAll(`link[href="${chunkUrl}"],link[href^="${chunkUrl}?"],link[href="${decodedChunkUrl}"],link[href^="${decodedChunkUrl}?"]`);
                 for (const link of Array.from(links)){
                     link.remove();
                 }
@@ -1358,7 +1367,7 @@ async function loadWebAssemblyModule(_source, wasmChunkPath) {
                 // runtime once evaluated.
                 // However, we still want to remove the script tag from the DOM to keep
                 // the HTML somewhat consistent from the user's perspective.
-                const scripts = document.querySelectorAll(`script[src="${chunkUrl}"],script[src^="${chunkUrl}?"]`);
+                const scripts = document.querySelectorAll(`script[src="${chunkUrl}"],script[src^="${chunkUrl}?"],script[src="${decodedChunkUrl}"],script[src^="${decodedChunkUrl}?"]`);
                 for (const script of Array.from(scripts)){
                     script.remove();
                 }
@@ -1373,14 +1382,26 @@ async function loadWebAssemblyModule(_source, wasmChunkPath) {
                     return;
                 }
                 const chunkUrl = getChunkRelativeUrl(chunkPath);
-                const previousLinks = document.querySelectorAll(`link[rel=stylesheet][href="${chunkUrl}"],link[rel=stylesheet][href^="${chunkUrl}?"]`);
+                const decodedChunkUrl = decodeURI(chunkUrl);
+                const previousLinks = document.querySelectorAll(`link[rel=stylesheet][href="${chunkUrl}"],link[rel=stylesheet][href^="${chunkUrl}?"],link[rel=stylesheet][href="${decodedChunkUrl}"],link[rel=stylesheet][href^="${decodedChunkUrl}?"]`);
                 if (previousLinks.length == 0) {
                     reject(new Error(`No link element found for chunk ${chunkPath}`));
                     return;
                 }
                 const link = document.createElement("link");
                 link.rel = "stylesheet";
-                link.href = chunkUrl;
+                if (navigator.userAgent.includes("Firefox")) {
+                    // Firefox won't reload CSS files that were previously loaded on the current page,
+                    // we need to add a query param to make sure CSS is actually reloaded from the server.
+                    //
+                    // I believe this is this issue: https://bugzilla.mozilla.org/show_bug.cgi?id=1037506
+                    //
+                    // Safari has a similar issue, but only if you have a `<link rel=preload ... />` tag
+                    // pointing to the same URL as the stylesheet: https://bugs.webkit.org/show_bug.cgi?id=187726
+                    link.href = `${chunkUrl}?ts=${Date.now()}`;
+                } else {
+                    link.href = chunkUrl;
+                }
                 link.onerror = ()=>{
                     reject();
                 };
@@ -1450,8 +1471,9 @@ async function loadWebAssemblyModule(_source, wasmChunkPath) {
             return resolver.promise;
         }
         const chunkUrl = getChunkRelativeUrl(chunkPath);
+        const decodedChunkUrl = decodeURI(chunkUrl);
         if (chunkPath.endsWith(".css")) {
-            const previousLinks = document.querySelectorAll(`link[rel=stylesheet][href="${chunkUrl}"],link[rel=stylesheet][href^="${chunkUrl}?"]`);
+            const previousLinks = document.querySelectorAll(`link[rel=stylesheet][href="${chunkUrl}"],link[rel=stylesheet][href^="${chunkUrl}?"],link[rel=stylesheet][href="${decodedChunkUrl}"],link[rel=stylesheet][href^="${decodedChunkUrl}?"]`);
             if (previousLinks.length > 0) {
                 // CSS chunks do not register themselves, and as such must be marked as
                 // loaded instantly.
@@ -1471,7 +1493,7 @@ async function loadWebAssemblyModule(_source, wasmChunkPath) {
                 document.body.appendChild(link);
             }
         } else if (chunkPath.endsWith(".js")) {
-            const previousScripts = document.querySelectorAll(`script[src="${chunkUrl}"],script[src^="${chunkUrl}?"]`);
+            const previousScripts = document.querySelectorAll(`script[src="${chunkUrl}"],script[src^="${chunkUrl}?"],script[src="${decodedChunkUrl}"],script[src^="${decodedChunkUrl}?"]`);
             if (previousScripts.length > 0) {
                 // There is this edge where the script already failed loading, but we
                 // can't detect that. The Promise will never resolve in this case.
@@ -1499,7 +1521,7 @@ async function loadWebAssemblyModule(_source, wasmChunkPath) {
 })();
 function _eval({ code, url, map }) {
     code += `\n\n//# sourceURL=${location.origin}/${CHUNK_BASE_PATH}${url}`;
-    if (map) code += `\n//# sourceMappingURL=${location.origin}/${CHUNK_BASE_PATH}${map}`;
+    if (map) code += `\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${btoa(map)}`;
     return eval(code);
 }
 const chunksToRegister = globalThis.TURBOPACK;

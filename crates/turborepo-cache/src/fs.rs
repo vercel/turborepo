@@ -41,6 +41,7 @@ impl FSCache {
         }
     }
 
+    #[tracing::instrument(skip_all)]
     pub fn new(
         override_dir: Option<&Utf8Path>,
         repo_root: &AbsoluteSystemPath,
@@ -70,6 +71,7 @@ impl FSCache {
         }
     }
 
+    #[tracing::instrument(skip_all)]
     pub fn fetch(
         &self,
         anchor: &AbsoluteSystemPath,
@@ -112,6 +114,7 @@ impl FSCache {
         )))
     }
 
+    #[tracing::instrument(skip_all)]
     pub(crate) fn exists(&self, hash: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
         let uncompressed_cache_path = self
             .cache_directory
@@ -138,6 +141,7 @@ impl FSCache {
         }))
     }
 
+    #[tracing::instrument(skip_all)]
     pub fn put(
         &self,
         anchor: &AbsoluteSystemPath,
@@ -165,7 +169,7 @@ impl FSCache {
         };
 
         let mut metadata_options = OpenOptions::new();
-        metadata_options.create(true).write(true);
+        metadata_options.create(true).write(true).truncate(true);
 
         let metadata_file = metadata_path.open_with_options(metadata_options)?;
 

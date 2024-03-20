@@ -139,6 +139,7 @@ impl FinishSpaceRunPayload {
 }
 
 impl APIClient {
+    #[tracing::instrument(skip_all)]
     pub async fn create_space_run(
         &self,
         space_id: &str,
@@ -158,6 +159,7 @@ impl APIClient {
         Ok(response.json().await?)
     }
 
+    #[tracing::instrument(skip_all)]
     pub async fn create_task_summary(
         &self,
         space_id: &str,
@@ -181,6 +183,7 @@ impl APIClient {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all)]
     pub async fn finish_space_run(
         &self,
         space_id: &str,

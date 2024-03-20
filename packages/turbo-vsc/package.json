@@ -1,0 +1,90 @@
+{
+  "name": "turbo-vsc",
+  "displayName": "Turborepo LSP",
+  "version": "1.0.0",
+  "description": "Tools and instant feedback for your build system",
+  "main": "out/main.js",
+  "publisher": "Vercel",
+  "scripts": {
+    "vscode:prepublish": "npm run esbuild-base -- --minify",
+    "esbuild-base": "esbuild ./src/extension.ts --bundle --main-fields=module,main --outfile=out/main.js --external:vscode --format=cjs --platform=node",
+    "esbuild": "npm run esbuild-base -- --sourcemap",
+    "esbuild-watch": "npm run esbuild-base -- --sourcemap --watch",
+    "package": "pnpm vsce package --no-dependencies",
+    "publish": "pnpm vsce publish --no-dependencies",
+    "test-compile": "tsc -p ./"
+  },
+  "keywords": [
+    "turbo",
+    "turborepo",
+    "monorepo",
+    "vercel"
+  ],
+  "readme": "README.md",
+  "categories": [
+    "Linters"
+  ],
+  "icon": "resources/icon.png",
+  "bugs": {
+    "url": "https://github.com/vercel/turbo/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vercel/turbo",
+    "directory": "packages/turbo-vsc"
+  },
+  "author": "Vercel",
+  "license": "MPL-2.0",
+  "dependencies": {
+    "jsonc-parser": "^3.2.0",
+    "vscode-languageclient": "^9.0.1"
+  },
+  "engines": {
+    "vscode": "^1.84.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.9.0",
+    "@types/vscode": "^1.84.1",
+    "esbuild": "^0.15.0",
+    "@turbo/tsconfig": "workspace:*"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "turbo.daemon.start",
+        "title": "Start the Turborepo Daemon",
+        "category": "turbo"
+      },
+      {
+        "command": "turbo.daemon.stop",
+        "title": "Stop the Turborepo Daemon",
+        "category": "turbo"
+      },
+      {
+        "command": "turbo.daemon.status",
+        "title": "Get the status of the Turborepo Daemon",
+        "category": "turbo"
+      }
+    ],
+    "configuration": {
+      "title": "Turborepo LSP",
+      "properties": {
+        "turbo.path": {
+          "type": "string",
+          "required": false,
+          "default": null,
+          "description": "The path to your global `turbo` executable, if you'd rather not rely on auto-detection."
+        }
+      }
+    }
+  },
+  "capabilities": {
+    "virtualWorkspaces": {
+      "supported": "limited",
+      "description": "The language server requires a turbo daemon to function correctly."
+    }
+  },
+  "activationEvents": [
+    "workspaceContains:**/turbo.json"
+  ]
+}

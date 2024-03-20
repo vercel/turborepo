@@ -196,11 +196,6 @@ impl AbsoluteSystemPathBuf {
         self.0.file_name()
     }
 
-    pub fn try_exists(&self) -> Result<bool, PathError> {
-        // try_exists is an experimental API and not yet in fs_err
-        Ok(std::fs::try_exists(&self.0)?)
-    }
-
     pub fn extension(&self) -> Option<&str> {
         self.0.extension()
     }
@@ -274,8 +269,7 @@ mod tests {
         assert_eq!(
             AbsoluteSystemPathBuf::new("/some/dir")
                 .unwrap()
-                .join_unix_path(tail)
-                .unwrap(),
+                .join_unix_path(tail),
             AbsoluteSystemPathBuf::new("/some/other").unwrap(),
         );
     }
@@ -302,8 +296,7 @@ mod tests {
         assert_eq!(
             AbsoluteSystemPathBuf::new("C:\\some\\dir")
                 .unwrap()
-                .join_unix_path(&tail)
-                .unwrap(),
+                .join_unix_path(&tail),
             AbsoluteSystemPathBuf::new("C:\\some\\other").unwrap(),
         );
     }

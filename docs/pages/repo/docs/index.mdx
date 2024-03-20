@@ -7,7 +7,7 @@ import { readdirSync, lstatSync, readFileSync } from 'fs';
 import path from 'path';
 import { QuickStartArea, LearnMoreArea, MonoreposArea } from "../../../components/QuickStart";
 import { ExamplesArea } from "../../../components/ExamplesArea";
-import FullTurboCTA from "../../../components/FullTurboCTA";
+import { FullTurboCTA } from "../../../components/FullTurboCTA";
 
 export const getStaticProps = ({ params }) => {
   // path to examples directory at the monorepo root.

@@ -47,7 +47,7 @@ const LINKS = [
     title: "Deploy",
     href: "https://vercel.com/new",
     description:
-      " Instantly deploy your Turborepo to a shareable URL with Vercel.",
+      "Instantly deploy your Turborepo to a shareable URL with Vercel.",
   },
 ];
 
@@ -78,7 +78,7 @@ export default function Page(): JSX.Element {
         </div>
       </div>
 
-      <Button appName="web" className={styles.button}>
+      <Button appName="docs" className={styles.button}>
         Click me!
       </Button>
 

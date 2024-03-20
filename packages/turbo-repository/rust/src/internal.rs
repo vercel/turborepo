@@ -4,11 +4,13 @@ use napi::Status;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPathBuf, PathError};
 use turborepo_repository::{
-    inference::{self, RepoMode, RepoState},
+    inference::{self, RepoMode as WorkspaceType, RepoState as WorkspaceState},
+    package_graph::PackageGraphBuilder,
+    package_json::PackageJson,
     package_manager,
 };
 
-use crate::{Package, PackageManagerRoot};
+use crate::{Package, PackageManager, Workspace};
 
 /// This module is used to isolate code with defined errors
 /// from code in lib.rs that needs to have errors coerced to strings /
@@ -27,13 +29,17 @@ pub(crate) enum Error {
         error: String,
         path: AbsoluteSystemPathBuf,
     },
-    #[error("Failed to discover packages from root {repo_root}: {error}")]
+    #[error("Failed to discover packages from root {workspace_root}: {error}")]
     PackageJsons {
         error: package_manager::Error,
-        repo_root: AbsoluteSystemPathBuf,
+        workspace_root: AbsoluteSystemPathBuf,
     },
     #[error("Package directory {0} has no parent")]
     MissingParent(AbsoluteSystemPathBuf),
+    #[error("Package graph error: {0}")]
+    PackageGraph(#[from] turborepo_repository::package_graph::Error),
+    #[error("package.json error: {0}")]
+    PackageJson(#[from] turborepo_repository::package_json::Error),
 }
 
 impl From<Error> for napi::Error<Status> {
@@ -42,7 +48,7 @@ impl From<Error> for napi::Error<Status> {
     }
 }
 
-impl PackageManagerRoot {
+impl Workspace {
     pub(crate) async fn find_internal(path: Option<String>) -> Result<Self, Error> {
         let reference_dir = path
             .map(|path| {
@@ -57,12 +63,32 @@ impl PackageManagerRoot {
                     path_error,
                 })
             })?;
-        let repo_state = RepoState::infer(&reference_dir)?;
-        let is_monorepo = repo_state.mode == RepoMode::MultiPackage;
+        let workspace_state = WorkspaceState::infer(&reference_dir)?;
+        let is_multi_package = workspace_state.mode == WorkspaceType::MultiPackage;
+        let package_manager_name =
+            *workspace_state
+                .package_manager
+                .as_ref()
+                .map_err(|error| Error::PackageManager {
+                    error: error.to_string(),
+                    path: workspace_state.root.clone(),
+                })?;
+
+        let workspace_root = &workspace_state.root;
+        let root_package_json = PackageJson::load(&workspace_root.join_component("package.json"))?;
+        let package_graph = PackageGraphBuilder::new(workspace_root, root_package_json)
+            .with_single_package_mode(!is_multi_package)
+            .build()
+            .await?;
+
         Ok(Self {
-            root: repo_state.root.to_string(),
-            repo_state,
-            is_single_package: !is_monorepo,
+            absolute_path: workspace_state.root.to_string(),
+            workspace_state,
+            is_multi_package,
+            package_manager: PackageManager {
+                name: package_manager_name.to_string(),
+            },
+            graph: package_graph,
         })
     }
 
@@ -71,31 +97,49 @@ impl PackageManagerRoot {
         // manager discovery. That probably isn't the best design. We should
         // address it when we decide how we want to handle possibly finding a
         // repo root but not finding a package manager.
-        let package_manager =
-            self.repo_state
-                .package_manager
-                .as_ref()
-                .map_err(|error| Error::PackageManager {
-                    error: error.to_string(),
-                    path: self.repo_state.root.clone(),
-                })?;
-        let package_manager = package_manager.clone();
-        let repo_root = self.repo_state.root.clone();
+        let package_manager = self
+            .workspace_state
+            .package_manager
+            .as_ref()
+            .map_err(|error| Error::PackageManager {
+                error: error.to_string(),
+                path: self.workspace_state.root.clone(),
+            })?;
+
+        let package_manager = *package_manager;
+        let workspace_root = self.workspace_state.root.clone();
+
         let package_json_paths =
-            tokio::task::spawn(async move { package_manager.get_package_jsons(&repo_root) })
+            tokio::task::spawn(async move { package_manager.get_package_jsons(&workspace_root) })
                 .await
                 .expect("package enumeration should not crash")
                 .map_err(|error| Error::PackageJsons {
                     error,
-                    repo_root: self.repo_state.root.clone(),
+                    workspace_root: self.workspace_state.root.clone(),
                 })?;
+
         let packages = package_json_paths
-            .map(|path| {
+            .filter_map(|path| {
+                // Return an error if we fail to load the package.json
+                let pkg_json = match PackageJson::load(&path) {
+                    Ok(pkg) => pkg,
+                    Err(err) => return Some(Err(err.into())),
+                };
+
+                // Skip packages that don't have names
+                let name = pkg_json.name?;
+
+                // Get the package path and turn it into a package
+                // Error if we fail to get the package path (parent to
+                // package_json_path)
                 path.parent()
-                    .map(|package_path| Package::new(&self.repo_state.root, package_path))
-                    .ok_or_else(|| Error::MissingParent(path.to_owned()))
+                    .map(|package_path| {
+                        Ok(Package::new(name, &self.workspace_state.root, package_path))
+                    })
+                    .or_else(|| Some(Err(Error::MissingParent(path.to_owned()))))
             })
             .collect::<Result<Vec<Package>, Error>>()?;
+
         Ok(packages)
     }
 }

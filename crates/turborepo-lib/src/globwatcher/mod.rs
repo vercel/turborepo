@@ -13,7 +13,7 @@ use thiserror::Error;
 use tokio::time::timeout;
 use tracing::{trace, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
-use wax::{Glob as WaxGlob, Pattern};
+use wax::{Glob as WaxGlob, Program};
 
 // these aliases are for readability, but they're just strings. it may make
 // sense to use a newtype wrapper for these types in the future.
@@ -394,15 +394,12 @@ mod test {
 
         for dir in directories.iter() {
             let dir = RelativeUnixPathBuf::new(*dir).unwrap();
-            tmp.join_unix_path(&dir).unwrap().create_dir_all().unwrap();
+            tmp.join_unix_path(&dir).create_dir_all().unwrap();
         }
 
         for file in files.iter() {
             let file = RelativeUnixPathBuf::new(*file).unwrap();
-            tmp.join_unix_path(&file)
-                .unwrap()
-                .create_with_contents("")
-                .unwrap();
+            tmp.join_unix_path(&file).create_with_contents("").unwrap();
         }
     }
 

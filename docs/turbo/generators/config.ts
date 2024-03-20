@@ -1,8 +1,8 @@
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
+import type { PlopTypes } from "@turbo/gen";
 import { releasePostStats } from "./utils";
 import * as helpers from "./helpers";
-import type { PlopTypes } from "@turbo/gen";
 
 export default function generator(plop: PlopTypes.NodePlopAPI): void {
   // add helpers for use in templates
@@ -17,8 +17,8 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
         name: "version",
         message:
           'The full semantic version of the new release (example: "1.9.0")',
-        validate: (input) => {
-          if (!input.match(/^\d+\.\d+\.\d+$/)) {
+        validate: (input: string) => {
+          if (!/^\d+\.\d+\.\d+$/.exec(input)) {
             return "Version must be in the form of major.minor.patch";
           }
           return true;
@@ -29,8 +29,8 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
         name: "prevVersion",
         message:
           'The full semantic version of the previous release (example: "1.8.0")',
-        validate: (input) => {
-          if (!input.match(/^\d+\.\d+\.\d+$/)) {
+        validate: (input: string) => {
+          if (!/^\d+\.\d+\.\d+$/.exec(input)) {
             return "Version must be in the form of major.minor.patch";
           }
           return true;
@@ -86,7 +86,7 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
       {
         type: "append",
         path: "pages/blog/_meta.json",
-        pattern: /"\*":\s\{(.|\n)*?\},/gm,
+        pattern: /"\*":\s\{(?<group>.|\n)*?\},/gm,
         template:
           '  "turbo-{{dashCase version}}": "Turborepo {{ majorMinor version }}",',
       },

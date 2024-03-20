@@ -10,14 +10,16 @@ use turbopack_core::{
     chunk::{
         availability_info::AvailabilityInfo,
         chunk_group::{make_chunk_group, MakeChunkGroupResult},
-        Chunk, ChunkItem, ChunkableModule, ChunkingContext, EvaluatableAssets, ModuleId,
+        Chunk, ChunkGroupResult, ChunkItem, ChunkableModule, ChunkingContext, EvaluatableAssets,
+        ModuleId,
     },
     environment::Environment,
     ident::AssetIdent,
     module::Module,
-    output::{OutputAsset, OutputAssets},
+    output::OutputAsset,
 };
 use turbopack_ecmascript::{
+    async_chunk::module::AsyncLoaderModule,
     chunk::{EcmascriptChunk, EcmascriptChunkPlaceable, EcmascriptChunkingContext},
     manifest::{chunk_asset::ManifestAsyncModule, loader_item::ManifestLoaderChunkItem},
 };
@@ -70,6 +72,11 @@ impl BuildChunkingContextBuilder {
         self
     }
 
+    pub fn manifest_chunks(mut self, manifest_chunks: bool) -> Self {
+        self.chunking_context.manifest_chunks = manifest_chunks;
+        self
+    }
+
     /// Builds the chunking context.
     pub fn build(self) -> Vc<BuildChunkingContext> {
         BuildChunkingContext::new(Value::new(self.chunking_context))
@@ -99,6 +106,8 @@ pub struct BuildChunkingContext {
     runtime_type: RuntimeType,
     /// Whether to minify resulting chunks
     minify_type: MinifyType,
+    /// Whether to use manifest chunks for lazy compilation
+    manifest_chunks: bool,
 }
 
 impl BuildChunkingContext {
@@ -122,6 +131,7 @@ impl BuildChunkingContext {
                 environment,
                 runtime_type: Default::default(),
                 minify_type: MinifyType::Minify,
+                manifest_chunks: false,
             },
         }
     }
@@ -139,6 +149,12 @@ impl BuildChunkingContext {
     pub fn minify_type(&self) -> MinifyType {
         self.minify_type
     }
+}
+
+#[turbo_tasks::value]
+pub struct EntryChunkGroupResult {
+    pub asset: Vc<Box<dyn OutputAsset>>,
+    pub availability_info: AvailabilityInfo,
 }
 
 #[turbo_tasks::value_impl]
@@ -163,10 +179,14 @@ impl BuildChunkingContext {
         path: Vc<FileSystemPath>,
         module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
         evaluatable_assets: Vc<EvaluatableAssets>,
-    ) -> Result<Vc<Box<dyn OutputAsset>>> {
-        let availability_info = AvailabilityInfo::Root;
+        availability_info: Value<AvailabilityInfo>,
+    ) -> Result<Vc<EntryChunkGroupResult>> {
+        let availability_info = availability_info.into_value();
 
-        let MakeChunkGroupResult { chunks } = make_chunk_group(
+        let MakeChunkGroupResult {
+            chunks,
+            availability_info,
+        } = make_chunk_group(
             Vc::upcast(self),
             once(Vc::upcast(module)).chain(
                 evaluatable_assets
@@ -191,7 +211,11 @@ impl BuildChunkingContext {
             module,
         ));
 
-        Ok(asset)
+        Ok(EntryChunkGroupResult {
+            asset,
+            availability_info,
+        }
+        .cell())
     }
 
     #[turbo_tasks::function]
@@ -312,10 +336,13 @@ impl ChunkingContext for BuildChunkingContext {
         self: Vc<Self>,
         module: Vc<Box<dyn ChunkableModule>>,
         availability_info: Value<AvailabilityInfo>,
-    ) -> Result<Vc<OutputAssets>> {
+    ) -> Result<Vc<ChunkGroupResult>> {
         let span = tracing::info_span!("chunking", module = *module.ident().to_string().await?);
         async move {
-            let MakeChunkGroupResult { chunks } = make_chunk_group(
+            let MakeChunkGroupResult {
+                chunks,
+                availability_info,
+            } = make_chunk_group(
                 Vc::upcast(self),
                 [Vc::upcast(module)],
                 availability_info.into_value(),
@@ -332,42 +359,57 @@ impl ChunkingContext for BuildChunkingContext {
                 *asset = asset.resolve().await?;
             }
 
-            Ok(Vc::cell(assets))
+            Ok(ChunkGroupResult {
+                assets: Vc::cell(assets),
+                availability_info,
+            }
+            .cell())
         }
         .instrument(span)
         .await
     }
 
     #[turbo_tasks::function]
-    async fn evaluated_chunk_group(
+    fn evaluated_chunk_group(
         self: Vc<Self>,
         _ident: Vc<AssetIdent>,
         _evaluatable_assets: Vc<EvaluatableAssets>,
-    ) -> Result<Vc<OutputAssets>> {
+        _availability_info: Value<AvailabilityInfo>,
+    ) -> Result<Vc<ChunkGroupResult>> {
         // TODO(alexkirsz) This method should be part of a separate trait that is
         // only implemented for client/edge runtimes.
         bail!("the build chunking context does not support evaluated chunk groups")
     }
 
     #[turbo_tasks::function]
-    fn async_loader_chunk_item(
+    async fn async_loader_chunk_item(
         self: Vc<Self>,
         module: Vc<Box<dyn ChunkableModule>>,
         availability_info: Value<AvailabilityInfo>,
-    ) -> Vc<Box<dyn ChunkItem>> {
-        let manifest_asset = ManifestAsyncModule::new(module, Vc::upcast(self), availability_info);
-        Vc::upcast(ManifestLoaderChunkItem::new(
-            manifest_asset,
-            Vc::upcast(self),
-        ))
+    ) -> Result<Vc<Box<dyn ChunkItem>>> {
+        Ok(if self.await?.manifest_chunks {
+            let manifest_asset =
+                ManifestAsyncModule::new(module, Vc::upcast(self), availability_info);
+            Vc::upcast(ManifestLoaderChunkItem::new(
+                manifest_asset,
+                Vc::upcast(self),
+            ))
+        } else {
+            let module = AsyncLoaderModule::new(module, Vc::upcast(self), availability_info);
+            Vc::upcast(module.as_chunk_item(Vc::upcast(self)))
+        })
     }
 
     #[turbo_tasks::function]
-    fn async_loader_chunk_item_id(
+    async fn async_loader_chunk_item_id(
         self: Vc<Self>,
         module: Vc<Box<dyn ChunkableModule>>,
-    ) -> Vc<ModuleId> {
-        self.chunk_item_id_from_ident(ManifestLoaderChunkItem::asset_ident_for(module))
+    ) -> Result<Vc<ModuleId>> {
+        Ok(if self.await?.manifest_chunks {
+            self.chunk_item_id_from_ident(ManifestLoaderChunkItem::asset_ident_for(module))
+        } else {
+            self.chunk_item_id_from_ident(AsyncLoaderModule::asset_ident_for(module))
+        })
     }
 }
 

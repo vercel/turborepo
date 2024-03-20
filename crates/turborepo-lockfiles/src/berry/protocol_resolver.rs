@@ -17,7 +17,13 @@ struct Key {
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Default)]
 struct Entry {
     without: Option<String>,
-    with: Option<String>,
+    with: Option<RangeAndProtocol>,
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Default)]
+struct RangeAndProtocol {
+    protocol: String,
+    range: String,
 }
 
 impl DescriptorResolver {
@@ -49,9 +55,28 @@ impl Entry {
     // with or without a protocol
     fn insert_descriptor(&mut self, descriptor: &Descriptor) -> Option<String> {
         let range = descriptor.range()?.to_string();
-        match descriptor.protocol().is_some() {
-            true => self.with.replace(range),
-            false => self.without.replace(range),
+        match descriptor.protocol() {
+            Some(protocol) => {
+                // Yarn 4 made the default npm protocol explicit in the lockfile.
+                // In order to return the more specific protocol we avoid overwriting other
+                // protocols with the now explicit npm protocol.
+                if protocol != "npm" || self.with.is_none() {
+                    match self.with.replace(RangeAndProtocol {
+                        range,
+                        protocol: protocol.to_string(),
+                    }) {
+                        // We only return an ejected range if the protocol isn't the default npm
+                        // protocol
+                        Some(RangeAndProtocol { range, protocol }) if protocol != "npm" => {
+                            Some(range)
+                        }
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            }
+            None => self.without.replace(range),
         }
     }
 
@@ -61,7 +86,7 @@ impl Entry {
         if self.without.is_some() && descriptor.protocol().is_none() {
             self.without.as_deref()
         } else {
-            self.with.as_deref()
+            self.with.as_ref().map(|x| x.range.as_str())
         }
     }
 }

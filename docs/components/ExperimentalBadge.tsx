@@ -1,5 +1,5 @@
 import Link from "next/link";
-import Badge from "./Badge";
+import { Badge } from "./Badge";
 
 /**
  * A custom variant of the Badge for experimental features

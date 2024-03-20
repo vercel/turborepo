@@ -3,6 +3,8 @@
 //! mock server (`turborepo-vercel-api-mock`)
 use serde::{Deserialize, Serialize};
 use url::Url;
+pub mod telemetry;
+pub mod token;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct VerifiedSsoUser {

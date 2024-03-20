@@ -1,7 +1,7 @@
 import Head from "next/head";
 import { Container } from "../Container";
 
-export default function Confirm() {
+export function Confirm() {
   return (
     <>
       <Head>

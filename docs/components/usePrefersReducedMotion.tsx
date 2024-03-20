@@ -27,12 +27,14 @@ export function usePrefersReducedMotion(): boolean {
     const listener = (event: MediaQueryListEvent) => {
       setPrefersReducedMotion(!event.matches);
     };
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- This can be missing on some browsers.
     if (mediaQueryList.addEventListener) {
       mediaQueryList.addEventListener("change", listener);
     } else {
       mediaQueryList.addListener(listener);
     }
     return () => {
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- This can be missing on some browsers.
       if (mediaQueryList.removeEventListener) {
         mediaQueryList.removeEventListener("change", listener);
       } else {

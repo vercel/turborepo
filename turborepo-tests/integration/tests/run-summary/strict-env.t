@@ -50,7 +50,7 @@ Run as `loose`
 
 All specified + infer
   $ rm -rf .turbo/runs
-  $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/all.json"
+  $ ${TESTDIR}/../../../helpers/replace_turbo_json.sh $(pwd) "strict_env_vars/all.json"
   $ ${TURBO} run build --summarize > /dev/null
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   strict
@@ -66,7 +66,7 @@ All specified + infer
 
 All specified + loose
   $ rm -rf .turbo/runs
-  $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/all.json"
+  $ ${TESTDIR}/../../../helpers/replace_turbo_json.sh $(pwd) "strict_env_vars/all.json"
   $ ${TURBO} run build --env-mode=loose --summarize > /dev/null
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   loose
@@ -82,7 +82,7 @@ All specified + loose
 
 Global passthrough specified empty array + infer
   $ rm -rf .turbo/runs
-  $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/global_pt-empty.json"
+  $ ${TESTDIR}/../../../helpers/replace_turbo_json.sh $(pwd) "strict_env_vars/global_pt-empty.json"
   $ ${TURBO} run build --summarize > /dev/null
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   strict
@@ -96,7 +96,7 @@ Global passthrough specified empty array + infer
 
 Global passthrough specified value + infer
   $ rm -rf .turbo/runs
-  $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/global_pt.json"
+  $ ${TESTDIR}/../../../helpers/replace_turbo_json.sh $(pwd) "strict_env_vars/global_pt.json"
   $ ${TURBO} run build --summarize > /dev/null
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   strict
@@ -110,7 +110,7 @@ Global passthrough specified value + infer
 
 Global passthrough specified empty array + loose
   $ rm -rf .turbo/runs
-  $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/global_pt-empty.json"
+  $ ${TESTDIR}/../../../helpers/replace_turbo_json.sh $(pwd) "strict_env_vars/global_pt-empty.json"
   $ ${TURBO} run build --env-mode=loose --summarize > /dev/null
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   loose
@@ -124,7 +124,7 @@ Global passthrough specified empty array + loose
 
 Global passthrough specified value + loose
   $ rm -rf .turbo/runs
-  $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/global_pt.json"
+  $ ${TESTDIR}/../../../helpers/replace_turbo_json.sh $(pwd) "strict_env_vars/global_pt.json"
   $ ${TURBO} run build --env-mode=loose --summarize > /dev/null
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   loose
@@ -138,7 +138,7 @@ Global passthrough specified value + loose
 
 Task passthrough specified empty array + infer
   $ rm -rf .turbo/runs
-  $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/task_pt-empty.json"
+  $ ${TESTDIR}/../../../helpers/replace_turbo_json.sh $(pwd) "strict_env_vars/task_pt-empty.json"
   $ ${TURBO} run build --summarize > /dev/null
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   infer
@@ -152,7 +152,7 @@ Task passthrough specified empty array + infer
 
 Task passthrough specified value + infer
   $ rm -rf .turbo/runs
-  $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/task_pt.json"
+  $ ${TESTDIR}/../../../helpers/replace_turbo_json.sh $(pwd) "strict_env_vars/task_pt.json"
   $ ${TURBO} run build --summarize > /dev/null
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   infer
@@ -168,7 +168,7 @@ Task passthrough specified value + infer
 
 Task passthrough specified empty array + loose
   $ rm -rf .turbo/runs
-  $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/task_pt-empty.json"
+  $ ${TESTDIR}/../../../helpers/replace_turbo_json.sh $(pwd) "strict_env_vars/task_pt-empty.json"
   $ ${TURBO} run build --env-mode=loose --summarize > /dev/null
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   loose
@@ -182,7 +182,7 @@ Task passthrough specified empty array + loose
 
 Task passthrough specified value + loose
   $ rm -rf .turbo/runs
-  $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/task_pt.json"
+  $ ${TESTDIR}/../../../helpers/replace_turbo_json.sh $(pwd) "strict_env_vars/task_pt.json"
   $ ${TURBO} run build --env-mode=loose --summarize > /dev/null
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   loose

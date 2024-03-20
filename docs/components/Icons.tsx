@@ -1,11 +1,13 @@
 import type { ComponentProps } from "react";
 import React from "react";
 
-export type IconType = ((props: ComponentProps<"svg">) => JSX.Element) & {
+type IconProps = ComponentProps<"svg"> & { requiresFill?: boolean };
+
+export type IconType = ((IconProps) => JSX.Element) & {
   requiresFill?: boolean;
 };
 
-export const TailwindIcon: IconType = (props) => {
+export function TailwindIcon(props: IconProps) {
   return (
     <svg
       aria-hidden="true"
@@ -22,9 +24,9 @@ export const TailwindIcon: IconType = (props) => {
       />
     </svg>
   );
-};
+}
 
-export const GitHubIcon: IconType = ({ height = 28 }) => {
+export function GitHubIcon({ height = 28 }) {
   return (
     <svg
       aria-hidden="true"
@@ -40,9 +42,9 @@ export const GitHubIcon: IconType = ({ height = 28 }) => {
       />
     </svg>
   );
-};
+}
 
-export const DockerIcon: IconType = ({ height: _ = 28, ...props }) => {
+export function DockerIcon({ height: _ = 28, ...props }) {
   return (
     <svg viewBox="0 0 122.88 88.17" {...props}>
       <g>
@@ -54,9 +56,9 @@ export const DockerIcon: IconType = ({ height: _ = 28, ...props }) => {
       </g>
     </svg>
   );
-};
+}
 
-export const RectangleGroupIcon: IconType = (props) => {
+export function RectangleGroupIcon(props) {
   return (
     <svg
       fill="none"
@@ -73,9 +75,9 @@ export const RectangleGroupIcon: IconType = (props) => {
       />
     </svg>
   );
-};
+}
 
-export const FaceSmileIcon: IconType = (props) => {
+export function FaceSmileIcon(props) {
   return (
     <svg
       fill="none"
@@ -92,9 +94,9 @@ export const FaceSmileIcon: IconType = (props) => {
       />
     </svg>
   );
-};
+}
 
-export const RectangleStackIcon: IconType = (props) => {
+export function RectangleStackIcon(props) {
   return (
     <svg
       fill="none"
@@ -111,19 +113,19 @@ export const RectangleStackIcon: IconType = (props) => {
       />
     </svg>
   );
-};
+}
 
-export const JSIcon: IconType = (props) => {
+export function JSIcon(props) {
   return (
     <svg stroke="currentColor" viewBox="0 0 1024 1024" {...props}>
       <path d="M416 176.002h-160v424.996c0 105.16-36.064 134.522-98.824 134.522-29.41 0-55.896-5.042-76.5-12.126L64 847.808C93.4 857.932 138.518 864 173.814 864 317.91 864 416 796.258 416 602.04V176.002zM764.926 160C610.04 160 512 247.996 512 364.308c0 100.166 75.502 162.88 185.282 203.33 79.4 28.316 110.784 53.616 110.784 95.078 0 45.512-36.278 74.85-104.896 74.85-63.726 0-121.578-21.28-160.788-42.51v-0.042L512 821.454c37.278 21.276 106.882 42.51 182.334 42.51C875.708 863.96 960 766.86 960 652.568c0-97.1-53.916-159.8-170.556-204.326-86.278-34.382-122.54-53.59-122.54-97.084 0-34.4 31.376-65.738 96.086-65.738 63.692 0 107.488 21.414 133.01 34.582l38.25-128C894.25 174.44 840.376 160 764.926 160z" />
     </svg>
   );
-};
+}
 
 JSIcon.requiresFill = true;
 
-export const TSIcon: IconType = (props) => {
+export function TSIcon(props) {
   return (
     <svg
       fill="currentColor"
@@ -138,11 +140,11 @@ export const TSIcon: IconType = (props) => {
       />
     </svg>
   );
-};
+}
 
 TSIcon.requiresFill = true;
 
-export const CSSIcon: IconType = (props) => {
+export function CSSIcon(props) {
   return (
     <svg stroke="currentColor" viewBox="0 0 470.699 470.699" {...props}>
       <path
@@ -161,6 +163,6 @@ export const CSSIcon: IconType = (props) => {
       />
     </svg>
   );
-};
+}
 
 CSSIcon.requiresFill = true;

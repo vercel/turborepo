@@ -19,7 +19,7 @@ pub(crate) struct SCMState {
 }
 
 impl SCMState {
-    pub fn get(env_vars: &EnvironmentVariableMap, dir: &AbsoluteSystemPath) -> Self {
+    pub fn get(env_vars: &EnvironmentVariableMap, scm: &SCM, dir: &AbsoluteSystemPath) -> Self {
         let mut state = SCMState {
             ty: SCMType::Git,
             sha: None,
@@ -40,8 +40,6 @@ impl SCMState {
 
         // Fall back to using `git`
         if state.branch.is_none() && state.sha.is_none() {
-            let scm = SCM::new(dir);
-
             if state.branch.is_none() {
                 state.branch = scm.get_current_branch(dir).ok();
             }

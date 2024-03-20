@@ -49,9 +49,9 @@ Building
 Turborepo uses `reqwest`, a Rust HTTP client, to make requests to the Turbo API. `reqwest` supports two TLS
 implementations: `rustls` and `native-tls`. `rustls` is a pure Rust implementation of TLS, while `native-tls`
 is a wrapper around OpenSSL. Turborepo allows users to select which implementation they want with the `native-tls`
-and `rustls-tls` features. By default, the `native-tls` feature is selected---this is done so that `cargo build` works
-out of the box. If you wish to select `rustls-tls`, you may do so by passing `--no-default-features --features rustls-tls`
-to the build command. This allows for us to build for more platforms, as `native-tls` is not supported everywhere.
+and `rustls-tls` features. By default, the `rustls-tls` feature is selected---this is done so that `cargo build` works
+out of the box. If you wish to select `native-tls`, you may do so by passing `--no-default-features --features native-tls`
+to the build command.
 
 ### Running Turborepo Tests
 

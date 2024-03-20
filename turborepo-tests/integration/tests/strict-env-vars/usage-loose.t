@@ -19,7 +19,7 @@ All vars available in loose mode
   globalpt: 'higlobalpt', localpt: 'hilocalpt', globaldep: 'higlobaldep', localdep: 'hilocaldep', other: 'hiother', sysroot set: 'yes', path set: 'yes'
 
 All vars available in loose mode, even when global and pass through configs defined
-  $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/all.json"
+  $ ${TESTDIR}/../../../helpers/replace_turbo_json.sh $(pwd) "strict_env_vars/all.json"
   $ ${TURBO} build -vv --env-mode=loose > /dev/null 2>&1
   $ cat "$OUTPUT"
   globalpt: 'higlobalpt', localpt: 'hilocalpt', globaldep: 'higlobaldep', localdep: 'hilocaldep', other: 'hiother', sysroot set: 'yes', path set: 'yes'

@@ -1,11 +1,12 @@
 #![deny(clippy::all)]
 
+mod vendor_behavior;
 mod vendors;
 
 use std::{env, sync::OnceLock};
 
 use crate::vendors::get_vendors;
-pub use crate::vendors::Vendor;
+pub use crate::{vendor_behavior::VendorBehavior, vendors::Vendor};
 
 static IS_CI: OnceLock<bool> = OnceLock::new();
 static VENDOR: OnceLock<Option<&'static Vendor>> = OnceLock::new();
@@ -83,23 +84,13 @@ impl Vendor {
         None
     }
 
-    #[allow(dead_code)]
-    fn get_name() -> Option<&'static str> {
+    pub fn get_name() -> Option<&'static str> {
         Self::infer().map(|v| v.name)
     }
 
     pub fn get_constant() -> Option<&'static str> {
         Self::infer().map(|v| v.constant)
     }
-}
-
-pub fn github_header_footer(package: Option<&str>, task: &str) -> (String, String) {
-    let header = if let Some(package) = package {
-        format!("::group::{package}:{task}\n")
-    } else {
-        format!("::group::{task}\n")
-    };
-    (header, "::endgroup::\n".to_string())
 }
 
 #[cfg(test)]

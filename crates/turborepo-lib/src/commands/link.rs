@@ -17,7 +17,7 @@ use dirs_next::home_dir;
 #[cfg(test)]
 use rand::Rng;
 use thiserror::Error;
-use turborepo_api_client::Client;
+use turborepo_api_client::{CacheClient, Client};
 #[cfg(not(test))]
 use turborepo_ui::CYAN;
 use turborepo_ui::{BOLD, GREY, UNDERLINE};
@@ -27,6 +27,7 @@ use crate::{
     cli::LinkTarget,
     commands::CommandBase,
     config,
+    gitignore::ensure_turbo_is_gitignored,
     rewrite_json::{self, set_path, unset_path},
 };
 
@@ -108,7 +109,7 @@ pub(crate) const SPACES_URL: &str = "https://vercel.com/docs/workflow-collaborat
 ///
 /// returns: Result<(), Error>
 pub(crate) async fn verify_caching_enabled<'a>(
-    api_client: &impl Client,
+    api_client: &(impl Client + CacheClient),
     team_id: &str,
     token: &str,
     selected_team: Option<SelectedTeam<'a>>,
@@ -254,9 +255,11 @@ pub async fn link(
             };
 
             if modify_gitignore {
-                add_turbo_to_gitignore(base).map_err(|error| config::Error::FailedToSetConfig {
-                    config_path: base.repo_root.join_component(".gitignore"),
-                    error,
+                ensure_turbo_is_gitignored(&base.repo_root).map_err(|error| {
+                    config::Error::FailedToSetConfig {
+                        config_path: base.repo_root.join_component(".gitignore"),
+                        error,
+                    }
                 })?;
             }
 
@@ -586,14 +589,15 @@ mod test {
 
     use anyhow::Result;
     use tempfile::{NamedTempFile, TempDir};
-    use turbopath::AbsoluteSystemPathBuf;
+    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
     use turborepo_ui::UI;
     use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{
         cli::LinkTarget,
         commands::{link, CommandBase},
-        config::{RawTurboJSON, TurborepoConfigBuilder},
+        config::TurborepoConfigBuilder,
+        turbo_json::RawTurboJson,
         Args,
     };
 
@@ -728,10 +732,14 @@ mod test {
 
         // verify space id is added to turbo.json
         let turbo_json_contents = fs::read_to_string(&turbo_json_file).unwrap();
-        let turbo_json: RawTurboJSON = serde_json::from_str(&turbo_json_contents).unwrap();
+        let turbo_json = RawTurboJson::parse(
+            &turbo_json_contents,
+            AnchoredSystemPath::new("turbo.json").unwrap(),
+        )
+        .unwrap();
         assert_eq!(
             turbo_json.experimental_spaces.unwrap().id.unwrap(),
-            turborepo_vercel_api_mock::EXPECTED_SPACE_ID
+            turborepo_vercel_api_mock::EXPECTED_SPACE_ID.into()
         );
     }
 }

@@ -2,7 +2,7 @@ Setup
   $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
 
 Use our custom turbo config which has foo.txt as an input to the build command
-  $ . ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "gitignored-inputs.json"
+  $ . ${TESTDIR}/../../../helpers/replace_turbo_json.sh $(pwd) "gitignored-inputs.json"
 
 Create a internal.txt for the util package and add it to gitignore
 This field is already part of our turbo config.
@@ -12,7 +12,7 @@ This field is already part of our turbo config.
   $ git add . && git commit --quiet -m  "add internal.txt"
 
 Some helper functions to parse the summary file
-  $ source "$TESTDIR/../_helpers/run-summary-utils.sh"
+  $ source "$TESTDIR/../../../helpers/run_summary.sh"
 
 Just run the util package, it's simpler
   $ ${TURBO} run build --filter=util --output-logs=hash-only --summarize | grep "util:build: cache"

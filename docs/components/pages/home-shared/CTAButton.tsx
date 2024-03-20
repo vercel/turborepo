@@ -20,6 +20,7 @@ export function CTAButton({
 
   return (
     <div className="relative w-full group">
+      {/* eslint-disable-next-line react/button-has-type -- Nextra wrecks the styles if we add a type. */}
       <button
         className={`w-full min-w-[120px] text-base font-medium no-underline ${
           outline ? outlineClasses : filledClasses

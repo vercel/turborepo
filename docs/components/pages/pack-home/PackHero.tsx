@@ -4,7 +4,7 @@ import { HeroText, SectionSubtext } from "../home-shared/Headings";
 import { Gradient } from "../home-shared/Gradient";
 import { FadeIn } from "../home-shared/FadeIn";
 import { CTAButton } from "../home-shared/CTAButton";
-import PackLogo from "../../logos/PackLogo";
+import { PackLogo } from "../../logos/PackLogo";
 
 export function PackHero() {
   return (
@@ -13,22 +13,20 @@ export function PackHero() {
       noVertical
     >
       <FadeIn className="z-50 flex items-center justify-center w-full">
-        <div className="absolute min-w-[614px] min-h-[614px]">
-          <Image
-            alt="Turbopack"
-            className="hidden dark:block"
-            height={614}
-            src="/images/docs/pack/turbopack-hero-hexagons-dark.svg"
-            width={614}
-          />
-          <Image
-            alt="Turbopack"
-            className="block dark:hidden"
-            height={614}
-            src="/images/docs/pack/turbopack-hero-hexagons-light.svg"
-            width={614}
-          />
-        </div>
+        <Image
+          alt="Turbopack"
+          className="absolute hidden dark:block"
+          height={614}
+          src="/images/docs/pack/turbopack-hero-hexagons-dark.svg"
+          width={614}
+        />
+        <Image
+          alt="Turbopack"
+          className="absolute block dark:hidden"
+          height={614}
+          src="/images/docs/pack/turbopack-hero-hexagons-light.svg"
+          width={614}
+        />
         <div className="absolute z-50 flex items-center justify-center w-64 h-64">
           <Gradient
             className="dark:opacity-100 opacity-40"

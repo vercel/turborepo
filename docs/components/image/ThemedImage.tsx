@@ -8,9 +8,9 @@ interface ImageAttrs {
 }
 
 export interface ThemedImageProps {
-  title?: string;
-  dark?: ImageAttrs;
-  light?: ImageAttrs;
+  title: string;
+  dark: ImageAttrs;
+  light: ImageAttrs;
   priority?: boolean;
 }
 

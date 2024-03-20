@@ -84,6 +84,7 @@ impl SpacesClientHandle {
         }
     }
 
+    #[tracing::instrument(skip_all)]
     pub async fn finish_run(&self, exit_code: i32, end_time: DateTime<Local>) -> Result<(), Error> {
         Ok(self
             .tx

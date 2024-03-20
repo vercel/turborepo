@@ -7,6 +7,7 @@
 #![recursion_limit = "256"]
 
 pub mod analyzer;
+pub mod async_chunk;
 pub mod chunk;
 pub mod chunk_group_files_asset;
 pub mod code_gen;
@@ -16,7 +17,6 @@ pub mod manifest;
 pub mod parse;
 mod path_visitor;
 pub mod references;
-pub mod resolve;
 pub mod side_effect_optimization;
 pub(crate) mod special_cases;
 pub(crate) mod static_code;
@@ -51,8 +51,10 @@ pub use transform::{
     CustomTransformer, EcmascriptInputTransform, EcmascriptInputTransforms, OptionTransformPlugin,
     TransformContext, TransformPlugin, UnsupportedServerActionIssue,
 };
-use turbo_tasks::{trace::TraceRawVcs, ReadRef, TryJoinIterExt, Value, ValueToString, Vc};
-use turbo_tasks_fs::{rope::Rope, FileSystemPath};
+use turbo_tasks::{
+    trace::TraceRawVcs, ReadRef, TaskInput, TryJoinIterExt, Value, ValueToString, Vc,
+};
+use turbo_tasks_fs::{rope::Rope, FileJsonContent, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{
@@ -64,9 +66,15 @@ use turbopack_core::{
     module::{Module, OptionModule},
     reference::ModuleReferences,
     reference_type::InnerAssets,
-    resolve::{origin::ResolveOrigin, parse::Request, ModulePart},
+    resolve::{
+        find_context_file, origin::ResolveOrigin, package_json, parse::Request,
+        FindContextFileResult, ModulePart,
+    },
     source::Source,
+    source_map::{GenerateSourceMap, OptionSourceMap, SourceMap},
 };
+// TODO remove this
+pub use turbopack_resolve::ecmascript as resolve;
 
 use self::{
     chunk::{EcmascriptChunkItemContent, EcmascriptChunkType, EcmascriptExports},
@@ -80,7 +88,7 @@ use crate::{
 };
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
-#[derive(PartialOrd, Ord, Hash, Debug, Clone, Copy, Default)]
+#[derive(PartialOrd, Ord, Hash, Debug, Clone, Copy, Default, TaskInput)]
 pub enum SpecifiedModuleType {
     #[default]
     Automatic,
@@ -131,9 +139,12 @@ pub enum EcmascriptModuleAssetType {
     /// Module with EcmaScript code
     Ecmascript,
     /// Module with TypeScript code without types
-    Typescript,
-    /// Module with TypeScript code with references to imported types
-    TypescriptWithTypes,
+    Typescript {
+        // parse JSX syntax.
+        tsx: bool,
+        // follow references to imported types.
+        analyze_types: bool,
+    },
     /// Module with TypeScript declaration code
     TypescriptDeclaration,
 }
@@ -142,8 +153,16 @@ impl Display for EcmascriptModuleAssetType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             EcmascriptModuleAssetType::Ecmascript => write!(f, "ecmascript"),
-            EcmascriptModuleAssetType::Typescript => write!(f, "typescript"),
-            EcmascriptModuleAssetType::TypescriptWithTypes => write!(f, "typescript with types"),
+            EcmascriptModuleAssetType::Typescript { tsx, analyze_types } => {
+                write!(f, "typescript")?;
+                if *tsx {
+                    write!(f, "with JSX")?;
+                }
+                if *analyze_types {
+                    write!(f, "with types")?;
+                }
+                Ok(())
+            }
             EcmascriptModuleAssetType::TypescriptDeclaration => write!(f, "typescript declaration"),
         }
     }
@@ -163,6 +182,7 @@ struct MemoizedSuccessfulAnalysis {
     evaluation_references: ReadRef<ModuleReferences>,
     exports: ReadRef<EcmascriptExports>,
     async_module: ReadRef<OptionAsyncModule>,
+    source_map: Option<ReadRef<SourceMap>>,
 }
 
 pub struct EcmascriptModuleAssetBuilder {
@@ -258,6 +278,35 @@ impl EcmascriptModuleAsset {
     }
 }
 
+#[turbo_tasks::value]
+#[derive(Copy, Clone)]
+pub(crate) struct ModuleTypeResult {
+    pub module_type: SpecifiedModuleType,
+    pub referenced_package_json: Option<Vc<FileSystemPath>>,
+}
+
+#[turbo_tasks::value_impl]
+impl ModuleTypeResult {
+    #[turbo_tasks::function]
+    fn new(module_type: SpecifiedModuleType) -> Vc<Self> {
+        Self::cell(ModuleTypeResult {
+            module_type,
+            referenced_package_json: None,
+        })
+    }
+
+    #[turbo_tasks::function]
+    fn new_with_package_json(
+        module_type: SpecifiedModuleType,
+        package_json: Vc<FileSystemPath>,
+    ) -> Vc<Self> {
+        Self::cell(ModuleTypeResult {
+            module_type,
+            referenced_package_json: Some(package_json),
+        })
+    }
+}
+
 #[turbo_tasks::value_impl]
 impl EcmascriptModuleAsset {
     #[turbo_tasks::function]
@@ -316,8 +365,10 @@ impl EcmascriptModuleAsset {
     #[turbo_tasks::function]
     pub async fn failsafe_analyze(self: Vc<Self>) -> Result<Vc<AnalyzeEcmascriptModuleResult>> {
         let this = self.await?;
+
         let result = self.analyze();
         let result_value = result.await?;
+
         if result_value.successful {
             this.last_successful_analysis
                 .set(Some(MemoizedSuccessfulAnalysis {
@@ -329,6 +380,11 @@ impl EcmascriptModuleAsset {
                     evaluation_references: result_value.evaluation_references.await?,
                     exports: result_value.exports.await?,
                     async_module: result_value.async_module.await?,
+                    source_map: if let Some(map) = *result_value.source_map.await? {
+                        Some(map.await?)
+                    } else {
+                        None
+                    },
                 }));
         } else if let Some(MemoizedSuccessfulAnalysis {
             operation,
@@ -338,6 +394,7 @@ impl EcmascriptModuleAsset {
             evaluation_references,
             exports,
             async_module,
+            source_map,
         }) = &*this.last_successful_analysis.get()
         {
             // It's important to connect to the last operation here to keep it active, so
@@ -351,6 +408,7 @@ impl EcmascriptModuleAsset {
                 exports: ReadRef::cell(exports.clone()),
                 code_generation: result_value.code_generation,
                 async_module: ReadRef::cell(async_module.clone()),
+                source_map: Vc::cell(source_map.clone().map(ReadRef::cell)),
                 successful: false,
             }
             .cell());
@@ -362,6 +420,54 @@ impl EcmascriptModuleAsset {
     #[turbo_tasks::function]
     pub fn parse(&self) -> Vc<ParseResult> {
         parse(self.source, Value::new(self.ty), self.transforms)
+    }
+
+    #[turbo_tasks::function]
+    pub(crate) async fn determine_module_type(self: Vc<Self>) -> Result<Vc<ModuleTypeResult>> {
+        let this = self.await?;
+
+        match this.options.specified_module_type {
+            SpecifiedModuleType::EcmaScript => {
+                return Ok(ModuleTypeResult::new(SpecifiedModuleType::EcmaScript))
+            }
+            SpecifiedModuleType::CommonJs => {
+                return Ok(ModuleTypeResult::new(SpecifiedModuleType::CommonJs))
+            }
+            SpecifiedModuleType::Automatic => {}
+        }
+
+        let find_package_json = find_context_file(
+            self.origin_path()
+                .resolve()
+                .await?
+                .parent()
+                .resolve()
+                .await?,
+            package_json().resolve().await?,
+        )
+        .await?;
+        let FindContextFileResult::Found(package_json, _) = *find_package_json else {
+            return Ok(ModuleTypeResult::new(SpecifiedModuleType::Automatic));
+        };
+
+        // analysis.add_reference(PackageJsonReference::new(package_json));
+        if let FileJsonContent::Content(content) = &*package_json.read_json().await? {
+            if let Some(r#type) = content.get("type") {
+                return Ok(ModuleTypeResult::new_with_package_json(
+                    match r#type.as_str() {
+                        Some("module") => SpecifiedModuleType::EcmaScript,
+                        Some("commonjs") => SpecifiedModuleType::CommonJs,
+                        _ => SpecifiedModuleType::Automatic,
+                    },
+                    package_json,
+                ));
+            }
+        }
+
+        Ok(ModuleTypeResult::new_with_package_json(
+            SpecifiedModuleType::Automatic,
+            package_json,
+        ))
     }
 
     /// Generates module contents without an analysis pass. This is useful for
@@ -377,6 +483,7 @@ impl EcmascriptModuleAsset {
         Ok(EcmascriptModuleContent::new_without_analysis(
             parsed,
             self.ident(),
+            this.options.specified_module_type,
         ))
     }
 
@@ -393,12 +500,17 @@ impl EcmascriptModuleAsset {
             .await?;
 
         let analyze = self.analyze().await?;
+
+        let module_type_result = *self.determine_module_type().await?;
+
         Ok(EcmascriptModuleContent::new(
             parsed,
             self.ident(),
+            module_type_result.module_type,
             chunking_context,
             analyze.references,
             analyze.code_generation,
+            analyze.source_map,
             analyze.exports,
             async_module_info,
         ))
@@ -415,6 +527,7 @@ impl Module for EcmascriptModuleAsset {
                 ident.add_asset(Vc::cell(name.clone()), asset.ident());
             }
             ident.add_modifier(modifier());
+            ident.layer = Some(self.asset_context.layer());
             Ok(AssetIdent::new(Value::new(ident)))
         } else {
             Ok(self
@@ -594,7 +707,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
 #[turbo_tasks::value]
 pub struct EcmascriptModuleContent {
     pub inner_code: Rope,
-    pub source_map: Option<Vc<ParseResultSourceMap>>,
+    pub source_map: Option<Vc<Box<dyn GenerateSourceMap>>>,
     pub is_esm: bool,
 }
 
@@ -605,9 +718,11 @@ impl EcmascriptModuleContent {
     pub async fn new(
         parsed: Vc<ParseResult>,
         ident: Vc<AssetIdent>,
+        specified_module_type: SpecifiedModuleType,
         chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
         references: Vc<ModuleReferences>,
         code_generation: Vc<CodeGenerateables>,
+        source_map: Vc<OptionSourceMap>,
         exports: Vc<EcmascriptExports>,
         async_module_info: Option<Vc<AsyncModuleInfo>>,
     ) -> Result<Vc<Self>> {
@@ -653,7 +768,15 @@ impl EcmascriptModuleContent {
             }
         }
 
-        gen_content_with_visitors(parsed, ident, visitors, root_visitors).await
+        gen_content_with_visitors(
+            parsed,
+            ident,
+            specified_module_type,
+            visitors,
+            root_visitors,
+            source_map,
+        )
+        .await
     }
 
     /// Creates a new [`Vc<EcmascriptModuleContent>`] without an analysis pass.
@@ -661,19 +784,30 @@ impl EcmascriptModuleContent {
     pub async fn new_without_analysis(
         parsed: Vc<ParseResult>,
         ident: Vc<AssetIdent>,
+        specified_module_type: SpecifiedModuleType,
     ) -> Result<Vc<Self>> {
-        gen_content_with_visitors(parsed, ident, Vec::new(), Vec::new()).await
+        gen_content_with_visitors(
+            parsed,
+            ident,
+            specified_module_type,
+            Vec::new(),
+            Vec::new(),
+            OptionSourceMap::none(),
+        )
+        .await
     }
 }
 
 async fn gen_content_with_visitors(
     parsed: Vc<ParseResult>,
     ident: Vc<AssetIdent>,
+    specified_module_type: SpecifiedModuleType,
     visitors: Vec<(
         &Vec<swc_core::ecma::visit::AstParentKind>,
         &dyn VisitorFactory,
     )>,
     root_visitors: Vec<&dyn VisitorFactory>,
+    original_src_map: Vc<OptionSourceMap>,
 ) -> Result<Vc<EcmascriptModuleContent>> {
     let parsed = parsed.await?;
 
@@ -710,7 +844,7 @@ async fn gen_content_with_visitors(
         // TODO: Insert this as a sourceless segment so that sourcemaps aren't affected.
         // = format!("/* {} */\n", self.module.path().to_string().await?).into_bytes();
 
-        let mut srcmap = vec![];
+        let mut mappings = vec![];
 
         let comments = comments.consumable();
 
@@ -718,17 +852,19 @@ async fn gen_content_with_visitors(
             cfg: swc_core::ecma::codegen::Config::default(),
             cm: source_map.clone(),
             comments: Some(&comments),
-            wr: JsWriter::new(source_map.clone(), "\n", &mut bytes, Some(&mut srcmap)),
+            wr: JsWriter::new(source_map.clone(), "\n", &mut bytes, Some(&mut mappings)),
         };
 
         emitter.emit_program(&program)?;
 
-        let srcmap = ParseResultSourceMap::new(source_map.clone(), srcmap).cell();
+        let srcmap =
+            ParseResultSourceMap::new(source_map.clone(), mappings, original_src_map).cell();
 
         Ok(EcmascriptModuleContent {
             inner_code: bytes.into(),
-            source_map: Some(srcmap),
-            is_esm: eval_context.is_esm(),
+            source_map: Some(Vc::upcast(srcmap)),
+            is_esm: eval_context.is_esm()
+                || specified_module_type == SpecifiedModuleType::EcmaScript,
         }
         .cell())
     } else {

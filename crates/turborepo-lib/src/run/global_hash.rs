@@ -1,6 +1,9 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+};
 
-use globwalk::WalkType;
+use globwalk::{ValidatedGlob, WalkType};
 use thiserror::Error;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
@@ -24,6 +27,8 @@ pub enum Error {
     Env(#[from] turborepo_env::Error),
     #[error(transparent)]
     Globwalk(#[from] globwalk::WalkError),
+    #[error("invalid glob for globwalking: {0}")]
+    Glob(#[from] globwalk::GlobError),
     #[error(transparent)]
     Scm(#[from] turborepo_scm::Error),
     #[error(transparent)]
@@ -59,6 +64,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     env_mode: EnvMode,
     framework_inference: bool,
     dot_env: Option<&'a [RelativeUnixPathBuf]>,
+    hasher: &SCM,
 ) -> Result<GlobalHashableInputs<'a>, Error> {
     let global_hashable_env_vars =
         get_global_hashable_env_vars(env_at_execution_start, global_env)?;
@@ -78,8 +84,6 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
             global_deps.insert(lockfile_path);
         }
     }
-
-    let hasher = SCM::new(root_path);
 
     let global_deps_paths = global_deps
         .iter()
@@ -127,7 +131,7 @@ fn collect_global_deps(
     if global_file_dependencies.is_empty() {
         return Ok(HashSet::new());
     }
-    let exclusions = match package_manager.get_workspace_globs(root_path) {
+    let raw_exclusions = match package_manager.get_workspace_globs(root_path) {
         Ok(globs) => globs.raw_exclusions,
         // If we hit a missing workspaces error, we could be in single package mode
         // so we should just use the default globs
@@ -139,7 +143,16 @@ fn collect_global_deps(
             return Err(err.into());
         }
     };
+    let exclusions = raw_exclusions
+        .iter()
+        .map(|e| ValidatedGlob::from_str(e))
+        .collect::<Result<Vec<_>, _>>()?;
 
+    #[cfg(not(windows))]
+    let inclusions = global_file_dependencies
+        .iter()
+        .map(|i| ValidatedGlob::from_str(i))
+        .collect::<Result<Vec<_>, _>>()?;
     // This is a bit of a hack to ensure that we don't crash
     // when given an absolute path on Windows. We don't support
     // absolute paths, but the ':' from the drive letter will also
@@ -149,17 +162,14 @@ fn collect_global_deps(
     // behavior, which tacked it on to the end of the base path unmodified,
     // and then would produce no files.
     #[cfg(windows)]
-    let windows_global_file_dependencies: Vec<String> = global_file_dependencies
+    let inclusions: Vec<ValidatedGlob> = global_file_dependencies
         .iter()
-        .map(|s| s.replace(":", ""))
-        .collect();
+        .map(|s| ValidatedGlob::from_str(&s.replace(":", "")))
+        .collect::<Result<Vec<_>, _>>()?;
 
     Ok(globwalk::globwalk(
         root_path,
-        #[cfg(not(windows))]
-        global_file_dependencies,
-        #[cfg(windows)]
-        windows_global_file_dependencies.as_slice(),
+        &inclusions,
         &exclusions,
         WalkType::Files,
     )?)
@@ -211,6 +221,7 @@ mod tests {
     use turborepo_env::EnvironmentVariableMap;
     use turborepo_lockfiles::Lockfile;
     use turborepo_repository::package_manager::PackageManager;
+    use turborepo_scm::SCM;
 
     use super::get_global_hash_inputs;
     use crate::{cli::EnvMode, run::global_hash::collect_global_deps};
@@ -248,6 +259,7 @@ mod tests {
             EnvMode::Infer,
             false,
             None,
+            &SCM::new(&root),
         );
         assert!(result.is_ok());
     }

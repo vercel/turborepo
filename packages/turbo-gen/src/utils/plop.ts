@@ -199,6 +199,7 @@ function injectTurborepoData({
   generator: PlopGenerator & { basePath?: string };
 }) {
   const paths = {
+    cwd: process.cwd(),
     root: project.paths.root,
     workspace: generator.basePath
       ? searchUp({ cwd: generator.basePath, target: "package.json" })
