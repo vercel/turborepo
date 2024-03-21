@@ -169,17 +169,17 @@ impl ImportAttributes {
                 supports,
                 media,
             } => turbopack_core::reference_type::ImportAttributes {
-                layer: layer_name.as_ref().map(gen_swc_node),
-                supports: supports.as_ref().map(gen_swc_node),
+                layer: layer_name.as_ref().map(gen_swc_node).map(Arc::new),
+                supports: supports.as_ref().map(gen_swc_node).map(Arc::new),
                 media: media
                     .as_ref()
-                    .map(|queries| queries.iter().map(gen_swc_node).collect()),
+                    .map(|queries| queries.iter().map(gen_swc_node).collect().map(Arc::new)),
             },
         }
     }
 }
 
-fn gen_swc_node<N>(node: N) -> Arc<String>
+fn gen_swc_node<N>(node: N) -> String
 where
     N: Spanned,
     for<'a> CodeGenerator<BasicCssWriter<'a, &'a mut String>>: Emit<N>,
@@ -191,7 +191,7 @@ where
 
         gen.emit(&node).unwrap();
     }
-    code.into()
+    code
 }
 
 #[turbo_tasks::value]
