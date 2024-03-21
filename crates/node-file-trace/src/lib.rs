@@ -242,7 +242,8 @@ async fn input_to_modules(
     let root = fs.root();
     let process_cwd = process_cwd
         .clone()
-        .map(|p| format!("/ROOT{}", p.trim_start_matches(&*context_directory)));
+        .map(|p| format!("/ROOT{}", p.trim_start_matches(&*context_directory)))
+        .map(Arc::new);
 
     let asset_context: Vc<Box<dyn AssetContext>> = Vc::upcast(create_module_asset(
         root,
@@ -578,7 +579,7 @@ async fn main_operation(
             {
                 let nft_asset = NftJsonAsset::new(*module);
                 let path = nft_asset.ident().path().await?.path.clone();
-                output_nft_assets.push(path);
+                output_nft_assets.push((*path).clone());
                 emits.push(emit_asset(Vc::upcast(nft_asset)));
             }
             // Wait for all files to be emitted
@@ -625,13 +626,13 @@ async fn main_operation(
 #[turbo_tasks::function]
 async fn create_module_asset(
     root: Vc<FileSystemPath>,
-    process_cwd: Option<String>,
+    process_cwd: Option<Arc<String>>,
     module_options: TransientInstance<ModuleOptionsContext>,
     resolve_options: TransientInstance<ResolveOptionsContext>,
 ) -> Result<Vc<ModuleAssetContext>> {
     let env = Environment::new(Value::new(ExecutionEnvironment::NodeJsLambda(
         NodeJsEnvironment {
-            cwd: Vc::cell(process_cwd),
+            cwd: Vc::cell(process_cwd.as_deref().cloned()),
             ..Default::default()
         }
         .into(),
@@ -640,12 +641,12 @@ async fn create_module_asset(
     let glob_mappings = vec![
         (
             root,
-            Glob::new("**/*/next/dist/server/next.js".to_string()),
+            Glob::new("**/*/next/dist/server/next.js".to_string().into()),
             ImportMapping::Ignore.into(),
         ),
         (
             root,
-            Glob::new("**/*/next/dist/bin/next".to_string()),
+            Glob::new("**/*/next/dist/bin/next".to_string().into()),
             ImportMapping::Ignore.into(),
         ),
     ];
