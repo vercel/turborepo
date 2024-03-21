@@ -22,12 +22,14 @@ struct BottomRefInfo {
 #[derive(Default)]
 pub struct DistanceCountMap<T: IsEnabled> {
     map: AutoMap<T, BottomRefInfo, BuildNoHashHasher<T>>,
+    map_copy: AutoMap<T, BottomRefInfo, BuildNoHashHasher<T>>,
 }
 
 impl<T: IsEnabled + Eq + Hash + Clone> DistanceCountMap<T> {
     pub fn new() -> Self {
         Self {
             map: AutoMap::with_hasher(),
+            map_copy: AutoMap::with_hasher(),
         }
     }
 
@@ -50,6 +52,7 @@ impl<T: IsEnabled + Eq + Hash + Clone> DistanceCountMap<T> {
                 match info.count.cmp(&0) {
                     std::cmp::Ordering::Equal => {
                         e.remove();
+                        self.map_copy.remove(item);
                     }
                     std::cmp::Ordering::Greater => {
                         if distance < info.distance {
@@ -66,6 +69,8 @@ impl<T: IsEnabled + Eq + Hash + Clone> DistanceCountMap<T> {
             }
             RawEntry::Vacant(e) => {
                 e.insert(item.clone(), BottomRefInfo { count: 1, distance });
+                self.map_copy
+                    .insert(item.clone(), BottomRefInfo { count: 1, distance });
                 true
             }
         }
@@ -78,6 +83,7 @@ impl<T: IsEnabled + Eq + Hash + Clone> DistanceCountMap<T> {
                 info.count -= 1;
                 if info.count == 0 {
                     e.remove();
+                    self.map_copy.remove(item);
                     true
                 } else {
                     false
@@ -88,6 +94,13 @@ impl<T: IsEnabled + Eq + Hash + Clone> DistanceCountMap<T> {
                     item.clone(),
                     BottomRefInfo {
                         count: -1,
+                        distance: 0,
+                    },
+                );
+                self.map_copy.insert(
+                    item.clone(),
+                    BottomRefInfo {
+                        count: 0,
                         distance: 0,
                     },
                 );
