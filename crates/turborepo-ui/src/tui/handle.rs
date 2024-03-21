@@ -183,7 +183,6 @@ impl std::io::Write for PersistedWriter {
 
 impl std::io::Write for PersistedWriterInner {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        debug!("persisted write for {} bytes to ui", buf.len());
         let bytes = buf.to_vec();
         self.handle
             .priority

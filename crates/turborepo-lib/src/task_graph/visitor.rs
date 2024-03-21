@@ -974,7 +974,6 @@ impl ExecContext {
                 }
                 if let TaskOutput::UI(task) = output_client {
                     let mut persisted_ui = self.prefixed_ui(task.stdout(), task.stdout());
-                    // If we can't write to stdout we're dead
                     let _ = self
                         .task_cache
                         .replay_log_file(persisted_ui.output_prefixed_writer());
