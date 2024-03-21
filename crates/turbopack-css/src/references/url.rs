@@ -124,7 +124,7 @@ pub async fn resolve_url_reference(
     // currently works as all chunks are in the same directory.
     let chunk_path = chunking_context.chunk_path(
         AssetIdent::from_path(this.origin.origin_path()),
-        ".css".to_string(),
+        ".css".to_string().into(),
     );
     let context_path = chunk_path.parent().await?;
 
