@@ -1,4 +1,4 @@
-use std::{fmt::Write, mem::replace};
+use std::{fmt::Write, mem::replace, sync::Arc};
 
 use anyhow::Result;
 use indexmap::IndexMap;
@@ -20,7 +20,7 @@ pub enum RouteType {
 /// Some normal segment of a route.
 #[derive(TaskInput, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
 pub enum BaseSegment {
-    Static(String),
+    Static(Arc<String>),
     Dynamic,
 }
 
@@ -28,7 +28,7 @@ impl BaseSegment {
     pub fn from_static_pathname(str: &str) -> impl Iterator<Item = BaseSegment> + '_ {
         str.split('/')
             .filter(|s| !s.is_empty())
-            .map(|s| BaseSegment::Static(s.to_string()))
+            .map(|s| BaseSegment::Static(s.to_string().into()))
     }
 }
 
@@ -255,7 +255,7 @@ impl RouteTree {
     // TODO(WEB-1252) It's unneccesary to compute all [`GetContentSourceContent`]s at once, we could
     // return some lazy iterator to make it more efficient.
     #[turbo_tasks::function]
-    pub async fn get(self: Vc<Self>, path: String) -> Result<Vc<GetContentSourceContents>> {
+    pub async fn get(self: Vc<Self>, path: Arc<String>) -> Result<Vc<GetContentSourceContents>> {
         let RouteTree {
             base,
             sources,

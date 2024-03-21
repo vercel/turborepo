@@ -1,6 +1,9 @@
 use std::{
     collections::btree_map::Entry,
-    sync::atomic::{AtomicU64, Ordering},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
 };
 
 use anyhow::Result;
@@ -43,7 +46,7 @@ pub async fn resolve_source_request(
 ) -> Result<Vc<ResolveSourceRequestResult>> {
     let original_path = request.uri.path().to_string();
     // Remove leading slash.
-    let mut current_asset_path = urlencoding::decode(&original_path[1..])?.into_owned();
+    let mut current_asset_path = Arc::new(urlencoding::decode(&original_path[1..])?.into_owned());
     let mut request_overwrites = (*request).clone();
     let mut response_header_overwrites = Vec::new();
     let mut route_tree = source.get_routes().resolve_strongly_consistent().await?;
@@ -66,8 +69,8 @@ pub async fn resolve_source_request(
                             request_overwrites.headers.clear();
                             for (name, value) in &*headers.await? {
                                 request_overwrites.headers.insert(
-                                    HyperHeaderName::try_from(name)?,
-                                    HyperHeaderValue::try_from(value)?,
+                                    HyperHeaderName::try_from(&**name)?,
+                                    HyperHeaderValue::try_from(&**value)?,
                                 );
                             }
                         }
@@ -75,8 +78,9 @@ pub async fn resolve_source_request(
                         match &rewrite.ty {
                             RewriteType::Location { path_and_query } => {
                                 let new_uri = Uri::try_from(path_and_query)?;
-                                let new_asset_path =
-                                    urlencoding::decode(&new_uri.path()[1..])?.into_owned();
+                                let new_asset_path = Arc::new(
+                                    urlencoding::decode(&new_uri.path()[1..])?.into_owned(),
+                                );
                                 request_overwrites.uri = new_uri;
                                 current_asset_path = new_asset_path;
                                 continue 'routes;
@@ -86,8 +90,9 @@ pub async fn resolve_source_request(
                                 path_and_query,
                             } => {
                                 let new_uri = Uri::try_from(path_and_query)?;
-                                let new_asset_path =
-                                    urlencoding::decode(&new_uri.path()[1..])?.into_owned();
+                                let new_asset_path = Arc::new(
+                                    urlencoding::decode(&new_uri.path()[1..])?.into_owned(),
+                                );
                                 request_overwrites.uri = new_uri;
                                 current_asset_path = new_asset_path;
                                 route_tree =
