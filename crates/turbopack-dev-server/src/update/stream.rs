@@ -1,4 +1,4 @@
-use std::pin::Pin;
+use std::{pin::Pin, sync::Arc};
 
 use anyhow::Result;
 use futures::prelude::*;
@@ -42,7 +42,7 @@ fn extend_issues(issues: &mut Vec<ReadRef<PlainIssue>>, new_issues: Vec<ReadRef<
 
 #[turbo_tasks::function]
 async fn get_update_stream_item(
-    resource: String,
+    resource: Arc<String>,
     from: Vc<VersionState>,
     get_content: TransientInstance<GetContentFn>,
 ) -> Result<Vc<UpdateStreamItem>> {
@@ -55,7 +55,7 @@ async fn get_update_stream_item(
         Err(e) => {
             plain_issues.push(
                 FatalStreamIssue {
-                    resource: resource.to_string(),
+                    resource,
                     description: StyledString::Text(format!("{}", PrettyPrintError(&e))).cell(),
                 }
                 .cell()
@@ -159,7 +159,7 @@ async fn get_update_stream_item(
 
 #[turbo_tasks::function]
 async fn compute_update_stream(
-    resource: String,
+    resource: Arc<String>,
     from: Vc<VersionState>,
     get_content: TransientInstance<GetContentFn>,
     sender: TransientInstance<Sender<Result<ReadRef<UpdateStreamItem>>>>,
@@ -181,7 +181,7 @@ pub(super) struct UpdateStream(
 impl UpdateStream {
     #[tracing::instrument(skip(get_content), name = "UpdateStream::new")]
     pub async fn new(
-        resource: String,
+        resource: Arc<String>,
         get_content: TransientInstance<GetContentFn>,
     ) -> Result<UpdateStream> {
         let (sx, rx) = tokio::sync::mpsc::channel(32);
@@ -281,7 +281,7 @@ pub enum UpdateStreamItem {
 #[turbo_tasks::value(serialization = "none")]
 struct FatalStreamIssue {
     description: Vc<StyledString>,
-    resource: String,
+    resource: Arc<String>,
 }
 
 #[turbo_tasks::value_impl]

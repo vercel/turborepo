@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use turbo_tasks::{Value, Vc};
 
@@ -49,7 +51,7 @@ impl GetContentSourceContent for WrappedGetContentSourceContent {
     #[turbo_tasks::function]
     async fn get(
         &self,
-        path: String,
+        path: Arc<String>,
         data: Value<ContentSourceData>,
     ) -> Result<Vc<ContentSourceContent>> {
         let res = self.inner.get(path, data);
