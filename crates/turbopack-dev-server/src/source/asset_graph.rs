@@ -1,6 +1,7 @@
 use std::{
     collections::{HashSet, VecDeque},
     iter::once,
+    sync::Arc,
 };
 
 use anyhow::Result;
@@ -223,7 +224,7 @@ impl ContentSource for AssetGraphContentSource {
                     RouteType::Exact,
                     Vc::upcast(AssetGraphGetContentSourceContent::new(
                         self,
-                        path.to_string(),
+                        path.to_string().into(),
                         *asset,
                     )),
                 )
@@ -236,7 +237,7 @@ impl ContentSource for AssetGraphContentSource {
 #[turbo_tasks::value]
 struct AssetGraphGetContentSourceContent {
     source: Vc<AssetGraphContentSource>,
-    path: String,
+    path: Arc<String>,
     asset: Vc<Box<dyn OutputAsset>>,
 }
 
@@ -245,7 +246,7 @@ impl AssetGraphGetContentSourceContent {
     #[turbo_tasks::function]
     pub fn new(
         source: Vc<AssetGraphContentSource>,
-        path: String,
+        path: Arc<String>,
         asset: Vc<Box<dyn OutputAsset>>,
     ) -> Vc<Self> {
         Self::cell(AssetGraphGetContentSourceContent {
@@ -261,7 +262,7 @@ impl GetContentSourceContent for AssetGraphGetContentSourceContent {
     #[turbo_tasks::function]
     async fn get(
         self: Vc<Self>,
-        _path: String,
+        _path: Arc<String>,
         _data: Value<ContentSourceData>,
     ) -> Result<Vc<ContentSourceContent>> {
         let this = self.await?;

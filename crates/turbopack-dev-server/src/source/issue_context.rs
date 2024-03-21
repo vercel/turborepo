@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use turbo_tasks::{Value, Vc};
 use turbo_tasks_fs::FileSystemPath;
@@ -15,7 +17,7 @@ use super::{
 #[turbo_tasks::value]
 pub struct IssueFilePathContentSource {
     file_path: Option<Vc<FileSystemPath>>,
-    description: String,
+    description: Arc<String>,
     source: Vc<Box<dyn ContentSource>>,
 }
 
@@ -24,7 +26,7 @@ impl IssueFilePathContentSource {
     #[turbo_tasks::function]
     pub fn new_file_path(
         file_path: Vc<FileSystemPath>,
-        description: String,
+        description: Arc<String>,
         source: Vc<Box<dyn ContentSource>>,
     ) -> Vc<Self> {
         IssueFilePathContentSource {
@@ -111,7 +113,7 @@ impl GetContentSourceContent for IssueContextGetContentSourceContent {
     #[turbo_tasks::function]
     async fn get(
         &self,
-        path: String,
+        path: Arc<String>,
         data: Value<ContentSourceData>,
     ) -> Result<Vc<ContentSourceContent>> {
         let source = self.source.await?;

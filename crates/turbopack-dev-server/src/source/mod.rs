@@ -12,7 +12,7 @@ pub mod router;
 pub mod static_assets;
 pub mod wrapping_source;
 
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, sync::Arc};
 
 use anyhow::Result;
 use futures::{stream::Stream as StreamTrait, TryStreamExt};
@@ -71,7 +71,7 @@ pub trait GetContentSourceContent {
     /// Get the content
     fn get(
         self: Vc<Self>,
-        path: String,
+        path: Arc<String>,
         data: Value<ContentSourceData>,
     ) -> Vc<ContentSourceContent>;
 }

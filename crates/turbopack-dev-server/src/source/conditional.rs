@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use turbo_tasks::{Completion, State, Value, Vc};
 use turbopack_core::introspect::{Introspectable, IntrospectableChildren};
@@ -164,7 +166,7 @@ impl GetContentSourceContent for ActivateOnGetContentSource {
     #[turbo_tasks::function]
     async fn get(
         self: Vc<Self>,
-        path: String,
+        path: Arc<String>,
         data: Value<ContentSourceData>,
     ) -> Result<Vc<ContentSourceContent>> {
         turbo_tasks::emit(Vc::upcast::<Box<dyn ContentSourceSideEffect>>(self));

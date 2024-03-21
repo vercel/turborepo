@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashSet, fmt::Display};
+use std::{borrow::Cow, collections::HashSet, fmt::Display, sync::Arc};
 
 use anyhow::Result;
 use turbo_tasks::{ReadRef, TryJoinIterExt, Vc};
@@ -89,7 +89,7 @@ impl GetContentSourceContent for IntrospectionSource {
     #[turbo_tasks::function]
     async fn get(
         self: Vc<Self>,
-        path: String,
+        path: Arc<String>,
         _data: turbo_tasks::Value<ContentSourceData>,
     ) -> Result<Vc<ContentSourceContent>> {
         // get last segment
