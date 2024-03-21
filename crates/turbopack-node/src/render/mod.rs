@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
@@ -54,8 +56,8 @@ enum RenderStaticIncomingMessage {
     #[serde(rename_all = "camelCase")]
     Response {
         status_code: u16,
-        headers: Vec<(String, String)>,
-        body: String,
+        headers: Vec<(Arc<String>, Arc<String>)>,
+        body: Arc<String>,
     },
     Headers {
         data: ResponseHeaders,
@@ -65,7 +67,7 @@ enum RenderStaticIncomingMessage {
     },
     BodyEnd,
     Rewrite {
-        path: String,
+        path: Arc<String>,
     },
     Error(StructuredError),
 }

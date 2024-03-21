@@ -177,7 +177,7 @@ async fn static_error(
 
     issue.cell().emit();
 
-    let html = fallback_page.with_body(body);
+    let html = fallback_page.with_body(body.into());
 
     Ok(html.content())
 }

@@ -480,7 +480,7 @@ pub enum RewriteType {
     Location {
         /// The new path and query used to lookup content. This _does not_ need
         /// to be the original path or query.
-        path_and_query: String,
+        path_and_query: Arc<String>,
     },
     ContentSource {
         /// [Vc<Box<dyn ContentSource>>]s from which to restart the lookup
@@ -489,7 +489,7 @@ pub enum RewriteType {
         source: Vc<Box<dyn ContentSource>>,
         /// The new path and query used to lookup content. This _does not_ need
         /// to be the original path or query.
-        path_and_query: String,
+        path_and_query: Arc<String>,
     },
     Sources {
         /// [GetContentSourceContent]s from which to restart the lookup
@@ -520,7 +520,7 @@ pub struct RewriteBuilder {
 }
 
 impl RewriteBuilder {
-    pub fn new(path_and_query: String) -> Self {
+    pub fn new(path_and_query: Arc<String>) -> Self {
         Self {
             rewrite: Rewrite {
                 ty: RewriteType::Location { path_and_query },
@@ -532,7 +532,7 @@ impl RewriteBuilder {
 
     pub fn new_source_with_path_and_query(
         source: Vc<Box<dyn ContentSource>>,
-        path_and_query: String,
+        path_and_query: Arc<String>,
     ) -> Self {
         Self {
             rewrite: Rewrite {

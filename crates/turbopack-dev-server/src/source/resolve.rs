@@ -77,7 +77,7 @@ pub async fn resolve_source_request(
                         // do the rewrite
                         match &rewrite.ty {
                             RewriteType::Location { path_and_query } => {
-                                let new_uri = Uri::try_from(path_and_query)?;
+                                let new_uri = Uri::try_from(&**path_and_query)?;
                                 let new_asset_path = Arc::new(
                                     urlencoding::decode(&new_uri.path()[1..])?.into_owned(),
                                 );
@@ -89,7 +89,7 @@ pub async fn resolve_source_request(
                                 source,
                                 path_and_query,
                             } => {
-                                let new_uri = Uri::try_from(path_and_query)?;
+                                let new_uri = Uri::try_from(&**path_and_query)?;
                                 let new_asset_path = Arc::new(
                                     urlencoding::decode(&new_uri.path()[1..])?.into_owned(),
                                 );
