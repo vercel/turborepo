@@ -55,9 +55,9 @@ pub enum EcmaScriptModulesReferenceSubType {
 #[derive(Debug)]
 #[turbo_tasks::value(shared)]
 pub struct ImportAttributes {
-    pub layer: Option<String>,
-    pub supports: Option<String>,
-    pub media: Option<String>,
+    pub layer: Option<Arc<String>>,
+    pub supports: Option<Arc<String>>,
+    pub media: Option<Arc<String>>,
 }
 
 /// The accumulated list of conditions that should be applied to this module
