@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use turbo_tasks::Vc;
 use turbo_tasks_fs::{embed_directory, FileContent, FileSystem, FileSystemPath};
 
@@ -7,11 +9,11 @@ pub fn embed_fs() -> Vc<Box<dyn FileSystem>> {
 }
 
 #[turbo_tasks::function]
-pub(crate) fn embed_file(path: String) -> Vc<FileContent> {
+pub(crate) fn embed_file(path: Arc<String>) -> Vc<FileContent> {
     embed_fs().root().join(path).read()
 }
 
 #[turbo_tasks::function]
-pub(crate) fn embed_file_path(path: String) -> Vc<FileSystemPath> {
+pub(crate) fn embed_file_path(path: Arc<String>) -> Vc<FileSystemPath> {
     embed_fs().root().join(path)
 }

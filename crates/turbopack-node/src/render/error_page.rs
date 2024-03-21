@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::{Context, Result};
 use turbo_tasks::Vc;
 use turbo_tasks_fs::embed_file;
@@ -5,8 +7,8 @@ use turbo_tasks_fs::embed_file;
 #[turbo_tasks::function]
 pub(super) async fn error_html(
     status_code: u16,
-    title: String,
-    details: String,
+    title: Arc<String>,
+    details: Arc<String>,
 ) -> Result<Vc<String>> {
     let html = create_html(status_code, title, details).await?;
 
@@ -16,8 +18,8 @@ pub(super) async fn error_html(
 #[turbo_tasks::function]
 pub(super) async fn error_html_body(
     status_code: u16,
-    title: String,
-    details: String,
+    title: Arc<String>,
+    details: Arc<String>,
 ) -> Result<Vc<String>> {
     let html = create_html(status_code, title, details).await?;
 
@@ -27,7 +29,7 @@ pub(super) async fn error_html_body(
     Ok(Vc::cell(body.to_string()))
 }
 
-async fn create_html(status_code: u16, title: String, details: String) -> Result<String> {
+async fn create_html(status_code: u16, title: Arc<String>, details: Arc<String>) -> Result<String> {
     let file_content = embed_file!("src/render/error.html").await?;
     let file = file_content
         .as_content()

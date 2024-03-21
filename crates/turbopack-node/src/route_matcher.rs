@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use indexmap::IndexMap;
 use turbo_tasks::Vc;
 
@@ -26,8 +28,8 @@ pub trait RouteMatcherRef {
 #[turbo_tasks::value_trait]
 pub trait RouteMatcher {
     /// Returns whether the given path is a match for the route.
-    fn matches(self: Vc<Self>, path: String) -> Vc<bool>;
+    fn matches(self: Vc<Self>, path: Arc<String>) -> Vc<bool>;
 
     /// Returns the parameters extracted from the given path.
-    fn params(self: Vc<Self>, path: String) -> Vc<Params>;
+    fn params(self: Vc<Self>, path: Arc<String>) -> Vc<Params>;
 }

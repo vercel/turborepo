@@ -200,7 +200,7 @@ async fn separate_assets(
 fn emit_package_json(dir: Vc<FileSystemPath>) -> Vc<Completion> {
     emit(
         Vc::upcast(VirtualOutputAsset::new(
-            dir.join("package.json".to_string()),
+            dir.join("package.json".to_string().into()),
             AssetContent::file(File::from("{\"type\": \"commonjs\"}").into()),
         )),
         dir,
@@ -266,7 +266,7 @@ pub async fn get_intermediate_asset(
 ) -> Result<Vc<Box<dyn OutputAsset>>> {
     Ok(Vc::upcast(
         NodeJsBootstrapAsset {
-            path: chunking_context.chunk_path(main_entry.ident(), ".js".to_string()),
+            path: chunking_context.chunk_path(main_entry.ident(), ".js".to_string().into()),
             chunking_context,
             evaluatable_assets: other_entries.with_entry(main_entry),
         }

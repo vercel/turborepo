@@ -111,8 +111,10 @@ async fn proxy_error(
     let status_code = 500;
     let body = error_html(
         status_code,
-        "An error occurred while proxying the request to Node.js".to_string(),
-        format!("{message}\n\n{}", details.join("\n")),
+        "An error occurred while proxying the request to Node.js"
+            .to_string()
+            .into(),
+        format!("{message}\n\n{}", details.join("\n")).into(),
     )
     .await?
     .clone_value();
