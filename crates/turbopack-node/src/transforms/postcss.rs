@@ -193,8 +193,8 @@ async fn extra_configs_changed(
     let parent_path = postcss_config_path.parent();
 
     let config_paths = [
-        parent_path.join("tailwind.config.js".to_string()),
-        parent_path.join("tailwind.config.ts".to_string()),
+        parent_path.join("tailwind.config.js".to_string().into()),
+        parent_path.join("tailwind.config.ts".to_string().into()),
     ];
 
     let configs = config_paths
@@ -264,7 +264,7 @@ pub(crate) async fn config_loader_source(
     };
 
     Ok(Vc::upcast(VirtualSource::new(
-        postcss_config_path.append("_.loader.mjs".to_string()),
+        postcss_config_path.append("_.loader.mjs".to_string().into()),
         AssetContent::file(File::from(code).into()),
     )))
 }
@@ -284,8 +284,8 @@ async fn postcss_executor(
 
     Ok(asset_context.process(
         Vc::upcast(VirtualSource::new(
-            postcss_config_path.join("transform.ts".to_string()),
-            AssetContent::File(embed_file("transforms/postcss.ts".to_string())).cell(),
+            postcss_config_path.join("transform.ts".to_string().into()),
+            AssetContent::File(embed_file("transforms/postcss.ts".to_string().into())).cell(),
         )),
         Value::new(ReferenceType::Internal(Vc::cell(indexmap! {
             "CONFIG".to_string() => config_asset
