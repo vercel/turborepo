@@ -486,7 +486,7 @@ impl EvaluateContext for WebpackLoaderContext {
                 let Some(resolve_options_context) = self.resolve_options_context else {
                     bail!("Resolve options are not available in this context");
                 };
-                let lookup_path = self.cwd.join(lookup_path);
+                let lookup_path = self.cwd.join(lookup_path.into());
                 let request = Request::parse(Value::new(Pattern::Constant(request)));
                 let options = resolve_options(lookup_path, resolve_options_context);
 
@@ -571,7 +571,7 @@ async fn apply_webpack_resolve_options(
             .extract_if(|field| matches!(field, ResolveInPackage::AliasField(..)))
             .collect::<Vec<_>>();
         for field in alias_fields {
-            if field == "..." {
+            if &**field == "..." {
                 resolve_options.in_package.extend(take(&mut old));
             } else {
                 resolve_options
@@ -584,10 +584,10 @@ async fn apply_webpack_resolve_options(
         for conditions in get_condition_maps(&mut resolve_options) {
             let mut old = take(conditions);
             for name in &condition_names {
-                if name == "..." {
+                if &***name == "..." {
                     conditions.extend(take(&mut old));
                 } else {
-                    conditions.insert(name.clone(), ConditionValue::Set);
+                    conditions.insert((**name).clone(), ConditionValue::Set);
                 }
             }
         }
