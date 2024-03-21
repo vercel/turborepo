@@ -240,6 +240,7 @@ mod test {
     }
 
     #[test_case(&["foo"], "" ; "no newline")]
+    #[test_case(&["\n"], "\n" ; "one newline")]
     #[test_case(&["foo\n"], "foo\n" ; "single newline")]
     #[test_case(&["foo ", "bar ", "baz\n"], "foo bar baz\n" ; "building line")]
     #[test_case(&["multiple\nlines\nin\none"], "multiple\nlines\nin\n" ; "multiple lines")]
@@ -267,9 +268,11 @@ mod test {
             .write_all(b", now\nbut \ranother one starts")
             .unwrap();
         writer.write_all(b" done\n").unwrap();
+        writer.write_all(b"\n").unwrap();
         assert_eq!(
             String::from_utf8(buffer).unwrap(),
-            "turbo > not a line yet, now\nturbo > but \rturbo > another one starts done\n"
+            "turbo > not a line yet, now\nturbo > but \rturbo > another one starts done\nturbo > \
+             \n"
         );
     }
 }

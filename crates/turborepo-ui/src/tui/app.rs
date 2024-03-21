@@ -173,6 +173,7 @@ fn update(
             app.table.tick();
         }
         Event::Log { message } => {
+            debug!("received message");
             return Ok(Some(message));
         }
         Event::EndTask { task } => {
@@ -214,6 +215,7 @@ fn persist_bytes(terminal: &mut Terminal<impl Backend>, bytes: &[u8]) -> Result<
     parser.process(bytes);
     let screen = parser.entire_screen();
     let (height, _) = screen.size();
+    debug!("{} bytes rendered as {} lines", bytes.len(), height);
     terminal.insert_before(height as u16, |buf| {
         PseudoTerminal::new(&screen).render(buf.area, buf)
     })?;

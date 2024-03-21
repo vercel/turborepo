@@ -3,7 +3,10 @@ use std::{
     time::Instant,
 };
 
+use tracing::debug;
+
 use super::Event;
+use crate::LineWriter;
 
 /// Struct for sending app events to TUI rendering
 #[derive(Debug, Clone)]
@@ -27,8 +30,13 @@ pub struct TuiTask {
 }
 
 /// Writer that will correctly render writes to the persisted part of the screen
-#[derive(Debug, Clone)]
 pub struct PersistedWriter {
+    writer: LineWriter<PersistedWriterInner>,
+}
+
+/// Writer that will correctly render writes to the persisted part of the screen
+#[derive(Debug, Clone)]
+pub struct PersistedWriterInner {
     handle: AppSender,
 }
 
@@ -132,7 +140,9 @@ impl TuiTask {
     /// pass in a PersistedWriter instead.
     pub fn stdout(&self) -> PersistedWriter {
         PersistedWriter {
-            handle: self.as_app().clone(),
+            writer: LineWriter::new(PersistedWriterInner {
+                handle: self.as_app().clone(),
+            }),
         }
     }
 }
@@ -163,9 +173,20 @@ impl std::io::Write for TuiTask {
 
 impl std::io::Write for PersistedWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.writer.write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.writer.flush()
+    }
+}
+
+impl std::io::Write for PersistedWriterInner {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        debug!("persisted write for {} bytes to ui", buf.len());
         let bytes = buf.to_vec();
         self.handle
-            .primary
+            .priority
             .send(Event::Log { message: bytes })
             .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "receiver dropped"))?;
         Ok(buf.len())
