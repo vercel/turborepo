@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use turbo_tasks::Vc;
 use turbo_tasks_env::{EnvMap, ProcessEnv};
@@ -33,7 +35,7 @@ impl ProcessEnv for EmbeddableProcessEnv {
     }
 
     #[turbo_tasks::function]
-    async fn read(&self, name: String) -> Result<Vc<Option<String>>> {
+    async fn read(&self, name: Arc<String>) -> Result<Vc<Option<String>>> {
         let prior = self.prior.read(name).await?;
         let encoded = prior.as_deref().map(|s| StringifyJs(s).to_string());
         Ok(Vc::cell(encoded))
