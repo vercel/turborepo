@@ -18,7 +18,6 @@ pub struct TopTree<T> {
 
 struct TopTreeState<T> {
     data: T,
-    data_copy: T,
     upper: CountHashSet<TopRef<T>>,
 }
 
@@ -28,7 +27,6 @@ impl<T: Default> TopTree<T> {
             depth,
             state: Mutex::new(TopTreeState {
                 data: T::default(),
-                data_copy: T::default(),
                 upper: CountHashSet::new(),
             }),
         }
@@ -112,7 +110,6 @@ impl<T> TopTree<T> {
         change: &C::ItemChange,
     ) {
         let mut state = self.state.lock();
-        aggregation_context.apply_change(&mut state.data_copy, change);
         let change = aggregation_context.apply_change(&mut state.data, change);
         propagate_change_to_upper(&state, aggregation_context, change);
     }
