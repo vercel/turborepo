@@ -141,5 +141,5 @@ async fn errors_on_404() {
 }
 
 fn get_issue_context() -> Vc<FileSystemPath> {
-    DiskFileSystem::new("root".to_owned(), "/".to_owned(), vec![]).root()
+    DiskFileSystem::new("root".to_owned().into(), "/".to_owned().into(), vec![]).root()
 }
