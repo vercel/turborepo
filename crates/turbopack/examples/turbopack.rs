@@ -55,7 +55,7 @@ async fn main() -> Result<()> {
                     enable_typescript: true,
                     enable_react: true,
                     enable_node_modules: Some(fs.root()),
-                    custom_conditions: vec!["development".to_string()],
+                    custom_conditions: vec!["development".to_string().into()],
                     ..Default::default()
                 }
                 .cell(),

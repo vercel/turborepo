@@ -103,7 +103,7 @@ impl OutputAsset for EcmascriptBuildNodeRuntimeChunk {
         let ident = AssetIdent::from_path(
             turbopack_ecmascript_runtime::embed_fs()
                 .root()
-                .join("runtime.js".to_string()),
+                .join("runtime.js".to_string().into()),
         );
 
         AssetIdent::from_path(self.chunking_context.chunk_path(ident, ".js".to_string()))
