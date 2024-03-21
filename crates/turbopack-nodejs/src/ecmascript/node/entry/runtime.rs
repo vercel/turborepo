@@ -106,7 +106,10 @@ impl OutputAsset for EcmascriptBuildNodeRuntimeChunk {
                 .join("runtime.js".to_string().into()),
         );
 
-        AssetIdent::from_path(self.chunking_context.chunk_path(ident, ".js".to_string()))
+        AssetIdent::from_path(
+            self.chunking_context
+                .chunk_path(ident, ".js".to_string().into()),
+        )
     }
 
     #[turbo_tasks::function]
