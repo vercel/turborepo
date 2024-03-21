@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use indexmap::IndexSet;
 use turbo_tasks::{ValueToString, Vc};
@@ -80,7 +82,10 @@ impl OutputAsset for EcmascriptDevChunk {
     #[turbo_tasks::function]
     fn ident(&self) -> Vc<AssetIdent> {
         let ident = self.chunk.ident().with_modifier(modifier());
-        AssetIdent::from_path(self.chunking_context.chunk_path(ident, ".js".to_string()))
+        AssetIdent::from_path(
+            self.chunking_context
+                .chunk_path(ident, ".js".to_string().into()),
+        )
     }
 
     #[turbo_tasks::function]
@@ -125,7 +130,7 @@ impl GenerateSourceMap for EcmascriptDevChunk {
     }
 
     #[turbo_tasks::function]
-    fn by_section(self: Vc<Self>, section: String) -> Vc<OptionSourceMap> {
+    fn by_section(self: Vc<Self>, section: Arc<String>) -> Vc<OptionSourceMap> {
         self.own_content().by_section(section)
     }
 }

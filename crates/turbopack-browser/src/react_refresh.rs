@@ -12,12 +12,16 @@ use turbopack_resolve::{
 
 #[turbo_tasks::function]
 fn react_refresh_request() -> Vc<Request> {
-    Request::parse_string("@next/react-refresh-utils/dist/runtime".to_string())
+    Request::parse_string("@next/react-refresh-utils/dist/runtime".to_string().into())
 }
 
 #[turbo_tasks::function]
 fn react_refresh_request_in_next() -> Vc<Request> {
-    Request::parse_string("next/dist/compiled/@next/react-refresh-utils/dist/runtime".to_string())
+    Request::parse_string(
+        "next/dist/compiled/@next/react-refresh-utils/dist/runtime"
+            .to_string()
+            .into(),
+    )
 }
 
 #[turbo_tasks::value]

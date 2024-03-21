@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{io::Write, sync::Arc};
 
 use anyhow::{bail, Result};
 use indoc::writedoc;
@@ -159,7 +159,7 @@ impl GenerateSourceMap for EcmascriptDevChunkContent {
     }
 
     #[turbo_tasks::function]
-    async fn by_section(&self, section: String) -> Result<Vc<OptionSourceMap>> {
+    async fn by_section(&self, section: Arc<String>) -> Result<Vc<OptionSourceMap>> {
         // Weirdly, the ContentSource will have already URL decoded the ModuleId, and we
         // can't reparse that via serde.
         if let Ok(id) = ModuleId::parse(&section) {
