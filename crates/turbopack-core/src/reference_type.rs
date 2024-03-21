@@ -124,14 +124,14 @@ impl ImportContext {
         if !self.layers.is_empty() {
             for (i, layer) in self.layers.iter().enumerate() {
                 if i > 0 {
-                    modifier.push_str(" ");
+                    modifier.push(' ');
                 }
                 write!(modifier, "layer({})", layer)?
             }
         }
         if !self.media.is_empty() {
             if !modifier.is_empty() {
-                modifier.push_str(" ");
+                modifier.push(' ');
             }
             for (i, media) in self.media.iter().enumerate() {
                 if i > 0 {
@@ -142,11 +142,11 @@ impl ImportContext {
         }
         if !self.supports.is_empty() {
             if !modifier.is_empty() {
-                modifier.push_str(" ");
+                modifier.push(' ');
             }
             for (i, supports) in self.supports.iter().enumerate() {
                 if i > 0 {
-                    modifier.push_str(" ");
+                    modifier.push(' ');
                 }
                 write!(modifier, "supports({})", supports)?
             }
