@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use turbo_tasks::{ValueDefault, Vc};
 use turbo_tasks_fs::FileSystemPath;
@@ -44,9 +46,9 @@ pub struct ResolveOptionsContext {
     /// Enables the "module" field and export condition in package.json
     pub module: bool,
     #[serde(default)]
-    pub custom_conditions: Vec<String>,
+    pub custom_conditions: Vec<Arc<String>>,
     #[serde(default)]
-    pub custom_extensions: Option<Vec<String>>,
+    pub custom_extensions: Option<Vec<Arc<String>>>,
     #[serde(default)]
     /// An additional import map to use when resolving modules.
     ///

@@ -106,7 +106,8 @@ async fn base_resolve_options(
         for req in EDGE_NODE_EXTERNALS {
             direct_mappings.insert(
                 AliasPattern::exact(req),
-                ImportMapping::External(Some(format!("node:{req}")), ExternalType::CommonJs).into(),
+                ImportMapping::External(Some(format!("node:{req}").into()), ExternalType::CommonJs)
+                    .into(),
             );
             direct_mappings.insert(
                 AliasPattern::exact(format!("node:{req}")),
@@ -178,22 +179,22 @@ async fn base_resolve_options(
     } else {
         let mut ext = Vec::new();
         if opt.enable_typescript && opt.enable_react {
-            ext.push(".tsx".to_string());
+            ext.push(".tsx".to_string().into());
         }
         if opt.enable_typescript {
-            ext.push(".ts".to_string());
+            ext.push(".ts".to_string().into());
         }
         if opt.enable_react {
-            ext.push(".jsx".to_string());
+            ext.push(".jsx".to_string().into());
         }
-        ext.push(".js".to_string());
+        ext.push(".js".to_string().into());
         if opt.enable_mjs_extension {
-            ext.push(".mjs".to_string());
+            ext.push(".mjs".to_string().into());
         }
         if opt.enable_node_native_modules {
-            ext.push(".node".to_string());
+            ext.push(".node".to_string().into());
         }
-        ext.push(".json".to_string());
+        ext.push(".json".to_string().into());
         ext
     };
     Ok(ResolveOptions {
@@ -202,7 +203,7 @@ async fn base_resolve_options(
             if *environment.resolve_node_modules().await? {
                 vec![ResolveModules::Nested(
                     root,
-                    vec!["node_modules".to_string()],
+                    vec!["node_modules".to_string().into()],
                 )]
             } else {
                 Vec::new()
@@ -212,7 +213,7 @@ async fn base_resolve_options(
             if let Some(dir) = opt.enable_node_modules {
                 mods.push(ResolveModules::Nested(
                     dir,
-                    vec!["node_modules".to_string()],
+                    vec!["node_modules".to_string().into()],
                 ));
             }
             mods
