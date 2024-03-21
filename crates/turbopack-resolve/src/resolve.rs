@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use turbo_tasks::Vc;
 use turbo_tasks_fs::{FileSystem, FileSystemPath};
@@ -175,7 +177,13 @@ async fn base_resolve_options(
     let extensions = if let Some(custom_extension) = &opt.custom_extensions {
         custom_extension.clone()
     } else if let Some(environment) = emulating {
-        environment.resolve_extensions().await?.clone_value()
+        environment
+            .resolve_extensions()
+            .await?
+            .iter()
+            .cloned()
+            .map(Arc::new)
+            .collect()
     } else {
         let mut ext = Vec::new();
         if opt.enable_typescript && opt.enable_react {
@@ -225,16 +233,16 @@ async fn base_resolve_options(
             }];
             if opt.browser {
                 resolve_into.push(ResolveIntoPackage::MainField {
-                    field: "browser".to_string(),
+                    field: "browser".to_string().into(),
                 });
             }
             if opt.module {
                 resolve_into.push(ResolveIntoPackage::MainField {
-                    field: "module".to_string(),
+                    field: "module".to_string().into(),
                 });
             }
             resolve_into.push(ResolveIntoPackage::MainField {
-                field: "main".to_string(),
+                field: "main".to_string().into(),
             });
             resolve_into
         },
@@ -244,11 +252,11 @@ async fn base_resolve_options(
                 unspecified_conditions: ConditionValue::Unset,
             }];
             if opt.browser {
-                resolve_in.push(ResolveInPackage::AliasField("browser".to_string()));
+                resolve_in.push(ResolveInPackage::AliasField("browser".to_string().into()));
             }
             resolve_in
         },
-        default_files: vec!["index".to_string()],
+        default_files: vec!["index".to_string().into()],
         import_map: Some(import_map),
         resolved_map: opt.resolved_map,
         plugins,
