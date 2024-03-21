@@ -827,9 +827,19 @@ impl ExecContext {
             }
         }
 
+        // When the UI is enabled we don't want to have the prefix appear on the
+        // replayed logs.
+        let alt_log_replay_writer = match output_client {
+            TaskOutput::UI(task) => Some(task.clone()),
+            TaskOutput::Direct(_) => None,
+        };
         match self
             .task_cache
-            .restore_outputs(prefixed_ui.output_prefixed_writer(), telemetry)
+            .restore_outputs(
+                prefixed_ui.output_prefixed_writer(),
+                alt_log_replay_writer,
+                telemetry,
+            )
             .await
         {
             Ok(Some(status)) => {
