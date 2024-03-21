@@ -34,11 +34,7 @@ impl TaskInput for ConcreteTaskInput {
 impl TaskInput for Arc<String> {
     fn try_from_concrete(input: &ConcreteTaskInput) -> Result<Self> {
         match input {
-            ConcreteTaskInput::String(s) => {
-                println!("clone(String, {})", s.len());
-
-                Ok(s.clone())
-            }
+            ConcreteTaskInput::String(s) => Ok(s.clone()),
             _ => bail!("invalid task input type, expected String"),
         }
     }
@@ -257,7 +253,6 @@ where
                         value.1,
                     )
                 })?;
-                println!("clone(Value<{}>)", type_name::<T>());
                 Ok(Value::new(v.clone()))
             }
             _ => bail!("invalid task input type, expected {}", type_name::<T>()),
