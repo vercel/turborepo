@@ -16,7 +16,6 @@ import {
   parse as parseStackTrace,
 } from "../compiled/stacktrace-parser";
 import { type StructuredError } from "src/ipc";
-import { group, profile, time, timeLog, trace } from "console";
 
 export type IpcInfoMessage =
   | {
