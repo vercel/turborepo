@@ -26,7 +26,7 @@ impl StaticAssetsContentSource {
     // TODO(WEB-1151): Remove this method and migrate users to `with_prefix`.
     #[turbo_tasks::function]
     pub fn new(prefix: Arc<String>, dir: Vc<FileSystemPath>) -> Vc<StaticAssetsContentSource> {
-        StaticAssetsContentSource::with_prefix(Vc::cell(prefix), dir)
+        StaticAssetsContentSource::with_prefix(Vc::cell((*prefix).clone()), dir)
     }
 
     #[turbo_tasks::function]
@@ -56,14 +56,14 @@ async fn get_routes_from_directory(dir: Vc<FileSystemPath>) -> Result<Vc<RouteTr
         .flat_map(|(name, entry)| match entry {
             DirectoryEntry::File(path) | DirectoryEntry::Symlink(path) => {
                 Some(RouteTree::new_route(
-                    vec![BaseSegment::Static(name.clone())],
+                    vec![BaseSegment::Static(name.clone().into())],
                     RouteType::Exact,
                     Vc::upcast(StaticAssetsContentSourceItem::new(*path)),
                 ))
             }
             DirectoryEntry::Directory(path) => Some(
                 get_routes_from_directory(*path)
-                    .with_prepended_base(vec![BaseSegment::Static(name.clone())]),
+                    .with_prepended_base(vec![BaseSegment::Static(name.clone().into())]),
             ),
             _ => None,
         })
