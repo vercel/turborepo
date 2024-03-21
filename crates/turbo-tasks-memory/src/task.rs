@@ -186,6 +186,7 @@ struct TaskState {
 
     output: Output,
     cells: AutoMap<ValueTypeId, SmallVec<[Cell; 1]>, BuildNoHashHasher<ValueTypeId>>,
+    cells_copy: AutoMap<ValueTypeId, SmallVec<[Cell; 1]>, BuildNoHashHasher<ValueTypeId>>,
 
     // GC state:
     gc: GcTaskState,
@@ -211,6 +212,7 @@ impl TaskState {
             output: Default::default(),
             prepared_type: PrepareTaskType::None,
             cells: Default::default(),
+            cells_copy: Default::default(),
             gc: Default::default(),
             stats: TaskStats::new(stats_type),
             #[cfg(feature = "track_wait_dependencies")]
@@ -234,6 +236,7 @@ impl TaskState {
             output: Default::default(),
             prepared_type: PrepareTaskType::None,
             cells: Default::default(),
+            cells_copy: Default::default(),
             gc: Default::default(),
             stats: TaskStats::new(stats_type),
             #[cfg(feature = "track_wait_dependencies")]
@@ -266,6 +269,7 @@ impl PartialTaskState {
             prepared_type: PrepareTaskType::None,
             output: Default::default(),
             cells: Default::default(),
+            cells_copy: Default::default(),
             gc: Default::default(),
             stats: TaskStats::new(self.stats_type),
         }
@@ -300,6 +304,7 @@ impl UnloadedTaskState {
             prepared_type: PrepareTaskType::None,
             output: Default::default(),
             cells: Default::default(),
+            cells_copy: Default::default(),
             gc: Default::default(),
             stats: TaskStats::new(self.stats_type),
         }
@@ -999,6 +1004,9 @@ impl Task {
                         for cells in state.cells.values_mut() {
                             cells.shrink_to_fit();
                         }
+                        for cells in state.cells_copy.values_mut() {
+                            cells.shrink_to_fit();
+                        }
                         state.cells.shrink_to_fit();
                         state.stateful = stateful;
                         state.state_type = Done { dependencies };
@@ -1327,6 +1335,11 @@ impl Task {
     /// Access to a cell.
     pub(crate) fn with_cell_mut<T>(&self, index: CellId, func: impl FnOnce(&mut Cell) -> T) -> T {
         let mut state = self.full_state_mut();
+        let list = state.cells_copy.entry(index.type_id).or_default();
+        let i = index.index as usize;
+        if list.len() <= i {
+            list.resize_with(i + 1, Default::default);
+        }
         let list = state.cells.entry(index.type_id).or_default();
         let i = index.index as usize;
         if list.len() <= i {
@@ -1821,6 +1834,9 @@ impl Task {
                                     cell.shrink_to_fit();
                                 }
                             }
+                            for cells in state.cells_copy.values_mut() {
+                                cells.shrink_to_fit();
+                            }
                             stats.empty_unused_fast += 1;
                             return Some(GcPriority::EmptyCells {
                                 total_compute_duration: to_exp_u8(
@@ -2063,6 +2079,7 @@ impl Task {
         let TaskState {
             children,
             cells,
+            cells_copy: _,
             output,
             collectibles,
             aggregation_leaf,
