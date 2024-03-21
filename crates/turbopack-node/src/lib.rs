@@ -4,7 +4,7 @@
 #![feature(arbitrary_self_types)]
 #![feature(extract_if)]
 
-use std::{collections::HashMap, iter::once, thread::available_parallelism};
+use std::{collections::HashMap, iter::once, sync::Arc, thread::available_parallelism};
 
 use anyhow::{bail, Result};
 use indexmap::IndexSet;
@@ -278,7 +278,7 @@ pub async fn get_intermediate_asset(
 #[turbo_tasks::value(shared)]
 pub struct ResponseHeaders {
     pub status: u16,
-    pub headers: Vec<(String, String)>,
+    pub headers: Vec<(Arc<String>, Arc<String>)>,
 }
 
 pub fn register() {

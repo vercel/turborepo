@@ -36,7 +36,7 @@ pub struct ProxyResult {
     /// The HTTP status code to return.
     pub status: u16,
     /// Headers arranged as contiguous (name, value) pairs.
-    pub headers: Vec<(String, String)>,
+    pub headers: Vec<(Arc<String>, Arc<String>)>,
     /// The body to return.
     pub body: Body,
 }

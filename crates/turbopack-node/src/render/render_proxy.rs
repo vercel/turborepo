@@ -291,8 +291,8 @@ async fn render_stream_internal(
                 yield RenderItem::Headers(ResponseHeaders {
                     status,
                     headers: vec![(
-                        "content-type".to_string(),
-                        "text/html; charset=utf-8".to_string(),
+                        "content-type".to_string().into(),
+                        "text/html; charset=utf-8".to_string().into(),
                     )],
                 });
                 yield RenderItem::BodyChunk(body.into());
