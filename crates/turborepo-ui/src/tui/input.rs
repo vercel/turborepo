@@ -36,6 +36,10 @@ fn translate_key_event(interact: bool, key_event: KeyEvent) -> Option<Event> {
             bytes: encode_key(key_event),
         }),
         // Fall through if we aren't in interactive mode
+        KeyCode::Char('p') if key_event.modifiers == KeyModifiers::CONTROL => Some(Event::ScrollUp),
+        KeyCode::Char('n') if key_event.modifiers == KeyModifiers::CONTROL => {
+            Some(Event::ScrollDown)
+        }
         KeyCode::Up => Some(Event::Up),
         KeyCode::Down => Some(Event::Down),
         KeyCode::Enter => Some(Event::EnterInteractive),

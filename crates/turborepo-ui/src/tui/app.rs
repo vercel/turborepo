@@ -25,6 +25,11 @@ pub struct App<I> {
     interact: bool,
 }
 
+pub enum Direction {
+    Up,
+    Down,
+}
+
 impl<I> App<I> {
     pub fn new(rows: u16, cols: u16, tasks: Vec<String>) -> Self {
         debug!("tasks: {tasks:?}");
@@ -61,6 +66,15 @@ impl<I> App<I> {
             self.interact = interact;
             self.pane.highlight(interact);
         }
+    }
+
+    pub fn scroll(&mut self, direction: Direction) {
+        let Some(selected_task) = self.table.selected() else {
+            return;
+        };
+        self.pane
+            .scroll(selected_task, direction)
+            .expect("selected task should be in pane");
     }
 }
 
@@ -183,6 +197,12 @@ fn update(
         }
         Event::Down => {
             app.next();
+        }
+        Event::ScrollUp => {
+            app.scroll(Direction::Up);
+        }
+        Event::ScrollDown => {
+            app.scroll(Direction::Down);
         }
         Event::EnterInteractive => {
             app.interact(true);
