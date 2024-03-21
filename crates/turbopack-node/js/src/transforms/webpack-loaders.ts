@@ -374,7 +374,7 @@ const transform = (
               info: logFn.bind(this, LogType.info),
               log: logFn.bind(this, LogType.log),
               debug: logFn.bind(this, LogType.debug),
-              asset: (assertion: boolean, ...args: any[]) => {
+              assert: (assertion: boolean, ...args: any[]) => {
                 if (!assertion) {
                   logFn(LogType.error, ...args);
                 }
