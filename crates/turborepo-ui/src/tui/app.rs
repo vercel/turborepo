@@ -149,7 +149,9 @@ fn poll(interact: bool, receiver: &AppReceiver, deadline: Instant) -> Option<Eve
 /// Configures terminal for rendering App
 fn startup() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
     crossterm::terminal::enable_raw_mode()?;
-    let backend = CrosstermBackend::new(io::stdout());
+    let mut stdout = io::stdout();
+    crossterm::execute!(stdout, crossterm::event::EnableMouseCapture)?;
+    let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::with_options(
         backend,
         ratatui::TerminalOptions {
@@ -162,8 +164,12 @@ fn startup() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
 }
 
 /// Restores terminal to expected state
-fn cleanup<B: Backend>(mut terminal: Terminal<B>) -> io::Result<()> {
+fn cleanup<B: Backend + io::Write>(mut terminal: Terminal<B>) -> io::Result<()> {
     terminal.clear()?;
+    crossterm::execute!(
+        terminal.backend_mut(),
+        crossterm::event::DisableMouseCapture
+    )?;
     crossterm::terminal::disable_raw_mode()?;
     terminal.show_cursor()?;
     Ok(())

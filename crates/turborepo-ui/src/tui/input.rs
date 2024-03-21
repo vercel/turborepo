@@ -9,10 +9,14 @@ pub fn input(interact: bool) -> Result<Option<Event>, Error> {
     // poll with 0 duration will only return true if event::read won't need to wait
     // for input
     if crossterm::event::poll(Duration::from_millis(0))? {
-        if let crossterm::event::Event::Key(k) = crossterm::event::read()? {
-            Ok(translate_key_event(interact, k))
-        } else {
-            Ok(None)
+        match crossterm::event::read()? {
+            crossterm::event::Event::Key(k) => Ok(translate_key_event(interact, k)),
+            crossterm::event::Event::Mouse(m) => match m.kind {
+                crossterm::event::MouseEventKind::ScrollDown => Ok(Some(Event::ScrollDown)),
+                crossterm::event::MouseEventKind::ScrollUp => Ok(Some(Event::ScrollUp)),
+                _ => Ok(None),
+            },
+            _ => Ok(None),
         }
     } else {
         Ok(None)
