@@ -517,7 +517,8 @@ impl EvaluateContext for WebpackLoaderContext {
 
     async fn finish(&self, state: Self::State, pool: &NodeJsPool) -> Result<()> {
         let has_errors = state.iter().any(|log| log.log_type == LogType::Error);
-        if has_errors {
+        let has_warnings = state.iter().any(|log| log.log_type == LogType::Warn);
+        if has_errors || has_warnings {
             let logs = state
                 .into_iter()
                 .filter(|log| {
@@ -531,7 +532,11 @@ impl EvaluateContext for WebpackLoaderContext {
             EvaluateErrorLoggingIssue {
                 file_path: self.context_ident_for_issue.path(),
                 logging: logs,
-                severity: IssueSeverity::Error.cell(),
+                severity: if has_errors {
+                    IssueSeverity::Error.cell()
+                } else {
+                    IssueSeverity::Warning.cell()
+                },
                 assets_for_source_mapping: pool.assets_for_source_mapping,
                 assets_root: pool.assets_root,
                 project_dir: self.chunking_context.context_path().root(),
