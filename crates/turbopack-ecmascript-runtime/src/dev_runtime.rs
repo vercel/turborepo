@@ -22,10 +22,10 @@ pub async fn get_browser_runtime_code(
     let asset_context = get_runtime_asset_context(environment);
 
     let shared_runtime_utils_code =
-        embed_static_code(asset_context, "shared/runtime-utils.ts".to_string());
+        embed_static_code(asset_context, "shared/runtime-utils.ts".to_string().into());
     let runtime_base_code = embed_static_code(
         asset_context,
-        "dev/runtime/base/runtime-base.ts".to_string(),
+        "dev/runtime/base/runtime-base.ts".to_string().into(),
     );
 
     let chunk_loading = &*asset_context
@@ -37,9 +37,13 @@ pub async fn get_browser_runtime_code(
     let runtime_backend_code = embed_static_code(
         asset_context,
         match chunk_loading {
-            ChunkLoading::None => "dev/runtime/none/runtime-backend-none.ts".to_string(),
-            ChunkLoading::NodeJs => "dev/runtime/nodejs/runtime-backend-nodejs.ts".to_string(),
-            ChunkLoading::Dom => "dev/runtime/dom/runtime-backend-dom.ts".to_string(),
+            ChunkLoading::None => "dev/runtime/none/runtime-backend-none.ts"
+                .to_string()
+                .into(),
+            ChunkLoading::NodeJs => "dev/runtime/nodejs/runtime-backend-nodejs.ts"
+                .to_string()
+                .into(),
+            ChunkLoading::Dom => "dev/runtime/dom/runtime-backend-dom.ts".to_string().into(),
         },
     );
 
@@ -72,7 +76,7 @@ pub async fn get_browser_runtime_code(
         code.push_code(
             &*embed_static_code(
                 asset_context,
-                "shared-node/base-externals-utils.ts".to_string(),
+                "shared-node/base-externals-utils.ts".to_string().into(),
             )
             .await?,
         );
@@ -81,15 +85,18 @@ pub async fn get_browser_runtime_code(
         code.push_code(
             &*embed_static_code(
                 asset_context,
-                "shared-node/node-externals-utils.ts".to_string(),
+                "shared-node/node-externals-utils.ts".to_string().into(),
             )
             .await?,
         );
     }
     if *environment.supports_wasm().await? {
         code.push_code(
-            &*embed_static_code(asset_context, "shared-node/node-wasm-utils.ts".to_string())
-                .await?,
+            &*embed_static_code(
+                asset_context,
+                "shared-node/node-wasm-utils.ts".to_string().into(),
+            )
+            .await?,
         );
     }
 
