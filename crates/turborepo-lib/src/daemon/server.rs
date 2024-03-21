@@ -31,10 +31,7 @@ use turborepo_filewatch::{
     package_watcher::{PackageWatcher, WatchingPackageDiscovery},
     FileSystemWatcher, WatchError,
 };
-use turborepo_repository::{
-    discovery::{LocalPackageDiscoveryBuilder, PackageDiscovery, PackageDiscoveryBuilder},
-    package_manager,
-};
+use turborepo_repository::{discovery::PackageDiscovery, package_manager};
 
 use super::{bump_timeout::BumpTimeout, endpoint::SocketOpenError, proto};
 use crate::daemon::{
@@ -95,10 +92,7 @@ impl FileWatching {
     /// waiting for the filewatcher to be ready. Using `OptionalWatch`,
     /// dependent services can wait for resources they need to become
     /// available, and the server can start up without waiting for them.
-    pub fn new<PD: PackageDiscovery + Send + Sync + 'static>(
-        repo_root: AbsoluteSystemPathBuf,
-        backup_discovery: PD,
-    ) -> Result<FileWatching, WatchError> {
+    pub fn new(repo_root: AbsoluteSystemPathBuf) -> Result<FileWatching, WatchError> {
         let watcher = Arc::new(FileSystemWatcher::new_with_default_cookie_dir(&repo_root)?);
         let recv = watcher.watch();
 
@@ -113,13 +107,8 @@ impl FileWatching {
             recv.clone(),
         ));
         let package_watcher = Arc::new(
-            PackageWatcher::new(
-                repo_root.clone(),
-                recv.clone(),
-                backup_discovery,
-                cookie_writer,
-            )
-            .map_err(|e| WatchError::Setup(format!("{:?}", e)))?,
+            PackageWatcher::new(repo_root.clone(), recv.clone(), cookie_writer)
+                .map_err(|e| WatchError::Setup(format!("{:?}", e)))?,
         );
 
         Ok(FileWatching {
@@ -138,8 +127,6 @@ pub struct TurboGrpcService<S> {
     paths: Paths,
     timeout: Duration,
     external_shutdown: S,
-
-    package_discovery_backup: LocalPackageDiscoveryBuilder,
 }
 
 impl<S> TurboGrpcService<S>
@@ -158,9 +145,6 @@ where
         timeout: Duration,
         external_shutdown: S,
     ) -> Self {
-        let package_discovery_backup =
-            LocalPackageDiscoveryBuilder::new(repo_root.clone(), None, None);
-
         // Run the actual service. It takes ownership of the struct given to it,
         // so we use a private struct with just the pieces of state needed to handle
         // RPCs.
@@ -169,7 +153,6 @@ where
             paths,
             timeout,
             external_shutdown,
-            package_discovery_backup,
         }
     }
 }
@@ -184,7 +167,6 @@ where
             paths,
             repo_root,
             timeout,
-            package_discovery_backup,
         } = self;
 
         // A channel to trigger the shutdown of the gRPC server. This is handed out
@@ -192,13 +174,8 @@ where
         // well as available to the gRPC server itself to handle the shutdown RPC.
         let (trigger_shutdown, mut shutdown_signal) = mpsc::channel::<()>(1);
 
-        let package_discovery_backup = package_discovery_backup.build()?;
-        let (service, exit_root_watch, watch_root_handle) = TurboGrpcServiceInner::new(
-            package_discovery_backup,
-            repo_root.clone(),
-            trigger_shutdown,
-            paths.log_file,
-        );
+        let (service, exit_root_watch, watch_root_handle) =
+            TurboGrpcServiceInner::new(repo_root.clone(), trigger_shutdown, paths.log_file);
 
         let running = Arc::new(AtomicBool::new(true));
         let (_pid_lock, stream) =
@@ -272,8 +249,7 @@ struct TurboGrpcServiceInner {
 // watching package hasher also uses watching package discovery as well as
 // falling back to a local package hasher
 impl TurboGrpcServiceInner {
-    pub fn new<PD: Sync + PackageDiscovery + Send + 'static>(
-        package_discovery_backup: PD,
+    pub fn new(
         repo_root: AbsoluteSystemPathBuf,
         trigger_shutdown: mpsc::Sender<()>,
         log_file: AbsoluteSystemPathBuf,
@@ -282,7 +258,7 @@ impl TurboGrpcServiceInner {
         oneshot::Sender<()>,
         JoinHandle<Result<(), WatchError>>,
     ) {
-        let file_watching = FileWatching::new(repo_root.clone(), package_discovery_backup).unwrap();
+        let file_watching = FileWatching::new(repo_root.clone()).unwrap();
 
         tracing::debug!("initing package discovery");
         let package_discovery = Arc::new(WatchingPackageDiscovery::new(
