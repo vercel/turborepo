@@ -226,11 +226,12 @@ impl ImportMap {
         prefix: impl Into<String> + 'a,
         context_path: Vc<FileSystemPath>,
     ) {
-        let prefix = prefix.into();
-        let wildcard_prefix = prefix.clone() + "/";
-        let wildcard_alias: String = prefix.clone() + "/*";
+        let prefix: String = prefix.into();
+        let prefix = Arc::new(prefix);
+        let wildcard_prefix = (*prefix).clone() + "/";
+        let wildcard_alias = Arc::new((*prefix).clone() + "/*");
         self.insert_exact_alias(
-            &prefix,
+            &*prefix,
             ImportMapping::PrimaryAlternative(prefix.clone(), Some(context_path)).cell(),
         );
         self.insert_wildcard_alias(

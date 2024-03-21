@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -259,7 +261,7 @@ impl Request {
     }
 
     #[turbo_tasks::function]
-    pub fn parse_string(request: String) -> Vc<Self> {
+    pub fn parse_string(request: Arc<String>) -> Vc<Self> {
         Self::cell(Request::parse_ref(request.into()))
     }
 

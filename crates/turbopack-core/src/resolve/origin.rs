@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use turbo_tasks::{Upcast, Value, Vc};
 use turbo_tasks_fs::FileSystemPath;
@@ -137,7 +139,7 @@ impl ResolveOrigin for PlainResolveOrigin {
 #[turbo_tasks::value]
 struct ResolveOriginWithTransition {
     previous: Vc<Box<dyn ResolveOrigin>>,
-    transition: String,
+    transition: Arc<String>,
 }
 
 #[turbo_tasks::value_impl]
