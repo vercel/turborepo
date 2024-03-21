@@ -524,7 +524,11 @@ impl EvaluateContext for WebpackLoaderContext {
                 .filter(|log| {
                     matches!(
                         log.log_type,
-                        LogType::Error | LogType::Warn | LogType::Clear,
+                        LogType::Error
+                            | LogType::Warn
+                            | LogType::Info
+                            | LogType::Log
+                            | LogType::Clear,
                     )
                 })
                 .collect();
@@ -818,6 +822,8 @@ impl Issue for EvaluateErrorLoggingIssue {
             .map(|log| match log.log_type {
                 LogType::Error => StyledString::Strong(fmt_args("<e> ".to_string(), &log.args)),
                 LogType::Warn => StyledString::Text(fmt_args("<w> ".to_string(), &log.args)),
+                LogType::Info => StyledString::Text(fmt_args("<i> ".to_string(), &log.args)),
+                LogType::Log => StyledString::Text(fmt_args("<l> ".to_string(), &log.args)),
                 LogType::Clear => StyledString::Strong("---".to_string()),
                 _ => {
                     unimplemented!("{:?} is not implemented", log.log_type)
