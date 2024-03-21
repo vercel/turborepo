@@ -545,23 +545,23 @@ impl ModuleOptions {
                 webpack_loaders_options.loader_runner_package
             {
                 package_import_map_from_import_mapping(
-                    "loader-runner".to_string(),
+                    "loader-runner".to_string().into(),
                     loader_runner_package,
                 )
             } else {
-                package_import_map_from_context("loader-runner".to_string(), path)
+                package_import_map_from_context("loader-runner".to_string().into(), path)
             };
             for (glob, rule) in webpack_loaders_options.rules.await?.iter() {
                 rules.push(ModuleRule::new(
                     ModuleRuleCondition::All(vec![
                         if !glob.contains('/') {
                             ModuleRuleCondition::ResourceBasePathGlob(
-                                Glob::new(glob.clone()).await?,
+                                Glob::new(glob.clone().into()).await?,
                             )
                         } else {
                             ModuleRuleCondition::ResourcePathGlob {
                                 base: execution_context.project_path().await?,
-                                glob: Glob::new(glob.clone()).await?,
+                                glob: Glob::new(glob.clone().into()).await?,
                             }
                         },
                         ModuleRuleCondition::not(ModuleRuleCondition::ResourceIsVirtualSource),
@@ -579,7 +579,7 @@ impl ModuleOptions {
                                     execution_context,
                                     Some(import_map),
                                     None,
-                                    "webpack_loaders".to_string(),
+                                    "webpack_loaders".to_string().into(),
                                 ),
                                 execution_context,
                                 rule.loaders,

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{trace::TraceRawVcs, ValueDefault, Vc};
@@ -16,7 +18,7 @@ use super::ModuleRule;
 #[derive(Clone, PartialEq, Eq, Debug, TraceRawVcs, Serialize, Deserialize)]
 pub struct LoaderRuleItem {
     pub loaders: Vc<WebpackLoaderItems>,
-    pub rename_as: Option<String>,
+    pub rename_as: Option<Arc<String>>,
 }
 
 #[derive(Default)]
