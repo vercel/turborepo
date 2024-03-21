@@ -199,6 +199,9 @@ pub struct Args {
     pub check_for_update: bool,
     #[clap(long = "__test-run", global = true, hide = true)]
     pub test_run: bool,
+    /// Enable the experimental UI
+    #[clap(long, hide = true, global = true)]
+    pub experimental_ui: bool,
     #[clap(flatten, next_help_heading = "Run Arguments")]
     // We don't serialize this because by the time we're calling
     // Go, we've moved it to the command field as a Command::Run
