@@ -2178,7 +2178,7 @@ async fn resolve_module_request(
         options_value,
         |_| {
             let full_pattern = Pattern::concat([module.to_string().into(), path.clone()]);
-            full_pattern.into_string()
+            full_pattern.into_string().map(Arc::new)
         },
         query,
         fragment,

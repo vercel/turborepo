@@ -55,7 +55,7 @@ fn concatenation_extend_or_merge_items(
 
 impl Pattern {
     // TODO this should be removed in favor of pattern resolving
-    pub fn into_string(self) -> Option<Arc<String>> {
+    pub fn into_string(self) -> Option<String> {
         match self {
             Pattern::Constant(str) => Some(str),
             _ => None,
