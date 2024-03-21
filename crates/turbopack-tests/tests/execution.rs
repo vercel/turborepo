@@ -238,12 +238,12 @@ async fn run_test(prepared_test: Vc<PreparedTest>) -> Result<Vc<RunTestResult>> 
         ref options,
     } = *prepared_test.await?;
 
-    let jest_runtime_path = tests_path.join("js/jest-runtime.ts".to_string());
-    let jest_entry_path = tests_path.join("js/jest-entry.ts".to_string());
-    let test_path = project_path.join("input/index.js".to_string());
+    let jest_runtime_path = tests_path.join("js/jest-runtime.ts".to_string().into());
+    let jest_entry_path = tests_path.join("js/jest-entry.ts".to_string().into());
+    let test_path = project_path.join("input/index.js".to_string().into());
 
-    let chunk_root_path = path.join("output".to_string());
-    let static_root_path = path.join("static".to_string());
+    let chunk_root_path = path.join("output".to_string().into());
+    let static_root_path = path.join("static".to_string().into());
 
     let env = Environment::new(Value::new(ExecutionEnvironment::NodeJsBuildTime(
         NodeJsEnvironment::default().into(),
@@ -288,12 +288,12 @@ async fn run_test(prepared_test: Vc<PreparedTest>) -> Result<Vc<RunTestResult>> 
         ResolveOptionsContext {
             enable_typescript: true,
             enable_node_modules: Some(project_root),
-            custom_conditions: vec!["development".to_string()],
+            custom_conditions: vec!["development".to_string().into()],
             rules: vec![(
                 ContextCondition::InDirectory("node_modules".to_string()),
                 ResolveOptionsContext {
                     enable_node_modules: Some(project_root),
-                    custom_conditions: vec!["development".to_string()],
+                    custom_conditions: vec!["development".to_string().into()],
                     browser: true,
                     ..Default::default()
                 }
