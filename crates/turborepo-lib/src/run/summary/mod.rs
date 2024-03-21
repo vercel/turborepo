@@ -27,7 +27,8 @@ use tracing::{error, log::warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_api_client::{spaces::CreateSpaceRunPayload, APIAuth, APIClient};
 use turborepo_env::EnvironmentVariableMap;
-use turborepo_repository::package_graph::{PackageGraph, WorkspaceName};
+use turborepo_repository::package_graph::{PackageGraph, PackageName};
+use turborepo_scm::SCM;
 use turborepo_ui::{color, cprintln, cwriteln, BOLD, BOLD_CYAN, GREY, UI};
 
 use self::{
@@ -55,7 +56,7 @@ pub enum Error {
     #[error("failed to serialize run summary to JSON")]
     Serde(#[from] serde_json::Error),
     #[error("missing workspace {0}")]
-    MissingWorkspace(WorkspaceName),
+    MissingWorkspace(PackageName),
     #[error("request took too long to resolve: {0}")]
     Timeout(#[from] tokio::time::error::Elapsed),
     #[error("failed to send spaces request: {0}")]
@@ -113,7 +114,7 @@ pub struct RunSummary<'a> {
     global_hash_summary: GlobalHashSummary<'a>,
     #[serde(skip_serializing_if = "Option::is_none")]
     execution: Option<ExecutionSummary<'a>>,
-    packages: Vec<WorkspaceName>,
+    packages: Vec<PackageName>,
     env_mode: EnvMode,
     framework_inference: bool,
     tasks: Vec<TaskSummary>,
@@ -154,8 +155,9 @@ impl RunTracker {
         spaces_api_client: APIClient,
         api_auth: Option<APIAuth>,
         user: String,
+        scm: &SCM,
     ) -> Self {
-        let scm = SCMState::get(env_at_execution_start, repo_root);
+        let scm = SCMState::get(env_at_execution_start, scm, repo_root);
 
         let spaces_client_handle =
             SpacesClient::new(spaces_id.clone(), spaces_api_client, api_auth).and_then(
@@ -200,7 +202,7 @@ impl RunTracker {
         exit_code: i32,
         end_time: DateTime<Local>,
         run_opts: &'a RunOpts,
-        packages: HashSet<WorkspaceName>,
+        packages: HashSet<PackageName>,
         global_hash_summary: GlobalHashSummary<'a>,
         global_env_mode: EnvMode,
         task_factory: TaskSummaryFactory<'a>,
@@ -270,7 +272,7 @@ impl RunTracker {
         repo_root: &'a AbsoluteSystemPath,
         package_inference_root: Option<&AnchoredSystemPath>,
         run_opts: &'a RunOpts,
-        packages: HashSet<WorkspaceName>,
+        packages: HashSet<PackageName>,
         global_hash_summary: GlobalHashSummary<'a>,
         global_env_mode: cli::EnvMode,
         engine: &'a Engine,
@@ -461,11 +463,11 @@ impl<'a> RunSummary<'a> {
             let mut tab_writer = TabWriter::new(io::stdout()).minwidth(0).padding(1);
             writeln!(tab_writer, "Name\tPath\t")?;
             for pkg in &self.packages {
-                if matches!(pkg, WorkspaceName::Root) {
+                if matches!(pkg, PackageName::Root) {
                     continue;
                 }
                 let dir = pkg_dep_graph
-                    .workspace_info(pkg)
+                    .package_info(pkg)
                     .ok_or_else(|| Error::MissingWorkspace(pkg.clone()))?
                     .package_path();
 

@@ -13,6 +13,7 @@ Make sure exit code is 2 when no args are passed
     daemon      Runs the Turborepo background daemon
     generate    Generate a new app / package
     telemetry   Enable or disable anonymous telemetry
+    scan        Turbo your monorepo by running a number of 'repo lints' to identify common issues, suggest fixes, and improve performance
     link        Link your local directory to a Vercel organization and enable remote caching
     login       Login to your Vercel account
     logout      Logout to your Vercel account
@@ -41,7 +42,7 @@ Make sure exit code is 2 when no args are passed
   
   Run Arguments:
         --cache-dir <CACHE_DIR>
-            Override the filesystem cache directory
+            Override the filesystem cache directory [env: TURBO_CACHE_DIR=]
         --cache-workers <CACHE_WORKERS>
             Set the number of concurrent cache operations (default 10) [default: 10]
         --concurrency <CONCURRENCY>
@@ -50,8 +51,6 @@ Make sure exit code is 2 when no args are passed
             Continue execution even if a task exits with an error or non-zero exit code. The default behavior is to bail
         --dry-run [<DRY_RUN>]
             [possible values: text, json]
-        --go-fallback
-            Fallback to use Go for task execution
         --single-package
             Run turbo in single-package mode
         --force [<FORCE>]
@@ -78,7 +77,9 @@ Make sure exit code is 2 when no args are passed
             DEPRECATED: Exclude dependent task consumers from execution
         --no-cache
             Avoid saving task results to the cache. Useful for development/watch tasks
-        --[no-]daemon
+        --daemon
+            
+        --no-daemon
             Force turbo to either use or not use the local daemon. If unset turbo will use the default detection logic
         --output-logs <OUTPUT_LOGS>
             Set type of process output logging. Use "full" to show all output. Use "hash-only" to show only turbo-computed task hashes. Use "new-only" to show only new output with only hashes for cached tasks. Use "none" to hide process output. (default full) [possible values: full, none, hash-only, new-only, errors-only]
@@ -103,7 +104,8 @@ Make sure exit code is 2 when no args are passed
   [1]
 
   $ ${TURBO} run
-  Turbo error: at least one task must be specified
+    x at least one task must be specified
+  
   [1]
 
 Run again with an environment variable that corresponds to a run argument and assert that

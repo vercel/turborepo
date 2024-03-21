@@ -22,7 +22,7 @@ use turbo_tasks_fs::{File, FileContent, FileSystemPath};
 use turbopack_core::{
     error::PrettyPrintError,
     ident::AssetIdent,
-    issue::{Issue, IssueExt, IssueSeverity, OptionStyledString, StyledString},
+    issue::{Issue, IssueExt, IssueSeverity, IssueStage, OptionStyledString, StyledString},
 };
 
 use self::svg::calculate;
@@ -235,7 +235,7 @@ fn encode_image(image: DynamicImage, format: ImageFormat, quality: u8) -> Result
                 CompressionType::Best,
                 image::codecs::png::FilterType::NoFilter,
             )
-            .write_image(image.as_bytes(), width, height, image.color())?;
+            .write_image(image.as_bytes(), width, height, image.color().into())?;
             (buf, mime::IMAGE_PNG)
         }
         ImageFormat::Jpeg => {
@@ -243,7 +243,7 @@ fn encode_image(image: DynamicImage, format: ImageFormat, quality: u8) -> Result
                 image.as_bytes(),
                 width,
                 height,
-                image.color(),
+                image.color().into(),
             )?;
             (buf, mime::IMAGE_JPEG)
         }
@@ -252,7 +252,7 @@ fn encode_image(image: DynamicImage, format: ImageFormat, quality: u8) -> Result
                 image.as_bytes(),
                 width,
                 height,
-                image.color(),
+                image.color().into(),
             )?;
             // mime does not support typed IMAGE_X_ICO yet
             (buf, Mime::from_str("image/x-icon")?)
@@ -262,19 +262,16 @@ fn encode_image(image: DynamicImage, format: ImageFormat, quality: u8) -> Result
                 image.as_bytes(),
                 width,
                 height,
-                image.color(),
+                image.color().into(),
             )?;
             (buf, mime::IMAGE_BMP)
         }
         #[cfg(feature = "webp")]
         ImageFormat::WebP => {
-            use image::codecs::webp::{WebPEncoder, WebPQuality};
-            WebPEncoder::new_with_quality(&mut buf, WebPQuality::lossy(quality)).write_image(
-                image.as_bytes(),
-                width,
-                height,
-                image.color(),
-            )?;
+            use image::codecs::webp::WebPEncoder;
+            let encoder = WebPEncoder::new_lossless(&mut buf);
+            encoder.encode(image.as_bytes(), width, height, image.color().into())?;
+
             (buf, Mime::from_str("image/webp")?)
         }
         #[cfg(feature = "avif")]
@@ -284,7 +281,7 @@ fn encode_image(image: DynamicImage, format: ImageFormat, quality: u8) -> Result
                 image.as_bytes(),
                 width,
                 height,
-                image.color(),
+                image.color().into(),
             )?;
             (buf, Mime::from_str("image/avif")?)
         }
@@ -501,8 +498,8 @@ impl Issue for ImageProcessingIssue {
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("image".to_string())
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::Transform.cell()
     }
 
     #[turbo_tasks::function]

@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
-use turborepo_vercel_api::{TelemetryCommandEvent, TelemetryEvent};
+use turborepo_vercel_api::telemetry::{TelemetryCommandEvent, TelemetryEvent};
 use uuid::Uuid;
 
 use super::{Event, EventBuilder, EventType, Identifiable};
@@ -54,7 +54,7 @@ pub enum CodePath {
     Rust,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Copy)]
 pub enum LoginMethod {
     SSO,
     Standard,
@@ -147,6 +147,16 @@ impl CommandEventBuilder {
                 LoginMethod::SSO => "sso".to_string(),
                 LoginMethod::Standard => "standard".to_string(),
             },
+            is_sensitive: EventType::NonSensitive,
+        });
+        self
+    }
+
+    // Successful/Failed logins
+    pub fn track_login_success(&self, succeeded: bool) -> &Self {
+        self.track(Event {
+            key: "success".to_string(),
+            value: succeeded.to_string(),
             is_sensitive: EventType::NonSensitive,
         });
         self

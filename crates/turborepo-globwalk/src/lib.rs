@@ -4,7 +4,6 @@
 use std::{
     borrow::Cow,
     collections::HashSet,
-    io::ErrorKind,
     path::{Path, PathBuf},
     str::FromStr,
     sync::OnceLock,
@@ -14,10 +13,10 @@ use camino::Utf8PathBuf;
 use itertools::Itertools;
 use path_clean::PathClean;
 use path_slash::PathExt;
+use rayon::prelude::*;
 use regex::Regex;
-use tracing::{info_span, Span};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
-use wax::{BuildError, Glob, Pattern};
+use wax::{walk::FileIterator, BuildError, Glob};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum WalkType {
@@ -27,6 +26,7 @@ pub enum WalkType {
 }
 
 pub use walkdir::Error as WalkDirError;
+use wax::walk::Entry;
 
 #[derive(Debug, thiserror::Error)]
 pub enum WalkError {
@@ -40,7 +40,7 @@ pub enum WalkError {
     #[error(transparent)]
     Path(#[from] PathError),
     #[error(transparent)]
-    WaxWalk(#[from] wax::WalkError),
+    WaxWalk(#[from] wax::walk::WalkError),
     #[error("Internal error on glob {glob}: {error}")]
     InternalError { glob: String, error: String },
     #[error("IO Error: {0}")]
@@ -308,82 +308,61 @@ pub fn globwalk_internal(
 ) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
     let (base_path_new, include_paths, exclude_paths) =
         preprocess_paths_and_globs(base_path, include, exclude)?;
-    let inc_patterns = include_paths
-        .iter()
+
+    let ex_patterns: Vec<_> = exclude_paths
+        .into_iter()
         .map(glob_with_contextual_error)
-        .collect::<Result<Vec<_>, WalkError>>()?;
-    let ex_patterns = exclude_paths
-        .iter()
+        .collect::<Result<_, _>>()?;
+
+    let include_patterns = include_paths
+        .into_par_iter()
         .map(glob_with_contextual_error)
         .collect::<Result<Vec<_>, _>>()?;
 
-    let span = Span::current();
-    let result = inc_patterns
-        .into_iter()
-        .flat_map(|glob| {
-            let span =
-                tracing::info_span!(parent: &span, &"walk_glob", glob = glob.to_string().as_str());
-            let _enter = span.enter();
-            // Check if the glob specifies an exact filename with no meta characters.
-            if let Some(prefix) = glob.variance().path() {
-                // We expect all of our globs to be absolute paths (asserted above)
-                assert!(prefix.is_absolute(), "Found relative glob path {}", glob);
-                // We're either going to return this path or nothing. Check if it's a directory
-                // and if we want directories
-                match AbsoluteSystemPathBuf::try_from(prefix).and_then(|path| {
-                    let metadata = path.symlink_metadata()?;
-                    Ok((path, metadata))
-                }) {
-                    Err(e) if e.is_io_error(ErrorKind::NotFound) => {
-                        // If the file doesn't exist, it's not an error, there's just nothing to
-                        // glob
-                        vec![]
-                    }
-                    Err(e) => vec![Err(e.into())],
-                    Ok((_, md)) if walk_type == WalkType::Files && md.is_dir() => {
-                        vec![]
-                    }
-                    Ok((path, _)) => vec![Ok(path)],
-                }
-            } else {
-                glob.walk(&base_path_new)
-                    .not(ex_patterns.clone())
-                    // Per docs, only fails if exclusion list is too large, since we're using
-                    // pre-compiled globs
-                    .unwrap_or_else(|e| {
-                        panic!(
-                            "Failed to compile exclusion globs: {:?}: {}",
-                            ex_patterns, e,
-                        )
-                    })
-                    .filter_map(|entry| {
-                        let span = info_span!(parent: &span, "visit_file", entry = ?entry);
-                        let _enter = span.enter();
-                        match entry {
-                            Ok(entry)
-                                if walk_type == WalkType::Files && entry.file_type().is_dir() =>
-                            {
-                                None
-                            }
-                            Ok(entry) => Some(
-                                AbsoluteSystemPathBuf::try_from(entry.path()).map_err(|e| e.into()),
-                            ),
-                            Err(e) => {
-                                let io_err = std::io::Error::from(e);
-                                match io_err.kind() {
-                                    // Ignore DNE and permission errors
-                                    std::io::ErrorKind::NotFound
-                                    | std::io::ErrorKind::PermissionDenied => None,
-                                    _ => Some(Err(io_err.into())),
-                                }
-                            }
-                        }
-                    })
-                    .collect::<Vec<_>>()
-            }
+    include_patterns
+        .into_par_iter()
+        // Use flat_map_iter as we only want parallelism for walking the globs and not iterating
+        // over the results.
+        // See https://docs.rs/rayon/latest/rayon/iter/trait.ParallelIterator.html#method.flat_map_iter
+        .flat_map_iter(|glob| walk_glob(walk_type, &base_path_new, ex_patterns.clone(), glob))
+        .collect()
+}
+
+#[tracing::instrument(skip(ex_patterns), fields(glob=glob.to_string().as_str()))]
+fn walk_glob(
+    walk_type: WalkType,
+    base_path_new: &Path,
+    ex_patterns: Vec<Glob>,
+    glob: Glob,
+) -> Vec<Result<AbsoluteSystemPathBuf, WalkError>> {
+    glob.walk(base_path_new)
+        .not(ex_patterns)
+        .unwrap_or_else(|e| {
+            // Per docs, only fails if exclusion list is too large, since we're using
+            // pre-compiled globs
+            panic!("Failed to compile exclusion globs: {}", e,)
         })
-        .collect::<Result<HashSet<_>, WalkError>>()?;
-    Ok(result)
+        .filter_map(|entry| visit_file(walk_type, entry))
+        .collect::<Vec<_>>()
+}
+
+#[tracing::instrument]
+fn visit_file(
+    walk_type: WalkType,
+    entry: Result<wax::walk::GlobEntry, wax::walk::WalkError>,
+) -> Option<Result<AbsoluteSystemPathBuf, WalkError>> {
+    match entry {
+        Ok(entry) if walk_type == WalkType::Files && entry.file_type().is_dir() => None,
+        Ok(entry) => Some(AbsoluteSystemPathBuf::try_from(entry.path()).map_err(|e| e.into())),
+        Err(e) => {
+            let io_err = std::io::Error::from(e);
+            match io_err.kind() {
+                // Ignore DNE and permission errors
+                std::io::ErrorKind::NotFound | std::io::ErrorKind::PermissionDenied => None,
+                _ => Some(Err(io_err.into())),
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -606,7 +585,7 @@ mod test {
     #[test_case("abc/**", 3, 3 => matches None ; "abc then doublestar")]
     #[test_case("**/abc", 2, 2 => matches None)]
     #[test_case("**/*.txt", 1, 1 => matches None)]
-    #[test_case("**/【*", 1, 1 => matches None)]
+    #[test_case("**/【*", 1, 1 => matches None ; "star with unicode")]
     #[test_case("b/**/f", 0, 0 => matches None)]
     fn glob_walk(
         pattern: &str,

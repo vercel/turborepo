@@ -161,7 +161,7 @@ pub enum GraphOpts {
     File(String),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ResolvedLogOrder {
     Stream,
     Grouped,

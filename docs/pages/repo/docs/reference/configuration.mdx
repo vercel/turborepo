@@ -361,14 +361,16 @@ Defaults to `true`. Whether or not to cache the task [`outputs`](#outputs). Sett
 
 Tells `turbo` the set of files to consider when determining if a package has changed for a particular task.
 Setting this to a list of globs will cause the task to only be run when files matching those globs have
-changed. This can be helpful if you want to, for example, skip running tests unless a source file changed.
-
-The default is `[]` to run the task when any file in the package changes.
+changed. This can be helpful if you want to, for example, skip running tests unless a source file changed, or
+explicitly depend on a `.gitignore`d file.
 
 <Callout type="info">
-  `inputs` globs must be specified as relative paths rooted at the package's directory.
+  Good to know:
+  - The default for `inputs` is `[]` to run the task when any file in the package changes.
+  - `inputs` globs must be specified as relative paths rooted at the package's directory.
+  - `turbo.json` is *always* considered an input. If you modify
+  `turbo.json`, all caches are invalidated.
 </Callout>
-
 **Example**
 
 ```jsonc
@@ -384,10 +386,23 @@ The default is `[]` to run the task when any file in the package changes.
 }
 ```
 
-<Callout type="info">
-  Note: `turbo.json` is *always* considered an input. If you modify
-  `turbo.json`, all caches are invalidated.
-</Callout>
+Because specifying an `inputs` key immediately opts out of the default behavior, you may specify
+the special string `$TURBO_DEFAULT$` within an inputs array to start with the default inputs. This is useful
+when you want to add or remove additional inputs from the default set.
+
+**Example** with `$TURBO_DEFAULT$`:
+
+```jsonc
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "check-types": {
+      // Consider all default inputs except the README.md
+      "inputs": ["$TURBO_DEFAULT$", "!README.md"],
+    }
+  }
+}
+```
 
 ### `outputMode`
 

@@ -291,7 +291,7 @@ mod tests {
         assert!(!dst_broken_path.as_path().exists());
 
         let dst_circle_path = dst_child_path.join_component("circle");
-        let dst_circle_metadata = fs::symlink_metadata(&dst_circle_path)?;
+        let dst_circle_metadata = fs::symlink_metadata(dst_circle_path)?;
         assert!(dst_circle_metadata.is_symlink());
 
         let num_files = fs::read_dir(dst_child_path.as_path())?.count();

@@ -35,6 +35,7 @@ type RefreshHelpers = RefreshRuntimeGlobals["$RefreshHelpers$"];
 
 interface TurbopackDevBaseContext extends TurbopackBaseContext {
   k: RefreshContext;
+  R: ResolvePathFromModule;
 }
 
 interface TurbopackDevContext extends TurbopackDevBaseContext {}
@@ -101,6 +102,17 @@ interface RuntimeBackend {
   unloadChunk?: (chunkPath: ChunkPath) => void;
 
   restart: () => void;
+}
+
+class UpdateApplyError extends Error {
+  name = "UpdateApplyError";
+
+  dependencyChain: string[];
+
+  constructor(message: string, dependencyChain: string[]) {
+    super(message);
+    this.dependencyChain = dependencyChain;
+  }
 }
 
 const moduleFactories: ModuleFactories = Object.create(null);
@@ -259,6 +271,18 @@ async function loadChunkPath(
   }
 }
 
+/**
+ * Returns an absolute url to an asset.
+ */
+function createResolvePathFromModule(
+  resolver: (moduleId: string) => Exports
+): (moduleId: string) => string {
+  return function resolvePathFromModule(moduleId: string): string {
+    const exported = resolver(moduleId);
+    return exported?.default ?? exported;
+  };
+}
+
 function instantiateModule(id: ModuleId, source: SourceInfo): Module {
   const moduleFactory = moduleFactories[id];
   if (typeof moduleFactory !== "function") {
@@ -319,6 +343,7 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
     const sourceInfo: SourceInfo = { type: SourceType.Parent, parentId: id };
 
     runModuleExecutionHooks(module, (refresh) => {
+      const r = commonJsRequire.bind(null, module);
       moduleFactory.call(
         module.exports,
         augmentContext({
@@ -326,7 +351,7 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
           e: module.exports,
           r: commonJsRequire.bind(null, module),
           t: runtimeRequire,
-          f: requireContext.bind(null, module),
+          f: moduleContext,
           i: esmImport.bind(null, module),
           s: esmExport.bind(null, module, module.exports),
           j: dynamicExport.bind(null, module, module.exports),
@@ -334,12 +359,14 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
           n: exportNamespace.bind(null, module),
           m: module,
           c: moduleCache,
+          M: moduleFactories,
           l: loadChunk.bind(null, sourceInfo),
           w: loadWebAssembly.bind(null, sourceInfo),
           u: loadWebAssemblyModule.bind(null, sourceInfo),
           g: globalThis,
           U: relativeURL,
           k: refresh,
+          R: createResolvePathFromModule(r),
           __dirname: module.id.replace(/(^|\/)\/+$/, ""),
         })
       );
@@ -464,8 +491,8 @@ function registerExportsAndSetupBoundaryForReactRefresh(
       // function, we want to invalidate the boundary.
       if (
         helpers.shouldInvalidateReactRefreshBoundary(
-          prevExports,
-          currentExports
+          helpers.getRefreshBoundarySignature(prevExports),
+          helpers.getRefreshBoundarySignature(currentExports)
         )
       ) {
         module.hot.invalidate();
@@ -523,16 +550,18 @@ function computedInvalidatedModules(
 
     switch (effect.type) {
       case "unaccepted":
-        throw new Error(
+        throw new UpdateApplyError(
           `cannot apply update: unaccepted module. ${formatDependencyChain(
             effect.dependencyChain
-          )}.`
+          )}.`,
+          effect.dependencyChain
         );
       case "self-declined":
-        throw new Error(
+        throw new UpdateApplyError(
           `cannot apply update: self-declined module. ${formatDependencyChain(
             effect.dependencyChain
-          )}.`
+          )}.`,
+          effect.dependencyChain
         );
       case "accepted":
         for (const outdatedModuleId of effect.outdatedModules) {
@@ -728,25 +757,22 @@ function invariant(never: never, computeMessage: (arg: any) => string): never {
   throw new Error(`Invariant: ${computeMessage(never)}`);
 }
 
-function applyUpdate(chunkListPath: ChunkPath, update: PartialUpdate) {
+function applyUpdate(update: PartialUpdate) {
   switch (update.type) {
     case "ChunkListUpdate":
-      applyChunkListUpdate(chunkListPath, update);
+      applyChunkListUpdate(update);
       break;
     default:
       invariant(update, (update) => `Unknown update type: ${update.type}`);
   }
 }
 
-function applyChunkListUpdate(
-  chunkListPath: ChunkPath,
-  update: ChunkListUpdate
-) {
+function applyChunkListUpdate(update: ChunkListUpdate) {
   if (update.merged != null) {
     for (const merged of update.merged) {
       switch (merged.type) {
         case "EcmascriptMergedUpdate":
-          applyEcmascriptMergedUpdate(chunkListPath, merged);
+          applyEcmascriptMergedUpdate(merged);
           break;
         default:
           invariant(merged, (merged) => `Unknown merged type: ${merged.type}`);
@@ -782,10 +808,7 @@ function applyChunkListUpdate(
   }
 }
 
-function applyEcmascriptMergedUpdate(
-  chunkPath: ChunkPath,
-  update: EcmascriptMergedUpdate
-) {
+function applyEcmascriptMergedUpdate(update: EcmascriptMergedUpdate) {
   const { entries = {}, chunks = {} } = update;
   const { added, modified, chunksAdded, chunksDeleted } = computeChangedModules(
     entries,
@@ -829,6 +852,7 @@ function applyInternal(
 
   // we want to continue on error and only throw the error after we tried applying all updates
   let error: any;
+
   function reportError(err: any) {
     if (!error) error = err;
   }
@@ -1032,7 +1056,7 @@ function handleApply(chunkListPath: ChunkPath, update: ServerMessage) {
   switch (update.type) {
     case "partial": {
       // This indicates that the update is can be applied to the current state of the application.
-      applyUpdate(chunkListPath, update.instruction);
+      applyUpdate(update.instruction);
       break;
     }
     case "restart": {

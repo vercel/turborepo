@@ -12,7 +12,8 @@ Run test run
     "signature": null,
     "preflight": null,
     "timeout": null,
-    "enabled": null
+    "enabled": null,
+    "spacesId": null
   }
 
 Run test run with api overloaded
@@ -44,15 +45,14 @@ Run test run with remote cache timeout from both env and flag (flag should take 
   456
 
 Use our custom turbo config with an invalid env var
-  $ . ${TESTDIR}/../../helpers/replace_turbo_config.sh $(pwd) "invalid-env-var.json"
+  $ . ${TESTDIR}/../../helpers/replace_turbo_json.sh $(pwd) "invalid-env-var.json"
 
 Run build with invalid env var
-  $ EXPERIMENTAL_RUST_CODEPATH=true ${TURBO} build
-   ERROR  run failed: Environment variables should not be prefixed with "$"
-  turbo::config::invalid_env_prefix
+  $ ${TURBO} build
+  invalid_env_prefix (https://turbo.build/messages/invalid-env-prefix)
   
     x Environment variables should not be prefixed with "$"
-     ,-[6:1]
+     ,-[turbo.json:6:1]
    6 |     "build": {
    7 |       "env": ["NODE_ENV", "$FOOBAR"],
      :                           ^^^^|^^^^

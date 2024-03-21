@@ -49,9 +49,3 @@ fs.writeFileSync(
   path.join(outputPath, "package.json"),
   JSON.stringify(template, null, 2)
 );
-
-const goBin = os === "windows" ? "go-turbo.exe" : "go-turbo";
-fs.copyFileSync(
-  path.join(__dirname, "..", "..", `dist-${os}-${arch}`, goBin),
-  path.join(outputPath, "bin", goBin)
-);

@@ -1,6 +1,6 @@
 const RUNTIME_PUBLIC_PATH = "output/[turbopack]_runtime.js";
 const OUTPUT_ROOT = "crates/turbopack-tests/tests/snapshot/runtime/default_build_runtime";
-const ASSET_PREFIX = "";
+const ASSET_PREFIX = "/";
 /**
  * This file contains runtime types and functions that are shared between all
  * TurboPack ECMAScript runtimes.
@@ -10,8 +10,8 @@ const ASSET_PREFIX = "";
 const REEXPORTED_OBJECTS = Symbol("reexported objects");
 const hasOwnProperty = Object.prototype.hasOwnProperty;
 const toStringTag = typeof Symbol !== "undefined" && Symbol.toStringTag;
-function defineProp(obj, name, options) {
-    if (!hasOwnProperty.call(obj, name)) Object.defineProperty(obj, name, options);
+function defineProp(obj, name1, options) {
+    if (!hasOwnProperty.call(obj, name1)) Object.defineProperty(obj, name1, options);
 }
 /**
  * Adds the getters to the exports object.
@@ -116,7 +116,7 @@ function esmImport(sourceModule, id) {
     if (module.namespaceObject) return module.namespaceObject;
     // only ESM can be an async module, so we don't need to worry about exports being a promise here.
     const raw = module.exports;
-    return module.namespaceObject = interopEsm(raw, {}, raw.__esModule);
+    return module.namespaceObject = interopEsm(raw, {}, raw && raw.__esModule);
 }
 // Add a simple runtime require so that environments without one can still pass
 // `typeof require` CommonJS checks so that exports are correctly registered.
@@ -128,25 +128,32 @@ function commonJsRequire(sourceModule, id) {
     if (module.error) throw module.error;
     return module.exports;
 }
-function requireContext(sourceModule, map) {
-    function requireContext(id) {
-        const entry = map[id];
-        if (!entry) {
-            throw new Error(`module ${id} is required from a require.context, but is not in the context`);
+/**
+ * `require.context` and require/import expression runtime.
+ */ function moduleContext(map) {
+    function moduleContext(id) {
+        if (hasOwnProperty.call(map, id)) {
+            return map[id].module();
         }
-        return commonJsRequireContext(entry, sourceModule);
+        const e = new Error(`Cannot find module '${name}'`);
+        e.code = "MODULE_NOT_FOUND";
+        throw e;
     }
-    requireContext.keys = ()=>{
+    moduleContext.keys = ()=>{
         return Object.keys(map);
     };
-    requireContext.resolve = (id)=>{
-        const entry = map[id];
-        if (!entry) {
-            throw new Error(`module ${id} is resolved from a require.context, but is not in the context`);
+    moduleContext.resolve = (id)=>{
+        if (hasOwnProperty.call(map, id)) {
+            return map[id].id();
         }
-        return entry.id();
+        const e = new Error(`Cannot find module '${name}'`);
+        e.code = "MODULE_NOT_FOUND";
+        throw e;
     };
-    return requireContext;
+    moduleContext.import = async (id)=>{
+        return await moduleContext(id);
+    };
+    return moduleContext;
 }
 /**
  * Returns the path of a chunk defined by its data.
@@ -266,22 +273,23 @@ function asyncModule(module, body, hasAwait) {
     }
 }
 /**
- * A pseudo, `fake` URL object to resolve to the its relative path.
- * When urlrewritebehavior is set to relative, calls to the `new URL()` will construct url without base using this
+ * A pseudo "fake" URL object to resolve to its relative path.
+ *
+ * When UrlRewriteBehavior is set to relative, calls to the `new URL()` will construct url without base using this
  * runtime function to generate context-agnostic urls between different rendering context, i.e ssr / client to avoid
  * hydration mismatch.
  *
- * This is largely based on the webpack's existing implementation at
+ * This is based on webpack's existing implementation:
  * https://github.com/webpack/webpack/blob/87660921808566ef3b8796f8df61bd79fc026108/lib/runtime/RelativeUrlRuntimeModule.js
- */ var relativeURL = function(inputUrl) {
+ */ const relativeURL = function relativeURL(inputUrl) {
     const realUrl = new URL(inputUrl, "x:/");
     const values = {};
-    for(var key in realUrl)values[key] = realUrl[key];
+    for(const key in realUrl)values[key] = realUrl[key];
     values.href = inputUrl;
     values.pathname = inputUrl.replace(/[?#].*/, "");
     values.origin = values.protocol = "";
     values.toString = values.toJSON = (..._args)=>inputUrl;
-    for(var key in values)Object.defineProperty(this, key, {
+    for(const key in values)Object.defineProperty(this, key, {
         enumerable: true,
         configurable: true,
         value: values[key]
@@ -292,9 +300,6 @@ relativeURL.prototype = URL.prototype;
 /// A 'base' utilities to support runtime can have externals.
 /// Currently this is for node.js / edge runtime both.
 /// If a fn requires node.js specific behavior it should be placed in `node-external-utils` instead.
-function commonJsRequireContext(entry, sourceModule) {
-    return entry.external ? externalRequire(entry.id(), false) : commonJsRequire(sourceModule, entry.id());
-}
 async function externalImport(id) {
     let raw;
     try {
@@ -385,6 +390,14 @@ let SourceType;
    * The module was instantiated because a parent module imported it.
    */ SourceType[SourceType["Parent"] = 1] = "Parent";
 })(SourceType || (SourceType = {}));
+function stringifySourceInfo(source) {
+    switch(source.type){
+        case 0:
+            return `runtime for chunk ${source.chunkPath}`;
+        case 1:
+            return `parent module ${source.parentId}`;
+    }
+}
 const url = require("url");
 const moduleFactories = Object.create(null);
 const moduleCache = Object.create(null);
@@ -402,31 +415,41 @@ const moduleCache = Object.create(null);
         return url.pathToFileURL(resolved);
     };
 }
-function loadChunk(chunkData) {
+function loadChunk(chunkData, source) {
     if (typeof chunkData === "string") {
-        return loadChunkPath(chunkData);
+        return loadChunkPath(chunkData, source);
     } else {
-        return loadChunkPath(chunkData.path);
+        return loadChunkPath(chunkData.path, source);
     }
 }
-function loadChunkPath(chunkPath) {
+function loadChunkPath(chunkPath, source) {
     if (!chunkPath.endsWith(".js")) {
         // We only support loading JS chunks in Node.js.
         // This branch can be hit when trying to load a CSS chunk.
         return;
     }
-    const resolved = path.resolve(RUNTIME_ROOT, chunkPath);
-    const chunkModules = require(resolved);
-    for (const [moduleId, moduleFactory] of Object.entries(chunkModules)){
-        if (!moduleFactories[moduleId]) {
-            moduleFactories[moduleId] = moduleFactory;
+    try {
+        const resolved = path.resolve(RUNTIME_ROOT, chunkPath);
+        const chunkModules = require(resolved);
+        for (const [moduleId, moduleFactory] of Object.entries(chunkModules)){
+            if (!moduleFactories[moduleId]) {
+                moduleFactories[moduleId] = moduleFactory;
+            }
         }
+    } catch (e) {
+        let errorMessage = `Failed to load chunk ${chunkPath}`;
+        if (source) {
+            errorMessage += ` from ${stringifySourceInfo(source)}`;
+        }
+        throw new Error(errorMessage, {
+            cause: e
+        });
     }
 }
 async function loadChunkAsync(source, chunkData) {
     return new Promise((resolve, reject)=>{
         try {
-            loadChunk(chunkData);
+            loadChunk(chunkData, source);
         } catch (err) {
             reject(err);
             return;
@@ -492,7 +515,7 @@ function instantiateModule(id, source) {
             t: runtimeRequire,
             x: externalRequire,
             y: externalImport,
-            f: requireContext.bind(null, module1),
+            f: moduleContext,
             i: esmImport.bind(null, module1),
             s: esmExport.bind(null, module1, module1.exports),
             j: dynamicExport.bind(null, module1, module1.exports),
@@ -500,6 +523,7 @@ function instantiateModule(id, source) {
             n: exportNamespace.bind(null, module1),
             m: module1,
             c: moduleCache,
+            M: moduleFactories,
             l: loadChunkAsync.bind(null, {
                 type: 1,
                 parentId: id
@@ -507,7 +531,7 @@ function instantiateModule(id, source) {
             w: loadWebAssembly,
             u: loadWebAssemblyModule,
             g: globalThis,
-            p: resolveAbsolutePath,
+            P: resolveAbsolutePath,
             U: relativeURL,
             R: createResolvePathFromModule(r),
             __dirname: module1.id.replace(/(^|\/)[\/]+$/, "")

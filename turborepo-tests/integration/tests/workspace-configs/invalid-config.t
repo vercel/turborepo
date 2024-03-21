@@ -6,23 +6,15 @@ Setup
 Errors are shown if we run a task that is misconfigured (invalid-config#build)
   $ ${TURBO} run build --filter=invalid-config > tmp.log 2>&1
   [1]
-  $ cat tmp.log | grep --only-matching "Invalid turbo.json"
-  Invalid turbo.json
-  $ cat tmp.log | grep "invalid-config#build"
-   - "invalid-config#build". Use "build" instead
-  $ cat tmp.log | grep "//#some-root-task"
-   - "//#some-root-task". Use "some-root-task" instead
-  $ cat tmp.log | grep "extends"
-   - No "extends" key found
+  $ cat tmp.log | grep --quiet "[iI]nvalid turbo.json"
+  $ cat tmp.log | grep --quiet "invalid-config#build"
+  $ cat tmp.log | grep --quiet "//#some-root-task"
+  $ cat tmp.log | grep --quiet "No \"extends\" key found"
 
 Same error even if you're running a valid task in the package.
   $ ${TURBO} run valid-task --filter=invalid-config > tmp.log 2>&1
   [1]
-  $ cat tmp.log | grep --only-matching "Invalid turbo.json"
-  Invalid turbo.json
-  $ cat tmp.log | grep "invalid-config#build"
-   - "invalid-config#build". Use "build" instead
-  $ cat tmp.log | grep "//#some-root-task"
-   - "//#some-root-task". Use "some-root-task" instead
-  $ cat tmp.log | grep "extends"
-   - No "extends" key found
+  $ cat tmp.log | grep --quiet "[iI]nvalid turbo.json"
+  $ cat tmp.log | grep --quiet "invalid-config#build"
+  $ cat tmp.log | grep --quiet "//#some-root-task"
+  $ cat tmp.log | grep --quiet "No \"extends\" key found"

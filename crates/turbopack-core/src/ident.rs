@@ -61,8 +61,18 @@ impl ValueToString for AssetIdent {
             write!(s, "#{}", fragment.await?)?;
         }
 
-        for (key, asset) in &self.assets {
-            write!(s, "/({})/{}", key.await?, asset.to_string().await?)?;
+        if !self.assets.is_empty() {
+            s.push_str(" {");
+
+            for (i, (key, asset)) in self.assets.iter().enumerate() {
+                if i > 0 {
+                    s.push(',');
+                }
+
+                write!(s, " {} => {:?}", key.await?, asset.to_string().await?)?;
+            }
+
+            s.push_str(" }");
         }
 
         if let Some(layer) = &self.layer {
@@ -84,7 +94,7 @@ impl ValueToString for AssetIdent {
         }
 
         if let Some(part) = self.part {
-            write!(s, " {{{}}}", part.to_string().await?)?;
+            write!(s, " <{}>", part.to_string().await?)?;
         }
 
         Ok(Vc::cell(s))
@@ -165,9 +175,9 @@ impl AssetIdent {
     }
 
     /// Computes a unique output asset name for the given asset identifier.
-    /// TODO(alexkirsz) This is `turbopack-dev` specific, as `turbopack-build`
-    /// would use a content hash instead. But for now both are using the same
-    /// name generation logic.
+    /// TODO(alexkirsz) This is `turbopack-browser` specific, as
+    /// `turbopack-nodejs` would use a content hash instead. But for now
+    /// both are using the same name generation logic.
     #[turbo_tasks::function]
     pub async fn output_name(
         &self,

@@ -24,12 +24,12 @@ use turborepo_ui::UI;
 
 use crate::{
     commands::{
-        bin, daemon, generate, info, link, login, logout, prune, telemetry, unlink, CommandBase,
+        bin, daemon, generate, info, link, login, logout, prune, run, scan, telemetry, unlink,
+        CommandBase,
     },
     get_version,
     shim::TurboState,
     tracing::TurboSubscriber,
-    Payload,
 };
 
 mod error;
@@ -101,8 +101,6 @@ impl Display for LogOrder {
     }
 }
 
-// NOTE: These *must* be kept in sync with the `_dryRunJSONValue`
-// and `_dryRunTextValue` constants in run.go.
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
 pub enum DryRunMode {
     Text,
@@ -201,6 +199,9 @@ pub struct Args {
     pub check_for_update: bool,
     #[clap(long = "__test-run", global = true, hide = true)]
     pub test_run: bool,
+    /// Enable the experimental UI
+    #[clap(long, hide = true, global = true)]
+    pub experimental_ui: bool,
     #[clap(flatten, next_help_heading = "Run Arguments")]
     // We don't serialize this because by the time we're calling
     // Go, we've moved it to the command field as a Command::Run
@@ -255,7 +256,13 @@ pub enum DaemonCommand {
     Stop,
     /// Stops the turbo daemon if it is already running, and removes any stale
     /// daemon state
-    Clean,
+    Clean {
+        /// Clean
+        #[clap(long, default_value_t = true)]
+        clean_logs: bool,
+    },
+    /// Shows the daemon logs
+    Logs,
 }
 
 #[derive(Subcommand, Copy, Clone, Debug, Serialize, PartialEq)]
@@ -461,6 +468,9 @@ pub enum Command {
         #[serde(flatten)]
         command: Option<TelemetryCommand>,
     },
+    /// Turbo your monorepo by running a number of 'repo lints' to
+    /// identify common issues, suggest fixes, and improve performance.
+    Scan {},
     #[clap(hide = true)]
     Info {
         workspace: Option<String>,
@@ -483,9 +493,17 @@ pub enum Command {
     Login {
         #[clap(long = "sso-team")]
         sso_team: Option<String>,
+        /// Force a login to receive a new token. Will overwrite any existing
+        /// tokens for the given login url.
+        #[clap(long = "force", short = 'f')]
+        force: bool,
     },
     /// Logout to your Vercel account
-    Logout {},
+    Logout {
+        /// Invalidate the token on the server
+        #[clap(long)]
+        invalidate: bool,
+    },
     /// Prepare a subset of your monorepo.
     Prune {
         #[clap(hide = true, long)]
@@ -597,6 +615,14 @@ fn validate_graph_extension(s: &str) -> Result<String, String> {
     }
 }
 
+fn path_non_empty(s: &str) -> Result<Utf8PathBuf, String> {
+    if s.is_empty() {
+        Err("path must not be empty".to_string())
+    } else {
+        Ok(Utf8Path::new(s).to_path_buf())
+    }
+}
+
 #[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
 #[command(groups = [
     ArgGroup::new("daemon-group").multiple(false).required(false),
@@ -604,7 +630,7 @@ fn validate_graph_extension(s: &str) -> Result<String, String> {
 ])]
 pub struct RunArgs {
     /// Override the filesystem cache directory.
-    #[clap(long)]
+    #[clap(long, value_parser = path_non_empty, env = "TURBO_CACHE_DIR")]
     pub cache_dir: Option<Utf8PathBuf>,
     /// Set the number of concurrent cache operations (default 10)
     #[clap(long, default_value_t = DEFAULT_NUM_WORKERS)]
@@ -619,10 +645,6 @@ pub struct RunArgs {
     pub continue_execution: bool,
     #[clap(alias = "dry", long = "dry-run", num_args = 0..=1, default_missing_value = "text")]
     pub dry_run: Option<DryRunMode>,
-    /// Fallback to use Go for task execution
-    #[serde(skip)]
-    #[clap(long, conflicts_with = "remote_cache_read_only")]
-    pub go_fallback: bool,
     /// Run turbo in single-package mode
     #[clap(long)]
     pub single_package: bool,
@@ -699,12 +721,12 @@ pub struct RunArgs {
     // we set the long name as [no-]daemon with an alias of daemon such
     // that we can merge the help text together for both flags
     // -----------------------
-    /// Force turbo to either use or not use the local daemon. If unset
-    /// turbo will use the default detection logic.
-    #[clap(long = "[no-]daemon", alias = "daemon", group = "daemon-group")]
+    #[clap(long = "daemon", group = "daemon-group")]
     daemon: bool,
 
-    #[clap(long, group = "daemon-group", hide = true)]
+    /// Force turbo to either use or not use the local daemon. If unset
+    /// turbo will use the default detection logic.
+    #[clap(long, group = "daemon-group")]
     no_daemon: bool,
 
     /// Set type of process output logging. Use "full" to show
@@ -802,7 +824,6 @@ impl RunArgs {
         // default to true
         track_usage!(telemetry, self.continue_execution, |val| val);
         track_usage!(telemetry, self.include_dependencies, |val| val);
-        track_usage!(telemetry, self.go_fallback, |val| val);
         track_usage!(telemetry, self.single_package, |val| val);
         track_usage!(telemetry, self.no_deps, |val| val);
         track_usage!(telemetry, self.no_cache, |val| val);
@@ -926,7 +947,7 @@ pub async fn run(
     repo_state: Option<RepoState>,
     #[allow(unused_variables)] logger: &TurboSubscriber,
     ui: UI,
-) -> Result<Payload, Error> {
+) -> Result<i32, Error> {
     let mut cli_args = Args::new();
     let version = get_version();
 
@@ -1033,7 +1054,7 @@ pub async fn run(
                 .track_call();
             bin::run()?;
 
-            Ok(Payload::Rust(Ok(0)))
+            Ok(0)
         }
         #[allow(unused_variables)]
         Command::Daemon { command, idle_time } => {
@@ -1044,15 +1065,10 @@ pub async fn run(
 
             match command {
                 Some(command) => daemon::daemon_client(command, &base).await,
-                #[cfg(not(feature = "go-daemon"))]
                 None => daemon::daemon_server(&base, idle_time, logger).await,
-                #[cfg(feature = "go-daemon")]
-                None => {
-                    return Ok(Payload::Go(Box::new(base)));
-                }
             }?;
 
-            Ok(Payload::Rust(Ok(0)))
+            Ok(0)
         }
         Command::Generate {
             tag,
@@ -1073,7 +1089,7 @@ pub async fn run(
             };
             let child_event = event.child();
             generate::run(tag, command, &args, child_event)?;
-            Ok(Payload::Rust(Ok(0)))
+            Ok(0)
         }
         Command::Telemetry { command } => {
             let event = CommandEventBuilder::new("telemetry").with_parent(&root_telemetry);
@@ -1081,7 +1097,15 @@ pub async fn run(
             let mut base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
             let child_event = event.child();
             telemetry::configure(command, &mut base, child_event);
-            Ok(Payload::Rust(Ok(0)))
+            Ok(0)
+        }
+        Command::Scan {} => {
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
+            if scan::run(base).await {
+                Ok(0)
+            } else {
+                Ok(1)
+            }
         }
         Command::Info { workspace, json } => {
             CommandEventBuilder::new("info")
@@ -1092,7 +1116,7 @@ pub async fn run(
             let mut base = CommandBase::new(cli_args, repo_root, version, ui);
             info::run(&mut base, workspace.as_deref(), json).await?;
 
-            Ok(Payload::Rust(Ok(0)))
+            Ok(0)
         }
         Command::Link {
             no_gitignore,
@@ -1103,7 +1127,7 @@ pub async fn run(
                 .track_call();
             if cli_args.test_run {
                 println!("Link test run successful");
-                return Ok(Payload::Rust(Ok(0)));
+                return Ok(0);
             }
 
             let modify_gitignore = !*no_gitignore;
@@ -1114,37 +1138,41 @@ pub async fn run(
                 error!("error: {}", err.to_string())
             }
 
-            Ok(Payload::Rust(Ok(0)))
+            Ok(0)
         }
-        Command::Logout { .. } => {
+        Command::Logout { invalidate } => {
             let event = CommandEventBuilder::new("logout").with_parent(&root_telemetry);
             event.track_call();
+            let invalidate = *invalidate;
+
             let mut base = CommandBase::new(cli_args, repo_root, version, ui);
             let event_child = event.child();
-            logout::logout(&mut base, event_child)?;
 
-            Ok(Payload::Rust(Ok(0)))
+            logout::logout(&mut base, invalidate, event_child).await?;
+
+            Ok(0)
         }
-        Command::Login { sso_team } => {
+        Command::Login { sso_team, force } => {
             let event = CommandEventBuilder::new("login").with_parent(&root_telemetry);
             event.track_call();
             if cli_args.test_run {
                 println!("Login test run successful");
-                return Ok(Payload::Rust(Ok(0)));
+                return Ok(0);
             }
 
             let sso_team = sso_team.clone();
+            let force = *force;
 
             let mut base = CommandBase::new(cli_args, repo_root, version, ui);
             let event_child = event.child();
 
             if let Some(sso_team) = sso_team {
-                login::sso_login(&mut base, &sso_team, event_child).await?;
+                login::sso_login(&mut base, &sso_team, event_child, force).await?;
             } else {
-                login::login(&mut base, event_child).await?;
+                login::login(&mut base, event_child, force).await?;
             }
 
-            Ok(Payload::Rust(Ok(0)))
+            Ok(0)
         }
         Command::Unlink { target } => {
             CommandEventBuilder::new("unlink")
@@ -1152,7 +1180,7 @@ pub async fn run(
                 .track_call();
             if cli_args.test_run {
                 println!("Unlink test run successful");
-                return Ok(Payload::Rust(Ok(0)));
+                return Ok(0);
             }
 
             let from = *target;
@@ -1160,7 +1188,7 @@ pub async fn run(
 
             unlink::unlink(&mut base, from)?;
 
-            Ok(Payload::Rust(Ok(0)))
+            Ok(0)
         }
         Command::Run(args) => {
             let event = CommandEventBuilder::new("run").with_parent(&root_telemetry);
@@ -1177,33 +1205,14 @@ pub async fn run(
             }
             let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
 
-            let should_use_go = args.go_fallback
-                || env::var("EXPERIMENTAL_RUST_CODEPATH").as_deref() == Ok("false");
-
             args.track(&event);
-            if should_use_go {
-                event.track_run_code_path(CodePath::Go);
-                // we have to clear the telemetry queue before we hand off to go
-                if telemetry_handle.is_some() {
-                    let handle = telemetry_handle.take().unwrap();
-                    handle.close_with_timeout().await;
+            event.track_run_code_path(CodePath::Rust);
+            let exit_code = run::run(base, event).await.inspect(|code| {
+                if *code != 0 {
+                    error!("run failed: command  exited ({code})");
                 }
-                Ok(Payload::Go(Box::new(base)))
-            } else {
-                use crate::commands::run;
-                event.track_run_code_path(CodePath::Rust);
-                let exit_code = run::run(base, event)
-                    .await
-                    .inspect(|code| {
-                        if *code != 0 {
-                            error!("run failed: command  exited ({code})");
-                        }
-                    })
-                    .inspect_err(|err| {
-                        error!("run failed: {err}");
-                    })?;
-                Ok(Payload::Rust(Ok(exit_code)))
-            }
+            })?;
+            Ok(exit_code)
         }
         Command::Prune {
             scope,
@@ -1223,14 +1232,14 @@ pub async fn run(
             let base = CommandBase::new(cli_args, repo_root, version, ui);
             let event_child = event.child();
             prune::prune(&base, &scope, docker, &output_dir, event_child).await?;
-            Ok(Payload::Rust(Ok(0)))
+            Ok(0)
         }
         Command::Completion { shell } => {
             CommandEventBuilder::new("completion")
                 .with_parent(&root_telemetry)
                 .track_call();
             generate(*shell, &mut Args::command(), "turbo", &mut io::stdout());
-            Ok(Payload::Rust(Ok(0)))
+            Ok(0)
         }
     };
 
@@ -1983,7 +1992,10 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "login"]).unwrap(),
             Args {
-                command: Some(Command::Login { sso_team: None }),
+                command: Some(Command::Login {
+                    sso_team: None,
+                    force: false
+                }),
                 ..Args::default()
             }
         );
@@ -1993,7 +2005,10 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
-                command: Some(Command::Login { sso_team: None }),
+                command: Some(Command::Login {
+                    sso_team: None,
+                    force: false,
+                }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
@@ -2007,6 +2022,7 @@ mod test {
             expected_output: Args {
                 command: Some(Command::Login {
                     sso_team: Some("my-team".to_string()),
+                    force: false,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2020,7 +2036,7 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "logout"]).unwrap(),
             Args {
-                command: Some(Command::Logout {}),
+                command: Some(Command::Logout { invalidate: false }),
                 ..Args::default()
             }
         );
@@ -2030,7 +2046,7 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
-                command: Some(Command::Logout {}),
+                command: Some(Command::Logout { invalidate: false }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
@@ -2342,47 +2358,6 @@ mod test {
     }
 
     #[test]
-    fn test_go_fallback_conflicts_with_remote_read_only() {
-        assert!(Args::try_parse_from([
-            "turbo",
-            "build",
-            "--remote-cache-read-only",
-            "--go-fallback",
-        ])
-        .unwrap_err()
-        .to_string()
-        .contains(
-            "the argument '--remote-cache-read-only [<BOOL>]' cannot be used with '--go-fallback"
-        ));
-        assert!(Args::try_parse_from([
-            "turbo",
-            "--go-fallback",
-            "--remote-cache-read-only",
-            "true",
-            "build",
-        ])
-        .unwrap_err()
-        .to_string()
-        .contains(
-            "the argument '--go-fallback' cannot be used with '--remote-cache-read-only [<BOOL>]'"
-        ));
-        assert!(Args::try_parse_from([
-            "turbo",
-            "run",
-            "build",
-            "--remote-cache-read-only",
-            "--go-fallback",
-        ])
-        .unwrap_err()
-        .to_string()
-        .contains(
-            "the argument '--remote-cache-read-only [<BOOL>]' cannot be used with '--go-fallback"
-        ));
-        assert!(Args::try_parse_from(["turbo", "build", "--go-fallback"]).is_ok(),);
-        assert!(Args::try_parse_from(["turbo", "build", "--remote-cache-read-only",]).is_ok(),);
-    }
-
-    #[test]
     fn test_profile_usage() {
         assert!(Args::try_parse_from(["turbo", "build", "--profile", ""]).is_err());
         assert!(Args::try_parse_from(["turbo", "build", "--anon-profile", ""]).is_err());
@@ -2397,5 +2372,23 @@ mod test {
             "bar.json"
         ])
         .is_err());
+    }
+
+    #[test]
+    fn test_empty_cache_dir() {
+        assert!(Args::try_parse_from(["turbo", "build", "--cache-dir"]).is_err());
+        assert!(Args::try_parse_from(["turbo", "build", "--cache-dir="]).is_err());
+        assert!(Args::try_parse_from(["turbo", "build", "--cache-dir", ""]).is_err());
+    }
+
+    #[test]
+    fn test_preflight() {
+        assert!(!Args::try_parse_from(["turbo", "build",]).unwrap().preflight);
+        assert!(
+            Args::try_parse_from(["turbo", "build", "--preflight"])
+                .unwrap()
+                .preflight
+        );
+        assert!(Args::try_parse_from(["turbo", "build", "--preflight=true"]).is_err());
     }
 }

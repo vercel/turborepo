@@ -17,11 +17,6 @@ runs:
       with:
         extra-flags: --no-optional
 
-    - name: "Setup Go"
-      uses: ./.github/actions/setup-go
-      with:
-        github-token: ${{ inputs.github-token }}
-
     - name: "Setup Rust"
       uses: ./.github/actions/setup-rust
       with:
@@ -29,6 +24,7 @@ runs:
         shared-cache-key: turborepo-debug-build
         cache-key: ${{ inputs.target }}
         save-cache: true
+        github-token: ${{ inputs.github-token }}
 
     - name: "Setup capnproto"
       uses: ./.github/actions/setup-capnproto

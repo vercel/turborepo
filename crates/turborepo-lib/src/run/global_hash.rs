@@ -64,6 +64,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     env_mode: EnvMode,
     framework_inference: bool,
     dot_env: Option<&'a [RelativeUnixPathBuf]>,
+    hasher: &SCM,
 ) -> Result<GlobalHashableInputs<'a>, Error> {
     let global_hashable_env_vars =
         get_global_hashable_env_vars(env_at_execution_start, global_env)?;
@@ -83,8 +84,6 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
             global_deps.insert(lockfile_path);
         }
     }
-
-    let hasher = SCM::new(root_path);
 
     let global_deps_paths = global_deps
         .iter()
@@ -177,25 +176,7 @@ fn collect_global_deps(
 }
 
 impl<'a> GlobalHashableInputs<'a> {
-    pub fn calculate_global_hash_from_inputs(&mut self) -> String {
-        match self.env_mode {
-            // In infer mode, if there is any pass_through config (even if it is an empty array)
-            // we'll hash the whole object, so we can detect changes to that config
-            // Further, resolve the envMode to the concrete value.
-            EnvMode::Infer if self.pass_through_env.is_some() => {
-                self.env_mode = EnvMode::Strict;
-            }
-            EnvMode::Loose => {
-                // Remove the passthroughs from hash consideration if we're explicitly loose.
-                self.pass_through_env = None;
-            }
-            _ => {}
-        }
-
-        self.calculate_global_hash()
-    }
-
-    fn calculate_global_hash(&self) -> String {
+    pub fn calculate_global_hash(&self) -> String {
         let global_hashable = GlobalHashable {
             global_cache_key: self.global_cache_key,
             global_file_hash_map: &self.global_file_hash_map,
@@ -222,6 +203,7 @@ mod tests {
     use turborepo_env::EnvironmentVariableMap;
     use turborepo_lockfiles::Lockfile;
     use turborepo_repository::package_manager::PackageManager;
+    use turborepo_scm::SCM;
 
     use super::get_global_hash_inputs;
     use crate::{cli::EnvMode, run::global_hash::collect_global_deps};
@@ -259,6 +241,7 @@ mod tests {
             EnvMode::Infer,
             false,
             None,
+            &SCM::new(&root),
         );
         assert!(result.is_ok());
     }

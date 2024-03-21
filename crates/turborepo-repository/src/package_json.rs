@@ -55,6 +55,7 @@ pub enum Error {
 
 impl PackageJson {
     pub fn load(path: &AbsoluteSystemPath) -> Result<PackageJson, Error> {
+        tracing::debug!("loading package.json from {}", path);
         let contents = path.read_to_string()?;
         Self::from_str(&contents)
     }
@@ -71,6 +72,14 @@ impl PackageJson {
             .flatten()
             .chain(self.optional_dependencies.iter().flatten())
             .chain(self.dependencies.iter().flatten())
+    }
+
+    /// Returns the command for script_name if it is non-empty
+    pub fn command(&self, script_name: &str) -> Option<&str> {
+        self.scripts
+            .get(script_name)
+            .filter(|command| !command.is_empty())
+            .map(|command| command.as_str())
     }
 }
 

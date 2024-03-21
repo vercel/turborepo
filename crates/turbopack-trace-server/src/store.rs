@@ -7,6 +7,8 @@ use crate::{
 
 pub type SpanId = NonZeroUsize;
 
+const CUT_OFF_DEPTH: u32 = 150;
+
 pub struct Store {
     pub(crate) spans: Vec<Span>,
 }
@@ -17,14 +19,15 @@ impl Store {
             spans: vec![Span {
                 index: SpanIndex::MAX,
                 parent: None,
+                depth: 0,
                 start: 0,
                 ignore_self_time: false,
-                self_end: u64::MAX,
+                self_end: 0,
                 category: "".into(),
                 name: "(root)".into(),
                 args: vec![],
                 events: vec![],
-                is_complete: false,
+                is_complete: true,
                 end: OnceLock::new(),
                 nice_name: OnceLock::new(),
                 group_name: OnceLock::new(),
@@ -41,6 +44,7 @@ impl Store {
                 total_deallocations: OnceLock::new(),
                 total_persistent_allocations: OnceLock::new(),
                 total_allocation_count: OnceLock::new(),
+                total_span_count: OnceLock::new(),
                 corrected_self_time: OnceLock::new(),
                 corrected_total_time: OnceLock::new(),
                 search_index: OnceLock::new(),
@@ -67,6 +71,7 @@ impl Store {
         self.spans.push(Span {
             index: id,
             parent,
+            depth: 0,
             start,
             ignore_self_time: &name == "thread",
             self_end: start,
@@ -91,6 +96,7 @@ impl Store {
             total_deallocations: OnceLock::new(),
             total_persistent_allocations: OnceLock::new(),
             total_allocation_count: OnceLock::new(),
+            total_span_count: OnceLock::new(),
             corrected_self_time: OnceLock::new(),
             corrected_total_time: OnceLock::new(),
             search_index: OnceLock::new(),
@@ -101,7 +107,12 @@ impl Store {
         } else {
             &mut self.spans[0]
         };
-        parent.events.push(SpanEvent::Child { id });
+        let depth = parent.depth + 1;
+        if depth < CUT_OFF_DEPTH {
+            parent.events.push(SpanEvent::Child { id });
+        }
+        let span = &mut self.spans[id.get()];
+        span.depth = depth;
         id
     }
 
@@ -154,20 +165,24 @@ impl Store {
     }
 
     pub fn invalidate_outdated_spans(&mut self, outdated_spans: &HashSet<SpanId>) {
+        fn invalidate_span(span: &mut Span) {
+            span.end.take();
+            span.total_time.take();
+            span.total_allocations.take();
+            span.total_deallocations.take();
+            span.total_persistent_allocations.take();
+            span.total_allocation_count.take();
+            span.corrected_self_time.take();
+            span.corrected_total_time.take();
+            span.graph.take();
+            span.bottom_up.take();
+            span.search_index.take();
+        }
+
         for id in outdated_spans.iter() {
             let mut span = &mut self.spans[id.get()];
             loop {
-                span.end.take();
-                span.total_time.take();
-                span.total_allocations.take();
-                span.total_deallocations.take();
-                span.total_persistent_allocations.take();
-                span.total_allocation_count.take();
-                span.corrected_self_time.take();
-                span.corrected_total_time.take();
-                span.graph.take();
-                span.bottom_up.take();
-                span.search_index.take();
+                invalidate_span(span);
                 let Some(parent) = span.parent else {
                     break;
                 };
@@ -177,6 +192,8 @@ impl Store {
                 span = &mut self.spans[parent.get()];
             }
         }
+
+        invalidate_span(&mut self.spans[0]);
     }
 
     pub fn root_spans(&self) -> impl Iterator<Item = SpanRef<'_>> {
@@ -187,6 +204,13 @@ impl Store {
             }),
             _ => None,
         })
+    }
+
+    pub fn root_span(&self) -> SpanRef<'_> {
+        SpanRef {
+            span: &self.spans[0],
+            store: self,
+        }
     }
 
     pub fn span(&self, id: SpanId) -> Option<(SpanRef<'_>, bool)> {

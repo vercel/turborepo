@@ -11,10 +11,11 @@ use std::{
 
 pub use builder::{EngineBuilder, Error as BuilderError};
 pub use execute::{ExecuteError, ExecutionOptions, Message, StopExecution};
-use miette::Diagnostic;
+use miette::{Diagnostic, NamedSource, SourceSpan};
 use petgraph::Graph;
 use thiserror::Error;
-use turborepo_repository::package_graph::{PackageGraph, WorkspaceName};
+use turborepo_errors::Spanned;
+use turborepo_repository::package_graph::{PackageGraph, PackageName};
 
 use crate::{run::task_id::TaskId, task_graph::TaskDefinition};
 
@@ -42,6 +43,7 @@ pub struct Engine<S = Built> {
     root_index: petgraph::graph::NodeIndex,
     task_lookup: HashMap<TaskId<'static>, petgraph::graph::NodeIndex>,
     task_definitions: HashMap<TaskId<'static>, TaskDefinition>,
+    task_locations: HashMap<TaskId<'static>, Spanned<()>>,
 }
 
 impl Engine<Building> {
@@ -54,6 +56,7 @@ impl Engine<Building> {
             root_index,
             task_lookup: HashMap::default(),
             task_definitions: HashMap::default(),
+            task_locations: HashMap::default(),
         }
     }
 
@@ -78,6 +81,19 @@ impl Engine<Building> {
         self.task_definitions.insert(task_id, definition)
     }
 
+    pub fn add_task_location(&mut self, task_id: TaskId<'static>, location: Spanned<()>) {
+        // If we don't have the location stored,
+        // or if the location stored is empty, we add it to the map.
+        let has_location = self
+            .task_locations
+            .get(&task_id)
+            .map_or(false, |existing| existing.range.is_some());
+
+        if !has_location {
+            self.task_locations.insert(task_id, location);
+        }
+    }
+
     // Seals the task graph from being mutated
     pub fn seal(self) -> Engine<Built> {
         let Engine {
@@ -85,6 +101,7 @@ impl Engine<Building> {
             task_lookup,
             root_index,
             task_definitions,
+            task_locations,
             ..
         } = self;
         Engine {
@@ -93,6 +110,7 @@ impl Engine<Building> {
             task_lookup,
             root_index,
             task_definitions,
+            task_locations,
         }
     }
 }
@@ -140,6 +158,21 @@ impl Engine<Built> {
         self.task_graph.node_weights()
     }
 
+    /// Return all tasks that have a command to be run
+    pub fn tasks_with_command(&self, pkg_graph: &PackageGraph) -> Vec<String> {
+        self.tasks()
+            .filter_map(|node| match node {
+                TaskNode::Root => None,
+                TaskNode::Task(task) => Some(task),
+            })
+            .filter_map(|task| {
+                let pkg_name = PackageName::from(task.package());
+                let json = pkg_graph.package_json(&pkg_name)?;
+                json.command(task.task()).map(|_| task.to_string())
+            })
+            .collect()
+    }
+
     pub fn task_definitions(&self) -> &HashMap<TaskId<'static>, TaskDefinition> {
         &self.task_definitions
     }
@@ -148,6 +181,7 @@ impl Engine<Built> {
         &self,
         package_graph: &PackageGraph,
         concurrency: u32,
+        experimental_ui: bool,
     ) -> Result<(), Vec<ValidateError>> {
         // TODO(olszewski) once this is hooked up to a real run, we should
         // see if using rayon to parallelize would provide a speedup
@@ -185,14 +219,22 @@ impl Engine<Built> {
                     })?;
 
                     let package_json = package_graph
-                        .package_json(&WorkspaceName::from(dep_id.package()))
+                        .package_json(&PackageName::from(dep_id.package()))
                         .ok_or_else(|| ValidateError::MissingPackageJson {
                             package: dep_id.package().to_string(),
                         })?;
                     if task_definition.persistent
                         && package_json.scripts.contains_key(dep_id.task())
                     {
+                        let (span, text) = self
+                            .task_locations
+                            .get(dep_id)
+                            .map(|spanned| spanned.span_and_text("turbo.json"))
+                            .unwrap_or((None, NamedSource::new("", "")));
+
                         return Err(ValidateError::DependencyOnPersistentTask {
+                            span,
+                            text,
                             persistent_task: dep_id.to_string(),
                             dependant: task_id.to_string(),
                         });
@@ -201,7 +243,7 @@ impl Engine<Built> {
 
                 // check if the package for the task has that task in its package.json
                 let info = package_graph
-                    .workspace_info(&WorkspaceName::from(task_id.package().to_string()))
+                    .package_info(&PackageName::from(task_id.package().to_string()))
                     .expect("package graph should contain workspace info for task package");
 
                 let package_has_task = info
@@ -236,10 +278,33 @@ impl Engine<Built> {
             })
         }
 
+        validation_errors.extend(self.validate_interactive(experimental_ui));
+
         match validation_errors.is_empty() {
             true => Ok(()),
             false => Err(validation_errors),
         }
+    }
+
+    // Validates that UI is setup if any interactive tasks will be executed
+    fn validate_interactive(&self, experimental_ui: bool) -> Vec<ValidateError> {
+        // If experimental_ui is being used, then we don't need check for interactive
+        // tasks
+        if experimental_ui {
+            return Vec::new();
+        }
+        self.task_definitions
+            .iter()
+            .filter_map(|(task, definition)| {
+                if definition.interactive {
+                    Some(ValidateError::InteractiveNeedsUI {
+                        task: task.to_string(),
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 }
 
@@ -254,6 +319,10 @@ pub enum ValidateError {
     MissingPackageJson { package: String },
     #[error("\"{persistent_task}\" is a persistent task, \"{dependant}\" cannot depend on it")]
     DependencyOnPersistentTask {
+        #[label("persistent task")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
         persistent_task: String,
         dependant: String,
     },
@@ -265,6 +334,11 @@ pub enum ValidateError {
         persistent_count: u32,
         concurrency: u32,
     },
+    #[error(
+        "Cannot run interactive task \"{task}\" without experimental UI. Set `\"experimentalUI\": \
+         true` in `turbo.json` or `TURBO_EXPERIMENTAL_UI=true` as an environment variable"
+    )]
+    InteractiveNeedsUI { task: String },
 }
 
 impl fmt::Display for TaskNode {
@@ -294,7 +368,7 @@ mod test {
 
     impl<'a> PackageDiscovery for DummyDiscovery<'a> {
         async fn discover_packages(
-            &mut self,
+            &self,
         ) -> Result<
             turborepo_repository::discovery::DiscoveryResponse,
             turborepo_repository::discovery::Error,
@@ -335,6 +409,15 @@ mod test {
                 workspaces,
             })
         }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<
+            turborepo_repository::discovery::DiscoveryResponse,
+            turborepo_repository::discovery::Error,
+        > {
+            self.discover_packages().await
+        }
     }
 
     #[tokio::test]
@@ -373,16 +456,16 @@ mod test {
         let graph = graph_builder.build().await.unwrap();
 
         // if our limit is less than, it should fail
-        engine.validate(&graph, 1).expect_err("not enough");
+        engine.validate(&graph, 1, false).expect_err("not enough");
 
         // if our limit is less than, it should fail
-        engine.validate(&graph, 2).expect_err("not enough");
+        engine.validate(&graph, 2, false).expect_err("not enough");
 
         // we have two persistent tasks, and a slot for all other tasks, so this should
         // pass
-        engine.validate(&graph, 3).expect("ok");
+        engine.validate(&graph, 3, false).expect("ok");
 
         // if our limit is greater, then it should pass
-        engine.validate(&graph, 4).expect("ok");
+        engine.validate(&graph, 4, false).expect("ok");
     }
 }

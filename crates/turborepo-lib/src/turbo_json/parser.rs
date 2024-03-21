@@ -17,8 +17,10 @@ use convert_case::{Case, Casing};
 use miette::{Diagnostic, SourceSpan};
 use struct_iterable::Iterable;
 use thiserror::Error;
-use turborepo_errors::WithText;
+use turbopath::AnchoredSystemPath;
+use turborepo_errors::WithMetadata;
 
+use super::RawRemoteCacheOptions;
 use crate::{
     cli::OutputLogsMode,
     config::ConfigurationOptions,
@@ -29,7 +31,7 @@ use crate::{
 
 #[derive(Debug, Error, Diagnostic)]
 #[error("failed to parse turbo json")]
-#[diagnostic(code(turbo_json::parser::parse_error))]
+#[diagnostic(code(turbo_json_parse_error))]
 pub struct Error {
     #[related]
     diagnostics: Vec<ParseDiagnostic>,
@@ -57,8 +59,7 @@ impl From<biome_diagnostics::Error> for ParseDiagnostic {
                 .unwrap_or_default(),
             label: location.span.map(|span| {
                 let start: usize = span.start().into();
-                let end: usize = span.end().into();
-                let len = end - start;
+                let len: usize = span.len().into();
                 (start, len).into()
             }),
         }
@@ -67,7 +68,7 @@ impl From<biome_diagnostics::Error> for ParseDiagnostic {
 
 #[derive(Debug, Error, Diagnostic)]
 #[error("{message}")]
-#[diagnostic(code(turbo_json::parser::parse_error))]
+#[diagnostic(code(turbo_json_parse_error))]
 struct ParseDiagnostic {
     message: String,
     #[source_code]
@@ -133,6 +134,47 @@ impl Deserializable for TaskName<'static> {
     }
 }
 
+impl Deserializable for Pipeline {
+    fn deserialize(
+        value: &impl DeserializableValue,
+        name: &str,
+        diagnostics: &mut Vec<DeserializationDiagnostic>,
+    ) -> Option<Self> {
+        value.deserialize(PipelineVisitor, name, diagnostics)
+    }
+}
+
+struct PipelineVisitor;
+
+impl DeserializationVisitor for PipelineVisitor {
+    type Output = Pipeline;
+
+    const EXPECTED_TYPE: VisitableType = VisitableType::MAP;
+
+    fn visit_map(
+        self,
+        members: impl Iterator<Item = Option<(impl DeserializableValue, impl DeserializableValue)>>,
+        _range: TextRange,
+        _name: &str,
+        diagnostics: &mut Vec<DeserializationDiagnostic>,
+    ) -> Option<Self::Output> {
+        let mut result = BTreeMap::new();
+        for (key, value) in members.flatten() {
+            let task_name_range = value.range();
+            let task_name = TaskName::deserialize(&key, "", diagnostics)?;
+            let task_name_start: usize = task_name_range.start().into();
+            let task_name_end: usize = task_name_range.end().into();
+            result.insert(
+                task_name,
+                Spanned::new(RawTaskDefinition::deserialize(&value, "", diagnostics)?)
+                    .with_range(task_name_start..task_name_end),
+            );
+        }
+
+        Some(Pipeline(result))
+    }
+}
+
 impl Deserializable for RawTaskDefinition {
     fn deserialize(
         value: &impl DeserializableValue,
@@ -188,7 +230,7 @@ impl DeserializationVisitor for RawTaskDefinitionVisitor {
                 }
                 "inputs" => {
                     if let Some(inputs) = Vec::deserialize(&value, &key_text, diagnostics) {
-                        result.inputs = Some(Spanned::new(inputs).with_range(range));
+                        result.inputs = Some(inputs);
                     }
                 }
                 "passThroughEnv" => {
@@ -204,7 +246,7 @@ impl DeserializationVisitor for RawTaskDefinitionVisitor {
                 }
                 "outputs" => {
                     if let Some(outputs) = Vec::deserialize(&value, &key_text, diagnostics) {
-                        result.outputs = Some(Spanned::new(outputs).with_range(range));
+                        result.outputs = Some(outputs);
                     }
                 }
                 "outputMode" => {
@@ -212,6 +254,11 @@ impl DeserializationVisitor for RawTaskDefinitionVisitor {
                         OutputLogsMode::deserialize(&value, &key_text, diagnostics)
                     {
                         result.output_mode = Some(Spanned::new(output_mode).with_range(range));
+                    }
+                }
+                "interactive" => {
+                    if let Some(interactive) = bool::deserialize(&value, &key_text, diagnostics) {
+                        result.interactive = Some(Spanned::new(interactive).with_range(range));
                     }
                 }
                 unknown_key => {
@@ -276,6 +323,100 @@ impl Deserializable for ConfigurationOptions {
         diagnostics: &mut Vec<DeserializationDiagnostic>,
     ) -> Option<Self> {
         value.deserialize(ConfigurationOptionsVisitor, name, diagnostics)
+    }
+}
+
+impl Deserializable for RawRemoteCacheOptions {
+    fn deserialize(
+        value: &impl DeserializableValue,
+        name: &str,
+        diagnostics: &mut Vec<DeserializationDiagnostic>,
+    ) -> Option<Self> {
+        value.deserialize(RawRemoteCacheOptionsVisitor, name, diagnostics)
+    }
+}
+
+struct RawRemoteCacheOptionsVisitor;
+
+impl DeserializationVisitor for RawRemoteCacheOptionsVisitor {
+    type Output = RawRemoteCacheOptions;
+
+    const EXPECTED_TYPE: VisitableType = VisitableType::MAP;
+
+    fn visit_map(
+        self,
+        // Iterator of key-value pairs.
+        members: impl Iterator<Item = Option<(impl DeserializableValue, impl DeserializableValue)>>,
+        // range of the map in the source text.
+        _: TextRange,
+        _name: &str,
+        diagnostics: &mut Vec<DeserializationDiagnostic>,
+    ) -> Option<Self::Output> {
+        let mut result = RawRemoteCacheOptions::default();
+        for (key, value) in members.flatten() {
+            // Try to deserialize the key as a string.
+            // We use `Text` to avoid an heap-allocation.
+            let Some(key_text) = Text::deserialize(&key, "", diagnostics) else {
+                // If this failed, then pass to the next key-value pair.
+                continue;
+            };
+            match key_text.text() {
+                "apiUrl" => {
+                    if let Some(api_url) =
+                        UnescapedString::deserialize(&value, &key_text, diagnostics)
+                    {
+                        result.api_url = Some(api_url.into());
+                    }
+                }
+                "loginUrl" => {
+                    if let Some(login_url) =
+                        UnescapedString::deserialize(&value, &key_text, diagnostics)
+                    {
+                        result.login_url = Some(login_url.into());
+                    }
+                }
+                "teamSlug" => {
+                    if let Some(team_slug) =
+                        UnescapedString::deserialize(&value, &key_text, diagnostics)
+                    {
+                        result.team_slug = Some(team_slug.into());
+                    }
+                }
+                "teamId" => {
+                    if let Some(team_id) =
+                        UnescapedString::deserialize(&value, &key_text, diagnostics)
+                    {
+                        result.team_id = Some(team_id.into());
+                    }
+                }
+                "signature" => {
+                    if let Some(signature) = bool::deserialize(&value, &key_text, diagnostics) {
+                        result.signature = Some(signature);
+                    }
+                }
+                "preflight" => {
+                    if let Some(preflight) = bool::deserialize(&value, &key_text, diagnostics) {
+                        result.preflight = Some(preflight);
+                    }
+                }
+                "timeout" => {
+                    if let Some(timeout) = u64::deserialize(&value, &key_text, diagnostics) {
+                        result.timeout = Some(timeout);
+                    }
+                }
+                "enabled" => {
+                    if let Some(enabled) = bool::deserialize(&value, &key_text, diagnostics) {
+                        result.enabled = Some(enabled);
+                    }
+                }
+                unknown_key => diagnostics.push(create_unknown_key_diagnostic_from_struct(
+                    &result,
+                    unknown_key,
+                    key.range(),
+                )),
+            }
+        }
+        Some(result)
     }
 }
 
@@ -422,8 +563,7 @@ impl DeserializationVisitor for RawTurboJsonVisitor {
                     if let Some(global_dependencies) =
                         Vec::deserialize(&value, &key_text, diagnostics)
                     {
-                        result.global_dependencies =
-                            Some(Spanned::new(global_dependencies).with_range(range));
+                        result.global_dependencies = Some(global_dependencies);
                     }
                 }
                 "globalEnv" => {
@@ -449,17 +589,25 @@ impl DeserializationVisitor for RawTurboJsonVisitor {
                     }
                 }
                 "pipeline" => {
-                    if let Some(pipeline) = BTreeMap::deserialize(&value, &key_text, diagnostics) {
-                        result.pipeline = Some(Pipeline(pipeline));
+                    if let Some(pipeline) = Pipeline::deserialize(&value, &key_text, diagnostics) {
+                        result.pipeline = Some(pipeline);
                     }
                 }
                 "remoteCache" => {
                     if let Some(remote_cache) =
-                        ConfigurationOptions::deserialize(&value, &key_text, diagnostics)
+                        RawRemoteCacheOptions::deserialize(&value, &key_text, diagnostics)
                     {
                         result.remote_cache = Some(remote_cache);
                     }
                 }
+                "experimentalUI" => {
+                    if let Some(experimental_ui) = bool::deserialize(&value, &key_text, diagnostics)
+                    {
+                        result.experimental_ui = Some(experimental_ui);
+                    }
+                }
+                // Allow for faux-comments at the top level
+                "//" => {}
                 unknown_key => {
                     diagnostics.push(create_unknown_key_diagnostic_from_struct(
                         &result,
@@ -473,34 +621,71 @@ impl DeserializationVisitor for RawTurboJsonVisitor {
     }
 }
 
-impl WithText for RawTurboJson {
+impl WithMetadata for RawTurboJson {
     fn add_text(&mut self, text: Arc<str>) {
+        self.text = Some(text.clone());
         self.extends.add_text(text.clone());
         self.global_dependencies.add_text(text.clone());
         self.global_env.add_text(text.clone());
         self.global_pass_through_env.add_text(text.clone());
         self.pipeline.add_text(text);
     }
+
+    fn add_path(&mut self, path: Arc<str>) {
+        self.path = Some(path.clone());
+        self.extends.add_path(path.clone());
+        self.global_dependencies.add_path(path.clone());
+        self.global_env.add_path(path.clone());
+        self.global_pass_through_env.add_path(path.clone());
+        self.pipeline.add_path(path);
+    }
 }
 
-impl WithText for Pipeline {
+impl WithMetadata for Pipeline {
     fn add_text(&mut self, text: Arc<str>) {
-        for (_, task) in self.0.iter_mut() {
-            task.add_text(text.clone());
+        for (_, entry) in self.0.iter_mut() {
+            entry.add_text(text.clone());
+            entry.value.add_text(text.clone());
+        }
+    }
+
+    fn add_path(&mut self, path: Arc<str>) {
+        for (_, entry) in self.0.iter_mut() {
+            entry.add_path(path.clone());
+            entry.value.add_path(path.clone());
         }
     }
 }
 
-impl WithText for RawTaskDefinition {
+impl WithMetadata for RawTaskDefinition {
     fn add_text(&mut self, text: Arc<str>) {
         self.depends_on.add_text(text.clone());
+        if let Some(depends_on) = &mut self.depends_on {
+            depends_on.value.add_text(text.clone());
+        }
         self.dot_env.add_text(text.clone());
         self.env.add_text(text.clone());
         self.inputs.add_text(text.clone());
         self.pass_through_env.add_text(text.clone());
         self.persistent.add_text(text.clone());
         self.outputs.add_text(text.clone());
-        self.output_mode.add_text(text);
+        self.output_mode.add_text(text.clone());
+        self.interactive.add_text(text);
+    }
+
+    fn add_path(&mut self, path: Arc<str>) {
+        self.depends_on.add_path(path.clone());
+        if let Some(depends_on) = &mut self.depends_on {
+            depends_on.value.add_path(path.clone());
+        }
+        self.dot_env.add_path(path.clone());
+        self.env.add_path(path.clone());
+        self.inputs.add_path(path.clone());
+        self.pass_through_env.add_path(path.clone());
+        self.persistent.add_path(path.clone());
+        self.outputs.add_path(path.clone());
+        self.output_mode.add_path(path.clone());
+        self.interactive.add_path(path);
     }
 }
 
@@ -509,7 +694,7 @@ impl RawTurboJson {
     #[cfg(test)]
     pub fn parse_from_serde(value: serde_json::Value) -> Result<RawTurboJson, Error> {
         let json_string = serde_json::to_string(&value).expect("should be able to serialize");
-        Self::parse(&json_string, "turbo.json")
+        Self::parse(&json_string, AnchoredSystemPath::new("turbo.json").unwrap())
     }
     /// Parses a turbo.json file into the raw representation with span info
     /// attached.
@@ -521,7 +706,7 @@ impl RawTurboJson {
     ///   display, so doesn't need to actually be a correct path.
     ///
     /// returns: Result<RawTurboJson, Error>
-    pub fn parse(text: &str, file_path: &str) -> Result<RawTurboJson, Error> {
+    pub fn parse(text: &str, file_path: &AnchoredSystemPath) -> Result<RawTurboJson, Error> {
         let result = deserialize_from_json_str::<RawTurboJson>(
             text,
             JsonParserOptions::default().with_allow_comments(),
@@ -533,7 +718,7 @@ impl RawTurboJson {
                 .into_iter()
                 .map(|d| {
                     d.with_file_source_code(text)
-                        .with_file_path(file_path)
+                        .with_file_path(file_path.as_str())
                         .into()
                 })
                 .collect();
@@ -552,6 +737,7 @@ impl RawTurboJson {
         })?;
 
         turbo_json.add_text(Arc::from(text));
+        turbo_json.add_path(Arc::from(file_path.as_str()));
 
         Ok(turbo_json)
     }

@@ -20,21 +20,23 @@ use turbo_tasks_fs::{
 };
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
-    condition::ContextCondition,
-    ecmascript::EcmascriptModuleAsset,
-    module_options::{CustomEcmascriptTransformPlugins, JsxTransformOptions, ModuleOptionsContext},
-    resolve_options_context::ResolveOptionsContext,
+    ecmascript::{EcmascriptInputTransform, EcmascriptModuleAsset},
+    module_options::{
+        JsxTransformOptions, ModuleOptionsContext, ModuleRule, ModuleRuleCondition,
+        ModuleRuleEffect,
+    },
     ModuleAssetContext,
 };
-use turbopack_build::{BuildChunkingContext, MinifyType};
+use turbopack_browser::BrowserChunkingContext;
 use turbopack_core::{
     asset::Asset,
     chunk::{
         availability_info::AvailabilityInfo, ChunkableModule, ChunkingContext, ChunkingContextExt,
-        EvaluatableAssetExt, EvaluatableAssets,
+        EvaluatableAssetExt, EvaluatableAssets, MinifyType,
     },
     compile_time_defines,
     compile_time_info::CompileTimeInfo,
+    condition::ContextCondition,
     context::AssetContext,
     environment::{BrowserEnvironment, Environment, ExecutionEnvironment, NodeJsEnvironment},
     file_source::FileSource,
@@ -45,13 +47,14 @@ use turbopack_core::{
     reference_type::{EntryReferenceSubType, ReferenceType},
     source::Source,
 };
-use turbopack_dev::DevChunkingContext;
 use turbopack_ecmascript_plugins::transform::{
     emotion::{EmotionTransformConfig, EmotionTransformer},
     styled_components::{StyledComponentsTransformConfig, StyledComponentsTransformer},
 };
 use turbopack_ecmascript_runtime::RuntimeType;
 use turbopack_env::ProcessEnvAsset;
+use turbopack_nodejs::NodeJsChunkingContext;
+use turbopack_resolve::resolve_options_context::ResolveOptionsContext;
 use turbopack_test_utils::snapshot::{diff, expected, matches_expected, snapshot_issues};
 
 use crate::util::REPO_ROOT;
@@ -61,11 +64,12 @@ fn register() {
     turbo_tasks_env::register();
     turbo_tasks_fs::register();
     turbopack::register();
-    turbopack_build::register();
-    turbopack_dev::register();
+    turbopack_nodejs::register();
+    turbopack_browser::register();
     turbopack_env::register();
     turbopack_ecmascript_plugins::register();
     turbopack_ecmascript_runtime::register();
+    turbopack_resolve::register();
     include!(concat!(env!("OUT_DIR"), "/register_test_snapshot.rs"));
 }
 
@@ -84,6 +88,8 @@ struct SnapshotOptions {
     runtime_type: RuntimeType,
     #[serde(default)]
     environment: SnapshotEnvironment,
+    #[serde(default)]
+    use_swc_css: bool,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -109,6 +115,7 @@ impl Default for SnapshotOptions {
             runtime: Default::default(),
             runtime_type: default_runtime_type(),
             environment: Default::default(),
+            use_swc_css: Default::default(),
         }
     }
 }
@@ -180,8 +187,8 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
         Err(_) => SnapshotOptions::default(),
         Ok(options_str) => parse_json_with_source_context(&options_str).unwrap(),
     };
-    let root_fs = DiskFileSystem::new("workspace".to_string(), REPO_ROOT.clone());
-    let project_fs = DiskFileSystem::new("project".to_string(), REPO_ROOT.clone());
+    let root_fs = DiskFileSystem::new("workspace".to_string(), REPO_ROOT.clone(), vec![]);
+    let project_fs = DiskFileSystem::new("project".to_string(), REPO_ROOT.clone(), vec![]);
     let project_root = project_fs.root();
 
     let relative_path = test_path.strip_prefix(&*REPO_ROOT)?;
@@ -226,23 +233,28 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
         .free_var_references(free_var_references!(..defines.into_iter()).cell())
         .cell();
 
-    let custom_ecma_transform_plugins = Some(CustomEcmascriptTransformPlugins::cell(
-        CustomEcmascriptTransformPlugins {
-            source_transforms: vec![
-                Vc::cell(Box::new(
-                    EmotionTransformer::new(&EmotionTransformConfig {
-                        sourcemap: Some(false),
-                        ..Default::default()
-                    })
-                    .expect("Should be able to create emotion transformer"),
-                ) as _),
-                Vc::cell(Box::new(StyledComponentsTransformer::new(
-                    &StyledComponentsTransformConfig::default(),
-                )) as _),
-            ],
-            output_transforms: vec![],
-        },
-    ));
+    let conditions = ModuleRuleCondition::any(vec![
+        ModuleRuleCondition::ResourcePathEndsWith(".js".to_string()),
+        ModuleRuleCondition::ResourcePathEndsWith(".jsx".to_string()),
+        ModuleRuleCondition::ResourcePathEndsWith(".ts".to_string()),
+        ModuleRuleCondition::ResourcePathEndsWith(".tsx".to_string()),
+    ]);
+
+    let custom_rules = ModuleRule::new(
+        conditions,
+        vec![ModuleRuleEffect::ExtendEcmascriptTransforms {
+            prepend: Vc::cell(vec![
+                EcmascriptInputTransform::Plugin(Vc::cell(Box::new(
+                    EmotionTransformer::new(&EmotionTransformConfig::default())
+                        .expect("Should be able to create emotion transformer"),
+                ) as _)),
+                EcmascriptInputTransform::Plugin(Vc::cell(Box::new(
+                    StyledComponentsTransformer::new(&StyledComponentsTransformConfig::default()),
+                ) as _)),
+            ]),
+            append: Vc::cell(vec![]),
+        }],
+    );
     let asset_context: Vc<Box<dyn AssetContext>> = Vc::upcast(ModuleAssetContext::new(
         Vc::cell(HashMap::new()),
         compile_time_info,
@@ -252,14 +264,17 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
                 ..Default::default()
             })),
             preset_env_versions: Some(env),
+            ignore_dynamic_requests: true,
+            use_swc_css: options.use_swc_css,
             rules: vec![(
                 ContextCondition::InDirectory("node_modules".to_string()),
                 ModuleOptionsContext {
+                    use_swc_css: options.use_swc_css,
                     ..Default::default()
                 }
                 .cell(),
             )],
-            custom_ecma_transform_plugins,
+            custom_rules: vec![custom_rules],
             ..Default::default()
         }
         .into(),
@@ -292,25 +307,27 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
 
     let chunking_context: Vc<Box<dyn ChunkingContext>> = match options.runtime {
         Runtime::Dev => Vc::upcast(
-            DevChunkingContext::builder(
+            BrowserChunkingContext::builder(
                 project_root,
                 path,
                 path,
                 chunk_root_path,
                 static_root_path,
                 env,
+                RuntimeType::Development,
             )
             .runtime_type(options.runtime_type)
             .build(),
         ),
         Runtime::Build => Vc::upcast(
-            BuildChunkingContext::builder(
+            NodeJsChunkingContext::builder(
                 project_root,
                 path,
                 path,
                 chunk_root_path,
                 static_root_path,
                 env,
+                RuntimeType::Production,
             )
             .minify_type(options.minify_type)
             .runtime_type(options.runtime_type)
@@ -345,7 +362,7 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
             ),
             Runtime::Build => {
                 Vc::cell(vec![
-                    Vc::try_resolve_downcast_type::<BuildChunkingContext>(chunking_context)
+                    Vc::try_resolve_downcast_type::<NodeJsChunkingContext>(chunking_context)
                         .await?
                         .unwrap()
                         .entry_chunk_group(

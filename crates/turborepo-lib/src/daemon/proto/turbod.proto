@@ -1,0 +1,113 @@
+syntax = "proto3";
+
+option go_package = "github.com/vercel/turbo/cli/internal/turbodprotocol";
+
+package turbodprotocol;
+
+service Turbod {
+  rpc Hello (HelloRequest) returns (HelloResponse);
+  rpc Shutdown (ShutdownRequest) returns (ShutdownResponse);
+  rpc Status (StatusRequest) returns (StatusResponse);
+  // Implement cache watching
+  rpc NotifyOutputsWritten (NotifyOutputsWrittenRequest) returns (NotifyOutputsWrittenResponse);
+  rpc GetChangedOutputs (GetChangedOutputsRequest) returns (GetChangedOutputsResponse);
+
+  // Request the list of packages that the daemon is aware of.
+  //
+  // Since 1.11.0
+  rpc DiscoverPackages (DiscoverPackagesRequest) returns (DiscoverPackagesResponse);
+
+  // Request the list of packages that the daemon is aware of.
+  // This is a blocking call that will wait for the daemon to finish
+  // discovering the packages, rather than returning 'unavailable'.
+  // It will _still_ report unavailable if a critical process in the
+  // daemon is not running, and the answer will never come.
+  //
+  // Since 1.12.0
+  rpc DiscoverPackagesBlocking (DiscoverPackagesRequest) returns (DiscoverPackagesResponse);
+}
+
+message HelloRequest {
+  string version = 1;
+  string session_id = 2;
+
+  // The version compatibility range that the client requests.
+  // For example, if the client requests Patch level compatibility,
+  // then the server should trigger a failed precondition if the
+  // server's version is not identical down to the patch level.
+  VersionRange supported_version_range = 3;
+}
+
+enum VersionRange {
+  // Default to match old behaviour. Requires exact string match,
+  // performing no compatibility checks.
+  Exact = 0;
+  // The Major and Minor version must match, and the Patch version
+  // must be greater than or equal to the client's Patch version.
+  Patch = 1;
+  // The Major version must match, and the Minor version must be
+  // greater than or equal to the client's Minor version.
+  Minor = 2;
+  // The Major version must match. This is the most lenient check.
+  Major = 3;
+}
+
+message HelloResponse {}
+
+message ShutdownRequest {}
+
+message ShutdownResponse {}
+
+message StatusRequest {}
+
+message StatusResponse {
+  DaemonStatus daemonStatus = 1;
+}
+
+message NotifyOutputsWrittenRequest {
+  repeated string output_globs = 1;
+  string hash = 2;
+  repeated string output_exclusion_globs = 3;
+  uint64 time_saved = 4;
+}
+
+message NotifyOutputsWrittenResponse {}
+
+message GetChangedOutputsRequest {
+  repeated string output_globs = 1;
+  string hash = 2;
+}
+
+message GetChangedOutputsResponse {
+  repeated string changed_output_globs = 1;
+  uint64 time_saved = 2;
+}
+
+message DaemonStatus {
+  string log_file = 1;
+  uint64 uptime_msec = 2;
+}
+
+message DiscoverPackagesRequest {
+
+}
+
+message DiscoverPackagesResponse {
+  repeated PackageFiles package_files = 1;
+  PackageManager package_manager = 2;
+}
+
+message PackageFiles {
+  string package_json = 1;
+  optional string turbo_json = 2;
+
+}
+
+enum PackageManager {
+  Berry = 0;
+  Npm = 1;
+  Pnpm = 2;
+  Pnpm6 = 3;
+  Yarn = 4;
+  Bun = 5;
+}

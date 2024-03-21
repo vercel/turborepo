@@ -5,6 +5,9 @@
 #![feature(hash_extract_if)]
 #![feature(option_get_or_insert_default)]
 #![feature(once_cell_try)]
+#![feature(try_blocks)]
+#![feature(impl_trait_in_assoc_type)]
+#![feature(lazy_cell)]
 #![deny(clippy::all)]
 // Clippy's needless mut lint is buggy: https://github.com/rust-lang/rust-clippy/issues/11299
 #![allow(clippy::needless_pass_by_ref_mut)]
@@ -15,9 +18,12 @@ mod cli;
 mod commands;
 mod config;
 mod daemon;
+mod diagnostics;
 mod engine;
-mod execution_state;
+
 mod framework;
+mod gitignore;
+mod global_deps_package_change_mapper;
 pub(crate) mod globwatcher;
 mod hash;
 mod opts;
@@ -32,27 +38,12 @@ mod tracing;
 mod turbo_json;
 mod unescape;
 
-pub use child::spawn_child;
-use miette::Report;
-use shim::Error;
-
 pub use crate::{
+    child::spawn_child,
     cli::Args,
-    commands::DaemonRootHasher,
-    daemon::{DaemonClient, DaemonConnector},
-    execution_state::ExecutionState,
+    daemon::{DaemonClient, DaemonConnector, Paths as DaemonPaths},
     run::package_discovery::DaemonPackageDiscovery,
 };
-use crate::{commands::CommandBase, engine::BuilderError};
-
-/// The payload from running main, if the program can complete without using Go
-/// the Rust variant will be returned. If Go is needed then the execution state
-/// that should be passed to Go will be returned.
-#[derive(Debug)]
-pub enum Payload {
-    Rust(Result<i32, shim::Error>),
-    Go(Box<CommandBase>),
-}
 
 pub fn get_version() -> &'static str {
     include_str!("../../../version.txt")
@@ -63,38 +54,12 @@ pub fn get_version() -> &'static str {
         .trim_end()
 }
 
-pub fn main() -> Payload {
-    match shim::run() {
-        Ok(payload) => payload,
-        // We only print using miette for some errors because we want to keep
-        // compatibility with Go. When we've deleted the Go code we can
-        // move all errors to miette since it provides slightly nicer
-        // printing out of the box.
-        Err(
-            err @ (Error::MultipleCwd(..)
-            | Error::EmptyCwd { .. }
-            | Error::Cli(cli::Error::Run(run::Error::Builder(engine::BuilderError::Config(
-                config::Error::InvalidEnvPrefix { .. },
-            ))))
-            | Error::Cli(cli::Error::Run(run::Error::Config(
-                config::Error::TurboJsonParseError(_),
-            )))
-            | Error::Cli(cli::Error::Run(run::Error::Builder(BuilderError::Config(
-                config::Error::TurboJsonParseError(_),
-            ))))),
-        ) => {
-            println!("{:?}", Report::new(err));
-
-            Payload::Rust(Ok(1))
-        }
-        // We don't need to print "Turbo error" for Run errors
-        Err(err @ shim::Error::Cli(cli::Error::Run(_))) => Payload::Rust(Err(err)),
-        Err(err) => {
-            // This raw print matches the Go behavior, once we no longer care
-            // about matching formatting we should remove this.
-            println!("Turbo error: {err}");
-
-            Payload::Rust(Err(err))
-        }
-    }
+pub fn main() -> Result<i32, shim::Error> {
+    shim::run()
 }
+
+#[cfg(all(feature = "native-tls", feature = "rustls-tls"))]
+compile_error!("You can't enable both the `native-tls` and `rustls-tls` feature.");
+
+#[cfg(all(not(feature = "native-tls"), not(feature = "rustls-tls")))]
+compile_error!("You have to enable one of the TLS features: `native-tls` or `rustls-tls`");

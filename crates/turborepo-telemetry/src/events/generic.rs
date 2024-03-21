@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
-use turborepo_vercel_api::{TelemetryEvent, TelemetryGenericEvent};
+use turborepo_vercel_api::telemetry::{TelemetryEvent, TelemetryGenericEvent};
 use uuid::Uuid;
 
 use super::{Event, EventBuilder, EventType, Identifiable, TrackedErrors};

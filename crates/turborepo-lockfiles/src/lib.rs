@@ -18,6 +18,7 @@ pub use bun::BunLockfile;
 pub use error::Error;
 pub use npm::*;
 pub use pnpm::{pnpm_global_change, pnpm_subgraph, PnpmLockfile};
+use rayon::prelude::*;
 use serde::Serialize;
 use turbopath::RelativeUnixPathBuf;
 pub use yarn1::{yarn_subgraph, Yarn1Lockfile};
@@ -68,7 +69,7 @@ pub fn all_transitive_closures<L: Lockfile + ?Sized>(
     workspaces: HashMap<String, HashMap<String, String>>,
 ) -> Result<HashMap<String, HashSet<Package>>, Error> {
     workspaces
-        .into_iter()
+        .into_par_iter()
         .map(|(workspace, unresolved_deps)| {
             let closure = transitive_closure(lockfile, &workspace, unresolved_deps)?;
             Ok((workspace, closure))

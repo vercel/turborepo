@@ -86,7 +86,16 @@ switch (platform) {
     break;
   case "linux":
     if (isMusl()) {
-      throw new Error("musl not yet supported");
+      switch (arch) {
+        case "x64":
+          suffix = "linux-x64-musl";
+          break;
+        case "arm64":
+          suffix = "linux-arm64-musl";
+          break;
+        default:
+          throw new Error(`Unsupported architecture on Linux: ${arch}`);
+      }
     } else {
       switch (arch) {
         case "x64":

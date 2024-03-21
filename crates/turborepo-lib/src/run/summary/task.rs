@@ -105,6 +105,7 @@ pub struct TaskSummaryTaskDefinition {
     env: Vec<String>,
     pass_through_env: Option<Vec<String>>,
     dot_env: Option<Vec<RelativeUnixPathBuf>>,
+    interactive: bool,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -282,6 +283,7 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
             mut inputs,
             output_mode,
             persistent,
+            interactive,
         } = value;
 
         let mut outputs = inclusions;
@@ -295,7 +297,7 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
             depends_on.push(task_dependency.to_string());
         }
         for topological_dependency in topological_dependencies {
-            depends_on.push(format!("^{topological_dependency}"));
+            depends_on.push(format!("^{}", topological_dependency.as_inner()));
         }
 
         // These _should_ already be sorted when the TaskDefinition struct was
@@ -313,6 +315,7 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
             inputs,
             output_mode,
             persistent,
+            interactive,
             env,
             pass_through_env,
             // This should _not_ be sorted.
@@ -372,6 +375,7 @@ mod test {
             "inputs": [],
             "outputMode": "full",
             "persistent": false,
+            "interactive": false,
             "env": [],
             "passThroughEnv": null,
             "dotEnv": null,

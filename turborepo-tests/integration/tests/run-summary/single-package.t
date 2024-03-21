@@ -7,7 +7,7 @@ Check
   $ ls .turbo/runs/*.json | wc -l
   \s*1 (re)
 
-  $ source "$TESTDIR/../_helpers/run-summary-utils.sh"
+  $ source "$TESTDIR/../../../helpers/run_summary.sh"
   $ SUMMARY=$(/bin/ls .turbo/runs/*.json | head -n1)
   $ TASK_SUMMARY=$(getSummaryTask "$SUMMARY" "build")
 
@@ -112,12 +112,12 @@ Check
 
   $ rm -r .turbo/runs
 Check Rust implementation
-  $ EXPERIMENTAL_RUST_CODEPATH=true ${TURBO} run build --summarize --no-daemon > /dev/null
+  $ ${TURBO} run build --summarize --no-daemon > /dev/null
   $ test -d .turbo/runs
   $ ls .turbo/runs/*.json | wc -l
   \s*1 (re)
 
-  $ source "$TESTDIR/../_helpers/run-summary-utils.sh"
+  $ source "$TESTDIR/../../../helpers/run_summary.sh"
   $ SUMMARY=$(/bin/ls .turbo/runs/*.json | head -n1)
 
   $ TASK_SUMMARY=$(getSummaryTask "$SUMMARY" "build")

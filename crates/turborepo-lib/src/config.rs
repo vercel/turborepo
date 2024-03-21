@@ -1,15 +1,34 @@
 use std::{collections::HashMap, ffi::OsString, io};
 
-use miette::{Diagnostic, SourceSpan};
-use serde::{Deserialize, Serialize};
+use convert_case::{Case, Casing};
+use miette::{Diagnostic, NamedSource, SourceSpan};
+use serde::Deserialize;
 use struct_iterable::Iterable;
 use thiserror::Error;
-use turbopath::AbsoluteSystemPathBuf;
-use turborepo_dirs::config_dir;
+use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
+use turborepo_auth::{TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE};
+use turborepo_dirs::{config_dir, vercel_config_dir};
+use turborepo_errors::TURBO_SITE;
 use turborepo_repository::package_json::{Error as PackageJsonError, PackageJson};
 
 pub use crate::turbo_json::RawTurboJson;
 use crate::{commands::CommandBase, turbo_json};
+
+#[derive(Debug, Error, Diagnostic)]
+#[error("Environment variables should not be prefixed with \"{env_pipeline_delimiter}\"")]
+#[diagnostic(
+    code(invalid_env_prefix),
+    url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
+)]
+pub struct InvalidEnvPrefixError {
+    pub value: String,
+    pub key: String,
+    #[source_code]
+    pub text: NamedSource,
+    #[label("variable with invalid prefix declared here")]
+    pub span: Option<SourceSpan>,
+    pub env_pipeline_delimiter: &'static str,
+}
 
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Error, Diagnostic)]
@@ -20,10 +39,12 @@ pub enum Error {
     NoGlobalConfigPath,
     #[error("Global auth file path not found")]
     NoGlobalAuthFilePath,
+    #[error("Global config directory not found")]
+    NoGlobalConfigDir,
     #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(
-        "Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create \
+        "Could not find turbo.json.\nFollow directions at https://turbo.build/repo/docs to create \
          one"
     )]
     NoTurboJSON,
@@ -33,6 +54,8 @@ pub enum Error {
     Io(#[from] io::Error),
     #[error(transparent)]
     Camino(#[from] camino::FromPathBufError),
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
     #[error("Encountered an IO error while attempting to read {config_path}: {error}")]
     FailedToReadConfig {
         config_path: AbsoluteSystemPathBuf,
@@ -47,28 +70,61 @@ pub enum Error {
         "Package tasks (<package>#<task>) are not allowed in single-package repositories: found \
          {task_id}"
     )]
-    PackageTaskInSinglePackageMode { task_id: String },
-    #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
-    #[error("Environment variables should not be prefixed with \"{env_pipeline_delimiter}\"")]
-    #[diagnostic(code(turbo::config::invalid_env_prefix))]
-    InvalidEnvPrefix {
-        value: String,
-        key: String,
+    #[diagnostic(code(package_task_in_single_package_mode), url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab)))]
+    PackageTaskInSinglePackageMode {
+        task_id: String,
         #[source_code]
-        text: String,
-        #[label("variable with invalid prefix declared here")]
+        text: NamedSource,
+        #[label("package task found here")]
         span: Option<SourceSpan>,
-        env_pipeline_delimiter: &'static str,
     },
     #[error(transparent)]
+    #[diagnostic(transparent)]
+    InvalidEnvPrefix(Box<InvalidEnvPrefixError>),
+    #[error(transparent)]
     PathError(#[from] turbopath::PathError),
+    #[diagnostic(
+        code(unnecessary_package_task_syntax),
+        url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
+    )]
     #[error("\"{actual}\". Use \"{wanted}\" instead")]
-    UnnecessaryPackageTaskSyntax { actual: String, wanted: String },
+    UnnecessaryPackageTaskSyntax {
+        actual: String,
+        wanted: String,
+        #[label("unnecessary package syntax found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+    },
     #[error("You can only extend from the root workspace")]
-    ExtendFromNonRoot,
+    ExtendFromNonRoot {
+        #[label("non-root workspace found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+    },
+    #[error("`{field}` cannot contain an absolute path")]
+    AbsolutePathInConfig {
+        field: &'static str,
+        #[label("absolute path found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+    },
     #[error("No \"extends\" key found")]
-    NoExtends,
+    NoExtends {
+        #[label("add extends key here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+    },
+    #[error("Tasks cannot be marked as interactive and cacheable")]
+    InteractiveNoCacheable {
+        #[label("marked interactive here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+    },
     #[error("Failed to create APIClient: {0}")]
     ApiClient(#[source] turborepo_api_client::Error),
     #[error("{0} is not UTF8.")]
@@ -97,9 +153,12 @@ macro_rules! create_builder {
 
 const DEFAULT_API_URL: &str = "https://vercel.com/api";
 const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
-const DEFAULT_TIMEOUT: u64 = 20;
+const DEFAULT_TIMEOUT: u64 = 30;
 
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, Iterable)]
+// We intentionally don't derive Serialize so that different parts
+// of the code that want to display the config can tune how they
+// want to display and what fields they want to include.
+#[derive(Deserialize, Default, Debug, PartialEq, Eq, Clone, Iterable)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigurationOptions {
     #[serde(alias = "apiurl")]
@@ -123,6 +182,9 @@ pub struct ConfigurationOptions {
     pub(crate) preflight: Option<bool>,
     pub(crate) timeout: Option<u64>,
     pub(crate) enabled: Option<bool>,
+    pub(crate) spaces_id: Option<String>,
+    #[serde(rename = "experimentalUI")]
+    pub(crate) experimental_ui: Option<bool>,
 }
 
 #[derive(Default)]
@@ -175,11 +237,19 @@ impl ConfigurationOptions {
     pub fn timeout(&self) -> u64 {
         self.timeout.unwrap_or(DEFAULT_TIMEOUT)
     }
+
+    pub fn spaces_id(&self) -> Option<&str> {
+        self.spaces_id.as_deref()
+    }
+
+    pub fn experimental_ui(&self) -> bool {
+        self.experimental_ui.unwrap_or_default() && atty::is(atty::Stream::Stdout)
+    }
 }
 
 // Maps Some("") to None to emulate how Go handles empty strings
 fn non_empty_str(s: Option<&str>) -> Option<&str> {
-    s.and_then(|s| (!s.is_empty()).then_some(s))
+    s.filter(|s| !s.is_empty())
 }
 
 trait ResolvedConfigurationOptions {
@@ -190,8 +260,10 @@ impl ResolvedConfigurationOptions for PackageJson {
     fn get_configuration_options(self) -> Result<ConfigurationOptions, Error> {
         match &self.legacy_turbo_config {
             Some(legacy_turbo_config) => {
-                let synthetic_raw_turbo_json: RawTurboJson =
-                    RawTurboJson::parse(&legacy_turbo_config.to_string(), "package.json")?;
+                let synthetic_raw_turbo_json: RawTurboJson = RawTurboJson::parse(
+                    &legacy_turbo_config.to_string(),
+                    AnchoredSystemPath::new("package.json").unwrap(),
+                )?;
                 synthetic_raw_turbo_json.get_configuration_options()
             }
             None => Ok(ConfigurationOptions::default()),
@@ -201,19 +273,19 @@ impl ResolvedConfigurationOptions for PackageJson {
 
 impl ResolvedConfigurationOptions for RawTurboJson {
     fn get_configuration_options(self) -> Result<ConfigurationOptions, Error> {
-        match &self.remote_cache {
-            Some(configuration_options) => {
-                configuration_options
-                    .clone()
-                    .get_configuration_options()
-                    // Don't allow token to be set for shared config.
-                    .map(|mut configuration_options| {
-                        configuration_options.token = None;
-                        configuration_options
-                    })
-            }
-            None => Ok(ConfigurationOptions::default()),
-        }
+        let mut opts = if let Some(remote_cache_options) = &self.remote_cache {
+            remote_cache_options.into()
+        } else {
+            ConfigurationOptions::default()
+        };
+        // Don't allow token to be set for shared config.
+        opts.token = None;
+        opts.spaces_id = self
+            .experimental_spaces
+            .and_then(|spaces| spaces.id)
+            .map(|spaces_id| spaces_id.into());
+        opts.experimental_ui = self.experimental_ui;
+        Ok(opts)
     }
 }
 
@@ -240,10 +312,11 @@ fn get_env_var_config(
     turbo_mapping.insert(OsString::from("turbo_teamid"), "team_id");
     turbo_mapping.insert(OsString::from("turbo_token"), "token");
     turbo_mapping.insert(OsString::from("turbo_remote_cache_timeout"), "timeout");
+    turbo_mapping.insert(OsString::from("turbo_experimental_ui"), "experimental_ui");
+    turbo_mapping.insert(OsString::from("turbo_preflight"), "preflight");
 
     // We do not enable new config sources:
     // turbo_mapping.insert(String::from("turbo_signature"), "signature"); // new
-    // turbo_mapping.insert(String::from("turbo_preflight"), "preflight"); // new
     // turbo_mapping.insert(String::from("turbo_remote_cache_enabled"), "enabled");
 
     let mut output_map = HashMap::new();
@@ -279,8 +352,9 @@ fn get_env_var_config(
     // Process preflight
     let preflight = if let Some(preflight) = output_map.get("preflight") {
         match preflight.as_str() {
-            "0" => Some(false),
-            "1" => Some(true),
+            "0" | "false" => Some(false),
+            "1" | "true" => Some(true),
+            "" => None,
             _ => return Err(Error::InvalidPreflight),
         }
     } else {
@@ -309,6 +383,20 @@ fn get_env_var_config(
         None
     };
 
+    // Process experimentalUI
+    let experimental_ui = output_map
+        .get("experimental_ui")
+        .and_then(|val| match val.as_str() {
+            "true" | "1" => Some(true),
+            "false" | "0" => Some(false),
+            _ => None,
+        });
+
+    // We currently don't pick up a Spaces ID via env var, we likely won't
+    // continue using the Spaces name, we can add an env var when we have the
+    // name we want to stick with.
+    let spaces_id = None;
+
     let output = ConfigurationOptions {
         api_url: output_map.get("api_url").cloned(),
         login_url: output_map.get("login_url").cloned(),
@@ -320,9 +408,11 @@ fn get_env_var_config(
         signature,
         preflight,
         enabled,
+        experimental_ui,
 
         // Processed numbers
         timeout,
+        spaces_id,
     };
 
     Ok(output)
@@ -365,7 +455,9 @@ fn get_override_env_var_config(
         signature: None,
         preflight: None,
         enabled: None,
+        experimental_ui: None,
         timeout: None,
+        spaces_id: None,
     };
 
     Ok(output)
@@ -390,13 +482,31 @@ impl TurborepoConfigBuilder {
             return Ok(global_config_path);
         }
 
-        let config_dir = config_dir().ok_or(Error::NoGlobalConfigPath)?;
-        let global_config_path = config_dir.join("turborepo").join("config.json");
-        AbsoluteSystemPathBuf::try_from(global_config_path).map_err(Error::PathError)
+        let config_dir = config_dir()?.ok_or(Error::NoGlobalConfigPath)?;
+
+        Ok(config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]))
+    }
+    fn global_auth_path(&self) -> Result<AbsoluteSystemPathBuf, Error> {
+        #[cfg(test)]
+        if let Some(global_config_path) = self.global_config_path.clone() {
+            return Ok(global_config_path);
+        }
+
+        let vercel_config_dir = vercel_config_dir()?.ok_or(Error::NoGlobalConfigDir)?;
+        // Check for both Vercel and Turbo paths. Vercel takes priority.
+        let vercel_path = vercel_config_dir.join_components(&[VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE]);
+        if vercel_path.exists() {
+            return Ok(vercel_path);
+        }
+
+        let turbo_config_dir = config_dir()?.ok_or(Error::NoGlobalConfigDir)?;
+
+        Ok(turbo_config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]))
     }
     fn local_config_path(&self) -> AbsoluteSystemPathBuf {
         self.repo_root.join_components(&[".turbo", "config.json"])
     }
+
     #[allow(dead_code)]
     fn root_package_json_path(&self) -> AbsoluteSystemPathBuf {
         self.repo_root.join_component("package.json")
@@ -446,6 +556,33 @@ impl TurborepoConfigBuilder {
         Ok(local_config)
     }
 
+    fn get_global_auth(&self) -> Result<ConfigurationOptions, Error> {
+        let global_auth_path = self.global_auth_path()?;
+        let token = match turborepo_auth::Token::from_file(&global_auth_path) {
+            Ok(token) => token,
+            // Multiple ways this can go wrong. Don't error out if we can't find the token - it
+            // just might not be there.
+            Err(e) => {
+                if matches!(e, turborepo_auth::Error::TokenNotFound) {
+                    return Ok(ConfigurationOptions::default());
+                }
+
+                return Err(e.into());
+            }
+        };
+
+        // No auth token found in either Vercel or Turbo config.
+        if token.into_inner().is_empty() {
+            return Ok(ConfigurationOptions::default());
+        }
+
+        let global_auth: ConfigurationOptions = ConfigurationOptions {
+            token: Some(token.into_inner().to_owned()),
+            ..Default::default()
+        };
+        Ok(global_auth)
+    }
+
     create_builder!(with_api_url, api_url, Option<String>);
     create_builder!(with_login_url, login_url, Option<String>);
     create_builder!(with_team_slug, team_slug, Option<String>);
@@ -455,6 +592,7 @@ impl TurborepoConfigBuilder {
     create_builder!(with_enabled, enabled, Option<bool>);
     create_builder!(with_preflight, preflight, Option<bool>);
     create_builder!(with_timeout, timeout, Option<u64>);
+    create_builder!(with_experimental_ui, experimental_ui, Option<bool>);
 
     pub fn build(&self) -> Result<ConfigurationOptions, Error> {
         // Priority, from least significant to most significant:
@@ -476,17 +614,21 @@ impl TurborepoConfigBuilder {
 
             Err(e)
         })?;
-        let turbo_json =
-            RawTurboJson::read(&self.repo_root.join_component("turbo.json")).or_else(|e| {
-                if let Error::Io(e) = &e {
-                    if matches!(e.kind(), std::io::ErrorKind::NotFound) {
-                        return Ok(Default::default());
-                    }
+        let turbo_json = RawTurboJson::read(
+            &self.repo_root,
+            AnchoredSystemPath::new("turbo.json").unwrap(),
+        )
+        .or_else(|e| {
+            if let Error::Io(e) = &e {
+                if matches!(e.kind(), std::io::ErrorKind::NotFound) {
+                    return Ok(Default::default());
                 }
+            }
 
-                Err(e)
-            })?;
+            Err(e)
+        })?;
         let global_config = self.get_global_config()?;
+        let global_auth = self.get_global_auth()?;
         let local_config = self.get_local_config()?;
         let env_vars = self.get_environment();
         let env_var_config = get_env_var_config(&env_vars)?;
@@ -496,6 +638,7 @@ impl TurborepoConfigBuilder {
             root_package_json.get_configuration_options(),
             turbo_json.get_configuration_options(),
             global_config.get_configuration_options(),
+            global_auth.get_configuration_options(),
             local_config.get_configuration_options(),
             env_var_config.get_configuration_options(),
             Ok(self.override_config.clone()),
@@ -533,6 +676,12 @@ impl TurborepoConfigBuilder {
                     if let Some(timeout) = current_source_config.timeout {
                         acc.timeout = Some(timeout);
                     }
+                    if let Some(spaces_id) = current_source_config.spaces_id {
+                        acc.spaces_id = Some(spaces_id);
+                    }
+                    if let Some(experimental_ui) = current_source_config.experimental_ui {
+                        acc.experimental_ui = Some(experimental_ui);
+                    }
 
                     acc
                 })
@@ -549,9 +698,8 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
 
     use crate::config::{
-        get_env_var_config, get_override_env_var_config, ConfigurationOptions, RawTurboJson,
-        ResolvedConfigurationOptions, TurborepoConfigBuilder, DEFAULT_API_URL, DEFAULT_LOGIN_URL,
-        DEFAULT_TIMEOUT,
+        get_env_var_config, get_override_env_var_config, ConfigurationOptions,
+        TurborepoConfigBuilder, DEFAULT_API_URL, DEFAULT_LOGIN_URL, DEFAULT_TIMEOUT,
     };
 
     #[test]
@@ -566,6 +714,7 @@ mod test {
         assert!(defaults.enabled());
         assert!(!defaults.preflight());
         assert_eq!(defaults.timeout(), DEFAULT_TIMEOUT);
+        assert_eq!(defaults.spaces_id(), None);
     }
 
     #[test]
@@ -588,14 +737,18 @@ mod test {
             "turbo_remote_cache_timeout".into(),
             turbo_remote_cache_timeout.to_string().into(),
         );
+        env.insert("turbo_experimental_ui".into(), "true".into());
+        env.insert("turbo_preflight".into(), "true".into());
 
         let config = get_env_var_config(&env).unwrap();
+        assert!(config.preflight());
         assert_eq!(turbo_api, config.api_url.unwrap());
         assert_eq!(turbo_login, config.login_url.unwrap());
         assert_eq!(turbo_team, config.team_slug.unwrap());
         assert_eq!(turbo_teamid, config.team_id.unwrap());
         assert_eq!(turbo_token, config.token.unwrap());
         assert_eq!(turbo_remote_cache_timeout, config.timeout.unwrap());
+        assert_eq!(Some(true), config.experimental_ui);
     }
 
     #[test]
@@ -606,6 +759,8 @@ mod test {
         env.insert("turbo_team".into(), "".into());
         env.insert("turbo_teamid".into(), "".into());
         env.insert("turbo_token".into(), "".into());
+        env.insert("turbo_experimental_ui".into(), "".into());
+        env.insert("turbo_preflight".into(), "".into());
 
         let config = get_env_var_config(&env).unwrap();
         assert_eq!(config.api_url(), DEFAULT_API_URL);
@@ -613,6 +768,8 @@ mod test {
         assert_eq!(config.team_slug(), None);
         assert_eq!(config.team_id(), None);
         assert_eq!(config.token(), None);
+        assert!(!config.experimental_ui());
+        assert!(!config.preflight());
     }
 
     #[test]
@@ -638,11 +795,17 @@ mod test {
 
     #[test]
     fn test_env_layering() {
-        let repo_root = AbsoluteSystemPathBuf::try_from(TempDir::new().unwrap().path()).unwrap();
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
         let global_config_path = AbsoluteSystemPathBuf::try_from(
             TempDir::new().unwrap().path().join("nonexistent.json"),
         )
         .unwrap();
+
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents(r#"{"experimentalSpaces": {"id": "my-spaces-id"}}"#)
+            .unwrap();
 
         let turbo_teamid = "team_nLlpyC6REAqxydlFKbrMDlud";
         let turbo_token = "abcdef1234567890abcdef";
@@ -677,23 +840,6 @@ mod test {
         let config = builder.build().unwrap();
         assert_eq!(config.team_id().unwrap(), vercel_artifacts_owner);
         assert_eq!(config.token().unwrap(), vercel_artifacts_token);
-    }
-
-    #[test]
-    fn test_shared_no_token() {
-        let mut test_shared_config: RawTurboJson = Default::default();
-        let configuration_options = ConfigurationOptions {
-            token: Some("IF YOU CAN SEE THIS WE HAVE PROBLEMS".to_string()),
-            ..Default::default()
-        };
-        test_shared_config.remote_cache = Some(configuration_options);
-
-        assert_eq!(
-            test_shared_config
-                .get_configuration_options()
-                .unwrap()
-                .token(),
-            None
-        );
+        assert_eq!(config.spaces_id().unwrap(), "my-spaces-id");
     }
 }

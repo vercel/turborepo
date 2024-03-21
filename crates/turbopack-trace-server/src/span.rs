@@ -10,6 +10,7 @@ pub struct Span {
     // These values won't change after creation:
     pub index: SpanIndex,
     pub parent: Option<SpanIndex>,
+    pub depth: u32,
     pub start: u64,
     pub ignore_self_time: bool,
     pub category: String,
@@ -38,6 +39,7 @@ pub struct Span {
     pub total_deallocations: OnceLock<u64>,
     pub total_persistent_allocations: OnceLock<u64>,
     pub total_allocation_count: OnceLock<u64>,
+    pub total_span_count: OnceLock<u64>,
     pub corrected_self_time: OnceLock<u64>,
     pub corrected_total_time: OnceLock<u64>,
     pub graph: OnceLock<Vec<SpanGraphEvent>>,
@@ -81,6 +83,7 @@ pub struct SpanGraph {
     pub total_deallocations: OnceLock<u64>,
     pub total_persistent_allocations: OnceLock<u64>,
     pub total_allocation_count: OnceLock<u64>,
+    pub total_span_count: OnceLock<u64>,
     pub corrected_self_time: OnceLock<u64>,
     pub corrected_total_time: OnceLock<u64>,
     pub bottom_up: OnceLock<Vec<Arc<SpanBottomUp>>>,

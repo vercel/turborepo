@@ -1,18 +1,19 @@
 use std::{io::Write, sync::Arc, time::Duration};
 
-use console::StyledObject;
-use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
-use turborepo_cache::{AsyncCache, CacheError, CacheHitMetadata, CacheSource};
-use turborepo_repository::package_graph::WorkspaceInfo;
-use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
-use turborepo_ui::{
-    color, replay_logs, ColorSelector, LogWriter, PrefixedUI, PrefixedWriter, GREY, UI,
+use tracing::{debug, error};
+use turbopath::{
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
+use turborepo_cache::{AsyncCache, CacheError, CacheHitMetadata, CacheSource};
+use turborepo_repository::package_graph::PackageInfo;
+use turborepo_scm::SCM;
+use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
+use turborepo_ui::{color, replay_logs, ColorSelector, LogWriter, GREY, UI};
 
 use crate::{
     cli::OutputLogsMode,
     daemon::{DaemonClient, DaemonConnector},
+    hash::{FileHashes, TurboHash},
     opts::RunCacheOpts,
     run::task_id::TaskId,
     task_graph::{TaskDefinition, TaskOutputs},
@@ -32,6 +33,10 @@ pub enum Error {
     Daemon(#[from] crate::daemon::DaemonError),
     #[error("no connection to daemon")]
     NoDaemon,
+    #[error(transparent)]
+    Scm(#[from] turborepo_scm::Error),
+    #[error(transparent)]
+    Path(#[from] turbopath::PathError),
 }
 
 pub struct RunCache {
@@ -76,7 +81,7 @@ impl RunCache {
         self: &Arc<Self>,
         // TODO: Group these in a struct
         task_definition: &TaskDefinition,
-        workspace_info: &WorkspaceInfo,
+        workspace_info: &PackageInfo,
         task_id: TaskId<'static>,
         hash: &str,
     ) -> TaskCache {
@@ -108,8 +113,9 @@ impl RunCache {
         }
     }
 
-    pub async fn wait_for_cache(&self) {
-        self.cache.wait().await
+    pub async fn shutdown_cache(&self) {
+        // Ignore errors coming from cache already shutting down
+        self.cache.shutdown().await.ok();
     }
 }
 
@@ -127,36 +133,35 @@ pub struct TaskCache {
 }
 
 impl TaskCache {
-    pub fn replay_log_file(&self, prefixed_ui: &mut PrefixedUI<impl Write>) -> Result<(), Error> {
+    /// Will read log file and write to output a line at a time
+    pub fn replay_log_file(&self, output: impl Write) -> Result<(), Error> {
         if self.log_file_path.exists() {
-            replay_logs(prefixed_ui, &self.log_file_path)?;
+            replay_logs(output, &self.log_file_path)?;
         }
 
         Ok(())
     }
 
-    pub fn on_error(&self, prefixed_ui: &mut PrefixedUI<impl Write>) -> Result<(), Error> {
+    pub fn on_error(&self, mut terminal_output: impl Write) -> Result<(), Error> {
         if self.task_output_mode == OutputLogsMode::ErrorsOnly {
-            prefixed_ui.output(format!(
-                "cache miss, executing {}",
-                color!(self.ui, GREY, "{}", self.hash)
-            ));
-            self.replay_log_file(prefixed_ui)?;
+            fallible_write(
+                &mut terminal_output,
+                &format!(
+                    "cache miss, executing {}\n",
+                    color!(self.ui, GREY, "{}", self.hash)
+                ),
+            );
+            self.replay_log_file(terminal_output)?;
         }
 
         Ok(())
     }
 
-    pub fn output_writer<W: Write>(
-        &self,
-        prefix: StyledObject<String>,
-        writer: W,
-    ) -> Result<LogWriter<W>, Error> {
+    pub fn output_writer<W: Write>(&self, writer: W) -> Result<LogWriter<W>, Error> {
         let mut log_writer = LogWriter::default();
-        let prefixed_writer = PrefixedWriter::new(self.run_cache.ui, prefix, writer);
 
         if self.caching_disabled || self.run_cache.writes_disabled {
-            log_writer.with_prefixed_writer(prefixed_writer);
+            log_writer.with_writer(writer);
             return Ok(log_writer);
         }
 
@@ -166,7 +171,7 @@ impl TaskCache {
             self.task_output_mode,
             OutputLogsMode::None | OutputLogsMode::HashOnly | OutputLogsMode::ErrorsOnly
         ) {
-            log_writer.with_prefixed_writer(prefixed_writer);
+            log_writer.with_writer(writer);
         }
 
         Ok(log_writer)
@@ -178,7 +183,7 @@ impl TaskCache {
 
     pub async fn restore_outputs(
         &mut self,
-        prefixed_ui: &mut PrefixedUI<impl Write>,
+        mut terminal_output: impl Write,
         telemetry: &PackageTaskEventBuilder,
     ) -> Result<Option<CacheHitMetadata>, Error> {
         if self.caching_disabled || self.run_cache.reads_disabled {
@@ -186,21 +191,23 @@ impl TaskCache {
                 self.task_output_mode,
                 OutputLogsMode::None | OutputLogsMode::ErrorsOnly
             ) {
-                prefixed_ui.output(format!(
-                    "cache bypass, force executing {}",
-                    color!(self.ui, GREY, "{}", self.hash)
-                ));
+                fallible_write(
+                    &mut terminal_output,
+                    &format!(
+                        "cache bypass, force executing {}\n",
+                        color!(self.ui, GREY, "{}", self.hash)
+                    ),
+                );
             }
 
             return Ok(None);
         }
 
+        let validated_inclusions = self.repo_relative_globs.validated_inclusions()?;
+
         let changed_output_count = if let Some(daemon_client) = &mut self.daemon_client {
             match daemon_client
-                .get_changed_outputs(
-                    self.hash.to_string(),
-                    self.repo_relative_globs.inclusions.clone(),
-                )
+                .get_changed_outputs(self.hash.to_string(), &validated_inclusions)
                 .await
             {
                 Ok(changed_output_globs) => changed_output_globs.len(),
@@ -235,10 +242,13 @@ impl TaskCache {
                     self.task_output_mode,
                     OutputLogsMode::None | OutputLogsMode::ErrorsOnly
                 ) {
-                    prefixed_ui.output(format!(
-                        "cache miss, executing {}",
-                        color!(self.ui, GREY, "{}", self.hash)
-                    ));
+                    fallible_write(
+                        &mut terminal_output,
+                        &format!(
+                            "cache miss, executing {}\n",
+                            color!(self.ui, GREY, "{}", self.hash)
+                        ),
+                    );
                 }
 
                 return Ok(None);
@@ -247,11 +257,14 @@ impl TaskCache {
             self.expanded_outputs = restored_files;
 
             if let Some(daemon_client) = &mut self.daemon_client {
+                // Do we want to error the process if we can't parse the globs? We probably
+                // won't have even gotten this far if this fails...
+                let validated_exclusions = self.repo_relative_globs.validated_exclusions()?;
                 if let Err(err) = daemon_client
                     .notify_outputs_written(
                         self.hash.clone(),
-                        self.repo_relative_globs.inclusions.clone(),
-                        self.repo_relative_globs.exclusions.clone(),
+                        &validated_inclusions,
+                        &validated_exclusions,
                         cache_hit_metadata.time_saved,
                     )
                     .await
@@ -280,20 +293,26 @@ impl TaskCache {
 
         match self.task_output_mode {
             OutputLogsMode::HashOnly | OutputLogsMode::NewOnly => {
-                prefixed_ui.output(format!(
-                    "cache hit{}, suppressing logs {}",
-                    more_context,
-                    color!(self.ui, GREY, "{}", self.hash)
-                ));
+                fallible_write(
+                    &mut terminal_output,
+                    &format!(
+                        "cache hit{}, suppressing logs {}\n",
+                        more_context,
+                        color!(self.ui, GREY, "{}", self.hash)
+                    ),
+                );
             }
             OutputLogsMode::Full => {
                 debug!("log file path: {}", self.log_file_path);
-                prefixed_ui.output(format!(
-                    "cache hit{}, replaying logs {}",
-                    more_context,
-                    color!(self.ui, GREY, "{}", self.hash)
-                ));
-                self.replay_log_file(prefixed_ui)?;
+                fallible_write(
+                    &mut terminal_output,
+                    &format!(
+                        "cache hit{}, replaying logs {}\n",
+                        more_context,
+                        color!(self.ui, GREY, "{}", self.hash)
+                    ),
+                );
+                self.replay_log_file(&mut terminal_output)?;
             }
             // Note that if we're restoring from cache, the task succeeded
             // so we know we don't need to print anything for errors
@@ -314,10 +333,12 @@ impl TaskCache {
 
         debug!("caching outputs: outputs: {:?}", &self.repo_relative_globs);
 
+        let validated_inclusions = self.repo_relative_globs.validated_inclusions()?;
+        let validated_exclusions = self.repo_relative_globs.validated_exclusions()?;
         let files_to_be_cached = globwalk::globwalk(
             &self.run_cache.repo_root,
-            &self.repo_relative_globs.validated_inclusions()?,
-            &self.repo_relative_globs.validated_exclusions()?,
+            &validated_inclusions,
+            &validated_exclusions,
             globwalk::WalkType::All,
         )?;
 
@@ -342,8 +363,8 @@ impl TaskCache {
             let notify_result = daemon_client
                 .notify_outputs_written(
                     self.hash.to_string(),
-                    self.repo_relative_globs.inclusions.clone(),
-                    self.repo_relative_globs.exclusions.clone(),
+                    &validated_inclusions,
+                    &validated_exclusions,
                     duration.as_millis() as u64,
                 )
                 .await
@@ -352,7 +373,7 @@ impl TaskCache {
             if let Err(err) = notify_result {
                 telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);
                 let task_id = &self.task_id;
-                debug!("Failed to mark outputs as cached for {task_id}: {err}");
+                debug!("failed to mark outputs as cached for {task_id}: {err}");
             }
         }
 
@@ -363,5 +384,97 @@ impl TaskCache {
 
     pub fn expanded_outputs(&self) -> &[AnchoredSystemPathBuf] {
         &self.expanded_outputs
+    }
+}
+
+#[derive(Clone)]
+pub struct ConfigCache {
+    hash: String,
+    repo_root: AbsoluteSystemPathBuf,
+    config_file: AbsoluteSystemPathBuf,
+    anchored_path: AnchoredSystemPathBuf,
+    cache: AsyncCache,
+}
+
+impl ConfigCache {
+    pub fn new(
+        hash: String,
+        repo_root: AbsoluteSystemPathBuf,
+        config_path: &[&str],
+        cache: AsyncCache,
+    ) -> Self {
+        let config_file = repo_root.join_components(config_path);
+        ConfigCache {
+            hash,
+            repo_root: repo_root.clone(),
+            config_file: config_file.clone(),
+            anchored_path: AnchoredSystemPathBuf::relative_path_between(&repo_root, &config_file),
+            cache,
+        }
+    }
+
+    pub fn hash(&self) -> &str {
+        &self.hash
+    }
+
+    pub fn exists(&self) -> bool {
+        self.config_file.try_exists().unwrap_or(false)
+    }
+
+    pub async fn restore(
+        &self,
+    ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
+        self.cache.fetch(&self.repo_root, &self.hash).await
+    }
+
+    pub async fn save(&self) -> Result<(), CacheError> {
+        match self.exists() {
+            true => {
+                debug!("config file exists, caching");
+                self.cache
+                    .put(
+                        self.repo_root.clone(),
+                        self.hash.clone(),
+                        vec![self.anchored_path.clone()],
+                        0,
+                    )
+                    .await
+            }
+            false => {
+                debug!("config file does not exist, skipping cache save");
+                Ok(())
+            }
+        }
+    }
+
+    // The config hash is used for task access tracing, and is keyed off of all
+    // files in the repository
+    pub fn calculate_config_hash(
+        scm: &SCM,
+        repo_root: &AbsoluteSystemPathBuf,
+    ) -> Result<String, CacheError> {
+        // empty path to get all files
+        let anchored_root = match AnchoredSystemPath::new("") {
+            Ok(anchored_root) => anchored_root,
+            Err(_) => return Err(CacheError::ConfigCacheInvalidBase),
+        };
+
+        // empty inputs to get all files
+        let inputs: Vec<String> = vec![];
+        let hash_object = match scm.get_package_file_hashes(repo_root, anchored_root, &inputs, None)
+        {
+            Ok(hash_object) => hash_object,
+            Err(_) => return Err(CacheError::ConfigCacheError),
+        };
+
+        // return the hash
+        Ok(FileHashes(hash_object).hash())
+    }
+}
+
+// attempt to write message to writer, swallowing any errors encountered
+fn fallible_write(mut writer: impl Write, message: &str) {
+    if let Err(err) = writer.write_all(message.as_bytes()) {
+        error!("cannot write to logs: {:?}", err);
     }
 }

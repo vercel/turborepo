@@ -1,7 +1,6 @@
-use tracing::debug;
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
-use crate::{commands::CommandBase, run, run::Run, signal::SignalHandler};
+use crate::{commands::CommandBase, run, run::builder::RunBuilder, signal::SignalHandler};
 
 pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i32, run::Error> {
     #[cfg(windows)]
@@ -32,9 +31,12 @@ pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i3
 
     let api_auth = base.api_auth()?;
     let api_client = base.api_client()?;
-    let mut run = Run::new(base, api_auth)?;
-    debug!("using the experimental rust codepath");
-    let run_fut = run.run(&handler, telemetry, api_client);
+    let run_builder = RunBuilder::new(base, api_auth)?;
+    let run_fut = async {
+        let run = run_builder.build(&handler, telemetry, api_client).await?;
+        run.run().await
+    };
+
     let handler_fut = handler.done();
     tokio::select! {
         biased;

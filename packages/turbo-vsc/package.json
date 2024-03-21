@@ -1,8 +1,8 @@
 {
   "name": "turbo-vsc",
-  "displayName": "Turborepo",
+  "displayName": "Turborepo LSP",
   "version": "1.0.0",
-  "description": "Turborepo extension for VSCode",
+  "description": "Tools and instant feedback for your build system",
   "main": "out/main.js",
   "publisher": "Vercel",
   "scripts": {
@@ -67,13 +67,19 @@
       }
     ],
     "configuration": {
-      "title": "Turborepo",
+      "title": "Turborepo LSP",
       "properties": {
         "turbo.path": {
           "type": "string",
           "required": false,
           "default": null,
           "description": "The path to your global `turbo` executable, if you'd rather not rely on auto-detection."
+        },
+        "turbo.useLocalTurbo": {
+          "type": "boolean",
+          "required": false,
+          "default": false,
+          "description": "Silence the 'install global turbo' prompt and always use local turbo."
         }
       }
     }

@@ -5,7 +5,7 @@ use hex::ToHex;
 use ignore::WalkBuilder;
 use sha1::{Digest, Sha1};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, IntoUnix};
-use wax::{any, Glob, Pattern};
+use wax::{any, Glob, Program};
 
 use crate::{package_deps::GitHashes, Error};
 
@@ -395,7 +395,7 @@ mod tests {
         let mut expected = GitHashes::new();
         for (raw_unix_path, contents, expected_hash) in file_hash.iter() {
             let unix_path = RelativeUnixPath::new(raw_unix_path).unwrap();
-            let file_path = turbo_root.join_unix_path(unix_path).unwrap();
+            let file_path = turbo_root.join_unix_path(unix_path);
             file_path.ensure_dir().unwrap();
             file_path.create_with_contents(contents).unwrap();
             if let Some(hash) = expected_hash {
@@ -427,18 +427,17 @@ mod tests {
         expected = GitHashes::new();
         for (raw_unix_path, contents, expected_hash) in file_hash.iter() {
             let unix_path = RelativeUnixPath::new(raw_unix_path).unwrap();
-            let file_path = turbo_root.join_unix_path(unix_path).unwrap();
+            let file_path = turbo_root.join_unix_path(unix_path);
             file_path.ensure_dir().unwrap();
             file_path.create_with_contents(contents).unwrap();
             if let Some(hash) = expected_hash {
                 let unix_pkg_file_path = unix_path.strip_prefix(&unix_pkg_path).unwrap();
-                if unix_pkg_file_path.ends_with("file")
+                if (unix_pkg_file_path.ends_with("file")
                     || unix_pkg_file_path.ends_with("package.json")
-                    || unix_pkg_file_path.ends_with("turbo.json")
+                    || unix_pkg_file_path.ends_with("turbo.json"))
+                    && !unix_pkg_file_path.ends_with("excluded-file")
                 {
-                    if !unix_pkg_file_path.ends_with("excluded-file") {
-                        expected.insert(unix_pkg_file_path.to_owned(), (*hash).to_owned());
-                    }
+                    expected.insert(unix_pkg_file_path.to_owned(), (*hash).to_owned());
                 }
             }
         }

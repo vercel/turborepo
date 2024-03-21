@@ -3,18 +3,22 @@ use indexmap::IndexSet;
 use serde::{Deserialize, Serialize};
 use swc_core::{
     common::DUMMY_SP,
-    ecma::ast::{ArrayLit, ArrayPat, Expr, Ident, Pat, Program},
+    ecma::ast::{ArrayLit, ArrayPat, Expr, Ident, Program},
     quote,
 };
 use turbo_tasks::{trace::TraceRawVcs, TryFlatJoinIterExt, TryJoinIterExt, Vc};
-use turbopack_core::chunk::{AsyncModuleInfo, ChunkableModule};
+use turbopack_core::{
+    chunk::{AsyncModuleInfo, ChunkableModule},
+    reference::{ModuleReference, ModuleReferences},
+    resolve::ExternalType,
+};
 
 use super::esm::base::ReferencedAsset;
 use crate::{
     chunk::{EcmascriptChunkPlaceable, EcmascriptChunkingContext},
     code_gen::{CodeGenerateableWithAsyncModuleInfo, CodeGeneration},
     create_visitor,
-    references::esm::{base::insert_hoisted_stmt, EsmAssetReference},
+    references::esm::base::insert_hoisted_stmt,
 };
 
 /// Information needed for generating the async module wrapper for
@@ -44,7 +48,7 @@ impl OptionAsyncModuleOptions {
 #[turbo_tasks::value(shared)]
 pub struct AsyncModule {
     pub placeable: Vc<Box<dyn EcmascriptChunkPlaceable>>,
-    pub references: IndexSet<Vc<EsmAssetReference>>,
+    pub references: Vc<ModuleReferences>,
     pub has_top_level_await: bool,
     pub import_externals: bool,
 }
@@ -89,11 +93,16 @@ impl AsyncModule {
 
         let reference_idents = self
             .references
+            .await?
             .iter()
             .map(|r| async {
-                let referenced_asset = r.get_referenced_asset().await?;
+                let referenced_asset =
+                    ReferencedAsset::from_resolve_result(r.resolve_reference()).await?;
                 Ok(match &*referenced_asset {
-                    ReferencedAsset::OriginalReferenceTypeExternal(_) => {
+                    ReferencedAsset::External(
+                        _,
+                        ExternalType::OriginalReference | ExternalType::EcmaScriptModule,
+                    ) => {
                         if self.import_externals {
                             referenced_asset.get_ident().await?
                         } else {
@@ -114,6 +123,7 @@ impl AsyncModule {
                             None
                         }
                     }
+                    ReferencedAsset::External(..) => None,
                     ReferencedAsset::None => None,
                 })
             })
@@ -133,12 +143,17 @@ impl AsyncModule {
             self.import_externals
                 && self
                     .references
+                    .await?
                     .iter()
                     .map(|r| async {
-                        let referenced_asset = r.get_referenced_asset().await?;
+                        let referenced_asset =
+                            ReferencedAsset::from_resolve_result(r.resolve_reference()).await?;
                         Ok(matches!(
                             &*referenced_asset,
-                            ReferencedAsset::OriginalReferenceTypeExternal(_)
+                            ReferencedAsset::External(
+                                _,
+                                ExternalType::OriginalReference | ExternalType::EcmaScriptModule
+                            )
                         ))
                     })
                     .try_join()
@@ -213,7 +228,7 @@ fn add_async_dependency_handler(program: &mut Program, idents: &IndexSet<String>
     let stmt = quote!(
         "($deps = __turbopack_async_dependencies__.then ? (await \
          __turbopack_async_dependencies__)() : __turbopack_async_dependencies__);" as Stmt,
-        deps: Pat = Pat::Array(ArrayPat {
+        deps: AssignTarget = ArrayPat {
             span: DUMMY_SP,
             elems: idents
                 .into_iter()
@@ -221,7 +236,7 @@ fn add_async_dependency_handler(program: &mut Program, idents: &IndexSet<String>
                 .collect(),
             optional: false,
             type_ann: None,
-        }),
+        }.into(),
     );
 
     insert_hoisted_stmt(program, stmt);
