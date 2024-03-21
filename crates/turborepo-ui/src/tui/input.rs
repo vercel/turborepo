@@ -25,6 +25,13 @@ pub fn input(interact: bool) -> Result<Option<Event>, Error> {
 
 /// Converts a crostterm key event into a TUI interaction event
 fn translate_key_event(interact: bool, key_event: KeyEvent) -> Option<Event> {
+    // On Windows events for releasing a key are produced
+    // We skip these to avoid emitting 2 events per key press.
+    // There is still a `Repeat` event for when a key is held that will pass through
+    // this guard.
+    if key_event.kind == KeyEventKind::Release {
+        return None;
+    }
     match key_event.code {
         KeyCode::Char('c') if key_event.modifiers == crossterm::event::KeyModifiers::CONTROL => {
             ctrl_c()
