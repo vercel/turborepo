@@ -147,15 +147,29 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
     return false;
   };
 
+  const isProcessEnv = (node: MemberExpression): boolean => {
+    return (
+      "name" in node.object &&
+      "name" in node.property &&
+      node.object.name === "process" &&
+      node.property.name === "env"
+    );
+  };
+
+  const isImportMetaEnv = (node: MemberExpression): boolean => {
+    return (
+      node.object.type === "MetaProperty" &&
+      node.object.meta.name === "import" &&
+      node.object.property.name === "meta" &&
+      node.property.type === "Identifier" &&
+      node.property.name === "env"
+    );
+  };
+
   return {
     MemberExpression(node) {
       // we only care about complete process env declarations and non-computed keys
-      if (
-        "name" in node.object &&
-        "name" in node.property &&
-        node.object.name === "process" &&
-        node.property.name === "env"
-      ) {
+      if (isProcessEnv(node) || isImportMetaEnv(node)) {
         // we're doing something with process.env
         if (!isComputed(node)) {
           // destructuring from process.env
