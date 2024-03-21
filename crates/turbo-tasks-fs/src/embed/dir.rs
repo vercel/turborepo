@@ -74,7 +74,7 @@ macro_rules! embed_directory_internal {
         static dir: include_dir::Dir<'static> = turbo_tasks_fs::embed::include_dir!($path);
 
         turbo_tasks_fs::embed::directory_from_include_dir(
-            $name.to_string(),
+            $name.to_string().into(),
             turbo_tasks::TransientInstance::new(&dir),
         )
     }};

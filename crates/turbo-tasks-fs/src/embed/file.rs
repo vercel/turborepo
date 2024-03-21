@@ -54,7 +54,9 @@ macro_rules! embed_file {
 macro_rules! embed_file {
     ($path:expr) => {
         turbo_tasks_fs::embed::content_from_str(
-            include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path)).to_string(),
+            include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path))
+                .to_string()
+                .into(),
         )
     };
 }
