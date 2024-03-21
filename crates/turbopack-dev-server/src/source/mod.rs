@@ -111,7 +111,7 @@ impl GetContentSourceContent for ContentSourceContent {
     #[turbo_tasks::function]
     fn get(
         self: Vc<Self>,
-        _path: String,
+        _path: Arc<String>,
         _data: Value<ContentSourceData>,
     ) -> Vc<ContentSourceContent> {
         self
@@ -158,12 +158,12 @@ impl ContentSourceContent {
 
 /// A list of headers arranged as contiguous (name, value) pairs.
 #[turbo_tasks::value(transparent)]
-pub struct HeaderList(Vec<(String, String)>);
+pub struct HeaderList(Vec<(Arc<String>, Arc<String>)>);
 
 #[turbo_tasks::value_impl]
 impl HeaderList {
     #[turbo_tasks::function]
-    pub fn new(headers: Vec<(String, String)>) -> Vc<Self> {
+    pub fn new(headers: Vec<(Arc<String>, Arc<String>)>) -> Vc<Self> {
         HeaderList(headers).cell()
     }
 
@@ -423,7 +423,7 @@ pub trait ContentSourceExt: Send {
     fn issue_file_path(
         self: Vc<Self>,
         file_path: Vc<FileSystemPath>,
-        description: String,
+        description: Arc<String>,
     ) -> Vc<Box<dyn ContentSource>>;
 }
 
@@ -434,7 +434,7 @@ where
     fn issue_file_path(
         self: Vc<Self>,
         file_path: Vc<FileSystemPath>,
-        description: String,
+        description: Arc<String>,
     ) -> Vc<Box<dyn ContentSource>> {
         Vc::upcast(IssueFilePathContentSource::new_file_path(
             file_path,
