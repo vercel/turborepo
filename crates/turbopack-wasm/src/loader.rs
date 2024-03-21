@@ -52,7 +52,10 @@ pub(crate) async fn instantiating_loader_source(
     )?;
 
     Ok(Vc::upcast(VirtualSource::new(
-        source.ident().path().append("_.loader.mjs".to_string()),
+        source
+            .ident()
+            .path()
+            .append("_.loader.mjs".to_string().into()),
         AssetContent::file(File::from(code).into()),
     )))
 }
@@ -74,7 +77,10 @@ pub(crate) async fn compiling_loader_source(
     };
 
     Ok(Vc::upcast(VirtualSource::new(
-        source.ident().path().append("_.loader.mjs".to_string()),
+        source
+            .ident()
+            .path()
+            .append("_.loader.mjs".to_string().into()),
         AssetContent::file(File::from(code).into()),
     )))
 }

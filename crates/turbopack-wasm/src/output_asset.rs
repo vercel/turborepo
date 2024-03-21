@@ -43,7 +43,9 @@ impl OutputAsset for WebAssemblyAsset {
     async fn ident(&self) -> Result<Vc<AssetIdent>> {
         let ident = self.source.ident().with_modifier(modifier());
 
-        let asset_path = self.chunking_context.chunk_path(ident, ".wasm".to_string());
+        let asset_path = self
+            .chunking_context
+            .chunk_path(ident, ".wasm".to_string().into());
 
         Ok(AssetIdent::from_path(asset_path))
     }

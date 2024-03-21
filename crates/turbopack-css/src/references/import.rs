@@ -173,7 +173,7 @@ impl ImportAttributes {
                 supports: supports.as_ref().map(gen_swc_node).map(Arc::new),
                 media: media
                     .as_ref()
-                    .map(|queries| queries.iter().map(gen_swc_node).collect().map(Arc::new)),
+                    .map(|queries| queries.iter().map(gen_swc_node).collect::<String>().into()),
             },
         }
     }

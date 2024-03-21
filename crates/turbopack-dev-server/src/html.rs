@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::{anyhow, Result};
 use mime_guess::mime::TEXT_HTML_UTF_8;
 use turbo_tasks::{ReadRef, TryJoinIterExt, Value, Vc};
@@ -31,7 +33,7 @@ type DevHtmlEntry = (
 pub struct DevHtmlAsset {
     path: Vc<FileSystemPath>,
     entries: Vec<DevHtmlEntry>,
-    body: Option<String>,
+    body: Option<Arc<String>>,
 }
 
 #[turbo_tasks::function]
@@ -80,7 +82,7 @@ impl DevHtmlAsset {
     pub fn new_with_body(
         path: Vc<FileSystemPath>,
         entries: Vec<DevHtmlEntry>,
-        body: String,
+        body: Arc<String>,
     ) -> Vc<Self> {
         DevHtmlAsset {
             path,
@@ -101,7 +103,7 @@ impl DevHtmlAsset {
     }
 
     #[turbo_tasks::function]
-    pub async fn with_body(self: Vc<Self>, body: String) -> Result<Vc<Self>> {
+    pub async fn with_body(self: Vc<Self>, body: Arc<String>) -> Result<Vc<Self>> {
         let mut html: DevHtmlAsset = self.await?.clone_value();
         html.body = Some(body);
         Ok(html.cell())

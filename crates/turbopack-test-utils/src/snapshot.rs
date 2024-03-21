@@ -48,7 +48,7 @@ pub async fn snapshot_issues<I: IntoIterator<Item = ReadRef<PlainIssue>>>(
         };
         let hash = encode_hex(plain_issue.internal_hash_ref(true));
 
-        let path = issues_path.join(format!("{title}-{}.txt", &hash[0..6]));
+        let path = issues_path.join(format!("{title}-{}.txt", &hash[0..6]).into());
         if !seen.insert(path) {
             continue;
         }
