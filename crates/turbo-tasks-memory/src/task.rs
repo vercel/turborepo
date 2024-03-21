@@ -377,7 +377,6 @@ enum TaskStateType {
         ///
         /// This back-edge is [Cell] `dependent_tasks`, which is a weak edge.
         dependencies: TaskDependencySet,
-        dependencies_copy: TaskDependencySet,
     },
 
     /// Execution is invalid, but not yet scheduled
@@ -1002,10 +1001,7 @@ impl Task {
                         }
                         state.cells.shrink_to_fit();
                         state.stateful = stateful;
-                        state.state_type = Done {
-                            dependencies_copy: dependencies.clone(),
-                            dependencies,
-                        };
+                        state.state_type = Done { dependencies };
                         if !count_as_finished {
                             let mut change = TaskChange {
                                 unfinished: -1,
@@ -1132,10 +1128,8 @@ impl Task {
                 }
                 Done {
                     ref mut dependencies,
-                    ref mut dependencies_copy,
                 } => {
                     let mut has_set_unfinished = false;
-                    take(dependencies_copy);
                     let outdated_dependencies = take(dependencies);
                     // add to dirty lists and potentially schedule
                     let description = self.get_event_description();
@@ -1450,10 +1444,7 @@ impl Task {
             for child in state.children.iter() {
                 refs.push((ReferenceType::Child, *child));
             }
-            if let Done {
-                ref dependencies, ..
-            } = state.state_type
-            {
+            if let Done { ref dependencies } = state.state_type {
                 for dep in dependencies.iter() {
                     match dep {
                         TaskDependency::Output(task)
@@ -1753,12 +1744,8 @@ impl Task {
                     return None;
                 }
                 match &mut state.state_type {
-                    TaskStateType::Done {
-                        dependencies,
-                        dependencies_copy,
-                    } => {
+                    TaskStateType::Done { dependencies } => {
                         dependencies.shrink_to_fit();
-                        dependencies_copy.shrink_to_fit();
                     }
                     TaskStateType::Dirty { .. } => {}
                     _ => {
@@ -2020,7 +2007,6 @@ impl Task {
         match state_type {
             Done {
                 ref mut dependencies,
-                ..
             } => {
                 let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
                 aggregation_leaf.change(
