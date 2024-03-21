@@ -1104,10 +1104,10 @@ mod tests {
 
     #[test]
     fn normalize() {
-        let a = Pattern::Constant("a".to_string());
-        let b = Pattern::Constant("b".to_string());
-        let c = Pattern::Constant("c".to_string());
-        let s = Pattern::Constant("/".to_string());
+        let a = Pattern::Constant("a".to_string().into());
+        let b = Pattern::Constant("b".to_string().into());
+        let c = Pattern::Constant("c".to_string().into());
+        let s = Pattern::Constant("/".to_string().into());
         let d = Pattern::Dynamic;
         {
             let mut p = Pattern::Concatenation(vec![
@@ -1119,8 +1119,8 @@ mod tests {
             assert_eq!(
                 p,
                 Pattern::Alternatives(vec![
-                    Pattern::Constant("a/c".to_string()),
-                    Pattern::Constant("b/c".to_string()),
+                    Pattern::Constant("a/c".to_string().into()),
+                    Pattern::Constant("b/c".to_string().into()),
                 ])
             );
         }
@@ -1137,29 +1137,29 @@ mod tests {
             assert_eq!(
                 p,
                 Pattern::Alternatives(vec![
-                    Pattern::Constant("a/b".to_string()),
-                    Pattern::Constant("b/b".to_string()),
+                    Pattern::Constant("a/b".to_string().into()),
+                    Pattern::Constant("b/b".to_string().into()),
                     Pattern::Concatenation(vec![
                         Pattern::Dynamic,
-                        Pattern::Constant("/b".to_string())
+                        Pattern::Constant("/b".to_string().into())
                     ]),
-                    Pattern::Constant("a/c".to_string()),
-                    Pattern::Constant("b/c".to_string()),
+                    Pattern::Constant("a/c".to_string().into()),
+                    Pattern::Constant("b/c".to_string().into()),
                     Pattern::Concatenation(vec![
                         Pattern::Dynamic,
-                        Pattern::Constant("/c".to_string())
+                        Pattern::Constant("/c".to_string().into())
                     ]),
                     Pattern::Concatenation(vec![
-                        Pattern::Constant("a/".to_string()),
+                        Pattern::Constant("a/".to_string().into()),
                         Pattern::Dynamic
                     ]),
                     Pattern::Concatenation(vec![
-                        Pattern::Constant("b/".to_string()),
+                        Pattern::Constant("b/".to_string().into()),
                         Pattern::Dynamic
                     ]),
                     Pattern::Concatenation(vec![
                         Pattern::Dynamic,
-                        Pattern::Constant("/".to_string()),
+                        Pattern::Constant("/".to_string().into()),
                         Pattern::Dynamic
                     ]),
                 ])
@@ -1170,10 +1170,10 @@ mod tests {
     #[test]
     fn is_match() {
         let pat = Pattern::Concatenation(vec![
-            Pattern::Constant(".".to_string()),
-            Pattern::Constant("/".to_string()),
+            Pattern::Constant(".".to_string().into()),
+            Pattern::Constant("/".to_string().into()),
             Pattern::Dynamic,
-            Pattern::Constant(".js".to_string()),
+            Pattern::Constant(".js".to_string().into()),
         ]);
         assert!(pat.could_match(""));
         assert!(pat.could_match("./"));
@@ -1198,7 +1198,7 @@ mod tests {
 
     #[rstest]
     #[case::dynamic(Pattern::Dynamic)]
-    #[case::dynamic_concat(Pattern::Concatenation(vec![Pattern::Dynamic, Pattern::Constant(".js".to_string())]))]
+    #[case::dynamic_concat(Pattern::Concatenation(vec![Pattern::Dynamic, Pattern::Constant(".js".to_string().into())]))]
     fn dynamic_match(#[case] pat: Pattern) {
         assert!(pat.could_match(""));
         assert!(pat.is_match("index.js"));
@@ -1252,7 +1252,7 @@ mod tests {
     fn dynamic_match2() {
         let pat = Pattern::Concatenation(vec![
             Pattern::Dynamic,
-            Pattern::Constant("/".to_string()),
+            Pattern::Constant("/".to_string().into()),
             Pattern::Dynamic,
         ]);
         assert!(pat.could_match("dir"));
@@ -1304,16 +1304,16 @@ mod tests {
 
     #[rstest]
     #[case::dynamic(Pattern::Dynamic)]
-    #[case::dynamic_concat(Pattern::Concatenation(vec![Pattern::Dynamic, Pattern::Constant(".js".to_string())]))]
+    #[case::dynamic_concat(Pattern::Concatenation(vec![Pattern::Dynamic, Pattern::Constant(".js".to_string().into())]))]
     #[case::dynamic_concat2(Pattern::Concatenation(vec![
         Pattern::Dynamic,
-        Pattern::Constant("/".to_string()),
+        Pattern::Constant("/".to_string().into()),
         Pattern::Dynamic,
     ]))]
     #[case::dynamic_alt_concat(Pattern::alternatives(vec![
         Pattern::Concatenation(vec![
             Pattern::Dynamic,
-            Pattern::Constant("/".to_string()),
+            Pattern::Constant("/".to_string().into()),
             Pattern::Dynamic,
         ]),
         Pattern::Dynamic,
@@ -1327,28 +1327,28 @@ mod tests {
     #[rstest]
     #[case::dynamic(Pattern::Dynamic, "feijf", None)]
     #[case::dynamic_concat(
-        Pattern::Concatenation(vec![Pattern::Dynamic, Pattern::Constant(".js".to_string())]),
+        Pattern::Concatenation(vec![Pattern::Dynamic, Pattern::Constant(".js".to_string().into())]),
         "hello.", None
     )]
-    #[case::constant(Pattern::Constant("Hello World".to_string()), "Hello ", Some(vec![("World", true)]))]
+    #[case::constant(Pattern::Constant("Hello World".to_string().into()), "Hello ", Some(vec![("World", true)]))]
     #[case::alternatives(
         Pattern::Alternatives(vec![
-            Pattern::Constant("Hello World".to_string()),
-            Pattern::Constant("Hello All".to_string())
+            Pattern::Constant("Hello World".to_string().into()),
+            Pattern::Constant("Hello All".to_string().into())
         ]), "Hello ", Some(vec![("World", true), ("All", true)])
     )]
     #[case::alternatives_non_end(
         Pattern::Alternatives(vec![
-            Pattern::Constant("Hello World".to_string()),
-            Pattern::Constant("Hello All".to_string()),
-            Pattern::Concatenation(vec![Pattern::Constant("Hello more".to_string()), Pattern::Dynamic])
+            Pattern::Constant("Hello World".to_string().into()),
+            Pattern::Constant("Hello All".to_string().into()),
+            Pattern::Concatenation(vec![Pattern::Constant("Hello more".to_string().into()), Pattern::Dynamic])
         ]), "Hello ", Some(vec![("World", true), ("All", true), ("more", false)])
     )]
     #[case::request_with_extensions(
         Pattern::Alternatives(vec![
-            Pattern::Constant("./file.js".to_string()),
-            Pattern::Constant("./file.ts".to_string()),
-            Pattern::Constant("./file.cjs".to_string()),
+            Pattern::Constant("./file.js".to_string().into()),
+            Pattern::Constant("./file.ts".to_string().into()),
+            Pattern::Constant("./file.cjs".to_string().into()),
         ]), "./", Some(vec![("file.js", true), ("file.ts", true), ("file.cjs", true)])
     )]
     fn next_constants(
