@@ -11,7 +11,7 @@ use std::{
         Debug, Display, Formatter, {self},
     },
     future::Future,
-    hash::{BuildHasherDefault, Hash},
+    hash::Hash,
     mem::{replace, take},
     pin::Pin,
     sync::Arc,
@@ -19,10 +19,9 @@ use std::{
 };
 
 use anyhow::Result;
-use auto_hash_map::{AutoMap, AutoSet};
+use auto_hash_map::AutoMap;
 use nohash_hasher::BuildNoHashHasher;
 use parking_lot::{Mutex, RwLock};
-use rustc_hash::FxHasher;
 use smallvec::SmallVec;
 use stats::TaskStats;
 use tokio::task_local;
@@ -37,6 +36,7 @@ use turbo_tasks::{
 use crate::{
     aggregation_tree::{aggregation_info, ensure_thresholds, AggregationInfoGuard},
     cell::Cell,
+    dependencies::{TaskDependencies, TaskDependency},
     gc::{to_exp_u8, GcPriority, GcStats, GcTaskState},
     output::{Output, OutputContent},
     stats::{ReferenceType, StatsReferences, StatsTaskType},
@@ -47,18 +47,10 @@ use crate::{
 pub type NativeTaskFuture = Pin<Box<dyn Future<Output = Result<RawVc>> + Send>>;
 pub type NativeTaskFn = Box<dyn Fn() -> NativeTaskFuture + Send + Sync>;
 
-#[derive(Hash, Copy, Clone, PartialEq, Eq)]
-pub enum TaskDependency {
-    Output(TaskId),
-    Cell(TaskId, CellId),
-    Collectibles(TaskId, TraitTypeId),
-}
-pub type TaskDependencySet = AutoSet<TaskDependency, BuildHasherDefault<FxHasher>>;
-
 task_local! {
     /// Cells/Outputs/Collectibles that are read during task execution
     /// These will be stored as dependencies when the execution has finished
-    pub(crate) static DEPENDENCIES_TO_TRACK: RefCell<TaskDependencySet>;
+    pub(crate) static DEPENDENCIES_TO_TRACK: RefCell<TaskDependencies>;
 }
 
 type OnceTaskFn = Mutex<Option<Pin<Box<dyn Future<Output = Result<RawVc>> + Send + 'static>>>>;
@@ -376,7 +368,7 @@ enum TaskStateType {
         /// there might affect this task.
         ///
         /// This back-edge is [Cell] `dependent_tasks`, which is a weak edge.
-        dependencies: TaskDependencySet,
+        dependencies: TaskDependencies,
     },
 
     /// Execution is invalid, but not yet scheduled
@@ -384,7 +376,7 @@ enum TaskStateType {
     /// on activation this will move to Scheduled
     Dirty {
         event: Event,
-        outdated_dependencies: TaskDependencySet,
+        outdated_dependencies: TaskDependencies,
     },
 
     /// Execution is invalid and scheduled
@@ -392,7 +384,7 @@ enum TaskStateType {
     /// on start this will move to InProgress or Dirty depending on active flag
     Scheduled {
         event: Event,
-        outdated_dependencies: TaskDependencySet,
+        outdated_dependencies: TaskDependencies,
     },
 
     /// Execution is happening
@@ -639,7 +631,7 @@ impl Task {
     #[cfg(not(feature = "report_expensive"))]
     fn clear_dependencies(
         &self,
-        dependencies: TaskDependencySet,
+        dependencies: TaskDependencies,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
@@ -651,7 +643,7 @@ impl Task {
     #[cfg(feature = "report_expensive")]
     fn clear_dependencies(
         &self,
-        dependencies: TaskDependencySet,
+        dependencies: TaskDependencies,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
@@ -1450,7 +1442,7 @@ impl Task {
                         TaskDependency::Output(task)
                         | TaskDependency::Cell(task, _)
                         | TaskDependency::Collectibles(task, _) => {
-                            refs.push((ReferenceType::Dependency, *task))
+                            refs.push((ReferenceType::Dependency, task))
                         }
                     }
                 }

@@ -30,9 +30,10 @@ use turbo_tasks::{
 
 use crate::{
     cell::RecomputingCell,
+    dependencies::{TaskDependencies, TaskDependency},
     gc::GcQueue,
     output::Output,
-    task::{Task, TaskDependency, TaskDependencySet, DEPENDENCIES_TO_TRACK},
+    task::{Task, DEPENDENCIES_TO_TRACK},
 };
 
 pub struct MemoryBackend {
@@ -276,13 +277,13 @@ impl Backend for MemoryBackend {
     }
 
     type ExecutionScopeFuture<T: Future<Output = Result<()>> + Send + 'static> =
-        TaskLocalFuture<RefCell<TaskDependencySet>, T>;
+        TaskLocalFuture<RefCell<TaskDependencies>, T>;
     fn execution_scope<T: Future<Output = Result<()>> + Send + 'static>(
         &self,
         _task: TaskId,
         future: T,
     ) -> Self::ExecutionScopeFuture<T> {
-        DEPENDENCIES_TO_TRACK.scope(RefCell::new(TaskDependencySet::with_hasher()), future)
+        DEPENDENCIES_TO_TRACK.scope(RefCell::new(TaskDependencies::new()), future)
     }
 
     fn try_start_task_execution(
