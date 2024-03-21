@@ -192,6 +192,8 @@ struct TaskState {
 
     // Stats:
     stats: TaskStats,
+
+    _buf: [u8; 336],
 }
 
 impl TaskState {
@@ -215,6 +217,7 @@ impl TaskState {
             stats: TaskStats::new(stats_type),
             #[cfg(feature = "track_wait_dependencies")]
             last_waiting_task: Default::default(),
+            _buf: [0; 336],
         }
     }
 
@@ -238,6 +241,7 @@ impl TaskState {
             stats: TaskStats::new(stats_type),
             #[cfg(feature = "track_wait_dependencies")]
             last_waiting_task: Default::default(),
+            _buf: [0; 336],
         }
     }
 }
@@ -268,6 +272,7 @@ impl PartialTaskState {
             cells: Default::default(),
             gc: Default::default(),
             stats: TaskStats::new(self.stats_type),
+            _buf: [0; 336],
         }
     }
 }
@@ -302,6 +307,7 @@ impl UnloadedTaskState {
             cells: Default::default(),
             gc: Default::default(),
             stats: TaskStats::new(self.stats_type),
+            _buf: [0; 336],
         }
     }
 
@@ -2075,6 +2081,7 @@ impl Task {
             state_type: _,
             // can be dropped as only gc meta info
             gc: _,
+            _buf: _,
         } = old_state.into_full().unwrap();
 
         let aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
