@@ -1,4 +1,4 @@
-use std::iter::once;
+use std::{iter::once, sync::Arc};
 
 use anyhow::Result;
 use turbo_tasks::{TryJoinIterExt, Value, Vc};
@@ -18,7 +18,7 @@ use crate::source::{route_tree::MapGetContentSourceContent, ContentSources};
 #[turbo_tasks::value(shared)]
 pub struct PrefixedRouterContentSource {
     pub prefix: Vc<String>,
-    pub routes: Vec<(String, Vc<Box<dyn ContentSource>>)>,
+    pub routes: Vec<(Arc<String>, Vc<Box<dyn ContentSource>>)>,
     pub fallback: Vc<Box<dyn ContentSource>>,
 }
 
@@ -27,7 +27,7 @@ impl PrefixedRouterContentSource {
     #[turbo_tasks::function]
     pub async fn new(
         prefix: Vc<String>,
-        routes: Vec<(String, Vc<Box<dyn ContentSource>>)>,
+        routes: Vec<(Arc<String>, Vc<Box<dyn ContentSource>>)>,
         fallback: Vc<Box<dyn ContentSource>>,
     ) -> Result<Vc<Self>> {
         Ok(PrefixedRouterContentSource {
@@ -40,7 +40,7 @@ impl PrefixedRouterContentSource {
 }
 
 fn get_children(
-    routes: &[(String, Vc<Box<dyn ContentSource>>)],
+    routes: &[(Arc<String>, Vc<Box<dyn ContentSource>>)],
     fallback: &Vc<Box<dyn ContentSource>>,
 ) -> Vc<ContentSources> {
     Vc::cell(
@@ -53,18 +53,18 @@ fn get_children(
 }
 
 async fn get_introspection_children(
-    routes: &[(String, Vc<Box<dyn ContentSource>>)],
+    routes: &[(Arc<String>, Vc<Box<dyn ContentSource>>)],
     fallback: &Vc<Box<dyn ContentSource>>,
 ) -> Result<Vc<IntrospectableChildren>> {
     Ok(Vc::cell(
         routes
             .iter()
             .cloned()
-            .chain(std::iter::once((String::new(), *fallback)))
+            .chain(std::iter::once((Arc::default(), *fallback)))
             .map(|(path, source)| async move {
                 Ok(Vc::try_resolve_sidecast::<Box<dyn Introspectable>>(source)
                     .await?
-                    .map(|i| (Vc::cell(path), i)))
+                    .map(|i| (Vc::cell((*path).clone()), i)))
             })
             .try_join()
             .await?
@@ -120,7 +120,7 @@ impl ContentSource for PrefixedRouterContentSource {
 #[turbo_tasks::value]
 struct PrefixedRouterContentSourceMapper {
     prefix: Vc<String>,
-    path: String,
+    path: Arc<String>,
 }
 
 #[turbo_tasks::value_impl]
@@ -156,17 +156,17 @@ impl GetContentSourceContent for PrefixedRouterGetContentSourceContent {
     #[turbo_tasks::function]
     async fn get(
         &self,
-        path: String,
+        path: Arc<String>,
         data: Value<ContentSourceData>,
     ) -> Result<Vc<ContentSourceContent>> {
         let prefix = self.mapper.await?.prefix.await?;
         if let Some(path) = path.strip_prefix(&*prefix) {
             if path.is_empty() {
-                return Ok(self.get_content.get("".to_string(), data));
+                return Ok(self.get_content.get("".to_string().into(), data));
             } else if prefix.is_empty() {
-                return Ok(self.get_content.get(path.to_string(), data));
+                return Ok(self.get_content.get(path.to_string().into(), data));
             } else if let Some(path) = path.strip_prefix('/') {
-                return Ok(self.get_content.get(path.to_string(), data));
+                return Ok(self.get_content.get(path.to_string().into(), data));
             }
         }
         Ok(ContentSourceContent::not_found())

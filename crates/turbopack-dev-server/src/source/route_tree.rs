@@ -98,7 +98,7 @@ impl RouteTrees {
 pub struct RouteTree {
     base: Vec<BaseSegment>,
     sources: Vec<Vc<Box<dyn GetContentSourceContent>>>,
-    static_segments: IndexMap<String, Vc<RouteTree>>,
+    static_segments: IndexMap<Arc<String>, Vc<RouteTree>>,
     dynamic_segments: Vec<Vc<RouteTree>>,
     catch_all_sources: Vec<Vc<Box<dyn GetContentSourceContent>>>,
     fallback_sources: Vec<Vc<Box<dyn GetContentSourceContent>>>,
@@ -279,7 +279,7 @@ impl RouteTree {
                 };
                 match base {
                     BaseSegment::Static(str) => {
-                        if str != segment {
+                        if &**str != segment {
                             return Ok(Vc::cell(vec![]));
                         }
                     }
@@ -290,12 +290,23 @@ impl RouteTree {
             }
 
             if let Some(segment) = segments.next() {
+                let segment = Arc::new(segment.to_owned());
                 let remainder = segments.remainder().unwrap_or("");
-                if let Some(tree) = static_segments.get(segment) {
-                    results.extend(tree.get(remainder.to_string()).await?.iter().copied());
+                if let Some(tree) = static_segments.get(&segment) {
+                    results.extend(
+                        tree.get(remainder.to_string().into())
+                            .await?
+                            .iter()
+                            .copied(),
+                    );
                 }
                 for tree in dynamic_segments.iter() {
-                    results.extend(tree.get(remainder.to_string()).await?.iter().copied());
+                    results.extend(
+                        tree.get(remainder.to_string().into())
+                            .await?
+                            .iter()
+                            .copied(),
+                    );
                 }
             } else {
                 results.extend(sources.iter().copied());
