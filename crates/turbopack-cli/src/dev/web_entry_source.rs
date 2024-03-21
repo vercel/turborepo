@@ -41,8 +41,8 @@ pub fn get_client_chunking_context(
             project_path,
             server_root,
             server_root,
-            server_root.join("/_chunks".to_string()),
-            server_root.join("/_assets".to_string()),
+            server_root.join("/_chunks".to_string().into()),
+            server_root.join("/_assets".to_string().into()),
             environment,
             RuntimeType::Development,
         )

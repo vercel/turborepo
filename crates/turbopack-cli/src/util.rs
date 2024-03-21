@@ -60,14 +60,14 @@ pub fn normalize_entries(entries: &Option<Vec<String>>) -> Vec<String> {
 }
 
 #[turbo_tasks::function]
-pub async fn project_fs(project_dir: String) -> Result<Vc<Box<dyn FileSystem>>> {
+pub async fn project_fs(project_dir: Arc<String>) -> Result<Vc<Box<dyn FileSystem>>> {
     let disk_fs = DiskFileSystem::new("project".to_string(), project_dir.to_string(), vec![]);
     disk_fs.await?.start_watching()?;
     Ok(Vc::upcast(disk_fs))
 }
 
 #[turbo_tasks::function]
-pub async fn output_fs(project_dir: String) -> Result<Vc<Box<dyn FileSystem>>> {
+pub async fn output_fs(project_dir: Arc<String>) -> Result<Vc<Box<dyn FileSystem>>> {
     let disk_fs = DiskFileSystem::new("output".to_string(), project_dir.to_string(), vec![]);
     disk_fs.await?.start_watching()?;
     Ok(Vc::upcast(disk_fs))

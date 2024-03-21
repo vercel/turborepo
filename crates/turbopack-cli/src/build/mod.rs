@@ -111,8 +111,8 @@ impl TurbopackBuildBuilder {
     pub async fn build(self) -> Result<()> {
         let task = self.turbo_tasks.spawn_once_task::<(), _>(async move {
             let build_result = build_internal(
-                self.project_dir.clone(),
-                self.root_dir,
+                self.project_dir.clone().into(),
+                self.root_dir.into(),
                 EntryRequests(
                     self.entry_requests
                         .iter()
@@ -121,7 +121,7 @@ impl TurbopackBuildBuilder {
                         .collect(),
                 )
                 .cell(),
-                self.browserslist_query,
+                self.browserslist_query.into(),
                 self.minify_type,
             );
 
@@ -157,10 +157,10 @@ impl TurbopackBuildBuilder {
 
 #[turbo_tasks::function]
 async fn build_internal(
-    project_dir: String,
-    root_dir: String,
+    project_dir: Arc<String>,
+    root_dir: Arc<String>,
     entry_requests: Vc<EntryRequests>,
-    browserslist_query: String,
+    browserslist_query: Arc<String>,
     minify_type: MinifyType,
 ) -> Result<Vc<()>> {
     let env = Environment::new(Value::new(ExecutionEnvironment::Browser(
@@ -168,7 +168,7 @@ async fn build_internal(
             dom: true,
             web_worker: false,
             service_worker: false,
-            browserslist_query: browserslist_query.clone(),
+            browserslist_query: browserslist_query.to_string(),
         }
         .into(),
     )));
