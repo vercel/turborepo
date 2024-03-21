@@ -1,4 +1,4 @@
-use std::mem::Discriminant;
+use std::{mem::Discriminant, sync::Arc};
 
 pub use turbo_tasks_macros::DeterministicHash;
 
@@ -113,6 +113,12 @@ impl DeterministicHash for String {
     fn deterministic_hash<H: DeterministicHasher>(&self, state: &mut H) {
         state.write_usize(self.len());
         state.write_bytes(self.as_bytes());
+    }
+}
+
+impl DeterministicHash for Arc<String> {
+    fn deterministic_hash<H: DeterministicHasher>(&self, state: &mut H) {
+        (**self).deterministic_hash(state)
     }
 }
 

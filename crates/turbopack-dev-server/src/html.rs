@@ -120,7 +120,7 @@ impl DevHtmlAsset {
         for chunk in &*self.chunks().await? {
             let chunk_path = &*chunk.ident().path().await?;
             if let Some(relative_path) = context_path.get_path_to(chunk_path) {
-                chunk_paths.push(format!("/{relative_path}"));
+                chunk_paths.push(format!("/{relative_path}").into());
             }
         }
 
@@ -169,12 +169,12 @@ impl DevHtmlAsset {
 
 #[turbo_tasks::value]
 struct DevHtmlAssetContent {
-    chunk_paths: Vec<String>,
-    body: Option<String>,
+    chunk_paths: Vec<Arc<String>>,
+    body: Option<Arc<String>>,
 }
 
 impl DevHtmlAssetContent {
-    fn new(chunk_paths: Vec<String>, body: Option<String>) -> Vc<Self> {
+    fn new(chunk_paths: Vec<Arc<String>>, body: Option<Arc<String>>) -> Vc<Self> {
         DevHtmlAssetContent { chunk_paths, body }.cell()
     }
 }
