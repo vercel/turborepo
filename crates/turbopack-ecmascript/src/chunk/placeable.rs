@@ -50,9 +50,9 @@ async fn side_effects_from_package_json(
                     .filter_map(|side_effect| {
                         if let Some(side_effect) = side_effect.as_str() {
                             if side_effect.contains('/') {
-                                Some(Glob::new(side_effect.to_string()))
+                                Some(Glob::new(side_effect.to_string().into()))
                             } else {
-                                Some(Glob::new(format!("**/{side_effect}")))
+                                Some(Glob::new(format!("**/{side_effect}").into()))
                             }
                         } else {
                             SideEffectsInPackageJsonIssue {

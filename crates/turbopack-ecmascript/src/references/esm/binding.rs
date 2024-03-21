@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use swc_core::{
     common::{Span, SyntaxContext},
@@ -23,7 +25,7 @@ use crate::{
 #[derive(Hash, Debug)]
 pub struct EsmBinding {
     pub reference: Vc<EsmAssetReference>,
-    pub export: Option<String>,
+    pub export: Option<Arc<String>>,
     pub ast_path: Vc<AstPath>,
 }
 
@@ -32,7 +34,7 @@ impl EsmBinding {
     #[turbo_tasks::function]
     pub fn new(
         reference: Vc<EsmAssetReference>,
-        export: Option<String>,
+        export: Option<Arc<String>>,
         ast_path: Vc<AstPath>,
     ) -> Vc<Self> {
         EsmBinding {
@@ -110,7 +112,7 @@ impl CodeGenerateable for EsmBinding {
                                 if let Some(imported_ident) = imported_module.as_deref() {
                                     *prop = Prop::KeyValue(KeyValueProp {
                                         key: PropName::Ident(ident.clone()),
-                                        value: Box::new(make_expr(imported_ident, this.export.as_deref(), ident.span, false))
+                                        value: Box::new(make_expr(imported_ident, this.export.as_ref().map(|v| &***v), ident.span, false))
                                     });
                                 }
                             }
@@ -132,7 +134,7 @@ impl CodeGenerateable for EsmBinding {
                         create_visitor!(exact ast_path, visit_mut_expr(expr: &mut Expr) {
                             if let Some(ident) = imported_module.as_deref() {
                                 use swc_core::common::Spanned;
-                                *expr = make_expr(ident, this.export.as_deref(), expr.span(), in_call);
+                                *expr = make_expr(ident, this.export.as_ref().map(|v| &***v), expr.span(), in_call);
                             }
                             // If there's no identifier for the imported module,
                             // resolution failed and will insert code that throws
