@@ -5,7 +5,7 @@ description: Learn how to configure Turborepo through `turbo.json`.
 
 import { Callout } from "../../../../components/Callout";
 import OutputModeTable from "../../../../components/output-mode-table.mdx";
-import Link from 'next/link'
+import Link from "next/link";
 
 # Configuration Options (`turbo.json`)
 
@@ -19,8 +19,10 @@ A list of file globs for global hash dependencies. The contents of these files w
 This is useful for busting the cache based on `.env` files (not in Git) or any root level file that impacts workspace tasks (but are not represented in the traditional dependency graph (e.g. a root `tsconfig.json`, `jest.config.js`, `.eslintrc`, etc.)).
 
 <Callout type="info">
-These must be relative paths from the location of `turbo.json`, and they should be valid for any machine where
-  this configuration might be used. For instance, it is not a good idea to reference files in one user's home directory.
+  These must be relative paths from the location of `turbo.json`, and they
+  should be valid for any machine where this configuration might be used. For
+  instance, it is not a good idea to reference files in one user's home
+  directory.
 </Callout>
 
 **Example**
@@ -113,6 +115,13 @@ Note: this does _not_ load the files into the environment.
 The `extends` key is only valid in Workspace Configurations. It will be
 ignored in the root `turbo.json`. Read [the docs to learn more][1].
 
+## `experimentalUI`
+
+`type: bool`
+
+Enable use of the new UI for `turbo`.
+Can be overriden by the `TURBO_EXPERIMENTAL_UI` environment variable.
+
 ## `pipeline`
 
 An object representing the task dependency graph of your project. `turbo` interprets these conventions to properly schedule, execute, and cache the outputs of tasks in your project.
@@ -151,8 +160,9 @@ Prefixing an item in `dependsOn` with a `^` tells `turbo` that this pipeline tas
 Items in `dependsOn` without `^` prefix, express the relationships between tasks at the workspace level (e.g. "a workspace's `test` and `lint` commands depend on `build` being completed first").
 
 <Callout type="info">
-  As of version 1.5, using `$` to declare environment variables in the `dependsOn` config is
-  deprecated. <Link href="#env">Use the `env` key instead.</Link>
+  As of version 1.5, using `$` to declare environment variables in the
+  `dependsOn` config is deprecated.{" "}
+  <Link href="#env">Use the `env` key instead.</Link>
 </Callout>
 
 **Example**
@@ -199,7 +209,7 @@ Note: this does _not_ load the files into the environment.
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
-      "dotEnv": [".env.local", ".env"],
+      "dotEnv": [".env.local", ".env"]
     }
   }
 }
@@ -271,7 +281,7 @@ in `strict` [env mode][r-cli-env-mode].
     "build": {
       "passThroughEnv": ["AWS_SECRET_KEY", "GITHUB_TOKEN"]
     },
-    "lint": {},
+    "lint": {}
   }
 }
 ```
@@ -293,7 +303,8 @@ and thus doesn't emit any filesystem artifacts (e.g. like a linter), but you sti
 logs (and treat them like an artifact).
 
 <Callout type="info">
-  `outputs` globs must be specified as relative paths rooted at the workspace directory.
+  `outputs` globs must be specified as relative paths rooted at the workspace
+  directory.
 </Callout>
 
 **Example**
@@ -365,11 +376,10 @@ changed. This can be helpful if you want to, for example, skip running tests unl
 explicitly depend on a `.gitignore`d file.
 
 <Callout type="info">
-  Good to know:
-  - The default for `inputs` is `[]` to run the task when any file in the package changes.
-  - `inputs` globs must be specified as relative paths rooted at the package's directory.
-  - `turbo.json` is *always* considered an input. If you modify
-  `turbo.json`, all caches are invalidated.
+  Good to know: - The default for `inputs` is `[]` to run the task when any file
+  in the package changes. - `inputs` globs must be specified as relative paths
+  rooted at the package's directory. - `turbo.json` is *always* considered an
+  input. If you modify `turbo.json`, all caches are invalidated.
 </Callout>
 **Example**
 
@@ -398,7 +408,7 @@ when you want to add or remove additional inputs from the default set.
   "pipeline": {
     "check-types": {
       // Consider all default inputs except the README.md
-      "inputs": ["$TURBO_DEFAULT$", "!README.md"],
+      "inputs": ["$TURBO_DEFAULT$", "!README.md"]
     }
   }
 }
@@ -451,6 +461,15 @@ option, `turbo` can warn you about an invalid configuration.
   }
 }
 ```
+
+### `interactive`
+
+`type: boolean`
+
+Mark a task as `interactive` allowing it to receive input from `stdin`.
+Interactive tasks must be marked with `"cache": false` as the input they receive from `stdin` can change the outcome of the task.
+
+`turbo` will only run interactive tasks if hooked up to a TTY and the experimental UI is in use.
 
 ## Glob specification for paths
 
