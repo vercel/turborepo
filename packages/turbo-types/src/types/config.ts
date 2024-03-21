@@ -79,17 +79,6 @@ export interface RootSchema extends BaseSchema {
    * Documentation: https://turbo.build/repo/docs/reference/configuration#globalPassThroughEnv
    *
    * @defaultValue null
-   * @deprecated use `globalPassThroughEnv` instead
-   */
-  experimentalGlobalPassThroughEnv?: null | Array<string>;
-
-  /**
-   * An allowlist of environment variables that should be made to all tasks, but
-   * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
-   *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalPassThroughEnv
-   *
-   * @defaultValue null
    */
   globalPassThroughEnv?: null | Array<EnvWildcard>;
 
