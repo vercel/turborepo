@@ -415,9 +415,12 @@ impl ModuleOptions {
                     .context("execution_context is required for the postcss_transform")?;
 
                 let import_map = if let Some(postcss_package) = options.postcss_package {
-                    package_import_map_from_import_mapping("postcss".to_string(), postcss_package)
+                    package_import_map_from_import_mapping(
+                        "postcss".to_string().into(),
+                        postcss_package,
+                    )
                 } else {
-                    package_import_map_from_context("postcss".to_string(), path)
+                    package_import_map_from_context("postcss".to_string().into(), path)
                 };
 
                 rules.push(ModuleRule::new(
@@ -428,7 +431,7 @@ impl ModuleOptions {
                                 execution_context,
                                 Some(import_map),
                                 None,
-                                "postcss".to_string(),
+                                "postcss".to_string().into(),
                             ),
                             execution_context,
                             options.config_location,
