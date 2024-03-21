@@ -537,7 +537,7 @@ impl GenerateSourceMap for SourceMap {
     }
 
     #[turbo_tasks::function]
-    fn by_section(&self, _section: String) -> Vc<OptionSourceMap> {
+    fn by_section(&self, _section: Arc<String>) -> Vc<OptionSourceMap> {
         Vc::cell(None)
     }
 }
