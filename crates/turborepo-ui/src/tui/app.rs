@@ -25,6 +25,11 @@ pub struct App<I> {
     interact: bool,
 }
 
+pub enum Direction {
+    Up,
+    Down,
+}
+
 impl<I> App<I> {
     pub fn new(rows: u16, cols: u16, tasks: Vec<String>) -> Self {
         debug!("tasks: {tasks:?}");
@@ -61,6 +66,15 @@ impl<I> App<I> {
             self.interact = interact;
             self.pane.highlight(interact);
         }
+    }
+
+    pub fn scroll(&mut self, direction: Direction) {
+        let Some(selected_task) = self.table.selected() else {
+            return;
+        };
+        self.pane
+            .scroll(selected_task, direction)
+            .expect("selected task should be in pane");
     }
 }
 
@@ -135,7 +149,9 @@ fn poll(interact: bool, receiver: &AppReceiver, deadline: Instant) -> Option<Eve
 /// Configures terminal for rendering App
 fn startup() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
     crossterm::terminal::enable_raw_mode()?;
-    let backend = CrosstermBackend::new(io::stdout());
+    let mut stdout = io::stdout();
+    crossterm::execute!(stdout, crossterm::event::EnableMouseCapture)?;
+    let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::with_options(
         backend,
         ratatui::TerminalOptions {
@@ -148,8 +164,12 @@ fn startup() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
 }
 
 /// Restores terminal to expected state
-fn cleanup<B: Backend>(mut terminal: Terminal<B>) -> io::Result<()> {
+fn cleanup<B: Backend + io::Write>(mut terminal: Terminal<B>) -> io::Result<()> {
     terminal.clear()?;
+    crossterm::execute!(
+        terminal.backend_mut(),
+        crossterm::event::DisableMouseCapture
+    )?;
     crossterm::terminal::disable_raw_mode()?;
     terminal.show_cursor()?;
     Ok(())
@@ -183,6 +203,12 @@ fn update(
         }
         Event::Down => {
             app.next();
+        }
+        Event::ScrollUp => {
+            app.scroll(Direction::Up);
+        }
+        Event::ScrollDown => {
+            app.scroll(Direction::Down);
         }
         Event::EnterInteractive => {
             app.interact(true);

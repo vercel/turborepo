@@ -16,6 +16,8 @@ pub enum Event {
     },
     Up,
     Down,
+    ScrollUp,
+    ScrollDown,
     SetStdin {
         task: String,
         stdin: Box<dyn std::io::Write + Send>,
