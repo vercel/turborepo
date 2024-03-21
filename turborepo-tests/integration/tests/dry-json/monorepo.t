@@ -87,7 +87,8 @@ Setup
       "passThroughEnv": null,
       "dotEnv": [
         ".env.local"
-      ]
+      ],
+      "interactive": false
     },
     "expandedOutputs": [],
     "framework": "",
@@ -142,7 +143,8 @@ Setup
         "NODE_ENV"
       ],
       "passThroughEnv": null,
-      "dotEnv": null
+      "dotEnv": null,
+      "interactive": false
     },
     "expandedOutputs": [],
     "framework": "",
