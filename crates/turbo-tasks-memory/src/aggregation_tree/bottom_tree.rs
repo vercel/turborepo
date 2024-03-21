@@ -27,7 +27,6 @@ pub struct BottomTree<T, I: IsEnabled> {
 
 pub struct BottomTreeState<T, I: IsEnabled> {
     data: T,
-    data_copy: T,
     bottom_upper: BottomConnection<T, I>,
     top_upper: CountHashSet<TopRef<T>, BuildNoHashHasher<TopRef<T>>>,
     // TODO can this become negative?
@@ -41,7 +40,6 @@ impl<T: Default, I: IsEnabled> BottomTree<T, I> {
             item,
             state: RwLock::new(BottomTreeState {
                 data: T::default(),
-                data_copy: T::default(),
                 bottom_upper: BottomConnection::new(),
                 top_upper: CountHashSet::new(),
                 following: CountHashSet::new(),
@@ -556,7 +554,6 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         change: &C::ItemChange,
     ) {
         let mut state = self.state.write();
-        aggregation_context.apply_change(&mut state.data_copy, change);
         let change = aggregation_context.apply_change(&mut state.data, change);
         let state = RwLockWriteGuard::downgrade(state);
         propagate_change_to_upper(&state, aggregation_context, change);
