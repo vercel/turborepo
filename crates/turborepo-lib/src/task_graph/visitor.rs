@@ -803,19 +803,23 @@ impl ExecContext {
         }
     }
 
+    fn prefixed_ui<W: Write>(&self, stdout: W, stderr: W) -> PrefixedUI<W> {
+        Visitor::prefixed_ui(
+            self.ui,
+            self.is_github_actions,
+            stdout,
+            stderr,
+            self.pretty_prefix.clone(),
+        )
+    }
+
     async fn execute_inner(
         &mut self,
         output_client: &TaskOutput<impl std::io::Write>,
         telemetry: &PackageTaskEventBuilder,
     ) -> ExecOutcome {
         let task_start = Instant::now();
-        let mut prefixed_ui = Visitor::prefixed_ui(
-            self.ui,
-            self.is_github_actions,
-            output_client.stdout(),
-            output_client.stderr(),
-            self.pretty_prefix.clone(),
-        );
+        let mut prefixed_ui = self.prefixed_ui(output_client.stdout(), output_client.stderr());
 
         if self.experimental_ui {
             if let TaskOutput::UI(task) = output_client {
@@ -967,6 +971,12 @@ impl ExecContext {
                 // If there was an error, flush the buffered output
                 if let Err(e) = stdout_writer.flush() {
                     error!("error flushing logs: {e}");
+                }
+                if let TaskOutput::UI(task) = output_client {
+                    let mut persisted_ui = self.prefixed_ui(task.stdout(), task.stdout());
+                    let _ = self
+                        .task_cache
+                        .replay_log_file(persisted_ui.output_prefixed_writer());
                 }
                 if let Err(e) = self
                     .task_cache
