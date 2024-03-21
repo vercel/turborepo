@@ -68,6 +68,7 @@ impl CommandBase {
             .with_token(self.args.token.clone())
             .with_timeout(self.args.remote_cache_timeout)
             .with_preflight(self.args.preflight.then_some(true))
+            .with_experimental_ui(self.args.experimental_ui.then_some(true))
             .build()
     }
 
