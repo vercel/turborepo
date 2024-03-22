@@ -288,7 +288,7 @@ async fn source(
         env,
         eager_compile,
         NodeEnv::Development.cell(),
-        browserslist_query.to_string(),
+        browserslist_query,
     );
     let static_source = Vc::upcast(StaticAssetsContentSource::new(
         Arc::default(),

@@ -101,7 +101,7 @@ pub async fn create_web_entry_source(
 
     let runtime_entries = entries.resolve_entries(asset_context);
 
-    let origin = PlainResolveOrigin::new(asset_context, project_path.join("_".to_string()));
+    let origin = PlainResolveOrigin::new(asset_context, project_path.join("_".to_string().into()));
     let entries = entry_requests
         .into_iter()
         .map(|request| async move {
