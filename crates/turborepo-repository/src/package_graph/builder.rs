@@ -21,7 +21,7 @@ use crate::{
         PackageDiscoveryBuilder,
     },
     package_json::PackageJson,
-    package_manager::{self, PackageManager},
+    package_manager::PackageManager,
 };
 
 pub struct PackageGraphBuilder<'a, T> {
