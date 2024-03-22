@@ -416,7 +416,7 @@ impl ModuleAssetContext {
         let mut globs = Vec::with_capacity(pkgs.len());
 
         for pkg in pkgs {
-            globs.push(Glob::new(format!("node_modules/{pkg}/**")));
+            globs.push(Glob::new(format!("**/node_modules/{{{}}}/**", pkg)));
         }
 
         Ok(Glob::alternatives(globs))
