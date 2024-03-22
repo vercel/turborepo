@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 use std::{iter::once, sync::Arc};
 
 use anyhow::Result;
