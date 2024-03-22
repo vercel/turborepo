@@ -17,7 +17,7 @@
 #
 # The regex match is liberal, because the build task from either workspace can throw the error
   $ ${TURBO} run build
-    x invalid persistent task configuration
+    x invalid task configuration
   
   Error:   x "pkg-a#dev" is a persistent task, "((pkg-a)|(app-a))#build" cannot depend on it (re)
      ,-[turbo.json:4:1]

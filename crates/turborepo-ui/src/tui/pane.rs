@@ -8,7 +8,7 @@ use tracing::debug;
 use tui_term::widget::PseudoTerminal;
 use turborepo_vt100 as vt100;
 
-use super::Error;
+use super::{app::Direction, Error};
 
 pub struct TerminalPane<W> {
     tasks: BTreeMap<String, TerminalOutput<W>>,
@@ -24,6 +24,7 @@ struct TerminalOutput<W> {
     parser: vt100::Parser,
     stdin: Option<W>,
 }
+
 impl<W> TerminalPane<W> {
     pub fn new(rows: u16, cols: u16, tasks: impl IntoIterator<Item = String>) -> Self {
         // We trim 2 from rows and cols as we use them for borders
@@ -53,6 +54,13 @@ impl<W> TerminalPane<W> {
         Ok(())
     }
 
+    pub fn has_stdin(&self, task: &str) -> bool {
+        self.tasks
+            .get(task)
+            .map(|task| task.stdin.is_some())
+            .unwrap_or_default()
+    }
+
     pub fn resize(&mut self, rows: u16, cols: u16) -> Result<(), Error> {
         let changed = self.rows != rows || self.cols != cols;
         self.rows = rows;
@@ -80,6 +88,17 @@ impl<W> TerminalPane<W> {
         }
         self.displayed = Some(task.into());
 
+        Ok(())
+    }
+
+    pub fn scroll(&mut self, task: &str, direction: Direction) -> Result<(), Error> {
+        let task = self.task_mut(task)?;
+        let scrollback = task.parser.screen().scrollback();
+        let new_scrollback = match direction {
+            Direction::Up => scrollback + 1,
+            Direction::Down => scrollback.saturating_sub(1),
+        };
+        task.parser.screen_mut().set_scrollback(new_scrollback);
         Ok(())
     }
 
