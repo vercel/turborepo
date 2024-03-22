@@ -270,7 +270,7 @@ impl Request {
         request: Value<Pattern>,
         query: Vc<String>,
         force_in_lookup_dir: bool,
-        fragment: Value<Pattern>,
+        fragment: Vc<String>,
     ) -> Vc<Self> {
         Self::cell(Request::Raw {
             path: request.into_value(),
@@ -285,7 +285,7 @@ impl Request {
         request: Value<Pattern>,
         query: Vc<String>,
         force_in_lookup_dir: bool,
-        fragment: Value<Pattern>,
+        fragment: Vc<String>,
     ) -> Vc<Self> {
         Self::cell(Request::Relative {
             path: request.into_value(),
@@ -300,7 +300,7 @@ impl Request {
         module: String,
         path: Value<Pattern>,
         query: Vc<String>,
-        fragment: Value<Pattern>,
+        fragment: Vc<String>,
     ) -> Vc<Self> {
         Self::cell(Request::Module {
             module,
@@ -425,7 +425,7 @@ impl Request {
     }
 
     #[turbo_tasks::function]
-    pub async fn with_fragment(self: Vc<Self>, fragment: Value<Pattern>) -> Result<Vc<Self>> {
+    pub async fn with_fragment(self: Vc<Self>, fragment: Vc<String>) -> Result<Vc<Self>> {
         Ok(match &*self.await? {
             Request::Raw {
                 path,
