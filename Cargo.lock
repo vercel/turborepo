@@ -7988,9 +7988,9 @@ dependencies = [
 
 [[package]]
 name = "styled_jsx"
-version = "0.73.9"
+version = "0.73.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "243182797daf80d4ebed2f8ea46c787ac0df5609d10bff5d634dace5375c49b0"
+checksum = "fb7b2381ed0b1ba760b75671388d45be3196ab8514a6429b4fca05ab9dcfc86c"
 dependencies = [
  "anyhow",
  "lightningcss",
@@ -8000,6 +8000,7 @@ dependencies = [
  "swc_common",
  "swc_css_ast",
  "swc_css_codegen",
+ "swc_css_compat",
  "swc_css_minifier",
  "swc_css_parser",
  "swc_css_prefixer",
@@ -8400,9 +8401,9 @@ dependencies = [
 
 [[package]]
 name = "swc_css_minifier"
-version = "0.116.28"
+version = "0.116.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74888e8f156a087c2aa81e8542d30b5301ea025a1a99e1706e1a8b7f68b9282f"
+checksum = "dc7000b4de2dfbd04d8f2a1cc99046b8594fd9cd67fc9593f07df5425a508f75"
 dependencies = [
  "serde",
  "swc_atoms",
@@ -8443,9 +8444,9 @@ dependencies = [
 
 [[package]]
 name = "swc_css_prefixer"
-version = "0.153.31"
+version = "0.153.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbc040a489255446c6cfbb506677f0ceee0b8241a6c2a6f0eaf6b460c8d19b8d"
+checksum = "25c08c9394e9d314f4d7995653e7ef7bc9563aff1cb736457ed9009e278d72b9"
 dependencies = [
  "once_cell",
  "preset_env_base",
