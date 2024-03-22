@@ -12,29 +12,29 @@ pub enum Request {
         path: Pattern,
         query: Vc<String>,
         force_in_lookup_dir: bool,
-        fragment: Pattern,
+        fragment: Vc<String>,
     },
     Relative {
         path: Pattern,
         query: Vc<String>,
         force_in_lookup_dir: bool,
-        fragment: Pattern,
+        fragment: Vc<String>,
     },
     Module {
         module: String,
         path: Pattern,
         query: Vc<String>,
-        fragment: Pattern,
+        fragment: Vc<String>,
     },
     ServerRelative {
         path: Pattern,
         query: Vc<String>,
-        fragment: Pattern,
+        fragment: Vc<String>,
     },
     Windows {
         path: Pattern,
         query: Vc<String>,
-        fragment: Pattern,
+        fragment: Vc<String>,
     },
     Empty,
     PackageInternal {
@@ -43,8 +43,8 @@ pub enum Request {
     Uri {
         protocol: String,
         remainder: String,
-        query: Pattern,
-        fragment: Pattern,
+        query: Vc<String>,
+        fragment: Vc<String>,
     },
     Unknown {
         path: Pattern,
@@ -177,7 +177,7 @@ impl Request {
                                 remainder: remainder.as_str().to_string(),
                                 // TODO: query and fragment
                                 query: Pattern::Constant(String::new()),
-                                fragment: Pattern::Constant(String::new()),
+                                fragment: Vc::<String>::default(),
                             };
                         }
                     }
