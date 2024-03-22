@@ -113,9 +113,8 @@ impl Request {
             Request::Uri {
                 protocol,
                 remainder,
-                query,
-                fragment,
-            } => format!("{protocol}{remainder}?{query}#{fragment}"),
+                ..
+            } => format!("{protocol}{remainder}"),
             Request::Unknown {
                 path: Pattern::Constant(path),
             } => path.to_string(),
@@ -672,9 +671,8 @@ impl ValueToString for Request {
             Request::Uri {
                 protocol,
                 remainder,
-                query,
-                fragment,
-            } => format!("uri \"{protocol}\" \"{remainder}\" ?{query} #{fragment}"),
+                ..
+            } => format!("uri \"{protocol}\" \"{remainder}\""),
             Request::Unknown { path } => format!("unknown {path}"),
             Request::Dynamic => "dynamic".to_string(),
             Request::Alternatives { requests } => {

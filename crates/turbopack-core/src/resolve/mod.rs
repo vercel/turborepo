@@ -1687,10 +1687,10 @@ async fn resolve_internal_inline(
             Request::Uri {
                 protocol,
                 remainder,
-                query,
-                fragment,
+                query: _,
+                fragment: _,
             } => {
-                let uri = format!("{}{}?{}#{}", protocol, remainder, query, fragment);
+                let uri = format!("{}{}", protocol, remainder);
                 ResolveResult::primary_with_key(
                     RequestKey::new(uri.clone()),
                     ResolveResultItem::External(uri, ExternalType::Url),
