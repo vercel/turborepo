@@ -46,7 +46,7 @@ impl TraceReader {
             store.reset();
         }
 
-        let mut format = TurbopackFormat::new(self.store.clone());
+        let mut format = None;
 
         let mut initial_read = {
             if let Ok(pos) = file.seek(SeekFrom::End(0)) {
@@ -107,30 +107,45 @@ impl TraceReader {
                             index = 0;
                         }
                         buffer.extend_from_slice(&chunk[..bytes_read]);
-                        match format.read(&buffer[index..]) {
-                            Ok(bytes_read) => {
-                                index += bytes_read;
-                            }
-                            Err(err) => {
-                                println!("Trace file error: {err}");
+                        if format.is_none() && buffer.len() >= 8 {
+                            if buffer.starts_with(b"TRACEV0") {
+                                index = 7;
+                                format = Some(Box::new(TurbopackFormat::new(self.store.clone())));
+                            } else if buffer.starts_with(b"[{\"name\"") {
+                                println!("Next.js trace format detected, but not supported yet");
                                 return true;
+                            } else {
+                                // Fallback to the format without magic bytes
+                                // TODO Remove this after a while and show an error instead
+                                format = Some(Box::new(TurbopackFormat::new(self.store.clone())));
                             }
                         }
-                        if self.store.want_to_read() {
-                            thread::yield_now();
-                        }
-                        if let Some((current, total)) = &mut initial_read {
-                            let old_mbs = *current / (97 * 1024 * 1024);
-                            *current += bytes_read as u64;
-                            *total = *total.max(current);
-                            let new_mbs = *current / (97 * 1024 * 1024);
-                            if old_mbs != new_mbs {
-                                println!(
-                                    "{}% read ({}/{} MB)",
-                                    *current * 100 / *total,
-                                    *current / (1024 * 1024),
-                                    *total / (1024 * 1024),
-                                );
+                        if let Some(format) = &mut format {
+                            match format.read(&buffer[index..]) {
+                                Ok(bytes_read) => {
+                                    index += bytes_read;
+                                }
+                                Err(err) => {
+                                    println!("Trace file error: {err}");
+                                    return true;
+                                }
+                            }
+                            if self.store.want_to_read() {
+                                thread::yield_now();
+                            }
+                            if let Some((current, total)) = &mut initial_read {
+                                let old_mbs = *current / (97 * 1024 * 1024);
+                                *current += bytes_read as u64;
+                                *total = *total.max(current);
+                                let new_mbs = *current / (97 * 1024 * 1024);
+                                if old_mbs != new_mbs {
+                                    println!(
+                                        "{}% read ({}/{} MB)",
+                                        *current * 100 / *total,
+                                        *current / (1024 * 1024),
+                                        *total / (1024 * 1024),
+                                    );
+                                }
                             }
                         }
                     }
