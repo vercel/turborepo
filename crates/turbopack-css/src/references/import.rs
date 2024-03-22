@@ -264,13 +264,12 @@ impl CodeGenerateable for ImportAssetReference {
         if let Request::Uri {
             protocol,
             remainder,
-            query,
-            fragment,
+            ..
         } = &*this.request.await?
         {
             imports.push(CssImport::External(Vc::cell(format!(
-                "{}{}?{}#{}",
-                protocol, remainder, query, fragment
+                "{}{}",
+                protocol, remainder
             ))))
         }
 
