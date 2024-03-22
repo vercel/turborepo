@@ -1605,7 +1605,7 @@ async fn resolve_internal_inline(
                     module,
                     path,
                     *query,
-                    Value::new(fragment.clone()),
+                    *fragment,
                 )
                 .await?
             }
@@ -1616,12 +1616,7 @@ async fn resolve_internal_inline(
             } => {
                 let mut new_pat = path.clone();
                 new_pat.push_front(".".to_string().into());
-                let relative = Request::relative(
-                    Value::new(new_pat),
-                    *query,
-                    true,
-                    Value::new(fragment.clone()),
-                );
+                let relative = Request::relative(Value::new(new_pat), *query, true, *fragment);
 
                 ResolvingIssue {
                     severity: IssueSeverity::Error.cell(),
