@@ -55,20 +55,20 @@ pub enum Request {
     },
 }
 
-fn split_off_query_fragment(raw: String) -> (Pattern, Vc<String>, Pattern) {
+fn split_off_query_fragment(raw: String) -> (Pattern, Vc<String>, Vc<String>) {
     let Some((raw, query)) = raw.split_once('?') else {
         if let Some((raw, fragment)) = raw.split_once('#') {
             return (
                 Pattern::Constant(raw.to_string()),
                 Vc::<String>::default(),
-                Pattern::Constant(fragment.to_string()),
+                Vc::cell(fragment.to_string()),
             );
         }
 
         return (
             Pattern::Constant(raw),
             Vc::<String>::default(),
-            Pattern::Constant(String::new()),
+            Vc::<String>::default(),
         );
     };
 
@@ -77,7 +77,7 @@ fn split_off_query_fragment(raw: String) -> (Pattern, Vc<String>, Pattern) {
     (
         Pattern::Constant(raw.to_string()),
         Vc::cell(format!("?{}", query)),
-        Pattern::Constant(fragment.to_string()),
+        Vc::cell(format!("#{}", fragment)),
     )
 }
 
@@ -174,8 +174,7 @@ impl Request {
                             return Request::Uri {
                                 protocol: protocol.as_str().to_string(),
                                 remainder: remainder.as_str().to_string(),
-                                // TODO: query and fragment
-                                query: Pattern::Constant(String::new()),
+                                query: Vc::<String>::default(),
                                 fragment: Vc::<String>::default(),
                             };
                         }
@@ -275,7 +274,7 @@ impl Request {
             path: request.into_value(),
             force_in_lookup_dir,
             query,
-            fragment: fragment.into_value(),
+            fragment,
         })
     }
 
@@ -290,7 +289,7 @@ impl Request {
             path: request.into_value(),
             force_in_lookup_dir,
             query,
-            fragment: fragment.into_value(),
+            fragment,
         })
     }
 
@@ -305,7 +304,7 @@ impl Request {
             module,
             path: path.into_value(),
             query,
-            fragment: fragment.into_value(),
+            fragment,
         })
     }
 
@@ -435,7 +434,7 @@ impl Request {
                 path: path.clone(),
                 query: *query,
                 force_in_lookup_dir: *force_in_lookup_dir,
-                fragment: fragment.into_value(),
+                fragment,
             }
             .cell(),
             Request::Relative {
@@ -447,7 +446,7 @@ impl Request {
                 path: path.clone(),
                 query: *query,
                 force_in_lookup_dir: *force_in_lookup_dir,
-                fragment: fragment.into_value(),
+                fragment,
             }
             .cell(),
             Request::Module {
@@ -459,7 +458,7 @@ impl Request {
                 module: module.clone(),
                 path: path.clone(),
                 query: *query,
-                fragment: fragment.into_value(),
+                fragment,
             }
             .cell(),
             Request::ServerRelative {
@@ -469,7 +468,7 @@ impl Request {
             } => Request::ServerRelative {
                 path: path.clone(),
                 query: *query,
-                fragment: fragment.into_value(),
+                fragment,
             }
             .cell(),
             Request::Windows {
@@ -479,7 +478,7 @@ impl Request {
             } => Request::Windows {
                 path: path.clone(),
                 query: *query,
-                fragment: fragment.into_value(),
+                fragment,
             }
             .cell(),
             Request::Empty => self,
@@ -491,7 +490,7 @@ impl Request {
                 let requests = requests
                     .iter()
                     .copied()
-                    .map(|req| req.with_fragment(fragment.clone()))
+                    .map(|req| req.with_fragment(fragment))
                     .collect();
                 Request::Alternatives { requests }.cell()
             }
@@ -509,12 +508,7 @@ impl Request {
             } => {
                 let mut pat = Pattern::concat([path.clone(), suffix.into()]);
                 pat.normalize();
-                Self::raw(
-                    Value::new(pat),
-                    *query,
-                    *force_in_lookup_dir,
-                    Value::new(fragment.clone()),
-                )
+                Self::raw(Value::new(pat), *query, *force_in_lookup_dir, *fragment)
             }
             Request::Relative {
                 path,
@@ -524,12 +518,7 @@ impl Request {
             } => {
                 let mut pat = Pattern::concat([path.clone(), suffix.into()]);
                 pat.normalize();
-                Self::relative(
-                    Value::new(pat),
-                    *query,
-                    *force_in_lookup_dir,
-                    Value::new(fragment.clone()),
-                )
+                Self::relative(Value::new(pat), *query, *force_in_lookup_dir, *fragment)
             }
             Request::Module {
                 module,
@@ -539,12 +528,7 @@ impl Request {
             } => {
                 let mut pat = Pattern::concat([path.clone(), suffix.into()]);
                 pat.normalize();
-                Self::module(
-                    module.clone(),
-                    Value::new(pat),
-                    *query,
-                    Value::new(fragment.clone()),
-                )
+                Self::module(module.clone(), Value::new(pat), *query, *fragment)
             }
             Request::ServerRelative {
                 path,
