@@ -6,6 +6,7 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     fs,
     path::PathBuf,
+    sync::Arc,
 };
 
 use anyhow::{bail, Context, Result};
@@ -165,9 +166,13 @@ async fn run(resource: PathBuf) -> Result<()> {
             .try_join()
             .await?;
 
-        snapshot_issues(plain_issues, out.join("issues".to_string()), &REPO_ROOT)
-            .await
-            .context("Unable to handle issues")?;
+        snapshot_issues(
+            plain_issues,
+            out.join("issues".to_string().into()),
+            &REPO_ROOT,
+        )
+        .await
+        .context("Unable to handle issues")?;
         Ok(Vc::<()>::default())
     });
     tt.wait_task_completion(task, true).await?;
@@ -176,8 +181,8 @@ async fn run(resource: PathBuf) -> Result<()> {
 }
 
 #[turbo_tasks::function]
-async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
-    let test_path = canonicalize(&resource)?;
+async fn run_test(resource: Arc<String>) -> Result<Vc<FileSystemPath>> {
+    let test_path = canonicalize(&**resource)?;
     assert!(test_path.exists(), "{} does not exist", resource);
     assert!(
         test_path.is_dir(),
@@ -190,16 +195,16 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
         Err(_) => SnapshotOptions::default(),
         Ok(options_str) => parse_json_with_source_context(&options_str).unwrap(),
     };
-    let root_fs = DiskFileSystem::new("workspace".to_string(), REPO_ROOT.clone(), vec![]);
-    let project_fs = DiskFileSystem::new("project".to_string(), REPO_ROOT.clone(), vec![]);
+    let root_fs = DiskFileSystem::new("workspace".to_string().into(), REPO_ROOT.clone(), vec![]);
+    let project_fs = DiskFileSystem::new("project".to_string().into(), REPO_ROOT.clone(), vec![]);
     let project_root = project_fs.root();
 
-    let relative_path = test_path.strip_prefix(&*REPO_ROOT)?;
-    let relative_path = sys_to_unix(relative_path.to_str().unwrap());
-    let path = root_fs.root().join(relative_path.to_string());
-    let project_path = project_root.join(relative_path.to_string());
+    let relative_path = test_path.strip_prefix(&**REPO_ROOT)?;
+    let relative_path = Arc::new(sys_to_unix(relative_path.to_str().unwrap()).to_string());
+    let path = root_fs.root().join(relative_path.clone());
+    let project_path = project_root.join(relative_path.clone());
 
-    let entry_asset = project_path.join(options.entry);
+    let entry_asset = project_path.join(options.entry.into());
 
     let env = Environment::new(Value::new(match options.environment {
         SnapshotEnvironment::Browser => {

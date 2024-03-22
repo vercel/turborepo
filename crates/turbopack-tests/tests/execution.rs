@@ -3,7 +3,7 @@
 
 mod util;
 
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use anyhow::{Context, Result};
 use dunce::canonicalize;
@@ -158,7 +158,7 @@ async fn run(resource: PathBuf, snapshot_mode: IssueSnapshotMode) -> Result<JsRe
     let tt = TurboTasks::new(MemoryBackend::default());
     tt.run_once(async move {
         let resource_str = resource.to_str().unwrap();
-        let prepared_test = prepare_test(resource_str.to_string());
+        let prepared_test = prepare_test(resource_str.to_string().into());
         let run_result = run_test(prepared_test);
         if matches!(snapshot_mode, IssueSnapshotMode::Snapshots) {
             snapshot_issues(prepared_test, run_result).await?;
@@ -185,8 +185,8 @@ struct PreparedTest {
 }
 
 #[turbo_tasks::function]
-async fn prepare_test(resource: String) -> Result<Vc<PreparedTest>> {
-    let resource_path = canonicalize(&resource)?;
+async fn prepare_test(resource: Arc<String>) -> Result<Vc<PreparedTest>> {
+    let resource_path = canonicalize(&**resource)?;
     assert!(resource_path.exists(), "{} does not exist", resource);
     assert!(
         resource_path.is_dir(),
@@ -194,21 +194,23 @@ async fn prepare_test(resource: String) -> Result<Vc<PreparedTest>> {
         resource_path.to_str().unwrap()
     );
 
-    let root_fs = DiskFileSystem::new("workspace".to_string(), REPO_ROOT.clone(), vec![]);
-    let project_fs = DiskFileSystem::new("project".to_string(), REPO_ROOT.clone(), vec![]);
+    let root_fs = DiskFileSystem::new("workspace".to_string().into(), REPO_ROOT.clone(), vec![]);
+    let project_fs = DiskFileSystem::new("project".to_string().into(), REPO_ROOT.clone(), vec![]);
     let project_root = project_fs.root();
 
-    let relative_path = resource_path.strip_prefix(&*REPO_ROOT).context(format!(
+    let relative_path = resource_path.strip_prefix(&**REPO_ROOT).context(format!(
         "stripping repo root {:?} from resource path {:?}",
         &*REPO_ROOT,
         resource_path.display()
     ))?;
-    let relative_path = sys_to_unix(relative_path.to_str().unwrap());
-    let path = root_fs.root().join(relative_path.to_string());
-    let project_path = project_root.join(relative_path.to_string());
-    let tests_path = project_fs.root().join("crates/turbopack-tests".to_string());
+    let relative_path = Arc::new(sys_to_unix(relative_path.to_str().unwrap()).to_string());
+    let path = root_fs.root().join(relative_path.clone());
+    let project_path = project_root.join(relative_path.clone());
+    let tests_path = project_fs
+        .root()
+        .join("crates/turbopack-tests".to_string().into());
 
-    let options_file = path.join("options.json".to_string());
+    let options_file = path.join("options.json".to_string().into());
 
     let mut options = TestOptions::default();
     if matches!(*options_file.get_type().await?, FileSystemEntryType::File) {
@@ -386,7 +388,7 @@ async fn snapshot_issues(
 
     turbopack_test_utils::snapshot::snapshot_issues(
         plain_issues,
-        path.join("issues".to_string()),
+        path.join("issues".to_string().into()),
         &REPO_ROOT,
     )
     .await
