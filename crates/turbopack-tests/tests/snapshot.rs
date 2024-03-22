@@ -156,7 +156,7 @@ async fn run(resource: PathBuf) -> Result<()> {
 
     let tt = TurboTasks::new(MemoryBackend::default());
     let task = tt.spawn_once_task(async move {
-        let out = run_test(resource.to_str().unwrap().to_string());
+        let out = run_test(resource.to_str().unwrap().to_string().into());
         let _ = out.resolve_strongly_consistent().await?;
         let captured_issues = out.peek_issues_with_path().await?;
 
@@ -291,12 +291,12 @@ async fn run_test(resource: Arc<String>) -> Result<Vc<FileSystemPath>> {
             enable_typescript: true,
             enable_react: true,
             enable_node_modules: Some(project_root),
-            custom_conditions: vec!["development".to_string()],
+            custom_conditions: vec!["development".to_string().into()],
             rules: vec![(
                 ContextCondition::InDirectory("node_modules".to_string()),
                 ResolveOptionsContext {
                     enable_node_modules: Some(project_root),
-                    custom_conditions: vec!["development".to_string()],
+                    custom_conditions: vec!["development".to_string().into()],
                     ..Default::default()
                 }
                 .cell(),
@@ -311,8 +311,8 @@ async fn run_test(resource: Arc<String>) -> Result<Vc<FileSystemPath>> {
         .await?
         .map(|asset| EvaluatableAssets::one(asset.to_evaluatable(asset_context)));
 
-    let chunk_root_path = path.join("output".to_string());
-    let static_root_path = path.join("static".to_string());
+    let chunk_root_path = path.join("output".to_string().into());
+    let static_root_path = path.join("static".to_string().into());
 
     let chunking_context: Vc<Box<dyn ChunkingContext>> = match options.runtime {
         Runtime::Dev => Vc::upcast(
@@ -385,9 +385,10 @@ async fn run_test(resource: Arc<String>) -> Result<Vc<FileSystemPath>> {
                                         .await?
                                         .as_deref()
                                         .unwrap()
-                                        .to_string(),
+                                        .to_string()
+                                        .into(),
                                 )
-                                .with_extension("entry.js".to_string()),
+                                .with_extension("entry.js".to_string().into()),
                             Vc::upcast(ecmascript),
                             runtime_entries
                                 .unwrap_or_else(EvaluatableAssets::empty)
@@ -471,7 +472,7 @@ async fn maybe_load_env(
     _context: Vc<Box<dyn AssetContext>>,
     path: Vc<FileSystemPath>,
 ) -> Result<Option<Vc<Box<dyn Source>>>> {
-    let dotenv_path = path.join("input/.env".to_string());
+    let dotenv_path = path.join("input/.env".to_string().into());
 
     if !dotenv_path.read().await?.is_content() {
         return Ok(None);
