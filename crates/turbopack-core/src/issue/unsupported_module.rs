@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use turbo_tasks::Vc;
 use turbo_tasks_fs::FileSystemPath;
@@ -7,7 +9,7 @@ use super::{Issue, IssueSeverity, IssueStage, OptionStyledString, StyledString};
 #[turbo_tasks::value(shared)]
 pub struct UnsupportedModuleIssue {
     pub file_path: Vc<FileSystemPath>,
-    pub package: String,
+    pub package: Arc<String>,
     pub package_path: Option<String>,
 }
 
