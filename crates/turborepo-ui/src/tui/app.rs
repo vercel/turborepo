@@ -120,7 +120,7 @@ fn run_app_inner<B: Backend>(
     let mut last_render = Instant::now();
 
     while let Some(event) = poll(app.interact, &receiver, last_render + FRAMERATE) {
-        if let Some(message) = update(&mut app, event)? {
+        if let Some(message) = update(terminal, &mut app, event)? {
             persist_bytes(terminal, &message)?;
         }
         if app.done {
@@ -131,6 +131,9 @@ fn run_app_inner<B: Backend>(
             last_render = Instant::now();
         }
     }
+
+    let started_tasks = app.table.tasks_started().collect();
+    app.pane.render_remaining(started_tasks, terminal)?;
 
     Ok(())
 }
@@ -175,7 +178,8 @@ fn cleanup<B: Backend + io::Write>(mut terminal: Terminal<B>) -> io::Result<()> 
     Ok(())
 }
 
-fn update(
+fn update<B: Backend>(
+    terminal: &mut Terminal<B>,
     app: &mut App<Box<dyn io::Write + Send>>,
     event: Event,
 ) -> Result<Option<Vec<u8>>, Error> {
@@ -197,6 +201,7 @@ fn update(
         }
         Event::EndTask { task } => {
             app.table.finish_task(&task)?;
+            app.pane.render_screen(&task, terminal)?;
         }
         Event::Up => {
             app.previous();

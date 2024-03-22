@@ -180,6 +180,13 @@ impl TaskTable {
         }
     }
 
+    pub fn tasks_started(&self) -> impl Iterator<Item = &str> + '_ {
+        self.finished
+            .iter()
+            .map(|task| task.name())
+            .chain(self.running.iter().map(|task| task.name()))
+    }
+
     fn finished_rows(&self, duration_width: u16) -> impl Iterator<Item = Row> + '_ {
         self.finished.iter().map(move |task| {
             Row::new(vec![
