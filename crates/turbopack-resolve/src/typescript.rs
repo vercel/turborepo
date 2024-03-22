@@ -386,7 +386,7 @@ pub async fn type_resolve(
             format!("@types/{m}"),
             Value::new(p.clone()),
             Vc::<String>::default(),
-            Value::default(),
+            Vc::<String>::default(),
         ))
     } else {
         None
