@@ -11,8 +11,8 @@ pub struct EntryRequests(pub Vec<Vc<EntryRequest>>);
 #[turbo_tasks::value(shared)]
 #[derive(Clone)]
 pub enum EntryRequest {
-    Relative(String),
-    Module(String, String),
+    Relative(Arc<String>),
+    Module(Arc<String>, Arc<String>),
 }
 
 pub struct NormalizedDirs {

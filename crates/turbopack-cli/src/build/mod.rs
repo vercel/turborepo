@@ -341,7 +341,7 @@ pub async fn build(args: &BuildArguments) -> Result<()> {
         .show_all(args.common.show_all);
 
     for entry in normalize_entries(&args.common.entries) {
-        builder = builder.entry_request(EntryRequest::Relative(entry));
+        builder = builder.entry_request(EntryRequest::Relative(entry.into()));
     }
 
     builder.build().await?;
