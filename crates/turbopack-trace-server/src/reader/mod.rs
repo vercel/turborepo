@@ -1,3 +1,4 @@
+mod nextjs;
 mod turbopack;
 
 use std::{
@@ -11,7 +12,10 @@ use std::{
 
 use anyhow::Result;
 
-use crate::{reader::turbopack::TurbopackFormat, store_container::StoreContainer};
+use crate::{
+    reader::{nextjs::NextJsFormat, turbopack::TurbopackFormat},
+    store_container::StoreContainer,
+};
 
 trait TraceFormat {
     fn read(&mut self, buffer: &[u8]) -> Result<usize>;
@@ -46,7 +50,7 @@ impl TraceReader {
             store.reset();
         }
 
-        let mut format = None;
+        let mut format: Option<Box<dyn TraceFormat>> = None;
 
         let mut initial_read = {
             if let Ok(pos) = file.seek(SeekFrom::End(0)) {
@@ -112,8 +116,7 @@ impl TraceReader {
                                 index = 7;
                                 format = Some(Box::new(TurbopackFormat::new(self.store.clone())));
                             } else if buffer.starts_with(b"[{\"name\"") {
-                                println!("Next.js trace format detected, but not supported yet");
-                                return true;
+                                format = Some(Box::new(NextJsFormat::new(self.store.clone())));
                             } else {
                                 // Fallback to the format without magic bytes
                                 // TODO Remove this after a while and show an error instead
