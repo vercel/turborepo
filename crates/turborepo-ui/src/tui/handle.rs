@@ -3,8 +3,6 @@ use std::{
     time::Instant,
 };
 
-use tracing::debug;
-
 use super::Event;
 use crate::LineWriter;
 

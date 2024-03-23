@@ -5,6 +5,7 @@ mod sso;
 pub use login::*;
 pub use logout::*;
 pub use sso::*;
+#[cfg(test)]
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::{CacheClient, Client, TokenClient};
 use turborepo_ui::UI;
