@@ -1,0 +1,982 @@
+{
+  "name": "base",
+  "benchmarks": {
+    "bench_hmr_to_eval/Next.js 13 Turbo SSR/100 modules": {
+      "baseline": "base",
+      "fullname": "base/bench_hmr_to_eval/Next.js 13 Turbo SSR/100 modules",
+      "criterion_benchmark_v1": {
+        "group_id": "bench_hmr_to_eval",
+        "function_id": "Next.js 13 Turbo SSR",
+        "value_str": "100 modules",
+        "throughput": null,
+        "full_id": "bench_hmr_to_eval/Next.js 13 Turbo SSR/100 modules",
+        "directory_name": "bench_hmr_to_eval/Next.js 13 Turbo SSR/100 modules"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 10372173.342285717,
+            "upper_bound": 13815714.804262498
+          },
+          "point_estimate": 12020964.953642856,
+          "standard_error": 885099.3500750589
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 9668220.771428572,
+            "upper_bound": 14701815.85
+          },
+          "point_estimate": 10861231.405,
+          "standard_error": 1482404.820930397
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 568508.667916953,
+            "upper_bound": 4727162.4746260885
+          },
+          "point_estimate": 2797236.73748812,
+          "standard_error": 1181279.2763486234
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 9292417.951142356,
+            "upper_bound": 11287809.768452382
+          },
+          "point_estimate": 9940193.135584416,
+          "standard_error": 513751.13906084234
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1664868.0382094649,
+            "upper_bound": 3501160.143713053
+          },
+          "point_estimate": 2953573.73688246,
+          "standard_error": 464007.16280011664
+        }
+      }
+    },
+    "bench_hydration/Next.js 13 Turbo RCC/100 modules": {
+      "baseline": "base",
+      "fullname": "base/bench_hydration/Next.js 13 Turbo RCC/100 modules",
+      "criterion_benchmark_v1": {
+        "group_id": "bench_hydration",
+        "function_id": "Next.js 13 Turbo RCC",
+        "value_str": "100 modules",
+        "throughput": null,
+        "full_id": "bench_hydration/Next.js 13 Turbo RCC/100 modules",
+        "directory_name": "bench_hydration/Next.js 13 Turbo RCC/100 modules"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2924655260.5175004,
+            "upper_bound": 2941653745.96875
+          },
+          "point_estimate": 2933836416.4,
+          "standard_error": 4372459.849797406
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2925778122.5,
+            "upper_bound": 2945459486.25
+          },
+          "point_estimate": 2935015453.25,
+          "standard_error": 4216848.444752955
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1908474.9628677964,
+            "upper_bound": 22999353.225579858
+          },
+          "point_estimate": 9999246.89182788,
+          "standard_error": 5728677.142690595
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 5957958.587083877,
+            "upper_bound": 19572976.26097254
+          },
+          "point_estimate": 14518176.805886226,
+          "standard_error": 3721072.408662483
+        }
+      }
+    },
+    "bench_hydration/Next.js 13 Turbo RCC/1000 modules": {
+      "baseline": "base",
+      "fullname": "base/bench_hydration/Next.js 13 Turbo RCC/1000 modules",
+      "criterion_benchmark_v1": {
+        "group_id": "bench_hydration",
+        "function_id": "Next.js 13 Turbo RCC",
+        "value_str": "1000 modules",
+        "throughput": null,
+        "full_id": "bench_hydration/Next.js 13 Turbo RCC/1000 modules",
+        "directory_name": "bench_hydration/Next.js 13 Turbo RCC/1000 modules"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4588570240.7,
+            "upper_bound": 4625988185.65
+          },
+          "point_estimate": 4606219033.2,
+          "standard_error": 9550660.52514462
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4580952649.0,
+            "upper_bound": 4622613973.5
+          },
+          "point_estimate": 4606308217.0,
+          "standard_error": 10355642.729067856
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 6824022.944149375,
+            "upper_bound": 50840789.75049555
+          },
+          "point_estimate": 24961433.44374597,
+          "standard_error": 11293486.757494338
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 14296772.88516223,
+            "upper_bound": 43790991.086949885
+          },
+          "point_estimate": 31836517.242003415,
+          "standard_error": 8015374.669661768
+        }
+      }
+    },
+    "bench_hydration/Next.js 13 Turbo RCC/500 modules": {
+      "baseline": "base",
+      "fullname": "base/bench_hydration/Next.js 13 Turbo RCC/500 modules",
+      "criterion_benchmark_v1": {
+        "group_id": "bench_hydration",
+        "function_id": "Next.js 13 Turbo RCC",
+        "value_str": "500 modules",
+        "throughput": null,
+        "full_id": "bench_hydration/Next.js 13 Turbo RCC/500 modules",
+        "directory_name": "bench_hydration/Next.js 13 Turbo RCC/500 modules"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3616335331.45,
+            "upper_bound": 3659444065.63375
+          },
+          "point_estimate": 3637041055.45,
+          "standard_error": 11036737.86476848
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3606867812.0,
+            "upper_bound": 3667149092.0
+          },
+          "point_estimate": 3631718673.75,
+          "standard_error": 15810076.57881097
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 11104263.493309917,
+            "upper_bound": 62410932.116134465
+          },
+          "point_estimate": 42102358.10773373,
+          "standard_error": 13097345.149370812
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 20330984.19895752,
+            "upper_bound": 46146215.82984236
+          },
+          "point_estimate": 36698512.017584056,
+          "standard_error": 6646656.4938352015
+        }
+      }
+    },
+    "bench_hydration/Next.js 13 Turbo RSC/100 modules": {
+      "baseline": "base",
+      "fullname": "base/bench_hydration/Next.js 13 Turbo RSC/100 modules",
+      "criterion_benchmark_v1": {
+        "group_id": "bench_hydration",
+        "function_id": "Next.js 13 Turbo RSC",
+        "value_str": "100 modules",
+        "throughput": null,
+        "full_id": "bench_hydration/Next.js 13 Turbo RSC/100 modules",
+        "directory_name": "bench_hydration/Next.js 13 Turbo RSC/100 modules"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2843833725.6,
+            "upper_bound": 2852503952.9224997
+          },
+          "point_estimate": 2847879272.9,
+          "standard_error": 2230763.2205422856
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2843394785.75,
+            "upper_bound": 2853627749.5
+          },
+          "point_estimate": 2846111614.5,
+          "standard_error": 2046962.642157393
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 652451.8475666642,
+            "upper_bound": 12590378.340876102
+          },
+          "point_estimate": 3724925.6866693497,
+          "standard_error": 2971988.583607934
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2828971.3805954573,
+            "upper_bound": 9655258.529743956
+          },
+          "point_estimate": 7464119.208416708,
+          "standard_error": 1741921.7714711756
+        }
+      }
+    },
+    "bench_hydration/Next.js 13 Turbo RSC/1000 modules": {
+      "baseline": "base",
+      "fullname": "base/bench_hydration/Next.js 13 Turbo RSC/1000 modules",
+      "criterion_benchmark_v1": {
+        "group_id": "bench_hydration",
+        "function_id": "Next.js 13 Turbo RSC",
+        "value_str": "1000 modules",
+        "throughput": null,
+        "full_id": "bench_hydration/Next.js 13 Turbo RSC/1000 modules",
+        "directory_name": "bench_hydration/Next.js 13 Turbo RSC/1000 modules"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4125764382.45,
+            "upper_bound": 4142605349.22625
+          },
+          "point_estimate": 4134627446.1,
+          "standard_error": 4320247.165945431
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4122573378.25,
+            "upper_bound": 4146994513.5
+          },
+          "point_estimate": 4135023776.25,
+          "standard_error": 4969372.194325248
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 967203.0035287142,
+            "upper_bound": 24922028.530995548
+          },
+          "point_estimate": 13280792.160768809,
+          "standard_error": 6560915.969969162
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 6604978.693032438,
+            "upper_bound": 18204469.35878503
+          },
+          "point_estimate": 14464407.686036237,
+          "standard_error": 3009408.691627691
+        }
+      }
+    },
+    "bench_hydration/Next.js 13 Turbo RSC/500 modules": {
+      "baseline": "base",
+      "fullname": "base/bench_hydration/Next.js 13 Turbo RSC/500 modules",
+      "criterion_benchmark_v1": {
+        "group_id": "bench_hydration",
+        "function_id": "Next.js 13 Turbo RSC",
+        "value_str": "500 modules",
+        "throughput": null,
+        "full_id": "bench_hydration/Next.js 13 Turbo RSC/500 modules",
+        "directory_name": "bench_hydration/Next.js 13 Turbo RSC/500 modules"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3406966909.17625,
+            "upper_bound": 3432577642.1474996
+          },
+          "point_estimate": 3419613831.7,
+          "standard_error": 6572495.233809263
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3397244683.0,
+            "upper_bound": 3435625427.75
+          },
+          "point_estimate": 3423929668.0,
+          "standard_error": 11473605.928088613
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3661144.977101683,
+            "upper_bound": 39713305.40574789
+          },
+          "point_estimate": 30302950.188665092,
+          "standard_error": 9457981.40643778
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 13992467.517387483,
+            "upper_bound": 26764925.62508513
+          },
+          "point_estimate": 21964576.55651919,
+          "standard_error": 3349811.904578344
+        }
+      }
+    },
+    "bench_hydration/Next.js 13 Turbo SSR/100 modules": {
+      "baseline": "base",
+      "fullname": "base/bench_hydration/Next.js 13 Turbo SSR/100 modules",
+      "criterion_benchmark_v1": {
+        "group_id": "bench_hydration",
+        "function_id": "Next.js 13 Turbo SSR",
+        "value_str": "100 modules",
+        "throughput": null,
+        "full_id": "bench_hydration/Next.js 13 Turbo SSR/100 modules",
+        "directory_name": "bench_hydration/Next.js 13 Turbo SSR/100 modules"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2180984285.72375,
+            "upper_bound": 2191340910.435
+          },
+          "point_estimate": 2185967636.25,
+          "standard_error": 2677269.670922278
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2178123891.75,
+            "upper_bound": 2196386011.0
+          },
+          "point_estimate": 2183202938.0,
+          "standard_error": 5442171.947689014
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 132620.05024552345,
+            "upper_bound": 14268545.853182672
+          },
+          "point_estimate": 8143510.233923793,
+          "standard_error": 4858344.961279722
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 5306644.661797244,
+            "upper_bound": 10144430.00143074
+          },
+          "point_estimate": 8919498.440982088,
+          "standard_error": 1200147.9364840062
+        }
+      }
+    },
+    "bench_hydration/Next.js 13 Turbo SSR/1000 modules": {
+      "baseline": "base",
+      "fullname": "base/bench_hydration/Next.js 13 Turbo SSR/1000 modules",
+      "criterion_benchmark_v1": {
+        "group_id": "bench_hydration",
+        "function_id": "Next.js 13 Turbo SSR",
+        "value_str": "1000 modules",
+        "throughput": null,
+        "full_id": "bench_hydration/Next.js 13 Turbo SSR/1000 modules",
+        "directory_name": "bench_hydration/Next.js 13 Turbo SSR/1000 modules"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4021614609.395,
+            "upper_bound": 4030701764.85
+          },
+          "point_estimate": 4026544614.95,
+          "standard_error": 2323300.862582057
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4023016999.0,
+            "upper_bound": 4032701517.5
+          },
+          "point_estimate": 4027914722.25,
+          "standard_error": 2427170.494548683
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1081297.5964531302,
+            "upper_bound": 11527037.32813405
+          },
+          "point_estimate": 7179133.4365949035,
+          "standard_error": 2552675.022686873
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3346178.4714092165,
+            "upper_bound": 10790793.789698362
+          },
+          "point_estimate": 7756782.679157388,
+          "standard_error": 2126737.408444724
+        }
+      }
+    },
+    "bench_hydration/Next.js 13 Turbo SSR/500 modules": {
+      "baseline": "base",
+      "fullname": "base/bench_hydration/Next.js 13 Turbo SSR/500 modules",
+      "criterion_benchmark_v1": {
+        "group_id": "bench_hydration",
+        "function_id": "Next.js 13 Turbo SSR",
+        "value_str": "500 modules",
+        "throughput": null,
+        "full_id": "bench_hydration/Next.js 13 Turbo SSR/500 modules",
+        "directory_name": "bench_hydration/Next.js 13 Turbo SSR/500 modules"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3010510613.155,
+            "upper_bound": 3027047696.85
+          },
+          "point_estimate": 3018749938.55,
+          "standard_error": 4244330.536800258
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3003762509.0,
+            "upper_bound": 3030641789.25
+          },
+          "point_estimate": 3021044820.75,
+          "standard_error": 8471124.58433469
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1640812.2940197587,
+            "upper_bound": 23391099.875324965
+          },
+          "point_estimate": 20800385.778169338,
+          "standard_error": 6071354.49397441
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 9504223.240893666,
+            "upper_bound": 16379627.60133452
+          },
+          "point_estimate": 14145559.068399156,
+          "standard_error": 1781864.5570780523
+        }
+      }
+    },
+    "bench_startup/Next.js 13 Turbo RCC/100 modules": {
+      "baseline": "base",
+      "fullname": "base/bench_startup/Next.js 13 Turbo RCC/100 modules",
+      "criterion_benchmark_v1": {
+        "group_id": "bench_startup",
+        "function_id": "Next.js 13 Turbo RCC",
+        "value_str": "100 modules",
+        "throughput": null,
+        "full_id": "bench_startup/Next.js 13 Turbo RCC/100 modules",
+        "directory_name": "bench_startup/Next.js 13 Turbo RCC/100 modules"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2706397094.8725,
+            "upper_bound": 2720541003.23375
+          },
+          "point_estimate": 2712891195.15,
+          "standard_error": 3643688.271229412
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2703173895.0,
+            "upper_bound": 2722442031.75
+          },
+          "point_estimate": 2710130950.75,
+          "standard_error": 4100963.098278356
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1152343.0458918214,
+            "upper_bound": 16861197.708503902
+          },
+          "point_estimate": 8471685.220697522,
+          "standard_error": 4178489.754733346
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4084342.4054800794,
+            "upper_bound": 15384407.833131986
+          },
+          "point_estimate": 12145638.480625888,
+          "standard_error": 2991776.7213869384
+        }
+      }
+    },
+    "bench_startup/Next.js 13 Turbo RCC/1000 modules": {
+      "baseline": "base",
+      "fullname": "base/bench_startup/Next.js 13 Turbo RCC/1000 modules",
+      "criterion_benchmark_v1": {
+        "group_id": "bench_startup",
+        "function_id": "Next.js 13 Turbo RCC",
+        "value_str": "1000 modules",
+        "throughput": null,
+        "full_id": "bench_startup/Next.js 13 Turbo RCC/1000 modules",
+        "directory_name": "bench_startup/Next.js 13 Turbo RCC/1000 modules"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4167571005.0,
+            "upper_bound": 4217582612.945
+          },
+          "point_estimate": 4193095902.25,
+          "standard_error": 12815308.291394956
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4165670275.75,
+            "upper_bound": 4239685339.0
+          },
+          "point_estimate": 4186314862.0,
+          "standard_error": 21015419.508470535
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3085263.858425617,
+            "upper_bound": 82525877.82667279
+          },
+          "point_estimate": 45483595.993454754,
+          "standard_error": 20004894.877519034
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 25820985.96333433,
+            "upper_bound": 54304848.56000816
+          },
+          "point_estimate": 42793809.48672948,
+          "standard_error": 7719189.01396447
+        }
+      }
+    },
+    "bench_startup/Next.js 13 Turbo RCC/500 modules": {
+      "baseline": "base",
+      "fullname": "base/bench_startup/Next.js 13 Turbo RCC/500 modules",
+      "criterion_benchmark_v1": {
+        "group_id": "bench_startup",
+        "function_id": "Next.js 13 Turbo RCC",
+        "value_str": "500 modules",
+        "throughput": null,
+        "full_id": "bench_startup/Next.js 13 Turbo RCC/500 modules",
+        "directory_name": "bench_startup/Next.js 13 Turbo RCC/500 modules"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3311450251.48625,
+            "upper_bound": 3347708739.45875
+          },
+          "point_estimate": 3329680425.65,
+          "standard_error": 9297234.745740134
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3301191007.5,
+            "upper_bound": 3354751626.5
+          },
+          "point_estimate": 3332823672.0,
+          "standard_error": 14667355.224201826
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 9542652.801834049,
+            "upper_bound": 51912543.10961813
+          },
+          "point_estimate": 40232138.301336765,
+          "standard_error": 11151126.62661438
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 19074772.922285233,
+            "upper_bound": 37908560.054923095
+          },
+          "point_estimate": 31079950.784308225,
+          "standard_error": 4806801.67675773
+        }
+      }
+    },
+    "bench_startup/Next.js 13 Turbo RSC/100 modules": {
+      "baseline": "base",
+      "fullname": "base/bench_startup/Next.js 13 Turbo RSC/100 modules",
+      "criterion_benchmark_v1": {
+        "group_id": "bench_startup",
+        "function_id": "Next.js 13 Turbo RSC",
+        "value_str": "100 modules",
+        "throughput": null,
+        "full_id": "bench_startup/Next.js 13 Turbo RSC/100 modules",
+        "directory_name": "bench_startup/Next.js 13 Turbo RSC/100 modules"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2646771817.55,
+            "upper_bound": 2665693478.3
+          },
+          "point_estimate": 2656487582.75,
+          "standard_error": 4854680.885220724
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2643831987.25,
+            "upper_bound": 2674130602.0
+          },
+          "point_estimate": 2656989380.25,
+          "standard_error": 6367762.3202222735
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2654036.68333143,
+            "upper_bound": 29251961.01282388
+          },
+          "point_estimate": 17906988.518187404,
+          "standard_error": 7472004.749052666
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 9298353.725087704,
+            "upper_bound": 20549613.890311334
+          },
+          "point_estimate": 16247458.171215065,
+          "standard_error": 2986788.774316347
+        }
+      }
+    },
+    "bench_startup/Next.js 13 Turbo RSC/1000 modules": {
+      "baseline": "base",
+      "fullname": "base/bench_startup/Next.js 13 Turbo RSC/1000 modules",
+      "criterion_benchmark_v1": {
+        "group_id": "bench_startup",
+        "function_id": "Next.js 13 Turbo RSC",
+        "value_str": "1000 modules",
+        "throughput": null,
+        "full_id": "bench_startup/Next.js 13 Turbo RSC/1000 modules",
+        "directory_name": "bench_startup/Next.js 13 Turbo RSC/1000 modules"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3880329364.9,
+            "upper_bound": 3901227550.9375
+          },
+          "point_estimate": 3890186360.55,
+          "standard_error": 5366664.476456495
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3875426529.25,
+            "upper_bound": 3905762257.25
+          },
+          "point_estimate": 3890496052.0,
+          "standard_error": 7079199.845447245
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1335460.821890831,
+            "upper_bound": 29851365.06268233
+          },
+          "point_estimate": 21328881.889736652,
+          "standard_error": 8434711.003501987
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 8261930.578621266,
+            "upper_bound": 22200920.335190862
+          },
+          "point_estimate": 17794243.386067636,
+          "standard_error": 3620469.076611232
+        }
+      }
+    },
+    "bench_startup/Next.js 13 Turbo RSC/500 modules": {
+      "baseline": "base",
+      "fullname": "base/bench_startup/Next.js 13 Turbo RSC/500 modules",
+      "criterion_benchmark_v1": {
+        "group_id": "bench_startup",
+        "function_id": "Next.js 13 Turbo RSC",
+        "value_str": "500 modules",
+        "throughput": null,
+        "full_id": "bench_startup/Next.js 13 Turbo RSC/500 modules",
+        "directory_name": "bench_startup/Next.js 13 Turbo RSC/500 modules"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3201985167.1725,
+            "upper_bound": 3216378601.95
+          },
+          "point_estimate": 3209429324.25,
+          "standard_error": 3700669.34586651
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3198966105.75,
+            "upper_bound": 3216830516.5
+          },
+          "point_estimate": 3213980107.5,
+          "standard_error": 4507283.0514444485
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 558815.651679039,
+            "upper_bound": 20600169.917973876
+          },
+          "point_estimate": 7524376.855565608,
+          "standard_error": 5711690.403504547
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 5521712.836912036,
+            "upper_bound": 15754553.041369522
+          },
+          "point_estimate": 12355352.362684948,
+          "standard_error": 2476485.979218899
+        }
+      }
+    },
+    "bench_startup/Next.js 13 Turbo SSR/100 modules": {
+      "baseline": "base",
+      "fullname": "base/bench_startup/Next.js 13 Turbo SSR/100 modules",
+      "criterion_benchmark_v1": {
+        "group_id": "bench_startup",
+        "function_id": "Next.js 13 Turbo SSR",
+        "value_str": "100 modules",
+        "throughput": null,
+        "full_id": "bench_startup/Next.js 13 Turbo SSR/100 modules",
+        "directory_name": "bench_startup/Next.js 13 Turbo SSR/100 modules"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2012557166.5,
+            "upper_bound": 2053242978.5
+          },
+          "point_estimate": 2031349025.6,
+          "standard_error": 10451994.82212069
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2007212044.0,
+            "upper_bound": 2057939721.5
+          },
+          "point_estimate": 2021142355.5,
+          "standard_error": 11235578.700755827
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 6745391.771945357,
+            "upper_bound": 54684356.05225861
+          },
+          "point_estimate": 23372820.158949494,
+          "standard_error": 11556159.690564573
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 11934334.313348925,
+            "upper_bound": 44526839.095407195
+          },
+          "point_estimate": 34829594.834062934,
+          "standard_error": 8416216.19095112
+        }
+      }
+    },
+    "bench_startup/Next.js 13 Turbo SSR/1000 modules": {
+      "baseline": "base",
+      "fullname": "base/bench_startup/Next.js 13 Turbo SSR/1000 modules",
+      "criterion_benchmark_v1": {
+        "group_id": "bench_startup",
+        "function_id": "Next.js 13 Turbo SSR",
+        "value_str": "1000 modules",
+        "throughput": null,
+        "full_id": "bench_startup/Next.js 13 Turbo SSR/1000 modules",
+        "directory_name": "bench_startup/Next.js 13 Turbo SSR/1000 modules"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3686838063.9,
+            "upper_bound": 3711779777.8025
+          },
+          "point_estimate": 3698724966.8,
+          "standard_error": 6402969.403171742
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3683548507.0,
+            "upper_bound": 3714923374.5
+          },
+          "point_estimate": 3695590401.75,
+          "standard_error": 7207903.335061241
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2486632.243153453,
+            "upper_bound": 37657119.007502496
+          },
+          "point_estimate": 18717174.176953733,
+          "standard_error": 8747209.375180302
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 9784240.803755268,
+            "upper_bound": 26702085.04207853
+          },
+          "point_estimate": 21310336.404856235,
+          "standard_error": 4217129.180254124
+        }
+      }
+    },
+    "bench_startup/Next.js 13 Turbo SSR/500 modules": {
+      "baseline": "base",
+      "fullname": "base/bench_startup/Next.js 13 Turbo SSR/500 modules",
+      "criterion_benchmark_v1": {
+        "group_id": "bench_startup",
+        "function_id": "Next.js 13 Turbo SSR",
+        "value_str": "500 modules",
+        "throughput": null,
+        "full_id": "bench_startup/Next.js 13 Turbo SSR/500 modules",
+        "directory_name": "bench_startup/Next.js 13 Turbo SSR/500 modules"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2751376974.6,
+            "upper_bound": 2767340646.3
+          },
+          "point_estimate": 2758713275.2,
+          "standard_error": 4101299.308413768
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2747839976.5,
+            "upper_bound": 2770169466.5
+          },
+          "point_estimate": 2755253700.25,
+          "standard_error": 4526666.357000942
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1541253.1112372875,
+            "upper_bound": 19135951.96006894
+          },
+          "point_estimate": 9650998.984010518,
+          "standard_error": 4488459.479953743
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4817674.432289352,
+            "upper_bound": 17147937.05821332
+          },
+          "point_estimate": 13681514.286179692,
+          "standard_error": 3209889.5933344904
+        }
+      }
+    }
+  }
+}
