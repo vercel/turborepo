@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "vite.js",
+  "extends": "./base.json",
+  "compilerOptions": {
+    "plugins": [{ "name": "react" }],
+    "allowJs": true,
+    "declaration": false,
+    "declarationMap": false,
+    "incremental": true,
+    "jsx": "preserve",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "module": "esnext",
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "strict": false,
+    "target": "es5",
+    "baseUrl": "./",
+
+    "paths": {
+      "@/*": ["src/*"],
+      "@ui/*": ["../../packages/ui/*"],
+      "@ui/components/*": ["../../packages/ui/components/ui/*"]
+    }
+  },
+  "exclude": ["node_modules"]
+}

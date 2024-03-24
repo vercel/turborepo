@@ -1,0 +1,42 @@
+{
+  "name": "@repo/super-admin",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "preview": "vite preview",
+    "route-gen": "tsr generate"
+  },
+  "dependencies": {
+    "@ant-design/cssinjs": "^1.18.1",
+    "@ant-design/icons": "^5.2.6",
+    "@tanstack/react-query": "^5.13.4",
+    "@tanstack/react-query-devtools": "^5.13.5",
+    "@tanstack/react-router": "^1.22.3",
+    "@tanstack/router-devtools": "^1.22.3",
+    "antd": "^5.12.2",
+    "jotai": "^2.6.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-json-view": "^1.21.3",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@julr/vite-plugin-validate-env": "^1.0.1",
+    "@tanstack/eslint-plugin-query": "^5.12.1",
+    "@tanstack/router-vite-plugin": "^1.20.5",
+    "@types/react": "^18.2.37",
+    "@types/react-dom": "^18.2.15",
+    "@vitejs/plugin-react": "^4.2.0",
+    "autoprefixer": "^10.4.14",
+    "eslint-config-custom": "workspace:*",
+    "postcss": "^8.4.24",
+    "tailwindcss": "^3.3.2",
+    "tsconfig": "workspace:*",
+    "typescript": "^5.2.2",
+    "vite": "^5.0.0"
+  }
+}
