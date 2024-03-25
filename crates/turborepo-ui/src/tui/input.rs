@@ -9,10 +9,14 @@ pub fn input(interact: bool) -> Result<Option<Event>, Error> {
     // poll with 0 duration will only return true if event::read won't need to wait
     // for input
     if crossterm::event::poll(Duration::from_millis(0))? {
-        if let crossterm::event::Event::Key(k) = crossterm::event::read()? {
-            Ok(translate_key_event(interact, k))
-        } else {
-            Ok(None)
+        match crossterm::event::read()? {
+            crossterm::event::Event::Key(k) => Ok(translate_key_event(interact, k)),
+            crossterm::event::Event::Mouse(m) => match m.kind {
+                crossterm::event::MouseEventKind::ScrollDown => Ok(Some(Event::ScrollDown)),
+                crossterm::event::MouseEventKind::ScrollUp => Ok(Some(Event::ScrollUp)),
+                _ => Ok(None),
+            },
+            _ => Ok(None),
         }
     } else {
         Ok(None)
@@ -21,6 +25,13 @@ pub fn input(interact: bool) -> Result<Option<Event>, Error> {
 
 /// Converts a crostterm key event into a TUI interaction event
 fn translate_key_event(interact: bool, key_event: KeyEvent) -> Option<Event> {
+    // On Windows events for releasing a key are produced
+    // We skip these to avoid emitting 2 events per key press.
+    // There is still a `Repeat` event for when a key is held that will pass through
+    // this guard.
+    if key_event.kind == KeyEventKind::Release {
+        return None;
+    }
     match key_event.code {
         KeyCode::Char('c') if key_event.modifiers == crossterm::event::KeyModifiers::CONTROL => {
             ctrl_c()
@@ -36,6 +47,10 @@ fn translate_key_event(interact: bool, key_event: KeyEvent) -> Option<Event> {
             bytes: encode_key(key_event),
         }),
         // Fall through if we aren't in interactive mode
+        KeyCode::Char('p') if key_event.modifiers == KeyModifiers::CONTROL => Some(Event::ScrollUp),
+        KeyCode::Char('n') if key_event.modifiers == KeyModifiers::CONTROL => {
+            Some(Event::ScrollDown)
+        }
         KeyCode::Up => Some(Event::Up),
         KeyCode::Down => Some(Event::Down),
         KeyCode::Enter => Some(Event::EnterInteractive),

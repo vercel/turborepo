@@ -1,4 +1,10 @@
-use std::{cmp::max, collections::HashSet, num::NonZeroUsize, sync::OnceLock};
+use std::{
+    cmp::{max, min},
+    collections::HashSet,
+    mem::replace,
+    num::NonZeroUsize,
+    sync::OnceLock,
+};
 
 use crate::{
     span::{Span, SpanEvent, SpanIndex},
@@ -13,49 +19,52 @@ pub struct Store {
     pub(crate) spans: Vec<Span>,
 }
 
+fn new_root_span() -> Span {
+    Span {
+        index: SpanIndex::MAX,
+        parent: None,
+        depth: 0,
+        start: u64::MAX,
+        ignore_self_time: false,
+        self_end: 0,
+        category: "".into(),
+        name: "(root)".into(),
+        args: vec![],
+        events: vec![],
+        is_complete: true,
+        end: OnceLock::new(),
+        nice_name: OnceLock::new(),
+        group_name: OnceLock::new(),
+        max_depth: OnceLock::new(),
+        graph: OnceLock::new(),
+        bottom_up: OnceLock::new(),
+        self_time: 0,
+        self_allocations: 0,
+        self_allocation_count: 0,
+        self_deallocations: 0,
+        self_deallocation_count: 0,
+        total_time: OnceLock::new(),
+        total_allocations: OnceLock::new(),
+        total_deallocations: OnceLock::new(),
+        total_persistent_allocations: OnceLock::new(),
+        total_allocation_count: OnceLock::new(),
+        total_span_count: OnceLock::new(),
+        corrected_self_time: OnceLock::new(),
+        corrected_total_time: OnceLock::new(),
+        search_index: OnceLock::new(),
+    }
+}
+
 impl Store {
     pub fn new() -> Self {
         Self {
-            spans: vec![Span {
-                index: SpanIndex::MAX,
-                parent: None,
-                depth: 0,
-                start: 0,
-                ignore_self_time: false,
-                self_end: 0,
-                category: "".into(),
-                name: "(root)".into(),
-                args: vec![],
-                events: vec![],
-                is_complete: true,
-                end: OnceLock::new(),
-                nice_name: OnceLock::new(),
-                group_name: OnceLock::new(),
-                max_depth: OnceLock::new(),
-                graph: OnceLock::new(),
-                bottom_up: OnceLock::new(),
-                self_time: 0,
-                self_allocations: 0,
-                self_allocation_count: 0,
-                self_deallocations: 0,
-                self_deallocation_count: 0,
-                total_time: OnceLock::new(),
-                total_allocations: OnceLock::new(),
-                total_deallocations: OnceLock::new(),
-                total_persistent_allocations: OnceLock::new(),
-                total_allocation_count: OnceLock::new(),
-                total_span_count: OnceLock::new(),
-                corrected_self_time: OnceLock::new(),
-                corrected_total_time: OnceLock::new(),
-                search_index: OnceLock::new(),
-            }],
+            spans: vec![new_root_span()],
         }
     }
 
     pub fn reset(&mut self) {
         self.spans.truncate(1);
-        let root = &mut self.spans[0];
-        root.events.clear();
+        self.spans[0] = new_root_span();
     }
 
     pub fn add_span(
@@ -107,6 +116,7 @@ impl Store {
         } else {
             &mut self.spans[0]
         };
+        parent.start = min(parent.start, start);
         let depth = parent.depth + 1;
         if depth < CUT_OFF_DEPTH {
             parent.events.push(SpanEvent::Child { id });
@@ -114,6 +124,17 @@ impl Store {
         let span = &mut self.spans[id.get()];
         span.depth = depth;
         id
+    }
+
+    pub fn add_args(
+        &mut self,
+        span_index: SpanIndex,
+        args: Vec<(String, String)>,
+        outdated_spans: &mut HashSet<SpanIndex>,
+    ) {
+        let span = &mut self.spans[span_index.get()];
+        span.args.extend(args);
+        outdated_spans.insert(span_index);
     }
 
     pub fn add_self_time(
@@ -131,6 +152,86 @@ impl Store {
         span.self_time += end - start;
         span.events.push(SpanEvent::SelfTime { start, end });
         span.self_end = max(span.self_end, end);
+    }
+
+    pub fn set_total_time(
+        &mut self,
+        span_index: SpanIndex,
+        start_time: u64,
+        total_time: u64,
+        outdated_spans: &mut HashSet<SpanIndex>,
+    ) {
+        let span = SpanRef {
+            span: &self.spans[span_index.get()],
+            store: self,
+        };
+        let mut children = span
+            .children()
+            .map(|c| (c.span.start, c.span.self_end, c.span.index))
+            .collect::<Vec<_>>();
+        children.sort();
+        let self_end = start_time + total_time;
+        let mut self_time = 0;
+        let mut current = start_time;
+        let mut events = Vec::new();
+        for (start, end, index) in children {
+            if start > current {
+                if start > self_end {
+                    events.push(SpanEvent::SelfTime {
+                        start: current,
+                        end: self_end,
+                    });
+                    self_time += self_end - current;
+                    break;
+                }
+                events.push(SpanEvent::SelfTime {
+                    start: current,
+                    end: start,
+                });
+                self_time += start - current;
+            }
+            events.push(SpanEvent::Child { id: index });
+            current = max(current, end);
+        }
+        current -= start_time;
+        if current < total_time {
+            self_time += total_time - current;
+        }
+        let span = &mut self.spans[span_index.get()];
+        outdated_spans.insert(span_index);
+        span.self_time = self_time;
+        span.events = events;
+        span.start = start_time;
+        span.self_end = self_end;
+    }
+
+    pub fn set_parent(
+        &mut self,
+        span_index: SpanIndex,
+        parent: SpanIndex,
+        outdated_spans: &mut HashSet<SpanIndex>,
+    ) {
+        outdated_spans.insert(span_index);
+        let span = &mut self.spans[span_index.get()];
+
+        let old_parent = replace(&mut span.parent, Some(parent));
+        let old_parent = if let Some(parent) = old_parent {
+            outdated_spans.insert(parent);
+            &mut self.spans[parent.get()]
+        } else {
+            &mut self.spans[0]
+        };
+        if let Some(index) = old_parent
+            .events
+            .iter()
+            .position(|event| *event == SpanEvent::Child { id: span_index })
+        {
+            old_parent.events.remove(index);
+        }
+
+        outdated_spans.insert(parent);
+        let parent = &mut self.spans[parent.get()];
+        parent.events.push(SpanEvent::Child { id: span_index });
     }
 
     pub fn add_allocation(

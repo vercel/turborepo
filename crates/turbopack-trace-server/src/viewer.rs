@@ -315,21 +315,21 @@ impl Viewer {
         };
         let mut children = Vec::new();
         let mut current = 0;
+        let offset = root_spans
+            .iter()
+            .min_by_key(|span| span.start())
+            .map_or(0, |span| span.start());
         for span in root_spans {
             if matches!(value_mode, ValueMode::Duration) {
                 // Move current to start if needed.
-                current = max(current, span.start());
+                current = max(current, span.start() - offset);
             }
             if add_child_item(
                 &mut children,
                 &mut current,
                 view_rect,
                 0,
-                if view_rect.query.is_empty() {
-                    default_view_mode
-                } else {
-                    default_view_mode.as_spans()
-                },
+                default_view_mode,
                 value_mode,
                 QueueItem::Span(span),
                 false,
@@ -392,6 +392,14 @@ impl Viewer {
                     } else {
                         view_mode
                     };
+
+                    let selected_view_mode =
+                        if search_mode && highlighted_spans.contains(&span.id()) {
+                            selected_view_mode.as_spans()
+                        } else {
+                            selected_view_mode
+                        };
+
                     if selected_view_mode.bottom_up() {
                         let bottom_up = span.bottom_up();
                         if selected_view_mode.aggregate_children() {
@@ -470,6 +478,7 @@ impl Viewer {
                             Either::Right(span.graph())
                         };
                         for event in events {
+                            let filtered = search_mode;
                             match event {
                                 SpanGraphEventRef::SelfTime { duration: _ } => {}
                                 SpanGraphEventRef::Child { graph } => {
@@ -481,7 +490,7 @@ impl Viewer {
                                         view_mode,
                                         value_mode,
                                         QueueItem::SpanGraph(graph),
-                                        false,
+                                        filtered,
                                     );
                                 }
                             }
@@ -579,6 +588,7 @@ impl Viewer {
                         };
                         for child in events {
                             if let SpanGraphEventRef::Child { graph } = child {
+                                let filtered = search_mode;
                                 add_child_item(
                                     &mut children,
                                     &mut current,
@@ -587,7 +597,7 @@ impl Viewer {
                                     view_mode,
                                     value_mode,
                                     QueueItem::SpanGraph(graph),
-                                    false,
+                                    filtered,
                                 );
                             }
                         }
