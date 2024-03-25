@@ -105,6 +105,7 @@ enum TagValue<'a> {
     String(Cow<'a, str>),
     Number(f64),
     Bool(bool),
+    Array(Vec<TagValue<'a>>),
 }
 
 impl<'a> Display for TagValue<'a> {
@@ -113,6 +114,16 @@ impl<'a> Display for TagValue<'a> {
             TagValue::String(s) => write!(f, "{}", s),
             TagValue::Number(n) => write!(f, "{}", n),
             TagValue::Bool(b) => write!(f, "{}", b),
+            TagValue::Array(a) => {
+                write!(f, "[")?;
+                for (i, v) in a.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", v)?;
+                }
+                write!(f, "]")
+            }
         }
     }
 }
