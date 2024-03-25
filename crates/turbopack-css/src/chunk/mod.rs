@@ -128,18 +128,41 @@ pub async fn write_import_context(
     if let Some(import_context) = import_context {
         let import_context = &*import_context.await?;
         if !&import_context.layers.is_empty() {
-            writeln!(body, "@layer {} {{", import_context.layers.join("."))?;
+            writeln!(
+                body,
+                "@layer {} {{",
+                import_context
+                    .layers
+                    .iter()
+                    .map(|v| &***v)
+                    .intersperse(".")
+                    .collect::<String>()
+            )?;
             close.push_str("\n}");
         }
         if !&import_context.media.is_empty() {
-            writeln!(body, "@media {} {{", import_context.media.join(" and "))?;
+            writeln!(
+                body,
+                "@media {} {{",
+                import_context
+                    .media
+                    .iter()
+                    .map(|v| &***v)
+                    .intersperse(" and ")
+                    .collect::<String>()
+            )?;
             close.push_str("\n}");
         }
         if !&import_context.supports.is_empty() {
             writeln!(
                 body,
                 "@supports {} {{",
-                import_context.supports.join(" and ")
+                import_context
+                    .supports
+                    .iter()
+                    .map(|v| &***v)
+                    .intersperse(" and ")
+                    .collect::<String>()
             )?;
             close.push_str("\n}");
         }
@@ -285,7 +308,7 @@ impl OutputAsset for CssChunk {
 
         Ok(AssetIdent::from_path(this.chunking_context.chunk_path(
             AssetIdent::new(Value::new(ident)),
-            ".css".to_string(),
+            ".css".to_string().into(),
         )))
     }
 
