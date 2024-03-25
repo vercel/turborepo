@@ -32,10 +32,10 @@ export class TelemetryClient {
   private batchSize = DEFAULT_BATCH_SIZE;
   private timeout = 250;
   private sessionId = uuid();
-  config: TelemetryConfig;
   private eventBatches: Array<Promise<Response<string> | undefined>> = [];
-
   private events: Array<Record<"package", Event>> = [];
+
+  config: TelemetryConfig;
 
   constructor(
     api: string,
@@ -61,19 +61,15 @@ export class TelemetryClient {
     return this.events.length !== 0;
   }
 
+  async waitForFlush(): Promise<void> {
+    await Promise.all(this.eventBatches);
+  }
+
   /**
    * Flushes the telemetry events by sending them to the server.
    */
   private flushEvents() {
     const batch = this.events.splice(0, this.batchSize);
-    if (TelemetryConfig.isDebug()) {
-      for (const event of batch) {
-        logger.log();
-        logger.bold("[telemetry event]");
-        logger.dimmed(JSON.stringify(event, null, 2));
-        logger.log();
-      }
-    }
 
     if (this.config.isEnabled()) {
       // track the promises on the class
@@ -112,11 +108,20 @@ export class TelemetryClient {
       parent_id: parentId,
     };
 
-    this.events.push({ package: event });
+    if (TelemetryConfig.isDebug()) {
+      logger.log();
+      logger.bold("[telemetry event]");
+      logger.dimmed(JSON.stringify(event, null, 2));
+      logger.log();
+    }
 
-    // flush if we have enough events
-    if (this.events.length >= this.batchSize) {
-      this.flushEvents();
+    if (this.config.isEnabled()) {
+      this.events.push({ package: event });
+
+      // flush if we have enough events
+      if (this.events.length >= this.batchSize) {
+        this.flushEvents();
+      }
     }
 
     return event;
@@ -130,7 +135,7 @@ export class TelemetryClient {
       this.flushEvents();
     }
     try {
-      await Promise.all(this.eventBatches);
+      await this.waitForFlush();
     } catch (err) {
       // fail silently if we can't send telemetry
     }
