@@ -27,6 +27,8 @@ pub struct PnpmLockfile {
     #[serde(skip_serializing_if = "Option::is_none")]
     packages: Option<Map<String, PackageSnapshot>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    snapshots: Option<Map<String, PackageSnapshotV7>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     time: Option<Map<String, String>>,
 }
 
@@ -92,15 +94,33 @@ pub struct PackageSnapshot {
     #[serde(skip_serializing_if = "Option::is_none")]
     version: Option<String>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    dependencies: Option<Map<String, String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    optional_dependencies: Option<Map<String, String>>,
+    // In lockfile v7, this portion of package is stored in the top level
+    // `shapshots` map as opposed to being stored inline.
+    #[serde(flatten)]
+    snapshot: PackageSnapshotV7,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     patched: Option<bool>,
 
     #[serde(flatten)]
     other: Map<String, serde_yaml::Value>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PackageSnapshotV7 {
+    #[serde(skip_serializing_if = "is_false", default)]
+    optional: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    dependencies: Option<Map<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    optional_dependencies: Option<Map<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    transitive_peer_dependencies: Option<Vec<String>>,
+}
+
+fn is_false(val: &bool) -> bool {
+    !val
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -332,10 +352,11 @@ impl crate::Lockfile for PnpmLockfile {
         };
         Ok(Some(
             entry
+                .snapshot
                 .dependencies
                 .iter()
                 .flatten()
-                .chain(entry.optional_dependencies.iter().flatten())
+                .chain(entry.snapshot.optional_dependencies.iter().flatten())
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect(),
         ))
@@ -403,6 +424,7 @@ impl crate::Lockfile for PnpmLockfile {
             overrides: self.overrides.clone(),
             package_extensions_checksum: self.package_extensions_checksum.clone(),
             patched_dependencies: patches,
+            snapshots: None,
             time: None,
             settings: self.settings.clone(),
         }))
@@ -504,13 +526,14 @@ mod tests {
     const PNPM_OVERRIDE: &[u8] = include_bytes!("../../fixtures/pnpm-override.yaml").as_slice();
     const PNPM_PATCH: &[u8] = include_bytes!("../../fixtures/pnpm-patch.yaml").as_slice();
     const PNPM_PATCH_V6: &[u8] = include_bytes!("../../fixtures/pnpm-patch-v6.yaml").as_slice();
+    const PNPM_V7: &[u8] = include_bytes!("../../fixtures/pnpm-v7.yaml").as_slice();
 
     use super::*;
     use crate::{Lockfile, Package};
 
     #[test]
     fn test_roundtrip() {
-        for fixture in &[PNPM6, PNPM7, PNPM8, PNPM8_6] {
+        for fixture in &[PNPM6, PNPM7, PNPM8, PNPM8_6, PNPM_V7] {
             let lockfile = PnpmLockfile::from_bytes(fixture).unwrap();
             let serialized_lockfile = serde_yaml::to_string(&lockfile).unwrap();
             let lockfile_from_serialized =
@@ -913,5 +936,12 @@ c:
         let settings = lockfile.settings.unwrap();
         assert_eq!(settings.auto_install_peers, Some(true));
         assert_eq!(settings.exclude_links_from_lockfile, Some(false));
+    }
+
+    #[test]
+    fn test_lockfile_v7_parsing() {
+        let lockfile = PnpmLockfile::from_bytes(PNPM_V7).unwrap();
+        assert!(lockfile.packages.unwrap().contains_key("is-buffer@1.1.6"));
+        assert!(lockfile.snapshots.unwrap().contains_key("is-buffer@1.1.6"));
     }
 }
