@@ -90,7 +90,7 @@ impl Display for PackageManager {
 }
 
 // WorkspaceGlobs is suitable for finding package.json files via globwalk
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct WorkspaceGlobs {
     directory_inclusions: Any<'static>,
     directory_exclusions: Any<'static>,
@@ -98,6 +98,15 @@ pub struct WorkspaceGlobs {
     pub raw_inclusions: Vec<String>,
     pub raw_exclusions: Vec<String>,
     validated_exclusions: Vec<ValidatedGlob>,
+}
+
+impl fmt::Debug for WorkspaceGlobs {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("WorkspaceGlobs")
+            .field("inclusions", &self.raw_inclusions)
+            .field("exclusions", &self.raw_exclusions)
+            .finish()
+    }
 }
 
 impl PartialEq for WorkspaceGlobs {

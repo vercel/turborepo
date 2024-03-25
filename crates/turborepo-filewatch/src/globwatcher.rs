@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     fmt::Display,
     future::IntoFuture,
     str::FromStr,
@@ -20,10 +20,19 @@ use crate::{
 
 type Hash = String;
 
+#[derive(Clone)]
 pub struct GlobSet {
     include: HashMap<String, wax::Glob<'static>>,
     exclude: Any<'static>,
-    exclude_raw: Vec<String>,
+    exclude_raw: BTreeSet<String>,
+}
+
+impl GlobSet {
+    pub fn as_inputs(&self) -> Vec<String> {
+        let mut inputs: Vec<String> = self.include.keys().cloned().collect();
+        inputs.extend(self.exclude_raw.iter().cloned());
+        inputs
+    }
 }
 
 impl std::fmt::Debug for GlobSet {
@@ -32,6 +41,22 @@ impl std::fmt::Debug for GlobSet {
             .field("include", &self.include.keys())
             .field("exclude", &self.exclude_raw)
             .finish()
+    }
+}
+
+impl PartialEq for GlobSet {
+    fn eq(&self, other: &Self) -> bool {
+        self.include.keys().collect::<HashSet<_>>() == other.include.keys().collect::<HashSet<_>>()
+            && self.exclude_raw == other.exclude_raw
+    }
+}
+
+impl Eq for GlobSet {}
+
+impl std::hash::Hash for GlobSet {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.include.keys().collect::<BTreeSet<_>>().hash(state);
+        self.exclude_raw.hash(state);
     }
 }
 
@@ -63,7 +88,8 @@ impl GlobSet {
         raw_excludes: Vec<String>,
     ) -> Result<Self, GlobError> {
         let include = raw_includes
-            .into_iter()
+            .iter()
+            .cloned()
             .map(|raw_glob| {
                 let glob = compile_glob(&raw_glob)?;
                 Ok((raw_glob, glob))
@@ -86,7 +112,7 @@ impl GlobSet {
         Ok(Self {
             include,
             exclude,
-            exclude_raw: raw_excludes,
+            exclude_raw: BTreeSet::from_iter(raw_excludes.into_iter()),
         })
     }
 }

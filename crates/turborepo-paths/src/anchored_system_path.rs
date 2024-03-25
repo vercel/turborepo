@@ -4,7 +4,7 @@ use camino::{Utf8Component, Utf8Path};
 use path_clean::PathClean;
 use serde::Serialize;
 
-use crate::{AnchoredSystemPathBuf, PathError, RelativeUnixPathBuf};
+use crate::{AnchoredSystemPathBuf, PathError, PathRelation, RelativeUnixPathBuf};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(transparent)]
@@ -123,5 +123,33 @@ impl AnchoredSystemPath {
 
     pub fn clean(&self) -> AnchoredSystemPathBuf {
         AnchoredSystemPathBuf(self.0.as_std_path().clean().try_into().unwrap())
+    }
+
+    /// relation_to_path does a lexical comparison of path components to
+    /// determine how this path relates to the given path. In the event that
+    /// the paths are the same, we return `Parent`, much the way that `contains`
+    /// would return `true`.
+    pub fn relation_to_path(&self, other: &Self) -> PathRelation {
+        let mut self_components = self.components();
+        let mut other_components = other.components();
+        loop {
+            match (self_components.next(), other_components.next()) {
+                // Non-matching component, the paths diverge
+                (Some(self_component), Some(other_component))
+                    if self_component != other_component =>
+                {
+                    return PathRelation::Divergent
+                }
+                // A matching component, continue iterating
+                (Some(_), Some(_)) => {}
+                // We've reached the end of a possible parent without hitting a
+                // non-matching component. Return Parent.
+                (None, _) => return PathRelation::Parent,
+                // We've hit the end of the other path without hitting the
+                // end of this path. Since we haven't hit a non-matching component,
+                // our path must be a child
+                (_, None) => return PathRelation::Child,
+            }
+        }
     }
 }
