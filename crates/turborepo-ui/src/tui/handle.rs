@@ -10,13 +10,11 @@ use crate::LineWriter;
 #[derive(Debug, Clone)]
 pub struct AppSender {
     primary: mpsc::Sender<Event>,
-    priority: mpsc::Sender<Event>,
 }
 
 /// Struct for receiving app events
 pub struct AppReceiver {
     primary: mpsc::Receiver<Event>,
-    priority: mpsc::Receiver<Event>,
 }
 
 /// Struct for sending events related to a specific task
@@ -45,15 +43,12 @@ impl AppSender {
     /// AppReceiver should be passed to `crate::tui::run_app`
     pub fn new() -> (Self, AppReceiver) {
         let (primary_tx, primary_rx) = mpsc::channel();
-        let (priority_tx, priority_rx) = mpsc::channel();
         (
             Self {
                 primary: primary_tx,
-                priority: priority_tx,
             },
             AppReceiver {
                 primary: primary_rx,
-                priority: priority_rx,
             },
         )
     }
@@ -69,9 +64,8 @@ impl AppSender {
 
     /// Stop rendering TUI and restore terminal to default configuration
     pub fn stop(&self) {
-        // Send stop events in both channels, if receiver has dropped ignore error as
+        // Send stop event, if receiver has dropped ignore error as
         // it'll be a no-op.
-        self.priority.send(Event::Stop).ok();
         self.primary.send(Event::Stop).ok();
     }
 }
@@ -80,15 +74,10 @@ impl AppReceiver {
     /// Receive an event, producing a tick event if no events are received by
     /// the deadline.
     pub fn recv(&self, deadline: Instant) -> Result<Event, mpsc::RecvError> {
-        // If there's an event in the priority queue take from that first
-        if let Ok(event) = self.priority.try_recv() {
-            Ok(event)
-        } else {
-            match self.primary.recv_deadline(deadline) {
-                Ok(event) => Ok(event),
-                Err(mpsc::RecvTimeoutError::Timeout) => Ok(Event::Tick),
-                Err(mpsc::RecvTimeoutError::Disconnected) => Err(mpsc::RecvError),
-            }
+        match self.primary.recv_deadline(deadline) {
+            Ok(event) => Ok(event),
+            Err(mpsc::RecvTimeoutError::Timeout) => Ok(Event::Tick),
+            Err(mpsc::RecvTimeoutError::Disconnected) => Err(mpsc::RecvError),
         }
     }
 }
@@ -183,7 +172,7 @@ impl std::io::Write for PersistedWriterInner {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         let bytes = buf.to_vec();
         self.handle
-            .priority
+            .primary
             .send(Event::Log { message: bytes })
             .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "receiver dropped"))?;
         Ok(buf.len())
