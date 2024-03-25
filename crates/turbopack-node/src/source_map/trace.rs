@@ -106,7 +106,7 @@ impl SourceMapTrace {
         map: Vc<SourceMap>,
         line: usize,
         column: usize,
-        name: Option<String>,
+        name: Option<Arc<String>>,
     ) -> Vc<Self> {
         SourceMapTrace {
             map,

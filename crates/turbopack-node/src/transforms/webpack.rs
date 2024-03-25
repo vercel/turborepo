@@ -1,4 +1,4 @@
-use std::mem::take;
+use std::{mem::take, sync::Arc};
 
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
@@ -329,13 +329,13 @@ pub enum InfoMessage {
 #[serde(rename_all = "camelCase")]
 
 pub struct WebpackResolveOptions {
-    alias_fields: Option<Vec<String>>,
-    condition_names: Option<Vec<String>>,
+    alias_fields: Option<Vec<Arc<String>>>,
+    condition_names: Option<Vec<Arc<String>>>,
     no_package_json: bool,
-    extensions: Option<Vec<String>>,
-    main_fields: Option<Vec<String>>,
+    extensions: Option<Vec<Arc<String>>>,
+    main_fields: Option<Vec<Arc<String>>>,
     no_exports_field: bool,
-    main_files: Option<Vec<String>>,
+    main_files: Option<Vec<Arc<String>>>,
     no_modules: bool,
     prefer_relative: bool,
 }
