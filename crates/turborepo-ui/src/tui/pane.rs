@@ -133,6 +133,10 @@ impl<W> TerminalPane<W> {
         Ok(())
     }
 
+    pub fn term_size(&self) -> (u16, u16) {
+        (self.rows, self.cols)
+    }
+
     fn selected(&self) -> Option<(&String, &TerminalOutput<W>)> {
         let task_name = self.displayed.as_deref()?;
         self.tasks.get_key_value(task_name)
