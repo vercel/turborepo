@@ -1,4 +1,4 @@
-use std::{borrow::Cow, fmt::Display};
+use std::{borrow::Cow, fmt::Display, sync::Arc};
 
 use anyhow::Result;
 use mime::APPLICATION_JSON;
@@ -88,7 +88,7 @@ pub struct SourceMapTrace {
     map: Vc<SourceMap>,
     line: usize,
     column: usize,
-    name: Option<String>,
+    name: Option<Arc<String>>,
 }
 
 /// The result of performing a source map trace.

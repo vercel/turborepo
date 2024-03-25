@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::{anyhow, Result};
 use indexmap::IndexSet;
 use serde_json::Value as JsonValue;
@@ -167,7 +169,7 @@ impl GetContentSourceContent for NodeRenderContentSource {
     #[turbo_tasks::function]
     async fn get(
         &self,
-        path: String,
+        path: Arc<String>,
         data: Value<ContentSourceData>,
     ) -> Result<Vc<ContentSourceContent>> {
         let pathname = self.pathname.await?;
