@@ -982,12 +982,6 @@ impl ExecContext {
                 if let Err(e) = stdout_writer.flush() {
                     error!("error flushing logs: {e}");
                 }
-                if let TaskOutput::UI(task) = output_client {
-                    let mut persisted_ui = self.prefixed_ui(task.stdout(), task.stdout());
-                    let _ = self
-                        .task_cache
-                        .replay_log_file(persisted_ui.output_prefixed_writer());
-                }
                 if let Err(e) = self
                     .task_cache
                     .on_error(prefixed_ui.output_prefixed_writer())
