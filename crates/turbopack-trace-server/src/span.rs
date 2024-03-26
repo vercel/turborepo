@@ -8,7 +8,6 @@ pub type SpanIndex = NonZeroUsize;
 
 pub struct Span {
     // These values won't change after creation:
-    pub index: SpanIndex,
     pub parent: Option<SpanIndex>,
     pub depth: u32,
     pub start: u64,
@@ -50,7 +49,7 @@ pub struct Span {
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum SpanEvent {
     SelfTime { start: u64, end: u64 },
-    Child { id: SpanIndex },
+    Child { index: SpanIndex },
 }
 
 #[derive(Clone)]

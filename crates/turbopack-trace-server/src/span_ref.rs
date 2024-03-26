@@ -19,21 +19,23 @@ use crate::{
 pub struct SpanRef<'a> {
     pub(crate) span: &'a Span,
     pub(crate) store: &'a Store,
+    pub(crate) index: usize,
 }
 
 impl<'a> SpanRef<'a> {
     pub fn id(&self) -> SpanId {
-        unsafe { SpanId::new_unchecked(self.span.index.get() << 1) }
+        unsafe { SpanId::new_unchecked(self.index << 1) }
     }
 
     pub fn index(&self) -> SpanIndex {
-        self.span.index
+        SpanIndex::new(self.index).unwrap()
     }
 
     pub fn parent(&self) -> Option<SpanRef<'a>> {
-        self.span.parent.map(|id| SpanRef {
-            span: &self.store.spans[id.get()],
+        self.span.parent.map(|index| SpanRef {
+            span: &self.store.spans[index.get()],
             store: self.store,
+            index: index.get(),
         })
     }
 
@@ -154,10 +156,11 @@ impl<'a> SpanRef<'a> {
     pub fn events(&self) -> impl Iterator<Item = SpanEventRef<'a>> {
         self.span.events.iter().map(|event| match event {
             &SpanEvent::SelfTime { start, end } => SpanEventRef::SelfTime { start, end },
-            SpanEvent::Child { id } => SpanEventRef::Child {
+            SpanEvent::Child { index } => SpanEventRef::Child {
                 span: SpanRef {
-                    span: &self.store.spans[id.get()],
+                    span: &self.store.spans[index.get()],
                     store: self.store,
+                    index: index.get(),
                 },
             },
         })
@@ -166,9 +169,10 @@ impl<'a> SpanRef<'a> {
     pub fn children(&self) -> impl Iterator<Item = SpanRef<'a>> + DoubleEndedIterator + 'a {
         self.span.events.iter().filter_map(|event| match event {
             SpanEvent::SelfTime { .. } => None,
-            SpanEvent::Child { id } => Some(SpanRef {
-                span: &self.store.spans[id.get()],
+            SpanEvent::Child { index } => Some(SpanRef {
+                span: &self.store.spans[index.get()],
                 store: self.store,
+                index: index.get(),
             }),
         })
     }
@@ -279,13 +283,13 @@ impl<'a> SpanRef<'a> {
                 for child in self.children() {
                     let name = child.group_name();
                     let (list, recursive_list) = map.entry(name).or_default();
-                    list.push(child.span.index);
+                    list.push(child.index());
                     queue.push_back(child);
                     while let Some(child) = queue.pop_front() {
                         for nested_child in child.children() {
                             let nested_name = nested_child.group_name();
                             if name == nested_name {
-                                recursive_list.push(nested_child.span.index);
+                                recursive_list.push(nested_child.index());
                                 queue.push_back(nested_child);
                             }
                         }
@@ -310,12 +314,7 @@ impl<'a> SpanRef<'a> {
     pub fn bottom_up(self) -> impl Iterator<Item = SpanBottomUpRef<'a>> {
         self.span
             .bottom_up
-            .get_or_init(|| {
-                build_bottom_up_graph([SpanRef {
-                    span: self.span,
-                    store: self.store,
-                }])
-            })
+            .get_or_init(|| build_bottom_up_graph([self]))
             .iter()
             .map(|bottom_up| SpanBottomUpRef {
                 bottom_up: bottom_up.clone(),
@@ -335,6 +334,7 @@ impl<'a> SpanRef<'a> {
         result.into_iter().map(move |index| SpanRef {
             span: &store.spans[index.get()],
             store,
+            index: index.get(),
         })
     }
 
@@ -349,30 +349,30 @@ impl<'a> SpanRef<'a> {
                     index
                         .raw_entry_mut()
                         .from_key(cat)
-                        .and_modify(|_, v| v.push(span.span.index))
-                        .or_insert_with(|| (cat.to_string(), vec![span.span.index]));
+                        .and_modify(|_, v| v.push(span.index()))
+                        .or_insert_with(|| (cat.to_string(), vec![span.index()]));
                 }
                 if !name.is_empty() {
                     index
                         .raw_entry_mut()
                         .from_key(name)
-                        .and_modify(|_, v| v.push(span.span.index))
-                        .or_insert_with(|| (name.to_string(), vec![span.span.index]));
+                        .and_modify(|_, v| v.push(span.index()))
+                        .or_insert_with(|| (name.to_string(), vec![span.index()]));
                 }
                 for (_, value) in span.span.args.iter() {
                     index
                         .raw_entry_mut()
                         .from_key(value)
-                        .and_modify(|_, v| v.push(span.span.index))
-                        .or_insert_with(|| (value.to_string(), vec![span.span.index]));
+                        .and_modify(|_, v| v.push(span.index()))
+                        .or_insert_with(|| (value.to_string(), vec![span.index()]));
                 }
                 if !span.is_complete() {
                     let name = "incomplete";
                     index
                         .raw_entry_mut()
                         .from_key(name)
-                        .and_modify(|_, v| v.push(span.span.index))
-                        .or_insert_with(|| (name.to_string(), vec![span.span.index]));
+                        .and_modify(|_, v| v.push(span.index()))
+                        .or_insert_with(|| (name.to_string(), vec![span.index()]));
                 }
                 for child in span.children() {
                     queue.push_back(child);

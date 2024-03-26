@@ -1,9 +1,11 @@
+mod heaptrack;
 mod nextjs;
 mod turbopack;
 
 use std::{
     fs::File,
-    io::{Read, Seek, SeekFrom},
+    io::{self, BufReader, Read, Seek, SeekFrom},
+    mem::take,
     path::PathBuf,
     sync::Arc,
     thread::{self, JoinHandle},
@@ -13,12 +15,46 @@ use std::{
 use anyhow::Result;
 
 use crate::{
-    reader::{nextjs::NextJsFormat, turbopack::TurbopackFormat},
+    reader::{heaptrack::HeaptrackFormat, nextjs::NextJsFormat, turbopack::TurbopackFormat},
     store_container::StoreContainer,
 };
 
 trait TraceFormat {
     fn read(&mut self, buffer: &[u8]) -> Result<usize>;
+}
+
+#[derive(Default)]
+enum TraceFile {
+    Raw(File),
+    Zstd(zstd::Decoder<'static, BufReader<File>>),
+    #[default]
+    Unloaded,
+}
+
+impl TraceFile {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        match self {
+            Self::Raw(file) => file.read(buffer),
+            Self::Zstd(decoder) => decoder.read(buffer),
+            Self::Unloaded => unreachable!(),
+        }
+    }
+
+    fn stream_position(&mut self) -> io::Result<u64> {
+        match self {
+            Self::Raw(file) => file.stream_position(),
+            Self::Zstd(decoder) => decoder.get_mut().stream_position(),
+            Self::Unloaded => unreachable!(),
+        }
+    }
+
+    fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
+        match self {
+            Self::Raw(file) => file.seek(pos),
+            Self::Zstd(decoder) => decoder.get_mut().seek(pos),
+            Self::Unloaded => unreachable!(),
+        }
+    }
 }
 
 pub struct TraceReader {
@@ -37,6 +73,14 @@ impl TraceReader {
             self.try_read();
             thread::sleep(Duration::from_millis(500));
         }
+    }
+
+    fn trace_file_from_file(&self, file: File) -> io::Result<TraceFile> {
+        Ok(if self.path.to_string_lossy().ends_with(".zst") {
+            TraceFile::Zstd(zstd::Decoder::new(file)?)
+        } else {
+            TraceFile::Raw(file)
+        })
     }
 
     fn try_read(&mut self) -> bool {
@@ -66,6 +110,13 @@ impl TraceReader {
         if file.seek(SeekFrom::Start(0)).is_err() {
             return false;
         }
+        let mut file = match self.trace_file_from_file(file) {
+            Ok(f) => f,
+            Err(err) => {
+                println!("Error creating zstd decoder: {err}");
+                return false;
+            }
+        };
 
         let mut buffer = Vec::new();
         let mut index = 0;
@@ -75,33 +126,8 @@ impl TraceReader {
             match file.read(&mut chunk) {
                 Ok(bytes_read) => {
                     if bytes_read == 0 {
-                        let Ok(pos) = file.stream_position() else {
-                            return true;
-                        };
-                        drop(file);
-                        if let Some((_, total)) = initial_read.take() {
-                            println!("Initial read completed ({} MB)", total / (1024 * 1024),);
-                        }
-                        // No more data to read, sleep for a while to wait for more data
-                        thread::sleep(Duration::from_millis(100));
-                        let Ok(file_again) = File::open(&self.path) else {
-                            return true;
-                        };
-                        file = file_again;
-                        let Ok(end) = file.seek(SeekFrom::End(0)) else {
-                            return true;
-                        };
-                        if end < pos {
-                            return true;
-                        } else if end != pos {
-                            // Seek to the same position. This will fail when the file was
-                            // truncated.
-                            let Ok(new_pos) = file.seek(SeekFrom::Start(pos)) else {
-                                return true;
-                            };
-                            if new_pos != pos {
-                                return true;
-                            }
+                        if let Some(value) = self.wait_for_more_data(&mut file, &mut initial_read) {
+                            return value;
                         }
                     } else {
                         // If we have partially consumed some data, and we are at buffer capacity,
@@ -117,6 +143,8 @@ impl TraceReader {
                                 format = Some(Box::new(TurbopackFormat::new(self.store.clone())));
                             } else if buffer.starts_with(b"[{\"name\"") {
                                 format = Some(Box::new(NextJsFormat::new(self.store.clone())));
+                            } else if buffer.starts_with(b"v ") {
+                                format = Some(Box::new(HeaptrackFormat::new(self.store.clone())))
                             } else {
                                 // Fallback to the format without magic bytes
                                 // TODO Remove this after a while and show an error instead
@@ -153,11 +181,60 @@ impl TraceReader {
                         }
                     }
                 }
-                Err(_) => {
-                    // Error reading file, maybe it was removed
-                    return true;
+                Err(err) => {
+                    if err.kind() == io::ErrorKind::UnexpectedEof {
+                        if let Some(value) = self.wait_for_more_data(&mut file, &mut initial_read) {
+                            return value;
+                        }
+                    } else {
+                        // Error reading file, maybe it was removed
+                        println!("Error reading trace file: {err:?}");
+                        return true;
+                    }
                 }
             }
         }
+    }
+
+    fn wait_for_more_data(
+        &mut self,
+        file: &mut TraceFile,
+        initial_read: &mut Option<(u64, u64)>,
+    ) -> Option<bool> {
+        let Ok(pos) = file.stream_position() else {
+            return Some(true);
+        };
+        drop(take(file));
+        if let Some((_, total)) = initial_read.take() {
+            println!("Initial read completed ({} MB)", total / (1024 * 1024),);
+        }
+        thread::sleep(Duration::from_millis(100));
+        let Ok(file_again) = File::open(&self.path) else {
+            return Some(true);
+        };
+        *file = match self.trace_file_from_file(file_again) {
+            Ok(f) => f,
+            Err(err) => {
+                println!("Error creating zstd decoder: {err}");
+                return Some(false);
+            }
+        };
+        let Ok(end) = file.seek(SeekFrom::End(0)) else {
+            return Some(true);
+        };
+        // No more data to read, sleep for a while to wait for more data
+        if end < pos {
+            return Some(true);
+        } else if end != pos {
+            // Seek to the same position. This will fail when the file was
+            // truncated.
+            let Ok(new_pos) = file.seek(SeekFrom::Start(pos)) else {
+                return Some(true);
+            };
+            if new_pos != pos {
+                return Some(true);
+            }
+        }
+        None
     }
 }
