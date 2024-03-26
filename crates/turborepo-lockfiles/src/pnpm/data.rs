@@ -7,7 +7,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use turbopath::RelativeUnixPathBuf;
 
-use super::{dep_path::DepPath, Error, LockfileVersion};
+use super::{dep_path::DepPath, Error, LockfileVersion, SupportedLockfileVersion};
 
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 
@@ -167,13 +167,6 @@ struct LockfileSettings {
     exclude_links_from_lockfile: Option<bool>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SupportedLockfileVersion {
-    V5,
-    V6,
-    V7,
-}
-
 impl PnpmLockfile {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, crate::Error> {
         let this = serde_yaml::from_slice(bytes)?;
@@ -222,7 +215,7 @@ impl PnpmLockfile {
 
     // Extracts the version from a dependency path
     fn extract_version<'a>(&self, key: &'a str) -> Result<Cow<'a, str>, Error> {
-        let dp = DepPath::try_from(key)?;
+        let dp = DepPath::parse(self.version(), key)?;
         // If there's a suffix, the suffix gets included as part of the version
         // so we can track patch file changes
         if let Some(suffix) = dp.peer_suffix {
@@ -277,12 +270,13 @@ impl PnpmLockfile {
     }
 
     fn prune_patches(
+        &self,
         patches: &Map<String, PatchFile>,
         pruned_packages: &Map<String, PackageSnapshot>,
     ) -> Result<Map<String, PatchFile>, Error> {
         let mut pruned_patches = Map::new();
         for dependency in pruned_packages.keys() {
-            let dp = DepPath::try_from(dependency.as_str())?;
+            let dp = DepPath::parse(self.version(), dependency.as_str())?;
             let patch_key = format!("{}@{}", dp.name, dp.version);
             if let Some(patch) = patches
                 .get(&patch_key)
@@ -430,7 +424,7 @@ impl crate::Lockfile for PnpmLockfile {
         let patches = self
             .patched_dependencies
             .as_ref()
-            .map(|patches| Self::prune_patches(patches, &pruned_packages))
+            .map(|patches| self.prune_patches(patches, &pruned_packages))
             .transpose()?;
 
         Ok(Box::new(Self {
@@ -559,13 +553,14 @@ mod tests {
     const PNPM_PATCH: &[u8] = include_bytes!("../../fixtures/pnpm-patch.yaml").as_slice();
     const PNPM_PATCH_V6: &[u8] = include_bytes!("../../fixtures/pnpm-patch-v6.yaml").as_slice();
     const PNPM_V7: &[u8] = include_bytes!("../../fixtures/pnpm-v7.yaml").as_slice();
+    const PNPM_V7_FULL: &[u8] = include_bytes!("../../fixtures/pnpm-v7-full.yaml").as_slice();
 
     use super::*;
     use crate::{Lockfile, Package};
 
     #[test]
     fn test_roundtrip() {
-        for fixture in &[PNPM6, PNPM7, PNPM8, PNPM8_6, PNPM_V7] {
+        for fixture in &[PNPM6, PNPM7, PNPM8, PNPM8_6, PNPM_V7, PNPM_V7_FULL] {
             let lockfile = PnpmLockfile::from_bytes(fixture).unwrap();
             let serialized_lockfile = serde_yaml::to_string(&lockfile).unwrap();
             let lockfile_from_serialized =

@@ -6,6 +6,8 @@ use nom::{
     Finish, IResult,
 };
 
+use super::SupportedLockfileVersion;
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DepPath<'a> {
     // todo we possibly keep the full string here for 0-cost serialization
@@ -23,6 +25,19 @@ impl<'a> DepPath<'a> {
             host: None,
             peer_suffix: None,
         }
+    }
+
+    pub fn parse(
+        version: SupportedLockfileVersion,
+        input: &'a str,
+    ) -> Result<Self, nom::error::Error<String>> {
+        let (_, dep_path) = match version {
+            SupportedLockfileVersion::V7 => parse_dep_path_v7(input),
+            SupportedLockfileVersion::V5 | SupportedLockfileVersion::V6 => parse_dep_path(input),
+        }
+        .map_err(|e| e.to_owned())
+        .finish()?;
+        Ok(dep_path)
     }
 
     pub fn with_host(mut self, host: Option<&'a str>) -> Self {
@@ -52,15 +67,6 @@ impl<'a> DepPath<'a> {
     }
 }
 
-impl<'a> TryFrom<&'a str> for DepPath<'a> {
-    type Error = nom::error::Error<String>;
-
-    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
-        let (_, dep_path) = parse_dep_path(value).map_err(|e| e.to_owned()).finish()?;
-        Ok(dep_path)
-    }
-}
-
 // See https://github.com/pnpm/pnpm/blob/185ab01adfc927ea23d2db08a14723bf51d0025f/packages/dependency-path/src/index.ts#L96
 // This diverges from the pnpm implementation that only parses <6 and in
 // order to parse 6+ it partially converts to the old format.
@@ -79,6 +85,18 @@ fn parse_dep_path(i: &str) -> IResult<&str, DepPath> {
         DepPath::new(name, version)
             .with_host(host)
             .with_peer_suffix(peer_suffix),
+    ))
+}
+
+fn parse_dep_path_v7(i: &str) -> IResult<&str, DepPath> {
+    let (i, name) = parse_name(i)?;
+    let (i, _) = nom::character::complete::one_of("/@")(i)?;
+    let (i, version) = parse_version(i)?;
+    let (i, peer_suffix) = opt(parse_new_peer_suffix)(i)?;
+    let (_, _) = nom::combinator::eof(i)?;
+    Ok((
+        "",
+        DepPath::new(name, version).with_peer_suffix(peer_suffix),
     ))
 }
 
@@ -149,12 +167,21 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
+    #[test_case("foo@1.0.0", DepPath::new("foo", "1.0.0") ; "basic v7")]
+    #[test_case("@scope/foo@1.0.0", DepPath::new("@scope/foo", "1.0.0") ; "scope v7")]
+    #[test_case("foo@1.0.0(bar@1.2.3)", DepPath::new("foo", "1.0.0").with_peer_suffix(Some("(bar@1.2.3)")) ; "peer v7")]
+    fn dep_path_parse_v7_tests(s: &str, expected: DepPath) {
+        let (rest, actual) = parse_dep_path_v7(s).unwrap();
+        assert_eq!(rest, "");
+        assert_eq!(actual, expected);
+    }
+
     #[test_case("/@babel/helper-string-parser/7.19.4(patch_hash=wjhgmpzh47qmycrzgpeyoyh3ce)(@babel/core@7.21.0)", Some("wjhgmpzh47qmycrzgpeyoyh3ce"); "v6 patch")]
     #[test_case("/foo/1.0.0_patchHash_peerHash", Some("patchHash"); "pre v6 patch")]
     #[test_case("/foo/1.0.0", None; "no suffix")]
     #[test_case("/foo/1.0.0(bar@1.0.0)", None; "no patch")]
     fn dep_path_patch_hash(input: &str, expected: Option<&str>) {
-        let dep_path = DepPath::try_from(input).unwrap();
+        let dep_path = DepPath::parse(SupportedLockfileVersion::V5, input).unwrap();
         assert_eq!(dep_path.patch_hash(), expected);
     }
 }

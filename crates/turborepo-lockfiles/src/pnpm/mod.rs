@@ -27,6 +27,13 @@ enum VersionFormat {
     Float,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SupportedLockfileVersion {
+    V5,
+    V6,
+    V7,
+}
+
 pub fn pnpm_subgraph(
     contents: &[u8],
     workspace_packages: &[String],
