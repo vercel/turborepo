@@ -1,7 +1,7 @@
 {
   "name": "turbo-vsc",
   "displayName": "Turborepo LSP",
-  "version": "1.0.0",
+  "version": "1.1.2",
   "description": "Tools and instant feedback for your build system",
   "main": "out/main.js",
   "publisher": "Vercel",
@@ -10,8 +10,8 @@
     "esbuild-base": "esbuild ./src/extension.ts --bundle --main-fields=module,main --outfile=out/main.js --external:vscode --format=cjs --platform=node",
     "esbuild": "npm run esbuild-base -- --sourcemap",
     "esbuild-watch": "npm run esbuild-base -- --sourcemap --watch",
-    "package": "pnpm vsce package --no-dependencies",
-    "publish": "pnpm vsce publish --no-dependencies",
+    "package": "pnpm vsce package --no-dependencies --baseContentUrl https://github.com/vercel/turbo/raw/HEAD/packages/turbo-vsc",
+    "publish": "pnpm vsce publish --no-dependencies --baseContentUrl https://github.com/vercel/turbo/raw/HEAD/packages/turbo-vsc",
     "test-compile": "tsc -p ./"
   },
   "keywords": [
