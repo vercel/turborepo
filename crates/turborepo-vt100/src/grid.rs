@@ -138,7 +138,18 @@ impl Grid {
         self.scrollback
             .iter()
             .skip(scrollback_len - self.scrollback_offset)
-            .chain(self.rows.iter().take(rows_len - self.scrollback_offset))
+            // when scrollback_offset > rows_len (e.g. rows = 3,
+            // scrollback_len = 10, offset = 9) the skip(10 - 9)
+            // will take 9 rows instead of 3. we need to set
+            // the upper bound to rows_len (e.g. 3)
+            .take(rows_len)
+            // same for rows_len - scrollback_offset (e.g. 3 - 9).
+            // it'll panic with overflow. we have to saturate the subtraction.
+            .chain(
+                self.rows
+                    .iter()
+                    .take(rows_len.saturating_sub(self.scrollback_offset)),
+            )
     }
 
     pub fn drawing_rows(&self) -> impl Iterator<Item = &crate::row::Row> {
