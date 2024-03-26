@@ -203,7 +203,9 @@ impl<W> TerminalOutput<W> {
             .title(title.as_str())
             .title(Title::from(title.as_str()).position(Position::Bottom));
         let term = PseudoTerminal::new(&screen).cursor(cursor).block(block);
-        terminal.insert_before(rows as u16, |buf| term.render(buf.area, buf))?;
+        terminal.insert_before((rows as u16).saturating_add(2), |buf| {
+            term.render(buf.area, buf)
+        })?;
         self.has_been_persisted = true;
 
         Ok(())
