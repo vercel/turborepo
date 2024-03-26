@@ -11,4 +11,32 @@ This information is used to shape the Turborepo roadmap and prioritize features.
 
 ## Events
 
-All recorded events can be found by browsing the [event methods on the client class](./src/client.ts).
+Each event must have its own method on the client class. All recorded events can be found by browsing the [event methods on the client class](./src/client.ts).
+
+## Usage
+
+1. Init the client with your package name and version:
+
+```ts
+import { initTelemetry } from "@turbo/telemetry";
+import pkgJson from "../package.json";
+
+const { telemetry } = await initTelemetry({
+  name: pkgJson.name,
+  version: pkgJson.version,
+});
+```
+
+2. Send events
+
+```ts
+telemetry.myCustomEventName({
+  // event properties
+});
+```
+
+3. Close the client before exiting
+
+```ts
+await telemetry.close();
+```
