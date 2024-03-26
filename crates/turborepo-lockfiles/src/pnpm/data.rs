@@ -1,4 +1,8 @@
-use std::{any::Any, borrow::Cow, collections::BTreeMap};
+use std::{
+    any::Any,
+    borrow::Cow,
+    collections::{BTreeMap, HashMap},
+};
 
 use serde::{Deserialize, Serialize};
 use turbopath::RelativeUnixPathBuf;
@@ -163,6 +167,13 @@ struct LockfileSettings {
     exclude_links_from_lockfile: Option<bool>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SupportedLockfileVersion {
+    V5,
+    V6,
+    V7,
+}
+
 impl PnpmLockfile {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, crate::Error> {
         let this = serde_yaml::from_slice(bytes)?;
@@ -191,10 +202,21 @@ impl PnpmLockfile {
         matches!(self.lockfile_version.format, super::VersionFormat::String)
     }
 
+    fn version(&self) -> SupportedLockfileVersion {
+        if matches!(self.lockfile_version.format, super::VersionFormat::Float) {
+            return SupportedLockfileVersion::V5;
+        }
+        match self.lockfile_version.version.as_str() {
+            "7.0" => SupportedLockfileVersion::V7,
+            _ => SupportedLockfileVersion::V6,
+        }
+    }
+
     fn format_key(&self, name: &str, version: &str) -> String {
-        match self.is_v6() {
-            true => format!("/{name}@{version}"),
-            false => format!("/{name}/{version}"),
+        match self.version() {
+            SupportedLockfileVersion::V5 => format!("/{name}/{version}"),
+            SupportedLockfileVersion::V6 => format!("/{name}@{version}"),
+            SupportedLockfileVersion::V7 => format!("{name}@{version}"),
         }
     }
 
@@ -347,19 +369,18 @@ impl crate::Lockfile for PnpmLockfile {
         &self,
         key: &str,
     ) -> Result<Option<std::collections::HashMap<String, String>>, crate::Error> {
+        // Check snapshots for v7
+        if let Some(snapshot) = self
+            .snapshots
+            .as_ref()
+            .and_then(|snapshots| snapshots.get(key))
+        {
+            return Ok(Some(snapshot.dependencies()));
+        }
         let Some(entry) = self.packages.as_ref().and_then(|pkgs| pkgs.get(key)) else {
             return Ok(None);
         };
-        Ok(Some(
-            entry
-                .snapshot
-                .dependencies
-                .iter()
-                .flatten()
-                .chain(entry.snapshot.optional_dependencies.iter().flatten())
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect(),
-        ))
+        Ok(Some(entry.snapshot.dependencies()))
     }
 
     fn subgraph(
@@ -492,6 +513,17 @@ impl Dependency {
     fn as_tuple(&self) -> (&str, &str) {
         let Dependency { specifier, version } = self;
         (specifier, version)
+    }
+}
+
+impl PackageSnapshotV7 {
+    pub fn dependencies(&self) -> HashMap<String, String> {
+        self.dependencies
+            .iter()
+            .flatten()
+            .chain(self.optional_dependencies.iter().flatten())
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
     }
 }
 
@@ -943,5 +975,28 @@ c:
         let lockfile = PnpmLockfile::from_bytes(PNPM_V7).unwrap();
         assert!(lockfile.packages.unwrap().contains_key("is-buffer@1.1.6"));
         assert!(lockfile.snapshots.unwrap().contains_key("is-buffer@1.1.6"));
+    }
+
+    #[test]
+    fn test_lockfile_v7_traversal() {
+        let lockfile = PnpmLockfile::from_bytes(PNPM_V7).unwrap();
+        let is_even = lockfile
+            .resolve_package("packages/a", "is-even", "^1.0.0")
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            is_even,
+            Package {
+                key: "is-even@1.0.0".into(),
+                version: "1.0.0".into()
+            }
+        );
+        let is_even_deps = lockfile.all_dependencies(&is_even.key).unwrap().unwrap();
+        assert_eq!(
+            is_even_deps,
+            vec![("is-odd".to_string(), "0.1.2".to_string())]
+                .into_iter()
+                .collect()
+        );
     }
 }
