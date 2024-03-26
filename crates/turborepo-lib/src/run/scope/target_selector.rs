@@ -4,6 +4,12 @@ use regex::Regex;
 use thiserror::Error;
 use turbopath::AnchoredSystemPathBuf;
 
+#[derive(Debug, PartialEq)]
+pub struct GitRange {
+    pub from_ref: String,
+    pub to_ref: Option<String>,
+}
+
 #[derive(Debug, Default, PartialEq)]
 pub struct TargetSelector {
     pub include_dependencies: bool,
@@ -14,26 +20,8 @@ pub struct TargetSelector {
     pub follow_prod_deps_only: bool,
     pub parent_dir: AnchoredSystemPathBuf,
     pub name_pattern: String,
-    pub from_ref: String,
-    pub to_ref_override: String,
+    pub git_range: Option<GitRange>,
     pub raw: String,
-}
-
-impl TargetSelector {
-    pub fn to_ref(&self) -> &str {
-        if self.to_ref_override.is_empty() {
-            "HEAD"
-        } else {
-            &self.to_ref_override
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn is_valid(&self) -> bool {
-        !self.from_ref.is_empty()
-            || self.parent_dir != AnchoredSystemPathBuf::default()
-            || !self.name_pattern.is_empty()
-    }
 }
 
 impl FromStr for TargetSelector {
@@ -78,7 +66,9 @@ impl FromStr for TargetSelector {
             (false, selector)
         };
 
-        let re = Regex::new(r"^(?P<name>[^.](?:[^{}\[\]]*[^{}\[\].])?)?(\{(?P<directory>[^}]*)})?(?P<commits>(?:\.{3})?\[[^\]]+\])?$").expect("valid");
+        // We explicitly allow empty git ranges so we can return a more targeted error
+        // below
+        let re = Regex::new(r"^(?P<name>[^.](?:[^{}\[\]]*[^{}\[\].])?)?(\{(?P<directory>[^}]*)})?(?P<commits>(?:\.{3})?\[[^\]]*\])?$").expect("valid");
         let captures = re.captures(selector);
 
         let captures = match captures {
@@ -129,7 +119,7 @@ impl FromStr for TargetSelector {
             }
         }
 
-        let (from_ref, to_ref_override) = if let Some(commits) = captures.name("commits") {
+        let git_range = if let Some(commits) = captures.name("commits") {
             let commits_str = if let Some(commits) = commits.as_str().strip_prefix("...") {
                 if parent_dir == AnchoredSystemPathBuf::default() && name_pattern.is_empty() {
                     return Err(InvalidSelectorError::CantMatchDependencies);
@@ -141,26 +131,39 @@ impl FromStr for TargetSelector {
             };
 
             // strip the square brackets
-            let inner_str = commits_str
+            let commits_str = commits_str
                 .strip_prefix('[')
-                .and_then(|s| s.strip_suffix(']'));
+                .and_then(|s| s.strip_suffix(']'))
+                .expect("regex guarantees square brackets");
+            if commits_str.is_empty() {
+                return Err(InvalidSelectorError::InvalidGitRange(
+                    commits_str.to_string(),
+                ));
+            }
 
-            if let Some(commits_str) = inner_str {
-                if let Some((a, b)) = commits_str.split_once("...") {
-                    (a.to_string(), b.to_string())
-                } else {
-                    (commits_str.to_string(), String::new())
+            let git_range = if let Some((a, b)) = commits_str.split_once("...") {
+                if a.is_empty() || b.is_empty() {
+                    return Err(InvalidSelectorError::InvalidGitRange(
+                        commits_str.to_string(),
+                    ));
+                }
+                GitRange {
+                    from_ref: a.to_string(),
+                    to_ref: Some(b.to_string()),
                 }
             } else {
-                (commits_str.to_string(), String::new())
-            }
+                GitRange {
+                    from_ref: commits_str.to_string(),
+                    to_ref: None,
+                }
+            };
+            Some(git_range)
         } else {
-            Default::default()
+            None
         };
 
         Ok(TargetSelector {
-            from_ref,
-            to_ref_override,
+            git_range,
             exclude,
             exclude_self,
             include_dependencies,
@@ -182,6 +185,8 @@ pub enum InvalidSelectorError {
     InvalidAnchoredPath(String),
     #[error("empty path specification")]
     EmptyPathSpecification,
+    #[error("invalid git range selector: {0}")]
+    InvalidGitRange(String),
 
     #[error("selector \"{0}\" must have a reference, directory, or name pattern")]
     InvalidSelector(String),
@@ -220,6 +225,7 @@ mod test {
     use turbopath::AnchoredSystemPathBuf;
 
     use super::TargetSelector;
+    use crate::run::scope::target_selector::GitRange;
 
     #[test_case("foo", TargetSelector { name_pattern: "foo".to_string(), raw: "foo".to_string(), ..Default::default() }; "foo")]
     #[test_case("foo...", TargetSelector { name_pattern: "foo".to_string(), raw: "foo...".to_string(), include_dependencies: true, ..Default::default() }; "foo dot dot dot")]
@@ -233,17 +239,17 @@ mod test {
     #[test_case("...{./foo}", TargetSelector { raw: "...{./foo}".to_string(), parent_dir: AnchoredSystemPathBuf::try_from("foo").unwrap(), include_dependents: true, ..Default::default() }; "dot dot dot curly bracket foo")]
     #[test_case(".", TargetSelector { raw: ".".to_string(), parent_dir: AnchoredSystemPathBuf::try_from(".").unwrap(), ..Default::default() }; "parent dir dot")]
     #[test_case("..", TargetSelector { raw: "..".to_string(), parent_dir: AnchoredSystemPathBuf::try_from("..").unwrap(), ..Default::default() }; "parent dir dot dot")]
-    #[test_case("[master]", TargetSelector { raw: "[master]".to_string(), from_ref: "master".to_string(), ..Default::default() }; "square brackets master")]
-    #[test_case("[from...to]", TargetSelector { raw: "[from...to]".to_string(), from_ref: "from".to_string(), to_ref_override: "to".to_string(), ..Default::default() }; "[from...to]")]
-    #[test_case("{foo}[master]", TargetSelector { raw: "{foo}[master]".to_string(), from_ref: "master".to_string(), parent_dir: AnchoredSystemPathBuf::try_from("foo").unwrap(), ..Default::default() }; "{foo}[master]")]
-    #[test_case("pattern{foo}[master]", TargetSelector { raw: "pattern{foo}[master]".to_string(), from_ref: "master".to_string(), parent_dir: AnchoredSystemPathBuf::try_from("foo").unwrap(), name_pattern: "pattern".to_string(), ..Default::default() }; "pattern{foo}[master]")]
-    #[test_case("[master]...", TargetSelector { raw: "[master]...".to_string(), from_ref: "master".to_string(), include_dependencies: true, ..Default::default() }; "square brackets master dot dot dot")]
-    #[test_case("...[master]", TargetSelector { raw: "...[master]".to_string(), from_ref: "master".to_string(), include_dependents: true, ..Default::default() }; "dot dot dot master square brackets")]
-    #[test_case("...[master]...", TargetSelector { raw: "...[master]...".to_string(), from_ref: "master".to_string(), include_dependencies: true, include_dependents: true, ..Default::default() }; "dot dot dot master square brackets dot dot dot")]
-    #[test_case("...[from...to]...", TargetSelector { raw: "...[from...to]...".to_string(), from_ref: "from".to_string(), to_ref_override: "to".to_string(), include_dependencies: true, include_dependents: true, ..Default::default() }; "dot dot dot [from...to] dot dot dot")]
-    #[test_case("foo...[master]", TargetSelector { raw: "foo...[master]".to_string(), from_ref: "master".to_string(), name_pattern: "foo".to_string(), match_dependencies: true, ..Default::default() }; "foo...[master]")]
-    #[test_case("foo...[master]...", TargetSelector { raw: "foo...[master]...".to_string(), from_ref: "master".to_string(), name_pattern: "foo".to_string(), match_dependencies: true, include_dependencies: true, ..Default::default() }; "foo...[master] dot dot dot")]
-    #[test_case("{foo}...[master]", TargetSelector { raw: "{foo}...[master]".to_string(), from_ref: "master".to_string(), parent_dir: AnchoredSystemPathBuf::try_from("foo").unwrap(), match_dependencies: true, ..Default::default() }; "curly brackets foo...[master]")]
+    #[test_case("[master]", TargetSelector { raw: "[master]".to_string(), git_range: Some(GitRange { from_ref: "master".to_string(), to_ref: None }), ..Default::default() }; "square brackets master")]
+    #[test_case("[from...to]", TargetSelector { raw: "[from...to]".to_string(), git_range: Some(GitRange { from_ref: "from".to_string(), to_ref: Some("to".to_string()) }), ..Default::default() }; "[from...to]")]
+    #[test_case("{foo}[master]", TargetSelector { raw: "{foo}[master]".to_string(), git_range: Some(GitRange { from_ref: "master".to_string(), to_ref: None }), parent_dir: AnchoredSystemPathBuf::try_from("foo").unwrap(), ..Default::default() }; "{foo}[master]")]
+    #[test_case("pattern{foo}[master]", TargetSelector { raw: "pattern{foo}[master]".to_string(), git_range: Some(GitRange { from_ref: "master".to_string(), to_ref: None }), parent_dir: AnchoredSystemPathBuf::try_from("foo").unwrap(), name_pattern: "pattern".to_string(), ..Default::default() }; "pattern{foo}[master]")]
+    #[test_case("[master]...", TargetSelector { raw: "[master]...".to_string(), git_range: Some(GitRange { from_ref: "master".to_string(), to_ref: None }), include_dependencies: true, ..Default::default() }; "square brackets master dot dot dot")]
+    #[test_case("...[master]", TargetSelector { raw: "...[master]".to_string(), git_range: Some(GitRange { from_ref: "master".to_string(), to_ref: None }), include_dependents: true, ..Default::default() }; "dot dot dot master square brackets")]
+    #[test_case("...[master]...", TargetSelector { raw: "...[master]...".to_string(), git_range: Some(GitRange { from_ref: "master".to_string(), to_ref: None }), include_dependencies: true, include_dependents: true, ..Default::default() }; "dot dot dot master square brackets dot dot dot")]
+    #[test_case("...[from...to]...", TargetSelector { raw: "...[from...to]...".to_string(), git_range: Some(GitRange { from_ref: "from".to_string(), to_ref: Some("to".to_string()) }), include_dependencies: true, include_dependents: true, ..Default::default() }; "dot dot dot [from...to] dot dot dot")]
+    #[test_case("foo...[master]", TargetSelector { raw: "foo...[master]".to_string(), git_range: Some(GitRange { from_ref: "master".to_string(), to_ref: None }), name_pattern: "foo".to_string(), match_dependencies: true, ..Default::default() }; "foo...[master]")]
+    #[test_case("foo...[master]...", TargetSelector { raw: "foo...[master]...".to_string(), git_range: Some(GitRange { from_ref: "master".to_string(), to_ref: None }), name_pattern: "foo".to_string(), match_dependencies: true, include_dependencies: true, ..Default::default() }; "foo...[master] dot dot dot")]
+    #[test_case("{foo}...[master]", TargetSelector { raw: "{foo}...[master]".to_string(), git_range: Some(GitRange { from_ref: "master".to_string(), to_ref: None }), parent_dir: AnchoredSystemPathBuf::try_from("foo").unwrap(), match_dependencies: true, ..Default::default() }; "curly brackets foo...[master]")]
     fn parse_target_selector(raw_selector: &str, want: TargetSelector) {
         let result = TargetSelector::from_str(raw_selector);
 
@@ -263,6 +269,10 @@ mod test {
 
     #[test_case("{}" ; "curly brackets")]
     #[test_case("......[master]" ; "......[master]")]
+    #[test_case("[]" ; "empty git range")]
+    #[test_case("[...some-ref]" ; "missing git range start")]
+    #[test_case("[some-ref...]" ; "missing git range end")]
+    #[test_case("[...]" ; "missing entire git range")]
     fn parse_target_selector_invalid(raw_selector: &str) {
         let result = TargetSelector::from_str(raw_selector);
 

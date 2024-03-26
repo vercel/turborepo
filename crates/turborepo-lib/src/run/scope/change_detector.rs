@@ -16,7 +16,7 @@ pub trait GitChangeDetector {
     fn changed_packages(
         &self,
         from_ref: &str,
-        to_ref: &str,
+        to_ref: Option<&str>,
     ) -> Result<HashSet<PackageName>, ChangeMapError>;
 }
 
@@ -84,13 +84,11 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
     fn changed_packages(
         &self,
         from_ref: &str,
-        to_ref: &str,
+        to_ref: Option<&str>,
     ) -> Result<HashSet<PackageName>, ChangeMapError> {
         let mut changed_files = HashSet::new();
         if !from_ref.is_empty() {
-            changed_files = self
-                .scm
-                .changed_files(self.turbo_root, Some(from_ref), to_ref)?;
+            changed_files = self.scm.changed_files(self.turbo_root, from_ref, to_ref)?;
         }
 
         let lockfile_contents = self.get_lockfile_contents(from_ref, &changed_files);
