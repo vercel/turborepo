@@ -28,10 +28,10 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_filewatch::{
     cookies::CookieWriter,
     globwatcher::{Error as GlobWatcherError, GlobError, GlobSet, GlobWatcher},
-    package_watcher::{PackageWatcher, WatchingPackageDiscovery},
+    package_watcher::{PackageWatchError, PackageWatcher},
     FileSystemWatcher, WatchError,
 };
-use turborepo_repository::{discovery::PackageDiscovery, package_manager};
+use turborepo_repository::package_manager;
 
 use super::{bump_timeout::BumpTimeout, endpoint::SocketOpenError, proto};
 use crate::daemon::{
@@ -242,7 +242,7 @@ struct TurboGrpcServiceInner {
     times_saved: Arc<Mutex<HashMap<String, u64>>>,
     start_time: Instant,
     log_file: AbsoluteSystemPathBuf,
-    package_discovery: Arc<WatchingPackageDiscovery>,
+    package_watcher: Arc<PackageWatcher>,
 }
 
 // we have a grpc service that uses watching package discovery, and where the
@@ -261,9 +261,8 @@ impl TurboGrpcServiceInner {
         let file_watching = FileWatching::new(repo_root.clone()).unwrap();
 
         tracing::debug!("initing package discovery");
-        let package_discovery = Arc::new(WatchingPackageDiscovery::new(
-            file_watching.package_watcher.clone(),
-        ));
+        // Note that we're cloning the Arc, not the package watcher itself
+        let package_watcher = Arc::clone(&file_watching.package_watcher);
 
         // exit_root_watch delivers a signal to the root watch loop to exit.
         // In the event that the server shuts down via some other mechanism, this
@@ -278,7 +277,7 @@ impl TurboGrpcServiceInner {
 
         (
             TurboGrpcServiceInner {
-                package_discovery,
+                package_watcher,
                 shutdown: trigger_shutdown,
                 file_watching,
                 times_saved: Arc::new(Mutex::new(HashMap::new())),
@@ -469,60 +468,50 @@ impl proto::turbod_server::Turbod for TurboGrpcServiceInner {
         &self,
         _request: tonic::Request<proto::DiscoverPackagesRequest>,
     ) -> Result<tonic::Response<proto::DiscoverPackagesResponse>, tonic::Status> {
-        self.package_discovery
-            .discover_packages()
-            .await
-            .map(|packages| {
-                tonic::Response::new(proto::DiscoverPackagesResponse {
-                    package_files: packages
-                        .workspaces
-                        .into_iter()
-                        .map(|d| proto::PackageFiles {
-                            package_json: d.package_json.to_string(),
-                            turbo_json: d.turbo_json.map(|t| t.to_string()),
-                        })
-                        .collect(),
-                    package_manager: proto::PackageManager::from(packages.package_manager).into(),
-                })
-            })
-            .map_err(|e| match e {
-                turborepo_repository::discovery::Error::Unavailable => {
-                    tonic::Status::unavailable("package discovery unavailable")
-                }
-                turborepo_repository::discovery::Error::Failed(e) => {
-                    tonic::Status::internal(format!("{}", e))
-                }
-            })
+        match self.package_watcher.discover_packages().await {
+            Some(Ok(packages)) => Ok(tonic::Response::new(proto::DiscoverPackagesResponse {
+                package_files: packages
+                    .workspaces
+                    .into_iter()
+                    .map(|d| proto::PackageFiles {
+                        package_json: d.package_json.to_string(),
+                        turbo_json: d.turbo_json.map(|t| t.to_string()),
+                    })
+                    .collect(),
+                package_manager: proto::PackageManager::from(packages.package_manager).into(),
+            })),
+            None | Some(Err(PackageWatchError::Unavailable)) => {
+                Err(tonic::Status::unavailable("package discovery unavailable"))
+            }
+            Some(Err(PackageWatchError::InvalidState(reason))) => {
+                Err(tonic::Status::failed_precondition(reason))
+            }
+        }
     }
 
     async fn discover_packages_blocking(
         &self,
         _request: tonic::Request<proto::DiscoverPackagesRequest>,
     ) -> Result<tonic::Response<proto::DiscoverPackagesResponse>, tonic::Status> {
-        self.package_discovery
-            .discover_packages_blocking()
-            .await
-            .map(|packages| {
-                tonic::Response::new(proto::DiscoverPackagesResponse {
-                    package_files: packages
-                        .workspaces
-                        .into_iter()
-                        .map(|d| proto::PackageFiles {
-                            package_json: d.package_json.to_string(),
-                            turbo_json: d.turbo_json.map(|t| t.to_string()),
-                        })
-                        .collect(),
-                    package_manager: proto::PackageManager::from(packages.package_manager).into(),
-                })
-            })
-            .map_err(|e| match e {
-                turborepo_repository::discovery::Error::Unavailable => {
-                    tonic::Status::unavailable("package discovery unavailable")
-                }
-                turborepo_repository::discovery::Error::Failed(e) => {
-                    tonic::Status::internal(format!("{}", e))
-                }
-            })
+        match self.package_watcher.discover_packages_blocking().await {
+            Ok(packages) => Ok(tonic::Response::new(proto::DiscoverPackagesResponse {
+                package_files: packages
+                    .workspaces
+                    .into_iter()
+                    .map(|d| proto::PackageFiles {
+                        package_json: d.package_json.to_string(),
+                        turbo_json: d.turbo_json.map(|t| t.to_string()),
+                    })
+                    .collect(),
+                package_manager: proto::PackageManager::from(packages.package_manager).into(),
+            })),
+            Err(PackageWatchError::Unavailable) => {
+                Err(tonic::Status::unavailable("package discovery unavailable"))
+            }
+            Err(PackageWatchError::InvalidState(reason)) => {
+                Err(tonic::Status::failed_precondition(reason))
+            }
+        }
     }
 }
 
