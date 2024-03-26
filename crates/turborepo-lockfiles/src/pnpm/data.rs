@@ -382,6 +382,12 @@ impl crate::Lockfile for PnpmLockfile {
         workspace_packages: &[String],
         packages: &[String],
     ) -> Result<Box<dyn crate::Lockfile>, crate::Error> {
+        if matches!(self.version(), SupportedLockfileVersion::V7) {
+            return Err(crate::Error::Pnpm(Error::UnsupportedVersion(
+                self.lockfile_version.version.clone(),
+            )));
+        }
+
         let importers = self
             .importers
             .iter()
