@@ -12,6 +12,12 @@
     "esbuild-watch": "npm run esbuild-base -- --sourcemap --watch",
     "package": "pnpm vsce package --no-dependencies --baseContentUrl https://github.com/vercel/turbo/raw/HEAD/packages/turbo-vsc",
     "publish": "pnpm vsce publish --no-dependencies --baseContentUrl https://github.com/vercel/turbo/raw/HEAD/packages/turbo-vsc",
+    "copy-darwin-arm64": "cp out/artifacts/turborepo-lsp-aarch64-apple-darwin/turborepo-lsp out/turborepo-lsp-darwin-arm64 && chmod +x out/turborepo-lsp-darwin-arm64",
+    "copy-darwin-x64": "cp out/artifacts/turborepo-lsp-x86_64-apple-darwin/turborepo-lsp out/turborepo-lsp-darwin-x64 && chmod +x out/turborepo-lsp-darwin-x64",
+    "copy-win32-x64": "cp out/artifacts/turborepo-lsp-x86_64-pc-windows-msvc/turborepo-lsp.exe out/turborepo-lsp-win32-x64.exe",
+    "copy-linux-arm64": "cp out/artifacts/turborepo-lsp-aarch64-unknown-linux-musl/turborepo-lsp out/turborepo-lsp-linux-arm64 && chmod +x out/turborepo-lsp-linux-arm64",
+    "copy-linux-x64": "cp out/artifacts/turborepo-lsp-x86_64-unknown-linux-musl/turborepo-lsp out/turborepo-lsp-linux-x64 && chmod +x out/turborepo-lsp-linux-x64",
+    "copy": "pnpm run copy-darwin-arm64 && pnpm run copy-darwin-x64 && pnpm run copy-win32-x64 && pnpm run copy-linux-arm64 && pnpm run copy-linux-x64",
     "test-compile": "tsc -p ./"
   },
   "keywords": [
