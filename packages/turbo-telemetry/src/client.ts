@@ -88,21 +88,27 @@ export class TelemetryClient {
   }
 
   /**
-   * Private method that tracks the given key value pair
+   * Method that tracks the given key value pair.
+   *
+   * NOTE: This is intentionally private to prevent misuse.
+   * All tracking should be done through the public methods.
+   * If a new event is needed, a new public method should be created.
    */
   private track({
     key,
     value,
     parentId,
+    isSensitive,
   }: {
     key: string;
     value: string;
     parentId?: string;
+    isSensitive?: boolean;
   }): Event {
     const event = {
       id: uuid(),
       key,
-      value,
+      value: isSensitive ? this.config.oneWayHash(value) : value,
       package_name: this.packageInfo.name,
       package_version: this.packageInfo.version,
       parent_id: parentId,
@@ -141,7 +147,13 @@ export class TelemetryClient {
     }
   }
 
-  // events
+  ////////////
+  // EVENTS //
+  ////////////
+
+  /**
+   * Track selected package manager
+   */
   trackPackageManager(packageManager: string): Event {
     return this.track({
       key: "package_manager",

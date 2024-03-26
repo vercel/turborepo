@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { logger } from "@turbo/utils";
 import chalk from "chalk";
-import { defaultConfigPath } from "./utils";
+import { defaultConfigPath, oneWayHashWithSalt } from "./utils";
 
 const DEBUG_ENV_VAR = "TURBO_TELEMETRY_DEBUG";
 const DISABLED_ENV_VAR = "TURBO_TELEMETRY_DISABLED";
@@ -22,7 +22,7 @@ interface Config {
  * https://github.com/vercel/turbo/blob/main/crates/turborepo-telemetry/src/config.rs
  */
 export class TelemetryConfig {
-  private config: Config;
+  config: Config;
   private configPath: string;
 
   constructor({ configPath, config }: { configPath: string; config: Config }) {
@@ -118,6 +118,13 @@ export class TelemetryConfig {
     this.config.telemetry_alerted = new Date();
     this.write();
     return true;
+  }
+
+  oneWayHash(input: string) {
+    return oneWayHashWithSalt({
+      input,
+      salt: this.config.telemetry_salt,
+    });
   }
 
   static isDebug() {
