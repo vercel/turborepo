@@ -774,6 +774,17 @@ mod tests {
         }))
         ; "pnpm override"
     )]
+    #[test_case(
+        PNPM_V7,
+        "packages/b",
+        "is-negative",
+        "https://codeload.github.com/kevva/is-negative/tar.gz/1d7e288222b53a0cab90a331f1865220ec29560c",
+        Ok(Some(crate::Package {
+            key: "is-negative@https://codeload.github.com/kevva/is-negative/tar.gz/1d7e288222b53a0cab90a331f1865220ec29560c".into(),
+            version: "2.1.0".into(),
+        }))
+        ; "v7 git"
+    )]
     fn test_resolve_package(
         lockfile: &[u8],
         workspace_path: &str,

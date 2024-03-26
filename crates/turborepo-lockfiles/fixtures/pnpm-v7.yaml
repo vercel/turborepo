@@ -21,6 +21,9 @@ importers:
       c:
         specifier: workspace:*
         version: link:../c
+      is-negative:
+        specifier: github:kevva/is-negative#master
+        version: https://codeload.github.com/kevva/is-negative/tar.gz/1d7e288222b53a0cab90a331f1865220ec29560c
 
   packages/c:
     dependencies:
@@ -40,6 +43,14 @@ packages:
       {
         integrity: sha512-LEhnkAdJqic4Dbqn58A0y52IXoHWlsueqQkKfMfdEnIYG8A1sm/GHidKkS6yvXlMoRrkM34csHnXQtOqcb+Jzg==,
       }
+    engines: { node: ">=0.10.0" }
+
+  is-negative@https://codeload.github.com/kevva/is-negative/tar.gz/1d7e288222b53a0cab90a331f1865220ec29560c:
+    resolution:
+      {
+        tarball: https://codeload.github.com/kevva/is-negative/tar.gz/1d7e288222b53a0cab90a331f1865220ec29560c,
+      }
+    version: 2.1.0
     engines: { node: ">=0.10.0" }
 
   is-number@3.0.0:
@@ -87,6 +98,9 @@ snapshots:
   is-number@3.0.0:
     dependencies:
       kind-of: 3.2.2
+
+  is-negative@https://codeload.github.com/kevva/is-negative/tar.gz/1d7e288222b53a0cab90a331f1865220ec29560c:
+    {}
 
   is-number@6.0.0: {}
 
