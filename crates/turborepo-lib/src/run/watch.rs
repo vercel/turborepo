@@ -32,6 +32,11 @@ impl WatchClient {
                 proto::package_change_event::Event::RediscoverPackages(_) => {
                     println!("Rediscovering packages");
                 }
+                proto::package_change_event::Event::Error(proto::PackageChangeError {
+                    message,
+                }) => {
+                    return Err(DaemonError::Unavailable(message));
+                }
             }
         }
 

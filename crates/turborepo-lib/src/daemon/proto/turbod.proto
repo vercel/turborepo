@@ -100,7 +100,12 @@ message PackageChangeEvent {
   oneof event {
     PackageChanged package_changed = 1;
     RediscoverPackages rediscover_packages = 2;
+    PackageChangeError error = 3;
   }
+}
+
+message PackageChangeError {
+  string message = 1;
 }
 
 message PackageChanged {
