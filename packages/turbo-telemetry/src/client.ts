@@ -147,17 +147,135 @@ export class TelemetryClient {
     }
   }
 
+  private trackCliOption({
+    option,
+    value,
+  }: {
+    option: string;
+    value: string;
+  }): Event {
+    return this.track({
+      key: `option:${option}`,
+      value,
+    });
+  }
+
+  private trackCliArgument({
+    argument,
+    value,
+  }: {
+    argument: string;
+    value: string;
+  }): Event {
+    return this.track({
+      key: `argument:${argument}`,
+      value,
+    });
+  }
+
+  private trackCliCommand({
+    command,
+    value,
+  }: {
+    command: string;
+    value: string;
+  }): Event {
+    return this.track({
+      key: `command:${command}`,
+      value,
+    });
+  }
+
   ////////////
   // EVENTS //
   ////////////
 
-  /**
-   * Track selected package manager
-   */
-  trackPackageManager(packageManager: string): Event {
-    return this.track({
-      key: "package_manager",
-      value: packageManager,
+  trackCommandStatus({
+    command,
+    status,
+  }: {
+    command: string;
+    status: string;
+  }): Event {
+    return this.trackCliCommand({
+      command,
+      value: status,
     });
+  }
+
+  // CLI Options
+
+  trackOptionExample(value: string | undefined): Event | undefined {
+    if (value) {
+      return this.trackCliOption({
+        option: "example",
+        value,
+      });
+    }
+  }
+
+  trackOptionPackageManager(value: string | undefined): Event | undefined {
+    if (value) {
+      return this.trackCliOption({
+        option: "package_manager",
+        value,
+      });
+    }
+  }
+
+  trackOptionSkipInstall(value: boolean | undefined): Event | undefined {
+    if (value) {
+      return this.trackCliOption({
+        option: "skip_install",
+        value: value.toString(),
+      });
+    }
+  }
+
+  trackOptionSkipTransforms(value: boolean | undefined): Event | undefined {
+    if (value) {
+      return this.trackCliOption({
+        option: "skip_transforms",
+        value: value.toString(),
+      });
+    }
+  }
+
+  trackOptionTurboVersion(value: string | undefined): Event | undefined {
+    if (value) {
+      return this.trackCliOption({
+        option: "turbo_version",
+        value,
+      });
+    }
+  }
+
+  trackOptionExamplePath(value: string | undefined): Event | undefined {
+    if (value) {
+      return this.trackCliOption({
+        option: "example_path",
+        value,
+      });
+    }
+  }
+
+  // CLI Arguments
+
+  trackArgumentDirectory(provided: boolean): Event | undefined {
+    if (provided) {
+      return this.trackCliArgument({
+        argument: "project_directory",
+        value: provided.toString(),
+      });
+    }
+  }
+
+  trackArgumentPackageManager(value: string | undefined): Event | undefined {
+    if (value) {
+      return this.trackCliArgument({
+        argument: "package_manager",
+        value,
+      });
+    }
   }
 }

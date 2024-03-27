@@ -34,8 +34,14 @@ describe("TelemetryClient", () => {
     );
 
     // add two events to trigger the batch flush
-    client.trackPackageManager("yarn");
-    client.trackPackageManager("pnpm");
+    client.trackCommandStatus({
+      command: "test-command",
+      status: "start",
+    });
+    client.trackCommandStatus({
+      command: "test-command",
+      status: "end",
+    });
 
     expect(got.post).toHaveBeenCalled();
     expect(got.post).toHaveBeenCalledWith(
@@ -45,8 +51,8 @@ describe("TelemetryClient", () => {
           {
             package: {
               id: expect.any(String) as string,
-              key: "package_manager",
-              value: "yarn",
+              key: "command:test-command",
+              value: "start",
               package_name: "test-package",
               package_version: "1.0.0",
             },
@@ -54,8 +60,8 @@ describe("TelemetryClient", () => {
           {
             package: {
               id: expect.any(String) as string,
-              key: "package_manager",
-              value: "pnpm",
+              key: "command:test-command",
+              value: "end",
               package_name: "test-package",
               package_version: "1.0.0",
             },
@@ -91,7 +97,10 @@ describe("TelemetryClient", () => {
       config
     );
 
-    client.trackPackageManager("yarn");
+    client.trackCommandStatus({
+      command: "test-command",
+      status: "start",
+    });
     expect(got.post).not.toHaveBeenCalled();
     expect(client.hasPendingEvents()).toBe(true);
   });
@@ -115,7 +124,10 @@ describe("TelemetryClient", () => {
       config
     );
 
-    client.trackPackageManager("yarn");
+    client.trackCommandStatus({
+      command: "test-command",
+      status: "start",
+    });
     expect(got.post).not.toHaveBeenCalled();
     expect(client.hasPendingEvents()).toBe(false);
   });
@@ -143,7 +155,10 @@ describe("TelemetryClient", () => {
     );
 
     // add one event
-    client.trackPackageManager("pnpm");
+    client.trackCommandStatus({
+      command: "test-command",
+      status: "start",
+    });
     expect(got.post).not.toHaveBeenCalled();
 
     await client.close();
@@ -156,8 +171,8 @@ describe("TelemetryClient", () => {
           {
             package: {
               id: expect.any(String) as string,
-              key: "package_manager",
-              value: "pnpm",
+              key: "command:test-command",
+              value: "start",
               package_name: "test-package",
               package_version: "1.0.0",
             },

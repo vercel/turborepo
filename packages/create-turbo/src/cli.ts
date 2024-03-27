@@ -5,10 +5,18 @@ import https from "node:https";
 import chalk from "chalk";
 import { Command, Option } from "commander";
 import { logger } from "@turbo/utils";
+import {
+  type TelemetryClient,
+  initTelemetry,
+  withTelemetryCommand,
+} from "@turbo/telemetry";
 import { ProxyAgent } from "proxy-agent";
 import cliPkg from "../package.json";
 import { notifyUpdate } from "./utils/notifyUpdate";
 import { create } from "./commands";
+
+// Global telemetry client
+let telemetryClient: TelemetryClient | undefined;
 
 // Support http proxy vars
 const agent = new ProxyAgent();
@@ -22,6 +30,21 @@ createTurboCli
   .name(chalk.bold(logger.turboGradient("create-turbo")))
   .description("Create a new Turborepo")
   .usage(`${chalk.bold("<project-directory>")} [options]`)
+  .hook("preAction", async (_, thisAction) => {
+    const { telemetry } = await initTelemetry({
+      name: cliPkg.name,
+      version: cliPkg.version,
+    });
+    // inject telemetry into the action as an option
+    thisAction.addOption(
+      new Option("--telemetry").default(telemetry).hideHelp()
+    );
+    telemetryClient = telemetry;
+  })
+  .hook("postAction", async () => {
+    await telemetryClient?.close();
+  })
+
   .argument("[project-directory]")
   // TODO: argument is still provided (but removed from help)
   // for backwards compatibility, remove this in the next major
@@ -66,6 +89,9 @@ createTurboCli
   .version(cliPkg.version, "-v, --version", "Output the current version")
   .helpOption("-h, --help", "Display help for command")
   .action(create);
+
+// Add telemetry command to the CLI
+withTelemetryCommand(createTurboCli);
 
 createTurboCli
   .parseAsync()
