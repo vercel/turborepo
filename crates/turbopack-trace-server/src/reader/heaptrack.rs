@@ -1,4 +1,9 @@
-use std::{collections::HashSet, str::from_utf8, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    num::NonZeroUsize,
+    str::from_utf8,
+    sync::Arc,
+};
 
 use anyhow::{bail, Context, Result};
 use rustc_demangle::demangle;
@@ -75,7 +80,9 @@ pub struct HeaptrackFormat {
     last_timestamp: u64,
     strings: Vec<String>,
     traces: Vec<SpanIndex>,
+    ip_parent_map: HashMap<(usize, SpanIndex), SpanIndex>,
     instruction_pointers: Vec<InstructionPointer>,
+    first_span_of_ip: Vec<Option<NonZeroUsize>>,
     allocations: Vec<AllocationInfo>,
     spans: usize,
 }
@@ -88,10 +95,12 @@ impl HeaptrackFormat {
             last_timestamp: 0,
             strings: vec!["".to_string()],
             traces: vec![SpanIndex::new(usize::MAX).unwrap()],
+            ip_parent_map: HashMap::new(),
             instruction_pointers: vec![InstructionPointer {
                 module_index: 0,
                 frames: Vec::new(),
             }],
+            first_span_of_ip: vec![None],
             allocations: vec![AllocationInfo {
                 size: 0,
                 trace_index: 0,
@@ -153,8 +162,29 @@ impl TraceFormat for HeaptrackFormat {
                         ip_index,
                         parent_index,
                     } = TraceNode::read(&mut line)?;
+                    // Try to fix cut-off traces
+                    if parent_index == 0 {
+                        if let Some(span_index) = self
+                            .first_span_of_ip
+                            .get(ip_index)
+                            .context("ip not found")?
+                        {
+                            self.traces.push(*span_index);
+                            continue;
+                        }
+                    }
+                    // Lookup parent
                     let parent = if parent_index > 0 {
-                        Some(*self.traces.get(parent_index).context("parent not found")?)
+                        let parent_span_index =
+                            *self.traces.get(parent_index).context("parent not found")?;
+                        // Check if we have an duplicate (can only happen due to cut-off traces)
+                        if let Some(span_index) =
+                            self.ip_parent_map.get(&(ip_index, parent_span_index))
+                        {
+                            self.traces.push(*span_index);
+                            continue;
+                        }
+                        Some(parent_span_index)
                     } else {
                         None
                     };
@@ -199,6 +229,7 @@ impl TraceFormat for HeaptrackFormat {
                             format!("{} @ {file}:{line}", demangle(function)),
                         ));
                     }
+
                     let span_index = store.add_span(
                         parent,
                         self.last_timestamp,
@@ -209,10 +240,15 @@ impl TraceFormat for HeaptrackFormat {
                     );
                     self.spans += 1;
                     self.traces.push(span_index);
+                    self.first_span_of_ip[ip_index].get_or_insert_with(|| span_index);
+                    if let Some(parent) = parent {
+                        self.ip_parent_map.insert((ip_index, parent), span_index);
+                    }
                 }
                 b'i' => {
                     let ip = InstructionPointer::read(&mut line)?;
                     self.instruction_pointers.push(ip);
+                    self.first_span_of_ip.push(None);
                 }
                 b'#' => {
                     // comment
