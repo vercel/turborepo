@@ -3,9 +3,9 @@ mod nextjs;
 mod turbopack;
 
 use std::{
+    env,
     fs::File,
     io::{self, BufReader, Read, Seek, SeekFrom},
-    mem::take,
     path::PathBuf,
     sync::Arc,
     thread::{self, JoinHandle},
@@ -91,6 +91,13 @@ impl TraceReader {
             return false;
         };
         println!("Trace file opened");
+        let stop_at = env::var("STOP_AT")
+            .unwrap_or_default()
+            .parse()
+            .map_or(u64::MAX, |v: u64| v * 1024 * 1024);
+        if stop_at != u64::MAX {
+            println!("Will stop reading file at {} MB", stop_at / 1024 / 1024)
+        }
 
         {
             let mut store = self.store.write();
@@ -99,10 +106,11 @@ impl TraceReader {
 
         let mut format: Option<Box<dyn TraceFormat>> = None;
 
+        let mut current_read = 0;
         let mut initial_read = {
             if let Ok(pos) = file.seek(SeekFrom::End(0)) {
                 if pos > 100 * 1024 * 1024 {
-                    Some((0, pos))
+                    Some(pos)
                 } else {
                     None
                 }
@@ -167,16 +175,17 @@ impl TraceReader {
                             if self.store.want_to_read() {
                                 thread::yield_now();
                             }
-                            if let Some((current, total)) = &mut initial_read {
-                                let old_mbs = *current / (97 * 1024 * 1024);
-                                *current += bytes_read as u64;
-                                let new_mbs = *current / (97 * 1024 * 1024);
+                            let prev_read = current_read;
+                            current_read += bytes_read as u64;
+                            if let Some(total) = &mut initial_read {
+                                let old_mbs = prev_read / (97 * 1024 * 1024);
+                                let new_mbs = current_read / (97 * 1024 * 1024);
                                 if old_mbs != new_mbs {
-                                    let pos = file.stream_position().unwrap_or(*current);
+                                    let pos = file.stream_position().unwrap_or(current_read);
                                     *total = (*total).max(pos);
                                     let percentage = pos * 100 / *total;
                                     let read = pos / (1024 * 1024);
-                                    let uncompressed = *current / (1024 * 1024);
+                                    let uncompressed = current_read / (1024 * 1024);
                                     let total = *total / (1024 * 1024);
                                     let stats = format.stats();
                                     print!("{}% read ({}/{} MB)", percentage, read, total);
@@ -189,6 +198,14 @@ impl TraceReader {
                                         println!(" - {}", stats);
                                     }
                                 }
+                            }
+                            if current_read >= stop_at {
+                                println!(
+                                    "Stopped reading file as requested by STOP_AT env var. \
+                                     Waiting for new file..."
+                                );
+                                self.wait_for_new_file(&mut file);
+                                return true;
                             }
                         }
                     }
@@ -211,31 +228,21 @@ impl TraceReader {
     fn wait_for_more_data(
         &mut self,
         file: &mut TraceFile,
-        initial_read: &mut Option<(u64, u64)>,
+        initial_read: &mut Option<u64>,
     ) -> Option<bool> {
         let Ok(pos) = file.stream_position() else {
             return Some(true);
         };
-        drop(take(file));
-        if let Some((_, total)) = initial_read.take() {
+        if let Some(total) = initial_read.take() {
             println!("Initial read completed ({} MB)", total / (1024 * 1024),);
         }
         thread::sleep(Duration::from_millis(100));
-        let Ok(file_again) = File::open(&self.path) else {
-            return Some(true);
-        };
-        *file = match self.trace_file_from_file(file_again) {
-            Ok(f) => f,
-            Err(err) => {
-                println!("Error creating zstd decoder: {err}");
-                return Some(false);
-            }
-        };
         let Ok(end) = file.seek(SeekFrom::End(0)) else {
             return Some(true);
         };
         // No more data to read, sleep for a while to wait for more data
         if end < pos {
+            // new file
             return Some(true);
         } else if end != pos {
             // Seek to the same position. This will fail when the file was
@@ -248,5 +255,20 @@ impl TraceReader {
             }
         }
         None
+    }
+
+    fn wait_for_new_file(&self, file: &mut TraceFile) {
+        let Ok(pos) = file.stream_position() else {
+            return;
+        };
+        loop {
+            thread::sleep(Duration::from_millis(1000));
+            let Ok(end) = file.seek(SeekFrom::End(0)) else {
+                return;
+            };
+            if end < pos {
+                return;
+            }
+        }
     }
 }
