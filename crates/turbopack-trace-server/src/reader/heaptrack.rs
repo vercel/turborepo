@@ -81,12 +81,18 @@ struct InstructionPointerExtraInfo {
     first_trace_of_ip: Option<usize>,
 }
 
+#[derive(Clone, Copy)]
+struct TraceData {
+    span_index: SpanIndex,
+    ip_index: usize,
+}
+
 pub struct HeaptrackFormat {
     store: Arc<StoreContainer>,
     version: u32,
     last_timestamp: u64,
     strings: Vec<String>,
-    traces: Vec<(SpanIndex, usize)>,
+    traces: Vec<TraceData>,
     ip_parent_map: HashMap<(usize, SpanIndex), usize>,
     trace_instruction_pointers: Vec<usize>,
     instruction_pointers: IndexMap<InstructionPointer, InstructionPointerExtraInfo>,
@@ -103,7 +109,10 @@ impl HeaptrackFormat {
             version: 0,
             last_timestamp: 0,
             strings: vec!["".to_string()],
-            traces: vec![(SpanIndex::new(usize::MAX).unwrap(), 0)],
+            traces: vec![TraceData {
+                span_index: SpanIndex::new(usize::MAX).unwrap(),
+                ip_index: 0,
+            }],
             ip_parent_map: HashMap::new(),
             instruction_pointers: indexmap![InstructionPointer {
                 module_index: 0,
@@ -180,11 +189,10 @@ impl TraceFormat for HeaptrackFormat {
                     self.strings.push(demangle(&string).to_string());
                 }
                 b't' => {
-                    let trace_node = TraceNode::read(&mut line)?;
                     let TraceNode {
                         ip_index,
                         parent_index,
-                    } = trace_node;
+                    } = TraceNode::read(&mut line)?;
                     let ip_index = *self
                         .trace_instruction_pointers
                         .get(ip_index)
@@ -196,31 +204,28 @@ impl TraceFormat for HeaptrackFormat {
                     // Try to fix cut-off traces
                     if parent_index == 0 {
                         if let Some(trace_index) = ip_info.first_trace_of_ip {
-                            let (span_index, trace) =
-                                self.traces.get(trace_index).context("trace not found")?;
-                            self.traces.push((*span_index, *trace));
+                            let trace = self.traces.get(trace_index).context("trace not found")?;
+                            self.traces.push(*trace);
                             continue;
                         }
                     }
                     // Lookup parent
                     let parent = if parent_index > 0 {
-                        let (parent_span_index, parent_ip_index) =
-                            self.traces.get(parent_index).context("parent not found")?;
+                        let parent = self.traces.get(parent_index).context("parent not found")?;
                         // Check if we have an duplicate (can only happen due to cut-off traces)
                         if let Some(trace_index) =
-                            self.ip_parent_map.get(&(ip_index, *parent_span_index))
+                            self.ip_parent_map.get(&(ip_index, parent.span_index))
                         {
-                            let (span_index, trace) =
-                                self.traces.get(*trace_index).context("trace not found")?;
-                            self.traces.push((*span_index, *trace));
+                            let trace = self.traces.get(*trace_index).context("trace not found")?;
+                            self.traces.push(*trace);
                             continue;
                         }
                         // Check if we repeat parent frame
-                        if *parent_ip_index == ip_index {
-                            self.traces.push((*parent_span_index, *parent_ip_index));
+                        if parent.ip_index == ip_index {
+                            self.traces.push(*parent);
                             continue;
                         }
-                        Some(*parent_span_index)
+                        Some(parent.span_index)
                     } else {
                         None
                     };
@@ -278,7 +283,10 @@ impl TraceFormat for HeaptrackFormat {
                     store.complete_span(span_index);
                     self.spans += 1;
                     let index = self.traces.len();
-                    self.traces.push((span_index, ip_index));
+                    self.traces.push(TraceData {
+                        span_index,
+                        ip_index,
+                    });
                     self.instruction_pointers
                         .get_index_mut(ip_index)
                         .unwrap()
@@ -345,7 +353,7 @@ impl TraceFormat for HeaptrackFormat {
                         .get(index)
                         .context("allocation not found")?;
                     if *trace_index > 0 {
-                        let (span_index, _) =
+                        let TraceData { span_index, .. } =
                             self.traces.get(*trace_index).context("trace not found")?;
                         store.add_allocation(*span_index, *size, 1, &mut outdated_spans);
                     }
@@ -358,7 +366,7 @@ impl TraceFormat for HeaptrackFormat {
                         .get(index)
                         .context("allocation not found")?;
                     if *trace_index > 0 {
-                        let (span_index, _) =
+                        let TraceData { span_index, .. } =
                             self.traces.get(*trace_index).context("trace not found")?;
                         store.add_deallocation(*span_index, *size, 1, &mut outdated_spans);
                     }
