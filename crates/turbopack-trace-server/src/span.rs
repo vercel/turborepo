@@ -34,12 +34,10 @@ pub struct Span {
     pub total_persistent_allocations: OnceLock<u64>,
     pub total_span_count: OnceLock<u64>,
     pub total_allocation_count: OnceLock<u64>,
-    pub graph: OnceLock<Vec<SpanGraphEvent>>,
-    pub bottom_up: OnceLock<Vec<Arc<SpanBottomUp>>>,
-    pub search_index: OnceLock<HashMap<String, Vec<SpanIndex>>>,
 
     // More nested fields, but memory lazily allocated
     pub time_data: OnceLock<Box<SpanTimeData>>,
+    pub extra: OnceLock<Box<SpanExtra>>,
 }
 
 #[derive(Default)]
@@ -60,6 +58,13 @@ pub struct SpanTimeData {
     pub corrected_total_time: OnceLock<u64>,
 }
 
+#[derive(Default)]
+pub struct SpanExtra {
+    pub graph: OnceLock<Vec<SpanGraphEvent>>,
+    pub bottom_up: OnceLock<Vec<Arc<SpanBottomUp>>>,
+    pub search_index: OnceLock<HashMap<String, Vec<SpanIndex>>>,
+}
+
 impl Span {
     pub fn time_data(&self) -> &SpanTimeData {
         self.time_data.get_or_init(|| {
@@ -74,6 +79,10 @@ impl Span {
     pub fn time_data_mut(&mut self) -> &mut SpanTimeData {
         self.time_data();
         self.time_data.get_mut().unwrap()
+    }
+
+    pub fn extra(&self) -> &SpanExtra {
+        self.extra.get_or_init(Default::default)
     }
 }
 

@@ -9,7 +9,7 @@ use indexmap::IndexMap;
 
 use crate::{
     bottom_up::build_bottom_up_graph,
-    span::{Span, SpanEvent, SpanGraphEvent, SpanIndex, SpanTimeData},
+    span::{Span, SpanEvent, SpanExtra, SpanGraphEvent, SpanIndex, SpanTimeData},
     span_bottom_up_ref::SpanBottomUpRef,
     span_graph_ref::{event_map_to_list, SpanGraphEventRef, SpanGraphRef},
     store::{SpanId, Store},
@@ -43,8 +43,12 @@ impl<'a> SpanRef<'a> {
         self.span.start
     }
 
-    pub fn time_data(&self) -> &SpanTimeData {
+    pub fn time_data(&self) -> &'a SpanTimeData {
         self.span.time_data()
+    }
+
+    pub fn extra(&self) -> &'a SpanExtra {
+        self.span.extra()
     }
 
     pub fn end(&self) -> u64 {
@@ -280,7 +284,7 @@ impl<'a> SpanRef<'a> {
     }
 
     pub fn graph(&self) -> impl Iterator<Item = SpanGraphEventRef<'a>> + '_ {
-        self.span
+        self.extra()
             .graph
             .get_or_init(|| {
                 let mut map: IndexMap<&str, (Vec<SpanIndex>, Vec<SpanIndex>)> = IndexMap::new();
@@ -317,7 +321,7 @@ impl<'a> SpanRef<'a> {
     }
 
     pub fn bottom_up(self) -> impl Iterator<Item = SpanBottomUpRef<'a>> {
-        self.span
+        self.extra()
             .bottom_up
             .get_or_init(|| build_bottom_up_graph([self]))
             .iter()
@@ -344,7 +348,7 @@ impl<'a> SpanRef<'a> {
     }
 
     fn search_index(&self) -> &HashMap<String, Vec<SpanIndex>> {
-        self.span.search_index.get_or_init(|| {
+        self.extra().search_index.get_or_init(|| {
             let mut index: HashMap<String, Vec<SpanIndex>> = HashMap::new();
             let mut queue = VecDeque::with_capacity(8);
             queue.push_back(*self);

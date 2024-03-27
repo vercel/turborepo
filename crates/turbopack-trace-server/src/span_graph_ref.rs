@@ -72,7 +72,7 @@ impl<'a> SpanGraphRef<'a> {
             .get_or_init(|| {
                 if self.count() == 1 {
                     let _ = self.first_span().graph();
-                    self.first_span().span.graph.get().unwrap().clone()
+                    self.first_span().extra().graph.get().unwrap().clone()
                 } else {
                     let self_group = self.first_span().group_name();
                     let mut map: IndexMap<&str, (Vec<SpanIndex>, Vec<SpanIndex>)> = IndexMap::new();

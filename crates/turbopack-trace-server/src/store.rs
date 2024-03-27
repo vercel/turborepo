@@ -34,8 +34,6 @@ fn new_root_span() -> Span {
         nice_name: OnceLock::new(),
         group_name: OnceLock::new(),
         max_depth: OnceLock::new(),
-        graph: OnceLock::new(),
-        bottom_up: OnceLock::new(),
         self_allocations: 0,
         self_allocation_count: 0,
         self_deallocations: 0,
@@ -45,8 +43,8 @@ fn new_root_span() -> Span {
         total_persistent_allocations: OnceLock::new(),
         total_allocation_count: OnceLock::new(),
         total_span_count: OnceLock::new(),
-        search_index: OnceLock::new(),
         time_data: OnceLock::new(),
+        extra: OnceLock::new(),
     }
 }
 
@@ -90,8 +88,6 @@ impl Store {
             nice_name: OnceLock::new(),
             group_name: OnceLock::new(),
             max_depth: OnceLock::new(),
-            graph: OnceLock::new(),
-            bottom_up: OnceLock::new(),
             self_allocations: 0,
             self_allocation_count: 0,
             self_deallocations: 0,
@@ -101,8 +97,8 @@ impl Store {
             total_persistent_allocations: OnceLock::new(),
             total_allocation_count: OnceLock::new(),
             total_span_count: OnceLock::new(),
-            search_index: OnceLock::new(),
             time_data: OnceLock::new(),
+            extra: OnceLock::new(),
         });
         let parent = if let Some(parent) = parent {
             outdated_spans.insert(parent);
@@ -301,9 +297,7 @@ impl Store {
             span.total_deallocations.take();
             span.total_persistent_allocations.take();
             span.total_allocation_count.take();
-            span.graph.take();
-            span.bottom_up.take();
-            span.search_index.take();
+            span.extra.take();
         }
 
         for id in outdated_spans.iter() {
