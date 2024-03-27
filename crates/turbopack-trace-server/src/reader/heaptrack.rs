@@ -1,17 +1,18 @@
 use std::{
     collections::{HashMap, HashSet},
-    num::NonZeroUsize,
+    env,
     str::from_utf8,
     sync::Arc,
 };
 
 use anyhow::{bail, Context, Result};
+use indexmap::{indexmap, map::Entry, IndexMap};
 use rustc_demangle::demangle;
 
 use super::TraceFormat;
 use crate::{span::SpanIndex, store_container::StoreContainer};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 struct TraceNode {
     ip_index: usize,
     parent_index: usize,
@@ -26,10 +27,11 @@ impl TraceNode {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Hash, PartialEq, Eq)]
 struct InstructionPointer {
     module_index: usize,
     frames: Vec<Frame>,
+    custom_name: Option<String>,
 }
 
 impl InstructionPointer {
@@ -38,11 +40,12 @@ impl InstructionPointer {
         Ok(Self {
             module_index: read_hex_index(s)?,
             frames: read_all(s, Frame::read)?,
+            custom_name: None,
         })
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Hash, PartialEq, Eq)]
 struct Frame {
     function_index: usize,
     file_index: usize,
@@ -74,17 +77,23 @@ impl AllocationInfo {
     }
 }
 
+struct InstructionPointerExtraInfo {
+    first_trace_of_ip: Option<usize>,
+}
+
 pub struct HeaptrackFormat {
     store: Arc<StoreContainer>,
     version: u32,
     last_timestamp: u64,
     strings: Vec<String>,
-    traces: Vec<SpanIndex>,
-    ip_parent_map: HashMap<(usize, SpanIndex), SpanIndex>,
-    instruction_pointers: Vec<InstructionPointer>,
-    first_span_of_ip: Vec<Option<NonZeroUsize>>,
+    traces: Vec<(SpanIndex, usize)>,
+    ip_parent_map: HashMap<(usize, SpanIndex), usize>,
+    trace_instruction_pointers: Vec<usize>,
+    instruction_pointers: IndexMap<InstructionPointer, InstructionPointerExtraInfo>,
     allocations: Vec<AllocationInfo>,
     spans: usize,
+    collapse_crates: HashSet<String>,
+    expand_crates: HashSet<String>,
 }
 
 impl HeaptrackFormat {
@@ -94,18 +103,31 @@ impl HeaptrackFormat {
             version: 0,
             last_timestamp: 0,
             strings: vec!["".to_string()],
-            traces: vec![SpanIndex::new(usize::MAX).unwrap()],
+            traces: vec![(SpanIndex::new(usize::MAX).unwrap(), 0)],
             ip_parent_map: HashMap::new(),
-            instruction_pointers: vec![InstructionPointer {
+            instruction_pointers: indexmap![InstructionPointer {
                 module_index: 0,
                 frames: Vec::new(),
+                custom_name: Some("root".to_string())
+            } => InstructionPointerExtraInfo {
+                first_trace_of_ip: None,
             }],
-            first_span_of_ip: vec![None],
+            trace_instruction_pointers: vec![0],
             allocations: vec![AllocationInfo {
                 size: 0,
                 trace_index: 0,
             }],
             spans: 0,
+            collapse_crates: env::var("COLLAPSE_CRATES")
+                .unwrap_or_default()
+                .split(',')
+                .map(|s| s.to_string())
+                .collect(),
+            expand_crates: env::var("EXPAND_CRATES")
+                .unwrap_or_default()
+                .split(',')
+                .map(|s| s.to_string())
+                .collect(),
         }
     }
 }
@@ -116,7 +138,7 @@ impl TraceFormat for HeaptrackFormat {
             "{} spans, {} strings, {} ips, {} traces, {} allocations",
             self.spans,
             self.strings.len() - 1,
-            self.instruction_pointers.len() - 1,
+            self.trace_instruction_pointers.len() - 1,
             self.traces.len() - 1,
             self.allocations.len() - 1
         )
@@ -155,51 +177,65 @@ impl TraceFormat for HeaptrackFormat {
                     } else {
                         read_sized_string(&mut line)?
                     };
-                    self.strings.push(string);
+                    self.strings.push(demangle(&string).to_string());
                 }
                 b't' => {
+                    let trace_node = TraceNode::read(&mut line)?;
                     let TraceNode {
                         ip_index,
                         parent_index,
-                    } = TraceNode::read(&mut line)?;
+                    } = trace_node;
+                    let ip_index = *self
+                        .trace_instruction_pointers
+                        .get(ip_index)
+                        .context("ip not found")?;
+                    let (ip, ip_info) = self
+                        .instruction_pointers
+                        .get_index(ip_index)
+                        .context("ip not found")?;
                     // Try to fix cut-off traces
                     if parent_index == 0 {
-                        if let Some(span_index) = self
-                            .first_span_of_ip
-                            .get(ip_index)
-                            .context("ip not found")?
-                        {
-                            self.traces.push(*span_index);
+                        if let Some(trace_index) = ip_info.first_trace_of_ip {
+                            let (span_index, trace) =
+                                self.traces.get(trace_index).context("trace not found")?;
+                            self.traces.push((*span_index, *trace));
                             continue;
                         }
                     }
                     // Lookup parent
                     let parent = if parent_index > 0 {
-                        let parent_span_index =
-                            *self.traces.get(parent_index).context("parent not found")?;
+                        let (parent_span_index, parent_ip_index) =
+                            self.traces.get(parent_index).context("parent not found")?;
                         // Check if we have an duplicate (can only happen due to cut-off traces)
-                        if let Some(span_index) =
-                            self.ip_parent_map.get(&(ip_index, parent_span_index))
+                        if let Some(trace_index) =
+                            self.ip_parent_map.get(&(ip_index, *parent_span_index))
                         {
-                            self.traces.push(*span_index);
+                            let (span_index, trace) =
+                                self.traces.get(*trace_index).context("trace not found")?;
+                            self.traces.push((*span_index, *trace));
                             continue;
                         }
-                        Some(parent_span_index)
+                        // Check if we repeat parent frame
+                        if *parent_ip_index == ip_index {
+                            self.traces.push((*parent_span_index, *parent_ip_index));
+                            continue;
+                        }
+                        Some(*parent_span_index)
                     } else {
                         None
                     };
                     let InstructionPointer {
                         module_index,
                         frames,
-                    } = self
-                        .instruction_pointers
-                        .get(ip_index)
-                        .context("ip not found")?;
+                        custom_name,
+                    } = ip;
                     let module = self
                         .strings
                         .get(*module_index)
                         .context("module not found")?;
-                    let name = if let Some(first_frame) = frames.first() {
+                    let name = if let Some(name) = custom_name.as_ref() {
+                        name.to_string()
+                    } else if let Some(first_frame) = frames.first() {
                         let file = self
                             .strings
                             .get(first_frame.file_index)
@@ -208,11 +244,12 @@ impl TraceFormat for HeaptrackFormat {
                             .strings
                             .get(first_frame.function_index)
                             .context("function not found")?;
-                        format!("{} @ {file}:{}", demangle(function), first_frame.line)
+                        format!("{} @ {file}:{}", function, first_frame.line)
                     } else {
                         "unknown".to_string()
                     };
                     let mut args = Vec::new();
+                    args.push(("ip_index".to_string(), ip_index.to_string()));
                     for Frame {
                         function_index,
                         file_index,
@@ -226,7 +263,7 @@ impl TraceFormat for HeaptrackFormat {
                             .context("function not found")?;
                         args.push((
                             "location".to_string(),
-                            format!("{} @ {file}:{line}", demangle(function)),
+                            format!("{} @ {file}:{line}", function),
                         ));
                     }
 
@@ -238,17 +275,50 @@ impl TraceFormat for HeaptrackFormat {
                         args,
                         &mut outdated_spans,
                     );
+                    store.complete_span(span_index);
                     self.spans += 1;
-                    self.traces.push(span_index);
-                    self.first_span_of_ip[ip_index].get_or_insert_with(|| span_index);
+                    let index = self.traces.len();
+                    self.traces.push((span_index, ip_index));
+                    self.instruction_pointers
+                        .get_index_mut(ip_index)
+                        .unwrap()
+                        .1
+                        .first_trace_of_ip
+                        .get_or_insert_with(|| index);
                     if let Some(parent) = parent {
-                        self.ip_parent_map.insert((ip_index, parent), span_index);
+                        self.ip_parent_map.insert((ip_index, parent), index);
                     }
                 }
                 b'i' => {
-                    let ip = InstructionPointer::read(&mut line)?;
-                    self.instruction_pointers.push(ip);
-                    self.first_span_of_ip.push(None);
+                    let mut ip = InstructionPointer::read(&mut line)?;
+                    if let Some(frame) = ip.frames.first() {
+                        if let Some(function) = self.strings.get(frame.function_index) {
+                            let crate_name = function
+                                .strip_prefix("<")
+                                .unwrap_or(function)
+                                .split('[')
+                                .next()
+                                .unwrap();
+                            if self.collapse_crates.contains(crate_name)
+                                || !self.expand_crates.is_empty()
+                                    && !self.expand_crates.contains(crate_name)
+                            {
+                                ip.frames.clear();
+                                ip.custom_name = Some(crate_name.to_string());
+                            }
+                        }
+                    }
+                    match self.instruction_pointers.entry(ip) {
+                        Entry::Occupied(e) => {
+                            self.trace_instruction_pointers.push(e.index());
+                        }
+                        Entry::Vacant(e) => {
+                            self.trace_instruction_pointers.push(e.index());
+                            e.insert(InstructionPointerExtraInfo {
+                                first_trace_of_ip: None,
+                            });
+                        }
+                    }
                 }
                 b'#' => {
                     // comment
@@ -275,7 +345,7 @@ impl TraceFormat for HeaptrackFormat {
                         .get(index)
                         .context("allocation not found")?;
                     if *trace_index > 0 {
-                        let span_index =
+                        let (span_index, _) =
                             self.traces.get(*trace_index).context("trace not found")?;
                         store.add_allocation(*span_index, *size, 1, &mut outdated_spans);
                     }
@@ -288,7 +358,7 @@ impl TraceFormat for HeaptrackFormat {
                         .get(index)
                         .context("allocation not found")?;
                     if *trace_index > 0 {
-                        let span_index =
+                        let (span_index, _) =
                             self.traces.get(*trace_index).context("trace not found")?;
                         store.add_deallocation(*span_index, *size, 1, &mut outdated_spans);
                     }
