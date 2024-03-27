@@ -362,15 +362,17 @@ impl TraceFormat for HeaptrackFormat {
                     if let Some(frame) = ip.frames.first() {
                         if let Some(function) = self.strings.get(frame.function_index) {
                             let crate_name = function
-                                .strip_prefix("<")
+                                .strip_prefix('<')
                                 .unwrap_or(function)
+                                .split("::")
+                                .next()
+                                .unwrap()
                                 .split('[')
                                 .next()
                                 .unwrap();
-                            if !crate_name.contains("::")
-                                && (self.collapse_crates.contains(crate_name)
-                                    || !self.expand_crates.is_empty()
-                                        && !self.expand_crates.contains(crate_name))
+                            if self.collapse_crates.contains(crate_name)
+                                || !self.expand_crates.is_empty()
+                                    && !self.expand_crates.contains(crate_name)
                             {
                                 ip.frames.clear();
                                 ip.custom_name = Some(crate_name.to_string());
