@@ -70,6 +70,10 @@ impl Store {
         self.self_time_tree = SelfTimeTree::new();
     }
 
+    pub fn has_time_info(&self) -> bool {
+        self.self_time_tree.len() > 0
+    }
+
     pub fn add_span(
         &mut self,
         parent: Option<SpanIndex>,
