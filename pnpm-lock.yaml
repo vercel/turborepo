@@ -1084,6 +1084,15 @@ importers:
         specifier: workspace:*
         version: link:../helpers
 
+  turborepo-tests/example-with-bun:
+    dependencies:
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
   turborepo-tests/example-with-changesets:
     dependencies:
       turborepo-examples:

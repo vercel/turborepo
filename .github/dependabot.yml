@@ -170,6 +170,24 @@ updates:
         patterns:
           - "*"
 
+  - package-ecosystem: "bun"
+    directory: "/examples/with-bun"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    target-branch: dependabot-updates
+    groups:
+      with-npm-example-dependencies:
+        patterns:
+          - "*"
+
   - package-ecosystem: "npm"
     directory: "/examples/with-prisma"
     schedule:

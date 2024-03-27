@@ -9,6 +9,7 @@ The following turborepo examples contain [Next.js](https://nextjs.org/) applicat
 1. [with-yarn](../with-yarn/)
 1. [with-berry](../with-berry/)
 1. [with-npm](../with-npm/)
+1. [with-bun](../with-bun/)
 1. [with-react-native-web](../with-react-native-web/)
 1. [with-tailwind](../with-tailwind/)
 
