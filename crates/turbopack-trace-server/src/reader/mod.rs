@@ -21,6 +21,9 @@ use crate::{
 
 trait TraceFormat {
     fn read(&mut self, buffer: &[u8]) -> Result<usize>;
+    fn stats(&self) -> String {
+        String::new()
+    }
 }
 
 #[derive(Default)]
@@ -170,12 +173,18 @@ impl TraceReader {
                                 *total = *total.max(current);
                                 let new_mbs = *current / (97 * 1024 * 1024);
                                 if old_mbs != new_mbs {
-                                    println!(
-                                        "{}% read ({}/{} MB)",
-                                        *current * 100 / *total,
-                                        *current / (1024 * 1024),
-                                        *total / (1024 * 1024),
-                                    );
+                                    let percentage = *current * 100 / *total;
+                                    let current = *current / (1024 * 1024);
+                                    let total = *total / (1024 * 1024);
+                                    let stats = format.stats();
+                                    if stats.is_empty() {
+                                        println!("{}% read ({}/{} MB)", percentage, current, total);
+                                    } else {
+                                        println!(
+                                            "{}% read ({}/{} MB) - {}",
+                                            percentage, current, total, stats
+                                        );
+                                    }
                                 }
                             }
                         }

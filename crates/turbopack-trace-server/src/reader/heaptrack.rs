@@ -77,6 +77,7 @@ pub struct HeaptrackFormat {
     traces: Vec<SpanIndex>,
     instruction_pointers: Vec<InstructionPointer>,
     allocations: Vec<AllocationInfo>,
+    spans: usize,
 }
 
 impl HeaptrackFormat {
@@ -95,11 +96,23 @@ impl HeaptrackFormat {
                 size: 0,
                 trace_index: 0,
             }],
+            spans: 0,
         }
     }
 }
 
 impl TraceFormat for HeaptrackFormat {
+    fn stats(&self) -> String {
+        format!(
+            "{} spans, {} strings, {} ips, {} traces, {} allocations",
+            self.spans,
+            self.strings.len() - 1,
+            self.instruction_pointers.len() - 1,
+            self.traces.len() - 1,
+            self.allocations.len() - 1
+        )
+    }
+
     fn read(&mut self, mut buffer: &[u8]) -> anyhow::Result<usize> {
         let mut bytes_read = 0;
         let mut outdated_spans = HashSet::new();
@@ -194,6 +207,7 @@ impl TraceFormat for HeaptrackFormat {
                         args,
                         &mut outdated_spans,
                     );
+                    self.spans += 1;
                     self.traces.push(span_index);
                 }
                 b'i' => {
