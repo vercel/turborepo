@@ -7,12 +7,12 @@ This is an official starter Turborepo.
 Run the following command:
 
 ```sh
-npx create-turbo@latest -e with-npm
+npx create-turbo@latest -e with-bun
 ```
 
 ## What's inside?
 
-This Turborepo uses [npm](https://www.npmjs.com/) as a packages manager. It includes the following packages/apps:
+This Turborepo uses [bun](https://bun.sh/) as a packages manager which is also npm-compatible . It includes the following packages/apps:
 
 ### Apps and Packages
 
@@ -28,6 +28,7 @@ Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
 
 This Turborepo has some additional tools already setup for you:
 
+- [Bun](https://bun.sh) for package management (alternative for nodejs too)
 - [TypeScript](https://www.typescriptlang.org/) for static type checking
 - [ESLint](https://eslint.org/) for code linting
 - [Prettier](https://prettier.io) for code formatting
@@ -38,7 +39,7 @@ To build all apps and packages, run the following command:
 
 ```
 cd my-turborepo
-npm run build
+bun run build
 ```
 
 ### Develop
@@ -47,7 +48,7 @@ To develop all apps and packages, run the following command:
 
 ```
 cd my-turborepo
-npm run dev
+bun dev
 ```
 
 ### Remote Caching

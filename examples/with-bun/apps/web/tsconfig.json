@@ -1,11 +1,11 @@
 {
   "extends": "@repo/typescript-config/nextjs.json",
   "compilerOptions": {
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ]
+    "lib": ["ESNext"],
+    "module": "esnext",
+    "target": "esnext",
+    // "bun-types" is the important part
+    "types": ["bun-types"]
   },
   "include": [
     "next-env.d.ts",

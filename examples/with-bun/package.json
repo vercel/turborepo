@@ -1,5 +1,5 @@
 {
-  "name": "with-npm",
+  "name": "with-bun",
   "private": true,
   "workspaces": [
     "apps/*",
@@ -16,8 +16,7 @@
     "prettier": "^3.2.5",
     "turbo": "^1.12.4"
   },
-  "packageManager": "npm@8.19.4",
-  "engines": {
-    "node": ">=18"
+  "dependencies": {
+    "bun-types": "^1.0.35"
   }
 }
