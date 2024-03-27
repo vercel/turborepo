@@ -352,7 +352,7 @@ impl TraceFormat for HeaptrackFormat {
                         .unwrap()
                         .1
                         .first_trace_of_ip
-                        .get_or_insert_with(|| index);
+                        .get_or_insert(index);
                     if let Some(parent) = parent {
                         self.ip_parent_map.insert((ip_index, parent), index);
                     }
