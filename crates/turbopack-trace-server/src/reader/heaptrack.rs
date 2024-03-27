@@ -32,7 +32,7 @@ impl InstructionPointer {
         let _ip = read_hex(s)?;
         Ok(Self {
             module_index: read_hex_index(s)?,
-            frames: read_all(s, |s| Frame::read(s))?,
+            frames: read_all(s, Frame::read)?,
         })
     }
 }
@@ -276,7 +276,7 @@ fn read_hex_index(s: &mut &[u8]) -> anyhow::Result<usize> {
 fn read_hex(s: &mut &[u8]) -> anyhow::Result<u64> {
     let mut n: u64 = 0;
     loop {
-        if let Some(c) = s.get(0) {
+        if let Some(c) = s.first() {
             match c {
                 b'0'..=b'9' => {
                     n *= 16;
