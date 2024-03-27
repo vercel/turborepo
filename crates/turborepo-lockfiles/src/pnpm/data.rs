@@ -179,6 +179,24 @@ impl PnpmLockfile {
             .and_then(|packages| packages.get(key))
     }
 
+    fn has_package(&self, key: &str) -> bool {
+        match self.version() {
+            SupportedLockfileVersion::V5 | SupportedLockfileVersion::V6 => {
+                self.packages.as_ref().map(|pkgs| pkgs.contains_key(key))
+            }
+            SupportedLockfileVersion::V7 => {
+                self.snapshots.as_ref().map(|snaps| snaps.contains_key(key))
+            }
+        }
+        .unwrap_or_default()
+    }
+
+    fn package_version(&self, key: &str) -> Option<&str> {
+        let pkgs = self.packages.as_ref()?;
+        let pkg = pkgs.get(key)?;
+        pkg.version.as_deref()
+    }
+
     fn get_workspace(&self, workspace_path: &str) -> Result<&ProjectSnapshot, crate::Error> {
         let key = match workspace_path {
             // For pnpm, the root is named "."
@@ -252,17 +270,14 @@ impl PnpmLockfile {
         else {
             // Check if the specifier is already an exact version
             return Ok(self
-                .get_packages(&self.format_key(name, specifier))
-                .and(Some(specifier)));
+                .has_package(&self.format_key(name, specifier))
+                .then_some(specifier));
         };
 
         let override_specifier = self.apply_overrides(name, specifier);
         if resolved_specifier == override_specifier {
             Ok(Some(resolved_version))
-        } else if self
-            .get_packages(&self.format_key(name, override_specifier))
-            .is_some()
-        {
+        } else if self.has_package(&self.format_key(name, override_specifier)) {
             Ok(Some(override_specifier))
         } else {
             Ok(None)
@@ -319,7 +334,7 @@ impl crate::Lockfile for PnpmLockfile {
         version: &str,
     ) -> Result<Option<crate::Package>, crate::Error> {
         // Check if version is a key
-        if self.get_packages(version).is_some() {
+        if self.has_package(version) {
             let extracted_version = self.extract_version(version)?;
             return Ok(Some(crate::Package {
                 key: version.into(),
@@ -333,21 +348,19 @@ impl crate::Lockfile for PnpmLockfile {
 
         let key = self.format_key(name, resolved_version);
 
-        if let Some(pkg) = self.get_packages(&key) {
-            Ok(Some(crate::Package {
-                key,
-                version: pkg
-                    .version
-                    .clone()
-                    .unwrap_or_else(|| resolved_version.to_string()),
-            }))
-        } else if let Some(pkg) = self.get_packages(resolved_version) {
-            let version = pkg.version.clone().map_or_else(
+        if self.has_package(&key) {
+            let version = self
+                .package_version(&key)
+                .unwrap_or(resolved_version)
+                .to_owned();
+            Ok(Some(crate::Package { key, version }))
+        } else if self.has_package(resolved_version) {
+            let version = self.package_version(resolved_version).map_or_else(
                 || {
                     self.extract_version(resolved_version)
                         .map(|s| s.to_string())
                 },
-                Ok,
+                |version| Ok(version.to_string()),
             )?;
             Ok(Some(crate::Package {
                 key: resolved_version.to_string(),
@@ -559,20 +572,25 @@ mod tests {
     const PNPM_PATCH: &[u8] = include_bytes!("../../fixtures/pnpm-patch.yaml").as_slice();
     const PNPM_PATCH_V6: &[u8] = include_bytes!("../../fixtures/pnpm-patch-v6.yaml").as_slice();
     const PNPM_V7: &[u8] = include_bytes!("../../fixtures/pnpm-v7.yaml").as_slice();
+    const PNPM_V7_PEER: &[u8] = include_bytes!("../../fixtures/pnpm-v7-peer.yaml").as_slice();
     const PNPM_V7_FULL: &[u8] = include_bytes!("../../fixtures/pnpm-v7-full.yaml").as_slice();
 
     use super::*;
     use crate::{Lockfile, Package};
 
-    #[test]
-    fn test_roundtrip() {
-        for fixture in &[PNPM6, PNPM7, PNPM8, PNPM8_6, PNPM_V7, PNPM_V7_FULL] {
-            let lockfile = PnpmLockfile::from_bytes(fixture).unwrap();
-            let serialized_lockfile = serde_yaml::to_string(&lockfile).unwrap();
-            let lockfile_from_serialized =
-                serde_yaml::from_slice(serialized_lockfile.as_bytes()).unwrap();
-            assert_eq!(lockfile, lockfile_from_serialized);
-        }
+    #[test_case(PNPM6)]
+    #[test_case(PNPM7)]
+    #[test_case(PNPM8)]
+    #[test_case(PNPM8_6)]
+    #[test_case(PNPM_V7)]
+    #[test_case(PNPM_V7_PEER)]
+    #[test_case(PNPM_V7_FULL)]
+    fn test_roundtrip(fixture: &[u8]) {
+        let lockfile = PnpmLockfile::from_bytes(fixture).unwrap();
+        let serialized_lockfile = serde_yaml::to_string(&lockfile).unwrap();
+        let lockfile_from_serialized =
+            serde_yaml::from_slice(serialized_lockfile.as_bytes()).unwrap();
+        assert_eq!(lockfile, lockfile_from_serialized);
     }
 
     #[test]
@@ -785,6 +803,28 @@ mod tests {
             version: "2.1.0".into(),
         }))
         ; "v7 git"
+    )]
+    #[test_case(
+        PNPM_V7_PEER,
+        "packages/a",
+        "ajv-keywords",
+        "^5.1.0",
+        Ok(Some(crate::Package {
+            key: "ajv-keywords@5.1.0(ajv@8.12.0)".into(),
+            version: "5.1.0(ajv@8.12.0)".into(),
+        }))
+        ; "v7 peer"
+    )]
+    #[test_case(
+        PNPM_V7_PEER,
+        "packages/b",
+        "ajv-keywords",
+        "^5.1.0",
+        Ok(Some(crate::Package {
+            key: "ajv-keywords@5.1.0(ajv@8.11.0)".into(),
+            version: "5.1.0(ajv@8.11.0)".into(),
+        }))
+        ; "v7 peer 2"
     )]
     fn test_resolve_package(
         lockfile: &[u8],
