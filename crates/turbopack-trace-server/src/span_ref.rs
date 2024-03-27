@@ -9,7 +9,7 @@ use indexmap::IndexMap;
 
 use crate::{
     bottom_up::build_bottom_up_graph,
-    span::{Span, SpanEvent, SpanExtra, SpanGraphEvent, SpanIndex, SpanTimeData},
+    span::{Span, SpanEvent, SpanExtra, SpanGraphEvent, SpanIndex, SpanNames, SpanTimeData},
     span_bottom_up_ref::SpanBottomUpRef,
     span_graph_ref::{event_map_to_list, SpanGraphEventRef, SpanGraphRef},
     store::{SpanId, Store},
@@ -51,6 +51,10 @@ impl<'a> SpanRef<'a> {
         self.span.extra()
     }
 
+    pub fn names(&self) -> &'a SpanNames {
+        self.span.names()
+    }
+
     pub fn end(&self) -> u64 {
         let time_data = self.time_data();
         *time_data.end.get_or_init(|| {
@@ -69,7 +73,7 @@ impl<'a> SpanRef<'a> {
     }
 
     pub fn nice_name(&self) -> (&'a str, &'a str) {
-        let (category, title) = self.span.nice_name.get_or_init(|| {
+        let (category, title) = self.names().nice_name.get_or_init(|| {
             if let Some(name) = self
                 .span
                 .args
@@ -99,7 +103,7 @@ impl<'a> SpanRef<'a> {
     }
 
     pub fn group_name(&self) -> &'a str {
-        self.span.group_name.get_or_init(|| {
+        self.names().group_name.get_or_init(|| {
             if matches!(self.span.name.as_str(), "turbo_tasks::function") {
                 self.span
                     .args

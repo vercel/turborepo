@@ -31,8 +31,6 @@ fn new_root_span() -> Span {
         args: vec![],
         events: vec![],
         is_complete: true,
-        nice_name: OnceLock::new(),
-        group_name: OnceLock::new(),
         max_depth: OnceLock::new(),
         self_allocations: 0,
         self_allocation_count: 0,
@@ -45,6 +43,7 @@ fn new_root_span() -> Span {
         total_span_count: OnceLock::new(),
         time_data: OnceLock::new(),
         extra: OnceLock::new(),
+        names: OnceLock::new(),
     }
 }
 
@@ -85,8 +84,6 @@ impl Store {
             args,
             events: vec![],
             is_complete: false,
-            nice_name: OnceLock::new(),
-            group_name: OnceLock::new(),
             max_depth: OnceLock::new(),
             self_allocations: 0,
             self_allocation_count: 0,
@@ -99,6 +96,7 @@ impl Store {
             total_span_count: OnceLock::new(),
             time_data: OnceLock::new(),
             extra: OnceLock::new(),
+            names: OnceLock::new(),
         });
         let parent = if let Some(parent) = parent {
             outdated_spans.insert(parent);

@@ -26,8 +26,6 @@ pub struct Span {
     pub self_deallocation_count: u64,
 
     // These values are computed when accessed (and maybe deleted during writing):
-    pub nice_name: OnceLock<(String, String)>,
-    pub group_name: OnceLock<String>,
     pub max_depth: OnceLock<u32>,
     pub total_allocations: OnceLock<u64>,
     pub total_deallocations: OnceLock<u64>,
@@ -38,6 +36,7 @@ pub struct Span {
     // More nested fields, but memory lazily allocated
     pub time_data: OnceLock<Box<SpanTimeData>>,
     pub extra: OnceLock<Box<SpanExtra>>,
+    pub names: OnceLock<Box<SpanNames>>,
 }
 
 #[derive(Default)]
@@ -65,6 +64,13 @@ pub struct SpanExtra {
     pub search_index: OnceLock<HashMap<String, Vec<SpanIndex>>>,
 }
 
+#[derive(Default)]
+pub struct SpanNames {
+    // These values are computed when accessed (and maybe deleted during writing):
+    pub nice_name: OnceLock<(String, String)>,
+    pub group_name: OnceLock<String>,
+}
+
 impl Span {
     pub fn time_data(&self) -> &SpanTimeData {
         self.time_data.get_or_init(|| {
@@ -83,6 +89,10 @@ impl Span {
 
     pub fn extra(&self) -> &SpanExtra {
         self.extra.get_or_init(Default::default)
+    }
+
+    pub fn names(&self) -> &SpanNames {
+        self.names.get_or_init(Default::default)
     }
 }
 
