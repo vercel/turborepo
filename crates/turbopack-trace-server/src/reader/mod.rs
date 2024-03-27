@@ -170,20 +170,23 @@ impl TraceReader {
                             if let Some((current, total)) = &mut initial_read {
                                 let old_mbs = *current / (97 * 1024 * 1024);
                                 *current += bytes_read as u64;
-                                *total = *total.max(current);
                                 let new_mbs = *current / (97 * 1024 * 1024);
                                 if old_mbs != new_mbs {
-                                    let percentage = *current * 100 / *total;
-                                    let current = *current / (1024 * 1024);
+                                    let pos = file.stream_position().unwrap_or(*current);
+                                    *total = (*total).max(pos);
+                                    let percentage = pos * 100 / *total;
+                                    let read = pos / (1024 * 1024);
+                                    let uncompressed = *current / (1024 * 1024);
                                     let total = *total / (1024 * 1024);
                                     let stats = format.stats();
+                                    print!("{}% read ({}/{} MB)", percentage, read, total);
+                                    if uncompressed != read {
+                                        print!(" ({} MB uncompressed)", uncompressed);
+                                    }
                                     if stats.is_empty() {
-                                        println!("{}% read ({}/{} MB)", percentage, current, total);
+                                        println!();
                                     } else {
-                                        println!(
-                                            "{}% read ({}/{} MB) - {}",
-                                            percentage, current, total, stats
-                                        );
+                                        println!(" - {}", stats);
                                     }
                                 }
                             }
