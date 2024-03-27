@@ -85,6 +85,7 @@ struct InstructionPointerExtraInfo {
 struct TraceData {
     span_index: SpanIndex,
     ip_index: usize,
+    parent_trace_index: usize,
 }
 
 pub struct HeaptrackFormat {
@@ -100,7 +101,10 @@ pub struct HeaptrackFormat {
     spans: usize,
     collapse_crates: HashSet<String>,
     expand_crates: HashSet<String>,
+    expand_recursion: bool,
 }
+
+const RECURSION_IP: usize = 1;
 
 impl HeaptrackFormat {
     pub fn new(store: Arc<StoreContainer>) -> Self {
@@ -112,15 +116,25 @@ impl HeaptrackFormat {
             traces: vec![TraceData {
                 span_index: SpanIndex::new(usize::MAX).unwrap(),
                 ip_index: 0,
+                parent_trace_index: 0,
             }],
             ip_parent_map: HashMap::new(),
-            instruction_pointers: indexmap![InstructionPointer {
-                module_index: 0,
-                frames: Vec::new(),
-                custom_name: Some("root".to_string())
-            } => InstructionPointerExtraInfo {
-                first_trace_of_ip: None,
-            }],
+            instruction_pointers: indexmap! {
+                InstructionPointer {
+                    module_index: 0,
+                    frames: Vec::new(),
+                    custom_name: Some("root".to_string())
+                } => InstructionPointerExtraInfo {
+                    first_trace_of_ip: None,
+                },
+                InstructionPointer {
+                    module_index: 0,
+                    frames: Vec::new(),
+                    custom_name: Some("recursion".to_string())
+                } => InstructionPointerExtraInfo {
+                    first_trace_of_ip: None,
+                }
+            },
             trace_instruction_pointers: vec![0],
             allocations: vec![AllocationInfo {
                 size: 0,
@@ -135,8 +149,10 @@ impl HeaptrackFormat {
             expand_crates: env::var("EXPAND_CRATES")
                 .unwrap_or_default()
                 .split(',')
+                .filter(|s| !s.is_empty())
                 .map(|s| s.to_string())
                 .collect(),
+            expand_recursion: env::var("EXPAND_RECURSION").is_ok(),
         }
     }
 }
@@ -157,7 +173,7 @@ impl TraceFormat for HeaptrackFormat {
         let mut bytes_read = 0;
         let mut outdated_spans = HashSet::new();
         let mut store = self.store.write();
-        loop {
+        'outer: loop {
             let Some(line_end) = buffer.iter().position(|b| *b == b'\n') else {
                 break;
             };
@@ -211,7 +227,7 @@ impl TraceFormat for HeaptrackFormat {
                     }
                     // Lookup parent
                     let parent = if parent_index > 0 {
-                        let parent = self.traces.get(parent_index).context("parent not found")?;
+                        let parent = *self.traces.get(parent_index).context("parent not found")?;
                         // Check if we have an duplicate (can only happen due to cut-off traces)
                         if let Some(trace_index) =
                             self.ip_parent_map.get(&(ip_index, parent.span_index))
@@ -222,8 +238,52 @@ impl TraceFormat for HeaptrackFormat {
                         }
                         // Check if we repeat parent frame
                         if parent.ip_index == ip_index {
-                            self.traces.push(*parent);
+                            self.traces.push(parent);
                             continue;
+                        }
+                        if !self.expand_recursion {
+                            // Check for recursion
+                            let mut current = parent.parent_trace_index;
+                            while current > 0 {
+                                let current_parent =
+                                    self.traces.get(current).context("parent not found")?;
+                                current = current_parent.parent_trace_index;
+                                if current_parent.ip_index == ip_index {
+                                    if parent.ip_index == RECURSION_IP {
+                                        // Parent is recursion node, do nothing
+                                        self.traces.push(parent);
+                                    } else if let Some(trace_index) =
+                                        self.ip_parent_map.get(&(RECURSION_IP, parent.span_index))
+                                    {
+                                        // There is already one recursion node, reuse it
+                                        let trace = self
+                                            .traces
+                                            .get(*trace_index)
+                                            .context("trace not found")?;
+                                        self.traces.push(*trace);
+                                    } else {
+                                        // create a new recursion node
+                                        let span_index = store.add_span(
+                                            Some(parent.span_index),
+                                            self.last_timestamp,
+                                            "".to_string(),
+                                            "recursion".to_string(),
+                                            Vec::new(),
+                                            &mut outdated_spans,
+                                        );
+                                        store.complete_span(span_index);
+                                        let index = self.traces.len();
+                                        self.traces.push(TraceData {
+                                            ip_index: RECURSION_IP,
+                                            parent_trace_index: parent_index,
+                                            span_index: span_index,
+                                        });
+                                        self.ip_parent_map
+                                            .insert((RECURSION_IP, parent.span_index), index);
+                                    }
+                                    continue 'outer;
+                                }
+                            }
                         }
                         Some(parent.span_index)
                     } else {
@@ -254,7 +314,6 @@ impl TraceFormat for HeaptrackFormat {
                         "unknown".to_string()
                     };
                     let mut args = Vec::new();
-                    args.push(("ip_index".to_string(), ip_index.to_string()));
                     for Frame {
                         function_index,
                         file_index,
@@ -286,6 +345,7 @@ impl TraceFormat for HeaptrackFormat {
                     self.traces.push(TraceData {
                         span_index,
                         ip_index,
+                        parent_trace_index: parent_index,
                     });
                     self.instruction_pointers
                         .get_index_mut(ip_index)
@@ -307,9 +367,10 @@ impl TraceFormat for HeaptrackFormat {
                                 .split('[')
                                 .next()
                                 .unwrap();
-                            if self.collapse_crates.contains(crate_name)
-                                || !self.expand_crates.is_empty()
-                                    && !self.expand_crates.contains(crate_name)
+                            if !crate_name.contains("::")
+                                && (self.collapse_crates.contains(crate_name)
+                                    || !self.expand_crates.is_empty()
+                                        && !self.expand_crates.contains(crate_name))
                             {
                                 ip.frames.clear();
                                 ip.custom_name = Some(crate_name.to_string());
