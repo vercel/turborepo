@@ -9,7 +9,7 @@ use indexmap::IndexMap;
 
 use crate::{
     bottom_up::build_bottom_up_graph,
-    span::{Span, SpanEvent, SpanGraphEvent, SpanIndex},
+    span::{Span, SpanEvent, SpanGraphEvent, SpanIndex, SpanTimeData},
     span_bottom_up_ref::SpanBottomUpRef,
     span_graph_ref::{event_map_to_list, SpanGraphEventRef, SpanGraphRef},
     store::{SpanId, Store},
@@ -43,10 +43,15 @@ impl<'a> SpanRef<'a> {
         self.span.start
     }
 
+    pub fn time_data(&self) -> &SpanTimeData {
+        self.span.time_data()
+    }
+
     pub fn end(&self) -> u64 {
-        *self.span.end.get_or_init(|| {
+        let time_data = self.time_data();
+        *time_data.end.get_or_init(|| {
             max(
-                self.span.self_end,
+                time_data.self_end,
                 self.children()
                     .map(|child| child.end())
                     .max()
@@ -119,7 +124,7 @@ impl<'a> SpanRef<'a> {
     }
 
     pub fn self_time(&self) -> u64 {
-        self.span.self_time
+        self.time_data().self_time
     }
 
     pub fn self_allocations(&self) -> u64 {
@@ -178,7 +183,7 @@ impl<'a> SpanRef<'a> {
     }
 
     pub fn total_time(&self) -> u64 {
-        *self.span.total_time.get_or_init(|| {
+        *self.time_data().total_time.get_or_init(|| {
             self.children()
                 .map(|child| child.total_time())
                 .reduce(|a, b| a + b)
@@ -239,7 +244,7 @@ impl<'a> SpanRef<'a> {
 
     pub fn corrected_self_time(&self) -> u64 {
         let store = self.store;
-        *self.span.corrected_self_time.get_or_init(|| {
+        *self.time_data().corrected_self_time.get_or_init(|| {
             let mut self_time = 0;
             for event in self.span.events.iter() {
                 if let SpanEvent::SelfTime { start, end } = event {
@@ -256,7 +261,7 @@ impl<'a> SpanRef<'a> {
     }
 
     pub fn corrected_total_time(&self) -> u64 {
-        *self.span.corrected_total_time.get_or_init(|| {
+        *self.time_data().corrected_total_time.get_or_init(|| {
             self.children()
                 .map(|child| child.corrected_total_time())
                 .reduce(|a, b| a + b)

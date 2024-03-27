@@ -26,33 +26,27 @@ fn new_root_span() -> Span {
         parent: None,
         depth: 0,
         start: u64::MAX,
-        ignore_self_time: false,
-        self_end: 0,
         category: "".into(),
         name: "(root)".into(),
         args: vec![],
         events: vec![],
         is_complete: true,
-        end: OnceLock::new(),
         nice_name: OnceLock::new(),
         group_name: OnceLock::new(),
         max_depth: OnceLock::new(),
         graph: OnceLock::new(),
         bottom_up: OnceLock::new(),
-        self_time: 0,
         self_allocations: 0,
         self_allocation_count: 0,
         self_deallocations: 0,
         self_deallocation_count: 0,
-        total_time: OnceLock::new(),
         total_allocations: OnceLock::new(),
         total_deallocations: OnceLock::new(),
         total_persistent_allocations: OnceLock::new(),
         total_allocation_count: OnceLock::new(),
         total_span_count: OnceLock::new(),
-        corrected_self_time: OnceLock::new(),
-        corrected_total_time: OnceLock::new(),
         search_index: OnceLock::new(),
+        time_data: OnceLock::new(),
     }
 }
 
@@ -88,33 +82,27 @@ impl Store {
             parent,
             depth: 0,
             start,
-            ignore_self_time: &name == "thread",
-            self_end: start,
             category,
             name,
             args,
             events: vec![],
             is_complete: false,
-            end: OnceLock::new(),
             nice_name: OnceLock::new(),
             group_name: OnceLock::new(),
             max_depth: OnceLock::new(),
             graph: OnceLock::new(),
             bottom_up: OnceLock::new(),
-            self_time: 0,
             self_allocations: 0,
             self_allocation_count: 0,
             self_deallocations: 0,
             self_deallocation_count: 0,
-            total_time: OnceLock::new(),
             total_allocations: OnceLock::new(),
             total_deallocations: OnceLock::new(),
             total_persistent_allocations: OnceLock::new(),
             total_allocation_count: OnceLock::new(),
             total_span_count: OnceLock::new(),
-            corrected_self_time: OnceLock::new(),
-            corrected_total_time: OnceLock::new(),
             search_index: OnceLock::new(),
+            time_data: OnceLock::new(),
         });
         let parent = if let Some(parent) = parent {
             outdated_spans.insert(parent);
@@ -165,13 +153,14 @@ impl Store {
         outdated_spans: &mut HashSet<SpanIndex>,
     ) {
         let span = &mut self.spans[span_index.get()];
-        if span.ignore_self_time {
+        let time_data = span.time_data_mut();
+        if time_data.ignore_self_time {
             return;
         }
         outdated_spans.insert(span_index);
-        span.self_time += end - start;
+        time_data.self_time += end - start;
+        time_data.self_end = max(time_data.self_end, end);
         span.events.push(SpanEvent::SelfTime { start, end });
-        span.self_end = max(span.self_end, end);
         self.insert_self_time(start, end, span_index, outdated_spans);
     }
 
@@ -189,7 +178,7 @@ impl Store {
         };
         let mut children = span
             .children()
-            .map(|c| (c.span.start, c.span.self_end, c.index()))
+            .map(|c| (c.span.start, c.span.time_data().self_end, c.index()))
             .collect::<Vec<_>>();
         children.sort();
         let self_end = start_time + total_time;
@@ -233,10 +222,11 @@ impl Store {
         }
         let span = &mut self.spans[span_index.get()];
         outdated_spans.insert(span_index);
-        span.self_time = self_time;
+        let time_data = span.time_data_mut();
+        time_data.self_time = self_time;
+        time_data.self_end = self_end;
         span.events = events;
         span.start = start_time;
-        span.self_end = self_end;
     }
 
     pub fn set_parent(
@@ -301,14 +291,16 @@ impl Store {
 
     pub fn invalidate_outdated_spans(&mut self, outdated_spans: &HashSet<SpanId>) {
         fn invalidate_span(span: &mut Span) {
-            span.end.take();
-            span.total_time.take();
+            if let Some(time_data) = span.time_data.get_mut() {
+                time_data.end.take();
+                time_data.total_time.take();
+                time_data.corrected_self_time.take();
+                time_data.corrected_total_time.take();
+            }
             span.total_allocations.take();
             span.total_deallocations.take();
             span.total_persistent_allocations.take();
             span.total_allocation_count.take();
-            span.corrected_self_time.take();
-            span.corrected_total_time.take();
             span.graph.take();
             span.bottom_up.take();
             span.search_index.take();
