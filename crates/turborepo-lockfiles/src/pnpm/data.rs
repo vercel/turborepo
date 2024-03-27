@@ -11,6 +11,9 @@ use super::{dep_path::DepPath, Error, LockfileVersion, SupportedLockfileVersion}
 
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 
+type Packages = Map<String, PackageSnapshot>;
+type Snapshots = Map<String, PackageSnapshotV7>;
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PnpmLockfile {
@@ -29,9 +32,9 @@ pub struct PnpmLockfile {
     patched_dependencies: Option<Map<String, PatchFile>>,
     importers: Map<String, ProjectSnapshot>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    packages: Option<Map<String, PackageSnapshot>>,
+    packages: Option<Packages>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    snapshots: Option<Map<String, PackageSnapshotV7>>,
+    snapshots: Option<Snapshots>,
     #[serde(skip_serializing_if = "Option::is_none")]
     time: Option<Map<String, String>>,
 }
@@ -314,6 +317,40 @@ impl PnpmLockfile {
             settings: self.settings.as_ref(),
         }
     }
+
+    fn pruned_packages_and_snapshots(
+        &self,
+        packages: &[String],
+    ) -> Result<(Packages, Option<Snapshots>), crate::Error> {
+        let mut pruned_packages = Map::new();
+        if let Some(snapshots) = self.snapshots.as_ref() {
+            let mut pruned_snapshots = Map::new();
+            for package in packages {
+                let entry = snapshots
+                    .get(package.as_str())
+                    .ok_or_else(|| crate::Error::MissingPackage(package.clone()))?;
+                pruned_snapshots.insert(package.clone(), entry.clone());
+
+                // Remove peer suffix to find the key for the package entry
+                let dp = DepPath::parse(self.version(), package.as_str()).map_err(Error::from)?;
+                let package_key = self.format_key(dp.name, dp.version);
+                let entry = self
+                    .get_packages(&package_key)
+                    .ok_or_else(|| crate::Error::MissingPackage(package_key.clone()))?;
+                pruned_packages.insert(package_key, entry.clone());
+            }
+
+            return Ok((pruned_packages, Some(pruned_snapshots)));
+        }
+
+        for package in packages {
+            let entry = self
+                .get_packages(package.as_str())
+                .ok_or_else(|| crate::Error::MissingPackage(package.clone()))?;
+            pruned_packages.insert(package.clone(), entry.clone());
+        }
+        Ok((pruned_packages, None))
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -395,12 +432,6 @@ impl crate::Lockfile for PnpmLockfile {
         workspace_packages: &[String],
         packages: &[String],
     ) -> Result<Box<dyn crate::Lockfile>, crate::Error> {
-        if matches!(self.version(), SupportedLockfileVersion::V7) {
-            return Err(crate::Error::Pnpm(Error::UnsupportedVersion(
-                self.lockfile_version.version.clone(),
-            )));
-        }
-
         let importers = self
             .importers
             .iter()
@@ -408,13 +439,8 @@ impl crate::Lockfile for PnpmLockfile {
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect::<Map<_, _>>();
 
-        let mut pruned_packages = Map::new();
-        for package in packages {
-            let entry = self
-                .get_packages(package.as_str())
-                .ok_or_else(|| crate::Error::MissingPackage(package.clone()))?;
-            pruned_packages.insert(package.clone(), entry.clone());
-        }
+        let (mut pruned_packages, pruned_snapshots) =
+            self.pruned_packages_and_snapshots(packages)?;
         for importer in importers.values() {
             // Find all injected packages in each workspace and include it in
             // the pruned lockfile
@@ -458,7 +484,7 @@ impl crate::Lockfile for PnpmLockfile {
             overrides: self.overrides.clone(),
             package_extensions_checksum: self.package_extensions_checksum.clone(),
             patched_dependencies: patches,
-            snapshots: None,
+            snapshots: pruned_snapshots,
             time: None,
             settings: self.settings.clone(),
         }))
@@ -576,6 +602,8 @@ mod tests {
     const PNPM_PATCH_V6: &[u8] = include_bytes!("../../fixtures/pnpm-patch-v6.yaml").as_slice();
     const PNPM_V7: &[u8] = include_bytes!("../../fixtures/pnpm-v7.yaml").as_slice();
     const PNPM_V7_PEER: &[u8] = include_bytes!("../../fixtures/pnpm-v7-peer.yaml").as_slice();
+
+    use std::any::Any;
 
     use super::*;
     use crate::{Lockfile, Package};
@@ -1106,5 +1134,40 @@ c:
             deps.into_iter().sorted().collect::<Vec<_>>()
         }));
         assert_eq!(closures, expected);
+    }
+
+    #[test]
+    fn test_lockfile_v7_subgraph() {
+        let lockfile = PnpmLockfile::from_bytes(PNPM_V7_PEER).unwrap();
+        let pruned_lockfile = lockfile
+            .subgraph(
+                &["packages/a".into()],
+                &[
+                    "fast-deep-equal@3.1.3".into(),
+                    "ajv@8.12.0".into(),
+                    "uri-js@4.4.1".into(),
+                    "punycode@2.3.1".into(),
+                    "require-from-string@2.0.2".into(),
+                    "ajv-keywords@5.1.0(ajv@8.12.0)".into(),
+                    "json-schema-traverse@1.0.0".into(),
+                ],
+            )
+            .unwrap() as Box<dyn Any>;
+
+        let pruned_lockfile: &PnpmLockfile = pruned_lockfile.downcast_ref().unwrap();
+        let snapshots = pruned_lockfile.snapshots.as_ref().unwrap();
+        let packages = pruned_lockfile.packages.as_ref().unwrap();
+        assert!(
+            snapshots.contains_key("ajv-keywords@5.1.0(ajv@8.12.0)"),
+            "contains snapshot with used peer dependency"
+        );
+        assert!(
+            !snapshots.contains_key("ajv-keywords@5.1.0(ajv@8.11.0)"),
+            "doesn't contains snapshot with other peer dependency"
+        );
+        assert!(
+            packages.contains_key("ajv-keywords@5.1.0"),
+            "contains shared package metadata"
+        );
     }
 }
