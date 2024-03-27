@@ -276,7 +276,7 @@ impl TraceFormat for HeaptrackFormat {
                                         self.traces.push(TraceData {
                                             ip_index: RECURSION_IP,
                                             parent_trace_index: parent_index,
-                                            span_index: span_index,
+                                            span_index,
                                         });
                                         self.ip_parent_map
                                             .insert((RECURSION_IP, parent.span_index), index);
