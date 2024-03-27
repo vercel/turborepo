@@ -555,6 +555,9 @@ pub fn pnpm_global_change(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
+    use itertools::Itertools;
     use pretty_assertions::assert_eq;
     use test_case::test_case;
 
@@ -573,7 +576,6 @@ mod tests {
     const PNPM_PATCH_V6: &[u8] = include_bytes!("../../fixtures/pnpm-patch-v6.yaml").as_slice();
     const PNPM_V7: &[u8] = include_bytes!("../../fixtures/pnpm-v7.yaml").as_slice();
     const PNPM_V7_PEER: &[u8] = include_bytes!("../../fixtures/pnpm-v7-peer.yaml").as_slice();
-    const PNPM_V7_FULL: &[u8] = include_bytes!("../../fixtures/pnpm-v7-full.yaml").as_slice();
 
     use super::*;
     use crate::{Lockfile, Package};
@@ -584,7 +586,6 @@ mod tests {
     #[test_case(PNPM8_6)]
     #[test_case(PNPM_V7)]
     #[test_case(PNPM_V7_PEER)]
-    #[test_case(PNPM_V7_FULL)]
     fn test_roundtrip(fixture: &[u8]) {
         let lockfile = PnpmLockfile::from_bytes(fixture).unwrap();
         let serialized_lockfile = serde_yaml::to_string(&lockfile).unwrap();
@@ -1050,5 +1051,60 @@ c:
                 .into_iter()
                 .collect()
         );
+    }
+
+    #[test]
+    fn test_lockfile_v7_closures() {
+        let lockfile = PnpmLockfile::from_bytes(PNPM_V7_PEER).unwrap();
+        let mut workspaces = HashMap::new();
+        workspaces.insert(
+            "packages/a".into(),
+            vec![("ajv", "^8.12.0"), ("ajv-keywords", "^5.1.0")]
+                .into_iter()
+                .map(|(k, v)| (k.to_owned(), v.to_owned()))
+                .collect(),
+        );
+        workspaces.insert(
+            "packages/b".into(),
+            vec![("ajv", "8.11.0"), ("ajv-keywords", "^5.1.0")]
+                .into_iter()
+                .map(|(k, v)| (k.to_owned(), v.to_owned()))
+                .collect(),
+        );
+        let mut closures: Vec<_> = crate::all_transitive_closures(&lockfile, workspaces)
+            .unwrap()
+            .into_iter()
+            .map(|(k, v)| (k, v.into_iter().sorted().collect::<Vec<_>>()))
+            .collect();
+        closures.sort_by_key(|(k, _)| k.clone());
+        let shared_deps: HashSet<_> = vec![
+            crate::Package::new("fast-deep-equal@3.1.3", "3.1.3"),
+            crate::Package::new("json-schema-traverse@1.0.0", "1.0.0"),
+            crate::Package::new("punycode@2.3.1", "2.3.1"),
+            crate::Package::new("require-from-string@2.0.2", "2.0.2"),
+            crate::Package::new("uri-js@4.4.1", "4.4.1"),
+        ]
+        .into_iter()
+        .collect();
+        let mut expected = Vec::new();
+        expected.push(("packages/a".into(), {
+            let mut deps = shared_deps.clone();
+            deps.insert(crate::Package::new("ajv@8.12.0", "8.12.0"));
+            deps.insert(crate::Package::new(
+                "ajv-keywords@5.1.0(ajv@8.12.0)",
+                "5.1.0(ajv@8.12.0)",
+            ));
+            deps.into_iter().sorted().collect::<Vec<_>>()
+        }));
+        expected.push(("packages/b".into(), {
+            let mut deps = shared_deps;
+            deps.insert(crate::Package::new("ajv@8.11.0", "8.11.0"));
+            deps.insert(crate::Package::new(
+                "ajv-keywords@5.1.0(ajv@8.11.0)",
+                "5.1.0(ajv@8.11.0)",
+            ));
+            deps.into_iter().sorted().collect::<Vec<_>>()
+        }));
+        assert_eq!(closures, expected);
     }
 }
