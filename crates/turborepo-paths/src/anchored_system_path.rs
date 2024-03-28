@@ -6,7 +6,7 @@ use serde::Serialize;
 
 use crate::{AnchoredSystemPathBuf, PathError, PathRelation, RelativeUnixPathBuf};
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Hash)]
 #[serde(transparent)]
 pub struct AnchoredSystemPath(Utf8Path);
 
@@ -151,5 +151,32 @@ impl AnchoredSystemPath {
                 (_, None) => return PathRelation::Child,
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use test_case::test_case;
+
+    use crate::{AnchoredSystemPathBuf, PathRelation};
+
+    #[test_case(&["a", "b"], &["a", "b"], PathRelation::Parent ; "equal paths return parent")]
+    #[test_case(&["a"], &["a", "b"], PathRelation::Parent ; "a is a parent of a/b")]
+    #[test_case(&["a", "b"], &["a"], PathRelation::Child ; "a/b is a child of a")]
+    #[test_case(&["a", "b"], &["a", "c"], PathRelation::Divergent ; "a/b and a/c are divergent")]
+    fn test_path_relation(
+        abs_path_components: &[&str],
+        other_components: &[&str],
+        expected: PathRelation,
+    ) {
+        let abs_path = AnchoredSystemPathBuf::try_from("")
+            .unwrap()
+            .join_components(abs_path_components);
+        let other_path = AnchoredSystemPathBuf::try_from("")
+            .unwrap()
+            .join_components(other_components);
+
+        let relation = abs_path.relation_to_path(&other_path);
+        assert_eq!(relation, expected);
     }
 }

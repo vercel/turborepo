@@ -112,8 +112,26 @@ impl GlobSet {
         Ok(Self {
             include,
             exclude,
-            exclude_raw: BTreeSet::from_iter(raw_excludes.into_iter()),
+            exclude_raw: BTreeSet::from_iter(raw_excludes),
         })
+    }
+
+    // delegates to from_raw, but filters the globs into inclusions and exclusions
+    // first
+    pub fn from_raw_unfiltered(raw: Vec<String>) -> Result<Self, GlobError> {
+        let (includes, excludes): (Vec<_>, Vec<_>) = {
+            let mut includes = vec![];
+            let mut excludes = vec![];
+            for pattern in raw {
+                if let Some(exclude) = pattern.strip_prefix('!') {
+                    excludes.push(exclude.to_string());
+                } else {
+                    includes.push(pattern);
+                }
+            }
+            (includes, excludes)
+        };
+        Self::from_raw(includes, excludes)
     }
 }
 
