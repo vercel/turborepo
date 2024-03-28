@@ -296,10 +296,11 @@ impl PnpmLockfile {
         for dependency in pruned_packages.keys() {
             let dp = DepPath::parse(self.version(), dependency.as_str())?;
             let patch_key = format!("{}@{}", dp.name, dp.version);
-            if let Some(patch) = patches
-                .get(&patch_key)
-                .filter(|patch| dp.patch_hash() == Some(&patch.hash))
-            {
+            if let Some(patch) = patches.get(&patch_key).filter(|patch| {
+                // In V7 patch hash isn't included in packages key, so no need to check
+                matches!(self.version(), SupportedLockfileVersion::V7)
+                    || dp.patch_hash() == Some(&patch.hash)
+            }) {
                 pruned_patches.insert(patch_key, patch.clone());
             }
         }
@@ -602,6 +603,7 @@ mod tests {
     const PNPM_PATCH_V6: &[u8] = include_bytes!("../../fixtures/pnpm-patch-v6.yaml").as_slice();
     const PNPM_V7: &[u8] = include_bytes!("../../fixtures/pnpm-v7.yaml").as_slice();
     const PNPM_V7_PEER: &[u8] = include_bytes!("../../fixtures/pnpm-v7-peer.yaml").as_slice();
+    const PNPM_V7_PATCH: &[u8] = include_bytes!("../../fixtures/pnpm-v7-patch.yaml").as_slice();
 
     use std::any::Any;
 
@@ -614,6 +616,7 @@ mod tests {
     #[test_case(PNPM8_6)]
     #[test_case(PNPM_V7)]
     #[test_case(PNPM_V7_PEER)]
+    #[test_case(PNPM_V7_PATCH)]
     fn test_roundtrip(fixture: &[u8]) {
         let lockfile = PnpmLockfile::from_bytes(fixture).unwrap();
         let serialized_lockfile = serde_yaml::to_string(&lockfile).unwrap();
@@ -1168,6 +1171,62 @@ c:
         assert!(
             packages.contains_key("ajv-keywords@5.1.0"),
             "contains shared package metadata"
+        );
+        assert!(
+            packages.contains_key("ajv@8.12.0"),
+            "contains used peer dependency"
+        );
+        assert!(
+            snapshots.contains_key("ajv@8.12.0"),
+            "contains used peer dependency"
+        );
+    }
+
+    #[test]
+    fn test_lockfile_v7_subgraph_patches() {
+        let lockfile = PnpmLockfile::from_bytes(PNPM_V7_PATCH).unwrap();
+        let pruned_lockfile = lockfile
+            .subgraph(
+                &["packages/a".into()],
+                &[
+                    "fast-deep-equal@3.1.3".into(),
+                    "ajv@8.12.0".into(),
+                    "uri-js@4.4.1".into(),
+                    "punycode@2.3.1".into(),
+                    "require-from-string@2.0.2".into(),
+                    "ajv-keywords@5.1.0(patch_hash=5d3ekbiux3hfmrauqwpwb6chsq)(ajv@8.12.0)".into(),
+                    "json-schema-traverse@1.0.0".into(),
+                ],
+            )
+            .unwrap() as Box<dyn Any>;
+
+        let pruned_lockfile: &PnpmLockfile = pruned_lockfile.downcast_ref().unwrap();
+        let snapshots = pruned_lockfile.snapshots.as_ref().unwrap();
+        let packages = pruned_lockfile.packages.as_ref().unwrap();
+        let patches = pruned_lockfile.patched_dependencies.as_ref().unwrap();
+        assert!(
+            snapshots.contains_key(
+                "ajv-keywords@5.1.0(patch_hash=5d3ekbiux3hfmrauqwpwb6chsq)(ajv@8.12.0)"
+            ),
+            "contains snapshot with used peer dependency"
+        );
+        assert!(
+            !snapshots.contains_key(
+                "ajv-keywords@5.1.0(patch_hash=5d3ekbiux3hfmrauqwpwb6chsq)(ajv@8.11.0)"
+            ),
+            "doesn't contains snapshot with other peer dependency"
+        );
+        assert!(
+            snapshots.contains_key("ajv@8.12.0"),
+            "contains used peer dependency"
+        );
+        assert!(
+            packages.contains_key("ajv-keywords@5.1.0"),
+            "contains shared package metadata"
+        );
+        assert!(
+            patches.contains_key("ajv-keywords@5.1.0"),
+            "contains patched dependency"
         );
     }
 }
