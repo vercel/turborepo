@@ -133,6 +133,10 @@ impl<W> TerminalPane<W> {
         Ok(())
     }
 
+    pub fn term_size(&self) -> (u16, u16) {
+        (self.rows, self.cols)
+    }
+
     fn selected(&self) -> Option<(&String, &TerminalOutput<W>)> {
         let task_name = self.displayed.as_deref()?;
         self.tasks.get_key_value(task_name)
@@ -199,7 +203,9 @@ impl<W> TerminalOutput<W> {
             .title(title.as_str())
             .title(Title::from(title.as_str()).position(Position::Bottom));
         let term = PseudoTerminal::new(&screen).cursor(cursor).block(block);
-        terminal.insert_before(rows as u16, |buf| term.render(buf.area, buf))?;
+        terminal.insert_before((rows as u16).saturating_add(2), |buf| {
+            term.render(buf.area, buf)
+        })?;
         self.has_been_persisted = true;
 
         Ok(())

@@ -12,8 +12,8 @@ use ratatui::{
 use tracing::debug;
 use tui_term::widget::PseudoTerminal;
 
-const HEIGHT: u16 = 60;
-const PANE_HEIGHT: u16 = 40;
+const DEFAULT_APP_HEIGHT: u16 = 60;
+const PANE_SIZE_RATIO: f32 = 3.0 / 4.0;
 const FRAMERATE: Duration = Duration::from_millis(3);
 
 use super::{input, AppReceiver, Error, Event, TaskTable, TerminalPane};
@@ -76,6 +76,10 @@ impl<I> App<I> {
             .scroll(selected_task, direction)
             .expect("selected task should be in pane");
     }
+
+    pub fn term_size(&self) -> (u16, u16) {
+        self.pane.term_size()
+    }
 }
 
 impl<I: std::io::Write> App<I> {
@@ -96,10 +100,11 @@ impl<I: std::io::Write> App<I> {
 /// Handle the rendering of the `App` widget based on events received by
 /// `receiver`
 pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
-    let mut terminal = startup()?;
+    let (mut terminal, app_height) = startup()?;
     let size = terminal.size()?;
 
-    let app: App<Box<dyn io::Write + Send>> = App::new(PANE_HEIGHT, size.width, tasks);
+    let pane_height = (f32::from(app_height) * PANE_SIZE_RATIO) as u16;
+    let app: App<Box<dyn io::Write + Send>> = App::new(pane_height, size.width, tasks);
 
     let result = run_app_inner(&mut terminal, app, receiver);
 
@@ -150,20 +155,24 @@ fn poll(interact: bool, receiver: &AppReceiver, deadline: Instant) -> Option<Eve
 }
 
 /// Configures terminal for rendering App
-fn startup() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
+fn startup() -> io::Result<(Terminal<CrosstermBackend<Stdout>>, u16)> {
     crossterm::terminal::enable_raw_mode()?;
     let mut stdout = io::stdout();
     crossterm::execute!(stdout, crossterm::event::EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
+
+    // We need to reserve at least 1 line for writing persistent lines.
+    let height = DEFAULT_APP_HEIGHT.min(backend.size()?.height.saturating_sub(1));
+
     let mut terminal = Terminal::with_options(
         backend,
         ratatui::TerminalOptions {
-            viewport: ratatui::Viewport::Inline(HEIGHT),
+            viewport: ratatui::Viewport::Inline(height),
         },
     )?;
     terminal.hide_cursor()?;
 
-    Ok(terminal)
+    Ok((terminal, height))
 }
 
 /// Restores terminal to expected state
@@ -232,7 +241,8 @@ fn update<B: Backend>(
 }
 
 fn view<I>(app: &mut App<I>, f: &mut Frame) {
-    let vertical = Layout::vertical([Constraint::Min(5), Constraint::Length(PANE_HEIGHT)]);
+    let (term_height, _) = app.term_size();
+    let vertical = Layout::vertical([Constraint::Min(5), Constraint::Length(term_height)]);
     let [table, pane] = vertical.areas(f.size());
     app.table.stateful_render(f, table);
     f.render_widget(&app.pane, pane);
