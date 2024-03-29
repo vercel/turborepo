@@ -29,10 +29,12 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_filewatch::{
     cookies::CookieWriter,
     globwatcher::{Error as GlobWatcherError, GlobError, GlobSet, GlobWatcher},
+    hash_watcher::HashWatcher,
     package_watcher::{PackageWatchError, PackageWatcher},
     FileSystemWatcher, WatchError,
 };
 use turborepo_repository::package_manager;
+use turborepo_scm::SCM;
 
 use super::{bump_timeout::BumpTimeout, endpoint::SocketOpenError, proto};
 use crate::{
@@ -63,6 +65,7 @@ pub struct FileWatching {
     pub glob_watcher: Arc<GlobWatcher>,
     pub package_watcher: Arc<PackageWatcher>,
     pub package_changes_watcher: Arc<PackageChangesWatcher>,
+    pub hash_watcher: Arc<HashWatcher>,
 }
 
 #[derive(Debug, Error)]
@@ -115,6 +118,13 @@ impl FileWatching {
             PackageWatcher::new(repo_root.clone(), recv.clone(), cookie_writer)
                 .map_err(|e| WatchError::Setup(format!("{:?}", e)))?,
         );
+        let scm = SCM::new(&repo_root);
+        let hash_watcher = Arc::new(HashWatcher::new(
+            repo_root,
+            package_watcher.watch_discovery(),
+            recv.clone(),
+            scm,
+        ));
 
         let package_changes_watcher =
             Arc::new(PackageChangesWatcher::new(repo_root.clone(), recv.clone()));
@@ -124,6 +134,7 @@ impl FileWatching {
             glob_watcher,
             package_watcher,
             package_changes_watcher,
+            hash_watcher,
         })
     }
 }
@@ -164,12 +175,7 @@ where
             external_shutdown,
         }
     }
-}
 
-impl<S> TurboGrpcService<S>
-where
-    S: Future<Output = CloseReason>,
-{
     pub async fn serve(self) -> Result<CloseReason, package_manager::Error> {
         let Self {
             external_shutdown,
@@ -338,6 +344,23 @@ impl TurboGrpcServiceInner {
             .await?;
         Ok((changed_globs, time_saved))
     }
+
+    async fn get_file_hashes(
+        &self,
+        package_path: String,
+        inputs: Vec<String>,
+    ) -> Result<HashMap<String, String>, RpcError> {
+        let hashes = self
+            .file_watching
+            .hash_watcher
+            .get_file_hashes(package_path, inputs)
+            .await
+            .map_err(|e| match e {
+                PackageWatchError::Unavailable => RpcError::NoFileWatching,
+                PackageWatchError::InvalidState(_) => RpcError::NoFileWatching,
+            })?;
+        Ok(hashes)
+    }
 }
 
 async fn watch_root(
@@ -470,6 +493,19 @@ impl proto::turbod_server::Turbod for TurboGrpcServiceInner {
         Ok(tonic::Response::new(proto::GetChangedOutputsResponse {
             changed_output_globs: changed.into_iter().collect(),
             time_saved,
+        }))
+    }
+
+    async fn get_file_hashes(
+        &self,
+        request: tonic::Request<proto::GetFileHashesRequest>,
+    ) -> Result<tonic::Response<proto::GetFileHashesResponse>, tonic::Status> {
+        let inner = request.into_inner();
+        let file_hashes = self
+            .get_file_hashes(inner.package_path, inner.input_globs)
+            .await?;
+        Ok(tonic::Response::new(proto::GetFileHashesResponse {
+            file_hashes,
         }))
     }
 
