@@ -406,12 +406,11 @@ impl ModuleAssetContext {
 
     #[turbo_tasks::function]
     pub async fn side_effect_free_packages(self: Vc<Self>) -> Result<Vc<Glob>> {
-        let pkgs = self
+        let pkgs = &*self
             .await?
             .module_options_context
             .await?
-            .side_effect_free_packages
-            .await?;
+            .side_effect_free_packages;
 
         let mut globs = Vec::with_capacity(pkgs.len());
 
