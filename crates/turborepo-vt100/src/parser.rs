@@ -62,7 +62,7 @@ impl Parser {
     /// terminal state where all contents including scrollback and displayed.
     #[must_use]
     pub fn entire_screen(&self) -> crate::EntireScreen {
-        crate::EntireScreen(self.screen())
+        crate::EntireScreen::new(self.screen())
     }
 }
 
