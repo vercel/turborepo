@@ -6,6 +6,7 @@ use turbopath::{
 };
 
 use super::{npmrc::NpmRc, PackageInfo, PackageName};
+use crate::package_manager::PackageManager;
 
 pub struct DependencySplitter<'a> {
     repo_root: &'a AbsoluteSystemPath,
@@ -19,17 +20,16 @@ impl<'a> DependencySplitter<'a> {
         repo_root: &'a AbsoluteSystemPath,
         workspace_dir: &'a AbsoluteSystemPath,
         workspaces: &'a HashMap<PackageName, PackageInfo>,
+        package_manager: PackageManager,
         npmrc: Option<&'a NpmRc>,
     ) -> Self {
         Self {
             repo_root,
             workspace_dir,
             workspaces,
-            // TODO: default needs to depend on package manager as pnpm 9 changes the default to
-            // false
             link_workspace_packages: npmrc
                 .and_then(|npmrc| npmrc.link_workspace_packages)
-                .unwrap_or(true),
+                .unwrap_or(!matches!(package_manager, PackageManager::Pnpm9)),
         }
     }
 
