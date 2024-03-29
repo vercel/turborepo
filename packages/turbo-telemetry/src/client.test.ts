@@ -21,17 +21,17 @@ describe("TelemetryClient", () => {
       },
     });
 
-    const client = new TelemetryClient(
-      "https://example.com",
-      {
-        name: "test-package",
+    const client = new TelemetryClient({
+      api: "https://example.com",
+      packageInfo: {
+        name: "create-turbo",
         version: "1.0.0",
       },
       config,
-      {
+      opts: {
         batchSize: 2,
-      }
-    );
+      },
+    });
 
     // add two events to trigger the batch flush
     client.trackCommandStatus({
@@ -53,7 +53,7 @@ describe("TelemetryClient", () => {
               id: expect.any(String) as string,
               key: "command:test-command",
               value: "start",
-              package_name: "test-package",
+              package_name: "create-turbo",
               package_version: "1.0.0",
             },
           },
@@ -62,13 +62,13 @@ describe("TelemetryClient", () => {
               id: expect.any(String) as string,
               key: "command:test-command",
               value: "end",
-              package_name: "test-package",
+              package_name: "create-turbo",
               package_version: "1.0.0",
             },
           },
         ],
         headers: {
-          "User-Agent": expect.stringContaining("test-package 1.0.0") as string,
+          "User-Agent": expect.stringContaining("create-turbo 1.0.0") as string,
           "x-turbo-session-id": expect.any(String) as string,
           "x-turbo-telemetry-id": "telemetry-test-id",
         },
@@ -88,14 +88,14 @@ describe("TelemetryClient", () => {
       },
     });
 
-    const client = new TelemetryClient(
-      "https://example.com",
-      {
-        name: "test-package",
+    const client = new TelemetryClient({
+      api: "https://example.com",
+      packageInfo: {
+        name: "create-turbo",
         version: "1.0.0",
       },
-      config
-    );
+      config,
+    });
 
     client.trackCommandStatus({
       command: "test-command",
@@ -115,14 +115,14 @@ describe("TelemetryClient", () => {
       },
     });
 
-    const client = new TelemetryClient(
-      "https://example.com",
-      {
-        name: "test-package",
+    const client = new TelemetryClient({
+      api: "https://example.com",
+      packageInfo: {
+        name: "create-turbo",
         version: "1.0.0",
       },
-      config
-    );
+      config,
+    });
 
     client.trackCommandStatus({
       command: "test-command",
@@ -142,17 +142,17 @@ describe("TelemetryClient", () => {
       },
     });
 
-    const client = new TelemetryClient(
-      "https://example.com",
-      {
-        name: "test-package",
+    const client = new TelemetryClient({
+      api: "https://example.com",
+      packageInfo: {
+        name: "create-turbo",
         version: "1.0.0",
       },
       config,
-      {
+      opts: {
         batchSize: 2,
-      }
-    );
+      },
+    });
 
     // add one event
     client.trackCommandStatus({
@@ -173,13 +173,13 @@ describe("TelemetryClient", () => {
               id: expect.any(String) as string,
               key: "command:test-command",
               value: "start",
-              package_name: "test-package",
+              package_name: "create-turbo",
               package_version: "1.0.0",
             },
           },
         ],
         headers: {
-          "User-Agent": expect.stringContaining("test-package 1.0.0") as string,
+          "User-Agent": expect.stringContaining("create-turbo 1.0.0") as string,
           "x-turbo-session-id": expect.any(String) as string,
           "x-turbo-telemetry-id": "telemetry-test-id",
         },

@@ -3,27 +3,21 @@ import { logger } from "@turbo/utils";
 import { v4 as uuid } from "uuid";
 import { buildUserAgent } from "./utils";
 import { TelemetryConfig } from "./config";
+import type { Event, PackageInfo } from "./events/types";
 
 const DEFAULT_BATCH_SIZE = 20;
 const ENDPOINT = "/api/turborepo/v1/events";
 
-export interface PackageInfo {
-  name: string;
-  version: string;
+export interface Args {
+  api: string;
+  packageInfo: PackageInfo;
+  config: TelemetryConfig;
+  opts?: Options;
 }
 
 interface Options {
   timeout?: number;
   batchSize?: number;
-}
-
-interface Event {
-  id: string;
-  key: string;
-  value: string;
-  package_name: string;
-  package_version: string;
-  parent_id: string | undefined;
 }
 
 export class TelemetryClient {
@@ -37,12 +31,7 @@ export class TelemetryClient {
 
   config: TelemetryConfig;
 
-  constructor(
-    api: string,
-    packageInfo: PackageInfo,
-    config: TelemetryConfig,
-    opts?: Options
-  ) {
+  constructor({ api, packageInfo, config, opts }: Args) {
     // build the telemetry api url with the given base
     const telemetryApi = new URL(ENDPOINT, api);
     this.api = telemetryApi.toString();
@@ -94,7 +83,7 @@ export class TelemetryClient {
    * All tracking should be done through the public methods.
    * If a new event is needed, a new public method should be created.
    */
-  private track({
+  protected track({
     key,
     value,
     parentId,
@@ -147,7 +136,7 @@ export class TelemetryClient {
     }
   }
 
-  private trackCliOption({
+  protected trackCliOption({
     option,
     value,
   }: {
@@ -160,7 +149,7 @@ export class TelemetryClient {
     });
   }
 
-  private trackCliArgument({
+  protected trackCliArgument({
     argument,
     value,
   }: {
@@ -173,7 +162,7 @@ export class TelemetryClient {
     });
   }
 
-  private trackCliCommand({
+  protected trackCliCommand({
     command,
     value,
   }: {
@@ -186,9 +175,9 @@ export class TelemetryClient {
     });
   }
 
-  ////////////
-  // EVENTS //
-  ////////////
+  ///////////////////
+  // SHARED EVENTS //
+  //////////////////
 
   trackCommandStatus({
     command,
@@ -201,81 +190,5 @@ export class TelemetryClient {
       command,
       value: status,
     });
-  }
-
-  // CLI Options
-
-  trackOptionExample(value: string | undefined): Event | undefined {
-    if (value) {
-      return this.trackCliOption({
-        option: "example",
-        value,
-      });
-    }
-  }
-
-  trackOptionPackageManager(value: string | undefined): Event | undefined {
-    if (value) {
-      return this.trackCliOption({
-        option: "package_manager",
-        value,
-      });
-    }
-  }
-
-  trackOptionSkipInstall(value: boolean | undefined): Event | undefined {
-    if (value) {
-      return this.trackCliOption({
-        option: "skip_install",
-        value: value.toString(),
-      });
-    }
-  }
-
-  trackOptionSkipTransforms(value: boolean | undefined): Event | undefined {
-    if (value) {
-      return this.trackCliOption({
-        option: "skip_transforms",
-        value: value.toString(),
-      });
-    }
-  }
-
-  trackOptionTurboVersion(value: string | undefined): Event | undefined {
-    if (value) {
-      return this.trackCliOption({
-        option: "turbo_version",
-        value,
-      });
-    }
-  }
-
-  trackOptionExamplePath(value: string | undefined): Event | undefined {
-    if (value) {
-      return this.trackCliOption({
-        option: "example_path",
-        value,
-      });
-    }
-  }
-
-  // CLI Arguments
-
-  trackArgumentDirectory(provided: boolean): Event | undefined {
-    if (provided) {
-      return this.trackCliArgument({
-        argument: "project_directory",
-        value: provided.toString(),
-      });
-    }
-  }
-
-  trackArgumentPackageManager(value: string | undefined): Event | undefined {
-    if (value) {
-      return this.trackCliArgument({
-        argument: "package_manager",
-        value,
-      });
-    }
   }
 }

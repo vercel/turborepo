@@ -11,7 +11,7 @@ This information is used to shape the Turborepo roadmap and prioritize features.
 
 ## Events
 
-Each event must have its own method on the client class. All recorded events can be found by browsing the [event methods on the client class](./src/client.ts).
+Each package must create a subclass of the main telemetry client and implement specific methods for each telemetry event. All recorded events can be found by browsing the [packages classes](./src/events).
 
 ## Usage
 

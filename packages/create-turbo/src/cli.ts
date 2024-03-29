@@ -6,7 +6,7 @@ import chalk from "chalk";
 import { Command, Option } from "commander";
 import { logger } from "@turbo/utils";
 import {
-  type TelemetryClient,
+  type CreateTurboTelemetry,
   initTelemetry,
   withTelemetryCommand,
 } from "@turbo/telemetry";
@@ -16,7 +16,7 @@ import { notifyUpdate } from "./utils/notifyUpdate";
 import { create } from "./commands";
 
 // Global telemetry client
-let telemetryClient: TelemetryClient | undefined;
+let telemetryClient: CreateTurboTelemetry | undefined;
 
 // Support http proxy vars
 const agent = new ProxyAgent();
@@ -31,9 +31,11 @@ createTurboCli
   .description("Create a new Turborepo")
   .usage(`${chalk.bold("<project-directory>")} [options]`)
   .hook("preAction", async (_, thisAction) => {
-    const { telemetry } = await initTelemetry({
-      name: cliPkg.name,
-      version: cliPkg.version,
+    const { telemetry } = await initTelemetry<"create-turbo">({
+      packageInfo: {
+        name: "create-turbo",
+        version: cliPkg.version,
+      },
     });
     // inject telemetry into the action as an option
     thisAction.addOption(
