@@ -21,21 +21,27 @@ describe("TelemetryClient", () => {
       },
     });
 
-    const client = new TelemetryClient(
-      "https://example.com",
-      {
-        name: "test-package",
+    const client = new TelemetryClient({
+      api: "https://example.com",
+      packageInfo: {
+        name: "create-turbo",
         version: "1.0.0",
       },
       config,
-      {
+      opts: {
         batchSize: 2,
-      }
-    );
+      },
+    });
 
     // add two events to trigger the batch flush
-    client.trackPackageManager("yarn");
-    client.trackPackageManager("pnpm");
+    client.trackCommandStatus({
+      command: "test-command",
+      status: "start",
+    });
+    client.trackCommandStatus({
+      command: "test-command",
+      status: "end",
+    });
 
     expect(got.post).toHaveBeenCalled();
     expect(got.post).toHaveBeenCalledWith(
@@ -45,24 +51,24 @@ describe("TelemetryClient", () => {
           {
             package: {
               id: expect.any(String) as string,
-              key: "package_manager",
-              value: "yarn",
-              package_name: "test-package",
+              key: "command:test-command",
+              value: "start",
+              package_name: "create-turbo",
               package_version: "1.0.0",
             },
           },
           {
             package: {
               id: expect.any(String) as string,
-              key: "package_manager",
-              value: "pnpm",
-              package_name: "test-package",
+              key: "command:test-command",
+              value: "end",
+              package_name: "create-turbo",
               package_version: "1.0.0",
             },
           },
         ],
         headers: {
-          "User-Agent": expect.stringContaining("test-package 1.0.0") as string,
+          "User-Agent": expect.stringContaining("create-turbo 1.0.0") as string,
           "x-turbo-session-id": expect.any(String) as string,
           "x-turbo-telemetry-id": "telemetry-test-id",
         },
@@ -82,16 +88,19 @@ describe("TelemetryClient", () => {
       },
     });
 
-    const client = new TelemetryClient(
-      "https://example.com",
-      {
-        name: "test-package",
+    const client = new TelemetryClient({
+      api: "https://example.com",
+      packageInfo: {
+        name: "create-turbo",
         version: "1.0.0",
       },
-      config
-    );
+      config,
+    });
 
-    client.trackPackageManager("yarn");
+    client.trackCommandStatus({
+      command: "test-command",
+      status: "start",
+    });
     expect(got.post).not.toHaveBeenCalled();
     expect(client.hasPendingEvents()).toBe(true);
   });
@@ -106,16 +115,19 @@ describe("TelemetryClient", () => {
       },
     });
 
-    const client = new TelemetryClient(
-      "https://example.com",
-      {
-        name: "test-package",
+    const client = new TelemetryClient({
+      api: "https://example.com",
+      packageInfo: {
+        name: "create-turbo",
         version: "1.0.0",
       },
-      config
-    );
+      config,
+    });
 
-    client.trackPackageManager("yarn");
+    client.trackCommandStatus({
+      command: "test-command",
+      status: "start",
+    });
     expect(got.post).not.toHaveBeenCalled();
     expect(client.hasPendingEvents()).toBe(false);
   });
@@ -130,20 +142,23 @@ describe("TelemetryClient", () => {
       },
     });
 
-    const client = new TelemetryClient(
-      "https://example.com",
-      {
-        name: "test-package",
+    const client = new TelemetryClient({
+      api: "https://example.com",
+      packageInfo: {
+        name: "create-turbo",
         version: "1.0.0",
       },
       config,
-      {
+      opts: {
         batchSize: 2,
-      }
-    );
+      },
+    });
 
     // add one event
-    client.trackPackageManager("pnpm");
+    client.trackCommandStatus({
+      command: "test-command",
+      status: "start",
+    });
     expect(got.post).not.toHaveBeenCalled();
 
     await client.close();
@@ -156,15 +171,15 @@ describe("TelemetryClient", () => {
           {
             package: {
               id: expect.any(String) as string,
-              key: "package_manager",
-              value: "pnpm",
-              package_name: "test-package",
+              key: "command:test-command",
+              value: "start",
+              package_name: "create-turbo",
               package_version: "1.0.0",
             },
           },
         ],
         headers: {
-          "User-Agent": expect.stringContaining("test-package 1.0.0") as string,
+          "User-Agent": expect.stringContaining("create-turbo 1.0.0") as string,
           "x-turbo-session-id": expect.any(String) as string,
           "x-turbo-telemetry-id": "telemetry-test-id",
         },

@@ -2,7 +2,7 @@ import os from "node:os";
 import crypto from "node:crypto";
 import path from "node:path";
 import { configDir } from "dirs-next";
-import type { PackageInfo } from "./client";
+import type { PackageInfo } from "./events/types";
 
 export function buildUserAgent(packageInfo: PackageInfo): string {
   const nodeVersion = process.version;

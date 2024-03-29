@@ -3,27 +3,21 @@ import { logger } from "@turbo/utils";
 import { v4 as uuid } from "uuid";
 import { buildUserAgent } from "./utils";
 import { TelemetryConfig } from "./config";
+import type { Event, PackageInfo } from "./events/types";
 
 const DEFAULT_BATCH_SIZE = 20;
 const ENDPOINT = "/api/turborepo/v1/events";
 
-export interface PackageInfo {
-  name: string;
-  version: string;
+export interface Args {
+  api: string;
+  packageInfo: PackageInfo;
+  config: TelemetryConfig;
+  opts?: Options;
 }
 
 interface Options {
   timeout?: number;
   batchSize?: number;
-}
-
-interface Event {
-  id: string;
-  key: string;
-  value: string;
-  package_name: string;
-  package_version: string;
-  parent_id: string | undefined;
 }
 
 export class TelemetryClient {
@@ -37,12 +31,7 @@ export class TelemetryClient {
 
   config: TelemetryConfig;
 
-  constructor(
-    api: string,
-    packageInfo: PackageInfo,
-    config: TelemetryConfig,
-    opts?: Options
-  ) {
+  constructor({ api, packageInfo, config, opts }: Args) {
     // build the telemetry api url with the given base
     const telemetryApi = new URL(ENDPOINT, api);
     this.api = telemetryApi.toString();
@@ -94,7 +83,7 @@ export class TelemetryClient {
    * All tracking should be done through the public methods.
    * If a new event is needed, a new public method should be created.
    */
-  private track({
+  protected track({
     key,
     value,
     parentId,
@@ -147,17 +136,59 @@ export class TelemetryClient {
     }
   }
 
-  ////////////
-  // EVENTS //
-  ////////////
-
-  /**
-   * Track selected package manager
-   */
-  trackPackageManager(packageManager: string): Event {
+  protected trackCliOption({
+    option,
+    value,
+  }: {
+    option: string;
+    value: string;
+  }): Event {
     return this.track({
-      key: "package_manager",
-      value: packageManager,
+      key: `option:${option}`,
+      value,
+    });
+  }
+
+  protected trackCliArgument({
+    argument,
+    value,
+  }: {
+    argument: string;
+    value: string;
+  }): Event {
+    return this.track({
+      key: `argument:${argument}`,
+      value,
+    });
+  }
+
+  protected trackCliCommand({
+    command,
+    value,
+  }: {
+    command: string;
+    value: string;
+  }): Event {
+    return this.track({
+      key: `command:${command}`,
+      value,
+    });
+  }
+
+  ///////////////////
+  // SHARED EVENTS //
+  //////////////////
+
+  trackCommandStatus({
+    command,
+    status,
+  }: {
+    command: string;
+    status: string;
+  }): Event {
+    return this.trackCliCommand({
+      command,
+      value: status,
     });
   }
 }
