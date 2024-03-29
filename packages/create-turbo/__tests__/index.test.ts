@@ -6,7 +6,7 @@ import { logger } from "@turbo/utils";
 import type { PackageManager } from "@turbo/utils";
 // imports for mocks
 import * as turboWorkspaces from "@turbo/workspaces";
-import { TelemetryClient, TelemetryConfig } from "@turbo/telemetry";
+import { CreateTurboTelemetry, TelemetryConfig } from "@turbo/telemetry";
 import * as turboUtils from "@turbo/utils";
 import type { CreateCommandArgument } from "../src/commands/create/types";
 import { create } from "../src/commands/create";
@@ -25,21 +25,21 @@ describe("create-turbo", () => {
 
   const mockConsole = spyConsole();
   const mockExit = spyExit();
-  const telemetry = new TelemetryClient(
-    "https://example.com",
-    {
+  const telemetry = new CreateTurboTelemetry({
+    api: "https://example.com",
+    packageInfo: {
       name: "create-turbo",
       version: "1.0.0",
     },
-    new TelemetryConfig({
+    config: new TelemetryConfig({
       configPath: "test-config-path",
       config: {
         telemetry_enabled: false,
         telemetry_id: "telemetry-test-id",
         telemetry_salt: "telemetry-salt",
       },
-    })
-  );
+    }),
+  });
 
   test.each<{ packageManager: PackageManager }>([
     { packageManager: "yarn" },
