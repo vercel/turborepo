@@ -66,7 +66,13 @@ turbopack = [
 ]
 
 # List of the packages can be compiled against wasm32-wasi target.
-turbopack-wasi = ["path:crates/turbo-tasks-hash"]
+turbopack-wasi = [
+  "path:crates/turbo-tasks-auto-hash-map",
+  "path:crates/turbo-tasks-hash",
+  "path:crates/turbo-tasks-macro",
+  "path:crates/turbo-tasks-macros-shared",
+  "path:crates/turbo-tasks-build",
+]
 
 [workspace.lints.clippy]
 too_many_arguments = "allow"
