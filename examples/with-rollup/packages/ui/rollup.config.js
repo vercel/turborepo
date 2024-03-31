@@ -13,4 +13,8 @@ export default [
       file: "dist/header.js",
     },
   },
-].map((entry) => ({ ...entry, plugins: [typescript()] }));
+].map((entry) => ({
+  ...entry,
+  external: ["react/jsx-runtime"],
+  plugins: [typescript()],
+}));

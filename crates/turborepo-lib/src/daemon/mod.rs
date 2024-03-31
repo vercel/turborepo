@@ -110,6 +110,7 @@ pub(crate) mod proto {
                 PackageManager::Berry => Self::Berry,
                 PackageManager::Pnpm => Self::Pnpm,
                 PackageManager::Pnpm6 => Self::Pnpm6,
+                PackageManager::Pnpm9 => Self::Pnpm9,
                 PackageManager::Bun => Self::Bun,
             }
         }
@@ -123,6 +124,7 @@ pub(crate) mod proto {
                 turborepo_repository::package_manager::PackageManager::Berry => Self::Berry,
                 turborepo_repository::package_manager::PackageManager::Pnpm => Self::Pnpm,
                 turborepo_repository::package_manager::PackageManager::Pnpm6 => Self::Pnpm6,
+                turborepo_repository::package_manager::PackageManager::Pnpm9 => Self::Pnpm9,
                 turborepo_repository::package_manager::PackageManager::Bun => Self::Bun,
             }
         }

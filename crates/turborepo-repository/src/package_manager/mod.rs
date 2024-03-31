@@ -68,6 +68,7 @@ impl From<Workspaces> for Vec<String> {
 pub enum PackageManager {
     Berry,
     Npm,
+    Pnpm9,
     Pnpm,
     Pnpm6,
     Yarn,
@@ -76,13 +77,12 @@ pub enum PackageManager {
 
 impl Display for PackageManager {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Do not change these without also changing `GetPackageManager` in
-        // packagemanager.go
         match self {
             PackageManager::Berry => write!(f, "berry"),
             PackageManager::Npm => write!(f, "npm"),
             PackageManager::Pnpm => write!(f, "pnpm"),
             PackageManager::Pnpm6 => write!(f, "pnpm6"),
+            PackageManager::Pnpm9 => write!(f, "pnpm9"),
             PackageManager::Yarn => write!(f, "yarn"),
             PackageManager::Bun => write!(f, "bun"),
         }
@@ -216,7 +216,7 @@ impl Display for NoPackageManager {
 impl Display for MissingWorkspaceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let err = match self.package_manager {
-            PackageManager::Pnpm | PackageManager::Pnpm6 => {
+            PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
                 "pnpm-workspace.yaml: no packages found. Turborepo requires pnpm workspaces and \
                  thus packages to be defined in the root pnpm-workspace.yaml"
             }
@@ -308,7 +308,7 @@ impl PackageManager {
     pub fn command(&self) -> &'static str {
         match self {
             PackageManager::Npm => "npm",
-            PackageManager::Pnpm | PackageManager::Pnpm6 => "pnpm",
+            PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => "pnpm",
             PackageManager::Yarn | PackageManager::Berry => "yarn",
             PackageManager::Bun => "bun",
         }
@@ -335,7 +335,7 @@ impl PackageManager {
 
     pub fn get_default_exclusions(&self) -> impl Iterator<Item = String> {
         let ignores = match self {
-            PackageManager::Pnpm | PackageManager::Pnpm6 => {
+            PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
                 ["**/node_modules/**", "**/bower_components/**"].as_slice()
             }
             PackageManager::Npm => ["**/node_modules/**"].as_slice(),
@@ -351,7 +351,7 @@ impl PackageManager {
         root_path: &AbsoluteSystemPath,
     ) -> Result<(Vec<String>, Vec<String>), Error> {
         let globs = match self {
-            PackageManager::Pnpm | PackageManager::Pnpm6 => {
+            PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
                 // Make sure to convert this to a missing workspace error
                 // so we can catch it in the case of single package mode.
                 let source = self.workspace_glob_source(root_path);
@@ -490,14 +490,16 @@ impl PackageManager {
         match self {
             PackageManager::Npm => npm::LOCKFILE,
             PackageManager::Bun => bun::LOCKFILE,
-            PackageManager::Pnpm | PackageManager::Pnpm6 => pnpm::LOCKFILE,
+            PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => pnpm::LOCKFILE,
             PackageManager::Yarn | PackageManager::Berry => yarn::LOCKFILE,
         }
     }
 
     pub fn workspace_configuration_path(&self) -> Option<&'static str> {
         match self {
-            PackageManager::Pnpm | PackageManager::Pnpm6 => Some("pnpm-workspace.yaml"),
+            PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
+                Some("pnpm-workspace.yaml")
+            }
             PackageManager::Npm
             | PackageManager::Berry
             | PackageManager::Yarn
@@ -533,7 +535,7 @@ impl PackageManager {
     ) -> Result<Box<dyn Lockfile>, Error> {
         Ok(match self {
             PackageManager::Npm => Box::new(turborepo_lockfiles::NpmLockfile::load(contents)?),
-            PackageManager::Pnpm | PackageManager::Pnpm6 => {
+            PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
                 Box::new(turborepo_lockfiles::PnpmLockfile::from_bytes(contents)?)
             }
             PackageManager::Yarn => {
@@ -562,7 +564,7 @@ impl PackageManager {
     ) -> PackageJson {
         match self {
             PackageManager::Berry => yarn::prune_patches(package_json, patches),
-            PackageManager::Pnpm6 | PackageManager::Pnpm => {
+            PackageManager::Pnpm9 | PackageManager::Pnpm6 | PackageManager::Pnpm => {
                 pnpm::prune_patches(package_json, patches)
             }
             PackageManager::Yarn | PackageManager::Npm | PackageManager::Bun => {
@@ -589,7 +591,7 @@ impl PackageManager {
                 }
             }
             PackageManager::Npm | PackageManager::Pnpm6 => Some("--"),
-            PackageManager::Pnpm | PackageManager::Berry => None,
+            PackageManager::Pnpm | PackageManager::Pnpm9 | PackageManager::Berry => None,
         }
     }
 }
@@ -687,7 +689,7 @@ mod tests {
                 PackageManager::Berry => &["**/node_modules", "**/.git", "**/.yarn"],
                 PackageManager::Bun => &["**/node_modules", "**/.git"],
                 PackageManager::Yarn => &["apps/*/node_modules/**", "packages/*/node_modules/**"],
-                PackageManager::Pnpm | PackageManager::Pnpm6 => &[
+                PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => &[
                     "**/node_modules/**",
                     "**/bower_components/**",
                     "packages/skip",

@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use indexmap::IndexMap;
 use lightningcss::{
     css_modules::{CssModuleExport, CssModuleExports, CssModuleReference, Pattern, Segment},
@@ -368,7 +368,7 @@ pub async fn process_css_with_placeholder(
             let code = code.await?;
             let code = match &*code {
                 FileContent::Content(v) => v.content().to_str()?,
-                _ => unreachable!("this case should be filtered out while parsing"),
+                _ => bail!("this case should be filtered out while parsing"),
             };
 
             let (result, _) = stylesheet.to_css(cm.clone(), &code, false, false, false)?;
@@ -539,11 +539,11 @@ async fn process_content(
             CssModuleAssetType::Module => Some(lightningcss::css_modules::Config {
                 pattern: Pattern {
                     segments: smallvec![
-                        Segment::Local,
-                        Segment::Literal("__"),
                         Segment::Name,
                         Segment::Literal("__"),
                         Segment::Hash,
+                        Segment::Literal("__"),
+                        Segment::Local,
                     ],
                 },
                 dashed_idents: false,
@@ -636,11 +636,11 @@ async fn process_content(
         let handler = swc_core::common::errors::Handler::with_emitter(
             true,
             false,
-            Box::new(IssueEmitter {
+            Box::new(IssueEmitter::new(
                 source,
-                source_map: cm.clone(),
-                title: Some("Parsing css source code failed".to_string()),
-            }),
+                cm.clone(),
+                Some("Parsing css source code failed".to_string()),
+            )),
         );
 
         let fm = cm.new_source_file(FileName::Custom(ident_str.to_string()), code.clone());

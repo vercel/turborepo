@@ -50,15 +50,19 @@
 mod attrs;
 mod callbacks;
 mod cell;
+mod entire_screen;
 mod grid;
 mod parser;
 mod perform;
 mod row;
 mod screen;
 mod term;
+#[cfg(feature = "tui-term")]
+mod tui_term;
 
 pub use attrs::Color;
 pub use callbacks::Callbacks;
 pub use cell::Cell;
+pub use entire_screen::EntireScreen;
 pub use parser::Parser;
 pub use screen::{MouseProtocolEncoding, MouseProtocolMode, Screen};

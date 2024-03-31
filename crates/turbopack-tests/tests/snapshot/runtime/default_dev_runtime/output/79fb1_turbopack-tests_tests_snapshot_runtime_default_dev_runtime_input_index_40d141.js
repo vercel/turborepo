@@ -333,6 +333,14 @@ let SourceType;
    * update.
    */ SourceType[SourceType["Update"] = 2] = "Update";
 })(SourceType || (SourceType = {}));
+class UpdateApplyError extends Error {
+    name = "UpdateApplyError";
+    dependencyChain;
+    constructor(message, dependencyChain){
+        super(message);
+        this.dependencyChain = dependencyChain;
+    }
+}
 const moduleFactories = Object.create(null);
 const moduleCache = Object.create(null);
 /**
@@ -448,6 +456,14 @@ async function loadChunkPath(source, chunkPath) {
         } : undefined);
     }
 }
+/**
+ * Returns an absolute url to an asset.
+ */ function createResolvePathFromModule(resolver) {
+    return function resolvePathFromModule(moduleId) {
+        const exported = resolver(moduleId);
+        return exported?.default ?? exported;
+    };
+}
 function instantiateModule(id, source) {
     const moduleFactory = moduleFactories[id];
     if (typeof moduleFactory !== "function") {
@@ -506,6 +522,7 @@ function instantiateModule(id, source) {
             parentId: id
         };
         runModuleExecutionHooks(module, (refresh)=>{
+            const r = commonJsRequire.bind(null, module);
             moduleFactory.call(module.exports, augmentContext({
                 a: asyncModule.bind(null, module),
                 e: module.exports,
@@ -526,6 +543,7 @@ function instantiateModule(id, source) {
                 g: globalThis,
                 U: relativeURL,
                 k: refresh,
+                R: createResolvePathFromModule(r),
                 __dirname: module.id.replace(/(^|\/)\/+$/, "")
             }));
         });
@@ -654,9 +672,9 @@ function computedInvalidatedModules(invalidated) {
         const effect = getAffectedModuleEffects(moduleId);
         switch(effect.type){
             case "unaccepted":
-                throw new Error(`cannot apply update: unaccepted module. ${formatDependencyChain(effect.dependencyChain)}.`);
+                throw new UpdateApplyError(`cannot apply update: unaccepted module. ${formatDependencyChain(effect.dependencyChain)}.`, effect.dependencyChain);
             case "self-declined":
-                throw new Error(`cannot apply update: self-declined module. ${formatDependencyChain(effect.dependencyChain)}.`);
+                throw new UpdateApplyError(`cannot apply update: self-declined module. ${formatDependencyChain(effect.dependencyChain)}.`, effect.dependencyChain);
             case "accepted":
                 for (const outdatedModuleId of effect.outdatedModules){
                     outdatedModules.add(outdatedModuleId);

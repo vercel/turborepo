@@ -158,6 +158,21 @@ impl Engine<Built> {
         self.task_graph.node_weights()
     }
 
+    /// Return all tasks that have a command to be run
+    pub fn tasks_with_command(&self, pkg_graph: &PackageGraph) -> Vec<String> {
+        self.tasks()
+            .filter_map(|node| match node {
+                TaskNode::Root => None,
+                TaskNode::Task(task) => Some(task),
+            })
+            .filter_map(|task| {
+                let pkg_name = PackageName::from(task.package());
+                let json = pkg_graph.package_json(&pkg_name)?;
+                json.command(task.task()).map(|_| task.to_string())
+            })
+            .collect()
+    }
+
     pub fn task_definitions(&self) -> &HashMap<TaskId<'static>, TaskDefinition> {
         &self.task_definitions
     }
@@ -166,6 +181,7 @@ impl Engine<Built> {
         &self,
         package_graph: &PackageGraph,
         concurrency: u32,
+        experimental_ui: bool,
     ) -> Result<(), Vec<ValidateError>> {
         // TODO(olszewski) once this is hooked up to a real run, we should
         // see if using rayon to parallelize would provide a speedup
@@ -262,10 +278,33 @@ impl Engine<Built> {
             })
         }
 
+        validation_errors.extend(self.validate_interactive(experimental_ui));
+
         match validation_errors.is_empty() {
             true => Ok(()),
             false => Err(validation_errors),
         }
+    }
+
+    // Validates that UI is setup if any interactive tasks will be executed
+    fn validate_interactive(&self, experimental_ui: bool) -> Vec<ValidateError> {
+        // If experimental_ui is being used, then we don't need check for interactive
+        // tasks
+        if experimental_ui {
+            return Vec::new();
+        }
+        self.task_definitions
+            .iter()
+            .filter_map(|(task, definition)| {
+                if definition.interactive {
+                    Some(ValidateError::InteractiveNeedsUI {
+                        task: task.to_string(),
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 }
 
@@ -295,6 +334,11 @@ pub enum ValidateError {
         persistent_count: u32,
         concurrency: u32,
     },
+    #[error(
+        "Cannot run interactive task \"{task}\" without experimental UI. Set `\"experimentalUI\": \
+         true` in `turbo.json` or `TURBO_EXPERIMENTAL_UI=true` as an environment variable"
+    )]
+    InteractiveNeedsUI { task: String },
 }
 
 impl fmt::Display for TaskNode {
@@ -412,16 +456,16 @@ mod test {
         let graph = graph_builder.build().await.unwrap();
 
         // if our limit is less than, it should fail
-        engine.validate(&graph, 1).expect_err("not enough");
+        engine.validate(&graph, 1, false).expect_err("not enough");
 
         // if our limit is less than, it should fail
-        engine.validate(&graph, 2).expect_err("not enough");
+        engine.validate(&graph, 2, false).expect_err("not enough");
 
         // we have two persistent tasks, and a slot for all other tasks, so this should
         // pass
-        engine.validate(&graph, 3).expect("ok");
+        engine.validate(&graph, 3, false).expect("ok");
 
         // if our limit is greater, then it should pass
-        engine.validate(&graph, 4).expect("ok");
+        engine.validate(&graph, 4, false).expect("ok");
     }
 }

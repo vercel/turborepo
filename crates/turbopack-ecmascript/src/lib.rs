@@ -515,6 +515,7 @@ impl EcmascriptModuleAsset {
             chunking_context,
             analyze.references,
             analyze.code_generation,
+            analyze.async_module,
             analyze.source_map,
             analyze.exports,
             async_module_info,
@@ -660,7 +661,7 @@ impl ChunkItem for ModuleChunkItem {
     #[turbo_tasks::function]
     async fn is_self_async(&self) -> Result<Vc<bool>> {
         if let Some(async_module) = *self.module.get_async_module().await? {
-            Ok(Vc::cell(*async_module.is_self_async().await?))
+            Ok(async_module.is_self_async(self.module.failsafe_analyze().await?.references))
         } else {
             Ok(Vc::cell(false))
         }
@@ -727,6 +728,7 @@ impl EcmascriptModuleContent {
         chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
         references: Vc<ModuleReferences>,
         code_generation: Vc<CodeGenerateables>,
+        async_module: Vc<OptionAsyncModule>,
         source_map: Vc<OptionSourceMap>,
         exports: Vc<EcmascriptExports>,
         async_module_info: Option<Vc<AsyncModuleInfo>>,
@@ -743,6 +745,13 @@ impl EcmascriptModuleContent {
             {
                 code_gens.push(code_gen.code_generation(chunking_context));
             }
+        }
+        if let Some(async_module) = *async_module.await? {
+            code_gens.push(async_module.code_generation(
+                chunking_context,
+                async_module_info,
+                references,
+            ));
         }
         for c in code_generation.await?.iter() {
             match c {
@@ -816,64 +825,79 @@ async fn gen_content_with_visitors(
 ) -> Result<Vc<EcmascriptModuleContent>> {
     let parsed = parsed.await?;
 
-    if let ParseResult::Ok {
-        program,
-        source_map,
-        globals,
-        eval_context,
-        comments,
-        ..
-    } = &*parsed
-    {
-        let mut program = program.clone();
+    match &*parsed {
+        ParseResult::Ok {
+            program,
+            source_map,
+            globals,
+            eval_context,
+            comments,
+            ..
+        } => {
+            let mut program = program.clone();
 
-        GLOBALS.set(globals, || {
-            if !visitors.is_empty() {
-                program.visit_mut_with_path(
-                    &mut ApplyVisitors::new(visitors),
-                    &mut Default::default(),
-                );
+            GLOBALS.set(globals, || {
+                if !visitors.is_empty() {
+                    program.visit_mut_with_path(
+                        &mut ApplyVisitors::new(visitors),
+                        &mut Default::default(),
+                    );
+                }
+                for visitor in root_visitors {
+                    program.visit_mut_with(&mut visitor.create());
+                }
+                program.visit_mut_with(&mut swc_core::ecma::transforms::base::hygiene::hygiene());
+                program.visit_mut_with(&mut swc_core::ecma::transforms::base::fixer::fixer(None));
+
+                // we need to remove any shebang before bundling as it's only valid as the first
+                // line in a js file (not in a chunk item wrapped in the runtime)
+                remove_shebang(&mut program);
+            });
+
+            let mut bytes: Vec<u8> = vec![];
+            // TODO: Insert this as a sourceless segment so that sourcemaps aren't affected.
+            // = format!("/* {} */\n", self.module.path().to_string().await?).into_bytes();
+
+            let mut mappings = vec![];
+
+            let comments = comments.consumable();
+
+            let mut emitter = Emitter {
+                cfg: swc_core::ecma::codegen::Config::default(),
+                cm: source_map.clone(),
+                comments: Some(&comments),
+                wr: JsWriter::new(source_map.clone(), "\n", &mut bytes, Some(&mut mappings)),
+            };
+
+            emitter.emit_program(&program)?;
+
+            let srcmap =
+                ParseResultSourceMap::new(source_map.clone(), mappings, original_src_map).cell();
+
+            Ok(EcmascriptModuleContent {
+                inner_code: bytes.into(),
+                source_map: Some(Vc::upcast(srcmap)),
+                is_esm: eval_context.is_esm()
+                    || specified_module_type == SpecifiedModuleType::EcmaScript,
             }
-            for visitor in root_visitors {
-                program.visit_mut_with(&mut visitor.create());
-            }
-            program.visit_mut_with(&mut swc_core::ecma::transforms::base::hygiene::hygiene());
-            program.visit_mut_with(&mut swc_core::ecma::transforms::base::fixer::fixer(None));
-
-            // we need to remove any shebang before bundling as it's only valid as the first
-            // line in a js file (not in a chunk item wrapped in the runtime)
-            remove_shebang(&mut program);
-        });
-
-        let mut bytes: Vec<u8> = vec![];
-        // TODO: Insert this as a sourceless segment so that sourcemaps aren't affected.
-        // = format!("/* {} */\n", self.module.path().to_string().await?).into_bytes();
-
-        let mut mappings = vec![];
-
-        let comments = comments.consumable();
-
-        let mut emitter = Emitter {
-            cfg: swc_core::ecma::codegen::Config::default(),
-            cm: source_map.clone(),
-            comments: Some(&comments),
-            wr: JsWriter::new(source_map.clone(), "\n", &mut bytes, Some(&mut mappings)),
-        };
-
-        emitter.emit_program(&program)?;
-
-        let srcmap =
-            ParseResultSourceMap::new(source_map.clone(), mappings, original_src_map).cell();
-
-        Ok(EcmascriptModuleContent {
-            inner_code: bytes.into(),
-            source_map: Some(Vc::upcast(srcmap)),
-            is_esm: eval_context.is_esm()
-                || specified_module_type == SpecifiedModuleType::EcmaScript,
+            .cell())
         }
-        .cell())
-    } else {
-        Ok(EcmascriptModuleContent {
+        ParseResult::Unparseable { messages } => Ok(EcmascriptModuleContent {
+            inner_code: format!(
+                "const e = new Error(`Could not parse module \
+                 '{path}'\n{error_messages}`);\ne.code = 'MODULE_UNPARSEABLE';\nthrow e;",
+                path = ident.path().to_string().await?,
+                error_messages = messages
+                    .as_ref()
+                    .and_then(|m| { m.first().map(|f| format!("\n{}", f)) })
+                    .unwrap_or("".to_string())
+            )
+            .into(),
+            source_map: None,
+            is_esm: false,
+        }
+        .cell()),
+        _ => Ok(EcmascriptModuleContent {
             inner_code: format!(
                 "const e = new Error(\"Could not parse module '{path}'\");\ne.code = \
                  'MODULE_UNPARSEABLE';\nthrow e;",
@@ -883,7 +907,7 @@ async fn gen_content_with_visitors(
             source_map: None,
             is_esm: false,
         }
-        .cell())
+        .cell()),
     }
 }
 

@@ -522,7 +522,7 @@ jobs:
 
       - name: Run cargo check for the wasi targets
         run: |
-          RUSTFLAGS="-D warnings -A deprecated" cargo groups check turbopack-wasi --release
+          CARGO_BUILD_TARGET="wasm32-wasi-preview1-threads" RUSTFLAGS="-D warnings -A deprecated" cargo groups check turbopack-wasi --release
 
   turbopack_rust_clippy:
     needs: [turbopack_rust_check]

@@ -42,7 +42,7 @@ Test help flag
   
   Run Arguments:
         --cache-dir <CACHE_DIR>
-            Override the filesystem cache directory
+            Override the filesystem cache directory [env: TURBO_CACHE_DIR=]
         --cache-workers <CACHE_WORKERS>
             Set the number of concurrent cache operations (default 10) [default: 10]
         --concurrency <CONCURRENCY>
@@ -77,7 +77,9 @@ Test help flag
             DEPRECATED: Exclude dependent task consumers from execution
         --no-cache
             Avoid saving task results to the cache. Useful for development/watch tasks
-        --[no-]daemon
+        --daemon
+            
+        --no-daemon
             Force turbo to either use or not use the local daemon. If unset turbo will use the default detection logic
         --output-logs <OUTPUT_LOGS>
             Set type of process output logging. Use "full" to show all output. Use "hash-only" to show only turbo-computed task hashes. Use "new-only" to show only new output with only hashes for cached tasks. Use "none" to hide process output. (default full) [possible values: full, none, hash-only, new-only, errors-only]
@@ -145,7 +147,7 @@ Test help flag
   
   Run Arguments:
         --cache-dir <CACHE_DIR>
-            Override the filesystem cache directory
+            Override the filesystem cache directory [env: TURBO_CACHE_DIR=]
         --cache-workers <CACHE_WORKERS>
             Set the number of concurrent cache operations (default 10) [default: 10]
         --concurrency <CONCURRENCY>
@@ -180,7 +182,9 @@ Test help flag
             DEPRECATED: Exclude dependent task consumers from execution
         --no-cache
             Avoid saving task results to the cache. Useful for development/watch tasks
-        --[no-]daemon
+        --daemon
+            
+        --no-daemon
             Force turbo to either use or not use the local daemon. If unset turbo will use the default detection logic
         --output-logs <OUTPUT_LOGS>
             Set type of process output logging. Use "full" to show all output. Use "hash-only" to show only turbo-computed task hashes. Use "new-only" to show only new output with only hashes for cached tasks. Use "none" to hide process output. (default full) [possible values: full, none, hash-only, new-only, errors-only]

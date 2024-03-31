@@ -67,7 +67,8 @@ Setup
           "persistent": false,
           "env": [],
           "passThroughEnv": null,
-          "dotEnv": null
+          "dotEnv": null,
+          "interactive": false
         },
         "expandedOutputs": [],
         "framework": "",

@@ -63,6 +63,22 @@ impl Grid {
         self.size
     }
 
+    /// Size of screen without trailing blank rows
+    pub fn size_with_contents(&self) -> (usize, u16) {
+        let cols = self.size.cols;
+        let last_row_with_content = self.all_rows().enumerate().fold(
+            0,
+            |last_row_with_contents, (row_index, row)| {
+                if row.is_blank() {
+                    last_row_with_contents
+                } else {
+                    row_index
+                }
+            },
+        );
+        (last_row_with_content + 1, cols)
+    }
+
     pub fn set_size(&mut self, size: Size) {
         if size.cols != self.size.cols {
             for row in &mut self.rows {
@@ -122,11 +138,37 @@ impl Grid {
         self.scrollback
             .iter()
             .skip(scrollback_len - self.scrollback_offset)
-            .chain(self.rows.iter().take(rows_len - self.scrollback_offset))
+            // when scrollback_offset > rows_len (e.g. rows = 3,
+            // scrollback_len = 10, offset = 9) the skip(10 - 9)
+            // will take 9 rows instead of 3. we need to set
+            // the upper bound to rows_len (e.g. 3)
+            .take(rows_len)
+            // same for rows_len - scrollback_offset (e.g. 3 - 9).
+            // it'll panic with overflow. we have to saturate the subtraction.
+            .chain(
+                self.rows
+                    .iter()
+                    .take(rows_len.saturating_sub(self.scrollback_offset)),
+            )
     }
 
     pub fn drawing_rows(&self) -> impl Iterator<Item = &crate::row::Row> {
         self.rows.iter()
+    }
+
+    pub fn all_rows(&self) -> impl Iterator<Item = &crate::row::Row> {
+        self.scrollback.iter().chain(self.rows.iter())
+    }
+
+    pub(crate) fn all_row(&self, row: u16) -> Option<&crate::row::Row> {
+        let row = usize::from(row);
+        if row < self.scrollback.len() {
+            self.scrollback.get(row)
+        } else if row < self.scrollback.len() + self.rows.len() {
+            self.rows.get(row - self.scrollback.len())
+        } else {
+            None
+        }
     }
 
     pub fn drawing_rows_mut(
@@ -184,6 +226,21 @@ impl Grid {
     pub fn write_contents(&self, contents: &mut String) {
         let mut wrapping = false;
         for row in self.visible_rows() {
+            row.write_contents(contents, 0, self.size.cols, wrapping);
+            if !row.wrapped() {
+                contents.push('\n');
+            }
+            wrapping = row.wrapped();
+        }
+
+        while contents.ends_with('\n') {
+            contents.truncate(contents.len() - 1);
+        }
+    }
+
+    pub fn write_full_contents(&self, contents: &mut String) {
+        let mut wrapping = false;
+        for row in self.all_rows() {
             row.write_contents(contents, 0, self.size.cols, wrapping);
             if !row.wrapped() {
                 contents.push('\n');

@@ -127,7 +127,7 @@ impl<T> DaemonClient<T> {
     pub async fn discover_packages(&mut self) -> Result<DiscoverPackagesResponse, DaemonError> {
         let req = proto::DiscoverPackagesRequest {};
         let mut req = req.into_request();
-        req.set_timeout(Duration::from_millis(10));
+        req.set_timeout(Duration::from_millis(30));
         let response = self.client.discover_packages(req).await?.into_inner();
 
         Ok(response)
