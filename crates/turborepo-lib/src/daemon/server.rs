@@ -25,11 +25,11 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::{server::NamedService, transport::Server};
 use tower::ServiceBuilder;
 use tracing::{error, info, trace, warn};
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError};
 use turborepo_filewatch::{
     cookies::CookieWriter,
     globwatcher::{Error as GlobWatcherError, GlobError, GlobSet, GlobWatcher},
-    hash_watcher::HashWatcher,
+    hash_watcher::{Error as HashWatcherError, HashSpec, HashWatcher},
     package_watcher::{PackageWatchError, PackageWatcher},
     FileSystemWatcher, WatchError,
 };
@@ -72,12 +72,16 @@ pub struct FileWatching {
 enum RpcError {
     #[error("deadline exceeded")]
     DeadlineExceeded,
+    #[error("invalid relative system path {0}: {1}")]
+    InvalidAnchoredPath(String, PathError),
     #[error("invalid glob: {0}")]
     InvalidGlob(#[from] GlobError),
     #[error("globwatching failed: {0}")]
     GlobWatching(#[from] GlobWatcherError),
     #[error("filewatching unavailable")]
     NoFileWatching,
+    #[error("file hashing failed: {0}")]
+    FileHashing(#[from] HashWatcherError),
 }
 
 impl From<RpcError> for tonic::Status {
@@ -89,6 +93,12 @@ impl From<RpcError> for tonic::Status {
             RpcError::InvalidGlob(e) => tonic::Status::invalid_argument(e.to_string()),
             RpcError::GlobWatching(e) => tonic::Status::unavailable(e.to_string()),
             RpcError::NoFileWatching => tonic::Status::unavailable("filewatching unavailable"),
+            RpcError::FileHashing(e) => {
+                tonic::Status::failed_precondition(format!("File hashing not available: {e}",))
+            }
+            e @ RpcError::InvalidAnchoredPath(_, _) => {
+                tonic::Status::invalid_argument(e.to_string())
+            }
         }
     }
 }
@@ -120,14 +130,13 @@ impl FileWatching {
         );
         let scm = SCM::new(&repo_root);
         let hash_watcher = Arc::new(HashWatcher::new(
-            repo_root,
+            repo_root.clone(),
             package_watcher.watch_discovery(),
             recv.clone(),
             scm,
         ));
 
-        let package_changes_watcher =
-            Arc::new(PackageChangesWatcher::new(repo_root.clone(), recv.clone()));
+        let package_changes_watcher = Arc::new(PackageChangesWatcher::new(repo_root, recv.clone()));
 
         Ok(FileWatching {
             watcher,
@@ -350,16 +359,28 @@ impl TurboGrpcServiceInner {
         package_path: String,
         inputs: Vec<String>,
     ) -> Result<HashMap<String, String>, RpcError> {
-        let hashes = self
-            .file_watching
+        let glob_set = if inputs.is_empty() {
+            None
+        } else {
+            Some(GlobSet::from_raw_unfiltered(inputs)?)
+        };
+        let package_path = AnchoredSystemPathBuf::try_from(package_path.as_str())
+            .map_err(|e| RpcError::InvalidAnchoredPath(package_path, e))?;
+        let hash_spec = HashSpec {
+            package_path,
+            inputs: glob_set,
+        };
+        self.file_watching
             .hash_watcher
-            .get_file_hashes(package_path, inputs)
+            .get_file_hashes(hash_spec)
             .await
-            .map_err(|e| match e {
-                PackageWatchError::Unavailable => RpcError::NoFileWatching,
-                PackageWatchError::InvalidState(_) => RpcError::NoFileWatching,
-            })?;
-        Ok(hashes)
+            .map_err(RpcError::FileHashing)
+            .map(|hashes| {
+                hashes
+                    .into_iter()
+                    .map(|(path, hash)| (path.to_string(), hash))
+                    .collect()
+            })
     }
 }
 
@@ -496,6 +517,9 @@ impl proto::turbod_server::Turbod for TurboGrpcServiceInner {
         }))
     }
 
+    // Note that this is implemented as a blocking call. We expect the default
+    // server timeout to apply, as well as whatever timeout the client may have
+    // set.
     async fn get_file_hashes(
         &self,
         request: tonic::Request<proto::GetFileHashesRequest>,
