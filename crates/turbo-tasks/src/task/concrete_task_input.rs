@@ -38,7 +38,7 @@ impl Hash for SharedReference {
 }
 impl PartialEq for SharedReference {
     fn eq(&self, other: &Self) -> bool {
-        PartialEq::eq(
+        std::ptr::addr_eq(
             &(&*self.1 as *const (dyn Any + Send + Sync)),
             &(&*other.1 as *const (dyn Any + Send + Sync)),
         )
