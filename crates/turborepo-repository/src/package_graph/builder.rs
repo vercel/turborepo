@@ -21,7 +21,7 @@ use crate::{
         PackageDiscoveryBuilder,
     },
     package_json::PackageJson,
-    package_manager::{self, PackageManager},
+    package_manager::PackageManager,
 };
 
 pub struct PackageGraphBuilder<'a, T> {
@@ -368,6 +368,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
                         self.repo_root,
                         &entry.package_json_path,
                         &self.workspaces,
+                        package_manager,
                         npmrc.as_ref(),
                         entry.package_json.all_dependencies(),
                     ),
@@ -554,6 +555,7 @@ impl Dependencies {
         repo_root: &AbsoluteSystemPath,
         workspace_json_path: &AnchoredSystemPathBuf,
         workspaces: &HashMap<PackageName, PackageInfo>,
+        package_manager: PackageManager,
         npmrc: Option<&NpmRc>,
         dependencies: I,
     ) -> Self {
@@ -563,7 +565,8 @@ impl Dependencies {
             .expect("package.json path should have parent");
         let mut internal = HashSet::new();
         let mut external = BTreeMap::new();
-        let splitter = DependencySplitter::new(repo_root, workspace_dir, workspaces, npmrc);
+        let splitter =
+            DependencySplitter::new(repo_root, workspace_dir, workspaces, package_manager, npmrc);
         for (name, version) in dependencies.into_iter() {
             if let Some(workspace) = splitter.is_internal(name, version) {
                 internal.insert(workspace);

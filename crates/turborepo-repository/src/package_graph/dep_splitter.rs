@@ -1,8 +1,12 @@
 use std::{collections::HashMap, fmt};
 
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPath, RelativeUnixPathBuf};
+use turbopath::{
+    AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPath,
+    RelativeUnixPathBuf,
+};
 
 use super::{npmrc::NpmRc, PackageInfo, PackageName};
+use crate::package_manager::PackageManager;
 
 pub struct DependencySplitter<'a> {
     repo_root: &'a AbsoluteSystemPath,
@@ -16,17 +20,16 @@ impl<'a> DependencySplitter<'a> {
         repo_root: &'a AbsoluteSystemPath,
         workspace_dir: &'a AbsoluteSystemPath,
         workspaces: &'a HashMap<PackageName, PackageInfo>,
+        package_manager: PackageManager,
         npmrc: Option<&'a NpmRc>,
     ) -> Self {
         Self {
             repo_root,
             workspace_dir,
             workspaces,
-            // TODO: default needs to depend on package manager as pnpm 9 changes the default to
-            // false
             link_workspace_packages: npmrc
                 .and_then(|npmrc| npmrc.link_workspace_packages)
-                .unwrap_or(true),
+                .unwrap_or(!matches!(package_manager, PackageManager::Pnpm9)),
         }
     }
 
@@ -66,19 +69,28 @@ impl<'a> DependencySplitter<'a> {
                 Some((package_name, info))
             }
             WorkspacePackageSpecifier::Path(path) => {
-                let path = self.workspace_dir.join_unix_path(path);
+                let package_path = self.workspace_dir.join_unix_path(path);
                 // There's a chance that the user provided path could escape the root, in which
                 // case we don't support packages outside of the workspace.
                 // Pnpm also doesn't support this so we defer to them to provide the error
                 // message.
-                let package_path = AnchoredSystemPathBuf::new(self.repo_root, path).ok()?;
-                let (name, info) = self
-                    .workspaces
-                    .iter()
-                    .find(|(_, info)| info.package_path() == &*package_path)?;
+                let package_path = AnchoredSystemPathBuf::new(self.repo_root, package_path).ok()?;
+                let (name, info) = self.workspace(&package_path).or_else(|| {
+                    // Yarn4 allows for workspace root relative paths
+                    let package_path = self.repo_root.join_unix_path(path);
+                    let package_path =
+                        AnchoredSystemPathBuf::new(self.repo_root, package_path).ok()?;
+                    self.workspace(&package_path)
+                })?;
                 Some((name.clone(), info))
             }
         }
+    }
+
+    fn workspace(&self, path: &AnchoredSystemPath) -> Option<(&PackageName, &PackageInfo)> {
+        self.workspaces
+            .iter()
+            .find(|(_, info)| info.package_path() == path)
     }
 }
 
@@ -205,6 +217,7 @@ mod test {
     #[test_case("1.2.3", None, "workspace:1.2.3", Some("@scope/foo"), true ; "handles workspace protocol with version")]
     #[test_case("1.2.3", None, "workspace:*", Some("@scope/foo"), true ; "handles workspace protocol with no version")]
     #[test_case("1.2.3", None, "workspace:../@scope/foo", Some("@scope/foo"), true ; "handles workspace protocol with scoped relative path")]
+    #[test_case("1.2.3", None, "workspace:packages/@scope/foo", Some("@scope/foo"), true ; "handles workspace protocol with root relative path")]
     #[test_case("1.2.3", Some("bar"), "workspace:../baz", Some("baz"), true ; "handles workspace protocol with path to differing package")]
     #[test_case("1.2.3", None, "npm:^1.2.3", Some("@scope/foo"), true ; "handles npm protocol with satisfied semver range")]
     #[test_case("2.3.4", None, "npm:^1.2.3", None, true ; "handles npm protocol with not satisfied semver range")]

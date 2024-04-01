@@ -16,7 +16,7 @@ use wax::Program;
 use super::{
     change_detector::GitChangeDetector,
     simple_glob::{Match, SimpleGlob},
-    target_selector::{InvalidSelectorError, TargetSelector},
+    target_selector::{GitRange, InvalidSelectorError, TargetSelector},
 };
 use crate::{
     global_deps_package_change_mapper, run::scope::change_detector::ScopeChangeDetector,
@@ -388,8 +388,11 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
 
         let mut roots = HashSet::new();
         let mut matched = HashSet::new();
-        let changed_packages =
-            self.packages_changed_in_range(&selector.from_ref, selector.to_ref())?;
+        let changed_packages = if let Some(git_range) = selector.git_range.as_ref() {
+            self.packages_changed_in_range(git_range)?
+        } else {
+            HashSet::new()
+        };
 
         for package in filtered_entry_packages {
             if matched.contains(&package) {
@@ -438,10 +441,9 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 err: Box::new(err),
             })?;
 
-        if !selector.from_ref.is_empty() {
+        if let Some(git_range) = selector.git_range.as_ref() {
             selector_valid = true;
-            let changed_packages =
-                self.packages_changed_in_range(&selector.from_ref, selector.to_ref())?;
+            let changed_packages = self.packages_changed_in_range(git_range)?;
             let package_path_lookup = self
                 .pkg_graph
                 .packages()
@@ -514,10 +516,10 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
 
     fn packages_changed_in_range(
         &self,
-        from_ref: &str,
-        to_ref: &str,
+        git_range: &GitRange,
     ) -> Result<HashSet<PackageName>, ChangeMapError> {
-        self.change_detector.changed_packages(from_ref, to_ref)
+        self.change_detector
+            .changed_packages(&git_range.from_ref, git_range.to_ref.as_deref())
     }
 
     fn match_package_names_to_vertices(
@@ -617,7 +619,7 @@ mod test {
     };
 
     use super::{FilterResolver, PackageInference, TargetSelector};
-    use crate::run::scope::change_detector::GitChangeDetector;
+    use crate::run::scope::{change_detector::GitChangeDetector, target_selector::GitRange};
 
     fn get_name(name: &str) -> (Option<&str>, &str) {
         if let Some(idx) = name.rfind('/') {
@@ -1049,7 +1051,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                from_ref: "HEAD~1".to_string(),
+                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
                 ..Default::default()
             }
         ],
@@ -1059,7 +1061,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                from_ref: "HEAD~1".to_string(),
+                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
                 parent_dir: AnchoredSystemPathBuf::try_from(".").unwrap(),
                 ..Default::default()
             }
@@ -1070,7 +1072,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                from_ref: "HEAD~1".to_string(),
+                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
                 parent_dir: AnchoredSystemPathBuf::try_from("package-2").unwrap(),
                 ..Default::default()
             }
@@ -1081,7 +1083,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                from_ref: "HEAD~1".to_string(),
+                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
                 name_pattern: "package-2*".to_string(),
                 ..Default::default()
             }
@@ -1092,7 +1094,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                from_ref: "HEAD~1".to_string(),
+                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
                 name_pattern: "package-1".to_string(),
                 match_dependencies: true,
                 ..Default::default()
@@ -1104,7 +1106,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                from_ref: "HEAD~2".to_string(),
+                git_range: Some(GitRange { from_ref: "HEAD~2".to_string(), to_ref: None }),
                 ..Default::default()
             }
         ],
@@ -1114,8 +1116,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                from_ref: "HEAD~2".to_string(),
-                to_ref_override: "HEAD~1".to_string(),
+                git_range: Some(GitRange { from_ref: "HEAD~2".to_string(), to_ref: Some("HEAD~1".to_string()) }),
                 ..Default::default()
             }
         ],
@@ -1125,7 +1126,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                from_ref: "HEAD~1".to_string(),
+                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
                 parent_dir:
     AnchoredSystemPathBuf::try_from("package-*").unwrap(),
     match_dependencies: true,             ..Default::default()
@@ -1136,11 +1137,11 @@ mod test {
     )]
     fn scm(selectors: Vec<TargetSelector>, expected: &[&str]) {
         let scm_resolver = TestChangeDetector::new(&[
-            ("HEAD~1", "HEAD", &["package-1", "package-2", ROOT_PKG_NAME]),
-            ("HEAD~2", "HEAD~1", &["package-3"]),
+            ("HEAD~1", None, &["package-1", "package-2", ROOT_PKG_NAME]),
+            ("HEAD~2", Some("HEAD~1"), &["package-3"]),
             (
                 "HEAD~2",
-                "HEAD",
+                None,
                 &["package-1", "package-2", "package-3", ROOT_PKG_NAME],
             ),
         ]);
@@ -1159,10 +1160,10 @@ mod test {
         );
     }
 
-    struct TestChangeDetector<'a>(HashMap<(&'a str, &'a str), HashSet<PackageName>>);
+    struct TestChangeDetector<'a>(HashMap<(&'a str, Option<&'a str>), HashSet<PackageName>>);
 
     impl<'a> TestChangeDetector<'a> {
-        fn new(pairs: &[(&'a str, &'a str, &[&'a str])]) -> Self {
+        fn new(pairs: &[(&'a str, Option<&'a str>, &[&'a str])]) -> Self {
             let mut map = HashMap::new();
             for (from, to, changed) in pairs {
                 map.insert(
@@ -1179,7 +1180,7 @@ mod test {
         fn changed_packages(
             &self,
             from: &str,
-            to: &str,
+            to: Option<&str>,
         ) -> Result<HashSet<PackageName>, ChangeMapError> {
             Ok(self
                 .0

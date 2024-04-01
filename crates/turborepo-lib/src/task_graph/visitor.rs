@@ -803,19 +803,23 @@ impl ExecContext {
         }
     }
 
+    fn prefixed_ui<W: Write>(&self, stdout: W, stderr: W) -> PrefixedUI<W> {
+        Visitor::prefixed_ui(
+            self.ui,
+            self.is_github_actions,
+            stdout,
+            stderr,
+            self.pretty_prefix.clone(),
+        )
+    }
+
     async fn execute_inner(
         &mut self,
         output_client: &TaskOutput<impl std::io::Write>,
         telemetry: &PackageTaskEventBuilder,
     ) -> ExecOutcome {
         let task_start = Instant::now();
-        let mut prefixed_ui = Visitor::prefixed_ui(
-            self.ui,
-            self.is_github_actions,
-            output_client.stdout(),
-            output_client.stderr(),
-            self.pretty_prefix.clone(),
-        );
+        let mut prefixed_ui = self.prefixed_ui(output_client.stdout(), output_client.stderr());
 
         if self.experimental_ui {
             if let TaskOutput::UI(task) = output_client {
@@ -823,9 +827,19 @@ impl ExecContext {
             }
         }
 
+        // When the UI is enabled we don't want to have the prefix appear on the
+        // replayed logs.
+        let alt_log_replay_writer = match output_client {
+            TaskOutput::UI(task) => Some(task.clone()),
+            TaskOutput::Direct(_) => None,
+        };
         match self
             .task_cache
-            .restore_outputs(prefixed_ui.output_prefixed_writer(), telemetry)
+            .restore_outputs(
+                prefixed_ui.output_prefixed_writer(),
+                alt_log_replay_writer,
+                telemetry,
+            )
             .await
         {
             Ok(Some(status)) => {

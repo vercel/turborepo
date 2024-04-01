@@ -189,6 +189,13 @@ impl Diagnostic for GitDaemonDiagnostic {
                         return;
                     };
 
+                    // attempt to split out the apple git suffix
+                    let version = if let Some((version, _)) = version.split_once(" (Apple") {
+                        version
+                    } else {
+                        version
+                    };
+
                     let Ok(version) = semver::Version::parse(version) else {
                         chan.failed("Failed to parse git version".to_string()).await;
                         return;
