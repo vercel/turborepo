@@ -12,6 +12,7 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, RelativeUnixPathBuf};
 use turborepo_errors::Spanned;
 use turborepo_repository::{package_graph::ROOT_PKG_NAME, package_json::PackageJson};
+use turborepo_telemetry::events::generic::GenericEventBuilder;
 
 use crate::{
     cli::OutputLogsMode,
@@ -656,6 +657,11 @@ impl TurboJson {
             .iter()
             .flat_map(|validation| validation(self))
             .collect()
+    }
+
+    pub fn track_usage(&self, telemetry: &GenericEventBuilder) {
+        let global_dot_env = self.global_dot_env.as_deref();
+        telemetry.track_global_dot_env(global_dot_env);
     }
 }
 
