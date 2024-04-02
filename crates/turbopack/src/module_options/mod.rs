@@ -40,7 +40,7 @@ async fn package_import_map_from_import_mapping(
 
 #[turbo_tasks::function]
 async fn package_import_map_from_context(
-    package_name: String,
+    package_name: Arc<String>,
     context_path: Vc<FileSystemPath>,
 ) -> Result<Vc<ImportMap>> {
     let mut import_map = ImportMap::default();
