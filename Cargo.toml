@@ -114,6 +114,8 @@ swc_core = { version = "0.90.24", features = [
 swc_emotion = { version = "0.72.6" }
 swc_relay = { version = "0.44.5" }
 testing = { version = "0.35.21" }
+# Temporary: Reference the latest git minor version of pathfinder_simd until it's published.
+pathfinder_simd = "0.5.3"
 
 auto-hash-map = { path = "crates/turbo-tasks-auto-hash-map" }
 node-file-trace = { path = "crates/node-file-trace", default-features = false }
@@ -292,3 +294,6 @@ urlencoding = "2.1.2"
 webbrowser = "0.8.7"
 which = "4.4.0"
 unicode-segmentation = "1.10.1"
+
+[patch.crates-io]
+pathfinder_simd = { git = "https://github.com/servo/pathfinder", rev = "30419d" }
