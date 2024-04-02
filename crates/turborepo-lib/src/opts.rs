@@ -1,4 +1,4 @@
-use std::backtrace;
+use std::{backtrace, backtrace::Backtrace};
 
 use thiserror::Error;
 use turbopath::AnchoredSystemPathBuf;
@@ -15,7 +15,7 @@ use crate::{
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Expected run command")]
-    ExpectedRun,
+    ExpectedRun(#[backtrace] backtrace::Backtrace),
     #[error(transparent)]
     ParseFloat(#[from] std::num::ParseFloatError),
     #[error(
@@ -90,7 +90,7 @@ impl<'a> TryFrom<&'a Args> for Opts {
             execution_args,
         }) = &args.command
         else {
-            return Err(Error::ExpectedRun);
+            return Err(Error::ExpectedRun(Backtrace::capture()));
         };
         let run_and_execution_args = RunAndExecutionArgs {
             run_args: run_args.as_ref(),

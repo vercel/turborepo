@@ -818,7 +818,7 @@ impl ExecutionArgs {
     }
 }
 
-#[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
+#[derive(Parser, Clone, Debug, Serialize, PartialEq)]
 #[command(groups = [
     ArgGroup::new("daemon-group").multiple(false).required(false),
 ])]
@@ -878,6 +878,25 @@ pub struct RunArgs {
     /// Execute all tasks in parallel.
     #[clap(long)]
     pub parallel: bool,
+}
+
+impl Default for RunArgs {
+    fn default() -> Self {
+        Self {
+            cache_workers: DEFAULT_NUM_WORKERS,
+            dry_run: None,
+            graph: None,
+            no_cache: false,
+            daemon: false,
+            no_daemon: false,
+            profile: None,
+            anon_profile: None,
+            remote_cache_read_only: false,
+            summarize: None,
+            experimental_space_id: None,
+            parallel: false,
+        }
+    }
 }
 
 impl RunArgs {

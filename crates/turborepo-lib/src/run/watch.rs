@@ -62,10 +62,20 @@ impl WatchClient {
             return Ok(());
         };
 
+        let Some(Command::Watch(execution_args)) = &base.args().command else {
+            unreachable!()
+        };
+
+        let mut new_base = base.clone();
+        new_base.args_mut().command = Some(Command::Run {
+            run_args: Box::new(RunArgs::default()),
+            execution_args: execution_args.clone(),
+        });
+
         // We currently don't actually need the whole Run struct, just the filtered
         // packages. But in the future we'll likely need it to more efficiently
         // spawn tasks.
-        let mut run = RunBuilder::new(base.clone())?
+        let mut run = RunBuilder::new(new_base)?
             .build(&handler, telemetry.clone())
             .await?;
 
