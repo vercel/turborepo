@@ -179,7 +179,7 @@ impl<'a> SpanRef<'a> {
         })
     }
 
-    pub fn children(&self) -> impl Iterator<Item = SpanRef<'a>> + DoubleEndedIterator + 'a {
+    pub fn children(&self) -> impl DoubleEndedIterator<Item = SpanRef<'a>> + 'a {
         self.span.events.iter().filter_map(|event| match event {
             SpanEvent::SelfTime { .. } => None,
             SpanEvent::Child { index } => Some(SpanRef {
