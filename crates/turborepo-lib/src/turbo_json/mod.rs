@@ -128,6 +128,8 @@ pub struct RawTurboJson {
     // Configuration options when interfacing with the remote cache
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) remote_cache: Option<RawRemoteCacheOptions>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "experimentalUI")]
+    pub experimental_ui: Option<bool>,
 }
 
 #[derive(Serialize, Default, Debug, PartialEq, Clone)]
@@ -179,6 +181,8 @@ pub struct RawTaskDefinition {
     outputs: Option<Vec<Spanned<UnescapedString>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     output_mode: Option<Spanned<OutputLogsMode>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    interactive: Option<Spanned<bool>>,
 }
 
 macro_rules! set_field {
@@ -195,7 +199,10 @@ impl RawTaskDefinition {
     pub fn merge(&mut self, other: RawTaskDefinition) {
         set_field!(self, other, outputs);
 
-        if other.cache.value.is_some() {
+        if other.cache.value.is_some()
+            // If other has range info and we're missing it, carry it over
+            || (other.cache.range.is_some() && self.cache.range.is_none())
+        {
             self.cache = other.cache;
         }
         set_field!(self, other, depends_on);
@@ -205,6 +212,7 @@ impl RawTaskDefinition {
         set_field!(self, other, env);
         set_field!(self, other, pass_through_env);
         set_field!(self, other, dot_env);
+        set_field!(self, other, interactive);
     }
 }
 
@@ -260,7 +268,19 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
     fn try_from(raw_task: RawTaskDefinition) -> Result<Self, Error> {
         let outputs = raw_task.outputs.unwrap_or_default().try_into()?;
 
-        let cache = raw_task.cache;
+        let cache = raw_task.cache.into_inner().unwrap_or(true);
+        let interactive = raw_task
+            .interactive
+            .as_ref()
+            .map(|value| value.value)
+            .unwrap_or_default();
+
+        if let Some(interactive) = raw_task.interactive {
+            let (span, text) = interactive.span_and_text("turbo.json");
+            if cache && interactive.value {
+                return Err(Error::InteractiveNoCacheable { span, text });
+            }
+        }
 
         let mut env_var_dependencies = HashSet::new();
         let mut topological_dependencies: Vec<Spanned<TaskName>> = Vec::new();
@@ -348,7 +368,7 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
 
         Ok(TaskDefinition {
             outputs,
-            cache: cache.into_inner().unwrap_or(true),
+            cache,
             topological_dependencies,
             task_dependencies,
             env,
@@ -357,6 +377,7 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
             dot_env,
             output_mode: *raw_task.output_mode.unwrap_or_default(),
             persistent: *raw_task.persistent.unwrap_or_default(),
+            interactive,
         })
     }
 }
@@ -908,7 +929,8 @@ mod tests {
           "cache": false,
           "inputs": ["package/a/src/**"],
           "outputMode": "full",
-          "persistent": true
+          "persistent": true,
+          "interactive": true
         }"#,
         RawTaskDefinition {
             depends_on: Some(Spanned::new(vec![Spanned::<UnescapedString>::new("cli#build".into()).with_range(26..37)]).with_range(25..38)),
@@ -920,6 +942,7 @@ mod tests {
             inputs: Some(vec![Spanned::<UnescapedString>::new("package/a/src/**".into()).with_range(241..259)]),
             output_mode: Some(Spanned::new(OutputLogsMode::Full).with_range(286..292)),
             persistent: Some(Spanned::new(true).with_range(318..322)),
+            interactive: Some(Spanned::new(true).with_range(349..353)),
         },
         TaskDefinition {
           dot_env: Some(vec![RelativeUnixPathBuf::new("package/a/.env").unwrap()]),
@@ -935,6 +958,7 @@ mod tests {
           task_dependencies: vec![Spanned::<TaskName<'_>>::new("cli#build".into()).with_range(26..37)],
           topological_dependencies: vec![],
           persistent: true,
+          interactive: true,
         }
       ; "full"
     )]
@@ -960,6 +984,7 @@ mod tests {
             inputs: Some(vec![Spanned::<UnescapedString>::new("package\\a\\src\\**".into()).with_range(273..294)]),
             output_mode: Some(Spanned::new(OutputLogsMode::Full).with_range(325..331)),
             persistent: Some(Spanned::new(true).with_range(361..365)),
+            interactive: None,
         },
         TaskDefinition {
             dot_env: Some(vec![RelativeUnixPathBuf::new("package\\a\\.env").unwrap()]),
@@ -975,6 +1000,7 @@ mod tests {
             task_dependencies: vec![Spanned::<TaskName<'_>>::new("cli#build".into()).with_range(30..41)],
             topological_dependencies: vec![],
             persistent: true,
+            interactive: false,
         }
       ; "full (windows)"
     )]
@@ -1089,5 +1115,13 @@ mod tests {
             .and_then(|build| build.value.output_mode.clone())
             .map(|mode| mode.into_inner());
         assert_eq!(actual, expected);
+    }
+
+    #[test_case(r#"{ "experimentalUI": true }"#, Some(true) ; "t")]
+    #[test_case(r#"{ "experimentalUI": false }"#, Some(false) ; "f")]
+    #[test_case(r#"{}"#, None ; "missing")]
+    fn test_experimental_ui(json: &str, expected: Option<bool>) {
+        let json = RawTurboJson::parse(json, AnchoredSystemPath::new("").unwrap()).unwrap();
+        assert_eq!(json.experimental_ui, expected);
     }
 }

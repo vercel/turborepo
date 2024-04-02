@@ -2,11 +2,14 @@
 //! and logging. Includes a `PrefixedUI` struct that can be used to prefix
 //! output, and a `ColorSelector` that lets multiple concurrent resources get
 //! an assigned color.
+#![feature(deadline_api)]
+
 mod color_selector;
+mod line;
 mod logs;
 mod output;
 mod prefixed;
-mod tui;
+pub mod tui;
 
 use std::{borrow::Cow, env, f64::consts::PI, time::Duration};
 
@@ -17,10 +20,11 @@ use thiserror::Error;
 
 pub use crate::{
     color_selector::ColorSelector,
+    line::LineWriter,
     logs::{replay_logs, LogWriter},
     output::{OutputClient, OutputClientBehavior, OutputSink, OutputWriter},
     prefixed::{PrefixedUI, PrefixedWriter},
-    tui::TaskTable,
+    tui::{TaskTable, TerminalPane},
 };
 
 #[derive(Debug, Error)]
@@ -197,6 +201,8 @@ lazy_static! {
 }
 
 pub const RESET: &str = "\x1b[0m";
+
+pub use dialoguer::theme::ColorfulTheme as DialoguerTheme;
 
 #[cfg(test)]
 mod test {

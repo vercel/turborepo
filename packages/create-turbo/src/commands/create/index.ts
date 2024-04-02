@@ -23,7 +23,20 @@ import type { CreateCommandArgument, CreateCommandOptions } from "./types";
 
 const { turboGradient, turboLoader, info, error, warn } = logger;
 
-function handleErrors(err: unknown) {
+function trackOptions(opts: CreateCommandOptions) {
+  opts.telemetry.trackOptionPackageManager(opts.packageManager);
+  opts.telemetry.trackOptionSkipInstall(opts.skipInstall);
+  opts.telemetry.trackOptionSkipTransforms(opts.skipTransforms);
+  opts.telemetry.trackOptionExample(opts.example);
+  opts.telemetry.trackOptionTurboVersion(opts.turboVersion);
+  opts.telemetry.trackOptionExamplePath(opts.examplePath);
+}
+
+function handleErrors(
+  err: unknown,
+  telemetry: CreateCommandOptions["telemetry"]
+) {
+  telemetry.trackCommandStatus({ command: "create", status: "error" });
   // handle errors from ../../transforms
   if (err instanceof TransformError) {
     error(chalk.bold(err.transform), chalk.red(err.message));
@@ -59,6 +72,12 @@ export async function create(
   packageManagerCmd: CreateCommandArgument,
   opts: CreateCommandOptions
 ) {
+  // track CLI command start
+  opts.telemetry.trackCommandStatus({ command: "create", status: "start" });
+  opts.telemetry.trackArgumentPackageManager(packageManagerCmd);
+  opts.telemetry.trackArgumentDirectory(Boolean(directory));
+  trackOptions(opts);
+
   const {
     packageManager: packageManagerOpt,
     skipInstall,
@@ -110,7 +129,7 @@ export async function create(
       examplePath,
     });
   } catch (err) {
-    handleErrors(err);
+    handleErrors(err, opts.telemetry);
   }
 
   const { hasPackageJson, availableScripts, repoInfo } = projectData;
@@ -123,7 +142,7 @@ export async function create(
   try {
     project = await getWorkspaceDetails({ root });
   } catch (err) {
-    handleErrors(err);
+    handleErrors(err, opts.telemetry);
   }
 
   // run any required transforms
@@ -153,7 +172,7 @@ export async function create(
           );
         }
       } catch (err) {
-        handleErrors(err);
+        handleErrors(err, opts.telemetry);
       }
     }
   }
@@ -271,4 +290,5 @@ export async function create(
     logger.log(chalk.cyan(`  ${packageManagerMeta.executable} turbo login`));
     logger.log();
   }
+  opts.telemetry.trackCommandStatus({ command: "create", status: "end" });
 }

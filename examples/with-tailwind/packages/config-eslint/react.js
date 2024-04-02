@@ -38,4 +38,12 @@ module.exports = {
   rules: {
     "import/no-default-export": "off",
   },
+  overrides: [
+    {
+      files: ["*.config.js"],
+      env: {
+        node: true,
+      },
+    },
+  ],
 };

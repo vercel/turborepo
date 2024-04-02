@@ -3,6 +3,7 @@ use turbo_tasks::{TryJoinIterExt, Value, Vc};
 use turbo_tasks_env::ProcessEnv;
 use turbo_tasks_fs::FileSystemPath;
 use turbopack::ecmascript::EcmascriptModuleAsset;
+use turbopack_browser::{react_refresh::assert_can_resolve_react_refresh, BrowserChunkingContext};
 use turbopack_cli_utils::runtime_entry::{RuntimeEntries, RuntimeEntry};
 use turbopack_core::{
     chunk::{ChunkableModule, ChunkingContext},
@@ -14,11 +15,11 @@ use turbopack_core::{
         parse::Request,
     },
 };
-use turbopack_dev::{react_refresh::assert_can_resolve_react_refresh, DevChunkingContext};
 use turbopack_dev_server::{
     html::DevHtmlAsset,
     source::{asset_graph::AssetGraphContentSource, ContentSource},
 };
+use turbopack_ecmascript_runtime::RuntimeType;
 use turbopack_node::execution_context::ExecutionContext;
 
 use crate::{
@@ -36,13 +37,14 @@ pub fn get_client_chunking_context(
     environment: Vc<Environment>,
 ) -> Vc<Box<dyn ChunkingContext>> {
     Vc::upcast(
-        DevChunkingContext::builder(
+        BrowserChunkingContext::builder(
             project_path,
             server_root,
             server_root,
             server_root.join("/_chunks".to_string()),
             server_root.join("/_assets".to_string()),
             environment,
+            RuntimeType::Development,
         )
         .hot_module_replacement()
         .build(),

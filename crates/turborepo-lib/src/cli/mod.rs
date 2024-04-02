@@ -24,7 +24,7 @@ use turborepo_ui::UI;
 
 use crate::{
     commands::{
-        bin, daemon, generate, info, link, login, logout, prune, run, telemetry, unlink,
+        bin, daemon, generate, info, link, login, logout, prune, run, scan, telemetry, unlink,
         CommandBase,
     },
     get_version,
@@ -199,6 +199,9 @@ pub struct Args {
     pub check_for_update: bool,
     #[clap(long = "__test-run", global = true, hide = true)]
     pub test_run: bool,
+    /// Enable the experimental UI
+    #[clap(long, hide = true, global = true)]
+    pub experimental_ui: bool,
     #[clap(flatten, next_help_heading = "Run Arguments")]
     // We don't serialize this because by the time we're calling
     // Go, we've moved it to the command field as a Command::Run
@@ -465,6 +468,9 @@ pub enum Command {
         #[serde(flatten)]
         command: Option<TelemetryCommand>,
     },
+    /// Turbo your monorepo by running a number of 'repo lints' to
+    /// identify common issues, suggest fixes, and improve performance.
+    Scan {},
     #[clap(hide = true)]
     Info {
         workspace: Option<String>,
@@ -493,7 +499,11 @@ pub enum Command {
         force: bool,
     },
     /// Logout to your Vercel account
-    Logout {},
+    Logout {
+        /// Invalidate the token on the server
+        #[clap(long)]
+        invalidate: bool,
+    },
     /// Prepare a subset of your monorepo.
     Prune {
         #[clap(hide = true, long)]
@@ -605,6 +615,14 @@ fn validate_graph_extension(s: &str) -> Result<String, String> {
     }
 }
 
+fn path_non_empty(s: &str) -> Result<Utf8PathBuf, String> {
+    if s.is_empty() {
+        Err("path must not be empty".to_string())
+    } else {
+        Ok(Utf8Path::new(s).to_path_buf())
+    }
+}
+
 #[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
 #[command(groups = [
     ArgGroup::new("daemon-group").multiple(false).required(false),
@@ -612,7 +630,7 @@ fn validate_graph_extension(s: &str) -> Result<String, String> {
 ])]
 pub struct RunArgs {
     /// Override the filesystem cache directory.
-    #[clap(long)]
+    #[clap(long, value_parser = path_non_empty, env = "TURBO_CACHE_DIR")]
     pub cache_dir: Option<Utf8PathBuf>,
     /// Set the number of concurrent cache operations (default 10)
     #[clap(long, default_value_t = DEFAULT_NUM_WORKERS)]
@@ -703,12 +721,12 @@ pub struct RunArgs {
     // we set the long name as [no-]daemon with an alias of daemon such
     // that we can merge the help text together for both flags
     // -----------------------
-    /// Force turbo to either use or not use the local daemon. If unset
-    /// turbo will use the default detection logic.
-    #[clap(long = "[no-]daemon", alias = "daemon", group = "daemon-group")]
+    #[clap(long = "daemon", group = "daemon-group")]
     daemon: bool,
 
-    #[clap(long, group = "daemon-group", hide = true)]
+    /// Force turbo to either use or not use the local daemon. If unset
+    /// turbo will use the default detection logic.
+    #[clap(long, group = "daemon-group")]
     no_daemon: bool,
 
     /// Set type of process output logging. Use "full" to show
@@ -1081,6 +1099,14 @@ pub async fn run(
             telemetry::configure(command, &mut base, child_event);
             Ok(0)
         }
+        Command::Scan {} => {
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
+            if scan::run(base).await {
+                Ok(0)
+            } else {
+                Ok(1)
+            }
+        }
         Command::Info { workspace, json } => {
             CommandEventBuilder::new("info")
                 .with_parent(&root_telemetry)
@@ -1114,12 +1140,15 @@ pub async fn run(
 
             Ok(0)
         }
-        Command::Logout { .. } => {
+        Command::Logout { invalidate } => {
             let event = CommandEventBuilder::new("logout").with_parent(&root_telemetry);
             event.track_call();
+            let invalidate = *invalidate;
+
             let mut base = CommandBase::new(cli_args, repo_root, version, ui);
             let event_child = event.child();
-            logout::logout(&mut base, event_child)?;
+
+            logout::logout(&mut base, invalidate, event_child).await?;
 
             Ok(0)
         }
@@ -2007,7 +2036,7 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "logout"]).unwrap(),
             Args {
-                command: Some(Command::Logout {}),
+                command: Some(Command::Logout { invalidate: false }),
                 ..Args::default()
             }
         );
@@ -2017,7 +2046,7 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
-                command: Some(Command::Logout {}),
+                command: Some(Command::Logout { invalidate: false }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
@@ -2343,5 +2372,23 @@ mod test {
             "bar.json"
         ])
         .is_err());
+    }
+
+    #[test]
+    fn test_empty_cache_dir() {
+        assert!(Args::try_parse_from(["turbo", "build", "--cache-dir"]).is_err());
+        assert!(Args::try_parse_from(["turbo", "build", "--cache-dir="]).is_err());
+        assert!(Args::try_parse_from(["turbo", "build", "--cache-dir", ""]).is_err());
+    }
+
+    #[test]
+    fn test_preflight() {
+        assert!(!Args::try_parse_from(["turbo", "build",]).unwrap().preflight);
+        assert!(
+            Args::try_parse_from(["turbo", "build", "--preflight"])
+                .unwrap()
+                .preflight
+        );
+        assert!(Args::try_parse_from(["turbo", "build", "--preflight=true"]).is_err());
     }
 }

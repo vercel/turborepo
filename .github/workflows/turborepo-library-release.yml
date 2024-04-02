@@ -21,6 +21,7 @@ jobs:
             target: "aarch64-apple-darwin"
           - host: macos-latest
             target: "x86_64-apple-darwin"
+
           - host: ubuntu-latest
             target: "aarch64-unknown-linux-gnu"
             setup: |
@@ -29,6 +30,7 @@ jobs:
               echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
               echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
               echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> $GITHUB_ENV
+
           - host: ubuntu-latest
             target: "x86_64-unknown-linux-gnu"
             container: amazon/aws-lambda-nodejs:18
@@ -38,14 +40,17 @@ jobs:
               npm i -g pnpm@8.9.0
             setup: |
               pnpm install
+
           - host: ubuntu-latest
+            target: "x86_64-unknown-linux-musl"
             container: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2023-09-17-alpine
             install: |
               apk add libc6-compat curl
             setup: |
               pnpm install
-            target: "x86_64-unknown-linux-musl"
+
           - host: ubuntu-latest
+            target: "aarch64-unknown-linux-musl"
             container: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2023-09-17-alpine
             install: |
               apk add libc6-compat curl
@@ -59,10 +64,11 @@ jobs:
               rustup target add aarch64-unknown-linux-musl
               rustup toolchain install $(cat ./rust-toolchain)
               pnpm install
-            target: "aarch64-unknown-linux-musl"
             rust_env: CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc RUSTFLAGS="-Ctarget-feature=-crt-static"
+
           - host: windows-latest
             target: "aarch64-pc-windows-msvc"
+
           - host: windows-latest
             target: "x86_64-pc-windows-msvc"
 
@@ -83,6 +89,7 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           targets: ${{ matrix.settings.target }}
+          github-token: ${{ github.token }}
         if: ${{ !matrix.settings.install }}
 
       - name: Setup Node

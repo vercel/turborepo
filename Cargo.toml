@@ -35,7 +35,7 @@ default-members = [
   "crates/turbopack-core",
   "crates/turbopack-create-test-app",
   "crates/turbopack-css",
-  "crates/turbopack-dev",
+  "crates/turbopack-browser",
   "crates/turbopack-dev-server",
   "crates/turbopack-ecmascript",
   "crates/turbopack-env",
@@ -66,7 +66,13 @@ turbopack = [
 ]
 
 # List of the packages can be compiled against wasm32-wasi target.
-turbopack-wasi = ["path:crates/turbo-tasks-hash"]
+turbopack-wasi = [
+  "path:crates/turbo-tasks-auto-hash-map",
+  "path:crates/turbo-tasks-hash",
+  "path:crates/turbo-tasks-macro",
+  "path:crates/turbo-tasks-macros-shared",
+  "path:crates/turbo-tasks-build",
+]
 
 [workspace.lints.clippy]
 too_many_arguments = "allow"
@@ -100,14 +106,14 @@ miette = { version = "5.10.0", features = ["fancy"] }
 mdxjs = "0.1.23"
 modularize_imports = { version = "0.68.7" }
 styled_components = { version = "0.96.6" }
-styled_jsx = { version = "0.73.8" }
-swc_core = { version = "0.90.12", features = [
+styled_jsx = { version = "0.73.10" }
+swc_core = { version = "0.90.24", features = [
   "ecma_loader_lru",
   "ecma_loader_parking_lot",
 ] }
 swc_emotion = { version = "0.72.6" }
 swc_relay = { version = "0.44.5" }
-testing = { version = "0.35.19" }
+testing = { version = "0.35.21" }
 
 auto-hash-map = { path = "crates/turbo-tasks-auto-hash-map" }
 node-file-trace = { path = "crates/node-file-trace", default-features = false }
@@ -131,13 +137,13 @@ turbo-tasks-testing = { path = "crates/turbo-tasks-testing" }
 turbo-updater = { path = "crates/turborepo-updater" }
 turbopack = { path = "crates/turbopack" }
 turbopack-bench = { path = "crates/turbopack-bench" }
-turbopack-build = { path = "crates/turbopack-build" }
+turbopack-nodejs = { path = "crates/turbopack-nodejs" }
 turbopack-cli = { path = "crates/turbopack-cli" }
 turbopack-cli-utils = { path = "crates/turbopack-cli-utils" }
 turbopack-core = { path = "crates/turbopack-core" }
 turbopack-create-test-app = { path = "crates/turbopack-create-test-app" }
 turbopack-css = { path = "crates/turbopack-css" }
-turbopack-dev = { path = "crates/turbopack-dev" }
+turbopack-browser = { path = "crates/turbopack-browser" }
 turbopack-dev-server = { path = "crates/turbopack-dev-server" }
 turbopack-ecmascript = { path = "crates/turbopack-ecmascript" }
 turbopack-ecmascript-plugins = { path = "crates/turbopack-ecmascript-plugins", default-features = false }
@@ -172,6 +178,7 @@ turborepo-scm = { path = "crates/turborepo-scm" }
 wax = { path = "crates/turborepo-wax" }
 turborepo-vercel-api = { path = "crates/turborepo-vercel-api" }
 turborepo-vercel-api-mock = { path = "crates/turborepo-vercel-api-mock" }
+turborepo-vt100 = { path = "crates/turborepo-vt100" }
 
 # Be careful when selecting tls backend, including change default tls backend.
 # If you changed, must verify with ALL build targets with next-swc to ensure
@@ -204,8 +211,8 @@ biome_json_syntax = "0.3.1"
 bytes = "1.1.0"
 camino = { version = "1.1.4", features = ["serde1"] }
 chrono = "0.4.23"
-clap = "4.1.6"
-clap_complete = "4.1.2"
+clap = "4.5.2"
+clap_complete = "4.5.1"
 concurrent-queue = "2.1.0"
 console = "0.15.5"
 console-subscriber = "0.1.8"
@@ -219,7 +226,7 @@ futures = "0.3.26"
 futures-retry = "0.6.0"
 hex = "0.4.3"
 httpmock = { version = "0.6.8", default-features = false }
-image = { version = "0.24.6", default-features = false }
+image = { version = "0.25.0", default-features = false }
 indexmap = "1.9.2"
 indicatif = "0.17.3"
 indoc = "2.0.0"
@@ -247,10 +254,11 @@ port_scanner = "0.1.5"
 postcard = "1.0.4"
 predicates = "2.1.5"
 pretty_assertions = "1.3.0"
-proc-macro2 = "1.0.51"
+proc-macro2 = "1.0.79"
 qstring = "0.7.2"
 quote = "1.0.23"
 rand = "0.8.5"
+ratatui = "0.26.1"
 regex = "1.7.0"
 rstest = "0.16.0"
 rustc-hash = "1.1.0"
@@ -267,7 +275,7 @@ smallvec = { version = "1.13.1", features = [
   "union",
   "const_new",
 ] }
-sourcemap = "6.0.2"
+sourcemap = "6.4.1"
 syn = "1.0.107"
 tempfile = "3.3.0"
 test-case = "3.0.0"
@@ -278,6 +286,8 @@ tokio-util = { version = "0.7.7", features = ["io"] }
 tracing = "0.1.37"
 tracing-appender = "0.2.2"
 tracing-subscriber = "0.3.16"
+# Latest release (0.1.8) doesn't include necessary changes for us to use our vendored vt100
+tui-term = { git = "https://github.com/a-kenji/tui-term.git", rev = "96da15fb9974bb8f77b0e937abbdb2c3b8e932aa", default-features = false }
 url = "2.2.2"
 urlencoding = "2.1.2"
 webbrowser = "0.8.7"

@@ -1,8 +1,8 @@
-use std::io;
+use std::{io, time::Duration};
 
 use globwalk::ValidatedGlob;
 use thiserror::Error;
-use tonic::{Code, Status};
+use tonic::{Code, IntoRequest, Status};
 use tracing::info;
 use turbopath::AbsoluteSystemPathBuf;
 
@@ -125,11 +125,10 @@ impl<T> DaemonClient<T> {
     }
 
     pub async fn discover_packages(&mut self) -> Result<DiscoverPackagesResponse, DaemonError> {
-        let response = self
-            .client
-            .discover_packages(proto::DiscoverPackagesRequest {})
-            .await?
-            .into_inner();
+        let req = proto::DiscoverPackagesRequest {};
+        let mut req = req.into_request();
+        req.set_timeout(Duration::from_millis(30));
+        let response = self.client.discover_packages(req).await?.into_inner();
 
         Ok(response)
     }

@@ -22,5 +22,9 @@ module.exports = {
     "unicorn/filename-case": ["off"],
     "@typescript-eslint/explicit-function-return-type": ["off"],
     "@typescript-eslint/array-type": ["error", { default: "generic" }],
+    "import/no-extraneous-dependencies": [
+      "error",
+      { peerDependencies: true, includeTypes: true },
+    ],
   },
 };

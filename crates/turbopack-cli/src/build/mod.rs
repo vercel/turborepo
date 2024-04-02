@@ -10,12 +10,12 @@ use turbo_tasks::{TransientInstance, TryJoinIterExt, TurboTasks, Value, Vc};
 use turbo_tasks_fs::FileSystem;
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::ecmascript::EcmascriptModuleAsset;
-use turbopack_build::{BuildChunkingContext, MinifyType};
 use turbopack_cli_utils::issue::{ConsoleUi, LogOptions};
 use turbopack_core::{
     asset::Asset,
     chunk::{
-        availability_info::AvailabilityInfo, ChunkableModule, ChunkingContextExt, EvaluatableAssets,
+        availability_info::AvailabilityInfo, ChunkableModule, ChunkingContextExt,
+        EvaluatableAssets, MinifyType,
     },
     environment::{BrowserEnvironment, Environment, ExecutionEnvironment},
     issue::{handle_issues, IssueReporter, IssueSeverity},
@@ -28,8 +28,10 @@ use turbopack_core::{
         parse::Request,
     },
 };
+use turbopack_ecmascript_runtime::RuntimeType;
 use turbopack_env::dotenv::load_env;
 use turbopack_node::execution_context::ExecutionContext;
+use turbopack_nodejs::NodeJsChunkingContext;
 
 use crate::{
     arguments::BuildArguments,
@@ -180,20 +182,25 @@ async fn build_internal(
     let project_path = project_fs.root().join(project_relative);
     let build_output_root = output_fs.root().join("dist".to_string());
 
+    let node_env = NodeEnv::Production.cell();
+
     let chunking_context = Vc::upcast(
-        BuildChunkingContext::builder(
+        NodeJsChunkingContext::builder(
             project_path,
             build_output_root,
             build_output_root,
             build_output_root,
             build_output_root,
             env,
+            match *node_env.await? {
+                NodeEnv::Development => RuntimeType::Development,
+                NodeEnv::Production => RuntimeType::Production,
+            },
         )
         .minify_type(minify_type)
         .build(),
     );
 
-    let node_env = NodeEnv::Production.cell();
     let compile_time_info = get_client_compile_time_info(browserslist_query, node_env);
     let execution_context =
         ExecutionContext::new(project_path, chunking_context, load_env(project_path));
@@ -248,7 +255,7 @@ async fn build_internal(
                     Vc::try_resolve_downcast_type::<EcmascriptModuleAsset>(entry_module).await?
                 {
                     Vc::cell(vec![
-                        Vc::try_resolve_downcast_type::<BuildChunkingContext>(chunking_context)
+                        Vc::try_resolve_downcast_type::<NodeJsChunkingContext>(chunking_context)
                             .await?
                             .unwrap()
                             .entry_chunk_group(
