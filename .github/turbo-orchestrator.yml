@@ -82,6 +82,9 @@ labeler:
     - label: "pkg: turbo-repository"
       when:
         isAnyFilePathMatch: '^packages\/turbo-repository\/.*$'
+    - label: "pkg: turbo-telemetry"
+      when:
+        isAnyFilePathMatch: '^packages\/turbo-telemetry\/.*$'
 
     # release
     - label: "release: turborepo"
