@@ -54,8 +54,7 @@ Next, we need to scaffold Storybook:
   <Tab>
     ```shell
     cd workshop
-    npx sb init --skip-install
-    npm install --save-dev @storybook/cli   # Manually install deps and CLI
+    npx sb init
     ```
 
     <Callout type="info">You may be prompted to enable the `--legacy-peer-deps` flag. This flag is required for Storybook to work in a monorepo.</Callout>
@@ -87,9 +86,9 @@ Next, we need to scaffold Storybook:
 
 ### 3. Set up a story for your Button component
 
-The Storybook scaffold creates some stories and React components in the `/src/stories` directory. To create a story for the button from your `ui` package, we will replace the import in `Button.stories.tsx` with our own.
+The Storybook scaffold creates some stories and React components in the `/src/stories` directory. To create a story for the button from your `@repo/ui` package, we will replace the import in `Button.stories.tsx` with our own.
 
-1. Update the Button in your `ui` package to match the story's specifications.
+1. Update the Button in your `@repo/ui` package to match the story's specifications.
 
 ```jsx filename="packages/ui/Button.tsx"
 interface Props {
@@ -116,7 +115,7 @@ export const Button = ({
 };
 ```
 
-2. Add your `ui` package to the `workshop` app:
+2. Add your `@repo/ui` package to the `workshop` app:
 
 <Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
   <Tab>
@@ -125,14 +124,14 @@ export const Button = ({
   // ...
   {
     "dependencies": {
-      "ui": "*",
+      "@repo/ui": "*",
       // ...
     }
   }
 }
 ```
 
-And `npm install` one more time to make sure that your `ui` package is installed in the `workshop` app.
+And `npm install` one more time to make sure that your `@repo/ui` package is installed in the `workshop` app.
 
   </Tab>
   <Tab>
@@ -141,14 +140,14 @@ And `npm install` one more time to make sure that your `ui` package is installed
   // ...
   {
     "dependencies": {
-      "ui": "*",
+      "@repo/ui": "*",
       // ...
     }
   }
 }
 ```
 
-And `yarn install` to make sure that your `ui` package is installed in the `workshop` app.
+And `yarn install` to make sure that your `@repo/ui` package is installed in the `workshop` app.
 
   </Tab>
   <Tab>
@@ -157,20 +156,20 @@ And `yarn install` to make sure that your `ui` package is installed in the `work
   // ...
   {
     "dependencies": {
-      "ui": "workspace:*",
+      "@repo/ui": "workspace:*",
       // ...
     }
   }
 }
 ```
-And `pnpm install` one more time to make sure that your `ui` package is installed in the `workshop` app.
+And `pnpm install` one more time to make sure that your `@repo/ui` package is installed in the `workshop` app.
   </Tab>
 </Tabs>
 
-3. Replace the `Button` import in the `Button.stories.tsx` so that it comes from your `ui` package:
+3. Replace the `Button` import in the `Button.stories.tsx` so that it comes from your `@repo/ui` package:
 
 ```jsx filename="apps/workshop/src/stories/Button.stories.tsx"
-import { Button } from 'ui'
+import { Button } from '@repo/ui/button'
 ```
 
 ### 4. Align tasks
