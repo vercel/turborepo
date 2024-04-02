@@ -1,6 +1,7 @@
 use std::{
     collections::{BTreeMap, HashSet},
     ops::ControlFlow,
+    sync::Arc,
 };
 
 use anyhow::Result;
@@ -60,14 +61,14 @@ pub enum FoundExportType {
 #[turbo_tasks::value]
 pub struct FollowExportsResult {
     pub module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
-    pub export_name: Option<String>,
+    pub export_name: Option<Arc<String>>,
     pub ty: FoundExportType,
 }
 
 #[turbo_tasks::function]
 pub async fn follow_reexports(
     module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
-    export_name: String,
+    export_name: Arc<String>,
     side_effect_free_packages: Vc<Glob>,
 ) -> Result<Vc<FollowExportsResult>> {
     if !*module
@@ -148,10 +149,11 @@ pub async fn follow_reexports(
 
 async fn handle_declared_export(
     module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
-    export_name: String,
+    export_name: Arc<String>,
     export: &EsmExport,
     side_effect_free_packages: Vc<Glob>,
-) -> Result<ControlFlow<FollowExportsResult, (Vc<Box<dyn EcmascriptChunkPlaceable>>, String)>> {
+) -> Result<ControlFlow<FollowExportsResult, (Vc<Box<dyn EcmascriptChunkPlaceable>>, Arc<String>)>>
+{
     match export {
         EsmExport::ImportedBinding(reference, name, _) => {
             if let ReferencedAsset::Some(module) =
@@ -163,11 +165,11 @@ async fn handle_declared_export(
                 {
                     return Ok(ControlFlow::Break(FollowExportsResult {
                         module,
-                        export_name: Some(name.to_string()),
+                        export_name: Some(name.clone()),
                         ty: FoundExportType::SideEffects,
                     }));
                 }
-                return Ok(ControlFlow::Continue((module, name.to_string())));
+                return Ok(ControlFlow::Continue((module, name.clone())));
             }
         }
         EsmExport::ImportedNamespace(reference) => {
