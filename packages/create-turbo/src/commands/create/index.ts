@@ -24,19 +24,19 @@ import type { CreateCommandArgument, CreateCommandOptions } from "./types";
 const { turboGradient, turboLoader, info, error, warn } = logger;
 
 function trackOptions(opts: CreateCommandOptions) {
-  opts.telemetry.trackOptionPackageManager(opts.packageManager);
-  opts.telemetry.trackOptionSkipInstall(opts.skipInstall);
-  opts.telemetry.trackOptionSkipTransforms(opts.skipTransforms);
-  opts.telemetry.trackOptionExample(opts.example);
-  opts.telemetry.trackOptionTurboVersion(opts.turboVersion);
-  opts.telemetry.trackOptionExamplePath(opts.examplePath);
+  opts.telemetry?.trackOptionPackageManager(opts.packageManager);
+  opts.telemetry?.trackOptionSkipInstall(opts.skipInstall);
+  opts.telemetry?.trackOptionSkipTransforms(opts.skipTransforms);
+  opts.telemetry?.trackOptionExample(opts.example);
+  opts.telemetry?.trackOptionTurboVersion(opts.turboVersion);
+  opts.telemetry?.trackOptionExamplePath(opts.examplePath);
 }
 
 function handleErrors(
   err: unknown,
   telemetry: CreateCommandOptions["telemetry"]
 ) {
-  telemetry.trackCommandStatus({ command: "create", status: "error" });
+  telemetry?.trackCommandStatus({ command: "create", status: "error" });
   // handle errors from ../../transforms
   if (err instanceof TransformError) {
     error(chalk.bold(err.transform), chalk.red(err.message));
@@ -73,9 +73,9 @@ export async function create(
   opts: CreateCommandOptions
 ) {
   // track CLI command start
-  opts.telemetry.trackCommandStatus({ command: "create", status: "start" });
-  opts.telemetry.trackArgumentPackageManager(packageManagerCmd);
-  opts.telemetry.trackArgumentDirectory(Boolean(directory));
+  opts.telemetry?.trackCommandStatus({ command: "create", status: "start" });
+  opts.telemetry?.trackArgumentPackageManager(packageManagerCmd);
+  opts.telemetry?.trackArgumentDirectory(Boolean(directory));
   trackOptions(opts);
 
   const {
@@ -290,5 +290,5 @@ export async function create(
     logger.log(chalk.cyan(`  ${packageManagerMeta.executable} turbo login`));
     logger.log();
   }
-  opts.telemetry.trackCommandStatus({ command: "create", status: "end" });
+  opts.telemetry?.trackCommandStatus({ command: "create", status: "end" });
 }

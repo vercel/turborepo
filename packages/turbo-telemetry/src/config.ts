@@ -30,11 +30,15 @@ export class TelemetryConfig {
     this.configPath = configPath;
   }
 
-  static async fromDefaultConfig() {
-    const configPath = await defaultConfigPath();
-    const file = readFileSync(configPath, "utf-8");
-    const config = JSON.parse(file) as Config;
-    return new TelemetryConfig({ configPath, config });
+  static async fromDefaultConfig(): Promise<TelemetryConfig | undefined> {
+    try {
+      const configPath = await defaultConfigPath();
+      const file = readFileSync(configPath, "utf-8");
+      const config = JSON.parse(file) as Config;
+      return new TelemetryConfig({ configPath, config });
+    } catch (e) {
+      return undefined;
+    }
   }
 
   write() {
