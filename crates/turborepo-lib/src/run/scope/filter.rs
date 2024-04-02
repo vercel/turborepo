@@ -281,10 +281,10 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 let node = package_graph::PackageNode::Workspace(package.clone());
 
                 if selector.include_dependencies {
-                    let dependencies = self.pkg_graph.immediate_dependencies(&node);
+                    let dependencies = self.pkg_graph.dependencies(&node);
                     let dependencies = dependencies
                         .iter()
-                        .flatten()
+                        .filter(|node| !matches!(node, package_graph::PackageNode::Root))
                         .map(|i| i.as_package_name().to_owned())
                         .collect::<Vec<_>>();
 
@@ -303,11 +303,11 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                                 package_graph::PackageNode::Workspace(dependent.to_owned());
 
                             let dependent_dependencies =
-                                self.pkg_graph.immediate_dependencies(&dependent_node);
+                                self.pkg_graph.dependencies(&dependent_node);
 
                             let dependent_dependencies = dependent_dependencies
                                 .iter()
-                                .flatten()
+                                .filter(|node| !matches!(node, package_graph::PackageNode::Root))
                                 .map(|i| i.as_package_name().to_owned())
                                 .collect::<HashSet<_>>();
 
@@ -401,7 +401,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             }
 
             let workspace_node = package_graph::PackageNode::Workspace(package.clone());
-            let dependencies = self.pkg_graph.immediate_dependencies(&workspace_node);
+            let dependencies = self.pkg_graph.dependencies(&workspace_node);
 
             for changed_package in &changed_packages {
                 if !selector.exclude_self && package.eq(changed_package) {
@@ -412,11 +412,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 let changed_node =
                     package_graph::PackageNode::Workspace(changed_package.to_owned());
 
-                if dependencies
-                    .as_ref()
-                    .map(|d| d.contains(&changed_node))
-                    .unwrap_or_default()
-                {
+                if dependencies.contains(&changed_node) {
                     roots.insert(package.clone());
                     matched.insert(package);
                     break;
@@ -778,6 +774,19 @@ mod test {
         None,
         &["project-1", "project-2", "project-4"] ;
         "select package with dependencies"
+    )]
+    #[test_case(
+        vec![
+            TargetSelector {
+                exclude_self: false,
+                include_dependencies: true,
+                name_pattern: "project-0".to_string(),
+                ..Default::default()
+            }
+        ],
+        None,
+        &["project-0", "project-1", "project-2", "project-4", "project-5"] ;
+        "select package with transitive dependencies"
     )]
     #[test_case(
         vec![
