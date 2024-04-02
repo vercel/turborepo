@@ -35,7 +35,7 @@ function status(options: TelemetryCLIOptions) {
 
 function telemetry(action: TelemetryCLIAction, options: TelemetryCLIOptions) {
   if (!options.telemetry) {
-    logger.error("Telemetry client not found");
+    logger.error("Telemetry could not be initialized");
     return;
   }
 
