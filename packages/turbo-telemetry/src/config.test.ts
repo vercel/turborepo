@@ -49,7 +49,7 @@ describe("TelemetryConfig", () => {
       expect(mockDefaultConfigPath).toHaveBeenCalled();
       expect(mockReadFileSync).toHaveBeenCalledWith(mockConfigPath, "utf-8");
       expect(result).toBeInstanceOf(TelemetryConfig);
-      expect(result.id).toEqual("654321");
+      expect(result?.id).toEqual("654321");
     });
   });
 
