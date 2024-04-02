@@ -111,7 +111,7 @@ pub async fn follow_reexports(
         }
 
         // Try to find the export in the star exports
-        if !exports_ref.star_exports.is_empty() && export_name != "default" {
+        if !exports_ref.star_exports.is_empty() && *export_name != "default" {
             let result = get_all_export_names(module).await?;
             if let Some(m) = result.esm_exports.get(&export_name) {
                 module = *m;
@@ -207,7 +207,7 @@ async fn handle_declared_export(
 
 #[turbo_tasks::value]
 struct AllExportNamesResult {
-    esm_exports: IndexMap<String, Vc<Box<dyn EcmascriptChunkPlaceable>>>,
+    esm_exports: IndexMap<Arc<String>, Vc<Box<dyn EcmascriptChunkPlaceable>>>,
     dynamic_exporting_modules: Vec<Vc<Box<dyn EcmascriptChunkPlaceable>>>,
 }
 
@@ -265,7 +265,7 @@ async fn get_all_export_names(
 
 #[turbo_tasks::value]
 pub struct ExpandStarResult {
-    pub star_exports: Vec<String>,
+    pub star_exports: Vec<Arc<String>>,
     pub has_dynamic_exports: bool,
 }
 
@@ -282,7 +282,13 @@ pub async fn expand_star_exports(
         match &*exports.await? {
             EcmascriptExports::EsmExports(exports) => {
                 let exports = exports.await?;
-                set.extend(exports.exports.keys().filter(|n| *n != "default").cloned());
+                set.extend(
+                    exports
+                        .exports
+                        .keys()
+                        .filter(|n| ***n != "default")
+                        .cloned(),
+                );
                 for esm_ref in exports.star_exports.iter() {
                     if let ReferencedAsset::Some(asset) =
                         &*ReferencedAsset::from_resolve_result(esm_ref.resolve_reference()).await?
@@ -354,7 +360,7 @@ fn emit_star_exports_issue(source_ident: Vc<AssetIdent>, message: String) {
 #[turbo_tasks::value(shared)]
 #[derive(Hash, Debug)]
 pub struct EsmExports {
-    pub exports: BTreeMap<String, EsmExport>,
+    pub exports: BTreeMap<Arc<String>, EsmExport>,
     pub star_exports: Vec<Vc<Box<dyn ModuleReference>>>,
 }
 
