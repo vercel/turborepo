@@ -91,7 +91,7 @@ pub(super) type TaskMetaStateAsUnloadedMut =
 pub(super) enum TaskMetaStateReadGuard<'a> {
     Full(ReadGuard<'a, TaskMetaState, TaskState, TaskMetaStateAsFull>),
     Partial(ReadGuard<'a, TaskMetaState, PartialTaskState, TaskMetaStateAsPartial>),
-    Unloaded,
+    Unloaded(ReadGuard<'a, TaskMetaState, UnloadedTaskState, TaskMetaStateAsUnloaded>),
 }
 
 pub(super) type FullTaskWriteGuard<'a> =
@@ -128,7 +128,9 @@ impl<'a> From<RwLockReadGuard<'a, TaskMetaState>> for TaskMetaStateReadGuard<'a>
             TaskMetaState::Partial(_) => {
                 TaskMetaStateReadGuard::Partial(ReadGuard::new(guard, TaskMetaState::as_partial))
             }
-            TaskMetaState::Unloaded(_) => TaskMetaStateReadGuard::Unloaded,
+            TaskMetaState::Unloaded(_) => {
+                TaskMetaStateReadGuard::Unloaded(ReadGuard::new(guard, TaskMetaState::as_unloaded))
+            }
         }
     }
 }
