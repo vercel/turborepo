@@ -5,7 +5,6 @@ use std::{
     fmt::{Debug, Display},
     future::IntoFuture,
     path::Path,
-    result::Result,
     sync::Arc,
     time::Duration,
 };
