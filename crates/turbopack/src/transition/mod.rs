@@ -1,7 +1,7 @@
 pub(crate) mod context_transition;
 pub(crate) mod full_context_transition;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
 pub use context_transition::ContextTransition;
@@ -100,7 +100,7 @@ pub trait Transition {
 }
 
 #[turbo_tasks::value(transparent)]
-pub struct TransitionsByName(HashMap<String, Vc<Box<dyn Transition>>>);
+pub struct TransitionsByName(HashMap<Arc<String>, Vc<Box<dyn Transition>>>);
 
 #[turbo_tasks::value_impl]
 impl ValueDefault for TransitionsByName {

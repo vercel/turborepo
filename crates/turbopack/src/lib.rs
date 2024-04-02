@@ -17,6 +17,7 @@ pub(crate) mod unsupported_sass;
 use std::{
     collections::{HashMap, HashSet},
     mem::swap,
+    sync::Arc,
 };
 
 use anyhow::{bail, Result};
@@ -716,7 +717,7 @@ impl AssetContext for ModuleAssetContext {
     }
 
     #[turbo_tasks::function]
-    async fn with_transition(&self, transition: String) -> Result<Vc<Box<dyn AssetContext>>> {
+    async fn with_transition(&self, transition: Arc<String>) -> Result<Vc<Box<dyn AssetContext>>> {
         Ok(
             if let Some(transition) = self.transitions.await?.get(&transition) {
                 Vc::upcast(ModuleAssetContext::new_transition(

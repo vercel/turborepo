@@ -3,6 +3,8 @@ pub mod module_options_context;
 pub mod module_rule;
 pub mod rule_condition;
 
+use std::sync::Arc;
+
 use anyhow::{Context, Result};
 pub use custom_module_type::CustomModuleType;
 pub use module_options_context::*;
@@ -25,7 +27,7 @@ use crate::{
 
 #[turbo_tasks::function]
 async fn package_import_map_from_import_mapping(
-    package_name: String,
+    package_name: Arc<String>,
     package_mapping: Vc<ImportMapping>,
 ) -> Result<Vc<ImportMap>> {
     let mut import_map = ImportMap::default();
