@@ -68,7 +68,7 @@ impl WatchClient {
 
         let mut new_base = base.clone();
         new_base.args_mut().command = Some(Command::Run {
-            run_args: Box::new(RunArgs::default()),
+            run_args: Box::default(),
             execution_args: execution_args.clone(),
         });
 
@@ -78,6 +78,8 @@ impl WatchClient {
         let mut run = RunBuilder::new(new_base)?
             .build(&handler, telemetry.clone())
             .await?;
+
+        run.print_run_prelude();
 
         let connector = DaemonConnector {
             can_start_server: true,
@@ -143,10 +145,7 @@ impl WatchClient {
                 args.command = args.command.map(|c| {
                     if let Command::Watch(execution_args) = c {
                         Command::Run {
-                            execution_args: Box::new(ExecutionArgs {
-                                filter: vec![format!("...{}", package_name)],
-                                ..*execution_args
-                            }),
+                            execution_args: Box::new(ExecutionArgs { ..*execution_args }),
                             run_args: Box::new(RunArgs {
                                 no_cache: true,
                                 daemon: true,
@@ -166,14 +165,18 @@ impl WatchClient {
                     run.abort();
                 }
 
+                let signal_handler = handler.clone();
                 let telemetry = telemetry.clone();
-                let handler = handler.clone();
+
                 current_runs.insert(
-                    package_name,
+                    package_name.clone(),
                     tokio::spawn(async move {
-                        let mut run = RunBuilder::new(new_base)?
-                            .build(&handler, telemetry)
+                        let run = RunBuilder::new(new_base)?
+                            .with_entrypoint_package(package_name)
+                            .hide_prelude()
+                            .build(&signal_handler, telemetry)
                             .await?;
+
                         run.run().await
                     }),
                 );
@@ -204,6 +207,7 @@ impl WatchClient {
 
                 // rebuild run struct
                 *run = RunBuilder::new(base.clone())?
+                    .hide_prelude()
                     .build(handler, telemetry.clone())
                     .await?;
 
