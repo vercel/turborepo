@@ -250,6 +250,7 @@ impl TaskIdProvider for &dyn TaskIdProvider {
     }
 }
 
+#[allow(clippy::manual_non_exhaustive)]
 pub struct UpdateInfo {
     pub duration: Duration,
     pub tasks: usize,
