@@ -204,7 +204,7 @@ impl Subscriber {
                     state = self.rediscover_and_write_state().await;
                 }
             }
-            tracing::debug!("package watcher state: {:?}", state);
+            tracing::trace!("package watcher state: {:?}", state);
         }
     }
 
