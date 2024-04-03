@@ -2,7 +2,6 @@
 #![feature(min_specialization)]
 #![feature(iter_intersperse)]
 #![feature(int_roundings)]
-#![feature(slice_group_by)]
 #![feature(arbitrary_self_types)]
 #![recursion_limit = "256"]
 
