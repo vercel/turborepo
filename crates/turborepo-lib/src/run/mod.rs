@@ -95,6 +95,7 @@ impl Run {
         }
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn run(mut self) -> Result<i32, Error> {
         let analytics_handle = self.analytics_handle.take();
         let result = self.run_with_analytics().await;
@@ -108,6 +109,7 @@ impl Run {
 
     // We split this into a separate function because we need
     // to close the AnalyticsHandle regardless of whether the run succeeds or not
+    #[tracing::instrument(skip(self))]
     async fn run_with_analytics(self) -> Result<i32, Error> {
         if self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none() {
             self.print_run_prelude();

@@ -2,6 +2,7 @@ use turborepo_telemetry::events::command::CommandEventBuilder;
 
 use crate::{commands::CommandBase, run, run::builder::RunBuilder, signal::SignalHandler};
 
+#[tracing::instrument(skip(base, telemetry))]
 pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i32, run::Error> {
     #[cfg(windows)]
     let signal = {

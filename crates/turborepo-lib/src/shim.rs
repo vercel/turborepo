@@ -762,10 +762,12 @@ pub fn run() -> Result<i32, Error> {
         return Ok(cli::run(Some(repo_state), &subscriber, ui)?);
     }
 
-    match RepoState::infer(&args.cwd) {
+    let x = match RepoState::infer(&args.cwd) {
         Ok(repo_state) => {
             debug!("Repository Root: {}", repo_state.root);
-            run_correct_turbo(repo_state, args, &subscriber, ui)
+            let y = run_correct_turbo(repo_state, args, &subscriber, ui);
+            println!("dropped");
+            y
         }
         Err(err) => {
             // If we cannot infer, we still run global turbo. This allows for global
@@ -774,7 +776,11 @@ pub fn run() -> Result<i32, Error> {
             debug!("Running command as global turbo");
             Ok(cli::run(None, &subscriber, ui)?)
         }
-    }
+    };
+
+    println!("closing!");
+
+    x
 }
 
 #[cfg(test)]

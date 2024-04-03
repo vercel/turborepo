@@ -8,7 +8,7 @@ use clap::{
 use clap_complete::{generate, Shell};
 pub use error::Error;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, error};
+use tracing::{debug, error, span, Instrument};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::AnonAPIClient;
 use turborepo_repository::inference::{RepoMode, RepoState};
@@ -29,7 +29,7 @@ use crate::{
     },
     get_version,
     shim::TurboState,
-    tracing::TurboSubscriber,
+    tracing::{OtelConfig, TurboSubscriber},
 };
 
 mod error;
@@ -761,6 +761,9 @@ pub struct RunArgs {
     #[serde(skip)]
     #[clap(long, value_parser=NonEmptyStringValueParser::new(), conflicts_with = "profile")]
     pub anon_profile: Option<String>,
+
+    #[clap(flatten)]
+    pub otel_config: Option<OtelConfig>,
     /// Ignore the local filesystem cache for all tasks. Only
     /// allow reading and caching artifacts using the remote cache.
     #[clap(long, env = "TURBO_REMOTE_ONLY", value_name = "BOOL", action = ArgAction::Set, default_value = "false", default_missing_value = "true", num_args = 0..=1)]
@@ -924,8 +927,7 @@ impl Display for LogPrefix {
     }
 }
 
-/// Runs the CLI by parsing arguments with clap, then either calling Rust code
-/// directly or returning a payload for the Go code to use.
+/// Runs the CLI by parsing arguments with clap.
 ///
 /// Scenarios:
 /// 1. inference failed, we're running this global turbo. no repo state
@@ -1203,15 +1205,27 @@ pub async fn run(
                 // TODO: Do we want to handle the result / error?
                 let _ = logger.enable_chrome_tracing(file_path, include_args);
             }
+
+            let app_root = span!(tracing::Level::INFO, "run");
+            if let Some(opt) = &args.otel_config {
+                let _ = logger.enable_opentelemetry_tracing(&opt, &app_root);
+            }
+
             let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
 
             args.track(&event);
             event.track_run_code_path(CodePath::Rust);
-            let exit_code = run::run(base, event).await.inspect(|code| {
-                if *code != 0 {
-                    error!("run failed: command  exited ({code})");
-                }
-            })?;
+            let exit_code = run::run(base, event)
+                .instrument(app_root)
+                .await
+                .inspect(|code| {
+                    if *code != 0 {
+                        error!("run failed: command  exited ({code})");
+                    }
+                })?;
+
+            println!("ok!");
+
             Ok(exit_code)
         }
         Command::Prune {
@@ -1253,6 +1267,8 @@ pub async fn run(
         Some(handle) => handle.close_with_timeout().await,
         None => debug!("Skipping telemetry close - not initialized"),
     }
+
+    println!("ending run");
 
     cli_result
 }

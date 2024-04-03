@@ -731,7 +731,7 @@ impl ExecContext {
         telemetry: &PackageTaskEventBuilder,
     ) {
         let tracker = tracker.start().await;
-        let span = tracing::debug_span!("execute_task", task = %self.task_id.task());
+        let span = tracing::debug_span!("execute_task", task = %self.task_id.task(), package = %self.task_id.package());
         span.follows_from(parent_span_id);
         let mut result = self
             .execute_inner(&output_client, telemetry)
