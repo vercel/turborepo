@@ -53,8 +53,8 @@ impl PartialOrd for SharedReference {
 impl Ord for SharedReference {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         Ord::cmp(
-            &(&*self.1 as *const (dyn Any + Send + Sync)),
-            &(&*other.1 as *const (dyn Any + Send + Sync)),
+            &(&*self.1 as *const (dyn Any + Send + Sync)).cast::<()>(),
+            &(&*other.1 as *const (dyn Any + Send + Sync)).cast::<()>(),
         )
     }
 }

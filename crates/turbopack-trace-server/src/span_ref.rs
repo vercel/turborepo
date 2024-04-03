@@ -411,6 +411,7 @@ impl<'a> Debug for SpanRef<'a> {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Copy, Clone)]
 pub enum SpanEventRef<'a> {
     SelfTime { start: u64, end: u64 },
