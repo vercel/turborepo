@@ -1939,9 +1939,7 @@ pub fn register() {
 
 #[cfg(test)]
 mod tests {
-    use turbo_tasks::Vc;
-
-    use super::{virtual_fs::VirtualFileSystem, *};
+    use super::*;
 
     #[tokio::test]
     async fn with_extension() {

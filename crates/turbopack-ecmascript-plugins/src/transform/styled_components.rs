@@ -81,7 +81,9 @@ impl StyledComponentsTransformer {
         }
         let meaningless_file_names = &config.meaningless_file_names;
         if !meaningless_file_names.is_empty() {
-            options.meaningless_file_names = meaningless_file_names.clone();
+            options
+                .meaningless_file_names
+                .clone_from(&meaningless_file_names);
         }
 
         Self { config: options }
