@@ -191,4 +191,18 @@ export class TelemetryClient {
       value: status,
     });
   }
+
+  trackCommandWarning(warning: string): Event | undefined {
+    return this.track({
+      key: "warning",
+      value: warning,
+    });
+  }
+
+  trackCommandError(error: string): Event | undefined {
+    return this.track({
+      key: "error",
+      value: error,
+    });
+  }
 }
