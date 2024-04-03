@@ -286,8 +286,7 @@ tokio-util = { version = "0.7.7", features = ["io"] }
 tracing = "0.1.37"
 tracing-appender = "0.2.2"
 tracing-subscriber = "0.3.16"
-# Latest release (0.1.8) doesn't include necessary changes for us to use our vendored vt100
-tui-term = { git = "https://github.com/a-kenji/tui-term.git", rev = "96da15fb9974bb8f77b0e937abbdb2c3b8e932aa", default-features = false }
+tui-term = { version = "0.1.9", default-features = false }
 url = "2.2.2"
 urlencoding = "2.1.2"
 webbrowser = "0.8.7"
