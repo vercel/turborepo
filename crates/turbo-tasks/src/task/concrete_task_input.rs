@@ -37,8 +37,11 @@ impl Hash for SharedReference {
     }
 }
 impl PartialEq for SharedReference {
+    // Must compare with PartialEq rather than std::ptr::addr_eq since the latter
+    // only compares their addresses.
+    #[allow(ambiguous_wide_pointer_comparisons)]
     fn eq(&self, other: &Self) -> bool {
-        std::ptr::addr_eq(
+        PartialEq::eq(
             &(&*self.1 as *const (dyn Any + Send + Sync)),
             &(&*other.1 as *const (dyn Any + Send + Sync)),
         )
