@@ -287,7 +287,7 @@ fn filter_relevant(root: &AbsoluteSystemPath, event: &mut Event) {
                 // If we're modifying something along the path to the
                 // root, move the event to the root
                 if is_modify_existing {
-                    *path = root.as_std_path().to_owned();
+                    root.as_std_path().clone_into(path);
                 }
                 true
             }
