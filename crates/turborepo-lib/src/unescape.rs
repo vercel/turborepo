@@ -40,9 +40,7 @@ impl Deserializable for UnescapedString {
         name: &str,
         diagnostics: &mut Vec<DeserializationDiagnostic>,
     ) -> Option<Self> {
-        let Some(str) = String::deserialize(value, name, diagnostics) else {
-            return None;
-        };
+        let str = String::deserialize(value, name, diagnostics)?;
 
         match unescape_str(str) {
             Ok(s) => Some(Self(s)),
