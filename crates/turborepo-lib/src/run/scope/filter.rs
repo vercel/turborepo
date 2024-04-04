@@ -513,7 +513,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     fn packages_changed_in_range(
         &self,
         git_range: &GitRange,
-    ) -> Result<HashSet<PackageName>, ChangeMapError> {
+    ) -> Result<HashSet<PackageName>, ResolutionError> {
         self.change_detector
             .changed_packages(&git_range.from_ref, git_range.to_ref.as_deref())
     }
@@ -615,7 +615,9 @@ mod test {
     };
 
     use super::{FilterResolver, PackageInference, TargetSelector};
-    use crate::run::scope::{change_detector::GitChangeDetector, target_selector::GitRange};
+    use crate::run::scope::{
+        change_detector::GitChangeDetector, target_selector::GitRange, ResolutionError,
+    };
 
     fn get_name(name: &str) -> (Option<&str>, &str) {
         if let Some(idx) = name.rfind('/') {
@@ -1190,7 +1192,7 @@ mod test {
             &self,
             from: &str,
             to: Option<&str>,
-        ) -> Result<HashSet<PackageName>, ChangeMapError> {
+        ) -> Result<HashSet<PackageName>, ResolutionError> {
             Ok(self
                 .0
                 .get(&(from, to))

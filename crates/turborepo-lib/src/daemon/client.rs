@@ -12,7 +12,10 @@ use super::{
     proto::DiscoverPackagesResponse,
     Paths,
 };
-use crate::{daemon::proto, globwatcher::HashGlobSetupError};
+use crate::{
+    daemon::{proto, proto::PackageChangeEvent},
+    globwatcher::HashGlobSetupError,
+};
 
 #[derive(Debug, Clone)]
 pub struct DaemonClient<T> {
@@ -139,6 +142,18 @@ impl<T> DaemonClient<T> {
         let response = self
             .client
             .discover_packages_blocking(proto::DiscoverPackagesRequest {})
+            .await?
+            .into_inner();
+
+        Ok(response)
+    }
+
+    pub async fn package_changes(
+        &mut self,
+    ) -> Result<tonic::codec::Streaming<PackageChangeEvent>, DaemonError> {
+        let response = self
+            .client
+            .package_changes(proto::PackageChangesRequest {})
             .await?
             .into_inner();
 

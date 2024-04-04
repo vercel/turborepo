@@ -263,6 +263,9 @@ pub enum DaemonCommand {
     },
     /// Shows the daemon logs
     Logs,
+    #[clap(hide = true)]
+    /// Watches packages and which are changed
+    Watch,
 }
 
 #[derive(Subcommand, Copy, Clone, Debug, Serialize, PartialEq)]
@@ -1204,7 +1207,6 @@ pub async fn run(
                 let _ = logger.enable_chrome_tracing(file_path, include_args);
             }
             let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
-
             args.track(&event);
             event.track_run_code_path(CodePath::Rust);
             let exit_code = run::run(base, event).await.inspect(|code| {

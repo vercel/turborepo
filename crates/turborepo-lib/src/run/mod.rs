@@ -10,6 +10,7 @@ mod scope;
 pub(crate) mod summary;
 pub mod task_access;
 pub mod task_id;
+pub mod watch;
 
 use std::{collections::HashSet, io::Write, sync::Arc};
 
