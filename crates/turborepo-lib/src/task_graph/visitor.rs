@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     io::Write,
     sync::{Arc, Mutex, OnceLock},
     time::{Duration, Instant},
@@ -9,9 +9,11 @@ use std::{
 use console::{Style, StyledObject};
 use either::Either;
 use futures::{stream::FuturesUnordered, StreamExt};
+use opentelemetry::Context;
 use regex::Regex;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, Instrument, Span};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_ci::{Vendor, VendorBehavior};
 use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
@@ -293,15 +295,17 @@ impl<'a> Visitor<'a> {
                     let execution_telemetry = package_task_event.child();
 
                     tasks.push(tokio::spawn(async move {
+                        let span = tracing::info_span!(parent: parent_span.id(), "execute_task", task = %info.task(), package = %info.package());
+
                         exec_context
                             .execute(
-                                parent_span.id(),
                                 tracker,
                                 output_client,
                                 callback,
                                 spaces_client,
                                 &execution_telemetry,
                             )
+                            .instrument(span)
                             .await;
                     }));
                 }
@@ -721,9 +725,9 @@ impl ExecContext {
 
         tracker.dry_run().await;
     }
+
     pub async fn execute(
         &mut self,
-        parent_span_id: Option<tracing::Id>,
         tracker: TaskTracker<()>,
         output_client: TaskOutput<impl std::io::Write>,
         callback: oneshot::Sender<Result<(), StopExecution>>,
@@ -731,12 +735,7 @@ impl ExecContext {
         telemetry: &PackageTaskEventBuilder,
     ) {
         let tracker = tracker.start().await;
-        let span = tracing::debug_span!("execute_task", task = %self.task_id.task(), package = %self.task_id.package());
-        span.follows_from(parent_span_id);
-        let mut result = self
-            .execute_inner(&output_client, telemetry)
-            .instrument(span)
-            .await;
+        let mut result = self.execute_inner(&output_client, telemetry).await;
 
         // If the task resulted in an error, do not group in order to better highlight
         // the error.
@@ -881,6 +880,29 @@ impl ExecContext {
         cmd.envs(self.execution_env.iter());
         // Always last to make sure it overwrites any user configured env var.
         cmd.env("TURBO_HASH", &self.task_hash);
+
+        // plumb through open telemetry env vars
+        let cx = Span::current();
+        let disabled = cx.is_disabled();
+        let cx = cx.context();
+
+        let mut map = HashMap::new();
+        opentelemetry::global::get_text_map_propagator(|propagator| {
+            propagator.inject_context(&cx, &mut map)
+        });
+
+        cmd.env(
+            "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+            "http://localhost:4317",
+        );
+
+        println!("{} map: {:?}", disabled, map);
+
+        if let Some(parent) = map.get("traceparent") {
+            cmd.env("OTEL_TRACE_PARENT", parent);
+            cmd.env("TRACEPARENT", parent);
+        }
+
         // enable task access tracing
 
         // set the trace file env var - frameworks that support this can use it to

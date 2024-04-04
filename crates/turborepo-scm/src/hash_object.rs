@@ -12,7 +12,7 @@ pub(crate) fn hash_objects(
 ) -> Result<(), Error> {
     let parent = Span::current();
     for filename in to_hash {
-        let span = tracing::info_span!(parent: &parent, "hash_object", ?filename);
+        let span = tracing::trace_span!(parent: &parent, "hash_object", ?filename);
         let _enter = span.enter();
 
         let full_file_path = git_root.join_unix_path(filename);

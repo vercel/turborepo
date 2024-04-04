@@ -346,7 +346,7 @@ fn walk_glob(
         .collect::<Vec<_>>()
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "trace")]
 fn visit_file(
     walk_type: WalkType,
     entry: Result<wax::walk::GlobEntry, wax::walk::WalkError>,

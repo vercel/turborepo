@@ -95,7 +95,7 @@ impl Run {
         }
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip_all)]
     pub async fn run(mut self) -> Result<i32, Error> {
         let analytics_handle = self.analytics_handle.take();
         let result = self.run_with_analytics().await;

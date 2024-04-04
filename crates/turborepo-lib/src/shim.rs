@@ -577,34 +577,38 @@ impl LocalTurboState {
 /// returns: Result<i32, Error>
 fn run_correct_turbo(
     repo_state: RepoState,
-    shim_args: ShimArgs,
-    subscriber: &TurboSubscriber,
-    ui: UI,
-) -> Result<i32, Error> {
-    if let Some(turbo_state) = LocalTurboState::infer(&repo_state.root) {
-        try_check_for_updates(&shim_args, &turbo_state.version);
+    shim_args: &ShimArgs,
+) -> Result<InferenceOutcome, Error> {
+    let state = LocalTurboState::infer(&repo_state.root);
 
-        if turbo_state.local_is_self() {
-            env::set_var(
-                cli::INVOCATION_DIR_ENV_VAR,
-                shim_args.invocation_dir.as_path(),
-            );
-            debug!("Currently running turbo is local turbo.");
-            Ok(cli::run(Some(repo_state), subscriber, ui)?)
-        } else {
-            spawn_local_turbo(&repo_state, turbo_state, shim_args)
-        }
-    } else {
-        try_check_for_updates(&shim_args, get_version());
-        // cli::run checks for this env var, rather than an arg, so that we can support
-        // calling old versions without passing unknown flags.
-        env::set_var(
-            cli::INVOCATION_DIR_ENV_VAR,
-            shim_args.invocation_dir.as_path(),
-        );
-        debug!("Running command as global turbo");
-        Ok(cli::run(Some(repo_state), subscriber, ui)?)
+    {
+        let version = get_version();
+        let current_version = state
+            .as_ref()
+            .map(|s| s.version.as_str())
+            .unwrap_or(version);
+        try_check_for_updates(shim_args, current_version);
     }
+
+    match state {
+        Some(local_turbo_state) if !local_turbo_state.local_is_self() => {
+            return Ok(InferenceOutcome::RunCorrectTurbo(
+                repo_state,
+                local_turbo_state,
+            ));
+        }
+        Some(_) => debug!("Currently running turbo is local turbo."),
+        None => debug!("Running command as global turbo"),
+    }
+
+    // cli::run checks for this env var, rather than an arg, so that we can support
+    // calling old versions without passing unknown flags.
+    env::set_var(
+        cli::INVOCATION_DIR_ENV_VAR,
+        shim_args.invocation_dir.as_path(),
+    );
+
+    Ok(InferenceOutcome::Run(Some(repo_state)))
 }
 
 fn spawn_local_turbo(
@@ -731,6 +735,7 @@ fn try_check_for_updates(args: &ShimArgs, current_version: &str) {
 pub fn run() -> Result<i32, Error> {
     let args = ShimArgs::parse()?;
     let ui = args.ui();
+
     if ui.should_strip_ansi {
         // Let's not crash just because we failed to set up the hook
         let _ = miette::set_hook(Box::new(|_| {
@@ -742,15 +747,37 @@ pub fn run() -> Result<i32, Error> {
             )
         }));
     }
-    let subscriber = TurboSubscriber::new_with_verbosity(args.verbosity, &ui);
 
+    let result = infer_run(&args)?;
+    match result {
+        InferenceOutcome::Run(state) => {
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .enable_time()
+                .enable_io()
+                .build()
+                .unwrap();
+            let exit_code = runtime.block_on(async {
+                let subscriber = TurboSubscriber::new_with_verbosity(args.verbosity, &ui);
+                let x = cli::run(state, &subscriber, ui).await;
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                x
+            })?;
+            Ok(exit_code)
+        }
+        InferenceOutcome::RunCorrectTurbo(repo_state, local_turbo_state) => {
+            spawn_local_turbo(&repo_state, local_turbo_state, args)
+        }
+    }
+}
+
+fn infer_run(args: &ShimArgs) -> Result<InferenceOutcome, Error> {
     debug!("Global turbo version: {}", get_version());
 
     // If skip_infer is passed, we're probably running local turbo with
     // global turbo having handled the inference. We can run without any
     // concerns.
     if args.skip_infer {
-        return Ok(cli::run(None, &subscriber, ui)?);
+        return Ok(InferenceOutcome::Run(None));
     }
 
     // If the TURBO_BINARY_PATH is set, we do inference but we do not use
@@ -759,28 +786,27 @@ pub fn run() -> Result<i32, Error> {
     if is_turbo_binary_path_set() {
         let repo_state = RepoState::infer(&args.cwd)?;
         debug!("Repository Root: {}", repo_state.root);
-        return Ok(cli::run(Some(repo_state), &subscriber, ui)?);
+        return Ok(InferenceOutcome::Run(Some(repo_state)));
     }
 
-    let x = match RepoState::infer(&args.cwd) {
+    match RepoState::infer(&args.cwd) {
         Ok(repo_state) => {
             debug!("Repository Root: {}", repo_state.root);
-            let y = run_correct_turbo(repo_state, args, &subscriber, ui);
-            println!("dropped");
-            y
+            run_correct_turbo(repo_state, args)
         }
         Err(err) => {
             // If we cannot infer, we still run global turbo. This allows for global
             // commands like login/logout/link/unlink to still work
             debug!("Repository inference failed: {}", err);
             debug!("Running command as global turbo");
-            Ok(cli::run(None, &subscriber, ui)?)
+            Ok(InferenceOutcome::Run(None))
         }
-    };
+    }
+}
 
-    println!("closing!");
-
-    x
+enum InferenceOutcome {
+    Run(Option<RepoState>),
+    RunCorrectTurbo(RepoState, LocalTurboState),
 }
 
 #[cfg(test)]

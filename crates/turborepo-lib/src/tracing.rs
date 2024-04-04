@@ -1,10 +1,16 @@
-use std::{collections::HashMap, io::Stderr, marker::PhantomData, path::Path, sync::Mutex};
+use std::{
+    collections::HashMap, io::Stderr, marker::PhantomData, path::Path, sync::Mutex, time::Duration,
+};
 
 use chrono::Local;
 use clap::Parser;
-use opentelemetry::KeyValue;
+use opentelemetry::{trace::TracerProvider as _, KeyValue};
 use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::{runtime, trace::Tracer, Resource};
+use opentelemetry_sdk::{
+    runtime,
+    trace::{Tracer, TracerProvider},
+    Resource,
+};
 use owo_colors::{
     colors::{Black, Default, Red, Yellow},
     Color, OwoColorize,
@@ -78,6 +84,7 @@ type ChromeLogLayered = layer::Layered<ChromeReload, DaemonLogLayered>;
 
 type OpenTelemetryLog = OpenTelemetryLayer<ChromeLogLayered, Tracer>;
 type OpenTelemetryReload = reload::Layer<Option<OpenTelemetryLog>, ChromeLogLayered>;
+type OpenTelemetryFiltered = Filtered<OpenTelemetryReload, EnvFilter, ChromeLogLayered>;
 type OpenTelemetryLayered = layer::Layered<OpenTelemetryReload, ChromeLogLayered>;
 
 pub struct TurboSubscriber {
@@ -91,9 +98,11 @@ pub struct TurboSubscriber {
     chrome_guard: Mutex<Option<tracing_chrome::FlushGuard>>,
 
     opentelemetry_update: Handle<Option<OpenTelemetryLog>, ChromeLogLayered>,
+    open_telemetry_guard: Mutex<Option<TracerProvider>>,
 
     #[cfg(feature = "pprof")]
     pprof_guard: pprof::ProfilerGuard<'static>,
+    verbosity: usize,
 }
 
 impl TurboSubscriber {
@@ -115,14 +124,13 @@ impl TurboSubscriber {
     /// - `enable_chrome_tracing` enables logging to a file, using the chrome
     ///  tracing formatter.
     pub fn new_with_verbosity(verbosity: usize, ui: &UI) -> Self {
-        let level_override = match verbosity {
-            0 => None,
-            1 => Some(LevelFilter::INFO),
-            2 => Some(LevelFilter::DEBUG),
-            _ => Some(LevelFilter::TRACE),
-        };
-
         let env_filter = |level: LevelFilter| {
+            let level_override = match verbosity {
+                0 => None,
+                1 => Some(LevelFilter::INFO),
+                2 => Some(LevelFilter::DEBUG),
+                _ => Some(LevelFilter::TRACE),
+            };
             let filter = EnvFilter::builder()
                 .with_default_directive(level.into())
                 .with_env_var("TURBO_LOG_VERBOSITY")
@@ -151,6 +159,8 @@ impl TurboSubscriber {
 
         let (opentelemetry, opentelemetry_update) =
             reload::Layer::new(Option::<OpenTelemetryLog>::None);
+        let opentelemetry: OpenTelemetryFiltered =
+            opentelemetry.with_filter(env_filter(LevelFilter::INFO));
 
         let registry = Registry::default()
             .with(stderr)
@@ -173,8 +183,10 @@ impl TurboSubscriber {
             chrome_update,
             chrome_guard: Mutex::new(None),
             opentelemetry_update,
+            open_telemetry_guard: Mutex::new(None),
             #[cfg(feature = "pprof")]
             pprof_guard,
+            verbosity,
         }
     }
 
@@ -224,57 +236,48 @@ impl TurboSubscriber {
 
     /// Enables open telemetry tracing.
     #[tracing::instrument(skip(self, config))]
-    pub fn enable_opentelemetry_tracing(
-        &self,
-        config: &OtelConfig,
-        root_span: &Span,
-    ) -> Result<(), Error> {
+    pub fn enable_opentelemetry_tracing(&self, config: &OtelConfig) -> Result<(), Error> {
         // clap doesn't let us express a flattened group of options so we need to do it
         // manually. destination is required, traceparent is optional.
         let Some((destination, traceparent)) = config.flatten() else {
             return Ok(());
         };
 
-        if let Some(traceparent) = traceparent {
-            opentelemetry::global::set_text_map_propagator(
-                opentelemetry_sdk::propagation::TraceContextPropagator::new(),
-            );
+        opentelemetry::global::set_text_map_propagator(
+            opentelemetry_sdk::propagation::TraceContextPropagator::new(),
+        );
 
-            let parent_context = opentelemetry::global::get_text_map_propagator(|propagator| {
-                propagator.extract(
-                    &[("traceparent".to_string(), traceparent.to_string())]
-                        .into_iter()
-                        .collect::<HashMap<_, _>>(),
-                )
-            });
+        let exporter = match opentelemetry_otlp::new_exporter()
+            .tonic()
+            .with_endpoint(destination)
+            .with_protocol(opentelemetry_otlp::Protocol::Grpc)
+            .with_timeout(Duration::from_secs(1))
+            .build_span_exporter()
+        {
+            Ok(ex) => ex,
+            Err(e) => {
+                tracing::error!("failed to enable opentelemetry tracing: {}", e);
+                return Ok(());
+            }
+        };
 
-            root_span.set_parent(parent_context);
-        }
-
-        let res = opentelemetry_otlp::new_pipeline()
-            .tracing()
-            .with_trace_config(
+        let provider = TracerProvider::builder()
+            .with_simple_exporter(exporter)
+            .with_config(
                 opentelemetry_sdk::trace::Config::default()
                     .with_resource(Resource::new(vec![KeyValue::new("service.name", "turbo")])),
             )
-            .with_exporter(
-                opentelemetry_otlp::new_exporter()
-                    .tonic()
-                    .with_endpoint(destination)
-                    .with_timeout(std::time::Duration::from_secs(5)),
-            )
-            .install_batch(runtime::Tokio);
+            .build();
 
-        match res {
-            Ok(tracer) => {
-                let layer = tracing_opentelemetry::layer().with_tracer(tracer);
-                self.opentelemetry_update.reload(Some(layer))?;
-                tracing::debug!("opentelemetry tracing enabled");
-            }
-            Err(e) => {
-                tracing::error!("failed to enable opentelemetry tracing: {}", e);
-            }
-        }
+        let tracer = provider.tracer("turbo");
+
+        let layer = tracing_opentelemetry::layer().with_tracer(tracer);
+        self.opentelemetry_update.reload(Some(layer))?;
+        self.open_telemetry_guard
+            .lock()
+            .expect("not poisoned")
+            .replace(provider);
+        tracing::debug!("opentelemetry tracing enabled");
 
         Ok(())
     }
@@ -305,6 +308,12 @@ impl Drop for TurboSubscriber {
         } else {
             tracing::error!("failed to generate pprof report")
         }
+
+        self.open_telemetry_guard
+            .lock()
+            .expect("not poisoned")
+            .take();
+        opentelemetry::global::shutdown_tracer_provider();
     }
 }
 
@@ -313,16 +322,17 @@ pub struct OtelConfig {
     /// If turbo is being called by another service, setting the trace parent
     /// will preserve the context across services.
     #[clap(long = "otlp-parent", requires = "destination")]
-    traceparent: Option<String>,
+    pub traceparent: Option<String>,
 
     /// Enable open telemetry tracing, exporting to the specified destination
     /// over grpc.
     #[clap(long = "otlp-destination")]
-    destination: Option<String>,
+    pub destination: Option<String>,
 }
 
 impl OtelConfig {
     fn flatten(&self) -> Option<(&String, Option<&String>)> {
+        println!("using {:?} {:?}", self.destination, self.traceparent);
         self.destination
             .as_ref()
             .map(|destination| (destination, self.traceparent.as_ref()))

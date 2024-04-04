@@ -97,6 +97,7 @@ impl CommandBase {
         self.repo_root.join_component("turbo.json")
     }
 
+    #[tracing::instrument(skip_all)]
     pub fn api_auth(&self) -> Result<Option<APIAuth>, ConfigError> {
         let config = self.config()?;
         let team_id = config.team_id();
@@ -117,6 +118,7 @@ impl CommandBase {
         &self.args
     }
 
+    #[tracing::instrument(skip_all)]
     pub fn api_client(&self) -> Result<APIClient, ConfigError> {
         let config = self.config()?;
         let api_url = config.api_url();

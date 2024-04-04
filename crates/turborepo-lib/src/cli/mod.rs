@@ -1,4 +1,10 @@
-use std::{backtrace, backtrace::Backtrace, env, fmt, fmt::Display, io, mem, process};
+use std::{
+    backtrace::{self, Backtrace},
+    collections::HashMap,
+    env,
+    fmt::{self, Display},
+    io, mem, process,
+};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{
@@ -7,8 +13,10 @@ use clap::{
 };
 use clap_complete::{generate, Shell};
 pub use error::Error;
+use opentelemetry::baggage::BaggageExt;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, span, Instrument};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::AnonAPIClient;
 use turborepo_repository::inference::{RepoMode, RepoState};
@@ -944,7 +952,6 @@ impl Display for LogPrefix {
 /// * `ui`: The UI to use for the run.
 ///
 /// returns: Result<Payload, Error>
-#[tokio::main]
 pub async fn run(
     repo_state: Option<RepoState>,
     #[allow(unused_variables)] logger: &TurboSubscriber,
@@ -1206,9 +1213,25 @@ pub async fn run(
                 let _ = logger.enable_chrome_tracing(file_path, include_args);
             }
 
-            let app_root = span!(tracing::Level::INFO, "run");
             if let Some(opt) = &args.otel_config {
-                let _ = logger.enable_opentelemetry_tracing(&opt, &app_root);
+                let _ = logger.enable_opentelemetry_tracing(&opt);
+            }
+
+            let app_root = span!(tracing::Level::INFO, "run");
+            if let Some(traceparent) = args
+                .otel_config
+                .as_ref()
+                .and_then(|c| c.traceparent.as_ref())
+            {
+                let parent_context = opentelemetry::global::get_text_map_propagator(|propagator| {
+                    propagator.extract(
+                        &[("traceparent".to_string(), traceparent.to_string())]
+                            .into_iter()
+                            .collect::<HashMap<_, _>>(),
+                    )
+                });
+
+                app_root.set_parent(parent_context);
             }
 
             let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
@@ -1223,8 +1246,6 @@ pub async fn run(
                         error!("run failed: command  exited ({code})");
                     }
                 })?;
-
-            println!("ok!");
 
             Ok(exit_code)
         }
@@ -1267,8 +1288,6 @@ pub async fn run(
         Some(handle) => handle.close_with_timeout().await,
         None => debug!("Skipping telemetry close - not initialized"),
     }
-
-    println!("ending run");
 
     cli_result
 }
