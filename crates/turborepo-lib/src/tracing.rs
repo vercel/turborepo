@@ -157,16 +157,44 @@ impl TurboSubscriber {
 
         let (chrome, chrome_update) = reload::Layer::new(Option::<ChromeLog>::None);
 
-        let (opentelemetry, opentelemetry_update) =
-            reload::Layer::new(Option::<OpenTelemetryLog>::None);
-        let opentelemetry: OpenTelemetryFiltered =
-            opentelemetry.with_filter(env_filter(LevelFilter::INFO));
+        opentelemetry::global::set_text_map_propagator(
+            opentelemetry_sdk::propagation::TraceContextPropagator::new(),
+        );
+
+        let exporter = match opentelemetry_otlp::new_exporter()
+            .tonic()
+            .with_endpoint("http://localhost:4317")
+            .with_protocol(opentelemetry_otlp::Protocol::Grpc)
+            .with_timeout(Duration::from_secs(1))
+            .build_span_exporter()
+        {
+            Ok(ex) => ex,
+            Err(e) => {
+                tracing::error!("failed to enable opentelemetry tracing: {}", e);
+                panic!();
+            }
+        };
+
+        let provider = TracerProvider::builder()
+            .with_simple_exporter(exporter)
+            .with_config(
+                opentelemetry_sdk::trace::Config::default()
+                    .with_resource(Resource::new(vec![KeyValue::new("service.name", "turbo")])),
+            )
+            .build();
+
+        let tracer = provider.tracer("turbo");
+
+        let opentelemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+
+        let (_, opentelemetry_update) = reload::Layer::new(None);
+        let opentelemetry = opentelemetry.with_filter(env_filter(LevelFilter::INFO));
 
         let registry = Registry::default()
             .with(stderr)
             .with(logrotate)
             .with(chrome)
-            .with(opentelemetry);
+            .with(Some(opentelemetry));
 
         #[cfg(feature = "pprof")]
         let pprof_guard = pprof::ProfilerGuardBuilder::default()
@@ -183,7 +211,7 @@ impl TurboSubscriber {
             chrome_update,
             chrome_guard: Mutex::new(None),
             opentelemetry_update,
-            open_telemetry_guard: Mutex::new(None),
+            open_telemetry_guard: Mutex::new(Some(provider)),
             #[cfg(feature = "pprof")]
             pprof_guard,
             verbosity,
@@ -237,47 +265,12 @@ impl TurboSubscriber {
     /// Enables open telemetry tracing.
     #[tracing::instrument(skip(self, config))]
     pub fn enable_opentelemetry_tracing(&self, config: &OtelConfig) -> Result<(), Error> {
-        // clap doesn't let us express a flattened group of options so we need to do it
-        // manually. destination is required, traceparent is optional.
-        let Some((destination, traceparent)) = config.flatten() else {
-            return Ok(());
-        };
-
-        opentelemetry::global::set_text_map_propagator(
-            opentelemetry_sdk::propagation::TraceContextPropagator::new(),
-        );
-
-        let exporter = match opentelemetry_otlp::new_exporter()
-            .tonic()
-            .with_endpoint(destination)
-            .with_protocol(opentelemetry_otlp::Protocol::Grpc)
-            .with_timeout(Duration::from_secs(1))
-            .build_span_exporter()
-        {
-            Ok(ex) => ex,
-            Err(e) => {
-                tracing::error!("failed to enable opentelemetry tracing: {}", e);
-                return Ok(());
-            }
-        };
-
-        let provider = TracerProvider::builder()
-            .with_simple_exporter(exporter)
-            .with_config(
-                opentelemetry_sdk::trace::Config::default()
-                    .with_resource(Resource::new(vec![KeyValue::new("service.name", "turbo")])),
-            )
-            .build();
-
-        let tracer = provider.tracer("turbo");
-
-        let layer = tracing_opentelemetry::layer().with_tracer(tracer);
-        self.opentelemetry_update.reload(Some(layer))?;
-        self.open_telemetry_guard
-            .lock()
-            .expect("not poisoned")
-            .replace(provider);
-        tracing::debug!("opentelemetry tracing enabled");
+        // self.opentelemetry_update.modify(|l| *l = Some(layer))?;
+        // self.open_telemetry_guard
+        //     .lock()
+        //     .expect("not poisoned")
+        //     .replace(provider);
+        // tracing::debug!("opentelemetry tracing enabled");
 
         Ok(())
     }
