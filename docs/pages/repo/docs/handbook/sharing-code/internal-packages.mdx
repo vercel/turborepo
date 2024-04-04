@@ -238,3 +238,32 @@ This pattern is extremely powerful for creating pieces of code that can be easil
 
 1. Ensure that you're [importing it correctly](/repo/docs/handbook/sharing-code/internal-packages#3-import-the-package)
 2. Ensure that you've [configured your app to transpile it](/repo/docs/handbook/sharing-code/internal-packages#6-configuring-your-app)
+
+#### Package entry points
+
+In the case we want to customize the package entry points like this for instance.
+
+```diff
++ import { add } from "math-helpers/add";
+
++ add(1, 2);
+```
+
+Go back to `packages/math-helpers/package.json` and modify field: `exports`:
+
+```json filename="packages/math-helpers/package.json"
+{
+  "name": "math-helpers",
+  "exports": {
+    "./add": "./src/add.ts"
+  },
+  "dependencies": {
+    "typescript": "latest"
+  }
+}
+```
+
+Notice the difference than the previous where the `./add` in the `exports` key is mentioned now to export it to the subpath that we want.
+
+More readings about [package entry points](https://nodejs.org/api/packages.html#package-entry-points) can be explored.
+
