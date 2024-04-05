@@ -135,11 +135,11 @@ turbo run test --filter=[HEAD^1]
 
 #### Check a range of commits
 
-If you need to check a specific range of commits, rather than comparing to `HEAD`, you can set both ends of the comparison via `[<from commit>...<to commit>]`.
+If you need to check a specific range of commits, rather than comparing to `HEAD`, you can set both ends of the comparison via `[<to commit>...<from commit>]`.
 
 ```sh
-# Test each workspace that changed between 'main' and 'my-feature'
-turbo run test --filter=[main...my-feature]
+# Test each workspace that changed between 'my-feature' and 'main'
+turbo run test --filter=[my-feature...main]
 ```
 
 #### Ignoring changed files
