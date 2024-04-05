@@ -9,12 +9,14 @@ workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
+async-once-cell = "0.5.3"
 globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 itertools = { workspace = true }
 lazy-regex = "2.5.0"
 node-semver = "2.1.0"
 petgraph = { workspace = true }
 regex = { workspace = true }
+rust-ini = "0.20.0"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }

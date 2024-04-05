@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use anyhow::{bail, Context, Result};
 use turbo_tasks::Vc;
-use turbo_tasks_fs::{File, FileContent};
+use turbo_tasks_fs::{glob::Glob, File, FileContent};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{ChunkableModule, ChunkingContext, EvaluatableAsset},
@@ -12,11 +12,11 @@ use turbopack_core::{
     resolve::ModulePart,
 };
 
-use super::chunk_item::EcmascriptModuleReexportsChunkItem;
+use super::chunk_item::EcmascriptModuleFacadeChunkItem;
 use crate::{
     chunk::{EcmascriptChunkPlaceable, EcmascriptChunkingContext, EcmascriptExports},
     references::{
-        async_module::OptionAsyncModule,
+        async_module::{AsyncModule, OptionAsyncModule},
         esm::{EsmExport, EsmExports},
     },
     side_effect_optimization::reference::EcmascriptModulePartReference,
@@ -37,6 +37,22 @@ impl EcmascriptModuleFacadeModule {
     #[turbo_tasks::function]
     pub fn new(module: Vc<Box<dyn EcmascriptChunkPlaceable>>, ty: Vc<ModulePart>) -> Vc<Self> {
         EcmascriptModuleFacadeModule { module, ty }.cell()
+    }
+
+    #[turbo_tasks::function]
+    pub async fn async_module(self: Vc<Self>) -> Result<Vc<AsyncModule>> {
+        let import_externals =
+            if let Some(async_module) = *self.await?.module.get_async_module().await? {
+                async_module.await?.import_externals
+            } else {
+                false
+            };
+        Ok(AsyncModule {
+            placeable: Vc::upcast(self),
+            has_top_level_await: false,
+            import_externals,
+        }
+        .cell())
     }
 }
 
@@ -234,11 +250,14 @@ impl EcmascriptChunkPlaceable for EcmascriptModuleFacadeModule {
     }
 
     #[turbo_tasks::function]
-    async fn is_marked_as_side_effect_free(&self) -> Result<Vc<bool>> {
+    async fn is_marked_as_side_effect_free(
+        &self,
+        side_effect_free_packages: Vc<Glob>,
+    ) -> Result<Vc<bool>> {
         Ok(match *self.ty.await? {
-            ModulePart::Evaluation | ModulePart::Facade => {
-                self.module.is_marked_as_side_effect_free()
-            }
+            ModulePart::Evaluation | ModulePart::Facade => self
+                .module
+                .is_marked_as_side_effect_free(side_effect_free_packages),
             ModulePart::Exports
             | ModulePart::RenamedExport { .. }
             | ModulePart::RenamedNamespace { .. } => Vc::cell(true),
@@ -247,8 +266,8 @@ impl EcmascriptChunkPlaceable for EcmascriptModuleFacadeModule {
     }
 
     #[turbo_tasks::function]
-    fn get_async_module(&self) -> Vc<OptionAsyncModule> {
-        self.module.get_async_module()
+    fn get_async_module(self: Vc<Self>) -> Vc<OptionAsyncModule> {
+        Vc::cell(Some(self.async_module()))
     }
 }
 
@@ -267,7 +286,7 @@ impl ChunkableModule for EcmascriptModuleFacadeModule {
                      EcmascriptModuleFacadeModule",
                 )?;
         Ok(Vc::upcast(
-            EcmascriptModuleReexportsChunkItem {
+            EcmascriptModuleFacadeChunkItem {
                 module: self,
                 chunking_context,
             }

@@ -77,10 +77,10 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
-                    behavior: Some(VendorBehavior {
-                        group_prefix: |group_name| format!("##[group]{group_name}\r\n"),
-                        group_suffix: |_| String::from("##[endgroup]\r\n"),
-                    }),
+                    behavior: Some(VendorBehavior::new(
+                        |group_name| format!("##[group]{group_name}\r\n"),
+                        |_| String::from("##[endgroup]\r\n"),
+                    )),
                 },
                 Vendor {
                     name: "Bamboo",
@@ -266,10 +266,16 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: Some("GITHUB_SHA"),
                     branch_env_var: Some("GITHUB_REF_NAME"),
                     username_env_var: Some("GITHUB_ACTOR"),
-                    behavior: Some(VendorBehavior {
-                        group_prefix: |group_name| format!("::group::{group_name}\n"),
-                        group_suffix: |_| String::from("::endgroup::\n"),
-                    }),
+                    behavior: Some(
+                        VendorBehavior::new(
+                            |group_name| format!("::group::{group_name}\n"),
+                            |_| String::from("::endgroup::\n"),
+                        )
+                        .with_error(
+                            |group_name| format!("\x1B[;31m{group_name}\x1B[;0m\n"),
+                            |_| String::new(),
+                        ),
+                    ),
                 },
                 Vendor {
                     name: "GitLab CI",
@@ -546,14 +552,10 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
-                    behavior: Some(VendorBehavior {
-                        group_prefix: |group_name| {
-                            format!("##teamcity[blockOpened name='{group_name}']")
-                        },
-                        group_suffix: |group_name| {
-                            format!("##teamcity[blockClosed name='{group_name}']")
-                        },
-                    }),
+                    behavior: Some(VendorBehavior::new(
+                        |group_name| format!("##teamcity[blockOpened name='{group_name}']"),
+                        |group_name| format!("##teamcity[blockClosed name='{group_name}']"),
+                    )),
                 },
                 Vendor {
                     name: "Travis CI",
@@ -566,10 +568,10 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
-                    behavior: Some(VendorBehavior {
-                        group_prefix: |group_name| format!("travis_fold:start:{group_name}\r\n"),
-                        group_suffix: |group_name| format!("travis_fold:end:{group_name}\r\n"),
-                    }),
+                    behavior: Some(VendorBehavior::new(
+                        |group_name| format!("travis_fold:start:{group_name}\r\n"),
+                        |group_name| format!("travis_fold:end:{group_name}\r\n"),
+                    )),
                 },
                 Vendor {
                     name: "Vercel",

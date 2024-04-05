@@ -7,16 +7,17 @@ use swc_core::{
         errors::{Handler, HANDLER},
         input::StringInput,
         source_map::SourceMapGenConfig,
-        BytePos, FileName, Globals, LineCol, Mark, GLOBALS,
+        BytePos, FileName, Globals, LineCol, Mark, SyntaxContext, GLOBALS,
     },
     ecma::{
         ast::{EsVersion, Program},
+        lints::{config::LintConfig, rules::LintParams},
         parser::{lexer::Lexer, EsConfig, Parser, Syntax, TsConfig},
         transforms::base::{
             helpers::{Helpers, HELPERS},
             resolver,
         },
-        visit::VisitMutWith,
+        visit::{FoldWith, VisitMutWith},
     },
 };
 use tracing::Instrument;
@@ -26,7 +27,7 @@ use turbo_tasks_hash::hash_xxh3_hash64;
 use turbopack_core::{
     asset::{Asset, AssetContent},
     error::PrettyPrintError,
-    issue::{Issue, IssueExt, IssueSeverity, OptionStyledString, StyledString},
+    issue::{Issue, IssueExt, IssueSeverity, IssueStage, OptionStyledString, StyledString},
     source::Source,
     source_map::{GenerateSourceMap, OptionSourceMap, SourceMap},
     SOURCE_MAP_ROOT_NAME,
@@ -56,7 +57,9 @@ pub enum ParseResult {
         #[turbo_tasks(debug_ignore, trace_ignore)]
         source_map: Arc<swc_core::common::SourceMap>,
     },
-    Unparseable,
+    Unparseable {
+        messages: Option<Vec<String>>,
+    },
     NotFound,
 }
 
@@ -182,13 +185,18 @@ async fn parse_internal(
     let content = match content.await {
         Ok(content) => content,
         Err(error) => {
+            let error = PrettyPrintError(&error).to_string();
             ReadSourceIssue {
                 source,
-                error: PrettyPrintError(&error).to_string(),
+                error: error.clone(),
             }
             .cell()
             .emit();
-            return Ok(ParseResult::Unparseable.cell());
+
+            return Ok(ParseResult::Unparseable {
+                messages: Some(vec![error]),
+            }
+            .cell());
         }
     };
     Ok(match &*content {
@@ -219,17 +227,21 @@ async fn parse_internal(
                     }
                 }
                 Err(error) => {
+                    let error = PrettyPrintError(&error).to_string();
                     ReadSourceIssue {
                         source,
-                        error: PrettyPrintError(&error).to_string(),
+                        error: error.clone(),
                     }
                     .cell()
                     .emit();
-                    ParseResult::Unparseable.cell()
+                    ParseResult::Unparseable {
+                        messages: Some(vec![error]),
+                    }
+                    .cell()
                 }
             },
         },
-        AssetContent::Redirect { .. } => ParseResult::Unparseable.cell(),
+        AssetContent::Redirect { .. } => ParseResult::Unparseable { messages: None }.cell(),
     })
 }
 
@@ -247,12 +259,19 @@ async fn parse_content(
     let handler = Handler::with_emitter(
         true,
         false,
-        Box::new(IssueEmitter {
+        Box::new(IssueEmitter::new(
             source,
-            source_map: source_map.clone(),
-            title: Some("Parsing ecmascript source code failed".to_string()),
-        }),
+            source_map.clone(),
+            Some("Ecmascript file had an error".to_string()),
+        )),
     );
+
+    let emitter = Box::new(IssueEmitter::new(
+        source,
+        source_map.clone(),
+        Some("Parsing ecmascript source code failed".to_string()),
+    ));
+    let parser_handler = Handler::with_emitter(true, false, emitter.clone());
     let globals = Arc::new(Globals::new());
     let globals_ref = &globals;
     let helpers = GLOBALS.set(globals_ref, || Helpers::new(true));
@@ -305,21 +324,30 @@ async fn parse_content(
                 let mut parser = Parser::new_from(lexer);
                 let program_result = parser.parse_program();
 
-                let mut has_errors = false;
+                let mut has_errors = vec![];
                 for e in parser.take_errors() {
-                    e.into_diagnostic(&handler).emit();
-                    has_errors = true
+                    let mut e = e.into_diagnostic(&parser_handler);
+                    has_errors.extend(e.message.iter().map(|m| m.0.clone()));
+                    e.emit();
                 }
 
-                if has_errors {
-                    return Ok(ParseResult::Unparseable);
+                if !has_errors.is_empty() {
+                    return Ok(ParseResult::Unparseable {
+                        messages: Some(has_errors),
+                    });
                 }
 
                 match program_result {
                     Ok(parsed_program) => parsed_program,
                     Err(e) => {
-                        e.into_diagnostic(&handler).emit();
-                        return Ok(ParseResult::Unparseable);
+                        let mut e = e.into_diagnostic(&parser_handler);
+                        let messages = e.message.iter().map(|m| m.0.clone()).collect();
+
+                        e.emit();
+
+                        return Ok(ParseResult::Unparseable {
+                            messages: Some(messages),
+                        });
                     }
                 }
             };
@@ -338,6 +366,18 @@ async fn parse_content(
                 is_typescript,
             ));
 
+            let lint_config = LintConfig::default();
+            let rules = swc_core::ecma::lints::rules::all(LintParams {
+                program: &parsed_program,
+                lint_config: &lint_config,
+                unresolved_ctxt: SyntaxContext::empty().apply_mark(unresolved_mark),
+                top_level_ctxt: SyntaxContext::empty().apply_mark(top_level_mark),
+                es_version: EsVersion::latest(),
+                source_map: source_map.clone(),
+            });
+            parsed_program =
+                parsed_program.fold_with(&mut swc_core::ecma::lints::rules::lint_to_fold(rules));
+
             let transform_context = TransformContext {
                 comments: &comments,
                 source_map: &source_map,
@@ -352,6 +392,20 @@ async fn parse_content(
                 transform
                     .apply(&mut parsed_program, &transform_context)
                     .await?;
+            }
+
+            if parser_handler.has_errors() {
+                let messages = if let Some(error) = emitter.emitted_issues.last() {
+                    // The emitter created in here only uses StyledString::Text
+                    if let StyledString::Text(xx) = &*error.await?.message.await? {
+                        Some(vec![xx.clone()])
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+                return Ok(ParseResult::Unparseable { messages });
             }
 
             parsed_program.visit_mut_with(
@@ -422,7 +476,7 @@ impl Issue for ReadSourceIssue {
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("parse".to_string())
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::Load.cell()
     }
 }

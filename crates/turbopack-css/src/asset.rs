@@ -25,8 +25,12 @@ use crate::{
 };
 
 #[turbo_tasks::function]
-fn modifier() -> Vc<String> {
-    Vc::cell("css".to_string())
+fn modifier(use_swc_css: bool) -> Vc<String> {
+    if use_swc_css {
+        Vc::cell("swc css".to_string())
+    } else {
+        Vc::cell("css".to_string())
+    }
 }
 
 #[turbo_tasks::value]
@@ -36,7 +40,7 @@ pub struct CssModuleAsset {
     asset_context: Vc<Box<dyn AssetContext>>,
     import_context: Option<Vc<ImportContext>>,
     ty: CssModuleAssetType,
-    use_lightningcss: bool,
+    use_swc_css: bool,
 }
 
 #[turbo_tasks::value_impl]
@@ -47,7 +51,7 @@ impl CssModuleAsset {
         source: Vc<Box<dyn Source>>,
         asset_context: Vc<Box<dyn AssetContext>>,
         ty: CssModuleAssetType,
-        use_lightningcss: bool,
+        use_swc_css: bool,
         import_context: Option<Vc<ImportContext>>,
     ) -> Vc<Self> {
         Self::cell(CssModuleAsset {
@@ -55,7 +59,7 @@ impl CssModuleAsset {
             asset_context,
             import_context,
             ty,
-            use_lightningcss,
+            use_swc_css,
         })
     }
 
@@ -78,7 +82,7 @@ impl ParseCss for CssModuleAsset {
             this.import_context
                 .unwrap_or_else(|| ImportContext::new(vec![], vec![], vec![])),
             this.ty,
-            this.use_lightningcss,
+            this.use_swc_css,
         ))
     }
 }
@@ -107,10 +111,15 @@ impl ProcessCss for CssModuleAsset {
 impl Module for CssModuleAsset {
     #[turbo_tasks::function]
     fn ident(&self) -> Vc<AssetIdent> {
-        self.source
+        let mut ident = self
+            .source
             .ident()
-            .with_modifier(modifier())
-            .with_layer(self.asset_context.layer())
+            .with_modifier(modifier(self.use_swc_css))
+            .with_layer(self.asset_context.layer());
+        if let Some(import_context) = self.import_context {
+            ident = ident.with_modifier(import_context.modifier())
+        }
+        ident
     }
 
     #[turbo_tasks::function]

@@ -27,8 +27,16 @@ export const bold = (...args: Array<string>) => {
   log(chalk.bold(...args));
 };
 
+export const underline = (...args: Array<string>) => {
+  log(chalk.underline(...args));
+};
+
 export const dimmed = (...args: Array<string>) => {
   log(chalk.dim(...args));
+};
+
+export const grey = (...args: Array<string>) => {
+  log(chalk.grey(...args));
 };
 
 export const item = (...args: Array<unknown>) => {

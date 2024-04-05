@@ -1,8 +1,8 @@
-use std::io;
+use std::{io, time::Duration};
 
 use globwalk::ValidatedGlob;
 use thiserror::Error;
-use tonic::{Code, Status};
+use tonic::{Code, IntoRequest, Status};
 use tracing::info;
 use turbopath::AbsoluteSystemPathBuf;
 
@@ -10,8 +10,12 @@ use super::{
     connector::{DaemonConnector, DaemonConnectorError},
     endpoint::SocketOpenError,
     proto::DiscoverPackagesResponse,
+    Paths,
 };
-use crate::{daemon::proto, globwatcher::HashGlobSetupError};
+use crate::{
+    daemon::{proto, proto::PackageChangeEvent},
+    globwatcher::HashGlobSetupError,
+};
 
 #[derive(Debug, Clone)]
 pub struct DaemonClient<T> {
@@ -124,9 +128,32 @@ impl<T> DaemonClient<T> {
     }
 
     pub async fn discover_packages(&mut self) -> Result<DiscoverPackagesResponse, DaemonError> {
+        let req = proto::DiscoverPackagesRequest {};
+        let mut req = req.into_request();
+        req.set_timeout(Duration::from_millis(30));
+        let response = self.client.discover_packages(req).await?.into_inner();
+
+        Ok(response)
+    }
+
+    pub async fn discover_packages_blocking(
+        &mut self,
+    ) -> Result<DiscoverPackagesResponse, DaemonError> {
         let response = self
             .client
-            .discover_packages(proto::DiscoverPackagesRequest {})
+            .discover_packages_blocking(proto::DiscoverPackagesRequest {})
+            .await?
+            .into_inner();
+
+        Ok(response)
+    }
+
+    pub async fn package_changes(
+        &mut self,
+    ) -> Result<tonic::codec::Streaming<PackageChangeEvent>, DaemonError> {
+        let response = self
+            .client
+            .package_changes(proto::PackageChangesRequest {})
             .await?
             .into_inner();
 
@@ -140,12 +167,8 @@ impl DaemonClient<DaemonConnector> {
         self.stop().await?.connect().await.map_err(Into::into)
     }
 
-    pub fn pid_file(&self) -> &turbopath::AbsoluteSystemPathBuf {
-        &self.connect_settings.pid_file
-    }
-
-    pub fn sock_file(&self) -> &turbopath::AbsoluteSystemPathBuf {
-        &self.connect_settings.sock_file
+    pub fn paths(&self) -> &Paths {
+        &self.connect_settings.paths
     }
 }
 
@@ -209,6 +232,9 @@ pub enum DaemonError {
 
     #[error("`tail` is not installed. Please install it to use this feature.")]
     TailNotInstalled,
+
+    #[error("could not find log file")]
+    LogFileNotFound,
 }
 
 impl From<Status> for DaemonError {

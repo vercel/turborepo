@@ -1,19 +1,19 @@
 pub(crate) mod context_transition;
+pub(crate) mod full_context_transition;
 
 use std::collections::HashMap;
 
 use anyhow::Result;
 pub use context_transition::ContextTransition;
+pub use full_context_transition::FullContextTransition;
 use turbo_tasks::{Value, ValueDefault, Vc};
 use turbopack_core::{
     compile_time_info::CompileTimeInfo, context::ProcessResult, module::Module,
     reference_type::ReferenceType, source::Source,
 };
+use turbopack_resolve::resolve_options_context::ResolveOptionsContext;
 
-use crate::{
-    module_options::ModuleOptionsContext, resolve_options_context::ResolveOptionsContext,
-    ModuleAssetContext,
-};
+use crate::{module_options::ModuleOptionsContext, ModuleAssetContext};
 
 /// Some kind of operation that is executed during reference processing. e. g.
 /// you can transition to a different environment on a specific import
@@ -32,7 +32,9 @@ pub trait Transition {
         compile_time_info
     }
     /// Apply modifications to the layer
-    fn process_layer(self: Vc<Self>, layer: Vc<String>) -> Vc<String>;
+    fn process_layer(self: Vc<Self>, layer: Vc<String>) -> Vc<String> {
+        layer
+    }
     /// Apply modifications/wrapping to the module options context
     fn process_module_options_context(
         self: Vc<Self>,

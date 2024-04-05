@@ -55,6 +55,11 @@ pub enum TrackedErrors {
     ErrorFetchingFromCache,
     FailedToPipeOutputs,
     UnknownChildExit,
+    /// Yielded when package discovery yields a
+    /// list of packages that fails downstream.
+    /// Currently only indicates a package being
+    /// reported when it does not exist.
+    InvalidPackageDiscovery,
 }
 
 impl Display for TrackedErrors {
@@ -72,6 +77,7 @@ impl Display for TrackedErrors {
             TrackedErrors::ErrorFetchingFromCache => write!(f, "error_fetching_from_cache"),
             TrackedErrors::FailedToPipeOutputs => write!(f, "failed_to_pipe_outputs"),
             TrackedErrors::UnknownChildExit => write!(f, "unknown_child_exit"),
+            TrackedErrors::InvalidPackageDiscovery => write!(f, "invalid_package_discovery"),
         }
     }
 }

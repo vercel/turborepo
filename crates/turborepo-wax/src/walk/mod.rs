@@ -80,7 +80,7 @@ use std::{
 };
 
 use thiserror::Error;
-use walkdir::{self, DirEntry, Error, WalkDir};
+use walkdir::{DirEntry, Error, WalkDir};
 
 pub use crate::walk::glob::{GlobEntry, GlobWalker};
 use crate::{
@@ -1084,7 +1084,6 @@ mod tests {
 
     use build_fs_tree::{dir, file, Build, FileSystemTree};
     use path_slash::PathBufExt;
-    use regex::Regex;
     use tempfile::{self, TempDir};
 
     use crate::{
@@ -1312,7 +1311,7 @@ mod tests {
         // it a valid glob, we must
         #[cfg(windows)]
         let slash_path = {
-            let regex = Regex::new("([A-Z]):").unwrap();
+            let regex = regex::Regex::new("([A-Z]):").unwrap();
             regex.replace(&slash_path, "$1\\:")
         };
 

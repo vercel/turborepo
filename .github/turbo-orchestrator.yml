@@ -79,6 +79,18 @@ labeler:
     - label: "pkg: turbo-workspaces"
       when:
         isAnyFilePathMatch: '^packages\/turbo-workspaces\/.*$'
+    - label: "pkg: turbo-repository"
+      when:
+        isAnyFilePathMatch: '^packages\/turbo-repository\/.*$'
+    - label: "pkg: turbo-telemetry"
+      when:
+        isAnyFilePathMatch: '^packages\/turbo-telemetry\/.*$'
+
+    # release
+    - label: "release: turborepo"
+      when:
+        isAnyFilePathMatch: '^version\.txt$'
+        isPRTitleMatch: '^release\(turborepo\):.*$'
 events:
   onPublish:
     turbo:

@@ -19,22 +19,28 @@ use turbo_tasks_fs::{
 };
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
-    condition::ContextCondition, ecmascript::TreeShakingMode, module_options::ModuleOptionsContext,
-    resolve_options_context::ResolveOptionsContext, ModuleAssetContext,
+    ecmascript::TreeShakingMode, module_options::ModuleOptionsContext, ModuleAssetContext,
 };
+use turbopack_browser::BrowserChunkingContext;
 use turbopack_core::{
     chunk::{EvaluatableAssetExt, EvaluatableAssets},
     compile_time_defines,
     compile_time_info::CompileTimeInfo,
+    condition::ContextCondition,
     context::{AssetContext, ProcessResult},
     environment::{Environment, ExecutionEnvironment, NodeJsEnvironment},
     file_source::FileSource,
     issue::{Issue, IssueDescriptionExt},
     reference_type::{EntryReferenceSubType, ReferenceType},
+    resolve::{
+        options::{ImportMap, ImportMapping},
+        ExternalType,
+    },
     source::Source,
 };
-use turbopack_dev::DevChunkingContext;
+use turbopack_ecmascript_runtime::RuntimeType;
 use turbopack_node::{debug::should_debug, evaluate::evaluate};
+use turbopack_resolve::resolve_options_context::ResolveOptionsContext;
 use turbopack_test_utils::jest::JestRunResult;
 
 use crate::util::REPO_ROOT;
@@ -65,9 +71,10 @@ fn register() {
     turbo_tasks_env::register();
     turbo_tasks_fs::register();
     turbopack::register();
-    turbopack_dev::register();
+    turbopack_browser::register();
     turbopack_env::register();
     turbopack_ecmascript_plugins::register();
+    turbopack_resolve::register();
     include!(concat!(env!("OUT_DIR"), "/register_test_execution.rs"));
 }
 
@@ -187,8 +194,8 @@ async fn prepare_test(resource: String) -> Result<Vc<PreparedTest>> {
         resource_path.to_str().unwrap()
     );
 
-    let root_fs = DiskFileSystem::new("workspace".to_string(), REPO_ROOT.clone());
-    let project_fs = DiskFileSystem::new("project".to_string(), REPO_ROOT.clone());
+    let root_fs = DiskFileSystem::new("workspace".to_string(), REPO_ROOT.clone(), vec![]);
+    let project_fs = DiskFileSystem::new("project".to_string(), REPO_ROOT.clone(), vec![]);
     let project_root = project_fs.root();
 
     let relative_path = resource_path.strip_prefix(&*REPO_ROOT).context(format!(
@@ -253,6 +260,12 @@ async fn run_test(prepared_test: Vc<PreparedTest>) -> Result<Vc<RunTestResult>> 
         )
         .cell();
 
+    let mut import_map = ImportMap::empty();
+    import_map.insert_wildcard_alias(
+        "esm-external/",
+        ImportMapping::External(Some("*".to_string()), ExternalType::EcmaScriptModule).cell(),
+    );
+
     let asset_context: Vc<Box<dyn AssetContext>> = Vc::upcast(ModuleAssetContext::new(
         Vc::cell(HashMap::new()),
         compile_time_info,
@@ -260,6 +273,7 @@ async fn run_test(prepared_test: Vc<PreparedTest>) -> Result<Vc<RunTestResult>> 
             enable_typescript_transform: Some(Default::default()),
             preset_env_versions: Some(env),
             tree_shaking_mode: options.tree_shaking_mode,
+            import_externals: true,
             rules: vec![(
                 ContextCondition::InDirectory("node_modules".to_string()),
                 ModuleOptionsContext {
@@ -280,23 +294,28 @@ async fn run_test(prepared_test: Vc<PreparedTest>) -> Result<Vc<RunTestResult>> 
                 ResolveOptionsContext {
                     enable_node_modules: Some(project_root),
                     custom_conditions: vec!["development".to_string()],
+                    browser: true,
                     ..Default::default()
                 }
                 .cell(),
             )],
+            browser: true,
+            module: true,
+            import_map: Some(import_map.cell()),
             ..Default::default()
         }
         .cell(),
         Vc::cell("test".to_string()),
     ));
 
-    let chunking_context = DevChunkingContext::builder(
+    let chunking_context = BrowserChunkingContext::builder(
         project_root,
         chunk_root_path,
         static_root_path,
         chunk_root_path,
         static_root_path,
         env,
+        RuntimeType::Development,
     )
     .build();
 

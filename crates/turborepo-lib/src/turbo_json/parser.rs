@@ -256,6 +256,11 @@ impl DeserializationVisitor for RawTaskDefinitionVisitor {
                         result.output_mode = Some(Spanned::new(output_mode).with_range(range));
                     }
                 }
+                "interactive" => {
+                    if let Some(interactive) = bool::deserialize(&value, &key_text, diagnostics) {
+                        result.interactive = Some(Spanned::new(interactive).with_range(range));
+                    }
+                }
                 unknown_key => {
                     diagnostics.push(create_unknown_key_diagnostic_from_struct(
                         &result,
@@ -595,6 +600,14 @@ impl DeserializationVisitor for RawTurboJsonVisitor {
                         result.remote_cache = Some(remote_cache);
                     }
                 }
+                "experimentalUI" => {
+                    if let Some(experimental_ui) = bool::deserialize(&value, &key_text, diagnostics)
+                    {
+                        result.experimental_ui = Some(experimental_ui);
+                    }
+                }
+                // Allow for faux-comments at the top level
+                "//" => {}
                 unknown_key => {
                     diagnostics.push(create_unknown_key_diagnostic_from_struct(
                         &result,
@@ -647,24 +660,32 @@ impl WithMetadata for Pipeline {
 impl WithMetadata for RawTaskDefinition {
     fn add_text(&mut self, text: Arc<str>) {
         self.depends_on.add_text(text.clone());
+        if let Some(depends_on) = &mut self.depends_on {
+            depends_on.value.add_text(text.clone());
+        }
         self.dot_env.add_text(text.clone());
         self.env.add_text(text.clone());
         self.inputs.add_text(text.clone());
         self.pass_through_env.add_text(text.clone());
         self.persistent.add_text(text.clone());
         self.outputs.add_text(text.clone());
-        self.output_mode.add_text(text);
+        self.output_mode.add_text(text.clone());
+        self.interactive.add_text(text);
     }
 
     fn add_path(&mut self, path: Arc<str>) {
         self.depends_on.add_path(path.clone());
+        if let Some(depends_on) = &mut self.depends_on {
+            depends_on.value.add_path(path.clone());
+        }
         self.dot_env.add_path(path.clone());
         self.env.add_path(path.clone());
         self.inputs.add_path(path.clone());
         self.pass_through_env.add_path(path.clone());
         self.persistent.add_path(path.clone());
         self.outputs.add_path(path.clone());
-        self.output_mode.add_path(path);
+        self.output_mode.add_path(path.clone());
+        self.interactive.add_path(path);
     }
 }
 

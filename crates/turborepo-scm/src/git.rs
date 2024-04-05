@@ -24,8 +24,8 @@ impl SCM {
     pub fn changed_files(
         &self,
         turbo_root: &AbsoluteSystemPath,
-        from_commit: Option<&str>,
-        to_commit: &str,
+        from_commit: &str,
+        to_commit: Option<&str>,
     ) -> Result<HashSet<AnchoredSystemPathBuf>, Error> {
         match self {
             Self::Git(git) => git.changed_files(turbo_root, from_commit, to_commit),
@@ -65,8 +65,8 @@ impl SCM {
 pub fn changed_files(
     git_root: PathBuf,
     turbo_root: PathBuf,
-    from_commit: Option<&str>,
-    to_commit: &str,
+    from_commit: &str,
+    to_commit: Option<&str>,
 ) -> Result<HashSet<String>, Error> {
     let git_root = AbsoluteSystemPath::from_std_path(&git_root)?;
     let scm = SCM::new(git_root);
@@ -95,19 +95,15 @@ impl Git {
     fn changed_files(
         &self,
         turbo_root: &AbsoluteSystemPath,
-        from_commit: Option<&str>,
-        to_commit: &str,
+        from_commit: &str,
+        to_commit: Option<&str>,
     ) -> Result<HashSet<AnchoredSystemPathBuf>, Error> {
         let turbo_root_relative_to_git_root = self.root.anchor(turbo_root)?;
         let pathspec = turbo_root_relative_to_git_root.as_str();
 
         let mut files = HashSet::new();
 
-        let output = self.execute_git_command(&["diff", "--name-only", to_commit], pathspec)?;
-
-        self.add_files_from_stdout(&mut files, turbo_root, output);
-
-        if let Some(from_commit) = from_commit {
+        if let Some(to_commit) = to_commit {
             let output = self.execute_git_command(
                 &[
                     "diff",
@@ -118,12 +114,19 @@ impl Git {
             )?;
 
             self.add_files_from_stdout(&mut files, turbo_root, output);
+        } else {
+            let output =
+                self.execute_git_command(&["diff", "--name-only", from_commit], pathspec)?;
+
+            self.add_files_from_stdout(&mut files, turbo_root, output);
+
+            // We only care about non-tracked files if we haven't specified both ends up the
+            // comparison
+            let output = self
+                .execute_git_command(&["ls-files", "--others", "--exclude-standard"], pathspec)?;
+
+            self.add_files_from_stdout(&mut files, turbo_root, output);
         }
-
-        let output =
-            self.execute_git_command(&["ls-files", "--others", "--exclude-standard"], pathspec)?;
-
-        self.add_files_from_stdout(&mut files, turbo_root, output);
 
         Ok(files)
     }
@@ -167,7 +170,7 @@ impl Git {
         turbo_root: &AbsoluteSystemPath,
         path: &RelativeUnixPath,
     ) -> Result<AnchoredSystemPathBuf, Error> {
-        let absolute_file_path = self.root.join_unix_path(path)?;
+        let absolute_file_path = self.root.join_unix_path(path);
         let anchored_to_turbo_root_file_path = turbo_root.anchor(&absolute_file_path)?;
         Ok(anchored_to_turbo_root_file_path)
     }
@@ -312,16 +315,16 @@ mod tests {
         assert!(changed_files(
             tmp_dir.path().to_owned(),
             tmp_dir.path().to_owned(),
-            Some("HEAD~1"),
-            "HEAD",
+            "HEAD~1",
+            Some("HEAD"),
         )
         .is_ok());
 
         assert!(changed_files(
             tmp_dir.path().to_owned(),
             tmp_dir.path().to_owned(),
-            None,
             "HEAD",
+            None,
         )
         .is_ok());
 
@@ -344,7 +347,7 @@ mod tests {
         let first_commit_sha = first_commit_oid.to_string();
         let git_root = repo_root.path().to_owned();
         let turborepo_root = repo_root.path().to_owned();
-        let files = changed_files(git_root, turborepo_root, Some(&first_commit_sha), "HEAD")?;
+        let files = changed_files(git_root, turborepo_root, &first_commit_sha, Some("HEAD"))?;
 
         assert_eq!(files, HashSet::from(["foo.js".to_string()]));
         Ok(())
@@ -385,8 +388,8 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().to_path_buf(),
-            Some(&third_commit_oid.to_string()),
-            &fourth_commit_oid.to_string(),
+            &third_commit_oid.to_string(),
+            Some(&fourth_commit_oid.to_string()),
         )?;
 
         assert_eq!(
@@ -416,8 +419,8 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             turbo_root.to_path_buf(),
-            None,
             "HEAD",
+            None,
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
@@ -429,8 +432,8 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             turbo_root.to_path_buf(),
-            None,
             "HEAD",
+            None,
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
@@ -441,22 +444,50 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             turbo_root.to_path_buf(),
-            Some(first_commit_oid.to_string().as_str()),
-            second_commit_oid.to_string().as_str(),
+            first_commit_oid.to_string().as_str(),
+            Some(second_commit_oid.to_string().as_str()),
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
         // Create a file nested in subdir
         fs::create_dir_all(repo_root.path().join("subdir"))?;
         let new_file = repo_root.path().join("subdir").join("baz.js");
-        fs::write(new_file, "let x = 2;")?;
+        fs::write(&new_file, "let x = 2;")?;
+
+        // The new directory and files are not yet committed, they shouldn't show up.
+        let files = changed_files(
+            repo_root.path().to_path_buf(),
+            repo_root.path().to_path_buf(),
+            first_commit_oid.to_string().as_str(),
+            Some(second_commit_oid.to_string().as_str()),
+        )?;
+        assert_eq!(files, HashSet::from(["bar.js".to_string()]));
+
+        // Since we are only specifying the first commit, the new file should show up
+        let files = changed_files(
+            repo_root.path().to_path_buf(),
+            repo_root.path().to_path_buf(),
+            second_commit_oid.to_string().as_str(),
+            None,
+        )?;
+        assert_eq!(
+            files,
+            HashSet::from([format!("subdir{}baz.js", std::path::MAIN_SEPARATOR)])
+        );
+
+        // Commit the new file so it shows up in the changed files
+        let third_commit_oid = commit_file(
+            &repo,
+            &Path::new("subdir").join("baz.js"),
+            Some(second_commit_oid),
+        );
 
         // Test that `turbo_root` filters out files not in the specified directory
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().join("subdir"),
-            Some(first_commit_oid.to_string().as_str()),
-            second_commit_oid.to_string().as_str(),
+            first_commit_oid.to_string().as_str(),
+            Some(third_commit_oid.to_string().as_str()),
         )?;
         assert_eq!(files, HashSet::from(["baz.js".to_string()]));
 
@@ -481,8 +512,8 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().to_path_buf(),
-            None,
             "HEAD",
+            None,
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
@@ -510,8 +541,8 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().join("subdir"),
-            None,
             "HEAD",
+            None,
         )?;
 
         #[cfg(unix)]
@@ -529,14 +560,16 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().join("subdir"),
-            Some(first_commit.to_string().as_str()),
-            repo.head()
-                .unwrap()
-                .peel_to_commit()
-                .unwrap()
-                .id()
-                .to_string()
-                .as_str(),
+            first_commit.to_string().as_str(),
+            Some(
+                repo.head()
+                    .unwrap()
+                    .peel_to_commit()
+                    .unwrap()
+                    .id()
+                    .to_string()
+                    .as_str(),
+            ),
         )?;
 
         #[cfg(unix)]
@@ -609,8 +642,8 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().to_path_buf(),
-            Some("HEAD^"),
-            "HEAD",
+            "HEAD^",
+            Some("HEAD"),
         )?;
         assert_eq!(files, HashSet::from(["foo.js".to_string()]));
 
@@ -626,8 +659,8 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().to_path_buf(),
-            Some("HEAD~1"),
-            "release-1",
+            "HEAD~1",
+            Some("release-1"),
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
@@ -640,8 +673,8 @@ mod tests {
         let repo_does_not_exist = changed_files(
             repo_dir.path().to_path_buf(),
             repo_dir.path().to_path_buf(),
-            None,
             "HEAD",
+            None,
         );
 
         assert_matches!(repo_does_not_exist, Err(Error::GitRequired(_)));
@@ -652,8 +685,8 @@ mod tests {
         let commit_does_not_exist = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().to_path_buf(),
-            None,
             "does-not-exist",
+            None,
         );
 
         assert_matches!(commit_does_not_exist, Err(Error::Git(_, _)));
@@ -669,8 +702,8 @@ mod tests {
         let turbo_root_is_not_subdir_of_git_root = changed_files(
             repo_root.path().to_path_buf(),
             turbo_root.path().to_path_buf(),
-            None,
             "HEAD",
+            None,
         );
 
         assert_matches!(

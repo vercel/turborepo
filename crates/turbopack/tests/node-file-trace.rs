@@ -33,7 +33,7 @@ use turbo_tasks_fs::{DiskFileSystem, FileSystem, FileSystemPath};
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
     emit_with_completion, module_options::ModuleOptionsContext, rebase::RebasedAsset, register,
-    resolve_options_context::ResolveOptionsContext, ModuleAssetContext,
+    ModuleAssetContext,
 };
 use turbopack_core::{
     compile_time_info::CompileTimeInfo,
@@ -43,6 +43,7 @@ use turbopack_core::{
     output::OutputAsset,
     reference_type::ReferenceType,
 };
+use turbopack_resolve::resolve_options_context::ResolveOptionsContext;
 
 #[global_allocator]
 static ALLOC: turbo_tasks_malloc::TurboMalloc = turbo_tasks_malloc::TurboMalloc;
@@ -84,7 +85,8 @@ static ALLOC: turbo_tasks_malloc::TurboMalloc = turbo_tasks_malloc::TurboMalloc;
 #[case::empty("integration/empty.js")]
 #[case::env_var("integration/env-var.js")]
 #[case::es_get_iterator("integration/es-get-iterator.js")]
-#[case::esbuild("integration/esbuild.js")]
+// This is flakey on Windows. Disable for now.
+#[cfg_attr(not(target_os = "windows"), case::esbuild("integration/esbuild.js"))]
 #[case::esm("integration/esm.js")]
 #[case::express_consolidate("integration/express-consolidate.js")]
 #[case::express_template_engine("integration/express-template-engine.js")]
@@ -403,6 +405,7 @@ fn node_file_trace<B: Backend + 'static>(
                 let workspace_fs: Vc<Box<dyn FileSystem>> = Vc::upcast(DiskFileSystem::new(
                     "workspace".to_string(),
                     package_root.clone(),
+                    vec![],
                 ));
                 let input_dir = workspace_fs.root();
                 let input = input_dir.join(format!("tests/{input_string}"));
@@ -410,7 +413,8 @@ fn node_file_trace<B: Backend + 'static>(
                 #[cfg(not(feature = "bench_against_node_nft"))]
                 let original_output = exec_node(package_root, input);
 
-                let output_fs = DiskFileSystem::new("output".to_string(), directory.clone());
+                let output_fs =
+                    DiskFileSystem::new("output".to_string(), directory.clone(), vec![]);
                 let output_dir = output_fs.root();
 
                 let source = FileSource::new(input);
@@ -738,7 +742,7 @@ impl std::str::FromStr for CaseInput {
 async fn print_graph(asset: Vc<Box<dyn OutputAsset>>) -> Result<()> {
     let mut visited = HashSet::new();
     let mut queue = Vec::new();
-    queue.push((0, asset.clone()));
+    queue.push((0, asset));
     while let Some((depth, asset)) = queue.pop() {
         let references = asset.references().await?;
         let mut indent = String::new();

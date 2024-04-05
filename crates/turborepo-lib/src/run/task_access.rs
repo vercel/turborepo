@@ -12,7 +12,9 @@ use turborepo_cache::AsyncCache;
 use turborepo_scm::SCM;
 
 use super::ConfigCache;
-use crate::{config::RawTurboJson, unescape::UnescapedString};
+use crate::{
+    config::RawTurboJson, gitignore::ensure_turbo_is_gitignored, unescape::UnescapedString,
+};
 
 // Environment variable key that will be used to enable, and set the expected
 // trace location
@@ -152,6 +154,14 @@ impl TaskAccess {
 
         // we only want to setup the config cacher if task access tracing is enabled
         if enabled {
+            // make sure .turbo is ignored
+            match ensure_turbo_is_gitignored(&repo_root) {
+                Ok(_) => debug!("Automatically added .turbo to .gitignore"),
+                Err(e) => {
+                    error!("Failed to add .turbo to .gitignore. Caching will be disabled - {e}")
+                }
+            }
+
             let config_hash_result = ConfigCache::calculate_config_hash(scm, &root);
             if let Ok(c_hash) = config_hash_result {
                 let c_cache = ConfigCache::new(

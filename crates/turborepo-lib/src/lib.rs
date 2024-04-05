@@ -6,6 +6,8 @@
 #![feature(option_get_or_insert_default)]
 #![feature(once_cell_try)]
 #![feature(try_blocks)]
+#![feature(impl_trait_in_assoc_type)]
+#![feature(lazy_cell)]
 #![deny(clippy::all)]
 // Clippy's needless mut lint is buggy: https://github.com/rust-lang/rust-clippy/issues/11299
 #![allow(clippy::needless_pass_by_ref_mut)]
@@ -16,12 +18,16 @@ mod cli;
 mod commands;
 mod config;
 mod daemon;
+mod diagnostics;
 mod engine;
 
 mod framework;
+mod gitignore;
+mod global_deps_package_change_mapper;
 pub(crate) mod globwatcher;
 mod hash;
 mod opts;
+mod package_changes_watcher;
 mod process;
 mod rewrite_json;
 mod run;
@@ -36,8 +42,7 @@ mod unescape;
 pub use crate::{
     child::spawn_child,
     cli::Args,
-    commands::DaemonRootHasher,
-    daemon::{DaemonClient, DaemonConnector},
+    daemon::{DaemonClient, DaemonConnector, Paths as DaemonPaths},
     run::package_discovery::DaemonPackageDiscovery,
 };
 

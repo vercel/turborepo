@@ -1,7 +1,7 @@
 use std::{borrow::Cow, fmt};
 
 use serde::{Deserialize, Serialize};
-use turborepo_repository::package_graph::{WorkspaceName, ROOT_PKG_NAME};
+use turborepo_repository::package_graph::{PackageName, ROOT_PKG_NAME};
 
 pub const TASK_DELIMITER: &str = "#";
 
@@ -51,12 +51,12 @@ impl<'a> TaskId<'a> {
         })
     }
 
-    pub fn from_graph(workspace: &WorkspaceName, task_name: &TaskName) -> TaskId<'static> {
+    pub fn from_graph(workspace: &PackageName, task_name: &TaskName) -> TaskId<'static> {
         task_name.task_id().map_or_else(
             || {
                 let package = match workspace {
-                    WorkspaceName::Root => ROOT_PKG_NAME.into(),
-                    WorkspaceName::Other(workspace) => static_cow(workspace.as_str().into()),
+                    PackageName::Root => ROOT_PKG_NAME.into(),
+                    PackageName::Other(workspace) => static_cow(workspace.as_str().into()),
                 };
                 TaskId {
                     package,
@@ -71,10 +71,10 @@ impl<'a> TaskId<'a> {
         &self.package
     }
 
-    pub fn to_workspace_name(&self) -> WorkspaceName {
+    pub fn to_workspace_name(&self) -> PackageName {
         match self.package.as_ref() {
-            ROOT_PKG_NAME => WorkspaceName::Root,
-            package => WorkspaceName::Other(package.into()),
+            ROOT_PKG_NAME => PackageName::Root,
+            package => PackageName::Other(package.into()),
         }
     }
 

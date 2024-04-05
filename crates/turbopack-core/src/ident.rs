@@ -69,7 +69,9 @@ impl ValueToString for AssetIdent {
                     s.push(',');
                 }
 
-                write!(s, " {} => {:?}", key.await?, asset.to_string().await?)?;
+                let key_str = key.await?;
+                let asset_str = asset.to_string().await?;
+                write!(s, " {} => {:?}", key_str, asset_str)?;
             }
 
             s.push_str(" }");
@@ -175,9 +177,9 @@ impl AssetIdent {
     }
 
     /// Computes a unique output asset name for the given asset identifier.
-    /// TODO(alexkirsz) This is `turbopack-dev` specific, as `turbopack-build`
-    /// would use a content hash instead. But for now both are using the same
-    /// name generation logic.
+    /// TODO(alexkirsz) This is `turbopack-browser` specific, as
+    /// `turbopack-nodejs` would use a content hash instead. But for now
+    /// both are using the same name generation logic.
     #[turbo_tasks::function]
     pub async fn output_name(
         &self,

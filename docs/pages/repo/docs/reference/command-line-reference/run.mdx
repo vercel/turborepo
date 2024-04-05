@@ -28,6 +28,8 @@ Defaults to `./node_modules/.cache/turbo`. Specify local filesystem cache direct
 turbo run build --cache-dir="./my-cache"
 ```
 
+The same behavior can also be set via the `TURBO_CACHE_DIR=./my-cache` environment variable.
+
 ### `--concurrency`
 
 `type: number | string`
@@ -172,7 +174,7 @@ Ignore existing cached artifacts and forcibly re-execute all tasks (overwriting 
 turbo run build --force
 ```
 
-The same behavior also be set via the `TURBO_FORCE=true` environment variable.
+The same behavior can also be set via the `TURBO_FORCE=true` environment variable.
 
 ### `--global-deps`
 
@@ -347,8 +349,6 @@ turbo run dev --parallel --no-cache
 
 Generates a trace of the run in Chrome Tracing format that you can use to analyze performance.
 The profile can be viewed in [Perfetto](https://ui.perfetto.dev/).
-
-You must provide a verbosity flag (`-v`, `-vv`, or `-vvv`) with the `--profile` to produce a trace.
 
 ```sh
 turbo run build --profile=profile.json

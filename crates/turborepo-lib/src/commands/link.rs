@@ -10,23 +10,24 @@ use std::{
 #[cfg(not(test))]
 use console::Style;
 use console::StyledObject;
+use dialoguer::Confirm;
 #[cfg(not(test))]
 use dialoguer::FuzzySelect;
-use dialoguer::{theme::ColorfulTheme, Confirm};
 use dirs_next::home_dir;
 #[cfg(test)]
 use rand::Rng;
 use thiserror::Error;
-use turborepo_api_client::Client;
+use turborepo_api_client::{CacheClient, Client};
 #[cfg(not(test))]
 use turborepo_ui::CYAN;
-use turborepo_ui::{BOLD, GREY, UNDERLINE};
+use turborepo_ui::{DialoguerTheme, BOLD, GREY, UNDERLINE};
 use turborepo_vercel_api::{CachingStatus, Space, Team};
 
 use crate::{
     cli::LinkTarget,
     commands::CommandBase,
     config,
+    gitignore::ensure_turbo_is_gitignored,
     rewrite_json::{self, set_path, unset_path},
 };
 
@@ -108,7 +109,7 @@ pub(crate) const SPACES_URL: &str = "https://vercel.com/docs/workflow-collaborat
 ///
 /// returns: Result<(), Error>
 pub(crate) async fn verify_caching_enabled<'a>(
-    api_client: &impl Client,
+    api_client: &(impl Client + CacheClient),
     team_id: &str,
     token: &str,
     selected_team: Option<SelectedTeam<'a>>,
@@ -254,9 +255,11 @@ pub async fn link(
             };
 
             if modify_gitignore {
-                add_turbo_to_gitignore(base).map_err(|error| config::Error::FailedToSetConfig {
-                    config_path: base.repo_root.join_component(".gitignore"),
-                    error,
+                ensure_turbo_is_gitignored(&base.repo_root).map_err(|error| {
+                    config::Error::FailedToSetConfig {
+                        config_path: base.repo_root.join_component(".gitignore"),
+                        error,
+                    }
                 })?;
             }
 
@@ -371,7 +374,7 @@ pub async fn link(
 }
 
 fn should_enable_caching() -> Result<bool, Error> {
-    let theme = ColorfulTheme::default();
+    let theme = DialoguerTheme::default();
 
     Confirm::with_theme(&theme)
         .with_prompt(
@@ -407,12 +410,12 @@ fn select_team<'a>(
     let mut team_names = vec![user_display_name];
     team_names.extend(teams.iter().map(|team| team.name.as_str()));
 
-    let theme = ColorfulTheme {
+    let theme = DialoguerTheme {
         active_item_style: Style::new().cyan().bold(),
         active_item_prefix: Style::new().cyan().bold().apply_to(">".to_string()),
         prompt_prefix: Style::new().dim().bold().apply_to("?".to_string()),
         values_style: Style::new().cyan(),
-        ..ColorfulTheme::default()
+        ..DialoguerTheme::default()
     };
 
     let prompt = format!(
@@ -452,12 +455,12 @@ fn select_space<'a>(base: &CommandBase, spaces: &'a [Space]) -> Result<SelectedS
         .map(|space| space.name.as_str())
         .collect::<Vec<_>>();
 
-    let theme = ColorfulTheme {
+    let theme = DialoguerTheme {
         active_item_style: Style::new().cyan().bold(),
         active_item_prefix: Style::new().cyan().bold().apply_to(">".to_string()),
         prompt_prefix: Style::new().dim().bold().apply_to("?".to_string()),
         values_style: Style::new().cyan(),
-        ..ColorfulTheme::default()
+        ..DialoguerTheme::default()
     };
 
     let prompt = format!(

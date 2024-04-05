@@ -10,12 +10,12 @@ use notify::Event;
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing::{debug, warn};
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
+use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPath};
 use wax::{Any, Glob, Program};
 
 use crate::{
     cookies::{CookieError, CookieWatcher, CookieWriter, CookiedRequest},
-    NotifyError,
+    NotifyError, OptionalWatch,
 };
 
 type Hash = String;
@@ -101,6 +101,8 @@ pub enum Error {
     Closed,
     #[error("globwatcher request timed out")]
     Timeout(#[from] tokio::time::error::Elapsed),
+    #[error("glob watching is unavailable")]
+    Unavailable,
 }
 
 impl From<mpsc::error::SendError<Query>> for Error {
@@ -116,13 +118,13 @@ impl From<oneshot::error::RecvError> for Error {
 }
 
 pub struct GlobWatcher {
-    cookie_jar: CookieWriter,
+    cookie_writer: CookieWriter,
     // _exit_ch exists to trigger a close on the receiver when an instance
     // of this struct is dropped. The task that is receiving events will exit,
     // dropping the other sender for the broadcast channel, causing all receivers
     // to be notified of a close.
     _exit_ch: oneshot::Sender<()>,
-    query_ch: mpsc::Sender<CookiedRequest<Query>>,
+    query_ch_lazy: OptionalWatch<mpsc::Sender<CookiedRequest<Query>>>,
 }
 
 #[derive(Debug)]
@@ -160,23 +162,43 @@ struct GlobTracker {
 
 impl GlobWatcher {
     pub fn new(
-        root: &AbsoluteSystemPath,
-        cookie_jar: CookieWriter,
-        recv: broadcast::Receiver<Result<Event, NotifyError>>,
+        root: AbsoluteSystemPathBuf,
+        cookie_writer: CookieWriter,
+        mut recv: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
     ) -> Self {
         let (exit_ch, exit_signal) = tokio::sync::oneshot::channel();
-        let (query_ch, query_recv) = mpsc::channel(256);
-        let cookie_root = cookie_jar.root().to_owned();
-        tokio::task::spawn(
-            GlobTracker::new(root.to_owned(), cookie_root, exit_signal, recv, query_recv).watch(),
-        );
+        let (query_ch_tx, query_ch_lazy) = OptionalWatch::new();
+        let cookie_root = cookie_writer.root().to_owned();
+        tokio::task::spawn(async move {
+            let Ok(recv) = recv.get().await.map(|r| r.resubscribe()) else {
+                // if this fails, it means that the filewatcher is not available
+                // so starting the glob tracker is pointless
+                return;
+            };
+
+            // if the receiver is closed, it means the glob watcher is closed and we
+            // probably don't want to start the glob tracker
+            let (query_ch, query_recv) = mpsc::channel(128);
+            if query_ch_tx.send(Some(query_ch)).is_err() {
+                tracing::debug!("no queryers for glob watcher, exiting");
+                return;
+            }
+
+            GlobTracker::new(root, cookie_root, exit_signal, recv, query_recv)
+                .watch()
+                .await
+        });
         Self {
-            cookie_jar,
+            cookie_writer,
             _exit_ch: exit_ch,
-            query_ch,
+            query_ch_lazy,
         }
     }
 
+    /// Watch a set of globs for a given hash.
+    ///
+    /// This function will return `Error::Unavailable` if the globwatcher is not
+    /// yet available.
     pub async fn watch_globs(
         &self,
         hash: Hash,
@@ -189,11 +211,14 @@ impl GlobWatcher {
             glob_set: globs,
             resp: tx,
         };
-        let cookied_request = self.cookie_jar.cookie_request(req).await?;
-        self.query_ch.send(cookied_request).await?;
+        self.send_request(req).await?;
         tokio::time::timeout(timeout, rx).await??
     }
 
+    /// Get the globs that have changed for a given hash.
+    ///
+    /// This function will return `Error::Unavailable` if the globwatcher is not
+    /// yet available.
     pub async fn get_changed_globs(
         &self,
         hash: Hash,
@@ -206,9 +231,22 @@ impl GlobWatcher {
             candidates,
             resp: tx,
         };
-        let cookied_request = self.cookie_jar.cookie_request(req).await?;
-        self.query_ch.send(cookied_request).await?;
+
+        self.send_request(req).await?;
         tokio::time::timeout(timeout, rx).await??
+    }
+
+    async fn send_request(&self, req: Query) -> Result<(), Error> {
+        let cookied_request = self.cookie_writer.cookie_request(req).await?;
+        let mut query_ch = self.query_ch_lazy.clone();
+        let query_ch = query_ch
+            .get_immediate()
+            .ok_or(Error::Unavailable)?
+            .map(|ch| ch.clone())
+            .map_err(|_| Error::Unavailable)?;
+
+        query_ch.send(cookied_request).await?;
+        Ok(())
     }
 }
 
@@ -468,12 +506,10 @@ mod test {
         setup(&repo_root);
         let cookie_dir = repo_root.join_component(".git");
 
-        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)
-            .await
-            .unwrap();
-        let cookie_jar = CookieWriter::new(&cookie_dir, Duration::from_secs(2));
-
-        let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let recv = watcher.watch();
+        let cookie_writer = CookieWriter::new(&cookie_dir, Duration::from_secs(2), recv.clone());
+        let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, recv);
 
         let raw_includes = &["my-pkg/dist/**", "my-pkg/.next/**"];
         let raw_excludes = ["my-pkg/.next/cache/**"];
@@ -553,12 +589,11 @@ mod test {
         setup(&repo_root);
         let cookie_dir = repo_root.join_component(".git");
 
-        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)
-            .await
-            .unwrap();
-        let cookie_jar = CookieWriter::new(&cookie_dir, Duration::from_secs(2));
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let recv = watcher.watch();
+        let cookie_writer = CookieWriter::new(&cookie_dir, Duration::from_secs(2), recv.clone());
 
-        let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());
+        let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, recv);
 
         let raw_includes = &["my-pkg/dist/**", "my-pkg/.next/**"];
         let raw_excludes: [&str; 0] = [];
@@ -649,12 +684,11 @@ mod test {
         setup(&repo_root);
         let cookie_dir = repo_root.join_component(".git");
 
-        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)
-            .await
-            .unwrap();
-        let cookie_jar = CookieWriter::new(&cookie_dir, Duration::from_secs(2));
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let recv = watcher.watch();
+        let cookie_writer = CookieWriter::new(&cookie_dir, Duration::from_secs(2), recv.clone());
 
-        let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());
+        let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, recv);
 
         // On windows, we expect different sanitization before the
         // globs are passed in, due to alternative data streams in files.

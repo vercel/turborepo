@@ -112,7 +112,7 @@ Check
 
   $ rm -r .turbo/runs
 Check Rust implementation
-  $ EXPERIMENTAL_RUST_CODEPATH=true ${TURBO} run build --summarize --no-daemon > /dev/null
+  $ ${TURBO} run build --summarize --no-daemon > /dev/null
   $ test -d .turbo/runs
   $ ls .turbo/runs/*.json | wc -l
   \s*1 (re)

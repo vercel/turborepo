@@ -19,14 +19,13 @@ use turbo_tasks_fs::FileSystem;
 use turbo_tasks_malloc::TurboMalloc;
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::evaluate_context::node_build_environment;
+use turbopack_browser::BrowserChunkingContext;
 use turbopack_cli_utils::issue::{ConsoleUi, LogOptions};
 use turbopack_core::{
-    environment::ServerAddr,
     issue::{IssueReporter, IssueSeverity},
     resolve::parse::Request,
     server_fs::ServerFileSystem,
 };
-use turbopack_dev::DevChunkingContext;
 use turbopack_dev_server::{
     introspect::IntrospectionSource,
     source::{
@@ -35,6 +34,7 @@ use turbopack_dev_server::{
     },
     DevServer, DevServerBuilder,
 };
+use turbopack_ecmascript_runtime::RuntimeType;
 use turbopack_env::dotenv::load_env;
 use turbopack_node::execution_context::ExecutionContext;
 
@@ -249,13 +249,14 @@ async fn source(
     let env = load_env(project_path);
     let build_output_root = output_fs.root().join(".turbopack/build".to_string());
 
-    let build_chunking_context = DevChunkingContext::builder(
+    let build_chunking_context = BrowserChunkingContext::builder(
         project_path,
         build_output_root,
         build_output_root,
         build_output_root.join("chunks".to_string()),
         build_output_root.join("assets".to_string()),
         node_build_environment(),
+        RuntimeType::Development,
     )
     .build();
 
@@ -367,7 +368,21 @@ pub async fn start_server(args: &DevArguments) -> Result<()> {
     let server = server.build().await?;
 
     {
-        let index_uri = ServerAddr::new(server.addr).to_string()?;
+        let addr = &server.addr;
+        let hostname = if addr.ip().is_loopback() || addr.ip().is_unspecified() {
+            "localhost".to_string()
+        } else if addr.is_ipv6() {
+            // When using an IPv6 address, we need to surround the IP in brackets to
+            // distinguish it from the port's `:`.
+            format!("[{}]", addr.ip())
+        } else {
+            addr.ip().to_string()
+        };
+        let index_uri = match addr.port() {
+            443 => format!("https://{hostname}"),
+            80 => format!("http://{hostname}"),
+            port => format!("http://{hostname}:{port}"),
+        };
         println!(
             "{} - started server on {}, url: {}",
             "ready".green(),

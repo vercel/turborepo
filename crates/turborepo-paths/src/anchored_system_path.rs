@@ -74,6 +74,12 @@ impl AnchoredSystemPath {
             .map(|path| unsafe { AnchoredSystemPath::new_unchecked(path) })
     }
 
+    pub fn ancestors(&self) -> impl Iterator<Item = &AnchoredSystemPath> {
+        self.0
+            .ancestors()
+            .map(|path| unsafe { AnchoredSystemPath::new_unchecked(path) })
+    }
+
     pub fn components(&self) -> impl Iterator<Item = Utf8Component> {
         self.0.components()
     }
@@ -113,5 +119,9 @@ impl AnchoredSystemPath {
                 .try_into()
                 .unwrap(),
         )
+    }
+
+    pub fn clean(&self) -> AnchoredSystemPathBuf {
+        AnchoredSystemPathBuf(self.0.as_std_path().clean().try_into().unwrap())
     }
 }

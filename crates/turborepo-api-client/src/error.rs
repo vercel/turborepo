@@ -36,6 +36,17 @@ pub enum Error {
         err: serde_json::Error,
         text: String,
     },
+    #[error(
+        "[HTTP {status}] request to {url} returned \"{message}\" \ntry logging in again, or force \
+         a new token (turbo login <--sso-team your_team> -f)."
+    )]
+    InvalidToken {
+        status: u16,
+        url: String,
+        message: String,
+    },
+    #[error("[HTTP 403] token is forbidden from accessing {url}")]
+    ForbiddenToken { url: String },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

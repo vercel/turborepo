@@ -2,7 +2,7 @@ Setup
   $ . ${TESTDIR}/../../helpers/setup.sh
 
 Should error if `--cwd` flag doesn't have path passed along with it
-  $ EXPERIMENTAL_RUST_CODEPATH=true ${TURBO} foo bar --cwd
+  $ ${TURBO} foo bar --cwd
   turbo::shim::empty_cwd
   
     \xc3\x97 No value assigned to `--cwd` flag (esc)
@@ -15,7 +15,7 @@ Should error if `--cwd` flag doesn't have path passed along with it
   [1]
 
 Should error if multiple `--cwd` flags are passed
-  $ EXPERIMENTAL_RUST_CODEPATH=true ${TURBO} --cwd foo --cwd --bar --cwd baz --cwd qux
+  $ ${TURBO} --cwd foo --cwd --bar --cwd baz --cwd qux
   turbo::shim::multiple_cwd
   
     \xc3\x97 cannot have multiple `--cwd` flags in command (esc)

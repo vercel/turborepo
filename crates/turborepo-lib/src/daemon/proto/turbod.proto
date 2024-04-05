@@ -16,6 +16,17 @@ service Turbod {
   //
   // Since 1.11.0
   rpc DiscoverPackages (DiscoverPackagesRequest) returns (DiscoverPackagesResponse);
+
+  // Request the list of packages that the daemon is aware of.
+  // This is a blocking call that will wait for the daemon to finish
+  // discovering the packages, rather than returning 'unavailable'.
+  // It will _still_ report unavailable if a critical process in the
+  // daemon is not running, and the answer will never come.
+  //
+  // Since 1.12.0
+  rpc DiscoverPackagesBlocking (DiscoverPackagesRequest) returns (DiscoverPackagesResponse);
+
+  rpc PackageChanges (PackageChangesRequest) returns (stream PackageChangeEvent);
 }
 
 message HelloRequest {
@@ -83,6 +94,26 @@ message DiscoverPackagesRequest {
 
 }
 
+message PackageChangesRequest {}
+
+message PackageChangeEvent {
+  oneof event {
+    PackageChanged package_changed = 1;
+    RediscoverPackages rediscover_packages = 2;
+    PackageChangeError error = 3;
+  }
+}
+
+message PackageChangeError {
+  string message = 1;
+}
+
+message PackageChanged {
+  string package_name = 1;
+}
+
+message RediscoverPackages {}
+
 message DiscoverPackagesResponse {
   repeated PackageFiles package_files = 1;
   PackageManager package_manager = 2;
@@ -101,4 +132,5 @@ enum PackageManager {
   Pnpm6 = 3;
   Yarn = 4;
   Bun = 5;
+  Pnpm9 = 6;
 }

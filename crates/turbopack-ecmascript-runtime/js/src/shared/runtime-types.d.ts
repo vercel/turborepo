@@ -20,6 +20,7 @@ type ChunkData =
     };
 
 type CommonJsRequire = (moduleId: ModuleId) => Exports;
+type ModuleContextFactory = (map: ModuleContextMap) => ModuleContext;
 type EsmImport = (
   moduleId: ModuleId,
   allowExportDefault: boolean
@@ -57,7 +58,7 @@ interface TurbopackBaseContext {
   e: Module["exports"];
   r: CommonJsRequire;
   t: CommonJsRequire;
-  f: RequireContextFactory;
+  f: ModuleContextFactory;
   i: EsmImport;
   s: EsmExport;
   j: DynamicExport;

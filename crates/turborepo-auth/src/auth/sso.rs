@@ -3,8 +3,8 @@ use std::sync::Arc;
 use reqwest::Url;
 use tokio::sync::OnceCell;
 use tracing::warn;
-use turborepo_api_client::Client;
-use turborepo_ui::{start_spinner, BOLD};
+use turborepo_api_client::{CacheClient, Client, TokenClient};
+use turborepo_ui::{start_spinner, BOLD, UI};
 
 use crate::{auth::extract_vercel_token, error, ui, Error, LoginOptions, Token};
 
@@ -24,49 +24,65 @@ fn make_token_name() -> Result<String, Error> {
 /// Perform an SSO login flow. If an existing token is present, and the token
 /// has access to the provided `sso_team`, we do not overwrite it and instead
 /// log that we found an existing token.
-pub async fn sso_login<'a, T: Client>(options: &LoginOptions<'_, T>) -> Result<Token, Error> {
+pub async fn sso_login<'a, T: Client + TokenClient + CacheClient>(
+    options: &LoginOptions<'_, T>,
+) -> Result<Token, Error> {
     let LoginOptions {
         api_client,
         ui,
         login_url: login_url_configuration,
         login_server,
         sso_team,
-        existing_token: _,
+        existing_token,
+        force,
     } = *options;
 
     let sso_team = sso_team.ok_or(Error::EmptySSOTeam)?;
+    // I created a closure that gives back a closure since the `is_valid` checks do
+    // a call to get the user, so instead of doing that multiple times we have
+    // `is_valid` give back the user email.
+    //
+    // In the future I want to make the Token have some non-skewable information and
+    // be able to get rid of this, but it works for now.
+    let valid_token_callback = |message: &str, ui: &UI| {
+        let message = message.to_string();
+        let ui = *ui;
+        move |user_email: &str| {
+            println!("{}", ui.apply(BOLD.apply_to(message)));
+            ui::print_cli_authorized(user_email, &ui);
+        }
+    };
+
     // Check if token exists first. Must be there for the user and contain the
     // sso_team passed into this function.
-    if let Some(token) = options.existing_token {
-        let (result_user, result_teams) =
-            tokio::join!(api_client.get_user(token), api_client.get_teams(token));
-
-        if let (Ok(response_user), Ok(response_teams)) = (result_user, result_teams) {
-            if response_teams
-                .teams
-                .iter()
-                .any(|team| team.slug == sso_team)
+    if !force {
+        if let Some(token) = existing_token {
+            let token = Token::existing(token.into());
+            if token
+                .is_valid_sso(
+                    api_client,
+                    sso_team,
+                    Some(valid_token_callback("Existing token found!", ui)),
+                )
+                .await?
             {
-                println!("{}", ui.apply(BOLD.apply_to("Existing token found!")));
-                ui::print_cli_authorized(&response_user.user.email, ui);
-                return Ok(Token::Existing(token.into()));
+                return Ok(token);
             }
-        }
-    }
-
-    // No existing token found. If the user is logging into Vercel, check for an
-    // existing `vc` token with correct scope.
-    if login_url_configuration.contains("vercel.com") {
-        match extract_vercel_token() {
-            Ok(token) => {
-                println!(
-                    "{}",
-                    ui.apply(BOLD.apply_to("Existing Vercel token found!"))
-                );
-                return Ok(Token::Existing(token));
-            }
-            Err(e) => {
-                dbg!("Failed to extract Vercel token: ", e);
+        // No existing turbo token found. If the user is logging into Vercel,
+        // check for an existing `vc` token with correct scope.
+        } else if login_url_configuration.contains("vercel.com") {
+            if let Ok(Some(token)) = extract_vercel_token() {
+                let token = Token::existing(token);
+                if token
+                    .is_valid_sso(
+                        api_client,
+                        sso_team,
+                        Some(valid_token_callback("Existing Vercel token found!", ui)),
+                    )
+                    .await?
+                {
+                    return Ok(token);
+                }
             }
         }
     }
@@ -130,8 +146,8 @@ mod tests {
     use turborepo_api_client::Client;
     use turborepo_ui::UI;
     use turborepo_vercel_api::{
-        CachingStatusResponse, Membership, Role, SpacesResponse, Team, TeamsResponse, User,
-        UserResponse, VerifiedSsoUser,
+        CachingStatus, CachingStatusResponse, Membership, Role, SpacesResponse, Team,
+        TeamsResponse, User, UserResponse, VerifiedSsoUser,
     };
     use turborepo_vercel_api_mock::start_test_server;
 
@@ -215,18 +231,17 @@ mod tests {
             _token: &str,
             _team_id: &str,
         ) -> turborepo_api_client::Result<Option<Team>> {
-            unimplemented!("get_team")
+            Ok(Some(Team {
+                id: "id".to_string(),
+                slug: "something".to_string(),
+                name: "name".to_string(),
+                created_at: 0,
+                created: chrono::Utc::now(),
+                membership: Membership::new(Role::Member),
+            }))
         }
         fn add_ci_header(_request_builder: RequestBuilder) -> RequestBuilder {
             unimplemented!("add_ci_header")
-        }
-        async fn get_caching_status(
-            &self,
-            _token: &str,
-            _team_id: Option<&str>,
-            _team_slug: Option<&str>,
-        ) -> turborepo_api_client::Result<CachingStatusResponse> {
-            unimplemented!("get_caching_status")
         }
         async fn get_spaces(
             &self,
@@ -245,6 +260,58 @@ mod tests {
                 team_id: Some("team_id".to_string()),
             })
         }
+        async fn handle_403(_response: Response) -> turborepo_api_client::Error {
+            unimplemented!("handle_403")
+        }
+        fn make_url(&self, endpoint: &str) -> turborepo_api_client::Result<Url> {
+            let url = format!("{}{}", self.base_url, endpoint);
+            Url::parse(&url).map_err(|err| turborepo_api_client::Error::InvalidUrl { url, err })
+        }
+    }
+
+    #[async_trait]
+    impl TokenClient for MockApiClient {
+        async fn get_metadata(
+            &self,
+            token: &str,
+        ) -> turborepo_api_client::Result<turborepo_vercel_api::token::ResponseTokenMetadata>
+        {
+            if token.is_empty() {
+                return Err(MockApiError::EmptyToken.into());
+            }
+            Ok(turborepo_vercel_api::token::ResponseTokenMetadata {
+                id: "id".to_string(),
+                name: "name".to_string(),
+                token_type: "token".to_string(),
+                origin: "github".to_string(),
+                scopes: vec![turborepo_vercel_api::token::Scope {
+                    scope_type: "team".to_string(),
+                    origin: "saml".to_string(),
+                    team_id: Some("team_vozisthebest".to_string()),
+                    created_at: 1111111111111,
+                    expires_at: Some(9999999990000),
+                }],
+                active_at: 0,
+                created_at: 123456,
+            })
+        }
+        async fn delete_token(&self, _token: &str) -> turborepo_api_client::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[async_trait]
+    impl CacheClient for MockApiClient {
+        async fn get_artifact(
+            &self,
+            _hash: &str,
+            _token: &str,
+            _team_id: Option<&str>,
+            _team_slug: Option<&str>,
+            _method: Method,
+        ) -> Result<Option<Response>, turborepo_api_client::Error> {
+            unimplemented!("get_artifact")
+        }
         async fn put_artifact(
             &self,
             _hash: &str,
@@ -254,11 +321,8 @@ mod tests {
             _token: &str,
             _team_id: Option<&str>,
             _team_slug: Option<&str>,
-        ) -> turborepo_api_client::Result<()> {
-            unimplemented!("put_artifact")
-        }
-        async fn handle_403(_response: Response) -> turborepo_api_client::Error {
-            unimplemented!("handle_403")
+        ) -> Result<(), turborepo_api_client::Error> {
+            unimplemented!("set_artifact")
         }
         async fn fetch_artifact(
             &self,
@@ -266,7 +330,7 @@ mod tests {
             _token: &str,
             _team_id: Option<&str>,
             _team_slug: Option<&str>,
-        ) -> turborepo_api_client::Result<Option<Response>> {
+        ) -> Result<Option<Response>, turborepo_api_client::Error> {
             unimplemented!("fetch_artifact")
         }
         async fn artifact_exists(
@@ -275,22 +339,18 @@ mod tests {
             _token: &str,
             _team_id: Option<&str>,
             _team_slug: Option<&str>,
-        ) -> turborepo_api_client::Result<Option<Response>> {
+        ) -> Result<Option<Response>, turborepo_api_client::Error> {
             unimplemented!("artifact_exists")
         }
-        async fn get_artifact(
+        async fn get_caching_status(
             &self,
-            _hash: &str,
             _token: &str,
             _team_id: Option<&str>,
             _team_slug: Option<&str>,
-            _method: Method,
-        ) -> turborepo_api_client::Result<Option<Response>> {
-            unimplemented!("get_artifact")
-        }
-        fn make_url(&self, endpoint: &str) -> turborepo_api_client::Result<Url> {
-            let url = format!("{}{}", self.base_url, endpoint);
-            Url::parse(&url).map_err(|err| turborepo_api_client::Error::InvalidUrl { url, err })
+        ) -> Result<CachingStatusResponse, turborepo_api_client::Error> {
+            Ok(CachingStatusResponse {
+                status: CachingStatus::Enabled,
+            })
         }
     }
 

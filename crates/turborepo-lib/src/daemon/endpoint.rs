@@ -30,7 +30,8 @@ const WINDOWS_POLL_DURATION: Duration = Duration::from_millis(1);
 ///       code path to shut down the non-blocking polling
 #[tracing::instrument]
 pub async fn listen_socket(
-    daemon_root: &AbsoluteSystemPath,
+    pid_path: &AbsoluteSystemPath,
+    sock_path: &AbsoluteSystemPath,
     #[allow(unused)] running: Arc<AtomicBool>,
 ) -> Result<
     (
@@ -39,8 +40,6 @@ pub async fn listen_socket(
     ),
     SocketOpenError,
 > {
-    let pid_path = daemon_root.join_component("turbod.pid");
-    let sock_path = daemon_root.join_component("turbod.sock");
     let mut lock = pidlock::Pidlock::new(pid_path.as_std_path().to_owned());
 
     trace!("acquiring pidlock");
@@ -186,7 +185,7 @@ mod test {
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
     use super::listen_socket;
-    use crate::daemon::endpoint::SocketOpenError;
+    use crate::daemon::{endpoint::SocketOpenError, Paths};
 
     fn pid_path(daemon_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
         daemon_root.join_component("turbod.pid")
@@ -195,13 +194,14 @@ mod test {
     #[tokio::test]
     async fn test_stale_pid() {
         let tmp_dir = tempfile::tempdir().unwrap();
-        let daemon_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
-        let pid_path = pid_path(&daemon_root);
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+        let paths = Paths::from_repo_root(&repo_root);
+        paths.pid_file.ensure_dir().unwrap();
         // A pid that will never be running and is guaranteed not to be us
-        pid_path.create_with_contents("100000").unwrap();
+        paths.pid_file.create_with_contents("100000").unwrap();
 
         let running = Arc::new(AtomicBool::new(true));
-        let result = listen_socket(&daemon_root, running).await;
+        let result = listen_socket(&paths.pid_file, &paths.sock_file, running).await;
 
         assert!(
             result.is_ok(),
@@ -212,8 +212,8 @@ mod test {
     #[tokio::test]
     async fn test_existing_process() {
         let tmp_dir = tempfile::tempdir().unwrap();
-        let daemon_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
-        let pid_path = pid_path(&daemon_root);
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+        let paths = Paths::from_repo_root(&repo_root);
 
         #[cfg(windows)]
         let node_bin = "node.exe";
@@ -221,12 +221,14 @@ mod test {
         let node_bin = "node";
 
         let mut child = Command::new(node_bin).spawn().unwrap();
-        pid_path
+        paths.pid_file.ensure_dir().unwrap();
+        paths
+            .pid_file
             .create_with_contents(format!("{}", child.id()))
             .unwrap();
 
         let running = Arc::new(AtomicBool::new(true));
-        let result = listen_socket(&daemon_root, running).await;
+        let result = listen_socket(&paths.pid_file, &paths.sock_file, running).await;
 
         // Note: PidLock doesn't implement Debug, so we can't unwrap_err()
 

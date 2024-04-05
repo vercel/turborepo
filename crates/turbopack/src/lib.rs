@@ -7,13 +7,10 @@
 #![recursion_limit = "256"]
 #![feature(arbitrary_self_types)]
 
-pub mod condition;
 pub mod evaluate_context;
 mod graph;
 pub mod module_options;
 pub mod rebase;
-pub mod resolve;
-pub mod resolve_options_context;
 pub mod transition;
 pub(crate) mod unsupported_sass;
 
@@ -28,21 +25,20 @@ use ecmascript::{
     chunk::EcmascriptChunkPlaceable,
     references::{follow_reexports, FollowExportsResult},
     side_effect_optimization::facade::module::EcmascriptModuleFacadeModule,
-    typescript::resolve::type_resolve,
     EcmascriptModuleAsset, EcmascriptModuleAssetType, TreeShakingMode,
 };
 use graph::{aggregate, AggregatedGraph, AggregatedGraphNodeContent};
 use module_options::{ModuleOptions, ModuleOptionsContext, ModuleRuleEffect, ModuleType};
-pub use resolve::resolve_options;
 use tracing::Instrument;
 use turbo_tasks::{Completion, Value, ValueToString, Vc};
-use turbo_tasks_fs::FileSystemPath;
+use turbo_tasks_fs::{glob::Glob, FileSystemPath};
+pub use turbopack_core::condition;
 use turbopack_core::{
     asset::Asset,
     compile_time_info::CompileTimeInfo,
     context::{AssetContext, ProcessResult},
     ident::AssetIdent,
-    issue::{Issue, IssueExt, OptionStyledString, StyledString},
+    issue::{Issue, IssueExt, IssueStage, OptionStyledString, StyledString},
     module::Module,
     output::OutputAsset,
     raw_module::RawModule,
@@ -59,12 +55,13 @@ pub use turbopack_css as css;
 pub use turbopack_ecmascript as ecmascript;
 use turbopack_json::JsonModuleAsset;
 use turbopack_mdx::MdxModuleAsset;
+pub use turbopack_resolve::{resolve::resolve_options, resolve_options_context};
+use turbopack_resolve::{resolve_options_context::ResolveOptionsContext, typescript::type_resolve};
 use turbopack_static::StaticModuleAsset;
 use turbopack_wasm::{module_asset::WebAssemblyModuleAsset, source::WebAssemblySource};
 
 use self::{
     module_options::CustomModuleType,
-    resolve_options_context::ResolveOptionsContext,
     transition::{Transition, TransitionsByName},
 };
 
@@ -78,8 +75,8 @@ struct ModuleIssue {
 #[turbo_tasks::value_impl]
 impl Issue for ModuleIssue {
     #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("other".to_string())
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::ProcessModule.cell()
     }
 
     #[turbo_tasks::function]
@@ -174,11 +171,17 @@ async fn apply_module_type(
                         }
                     }
                     Some(TreeShakingMode::ReexportsOnly) => {
+                        let side_effect_free_packages =
+                            module_asset_context.side_effect_free_packages();
+
                         let module = builder.build();
                         if let Some(part) = part {
                             match *part.await? {
                                 ModulePart::Evaluation => {
-                                    if *module.is_marked_as_side_effect_free().await? {
+                                    if *module
+                                        .is_marked_as_side_effect_free(side_effect_free_packages)
+                                        .await?
+                                    {
                                         return Ok(ProcessResult::Ignore.cell());
                                     }
                                     if *module.get_exports().needs_facade().await? {
@@ -198,9 +201,14 @@ async fn apply_module_type(
                                                 ModulePart::exports(),
                                             )),
                                             part,
+                                            side_effect_free_packages,
                                         )
                                     } else {
-                                        apply_reexport_tree_shaking(Vc::upcast(module), part)
+                                        apply_reexport_tree_shaking(
+                                            Vc::upcast(module),
+                                            part,
+                                            side_effect_free_packages,
+                                        )
                                     }
                                 }
                                 _ => bail!(
@@ -230,14 +238,11 @@ async fn apply_module_type(
             source,
             Vc::upcast(module_asset_context),
         )),
-        ModuleType::Css {
-            ty,
-            use_lightningcss,
-        } => Vc::upcast(CssModuleAsset::new(
+        ModuleType::Css { ty, use_swc_css } => Vc::upcast(CssModuleAsset::new(
             source,
             Vc::upcast(module_asset_context),
             *ty,
-            *use_lightningcss,
+            *use_swc_css,
             if let ReferenceType::Css(CssReferenceSubType::AtImport(import)) =
                 reference_type.into_value()
             {
@@ -272,6 +277,7 @@ async fn apply_module_type(
 async fn apply_reexport_tree_shaking(
     module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
     part: Vc<ModulePart>,
+    side_effect_free_packages: Vc<Glob>,
 ) -> Result<Vc<Box<dyn Module>>> {
     if let ModulePart::Export(export) = *part.await? {
         let export = export.await?;
@@ -279,7 +285,7 @@ async fn apply_reexport_tree_shaking(
             module: final_module,
             export_name: new_export,
             ..
-        } = &*follow_reexports(module, export.clone_value()).await?;
+        } = &*follow_reexports(module, export.clone_value(), side_effect_free_packages).await?;
         let module = if let Some(new_export) = new_export {
             if *new_export == *export {
                 Vc::upcast(*final_module)
@@ -356,6 +362,11 @@ impl ModuleAssetContext {
     }
 
     #[turbo_tasks::function]
+    pub async fn resolve_options_context(self: Vc<Self>) -> Result<Vc<ResolveOptionsContext>> {
+        Ok(self.await?.resolve_options_context)
+    }
+
+    #[turbo_tasks::function]
     pub async fn is_types_resolving_enabled(self: Vc<Self>) -> Result<Vc<bool>> {
         let resolve_options_context = self.await?.resolve_options_context.await?;
         Ok(Vc::cell(
@@ -392,6 +403,23 @@ impl ModuleAssetContext {
     ) -> Vc<ProcessResult> {
         process_default(self, source, reference_type, Vec::new())
     }
+
+    #[turbo_tasks::function]
+    pub async fn side_effect_free_packages(self: Vc<Self>) -> Result<Vc<Glob>> {
+        let pkgs = &*self
+            .await?
+            .module_options_context
+            .await?
+            .side_effect_free_packages;
+
+        let mut globs = Vec::with_capacity(pkgs.len());
+
+        for pkg in pkgs {
+            globs.push(Glob::new(format!("**/node_modules/{{{}}}/**", pkg)));
+        }
+
+        Ok(Glob::alternatives(globs))
+    }
 }
 
 #[turbo_tasks::function]
@@ -427,6 +455,7 @@ async fn process_default_internal(
     let options = ModuleOptions::new(
         ident.path().parent(),
         module_asset_context.module_options_context(),
+        module_asset_context.resolve_options_context(),
     );
 
     let reference_type = reference_type.into_value();
@@ -532,7 +561,25 @@ async fn process_default_internal(
         }
     }
 
-    let module_type = current_module_type.unwrap_or(ModuleType::Raw).cell();
+    let module_type = match current_module_type {
+        Some(module_type) => module_type,
+        None => {
+            ModuleIssue {
+                ident,
+                title: StyledString::Text("Unknown module type".to_string()).cell(),
+                description: StyledString::Text(
+                    r"This module doesn't have an associated type. Use a known file extension, or register a loader for it.
+
+Read more: https://nextjs.org/docs/app/api-reference/next-config-js/turbo#webpack-loaders".to_string(),
+                )
+                .cell(),
+            }
+            .cell()
+            .emit();
+
+            return Ok(ProcessResult::Ignore.cell());
+        }
+    }.cell();
 
     Ok(apply_module_type(
         current_source,
@@ -802,6 +849,7 @@ pub fn register() {
     turbopack_env::register();
     turbopack_mdx::register();
     turbopack_json::register();
+    turbopack_resolve::register();
     turbopack_static::register();
     turbopack_wasm::register();
     include!(concat!(env!("OUT_DIR"), "/register.rs"));

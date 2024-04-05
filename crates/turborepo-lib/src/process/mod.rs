@@ -264,7 +264,7 @@ mod test {
         assert_eq!(kill_code, Some(ChildExit::Finished(Some(0))));
 
         let code = child.wait().await;
-        assert_eq!(code, None);
+        assert_eq!(code, Some(ChildExit::Finished(Some(0))));
     }
 
     #[tokio::test]

@@ -4,12 +4,12 @@ use anyhow::Result;
 use turbo_tasks::{ReadRef, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 
-use super::{Issue, IssueSource, OptionIssueSource, OptionStyledString, StyledString};
+use super::{Issue, IssueSource, IssueStage, OptionIssueSource, OptionStyledString, StyledString};
 use crate::{
     error::PrettyPrintError,
     issue::IssueSeverity,
     resolve::{
-        options::{ImportMap, ResolveOptions},
+        options::{ImportMap, ImportMapResult, ResolveOptions},
         parse::Request,
     },
 };
@@ -49,8 +49,8 @@ impl Issue for ResolvingIssue {
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("resolve".to_string())
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::Resolve.cell()
     }
 
     #[turbo_tasks::function]
@@ -59,12 +59,33 @@ impl Issue for ResolvingIssue {
     }
 
     #[turbo_tasks::function]
+    async fn description(&self) -> Result<Vc<OptionStyledString>> {
+        let mut description = String::new();
+        if let Some(error_message) = &self.error_message {
+            writeln!(description, "{error_message}")?;
+        }
+        if let Some(import_map) = &self.resolve_options.await?.import_map {
+            match lookup_import_map(*import_map, self.file_path, self.request).await {
+                Ok(None) => {}
+                Ok(Some(str)) => writeln!(description, "Import map: {}", str)?,
+                Err(err) => {
+                    writeln!(
+                        description,
+                        "Error while looking up import map: {}",
+                        PrettyPrintError(&err)
+                    )?;
+                }
+            }
+        }
+        Ok(Vc::cell(Some(StyledString::Text(description).cell())))
+    }
+
+    #[turbo_tasks::function]
     async fn detail(&self) -> Result<Vc<OptionStyledString>> {
         let mut detail = String::new();
 
-        if let Some(error_message) = &self.error_message {
+        if self.error_message.is_some() {
             writeln!(detail, "An error happened during resolving.")?;
-            writeln!(detail, "Error message: {error_message}")?;
         } else {
             writeln!(detail, "It was not possible to find the requested file.")?;
         }
@@ -83,18 +104,6 @@ impl Issue for ResolvingIssue {
             "Type of request: {request_type}",
             request_type = self.request_type,
         )?;
-        if let Some(import_map) = &self.resolve_options.await?.import_map {
-            match lookup_import_map(*import_map, self.file_path, self.request).await {
-                Ok(str) => writeln!(detail, "Import map: {}", str)?,
-                Err(err) => {
-                    writeln!(
-                        detail,
-                        "Error while looking up import map: {}",
-                        PrettyPrintError(&err)
-                    )?;
-                }
-            }
-        }
         Ok(Vc::cell(Some(StyledString::Text(detail).cell())))
     }
 
@@ -111,8 +120,11 @@ async fn lookup_import_map(
     import_map: Vc<ImportMap>,
     file_path: Vc<FileSystemPath>,
     request: Vc<Request>,
-) -> Result<ReadRef<String>> {
+) -> Result<Option<ReadRef<String>>> {
     let result = import_map.await?.lookup(file_path, request).await?;
 
-    result.cell().to_string().await
+    if matches!(result, ImportMapResult::NoEntry) {
+        return Ok(None);
+    }
+    Ok(Some(result.cell().to_string().await?))
 }

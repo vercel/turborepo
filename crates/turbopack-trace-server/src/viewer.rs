@@ -27,60 +27,84 @@ pub struct Viewer {
 #[derive(Clone, Copy, Debug)]
 pub enum ValueMode {
     Duration,
+    Cpu,
     Allocations,
     Deallocations,
     PersistentAllocations,
     AllocationCount,
+    Count,
 }
 
 impl ValueMode {
+    fn secondary(&self) -> ValueMode {
+        match self {
+            ValueMode::Duration => ValueMode::Cpu,
+            ValueMode::Cpu => ValueMode::Duration,
+            ValueMode::Allocations => ValueMode::PersistentAllocations,
+            ValueMode::Deallocations => ValueMode::PersistentAllocations,
+            ValueMode::PersistentAllocations => ValueMode::Allocations,
+            ValueMode::AllocationCount => ValueMode::Allocations,
+            ValueMode::Count => ValueMode::Count,
+        }
+    }
+
     fn value_from_span(&self, span: &SpanRef<'_>) -> u64 {
         match self {
             ValueMode::Duration => span.corrected_total_time(),
+            ValueMode::Cpu => span.total_time(),
             ValueMode::Allocations => span.total_allocations(),
             ValueMode::Deallocations => span.total_deallocations(),
             ValueMode::PersistentAllocations => span.total_persistent_allocations(),
             ValueMode::AllocationCount => span.total_allocation_count(),
+            ValueMode::Count => span.total_span_count(),
         }
     }
 
     fn value_from_graph(&self, graph: &SpanGraphRef<'_>) -> u64 {
         match self {
             ValueMode::Duration => graph.corrected_total_time(),
+            ValueMode::Cpu => graph.total_time(),
             ValueMode::Allocations => graph.total_allocations(),
             ValueMode::Deallocations => graph.total_deallocations(),
             ValueMode::PersistentAllocations => graph.total_persistent_allocations(),
             ValueMode::AllocationCount => graph.total_allocation_count(),
+            ValueMode::Count => graph.total_span_count(),
         }
     }
 
     fn value_from_graph_event(&self, event: &SpanGraphEventRef<'_>) -> u64 {
         match self {
             ValueMode::Duration => event.corrected_total_time(),
+            ValueMode::Cpu => event.total_time(),
             ValueMode::Allocations => event.total_allocations(),
             ValueMode::Deallocations => event.total_deallocations(),
             ValueMode::PersistentAllocations => event.total_persistent_allocations(),
             ValueMode::AllocationCount => event.total_allocation_count(),
+            ValueMode::Count => event.total_span_count(),
         }
     }
 
     fn value_from_bottom_up(&self, bottom_up: &SpanBottomUpRef<'_>) -> u64 {
         match self {
             ValueMode::Duration => bottom_up.corrected_self_time(),
+            ValueMode::Cpu => bottom_up.self_time(),
             ValueMode::Allocations => bottom_up.self_allocations(),
             ValueMode::Deallocations => bottom_up.self_deallocations(),
             ValueMode::PersistentAllocations => bottom_up.self_persistent_allocations(),
             ValueMode::AllocationCount => bottom_up.self_allocation_count(),
+            ValueMode::Count => bottom_up.self_span_count(),
         }
     }
 
     fn value_from_bottom_up_span(&self, bottom_up_span: &SpanRef<'_>) -> u64 {
         match self {
             ValueMode::Duration => bottom_up_span.corrected_self_time(),
+            ValueMode::Cpu => bottom_up_span.self_time(),
             ValueMode::Allocations => bottom_up_span.self_allocations(),
             ValueMode::Deallocations => bottom_up_span.self_deallocations(),
             ValueMode::PersistentAllocations => bottom_up_span.self_persistent_allocations(),
             ValueMode::AllocationCount => bottom_up_span.self_allocation_count(),
+            ValueMode::Count => bottom_up_span.self_span_count(),
         }
     }
 }
@@ -174,6 +198,12 @@ pub struct ViewSpan {
     count: u64,
     #[serde(rename = "k")]
     kind: u8,
+    #[serde(rename = "s")]
+    start_in_parent: u32,
+    #[serde(rename = "e")]
+    end_in_parent: u32,
+    #[serde(rename = "v")]
+    secondary: u64,
 }
 
 #[derive(Debug)]
@@ -239,54 +269,109 @@ impl Viewer {
         let (default_view_mode, default_sorted) = default_view_mode
             .strip_suffix("-sorted")
             .map_or((default_view_mode, false), |s| (s, true));
-        let default_view_mode = match default_view_mode {
-            "aggregated" => ViewMode::Aggregated {
-                sorted: default_sorted,
-            },
-            "raw-spans" => ViewMode::RawSpans {
-                sorted: default_sorted,
-            },
-            "bottom-up" => ViewMode::BottomUp {
-                sorted: default_sorted,
-            },
-            "aggregated-bottom-up" => ViewMode::AggregatedBottomUp {
-                sorted: default_sorted,
-            },
-            _ => ViewMode::Aggregated {
-                sorted: default_sorted,
-            },
+        let (default_view_mode, with_root) = match default_view_mode {
+            "aggregated" => (
+                ViewMode::Aggregated {
+                    sorted: default_sorted,
+                },
+                false,
+            ),
+            "root-aggregated" => (
+                ViewMode::Aggregated {
+                    sorted: default_sorted,
+                },
+                true,
+            ),
+            "raw-spans" => (
+                ViewMode::RawSpans {
+                    sorted: default_sorted,
+                },
+                false,
+            ),
+            "bottom-up" => (
+                ViewMode::BottomUp {
+                    sorted: default_sorted,
+                },
+                false,
+            ),
+            "aggregated-bottom-up" => (
+                ViewMode::AggregatedBottomUp {
+                    sorted: default_sorted,
+                },
+                false,
+            ),
+            "root-aggregated-bottom-up" => (
+                ViewMode::AggregatedBottomUp {
+                    sorted: default_sorted,
+                },
+                true,
+            ),
+            _ => (
+                ViewMode::Aggregated {
+                    sorted: default_sorted,
+                },
+                false,
+            ),
         };
 
         let value_mode = match view_rect.value_mode.as_str() {
             "duration" => ValueMode::Duration,
+            "cpu" => ValueMode::Cpu,
             "allocations" => ValueMode::Allocations,
             "deallocations" => ValueMode::Deallocations,
             "persistent-deallocations" => ValueMode::PersistentAllocations,
             "allocation-count" => ValueMode::AllocationCount,
+            "count" => ValueMode::Count,
             _ => ValueMode::Duration,
         };
 
+        if !store.has_time_info() && matches!(value_mode, ValueMode::Duration) {
+            return Update {
+                lines: vec![ViewLineUpdate {
+                    spans: vec![ViewSpan {
+                        id: 0,
+                        start: 0,
+                        width: 1,
+                        category: "info".to_string(),
+                        text: "No time info in trace".to_string(),
+                        count: 1,
+                        kind: 0,
+                        start_in_parent: 0,
+                        end_in_parent: 0,
+                        secondary: 0,
+                    }],
+                    y: 0,
+                }],
+                max: 1,
+            };
+        }
+
         let mut queue = Vec::new();
 
-        let mut root_spans = store.root_spans().collect::<Vec<_>>();
-        root_spans.sort_by_key(|span| span.start());
+        let root_spans = if with_root {
+            vec![store.root_span()]
+        } else {
+            let mut root_spans = store.root_spans().collect::<Vec<_>>();
+            root_spans.sort_by_key(|span| span.start());
+            root_spans
+        };
         let mut children = Vec::new();
         let mut current = 0;
+        let offset = root_spans
+            .iter()
+            .min_by_key(|span| span.start())
+            .map_or(0, |span| span.start());
         for span in root_spans {
             if matches!(value_mode, ValueMode::Duration) {
                 // Move current to start if needed.
-                current = max(current, span.start());
+                current = max(current, span.start() - offset);
             }
             if add_child_item(
                 &mut children,
                 &mut current,
                 view_rect,
                 0,
-                if view_rect.query.is_empty() {
-                    default_view_mode
-                } else {
-                    default_view_mode.as_spans()
-                },
+                default_view_mode,
                 value_mode,
                 QueueItem::Span(span),
                 false,
@@ -323,6 +408,7 @@ impl Viewer {
         {
             let line = get_line(&mut lines, line_index);
             let width = span.value(value_mode);
+            let secondary = span.value(value_mode.secondary());
 
             // compute children
             let mut children = Vec::new();
@@ -333,18 +419,30 @@ impl Viewer {
                         .span_options
                         .get(&span.id())
                         .and_then(|o| o.view_mode)
-                        .unwrap_or((view_mode, false));
-                    let selected_view_mode = if span.is_complete() {
-                        selected_view_mode
-                    } else {
-                        selected_view_mode.as_spans()
-                    };
+                        .unwrap_or_else(|| {
+                            (
+                                if span.is_complete() {
+                                    view_mode
+                                } else {
+                                    view_mode.as_spans()
+                                },
+                                false,
+                            )
+                        });
 
                     let view_mode = if inherit {
                         selected_view_mode
                     } else {
                         view_mode
                     };
+
+                    let selected_view_mode =
+                        if search_mode && highlighted_spans.contains(&span.id()) {
+                            selected_view_mode.as_spans()
+                        } else {
+                            selected_view_mode
+                        };
+
                     if selected_view_mode.bottom_up() {
                         let bottom_up = span.bottom_up();
                         if selected_view_mode.aggregate_children() {
@@ -423,6 +521,7 @@ impl Viewer {
                             Either::Right(span.graph())
                         };
                         for event in events {
+                            let filtered = search_mode;
                             match event {
                                 SpanGraphEventRef::SelfTime { duration: _ } => {}
                                 SpanGraphEventRef::Child { graph } => {
@@ -434,7 +533,7 @@ impl Viewer {
                                         view_mode,
                                         value_mode,
                                         QueueItem::SpanGraph(graph),
-                                        false,
+                                        filtered,
                                     );
                                 }
                             }
@@ -532,6 +631,7 @@ impl Viewer {
                         };
                         for child in events {
                             if let SpanGraphEventRef::Child { graph } = child {
+                                let filtered = search_mode;
                                 add_child_item(
                                     &mut children,
                                     &mut current,
@@ -540,7 +640,7 @@ impl Viewer {
                                     view_mode,
                                     value_mode,
                                     QueueItem::SpanGraph(graph),
-                                    false,
+                                    filtered,
                                 );
                             }
                         }
@@ -620,6 +720,7 @@ impl Viewer {
                 line.push(LineEntry {
                     start,
                     width,
+                    secondary: 0,
                     ty: LineEntryType::Placeholder(filtered),
                 });
             } else {
@@ -630,8 +731,9 @@ impl Viewer {
                 line.push(LineEntry {
                     start,
                     width,
+                    secondary,
                     ty: match span {
-                        QueueItem::Span(span) => LineEntryType::Span(span, filtered),
+                        QueueItem::Span(span) => LineEntryType::Span { span, filtered },
                         QueueItem::SpanGraph(span_graph) => {
                             LineEntryType::SpanGraph(span_graph, filtered)
                         }
@@ -662,9 +764,29 @@ impl Viewer {
                             text: String::new(),
                             count: 1,
                             kind: if filtered { 11 } else { 1 },
+                            start_in_parent: 0,
+                            end_in_parent: 0,
+                            secondary: 0,
                         },
-                        LineEntryType::Span(span, filtered) => {
+                        LineEntryType::Span { span, filtered } => {
                             let (category, text) = span.nice_name();
+                            let mut start_in_parent = 0;
+                            let mut end_in_parent = 0;
+                            if let Some(parent) = span.parent() {
+                                let parent_start = parent.start();
+                                let parent_duration = parent.end() - parent_start;
+                                if parent_duration > 0 {
+                                    start_in_parent = ((span.start() - parent_start) * 10000
+                                        / parent_duration)
+                                        as u32;
+                                    end_in_parent = ((span.end() - parent_start) * 10000
+                                        / parent_duration)
+                                        as u32;
+                                } else {
+                                    start_in_parent = 0;
+                                    end_in_parent = 10000;
+                                }
+                            }
                             ViewSpan {
                                 id: span.id().get() as u64,
                                 start: entry.start,
@@ -673,6 +795,9 @@ impl Viewer {
                                 text: text.to_string(),
                                 count: 1,
                                 kind: if filtered { 10 } else { 0 },
+                                start_in_parent,
+                                end_in_parent,
+                                secondary: entry.secondary,
                             }
                         }
                         LineEntryType::SpanGraph(graph, filtered) => {
@@ -685,6 +810,9 @@ impl Viewer {
                                 text: text.to_string(),
                                 count: graph.count() as u64,
                                 kind: if filtered { 10 } else { 0 },
+                                start_in_parent: 0,
+                                end_in_parent: 0,
+                                secondary: entry.secondary,
                             }
                         }
                         LineEntryType::SpanBottomUp(bottom_up, filtered) => {
@@ -697,6 +825,9 @@ impl Viewer {
                                 text: text.to_string(),
                                 count: bottom_up.count() as u64,
                                 kind: if filtered { 12 } else { 2 },
+                                start_in_parent: 0,
+                                end_in_parent: 0,
+                                secondary: entry.secondary,
                             }
                         }
                         LineEntryType::SpanBottomUpSpan(bottom_up_span, filtered) => {
@@ -709,6 +840,9 @@ impl Viewer {
                                 text: text.to_string(),
                                 count: 1,
                                 kind: if filtered { 12 } else { 2 },
+                                start_in_parent: 0,
+                                end_in_parent: 0,
+                                secondary: entry.secondary,
                             }
                         }
                     })
@@ -815,12 +949,13 @@ fn get_line<T: Default>(lines: &mut Vec<T>, i: usize) -> &mut T {
 struct LineEntry<'a> {
     start: u64,
     width: u64,
+    secondary: u64,
     ty: LineEntryType<'a>,
 }
 
 enum LineEntryType<'a> {
     Placeholder(bool),
-    Span(SpanRef<'a>, bool),
+    Span { span: SpanRef<'a>, filtered: bool },
     SpanGraph(SpanGraphRef<'a>, bool),
     SpanBottomUp(SpanBottomUpRef<'a>, bool),
     SpanBottomUpSpan(SpanRef<'a>, bool),

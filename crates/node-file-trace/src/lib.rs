@@ -35,7 +35,7 @@ use turbo_tasks_memory::{
 };
 use turbopack::{
     emit_asset, emit_with_completion, module_options::ModuleOptionsContext, rebase::RebasedAsset,
-    resolve_options_context::ResolveOptionsContext, ModuleAssetContext,
+    ModuleAssetContext,
 };
 use turbopack_cli_utils::issue::{ConsoleUi, IssueSeverityCliOption, LogOptions};
 use turbopack_core::{
@@ -49,6 +49,7 @@ use turbopack_core::{
     reference::all_modules_and_affecting_sources,
     resolve::options::{ImportMapping, ResolvedMap},
 };
+use turbopack_resolve::resolve_options_context::ResolveOptionsContext;
 
 use crate::nft_json::NftJsonAsset;
 
@@ -195,7 +196,7 @@ impl Args {
 }
 
 async fn create_fs(name: &str, root: &str, watch: bool) -> Result<Vc<Box<dyn FileSystem>>> {
-    let fs = DiskFileSystem::new(name.to_string(), root.to_string());
+    let fs = DiskFileSystem::new(name.to_string(), root.to_string(), vec![]);
     if watch {
         fs.await?.start_watching()?;
     } else {
@@ -694,5 +695,6 @@ fn register() {
     turbo_tasks_fs::register();
     turbopack::register();
     turbopack_cli_utils::register();
+    turbopack_resolve::register();
     include!(concat!(env!("OUT_DIR"), "/register.rs"));
 }
