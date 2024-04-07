@@ -17,7 +17,6 @@ use jsonc_parser::{
 use serde_json::Value;
 use tokio::sync::watch::{Receiver, Sender};
 use tower_lsp::{
-    self,
     jsonrpc::{Error, Result as LspResult},
     lsp_types::*,
     Client, LanguageServer,

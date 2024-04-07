@@ -2,7 +2,6 @@
 #![feature(assert_matches)]
 
 use std::{
-    convert::TryInto,
     fs,
     io::{self, Read, Write},
     num::TryFromIntError,

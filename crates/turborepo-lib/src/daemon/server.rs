@@ -21,6 +21,7 @@ use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
 };
+use tokio_stream::wrappers::ReceiverStream;
 use tonic::{server::NamedService, transport::Server};
 use tower::ServiceBuilder;
 use tracing::{error, info, trace, warn};
@@ -34,9 +35,12 @@ use turborepo_filewatch::{
 use turborepo_repository::package_manager;
 
 use super::{bump_timeout::BumpTimeout, endpoint::SocketOpenError, proto};
-use crate::daemon::{
-    bump_timeout_layer::BumpTimeoutLayer, default_timeout_layer::DefaultTimeoutLayer,
-    endpoint::listen_socket, Paths,
+use crate::{
+    daemon::{
+        bump_timeout_layer::BumpTimeoutLayer, default_timeout_layer::DefaultTimeoutLayer,
+        endpoint::listen_socket, Paths,
+    },
+    package_changes_watcher::{PackageChangeEvent, PackageChangesWatcher},
 };
 
 #[derive(Debug)]
@@ -58,6 +62,7 @@ pub struct FileWatching {
     watcher: Arc<FileSystemWatcher>,
     pub glob_watcher: Arc<GlobWatcher>,
     pub package_watcher: Arc<PackageWatcher>,
+    pub package_changes_watcher: Arc<PackageChangesWatcher>,
 }
 
 #[derive(Debug, Error)]
@@ -111,10 +116,14 @@ impl FileWatching {
                 .map_err(|e| WatchError::Setup(format!("{:?}", e)))?,
         );
 
+        let package_changes_watcher =
+            Arc::new(PackageChangesWatcher::new(repo_root.clone(), recv.clone()));
+
         Ok(FileWatching {
             watcher,
             glob_watcher,
             package_watcher,
+            package_changes_watcher,
         })
     }
 }
@@ -512,6 +521,58 @@ impl proto::turbod_server::Turbod for TurboGrpcServiceInner {
                 Err(tonic::Status::failed_precondition(reason))
             }
         }
+    }
+
+    type PackageChangesStream = ReceiverStream<Result<proto::PackageChangeEvent, tonic::Status>>;
+
+    async fn package_changes(
+        &self,
+        _request: tonic::Request<proto::PackageChangesRequest>,
+    ) -> Result<tonic::Response<Self::PackageChangesStream>, tonic::Status> {
+        let mut package_changes_rx = self
+            .file_watching
+            .package_changes_watcher
+            .package_changes()
+            .await;
+        let (tx, rx) = mpsc::channel(1);
+
+        tx.send(Ok(proto::PackageChangeEvent {
+            event: Some(proto::package_change_event::Event::RediscoverPackages(
+                proto::RediscoverPackages {},
+            )),
+        }))
+        .await
+        .map_err(|e| tonic::Status::unavailable(format!("{}", e)))?;
+
+        tokio::spawn(async move {
+            loop {
+                let event = match package_changes_rx.recv().await {
+                    Err(err) => {
+                        error!("package changes stream closed: {}", err);
+                        break;
+                    }
+                    Ok(PackageChangeEvent::Package { name }) => proto::PackageChangeEvent {
+                        event: Some(proto::package_change_event::Event::PackageChanged(
+                            proto::PackageChanged {
+                                package_name: name.to_string(),
+                            },
+                        )),
+                    },
+                    Ok(PackageChangeEvent::Rediscover) => proto::PackageChangeEvent {
+                        event: Some(proto::package_change_event::Event::RediscoverPackages(
+                            proto::RediscoverPackages {},
+                        )),
+                    },
+                };
+
+                if let Err(err) = tx.send(Ok(event)).await {
+                    error!("package changes stream closed: {}", err);
+                    break;
+                }
+            }
+        });
+
+        Ok(tonic::Response::new(ReceiverStream::new(rx)))
     }
 }
 
