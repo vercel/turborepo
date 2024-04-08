@@ -96,10 +96,6 @@ opt-level = "z"
 inherits = "release"
 strip = true
 
-[patch.crates-io]
-# temporary patch until https://github.com/servo/pathfinder/pull/557 gets released.
-pathfinder_simd = { git = "https://github.com/servo/pathfinder.git", rev = "30419d07660dc11a21e42ef4a7fa329600cff152" }
-
 # Declare dependencies used across workspace packages requires single version bump.
 # ref: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#inheriting-a-dependency-from-a-workspace
 [workspace.dependencies]
