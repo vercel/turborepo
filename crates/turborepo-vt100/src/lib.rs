@@ -33,7 +33,6 @@
 //! );
 //! ```
 
-#![warn(clippy::cargo)]
 #![warn(clippy::pedantic)]
 #![warn(clippy::nursery)]
 #![warn(clippy::as_conversions)]

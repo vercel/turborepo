@@ -49,4 +49,6 @@ pub enum Error {
     Visitor(#[from] task_graph::VisitorError),
     #[error("error registering signal handler: {0}")]
     SignalHandler(std::io::Error),
+    #[error(transparent)]
+    Daemon(#[from] daemon::DaemonError),
 }
