@@ -56,11 +56,12 @@ export class CreateTurboTelemetry extends TelemetryClient {
     }
   }
 
+  // only track that the argument was provided, not what it was
   trackArgumentDirectory(provided: boolean): Event | undefined {
     if (provided) {
       return this.trackCliArgument({
         argument: "project_directory",
-        value: provided.toString(),
+        value: "provided",
       });
     }
   }

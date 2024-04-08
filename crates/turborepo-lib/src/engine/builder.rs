@@ -1139,6 +1139,7 @@ mod test {
         assert_eq!(all_dependencies(&engine), expected);
     }
 
+    #[allow(clippy::duplicated_attributes)]
     #[test_case("build", None)]
     #[test_case("build:prod", None)]
     #[test_case("build$colon$prod", Some("task contains invalid string '$colon$'"))]

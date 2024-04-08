@@ -80,7 +80,7 @@ use std::{
 };
 
 use thiserror::Error;
-use walkdir::{self, DirEntry, Error, WalkDir};
+use walkdir::{DirEntry, Error, WalkDir};
 
 pub use crate::walk::glob::{GlobEntry, GlobWalker};
 use crate::{

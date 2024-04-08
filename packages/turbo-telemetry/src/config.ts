@@ -1,6 +1,8 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, rmSync } from "node:fs";
 import { logger } from "@turbo/utils";
 import chalk from "chalk";
+import { v4 as uuidv4 } from "uuid";
+import { z } from "zod";
 import { defaultConfigPath, oneWayHashWithSalt } from "./utils";
 
 const DEBUG_ENV_VAR = "TURBO_TELEMETRY_DEBUG";
@@ -8,12 +10,14 @@ const DISABLED_ENV_VAR = "TURBO_TELEMETRY_DISABLED";
 const DISABLED_MESSAGE_ENV_VAR = "TURBO_TELEMETRY_MESSAGE_DISABLED";
 const DO_NOT_TRACK_ENV_VAR = "DO_NOT_TRACK";
 
-interface Config {
-  telemetry_enabled: boolean;
-  telemetry_id: string;
-  telemetry_salt: string;
-  telemetry_alerted?: Date;
-}
+const ConfigSchema = z.object({
+  telemetry_enabled: z.boolean(),
+  telemetry_id: z.string(),
+  telemetry_salt: z.string(),
+  telemetry_alerted: z.date().optional(),
+});
+
+type Config = z.infer<typeof ConfigSchema>;
 
 /**
  * NOTE: This package is a direct port of the telemetry config struct from the turbo-telemetry crate. Any changes
@@ -30,16 +34,85 @@ export class TelemetryConfig {
     this.configPath = configPath;
   }
 
-  static async fromDefaultConfig() {
-    const configPath = await defaultConfigPath();
-    const file = readFileSync(configPath, "utf-8");
-    const config = JSON.parse(file) as Config;
-    return new TelemetryConfig({ configPath, config });
+  static fromConfigPath(configPath: string): TelemetryConfig | undefined {
+    try {
+      const file = readFileSync(configPath, "utf-8");
+      const rawConfig = JSON.parse(file) as unknown;
+      const config = TelemetryConfig.validateConfig(rawConfig);
+      return new TelemetryConfig({ configPath, config });
+    } catch (e) {
+      if (TelemetryConfig.tryRemove({ configPath })) {
+        return TelemetryConfig.create({ configPath });
+      }
+
+      return undefined;
+    }
   }
 
-  write() {
-    const json = JSON.stringify(this.config, null, 2);
-    writeFileSync(this.configPath, json);
+  static async fromDefaultConfig(): Promise<TelemetryConfig | undefined> {
+    try {
+      const configPath = await defaultConfigPath();
+      return TelemetryConfig.fromConfigPath(configPath);
+    } catch (e) {
+      return undefined;
+    }
+  }
+
+  static validateConfig(config: unknown): Config {
+    try {
+      return ConfigSchema.parse(config);
+    } catch (e) {
+      throw new Error("Config is invalid.");
+    }
+  }
+
+  static create({
+    configPath,
+  }: {
+    configPath: string;
+  }): TelemetryConfig | undefined {
+    const RawTelemetryId = uuidv4();
+    const telemetrySalt = uuidv4();
+    const telemetryId = oneWayHashWithSalt({
+      input: RawTelemetryId,
+      salt: telemetrySalt,
+    });
+
+    const config = new TelemetryConfig({
+      configPath,
+      config: {
+        telemetry_enabled: true,
+        telemetry_id: telemetryId,
+        telemetry_salt: telemetrySalt,
+      },
+    });
+
+    const saved = config.tryWrite();
+    if (saved) {
+      return config;
+    }
+    return undefined;
+  }
+
+  tryWrite(): boolean {
+    try {
+      const json = JSON.stringify(this.config, null, 2);
+      writeFileSync(this.configPath, json);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static tryRemove({ configPath }: { configPath: string }): boolean {
+    try {
+      rmSync(configPath, {
+        force: true,
+      });
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 
   hasSeenAlert(): boolean {
@@ -77,7 +150,7 @@ export class TelemetryConfig {
     return this.config.telemetry_id;
   }
 
-  showAlert() {
+  showAlert(): void {
     if (
       !this.hasSeenAlert() &&
       this.isEnabled() &&
@@ -100,34 +173,34 @@ export class TelemetryConfig {
     this.alertShown();
   }
 
-  enable() {
+  enable(): void {
     this.config.telemetry_enabled = true;
-    this.write();
+    this.tryWrite();
   }
 
-  disable() {
+  disable(): void {
     this.config.telemetry_enabled = false;
-    this.write();
+    this.tryWrite();
   }
 
-  alertShown() {
+  alertShown(): boolean {
     if (this.hasSeenAlert()) {
       return true;
     }
 
     this.config.telemetry_alerted = new Date();
-    this.write();
+    this.tryWrite();
     return true;
   }
 
-  oneWayHash(input: string) {
+  oneWayHash(input: string): string {
     return oneWayHashWithSalt({
       input,
       salt: this.config.telemetry_salt,
     });
   }
 
-  static isDebug() {
+  static isDebug(): boolean {
     const debug = process.env[DEBUG_ENV_VAR] || "0";
     return debug === "1" || debug.toLowerCase() === "true";
   }
