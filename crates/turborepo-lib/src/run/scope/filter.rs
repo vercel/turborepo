@@ -16,7 +16,7 @@ use wax::Program;
 use super::{
     change_detector::GitChangeDetector,
     simple_glob::{Match, SimpleGlob},
-    target_selector::{InvalidSelectorError, TargetSelector},
+    target_selector::{GitRange, InvalidSelectorError, TargetSelector},
 };
 use crate::{
     global_deps_package_change_mapper, run::scope::change_detector::ScopeChangeDetector,
@@ -78,7 +78,7 @@ impl PackageInference {
         };
 
         if let Some(name) = &self.package_name {
-            selector.name_pattern = name.to_owned();
+            name.clone_into(&mut selector.name_pattern);
         }
 
         if selector.parent_dir != turbopath::AnchoredSystemPathBuf::default() {
@@ -167,7 +167,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     /// It applies the following rules:
     pub(crate) fn resolve(
         &self,
-        patterns: &Vec<String>,
+        patterns: &[String],
     ) -> Result<(HashSet<PackageName>, bool), ResolutionError> {
         // inference is None only if we are in the root
         let is_all_packages = patterns.is_empty() && self.inference.is_none();
@@ -281,10 +281,10 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 let node = package_graph::PackageNode::Workspace(package.clone());
 
                 if selector.include_dependencies {
-                    let dependencies = self.pkg_graph.immediate_dependencies(&node);
+                    let dependencies = self.pkg_graph.dependencies(&node);
                     let dependencies = dependencies
                         .iter()
-                        .flatten()
+                        .filter(|node| !matches!(node, package_graph::PackageNode::Root))
                         .map(|i| i.as_package_name().to_owned())
                         .collect::<Vec<_>>();
 
@@ -303,11 +303,11 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                                 package_graph::PackageNode::Workspace(dependent.to_owned());
 
                             let dependent_dependencies =
-                                self.pkg_graph.immediate_dependencies(&dependent_node);
+                                self.pkg_graph.dependencies(&dependent_node);
 
                             let dependent_dependencies = dependent_dependencies
                                 .iter()
-                                .flatten()
+                                .filter(|node| !matches!(node, package_graph::PackageNode::Root))
                                 .map(|i| i.as_package_name().to_owned())
                                 .collect::<HashSet<_>>();
 
@@ -388,8 +388,11 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
 
         let mut roots = HashSet::new();
         let mut matched = HashSet::new();
-        let changed_packages =
-            self.packages_changed_in_range(&selector.from_ref, selector.to_ref())?;
+        let changed_packages = if let Some(git_range) = selector.git_range.as_ref() {
+            self.packages_changed_in_range(git_range)?
+        } else {
+            HashSet::new()
+        };
 
         for package in filtered_entry_packages {
             if matched.contains(&package) {
@@ -398,7 +401,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             }
 
             let workspace_node = package_graph::PackageNode::Workspace(package.clone());
-            let dependencies = self.pkg_graph.immediate_dependencies(&workspace_node);
+            let dependencies = self.pkg_graph.dependencies(&workspace_node);
 
             for changed_package in &changed_packages {
                 if !selector.exclude_self && package.eq(changed_package) {
@@ -409,11 +412,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 let changed_node =
                     package_graph::PackageNode::Workspace(changed_package.to_owned());
 
-                if dependencies
-                    .as_ref()
-                    .map(|d| d.contains(&changed_node))
-                    .unwrap_or_default()
-                {
+                if dependencies.contains(&changed_node) {
                     roots.insert(package.clone());
                     matched.insert(package);
                     break;
@@ -438,10 +437,9 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 err: Box::new(err),
             })?;
 
-        if !selector.from_ref.is_empty() {
+        if let Some(git_range) = selector.git_range.as_ref() {
             selector_valid = true;
-            let changed_packages =
-                self.packages_changed_in_range(&selector.from_ref, selector.to_ref())?;
+            let changed_packages = self.packages_changed_in_range(git_range)?;
             let package_path_lookup = self
                 .pkg_graph
                 .packages()
@@ -514,10 +512,10 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
 
     fn packages_changed_in_range(
         &self,
-        from_ref: &str,
-        to_ref: &str,
-    ) -> Result<HashSet<PackageName>, ChangeMapError> {
-        self.change_detector.changed_packages(from_ref, to_ref)
+        git_range: &GitRange,
+    ) -> Result<HashSet<PackageName>, ResolutionError> {
+        self.change_detector
+            .changed_packages(&git_range.from_ref, git_range.to_ref.as_deref())
     }
 
     fn match_package_names_to_vertices(
@@ -617,7 +615,9 @@ mod test {
     };
 
     use super::{FilterResolver, PackageInference, TargetSelector};
-    use crate::run::scope::change_detector::GitChangeDetector;
+    use crate::run::scope::{
+        change_detector::GitChangeDetector, target_selector::GitRange, ResolutionError,
+    };
 
     fn get_name(name: &str) -> (Option<&str>, &str) {
         if let Some(idx) = name.rfind('/') {
@@ -776,6 +776,19 @@ mod test {
         None,
         &["project-1", "project-2", "project-4"] ;
         "select package with dependencies"
+    )]
+    #[test_case(
+        vec![
+            TargetSelector {
+                exclude_self: false,
+                include_dependencies: true,
+                name_pattern: "project-0".to_string(),
+                ..Default::default()
+            }
+        ],
+        None,
+        &["project-0", "project-1", "project-2", "project-4", "project-5"] ;
+        "select package with transitive dependencies"
     )]
     #[test_case(
         vec![
@@ -1049,7 +1062,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                from_ref: "HEAD~1".to_string(),
+                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
                 ..Default::default()
             }
         ],
@@ -1059,7 +1072,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                from_ref: "HEAD~1".to_string(),
+                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
                 parent_dir: AnchoredSystemPathBuf::try_from(".").unwrap(),
                 ..Default::default()
             }
@@ -1070,7 +1083,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                from_ref: "HEAD~1".to_string(),
+                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
                 parent_dir: AnchoredSystemPathBuf::try_from("package-2").unwrap(),
                 ..Default::default()
             }
@@ -1081,7 +1094,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                from_ref: "HEAD~1".to_string(),
+                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
                 name_pattern: "package-2*".to_string(),
                 ..Default::default()
             }
@@ -1092,7 +1105,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                from_ref: "HEAD~1".to_string(),
+                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
                 name_pattern: "package-1".to_string(),
                 match_dependencies: true,
                 ..Default::default()
@@ -1104,7 +1117,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                from_ref: "HEAD~2".to_string(),
+                git_range: Some(GitRange { from_ref: "HEAD~2".to_string(), to_ref: None }),
                 ..Default::default()
             }
         ],
@@ -1114,8 +1127,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                from_ref: "HEAD~2".to_string(),
-                to_ref_override: "HEAD~1".to_string(),
+                git_range: Some(GitRange { from_ref: "HEAD~2".to_string(), to_ref: Some("HEAD~1".to_string()) }),
                 ..Default::default()
             }
         ],
@@ -1125,7 +1137,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                from_ref: "HEAD~1".to_string(),
+                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
                 parent_dir:
     AnchoredSystemPathBuf::try_from("package-*").unwrap(),
     match_dependencies: true,             ..Default::default()
@@ -1136,11 +1148,11 @@ mod test {
     )]
     fn scm(selectors: Vec<TargetSelector>, expected: &[&str]) {
         let scm_resolver = TestChangeDetector::new(&[
-            ("HEAD~1", "HEAD", &["package-1", "package-2", ROOT_PKG_NAME]),
-            ("HEAD~2", "HEAD~1", &["package-3"]),
+            ("HEAD~1", None, &["package-1", "package-2", ROOT_PKG_NAME]),
+            ("HEAD~2", Some("HEAD~1"), &["package-3"]),
             (
                 "HEAD~2",
-                "HEAD",
+                None,
                 &["package-1", "package-2", "package-3", ROOT_PKG_NAME],
             ),
         ]);
@@ -1159,10 +1171,10 @@ mod test {
         );
     }
 
-    struct TestChangeDetector<'a>(HashMap<(&'a str, &'a str), HashSet<PackageName>>);
+    struct TestChangeDetector<'a>(HashMap<(&'a str, Option<&'a str>), HashSet<PackageName>>);
 
     impl<'a> TestChangeDetector<'a> {
-        fn new(pairs: &[(&'a str, &'a str, &[&'a str])]) -> Self {
+        fn new(pairs: &[(&'a str, Option<&'a str>, &[&'a str])]) -> Self {
             let mut map = HashMap::new();
             for (from, to, changed) in pairs {
                 map.insert(
@@ -1179,8 +1191,8 @@ mod test {
         fn changed_packages(
             &self,
             from: &str,
-            to: &str,
-        ) -> Result<HashSet<PackageName>, ChangeMapError> {
+            to: Option<&str>,
+        ) -> Result<HashSet<PackageName>, ResolutionError> {
             Ok(self
                 .0
                 .get(&(from, to))

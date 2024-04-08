@@ -193,11 +193,6 @@ impl CookieWriter {
         Self::new(&cookie_root, timeout, recv)
     }
 
-    #[cfg(test)]
-    pub(crate) fn cookie_dir(&self) -> &AbsoluteSystemPath {
-        &self.cookie_root
-    }
-
     pub fn new(
         cookie_root: &AbsoluteSystemPath,
         timeout: Duration,

@@ -151,7 +151,7 @@ pub struct AnalyzeEcmascriptModuleResult {
 
 /// A temporary analysis result builder to pass around, to be turned into an
 /// `Vc<AnalyzeEcmascriptModuleResult>` eventually.
-pub(crate) struct AnalyzeEcmascriptModuleResultBuilder {
+pub struct AnalyzeEcmascriptModuleResultBuilder {
     references: IndexSet<Vc<Box<dyn ModuleReference>>>,
     local_references: IndexSet<Vc<Box<dyn ModuleReference>>>,
     reexport_references: IndexSet<Vc<Box<dyn ModuleReference>>>,
@@ -493,6 +493,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
             }
         }
     }
+    let mut source_map_from_comment = false;
     if let Some((_, path)) = paths_by_pos.into_iter().max_by_key(|&(pos, _)| pos) {
         let origin_path = origin.origin_path();
         if path.ends_with(".map") {
@@ -504,11 +505,24 @@ pub(crate) async fn analyse_ecmascript_module_internal(
                 source_map,
                 source_map_origin,
             ));
+            source_map_from_comment = true;
         } else if path.starts_with("data:application/json;base64,") {
             let source_map_origin = origin_path;
             let source_map = maybe_decode_data_url(path.to_string());
             analysis.set_source_map(convert_to_turbopack_source_map(
                 source_map,
+                source_map_origin,
+            ));
+            source_map_from_comment = true;
+        }
+    }
+    if !source_map_from_comment {
+        if let Some(generate_source_map) =
+            Vc::try_resolve_sidecast::<Box<dyn GenerateSourceMap>>(source).await?
+        {
+            let source_map_origin = source.ident().path();
+            analysis.set_source_map(convert_to_turbopack_source_map(
+                generate_source_map.generate_source_map(),
                 source_map_origin,
             ));
         }
@@ -561,7 +575,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
         *r = r.resolve().await?;
     }
     for r in import_references.iter() {
-        // `add_reference` will avoid adding duplicate references
+        // `add_import_reference` will avoid adding duplicate references
         analysis.add_import_reference(*r);
     }
     for i in evaluation_references {
@@ -736,13 +750,11 @@ pub(crate) async fn analyse_ecmascript_module_internal(
     if eval_context.is_esm() || specified_type == SpecifiedModuleType::EcmaScript {
         let async_module = AsyncModule {
             placeable: Vc::upcast(module),
-            references: Vc::cell(import_references.iter().map(|&r| Vc::upcast(r)).collect()),
             has_top_level_await,
             import_externals,
         }
         .cell();
         analysis.set_async_module(async_module);
-        analysis.add_code_gen_with_availability_info(async_module);
     } else if let Some(span) = top_level_await_span {
         AnalyzeIssue {
             code: None,

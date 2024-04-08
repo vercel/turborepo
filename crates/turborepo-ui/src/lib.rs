@@ -5,6 +5,7 @@
 #![feature(deadline_api)]
 
 mod color_selector;
+mod line;
 mod logs;
 mod output;
 mod prefixed;
@@ -19,6 +20,7 @@ use thiserror::Error;
 
 pub use crate::{
     color_selector::ColorSelector,
+    line::LineWriter,
     logs::{replay_logs, LogWriter},
     output::{OutputClient, OutputClientBehavior, OutputSink, OutputWriter},
     prefixed::{PrefixedUI, PrefixedWriter},

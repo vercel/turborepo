@@ -2,22 +2,23 @@ use std::collections::HashSet;
 
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
-    change_mapper::{
-        ChangeMapError, ChangeMapper, DefaultPackageChangeMapper, LockfileChange, PackageChanges,
-    },
+    change_mapper::{ChangeMapper, DefaultPackageChangeMapper, LockfileChange, PackageChanges},
     package_graph::{PackageGraph, PackageName},
 };
 use turborepo_scm::SCM;
 
-use crate::global_deps_package_change_mapper::{Error, GlobalDepsPackageChangeMapper};
+use crate::{
+    global_deps_package_change_mapper::{Error, GlobalDepsPackageChangeMapper},
+    run::scope::ResolutionError,
+};
 
 /// Given two git refs, determine which packages have changed between them.
 pub trait GitChangeDetector {
     fn changed_packages(
         &self,
         from_ref: &str,
-        to_ref: &str,
-    ) -> Result<HashSet<PackageName>, ChangeMapError>;
+        to_ref: Option<&str>,
+    ) -> Result<HashSet<PackageName>, ResolutionError>;
 }
 
 pub struct ScopeChangeDetector<'a> {
@@ -84,13 +85,11 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
     fn changed_packages(
         &self,
         from_ref: &str,
-        to_ref: &str,
-    ) -> Result<HashSet<PackageName>, ChangeMapError> {
+        to_ref: Option<&str>,
+    ) -> Result<HashSet<PackageName>, ResolutionError> {
         let mut changed_files = HashSet::new();
         if !from_ref.is_empty() {
-            changed_files = self
-                .scm
-                .changed_files(self.turbo_root, Some(from_ref), to_ref)?;
+            changed_files = self.scm.changed_files(self.turbo_root, from_ref, to_ref)?;
         }
 
         let lockfile_contents = self.get_lockfile_contents(from_ref, &changed_files);

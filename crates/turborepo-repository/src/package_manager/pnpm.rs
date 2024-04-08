@@ -25,8 +25,11 @@ impl<'a> PnpmDetector<'a> {
 
     pub fn detect_pnpm6_or_pnpm(version: &Version) -> Result<PackageManager, Error> {
         let pnpm6_constraint: Range = "<7.0.0".parse()?;
+        let pnpm9_constraint: Range = ">=9.0.0-alpha.0".parse()?;
         if pnpm6_constraint.satisfies(version) {
             Ok(PackageManager::Pnpm6)
+        } else if pnpm9_constraint.satisfies(version) {
+            Ok(PackageManager::Pnpm9)
         } else {
             Ok(PackageManager::Pnpm)
         }
@@ -95,6 +98,7 @@ mod test {
     use std::collections::BTreeMap;
 
     use serde_json::json;
+    use test_case::test_case;
     use turbopath::RelativeUnixPathBuf;
 
     use super::*;
@@ -125,6 +129,19 @@ mod test {
                     .collect::<BTreeMap<_, _>>()
             )
             .as_ref()
+        );
+    }
+
+    #[test_case("6.0.0", PackageManager::Pnpm6)]
+    #[test_case("7.0.0", PackageManager::Pnpm)]
+    #[test_case("8.0.0", PackageManager::Pnpm)]
+    #[test_case("9.0.0", PackageManager::Pnpm9)]
+    #[test_case("9.0.0-alpha.0", PackageManager::Pnpm9)]
+    fn test_version_detection(version: &str, expected: PackageManager) {
+        let version = Version::parse(version).unwrap();
+        assert_eq!(
+            PnpmDetector::detect_pnpm6_or_pnpm(&version).unwrap(),
+            expected
         );
     }
 }

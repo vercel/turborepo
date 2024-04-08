@@ -4,7 +4,6 @@ use std::{
     collections::HashMap,
     env,
     ops::{Deref, DerefMut},
-    string::ToString,
 };
 
 use regex::Regex;

@@ -111,6 +111,15 @@ export interface RootSchema extends BaseSchema {
    * @defaultValue `{}`
    */
   remoteCache?: RemoteCache;
+
+  /**
+   * Enable use of the new UI for `turbo`.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#experimentalui
+   *
+   * @defaultValue `{}`
+   */
+  experimentalUI?: boolean;
 }
 
 export interface Pipeline {
@@ -249,6 +258,15 @@ export interface Pipeline {
    * @defaultValue false
    */
   persistent?: boolean;
+
+  /**
+   * Mark a task as interactive allowing it to receive input from stdin.
+   * Interactive tasks must be marked with "cache": false as the input
+   * they receive from stdin can change the outcome of the task.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#interactive
+   */
+  interactive?: boolean;
 }
 
 export interface RemoteCache {

@@ -184,6 +184,7 @@ impl TaskCache {
     pub async fn restore_outputs(
         &mut self,
         mut terminal_output: impl Write,
+        alternative_log_replay: Option<impl Write>,
         telemetry: &PackageTaskEventBuilder,
     ) -> Result<Option<CacheHitMetadata>, Error> {
         if self.caching_disabled || self.run_cache.reads_disabled {
@@ -312,7 +313,11 @@ impl TaskCache {
                         color!(self.ui, GREY, "{}", self.hash)
                     ),
                 );
-                self.replay_log_file(&mut terminal_output)?;
+                if let Some(mut replay_writer) = alternative_log_replay {
+                    self.replay_log_file(&mut replay_writer)?;
+                } else {
+                    self.replay_log_file(&mut terminal_output)?;
+                }
             }
             // Note that if we're restoring from cache, the task succeeded
             // so we know we don't need to print anything for errors

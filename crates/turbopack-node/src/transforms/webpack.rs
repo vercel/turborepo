@@ -29,6 +29,7 @@ use turbopack_core::{
         resolve,
     },
     source::Source,
+    source_map::{GenerateSourceMap, OptionSourceMap, SourceMap},
     source_transform::SourceTransform,
     virtual_source::VirtualSource,
 };
@@ -47,7 +48,7 @@ use crate::{
     },
     execution_context::ExecutionContext,
     pool::{FormattingMode, NodeJsPool},
-    source_map::StructuredError,
+    source_map::{StackFrame, StructuredError},
     AssetsForSourceMapping,
 };
 
@@ -144,9 +145,18 @@ impl Asset for WebpackLoadersProcessedAsset {
     }
 }
 
+#[turbo_tasks::value_impl]
+impl GenerateSourceMap for WebpackLoadersProcessedAsset {
+    #[turbo_tasks::function]
+    async fn generate_source_map(self: Vc<Self>) -> Result<Vc<OptionSourceMap>> {
+        Ok(Vc::cell(self.process().await?.source_map))
+    }
+}
+
 #[turbo_tasks::value]
 struct ProcessWebpackLoadersResult {
     content: Vc<AssetContent>,
+    source_map: Option<Vc<SourceMap>>,
     assets: Vec<Vc<VirtualSource>>,
 }
 
@@ -180,6 +190,7 @@ impl WebpackLoadersProcessedAsset {
             return Ok(ProcessWebpackLoadersResult {
                 content: AssetContent::File(FileContent::NotFound.cell()).cell(),
                 assets: Vec::new(),
+                source_map: None,
             }
             .cell());
         };
@@ -187,13 +198,16 @@ impl WebpackLoadersProcessedAsset {
         let evaluate_context = transform.evaluate_context;
 
         let webpack_loaders_executor = webpack_loaders_executor(evaluate_context).module();
-        let resource_fs_path = this.source.ident().path().await?;
-        let Some(resource_path) = project_path.await?.get_relative_path_to(&resource_fs_path)
+        let resource_fs_path = this.source.ident().path();
+        let resource_fs_path_ref = resource_fs_path.await?;
+        let Some(resource_path) = project_path
+            .await?
+            .get_relative_path_to(&resource_fs_path_ref)
         else {
             bail!("Resource path need to be on project filesystem");
         };
         let loaders = transform.loaders.await?;
-        let config_value = custom_evaluate(WebpackLoaderContext {
+        let config_value = evaluate_webpack_loader(WebpackLoaderContext {
             module_asset: webpack_loaders_executor,
             cwd: project_path,
             env,
@@ -215,6 +229,7 @@ impl WebpackLoadersProcessedAsset {
             return Ok(ProcessWebpackLoadersResult {
                 content: AssetContent::File(FileContent::NotFound.cell()).cell(),
                 assets: Vec::new(),
+                source_map: None,
             }
             .cell());
         };
@@ -223,11 +238,23 @@ impl WebpackLoadersProcessedAsset {
         )
         .context("Unable to deserializate response from webpack loaders transform operation")?;
 
-        // TODO handle SourceMap
+        // handle SourceMap
+        let source_map = if let Some(source_map) = processed.map {
+            SourceMap::new_from_file_content(FileContent::Content(File::from(source_map)).cell())
+                .await?
+                .map(|source_map| source_map.cell())
+        } else {
+            None
+        };
         let file = File::from(processed.source);
         let assets = emitted_assets_to_virtual_sources(processed.assets);
         let content = AssetContent::File(FileContent::Content(file).cell()).cell();
-        Ok(ProcessWebpackLoadersResult { content, assets }.cell())
+        Ok(ProcessWebpackLoadersResult {
+            content,
+            assets,
+            source_map,
+        }
+        .cell())
     }
 }
 
@@ -244,6 +271,34 @@ async fn compute_webpack_loader_evaluation(
     sender: Vc<JavaScriptStreamSender>,
 ) -> Result<Vc<()>> {
     compute(webpack_loader_context, sender).await
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+enum LogType {
+    Error,
+    Warn,
+    Info,
+    Log,
+    Debug,
+    Trace,
+    Group,
+    GroupCollapsed,
+    GroupEnd,
+    Profile,
+    ProfileEnd,
+    Time,
+    Clear,
+    Status,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LogInfo {
+    time: u64,
+    log_type: LogType,
+    args: Vec<JsonValue>,
+    trace: Option<Vec<StackFrame<'static>>>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -263,13 +318,13 @@ pub enum InfoMessage {
         severity: IssueSeverity,
         error: StructuredError,
     },
+    Log(LogInfo),
 }
 
 #[derive(Deserialize, Debug, Clone, TaskInput)]
 #[serde(rename_all = "camelCase")]
 
 pub struct WebpackResolveOptions {
-    no_alias: bool,
     alias_fields: Option<Vec<String>>,
     condition_names: Option<Vec<String>>,
     no_package_json: bool,
@@ -316,6 +371,7 @@ impl EvaluateContext for WebpackLoaderContext {
     type InfoMessage = InfoMessage;
     type RequestMessage = RequestMessage;
     type ResponseMessage = ResponseMessage;
+    type State = Vec<LogInfo>;
 
     fn compute(self, sender: Vc<JavaScriptStreamSender>) {
         let _ = compute_webpack_loader_evaluation(self, sender);
@@ -359,7 +415,12 @@ impl EvaluateContext for WebpackLoaderContext {
         Ok(())
     }
 
-    async fn info(&self, data: Self::InfoMessage, pool: &NodeJsPool) -> Result<()> {
+    async fn info(
+        &self,
+        state: &mut Self::State,
+        data: Self::InfoMessage,
+        pool: &NodeJsPool,
+    ) -> Result<()> {
         match data {
             InfoMessage::FileDependency { path } => {
                 // TODO We might miss some changes that happened during execution
@@ -394,12 +455,16 @@ impl EvaluateContext for WebpackLoaderContext {
                 .cell()
                 .emit();
             }
+            InfoMessage::Log(log) => {
+                state.push(log);
+            }
         }
         Ok(())
     }
 
     async fn request(
         &self,
+        _state: &mut Self::State,
         data: Self::RequestMessage,
         _pool: &NodeJsPool,
     ) -> Result<Self::ResponseMessage> {
@@ -424,6 +489,9 @@ impl EvaluateContext for WebpackLoaderContext {
                     request,
                     options,
                 );
+
+                let request_str = request.to_string().await?;
+                let lookup_path_str = lookup_path.to_string().await?;
                 if let Some(source) = *resolved.first_source().await? {
                     if let Some(path) = self
                         .cwd
@@ -434,19 +502,51 @@ impl EvaluateContext for WebpackLoaderContext {
                     } else {
                         bail!(
                             "Resolving {} in {} ends up on a different filesystem",
-                            request.to_string().await?,
-                            lookup_path.to_string().await?
+                            request_str,
+                            lookup_path_str
                         );
                     }
                 } else {
-                    bail!(
-                        "Unable to resolve {} in {}",
-                        request.to_string().await?,
-                        lookup_path.to_string().await?
-                    );
+                    bail!("Unable to resolve {} in {}", request_str, lookup_path_str);
                 }
             }
         }
+    }
+
+    async fn finish(&self, state: Self::State, pool: &NodeJsPool) -> Result<()> {
+        let has_errors = state.iter().any(|log| log.log_type == LogType::Error);
+        let has_warnings = state.iter().any(|log| log.log_type == LogType::Warn);
+        if has_errors || has_warnings {
+            let logs = state
+                .into_iter()
+                .filter(|log| {
+                    matches!(
+                        log.log_type,
+                        LogType::Error
+                            | LogType::Warn
+                            | LogType::Info
+                            | LogType::Log
+                            | LogType::Clear,
+                    )
+                })
+                .collect();
+
+            EvaluateErrorLoggingIssue {
+                file_path: self.context_ident_for_issue.path(),
+                logging: logs,
+                severity: if has_errors {
+                    IssueSeverity::Error.cell()
+                } else {
+                    IssueSeverity::Warning.cell()
+                },
+                assets_for_source_mapping: pool.assets_for_source_mapping,
+                assets_root: pool.assets_root,
+                project_dir: self.chunking_context.context_path().root(),
+            }
+            .cell()
+            .emit();
+        }
+        Ok(())
     }
 }
 
@@ -456,10 +556,6 @@ async fn apply_webpack_resolve_options(
     webpack_resolve_options: WebpackResolveOptions,
 ) -> Result<Vc<ResolveOptions>> {
     let mut resolve_options = resolve_options.await?.clone_value();
-    if webpack_resolve_options.no_alias {
-        resolve_options.import_map = None;
-        resolve_options.fallback_import_map = None;
-    }
     if let Some(alias_fields) = webpack_resolve_options.alias_fields {
         let mut old = resolve_options
             .in_package
@@ -659,5 +755,75 @@ impl Issue for EvaluateEmittedErrorIssue {
             )
             .cell(),
         )))
+    }
+}
+
+#[turbo_tasks::value(shared)]
+pub struct EvaluateErrorLoggingIssue {
+    pub file_path: Vc<FileSystemPath>,
+    pub severity: Vc<IssueSeverity>,
+    #[turbo_tasks(trace_ignore)]
+    pub logging: Vec<LogInfo>,
+    pub assets_for_source_mapping: Vc<AssetsForSourceMapping>,
+    pub assets_root: Vc<FileSystemPath>,
+    pub project_dir: Vc<FileSystemPath>,
+}
+
+#[turbo_tasks::value_impl]
+impl Issue for EvaluateErrorLoggingIssue {
+    #[turbo_tasks::function]
+    fn file_path(&self) -> Vc<FileSystemPath> {
+        self.file_path
+    }
+
+    #[turbo_tasks::function]
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::Transform.cell()
+    }
+
+    #[turbo_tasks::function]
+    fn severity(&self) -> Vc<IssueSeverity> {
+        self.severity
+    }
+
+    #[turbo_tasks::function]
+    fn title(&self) -> Vc<StyledString> {
+        StyledString::Text("Error logging while running loader".to_string()).cell()
+    }
+
+    #[turbo_tasks::function]
+    async fn description(&self) -> Result<Vc<OptionStyledString>> {
+        fn fmt_args(prefix: String, args: &[JsonValue]) -> String {
+            let mut iter = args.iter();
+            let Some(first) = iter.next() else {
+                return "".to_string();
+            };
+            let mut result = prefix;
+            if let JsonValue::String(s) = first {
+                result.push_str(s);
+            } else {
+                result.push_str(&first.to_string());
+            }
+            for arg in iter {
+                result.push(' ');
+                result.push_str(&arg.to_string());
+            }
+            result
+        }
+        let lines = self
+            .logging
+            .iter()
+            .map(|log| match log.log_type {
+                LogType::Error => StyledString::Strong(fmt_args("<e> ".to_string(), &log.args)),
+                LogType::Warn => StyledString::Text(fmt_args("<w> ".to_string(), &log.args)),
+                LogType::Info => StyledString::Text(fmt_args("<i> ".to_string(), &log.args)),
+                LogType::Log => StyledString::Text(fmt_args("<l> ".to_string(), &log.args)),
+                LogType::Clear => StyledString::Strong("---".to_string()),
+                _ => {
+                    unimplemented!("{:?} is not implemented", log.log_type)
+                }
+            })
+            .collect::<Vec<_>>();
+        Ok(Vc::cell(Some(StyledString::Stack(lines).cell())))
     }
 }
