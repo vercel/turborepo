@@ -170,8 +170,8 @@ importers:
         specifier: 4.1.2
         version: 4.1.2
       commander:
-        specifier: ^10.0.0
-        version: 10.0.0
+        specifier: ^11.0.0
+        version: 11.0.0
       fs-extra:
         specifier: ^11.1.1
         version: 11.1.1
@@ -625,6 +625,9 @@ importers:
       '@turbo/eslint-config':
         specifier: workspace:*
         version: link:../eslint-config
+      '@turbo/telemetry':
+        specifier: workspace:*
+        version: link:../turbo-telemetry
       '@turbo/test-utils':
         specifier: workspace:*
         version: link:../turbo-test-utils
@@ -682,9 +685,12 @@ importers:
       chalk:
         specifier: ^4.1.2
         version: 4.1.2
+      ci-info:
+        specifier: ^4.0.0
+        version: 4.0.0
       commander:
-        specifier: ^10.0.0
-        version: 10.0.0
+        specifier: ^11.0.0
+        version: 11.0.0
       got:
         specifier: ^11.8.6
         version: 11.8.6
@@ -4686,6 +4692,11 @@ packages:
     resolution: {integrity: sha512-eXTggHWSooYhq49F2opQhuHWgzucfF2YgODK4e1566GQs5BIfP30B0oenwBJHfWxAs2fyPB1s7Mg949zLf61Yw==}
     engines: {node: '>=8'}
 
+  /ci-info@4.0.0:
+    resolution: {integrity: sha512-TdHqgGf9odd8SXNuxtUBVx8Nv+qZOejE6qyqiy5NtbYYQOeFa6zmHkxlPzmaLxWWHsU6nJmB7AETdVPi+2NBUg==}
+    engines: {node: '>=8'}
+    dev: false
+
   /cjs-module-lexer@1.2.2:
     resolution: {integrity: sha512-cOU9usZw8/dXIXKtwa8pM0OTJQuJkxMN6w30csNRUerHfeQ5R6U3kkU/FtJeIf3M202OHfY2U8ccInBG7/xogA==}
 
@@ -4844,7 +4855,6 @@ packages:
   /commander@11.0.0:
     resolution: {integrity: sha512-9HMlXtt/BNoYr8ooyjjNRdIilOTkVJXB+GhxMTtOKwk0R4j4lS4NpjuqmRxroBfnfTSHQIHQB7wryHhXarNjmQ==}
     engines: {node: '>=16'}
-    dev: true
 
   /commander@2.20.3:
     resolution: {integrity: sha512-GpVkmM8vF2vQUkj2LvZmD35JxeJOLCwJ9cUkugyk2nuhbv3+mJvpLYYt+0+USMxE+oj+ey/lJEnhZw75x/OMcQ==}
