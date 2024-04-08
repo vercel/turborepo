@@ -51,6 +51,123 @@ describe("TelemetryConfig", () => {
       expect(result).toBeInstanceOf(TelemetryConfig);
       expect(result?.id).toEqual("654321");
     });
+
+    test("should generate new config if default config doesn't exist", async () => {
+      const mockConfigPath = "/path/to/defaultConfig.json";
+      const mockDefaultConfigPath = jest.fn().mockResolvedValue(mockConfigPath);
+      const mockReadFileSync = jest.fn().mockImplementation(() => {
+        throw new Error("File not found");
+      });
+      const mockRmSync = jest.fn();
+      const mockWriteFileSync = jest.fn();
+
+      jest
+        .spyOn(utils, "defaultConfigPath")
+        .mockImplementation(mockDefaultConfigPath);
+      jest.spyOn(fs, "readFileSync").mockImplementation(mockReadFileSync);
+      jest.spyOn(fs, "rmSync").mockImplementation(mockRmSync);
+      jest.spyOn(fs, "writeFileSync").mockImplementation(mockWriteFileSync);
+
+      const result = await TelemetryConfig.fromDefaultConfig();
+
+      expect(mockDefaultConfigPath).toHaveBeenCalled();
+      expect(mockReadFileSync).toHaveBeenCalledWith(mockConfigPath, "utf-8");
+      expect(mockRmSync).toHaveBeenCalled();
+      expect(mockRmSync).toHaveBeenCalledWith(mockConfigPath, {
+        force: true,
+      });
+      expect(mockWriteFileSync).toHaveBeenCalled();
+      expect(mockWriteFileSync).toHaveBeenCalledWith(
+        mockConfigPath,
+        expect.any(String)
+      );
+      expect(result).toBeInstanceOf(TelemetryConfig);
+      expect(result?.id).toEqual(expect.any(String));
+      expect(result?.config.telemetry_enabled).toEqual(true);
+    });
+
+    test("should not throw if default config is missing a key", async () => {
+      const mockConfigPath = "/path/to/defaultConfig.json";
+      const id = "654321";
+      const mockFileContent = JSON.stringify({
+        // missing telemetry_enabled
+        telemetry_id: id,
+        telemetry_salt: "default-salt",
+      });
+      const mockRmSync = jest.fn();
+      const mockWriteFileSync = jest.fn();
+
+      const mockDefaultConfigPath = jest.fn().mockResolvedValue(mockConfigPath);
+      const mockReadFileSync = jest.fn().mockReturnValue(mockFileContent);
+
+      jest
+        .spyOn(utils, "defaultConfigPath")
+        .mockImplementation(mockDefaultConfigPath);
+      jest.spyOn(fs, "readFileSync").mockImplementation(mockReadFileSync);
+      jest.spyOn(fs, "rmSync").mockImplementation(mockRmSync);
+      jest.spyOn(fs, "writeFileSync").mockImplementation(mockWriteFileSync);
+
+      const result = await TelemetryConfig.fromDefaultConfig();
+
+      expect(mockDefaultConfigPath).toHaveBeenCalled();
+      expect(mockReadFileSync).toHaveBeenCalledWith(mockConfigPath, "utf-8");
+      expect(mockRmSync).toHaveBeenCalled();
+      expect(mockRmSync).toHaveBeenCalledWith(mockConfigPath, {
+        force: true,
+      });
+      expect(mockWriteFileSync).toHaveBeenCalled();
+      expect(mockWriteFileSync).toHaveBeenCalledWith(
+        mockConfigPath,
+        expect.any(String)
+      );
+      expect(result).toBeInstanceOf(TelemetryConfig);
+      expect(result?.id).toEqual(expect.any(String));
+      // this shouldn't match because we threw away the file and made a new one
+      expect(result?.id).not.toEqual(id);
+      expect(result?.config.telemetry_enabled).toEqual(true);
+    });
+
+    test("should not throw if default config has a key of the wrong type", async () => {
+      const mockConfigPath = "/path/to/defaultConfig.json";
+      const salt = "default-salt";
+      const mockFileContent = JSON.stringify({
+        telemetry_enabled: true,
+        // telemetry_id should be a string
+        telemetry_id: true,
+        telemetry_salt: salt,
+      });
+      const mockRmSync = jest.fn();
+      const mockWriteFileSync = jest.fn();
+
+      const mockDefaultConfigPath = jest.fn().mockResolvedValue(mockConfigPath);
+      const mockReadFileSync = jest.fn().mockReturnValue(mockFileContent);
+
+      jest
+        .spyOn(utils, "defaultConfigPath")
+        .mockImplementation(mockDefaultConfigPath);
+      jest.spyOn(fs, "readFileSync").mockImplementation(mockReadFileSync);
+      jest.spyOn(fs, "rmSync").mockImplementation(mockRmSync);
+      jest.spyOn(fs, "writeFileSync").mockImplementation(mockWriteFileSync);
+
+      const result = await TelemetryConfig.fromDefaultConfig();
+
+      expect(mockDefaultConfigPath).toHaveBeenCalled();
+      expect(mockReadFileSync).toHaveBeenCalledWith(mockConfigPath, "utf-8");
+      expect(mockRmSync).toHaveBeenCalled();
+      expect(mockRmSync).toHaveBeenCalledWith(mockConfigPath, {
+        force: true,
+      });
+      expect(mockWriteFileSync).toHaveBeenCalled();
+      expect(mockWriteFileSync).toHaveBeenCalledWith(
+        mockConfigPath,
+        expect.any(String)
+      );
+      expect(result).toBeInstanceOf(TelemetryConfig);
+      expect(result?.id).toEqual(expect.any(String));
+      // this shouldn't match because we threw away the file and made a new one
+      expect(result?.config.telemetry_salt).not.toEqual(salt);
+      expect(result?.config.telemetry_enabled).toEqual(true);
+    });
   });
 
   describe("write", () => {
@@ -59,7 +176,24 @@ describe("TelemetryConfig", () => {
       jest.spyOn(fs, "writeFileSync").mockImplementation(mockWriteFileSync);
 
       const mockJson = JSON.stringify(telemetryConfig.config, null, 2);
-      telemetryConfig.write();
+      telemetryConfig.tryWrite();
+
+      expect(mockWriteFileSync).toHaveBeenCalledWith(
+        "/path/to/config.json",
+        mockJson
+      );
+    });
+
+    test("should not throw if write fails", () => {
+      const mockWriteFileSync = jest.fn();
+      jest.spyOn(fs, "writeFileSync").mockImplementation(mockWriteFileSync);
+      mockWriteFileSync.mockImplementation(() => {
+        throw new Error("Write error");
+      });
+
+      const mockJson = JSON.stringify(telemetryConfig.config, null, 2);
+      // this shouldn't throw
+      telemetryConfig.tryWrite();
 
       expect(mockWriteFileSync).toHaveBeenCalledWith(
         "/path/to/config.json",
