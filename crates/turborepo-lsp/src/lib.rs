@@ -288,7 +288,7 @@ impl LanguageServer for Backend {
                 // so we just skip it and do a best effort
                 Err(_) => continue,
             };
-            let package_json = match PackageJson::from_str(&data) {
+            let package_json = match PackageJson::load_from_str(&data, wd.package_json.as_str()) {
                 Ok(package_json) => package_json,
                 // if we can't parse a package.json, then we can't set up references to it
                 // so we just skip it and do a best effort

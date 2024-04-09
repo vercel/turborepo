@@ -27,7 +27,6 @@ impl Deref for UnescapedString {
         &self.0
     }
 }
-
 fn unescape_str(s: String) -> Result<String, serde_json::Error> {
     let wrapped_s = format!("\"{}\"", s);
 

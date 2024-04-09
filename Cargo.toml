@@ -185,6 +185,7 @@ turborepo-lib = { path = "crates/turborepo-lib", default-features = false }
 turborepo-lockfiles = { path = "crates/turborepo-lockfiles" }
 turborepo-repository = { path = "crates/turborepo-repository" }
 turborepo-ui = { path = "crates/turborepo-ui" }
+turborepo-unescape = { path = "crates/turborepo-unescape" }
 turborepo-scm = { path = "crates/turborepo-scm" }
 wax = { path = "crates/turborepo-wax" }
 turborepo-vercel-api = { path = "crates/turborepo-vercel-api" }
@@ -214,11 +215,12 @@ async-trait = "0.1.64"
 atty = "0.2.14"
 axum = "0.6.2"
 axum-server = "0.4.4"
-biome_console = "0.5.7"
-biome_deserialize = "0.5.7"
-biome_diagnostics = "0.5.7"
-biome_json_parser = "0.5.7"
-biome_json_syntax = "0.5.7"
+biome_console = { path = "../biome/crates/biome_console" }
+biome_deserialize = { path = "../biome/crates/biome_deserialize", features = ["serde"] }
+biome_deserialize_macros = { path = "../biome/crates/biome_deserialize_macros" }
+biome_diagnostics = { path = "../biome/crates/biome_diagnostics" }
+biome_json_parser = { path = "../biome/crates/biome_json_parser" }
+biome_json_syntax = { path = "../biome/crates/biome_json_syntax" }
 bytes = "1.1.0"
 camino = { version = "1.1.4", features = ["serde1"] }
 chrono = "0.4.23"
