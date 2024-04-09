@@ -36,7 +36,7 @@ workspace = true
 atty = { workspace = true }
 axum = { workspace = true }
 biome_deserialize = { workspace = true }
-biome_deserialize_macros = "0.5.7"
+biome_deserialize_macros = { workspace = true }
 biome_diagnostics = { workspace = true }
 biome_json_parser = { workspace = true }
 biome_json_syntax = { workspace = true }
@@ -127,6 +127,7 @@ turborepo-repository = { path = "../turborepo-repository" }
 turborepo-scm = { workspace = true }
 turborepo-telemetry = { path = "../turborepo-telemetry" }
 turborepo-ui = { workspace = true }
+turborepo-unescape = { workspace = true }
 turborepo-vercel-api = { path = "../turborepo-vercel-api" }
 twox-hash = "1.6.3"
 uds_windows = "1.0.2"

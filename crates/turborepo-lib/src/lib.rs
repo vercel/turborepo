@@ -35,7 +35,6 @@ mod task_graph;
 mod task_hash;
 mod tracing;
 mod turbo_json;
-mod unescape;
 
 pub use crate::{
     child::spawn_child,

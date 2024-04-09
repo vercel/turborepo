@@ -2,58 +2,58 @@
 resolver = "2"
 
 members = [
-  "crates/node-file-trace",
-  "crates/tower-uds",
-  "crates/turbo-static",
-  "crates/turbo-tasks*",
-  "crates/turbo-prehash",
-  "crates/turbopack*",
-  "crates/turborepo*",
-  "packages/turbo-repository/rust",
-  "xtask",
+    "crates/node-file-trace",
+    "crates/tower-uds",
+    "crates/turbo-static",
+    "crates/turbo-tasks*",
+    "crates/turbo-prehash",
+    "crates/turbopack*",
+    "crates/turborepo*",
+    "packages/turbo-repository/rust",
+    "xtask",
 ]
 
 default-members = [
-  "crates/node-file-trace",
-  "crates/turbo-tasks",
-  "crates/turbo-tasks-auto-hash-map",
-  "crates/turbo-tasks-build",
-  "crates/turbo-tasks-bytes",
-  "crates/turbo-tasks-env",
-  "crates/turbo-tasks-fetch",
-  "crates/turbo-tasks-fs",
-  "crates/turbo-tasks-hash",
-  "crates/turbo-tasks-macros-shared",
-  "crates/turbo-tasks-macros-tests",
-  "crates/turbo-tasks-malloc",
-  "crates/turbo-tasks-memory",
-  "crates/turbo-tasks-signposter",
-  "crates/turbo-tasks-signposter-sys",
-  "crates/turbo-tasks-testing",
-  "crates/turbo-tasks-tracing-signpost",
-  "crates/turbopack",
-  "crates/turbopack-bench",
-  "crates/turbopack-cli-utils",
-  "crates/turbopack-core",
-  "crates/turbopack-create-test-app",
-  "crates/turbopack-css",
-  "crates/turbopack-browser",
-  "crates/turbopack-dev-server",
-  "crates/turbopack-ecmascript",
-  "crates/turbopack-env",
-  "crates/turbopack-json",
-  "crates/turbopack-mdx",
-  "crates/turbopack-node",
-  "crates/turbopack-resolve",
-  "crates/turbopack-static",
-  "crates/turbopack-swc-ast-explorer",
-  "crates/turbopack-swc-utils",
-  "crates/turbopack-test-utils",
-  "crates/turbopack-tests",
-  "crates/turbopack-trace-server",
-  "crates/turbopack-trace-utils",
-  "crates/turbopack-wasm",
-  "xtask",
+    "crates/node-file-trace",
+    "crates/turbo-tasks",
+    "crates/turbo-tasks-auto-hash-map",
+    "crates/turbo-tasks-build",
+    "crates/turbo-tasks-bytes",
+    "crates/turbo-tasks-env",
+    "crates/turbo-tasks-fetch",
+    "crates/turbo-tasks-fs",
+    "crates/turbo-tasks-hash",
+    "crates/turbo-tasks-macros-shared",
+    "crates/turbo-tasks-macros-tests",
+    "crates/turbo-tasks-malloc",
+    "crates/turbo-tasks-memory",
+    "crates/turbo-tasks-signposter",
+    "crates/turbo-tasks-signposter-sys",
+    "crates/turbo-tasks-testing",
+    "crates/turbo-tasks-tracing-signpost",
+    "crates/turbopack",
+    "crates/turbopack-bench",
+    "crates/turbopack-cli-utils",
+    "crates/turbopack-core",
+    "crates/turbopack-create-test-app",
+    "crates/turbopack-css",
+    "crates/turbopack-browser",
+    "crates/turbopack-dev-server",
+    "crates/turbopack-ecmascript",
+    "crates/turbopack-env",
+    "crates/turbopack-json",
+    "crates/turbopack-mdx",
+    "crates/turbopack-node",
+    "crates/turbopack-resolve",
+    "crates/turbopack-static",
+    "crates/turbopack-swc-ast-explorer",
+    "crates/turbopack-swc-utils",
+    "crates/turbopack-test-utils",
+    "crates/turbopack-tests",
+    "crates/turbopack-trace-server",
+    "crates/turbopack-trace-utils",
+    "crates/turbopack-wasm",
+    "xtask",
 ]
 
 [workspace.metadata.groups]
@@ -62,18 +62,18 @@ default-members = [
 turborepo-libraries = ["path:crates/turborepo-*"]
 turborepo = ["path:crates/turborepo*"]
 turbopack = [
-  "path:crates/turbopack*",
-  "path:crates/turbo-tasks*",
-  "path:crates/node-file-trace",
+    "path:crates/turbopack*",
+    "path:crates/turbo-tasks*",
+    "path:crates/node-file-trace",
 ]
 
 # List of the packages can be compiled against wasm32-wasi target.
 turbopack-wasi = [
-  "path:crates/turbo-tasks-auto-hash-map",
-  "path:crates/turbo-tasks-hash",
-  "path:crates/turbo-tasks-macro",
-  "path:crates/turbo-tasks-macros-shared",
-  "path:crates/turbo-tasks-build",
+    "path:crates/turbo-tasks-auto-hash-map",
+    "path:crates/turbo-tasks-hash",
+    "path:crates/turbo-tasks-macro",
+    "path:crates/turbo-tasks-macros-shared",
+    "path:crates/turbo-tasks-build",
 ]
 
 [workspace.lints.clippy]
@@ -115,8 +115,8 @@ modularize_imports = { version = "0.68.14" }
 styled_components = { version = "0.96.15" }
 styled_jsx = { version = "0.73.22" }
 swc_core = { version = "0.92.10", features = [
-  "ecma_loader_lru",
-  "ecma_loader_parking_lot",
+    "ecma_loader_lru",
+    "ecma_loader_parking_lot",
 ] }
 swc_emotion = { version = "0.72.13" }
 swc_relay = { version = "0.44.14" }
@@ -185,6 +185,7 @@ turborepo-lib = { path = "crates/turborepo-lib", default-features = false }
 turborepo-lockfiles = { path = "crates/turborepo-lockfiles" }
 turborepo-repository = { path = "crates/turborepo-repository" }
 turborepo-ui = { path = "crates/turborepo-ui" }
+turborepo-unescape = { path = "crates/turborepo-unescape" }
 turborepo-scm = { path = "crates/turborepo-scm" }
 wax = { path = "crates/turborepo-wax" }
 turborepo-vercel-api = { path = "crates/turborepo-vercel-api" }
@@ -198,7 +199,7 @@ turborepo-vt100 = { path = "crates/turborepo-vt100" }
 reqwest = { version = "=0.11.17", default-features = false }
 
 chromiumoxide = { version = "0.5.0", features = [
-  "tokio-runtime",
+    "tokio-runtime",
 ], default-features = false }
 # For matching on errors from chromiumoxide. Keep in
 # sync with chromiumoxide's tungstenite requirement.
@@ -207,18 +208,19 @@ tungstenite = "0.18.0"
 anyhow = "1.0.69"
 assert_cmd = "2.0.8"
 async-compression = { version = "0.3.13", default-features = false, features = [
-  "gzip",
-  "tokio",
+    "gzip",
+    "tokio",
 ] }
 async-trait = "0.1.64"
 atty = "0.2.14"
 axum = "0.6.2"
 axum-server = "0.4.4"
-biome_console = "0.5.7"
-biome_deserialize = "0.5.7"
-biome_diagnostics = "0.5.7"
-biome_json_parser = "0.5.7"
-biome_json_syntax = "0.5.7"
+biome_console = { path = "../biome/crates/biome_console" }
+biome_deserialize = { path = "../biome/crates/biome_deserialize", features = ["serde"] }
+biome_deserialize_macros = { path = "../biome/crates/biome_deserialize_macros" }
+biome_diagnostics = { path = "../biome/crates/biome_diagnostics" }
+biome_json_parser = { path = "../biome/crates/biome_json_parser" }
+biome_json_syntax = { path = "../biome/crates/biome_json_syntax" }
 bytes = "1.1.0"
 camino = { version = "1.1.4", features = ["serde1"] }
 chrono = "0.4.23"
@@ -244,9 +246,9 @@ indoc = "2.0.0"
 itertools = "0.10.5"
 lazy_static = "1.4.0"
 lightningcss = { version = "1.0.0-alpha.57", features = [
-  "serde",
-  "visitor",
-  "into_owned",
+    "serde",
+    "visitor",
+    "into_owned",
 ] }
 mime = "0.3.16"
 nohash-hasher = "0.2.0"
@@ -282,10 +284,10 @@ serde_with = "2.3.2"
 serde_yaml = "0.9.17"
 sha2 = "0.10.6"
 smallvec = { version = "1.13.1", features = [
-  "serde",
-  "const_generics",
-  "union",
-  "const_new",
+    "serde",
+    "const_generics",
+    "union",
+    "const_new",
 ] }
 sourcemap = "8.0.1"
 syn = "1.0.107"
