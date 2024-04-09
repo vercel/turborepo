@@ -159,8 +159,7 @@ impl Engine<Built> {
 
         let new_graph = self.task_graph.filter_map(
             |node_idx, node| {
-                let task = &self.task_graph[node_idx];
-                match task {
+                match &self.task_graph[node_idx] {
                     TaskNode::Root => {}
                     TaskNode::Task(task) => {
                         // We only want to include tasks that are not persistent
