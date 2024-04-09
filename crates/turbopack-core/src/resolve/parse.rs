@@ -267,8 +267,8 @@ impl Request {
     pub fn raw(
         request: Value<Pattern>,
         query: Vc<String>,
-        force_in_lookup_dir: bool,
         fragment: Vc<String>,
+        force_in_lookup_dir: bool,
     ) -> Vc<Self> {
         Self::cell(Request::Raw {
             path: request.into_value(),
