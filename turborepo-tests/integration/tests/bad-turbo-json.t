@@ -76,27 +76,21 @@ Run build with syntax errors in turbo.json
   
     x failed to parse turbo json
   
-  Error: turbo_json_parse_error
-  
-    x Expected a property but instead found ','.
+  Error:   x Expected a property but instead found ','.
      ,-[1:1]
    1 | {
    2 |   "$schema": "https://turbo.build/schema.json",,
      :                                                ^
    3 |   "globalDependencies": ["foo.txt"],
      `----
-  Error: turbo_json_parse_error
-  
-    x expected `,` but instead found `42`
+  Error:   x expected `,` but instead found `42`
       ,-[11:1]
    11 |     "my-app#build": {
    12 |       "outputs": ["banana.txt", "apple.json"]42,
       :                                              ^^
    13 |       "dotEnv": [".env.local"
       `----
-  Error: turbo_json_parse_error
-  
-    x expected `,` but instead found `}`
+  Error:   x expected `,` but instead found `}`
       ,-[13:1]
    13 |       "dotEnv": [".env.local"
    14 |     },
