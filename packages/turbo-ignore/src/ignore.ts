@@ -11,6 +11,13 @@ import { shouldWarn } from "./errors";
 import type { TurboIgnoreArg, TurboIgnoreOptions } from "./types";
 import { checkCommit } from "./checkCommit";
 
+function trackOptions(opts: TurboIgnoreOptions) {
+  opts.telemetry?.trackOptionTask(opts.task);
+  opts.telemetry?.trackOptionFallback(opts.fallback);
+  opts.telemetry?.trackOptionDirectory(opts.directory);
+  opts.telemetry?.trackOptionMaxBuffer(opts.maxBuffer);
+}
+
 function ignoreBuild() {
   log("⏭ Ignoring the change");
   return process.exit(0);
@@ -25,6 +32,10 @@ export function turboIgnore(
   workspaceArg: TurboIgnoreArg,
   opts: TurboIgnoreOptions
 ) {
+  opts.telemetry?.trackCommandStatus({ command: "ignore", status: "start" });
+  opts.telemetry?.trackArgumentWorkspace(workspaceArg !== undefined);
+  trackOptions(opts);
+
   const inputs = {
     workspace: workspaceArg,
     ...opts,
@@ -108,6 +119,7 @@ export function turboIgnore(
     if (err) {
       const { level, code, message } = shouldWarn({ err: err.message });
       if (level === "warn") {
+        opts.telemetry?.trackCommandWarning(message);
         warn(message);
       } else {
         error(`${code}: ${err.message}`);
@@ -142,6 +154,8 @@ export function turboIgnore(
       error(`Failed to parse JSON output from \`${command}\`.`);
       error(e);
       return continueBuild();
+    } finally {
+      opts.telemetry?.trackCommandStatus({ command: "ignore", status: "end" });
     }
   });
 }

@@ -26,15 +26,17 @@
   },
   "dependencies": {
     "chalk": "^4.1.2",
+    "ci-info": "^4.0.0",
     "got": "^11.8.6",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.1",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
     "@turbo/eslint-config": "workspace:*",
     "@turbo/test-utils": "workspace:*",
-    "@turbo/utils": "workspace:*",
     "@turbo/tsconfig": "workspace:*",
     "@turbo/types": "workspace:*",
+    "@turbo/utils": "workspace:*",
     "@types/jest": "^27.4.0",
     "@types/node": "^20.11.30",
     "@types/uuid": "^9.0.0",
@@ -44,6 +46,6 @@
     "typescript": "5.3.3"
   },
   "peerDependencies": {
-    "commander": "^10.0.0"
+    "commander": "^11.0.0"
   }
 }
