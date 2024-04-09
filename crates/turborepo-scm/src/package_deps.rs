@@ -291,12 +291,12 @@ impl Git {
 
 #[cfg(test)]
 mod tests {
-    use std::{assert_matches::assert_matches, collections::HashMap, process::Command};
+    use std::{assert_matches::assert_matches, process::Command};
 
-    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
+    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
     use super::*;
-    use crate::{manual::get_package_file_hashes_without_git, SCM};
+    use crate::manual::get_package_file_hashes_without_git;
 
     fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp_dir = tempfile::tempdir().unwrap();

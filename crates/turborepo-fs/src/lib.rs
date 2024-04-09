@@ -117,7 +117,7 @@ fn copy_file_with_type(
 
 #[cfg(test)]
 mod tests {
-    use std::{io, path::Path};
+    use std::path::Path;
 
     use turbopath::AbsoluteSystemPathBuf;
 

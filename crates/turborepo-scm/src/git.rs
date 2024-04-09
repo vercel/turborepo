@@ -452,7 +452,7 @@ mod tests {
         // Create a file nested in subdir
         fs::create_dir_all(repo_root.path().join("subdir"))?;
         let new_file = repo_root.path().join("subdir").join("baz.js");
-        fs::write(&new_file, "let x = 2;")?;
+        fs::write(new_file, "let x = 2;")?;
 
         // The new directory and files are not yet committed, they shouldn't show up.
         let files = changed_files(

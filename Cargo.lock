@@ -611,18 +611,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "axum-macros"
-version = "0.3.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bb524613be645939e280b7279f7b017f98cf7f5ef084ec374df373530e73277"
-dependencies = [
- "heck 0.4.1",
- "proc-macro2",
- "quote",
- "syn 2.0.32",
-]
-
-[[package]]
 name = "axum-server"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1358,7 +1346,7 @@ dependencies = [
  "chromiumoxide_types",
  "dunce",
  "fnv",
- "futures 0.3.28",
+ "futures 0.3.30",
  "futures-timer",
  "pin-project-lite",
  "serde",
@@ -1648,7 +1636,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e57ff02e8ad8e06ab9731d5dc72dc23bef9200778eae1a89d555d8c42e5d4a86"
 dependencies = [
  "prost 0.11.8",
- "prost-types 0.11.8",
+ "prost-types",
  "tonic 0.8.3",
  "tracing-core",
 ]
@@ -1662,10 +1650,10 @@ dependencies = [
  "console-api",
  "crossbeam-channel",
  "crossbeam-utils 0.8.16",
- "futures 0.3.28",
+ "futures 0.3.30",
  "hdrhistogram",
  "humantime",
- "prost-types 0.11.8",
+ "prost-types",
  "serde",
  "serde_json",
  "thread_local",
@@ -1847,9 +1835,9 @@ dependencies = [
 
 [[package]]
 name = "corosensei"
-version = "0.1.3"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9847f90f32a50b0dcbd68bc23ff242798b13080b97b0569f6ed96a45ce4cf2cd"
+checksum = "80128832c58ea9cbd041d2a759ec449224487b2c1e400453d99d244eead87a8e"
 dependencies = [
  "autocfg 1.1.0",
  "cfg-if 1.0.0",
@@ -2001,7 +1989,7 @@ dependencies = [
  "ciborium",
  "clap 3.2.23",
  "criterion-plot",
- "futures 0.3.28",
+ "futures 0.3.30",
  "itertools 0.10.5",
  "lazy_static",
  "num-traits",
@@ -2504,15 +2492,6 @@ dependencies = [
  "block-buffer 0.10.4",
  "crypto-common",
  "subtle",
-]
-
-[[package]]
-name = "directories"
-version = "4.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f51c5d4ddabd36886dd3e1438cb358cdcb0d7c499cb99cb4ac2e38e18b5cb210"
-dependencies = [
- "dirs-sys 0.3.7",
 ]
 
 [[package]]
@@ -3025,9 +3004,9 @@ checksum = "3a471a38ef8ed83cd6e40aa59c1ffe17db6855c18e3604d9c4ed8c08ebc28678"
 
 [[package]]
 name = "futures"
-version = "0.3.28"
+version = "0.3.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23342abe12aba583913b2e62f22225ff9c950774065e4bfb61a19cd9770fec40"
+checksum = "645c6916888f6cb6350d2550b80fb63e734897a8498abe35cfb732b6487804b0"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -3040,9 +3019,9 @@ dependencies = [
 
 [[package]]
 name = "futures-channel"
-version = "0.3.28"
+version = "0.3.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "955518d47e09b25bbebc7a18df10b81f0c766eaf4c4f1cccef2fca5f2a4fb5f2"
+checksum = "eac8f7d7865dcb88bd4373ab671c8cf4508703796caa2b1985a9ca867b3fcb78"
 dependencies = [
  "futures-core",
  "futures-sink",
@@ -3056,9 +3035,9 @@ checksum = "dfc6580bb841c5a68e9ef15c77ccc837b40a7504914d52e47b8b0e9bbda25a1d"
 
 [[package]]
 name = "futures-executor"
-version = "0.3.28"
+version = "0.3.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ccecee823288125bd88b4d7f565c9e58e41858e47ab72e8ea2d64e93624386e0"
+checksum = "a576fc72ae164fca6b9db127eaa9a9dda0d61316034f33a0a0d4eda41f02b01d"
 dependencies = [
  "futures-core",
  "futures-task",
@@ -3067,9 +3046,9 @@ dependencies = [
 
 [[package]]
 name = "futures-io"
-version = "0.3.28"
+version = "0.3.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fff74096e71ed47f8e023204cfd0aa1289cd54ae5430a9523be060cdb849964"
+checksum = "a44623e20b9681a318efdd71c299b6b222ed6f231972bfe2f224ebad6311f0c1"
 
 [[package]]
 name = "futures-lite"
@@ -3088,9 +3067,9 @@ dependencies = [
 
 [[package]]
 name = "futures-macro"
-version = "0.3.28"
+version = "0.3.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89ca545a94061b6365f2c7355b4b32bd20df3ff95f02da9329b34ccc3bd6ee72"
+checksum = "87750cf4b7a4c0625b1529e4c543c2182106e4dedc60a2a6455e00d212c489ac"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3103,22 +3082,22 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fde5a672a61f96552aa5ed9fd9c81c3fbdae4be9b1e205d6eaf17c83705adc0f"
 dependencies = [
- "futures 0.3.28",
+ "futures 0.3.30",
  "pin-project-lite",
  "tokio",
 ]
 
 [[package]]
 name = "futures-sink"
-version = "0.3.28"
+version = "0.3.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f43be4fe21a13b9781a69afa4985b0f6ee0e1afab2c6f454a8cf30e2b2237b6e"
+checksum = "9fb8e00e87438d937621c1c6269e53f536c14d3fbd6a042bb24879e57d474fb5"
 
 [[package]]
 name = "futures-task"
-version = "0.3.28"
+version = "0.3.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76d3d132be6c0e6aa1534069c705a74a5997a356c0dc2f86a47765e5617c5b65"
+checksum = "38d84fa142264698cdce1a9f9172cf383a0c82de1bddcf3092901442c4097004"
 
 [[package]]
 name = "futures-timer"
@@ -3128,9 +3107,9 @@ checksum = "e64b03909df88034c26dc1547e8970b91f98bdb65165d6a4e9110d94263dbb2c"
 
 [[package]]
 name = "futures-util"
-version = "0.3.28"
+version = "0.3.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26b01e40b772d54cf6c6d721c1d1abd0647a0106a12ecaa1c186273392a69533"
+checksum = "3d6401deb83407ab3da39eba7e33987a73c3df0c82b4bb5813ee871c19c41d48"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -3299,13 +3278,10 @@ dependencies = [
 name = "globwatch"
 version = "0.1.0"
 dependencies = [
- "camino",
- "futures 0.3.28",
+ "futures 0.3.30",
  "itertools 0.10.5",
  "merge-streams",
  "notify",
- "notify-debouncer-mini",
- "pin-project",
  "stop-token",
  "test-case",
  "thiserror",
@@ -3316,7 +3292,6 @@ dependencies = [
  "tracing-test",
  "turbopath",
  "unic-segment",
- "walkdir",
 ]
 
 [[package]]
@@ -3945,15 +3920,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "intervaltree"
-version = "0.2.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "270bc34e57047cab801a8c871c124d9dc7132f6473c6401f645524f4e6edd111"
-dependencies = [
- "smallvec 1.13.1",
-]
-
-[[package]]
 name = "io-lifetimes"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4132,12 +4098,6 @@ checksum = "406cda4b368d531c842222cf9d2600a9a4acce8d29423695379c6868a143a9ee"
 dependencies = [
  "wasm-bindgen",
 ]
-
-[[package]]
-name = "json_comments"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41ee439ee368ba4a77ac70d04f14015415af8600d6c894dc1f11bd79758c57d5"
 
 [[package]]
 name = "jsonc-parser"
@@ -5188,15 +5148,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "notify-debouncer-mini"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e55ee272914f4563a2f8b8553eb6811f3c0caea81c756346bad15b7e3ef969f0"
-dependencies = [
- "notify",
-]
-
-[[package]]
 name = "ntapi"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6182,7 +6133,7 @@ dependencies = [
  "petgraph",
  "prettyplease 0.1.25",
  "prost 0.11.8",
- "prost-types 0.11.8",
+ "prost-types",
  "regex",
  "syn 1.0.109",
  "tempfile",
@@ -6225,15 +6176,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "prost-types"
-version = "0.12.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "193898f59edcf43c26227dcd4c8427f00d99d61e95dcde58dabd49fa291d470e"
-dependencies = [
- "prost 0.12.3",
-]
-
-[[package]]
 name = "psm"
 version = "0.1.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6271,15 +6213,6 @@ dependencies = [
  "bitflags 1.3.2",
  "memchr",
  "unicase 2.6.0",
-]
-
-[[package]]
-name = "qstring"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d464fae65fff2680baf48019211ce37aaec0c78e9264c84a3e484717f965104e"
-dependencies = [
- "percent-encoding 2.3.0",
 ]
 
 [[package]]
@@ -6876,7 +6809,7 @@ version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b07f2d176c472198ec1e6551dc7da28f1c089652f66a7b722676c2238ebc0edf"
 dependencies = [
- "futures 0.3.28",
+ "futures 0.3.30",
  "futures-timer",
  "rstest_macros",
  "rustc_version 0.4.0",
@@ -6981,16 +6914,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rustc_version_runtime"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2dd18cd2bae1820af0b6ad5e54f4a51d0f3fcc53b05f845675074efcc7af071d"
-dependencies = [
- "rustc_version 0.4.0",
- "semver 1.0.18",
-]
-
-[[package]]
 name = "rustix"
 version = "0.37.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7085,7 +7008,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ed36cdb20de66d89a17ea04b8883fc7a386f2cf877aaedca5005583ce4876ff"
 dependencies = [
  "crossbeam-channel",
- "futures 0.3.28",
+ "futures 0.3.30",
  "futures-channel",
  "futures-executor",
  "num_cpus",
@@ -9354,7 +9277,7 @@ checksum = "e3fe0f8743615139eed21376c94d8201be331040c8999e9a7c86a43d0ca2ff8b"
 dependencies = [
  "anyhow",
  "enumset",
- "futures 0.3.28",
+ "futures 0.3.30",
  "once_cell",
  "parking_lot 0.12.1",
  "serde",
@@ -10249,19 +10172,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tonic-reflection"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "548c227bd5c0fae5925812c4ec6c66ffcfced23ea370cb823f4d18f0fc1cb6a7"
-dependencies = [
- "prost 0.12.3",
- "prost-types 0.12.3",
- "tokio",
- "tokio-stream",
- "tonic 0.11.0",
-]
-
-[[package]]
 name = "tower"
 version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10297,7 +10207,7 @@ dependencies = [
  "auto_impl",
  "bytes 1.5.0",
  "dashmap",
- "futures 0.3.28",
+ "futures 0.3.30",
  "httparse",
  "lsp-types",
  "memchr",
@@ -10332,7 +10242,6 @@ name = "tower-uds"
 version = "0.1.0"
 dependencies = [
  "async-io",
- "http",
  "tokio",
  "tokio-util",
  "tower",
@@ -10533,20 +10442,10 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "build-target",
- "clap 4.5.2",
- "clap_complete",
- "command-group",
- "dunce",
  "human-panic",
  "itertools 0.10.5",
  "miette 5.10.0",
  "pretty_assertions",
- "serde",
- "serde_json",
- "serde_yaml 0.9.27",
- "tiny-gradient",
- "tokio-util",
- "tracing",
  "turborepo-lib",
  "winapi 0.3.9",
 ]
@@ -10562,7 +10461,7 @@ dependencies = [
  "dashmap",
  "erased-serde",
  "event-listener",
- "futures 0.3.28",
+ "futures 0.3.30",
  "indexmap 1.9.3",
  "mopa",
  "nohash-hasher",
@@ -10574,7 +10473,6 @@ dependencies = [
  "serde_json",
  "serde_regex",
  "serde_test",
- "stable_deref_trait",
  "thiserror",
  "tokio",
  "tracing",
@@ -10600,11 +10498,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytes 1.5.0",
- "futures 0.3.28",
+ "futures 0.3.30",
  "serde",
  "serde_bytes",
  "serde_test",
- "tokio",
  "turbo-tasks",
  "turbo-tasks-build",
 ]
@@ -10628,7 +10525,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "httpmock",
- "indexmap 1.9.3",
  "lazy_static",
  "reqwest",
  "serde",
@@ -10653,7 +10549,7 @@ dependencies = [
  "criterion",
  "dashmap",
  "dunce",
- "futures 0.3.28",
+ "futures 0.3.30",
  "futures-retry",
  "include_dir",
  "indexmap 1.9.3",
@@ -10694,7 +10590,6 @@ name = "turbo-tasks-macros"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "convert_case 0.6.0",
  "proc-macro-error",
  "proc-macro2",
  "quote",
@@ -10766,7 +10661,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "auto-hash-map",
- "futures 0.3.28",
+ "futures 0.3.30",
  "lazy_static",
  "tokio",
  "turbo-tasks",
@@ -10793,7 +10688,7 @@ dependencies = [
  "async-recursion",
  "criterion",
  "difference",
- "futures 0.3.28",
+ "futures 0.3.30",
  "indexmap 1.9.3",
  "lazy_static",
  "regex",
@@ -10812,9 +10707,7 @@ dependencies = [
  "turbopack-core",
  "turbopack-css",
  "turbopack-ecmascript",
- "turbopack-ecmascript-plugins",
  "turbopack-env",
- "turbopack-image",
  "turbopack-json",
  "turbopack-mdx",
  "turbopack-node",
@@ -10829,12 +10722,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chromiumoxide",
- "clap 4.5.2",
- "console-subscriber",
  "criterion",
- "dunce",
- "futures 0.3.28",
- "mime 0.3.17",
+ "futures 0.3.30",
  "nix 0.26.2",
  "once_cell",
  "owo-colors",
@@ -10842,7 +10731,6 @@ dependencies = [
  "portpicker",
  "rand 0.8.5",
  "regex",
- "serde",
  "serde_json",
  "tempfile",
  "tokio",
@@ -10851,7 +10739,6 @@ dependencies = [
  "turbo-tasks-testing",
  "turbopack-create-test-app",
  "url 2.4.1",
- "webbrowser",
 ]
 
 [[package]]
@@ -10918,15 +10805,12 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_qs",
- "swc_core",
  "tracing",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
  "turbo-tasks-hash",
- "turbopack",
  "turbopack-core",
- "turbopack-css",
  "turbopack-ecmascript",
  "turbopack-ecmascript-runtime",
  "turbopack-resolve",
@@ -10942,15 +10826,12 @@ dependencies = [
  "console-subscriber",
  "criterion",
  "dunce",
- "futures 0.3.28",
+ "futures 0.3.30",
  "mime 0.3.17",
- "once_cell",
  "owo-colors",
  "regex",
  "serde",
- "serde_json",
  "tokio",
- "tracing",
  "tracing-signpost",
  "tracing-subscriber",
  "turbo-tasks",
@@ -10983,14 +10864,12 @@ dependencies = [
  "anyhow",
  "clap 4.5.2",
  "crossterm 0.26.1",
- "once_cell",
  "owo-colors",
  "serde",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
  "turbopack-core",
- "turbopack-ecmascript",
  "turbopack-resolve",
 ]
 
@@ -11003,18 +10882,16 @@ dependencies = [
  "async-trait",
  "auto-hash-map",
  "browserslist-rs",
- "futures 0.3.28",
+ "futures 0.3.30",
  "indexmap 1.9.3",
  "lazy_static",
  "once_cell",
  "patricia_tree",
- "qstring",
  "ref-cast",
  "regex",
  "rstest",
  "serde",
  "serde_json",
- "serde_qs",
  "sourcemap",
  "swc_core",
  "tokio",
@@ -11045,7 +10922,6 @@ name = "turbopack-css"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-trait",
  "indexmap 1.9.3",
  "indoc",
  "lightningcss",
@@ -11074,13 +10950,12 @@ dependencies = [
  "anyhow",
  "async-compression",
  "auto-hash-map",
- "futures 0.3.28",
+ "futures 0.3.30",
  "hyper 0.14.28",
  "hyper-tungstenite",
  "indexmap 1.9.3",
  "mime 0.3.17",
  "mime_guess",
- "once_cell",
  "parking_lot 0.12.1",
  "pin-project-lite",
  "serde",
@@ -11111,7 +10986,6 @@ dependencies = [
  "async-trait",
  "criterion",
  "either",
- "futures 0.3.28",
  "indexmap 1.9.3",
  "indoc",
  "lazy_static",
@@ -11120,13 +10994,11 @@ dependencies = [
  "once_cell",
  "parking_lot 0.12.1",
  "petgraph",
- "pin-project-lite",
  "regex",
  "rstest",
  "rustc-hash",
  "serde",
  "serde_json",
- "serde_qs",
  "sourcemap",
  "swc_core",
  "tokio",
@@ -11163,7 +11035,6 @@ dependencies = [
  "indexmap 1.9.3",
  "lightningcss",
  "modularize_imports",
- "parcel_selectors",
  "serde",
  "serde_json",
  "styled_components",
@@ -11185,7 +11056,6 @@ dependencies = [
  "anyhow",
  "indoc",
  "serde",
- "swc_core",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
@@ -11216,7 +11086,6 @@ dependencies = [
  "anyhow",
  "base64 0.21.4",
  "image 0.25.0",
- "indexmap 1.9.3",
  "mime 0.3.17",
  "once_cell",
  "regex",
@@ -11263,9 +11132,8 @@ dependencies = [
  "anyhow",
  "async-stream",
  "async-trait",
- "bytes 1.5.0",
  "const_format",
- "futures 0.3.28",
+ "futures 0.3.30",
  "futures-retry",
  "indexmap 1.9.3",
  "indoc",
@@ -11276,7 +11144,6 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
- "serde_qs",
  "tokio",
  "tracing",
  "turbo-tasks",
@@ -11289,8 +11156,6 @@ dependencies = [
  "turbopack-dev-server",
  "turbopack-ecmascript",
  "turbopack-resolve",
- "url 2.4.1",
- "urlencoding",
 ]
 
 [[package]]
@@ -11301,16 +11166,12 @@ dependencies = [
  "indexmap 1.9.3",
  "indoc",
  "serde",
- "serde_json",
- "serde_qs",
- "sourcemap",
  "tracing",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
  "turbo-tasks-hash",
  "turbopack-core",
- "turbopack-css",
  "turbopack-ecmascript",
  "turbopack-ecmascript-runtime",
  "urlencoding",
@@ -11321,18 +11182,14 @@ name = "turbopack-resolve"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-recursion",
- "futures 0.3.28",
  "indexmap 1.9.3",
  "lazy_static",
  "regex",
  "serde",
  "serde_json",
- "tokio",
  "tracing",
  "turbo-tasks",
  "turbo-tasks-build",
- "turbo-tasks-env",
  "turbo-tasks-fs",
  "turbopack-core",
 ]
@@ -11385,7 +11242,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "dunce",
- "futures 0.3.28",
+ "futures 0.3.30",
  "once_cell",
  "serde",
  "serde_json",
@@ -11415,13 +11272,9 @@ name = "turbopack-trace-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap 4.5.2",
  "either",
- "futures 0.3.28",
  "indexmap 1.9.3",
- "intervaltree",
  "itertools 0.10.5",
- "owo-colors",
  "postcard",
  "rustc-demangle",
  "serde",
@@ -11457,7 +11310,6 @@ dependencies = [
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
- "turbo-tasks-hash",
  "turbopack-core",
  "turbopack-ecmascript",
  "wasmparser 0.110.0",
@@ -11487,7 +11339,7 @@ name = "turborepo-analytics"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "futures 0.3.28",
+ "futures 0.3.30",
  "thiserror",
  "tokio",
  "tracing",
@@ -11508,7 +11360,7 @@ dependencies = [
  "port_scanner",
  "regex",
  "reqwest",
- "rustc_version_runtime 0.2.1",
+ "rustc_version_runtime",
  "serde",
  "serde_json",
  "test-case",
@@ -11557,14 +11409,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64 0.21.4",
- "bytes 1.5.0",
  "camino",
- "chrono",
- "dunce",
- "futures 0.3.28",
- "hex",
+ "futures 0.3.30",
  "hmac",
- "lazy_static",
  "libc",
  "os_str_bytes",
  "path-clean 1.0.1",
@@ -11583,7 +11430,6 @@ dependencies = [
  "turbopath",
  "turborepo-analytics",
  "turborepo-api-client",
- "turborepo-ui",
  "turborepo-vercel-api-mock",
  "zstd 0.12.3+zstd.1.5.2",
 ]
@@ -11610,7 +11456,6 @@ name = "turborepo-env"
 version = "0.1.0"
 dependencies = [
  "hex",
- "lazy_static",
  "regex",
  "serde",
  "sha2",
@@ -11633,12 +11478,9 @@ dependencies = [
 name = "turborepo-filewatch"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "bitflags 1.3.2",
- "dashmap",
  "fsevent-sys",
- "futures 0.3.28",
- "itertools 0.10.5",
+ "futures 0.3.30",
  "libc",
  "notify",
  "tempfile",
@@ -11668,7 +11510,7 @@ dependencies = [
 name = "turborepo-graph-utils"
 version = "0.1.0"
 dependencies = [
- "futures 0.3.28",
+ "futures 0.3.30",
  "itertools 0.10.5",
  "log 0.4.20",
  "petgraph",
@@ -11687,8 +11529,6 @@ dependencies = [
  "async-stream",
  "atty",
  "axum",
- "axum-server",
- "biome_console",
  "biome_deserialize",
  "biome_diagnostics",
  "biome_json_parser",
@@ -11706,30 +11546,23 @@ dependencies = [
  "crossterm 0.26.1",
  "ctrlc",
  "dialoguer",
- "directories 4.0.1",
  "dirs-next",
  "dunce",
  "either",
- "futures 0.3.28",
+ "futures 0.3.30",
  "futures-core",
  "globwalk",
  "globwatch",
  "go-parse-duration",
  "hex",
- "hostname",
  "humantime",
  "ignore",
- "indicatif",
- "is-terminal",
  "itertools 0.10.5",
- "json_comments",
  "jsonc-parser 0.21.0",
- "lazy-regex",
  "lazy_static",
  "libc",
  "miette 5.10.0",
  "nix 0.26.2",
- "node-semver",
  "notify",
  "num_cpus",
  "owo-colors",
@@ -11745,7 +11578,6 @@ dependencies = [
  "rayon",
  "regex",
  "reqwest",
- "rustc_version_runtime 0.2.1",
  "semver 1.0.18",
  "serde",
  "serde_json",
@@ -11767,7 +11599,6 @@ dependencies = [
  "tokio-util",
  "tonic 0.11.0",
  "tonic-build",
- "tonic-reflection",
  "tower",
  "tracing",
  "tracing-appender",
@@ -11796,7 +11627,6 @@ dependencies = [
  "turborepo-vercel-api-mock",
  "twox-hash",
  "uds_windows",
- "url 2.4.1",
  "wax",
  "webbrowser",
  "which",
@@ -11829,19 +11659,13 @@ name = "turborepo-lsp"
 version = "0.1.0"
 dependencies = [
  "crop",
- "futures 0.3.28",
  "itertools 0.10.5",
  "jsonc-parser 0.23.0",
  "pidlock",
  "serde_json",
  "tokio",
  "tokio-retry",
- "tokio-util",
- "tower",
  "tower-lsp",
- "tower-uds",
- "tracing",
- "tracing-subscriber",
  "turbopath",
  "turborepo-lib",
  "turborepo-repository",
@@ -11887,7 +11711,6 @@ dependencies = [
  "turbopath",
  "turborepo-graph-utils",
  "turborepo-lockfiles",
- "turborepo-scm",
  "wax",
  "which",
 ]
@@ -11920,12 +11743,10 @@ dependencies = [
  "async-trait",
  "chrono",
  "config",
- "dirs-next",
- "futures 0.3.28",
+ "futures 0.3.30",
  "hex",
  "once_cell",
  "reqwest",
- "rustc_version_runtime 0.3.0",
  "serde",
  "serde_json",
  "sha2",
@@ -11964,7 +11785,6 @@ dependencies = [
  "tracing",
  "tui-term",
  "turbopath",
- "turborepo-ci",
  "turborepo-vt100",
  "winapi 0.3.9",
 ]
@@ -11987,7 +11807,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
- "axum-macros",
  "axum-server",
  "futures-util",
  "port_scanner",
@@ -12207,7 +12026,7 @@ version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2f8811797a24ff123db3c6e1087aa42551d03d772b3724be421ad063da1f5f3f"
 dependencies = [
- "directories 5.0.1",
+ "directories",
  "reqwest",
  "semver 1.0.18",
  "serde",
@@ -12361,7 +12180,7 @@ dependencies = [
  "derivative",
  "filetime",
  "fs_extra",
- "futures 0.3.28",
+ "futures 0.3.30",
  "getrandom",
  "indexmap 1.9.3",
  "lazy_static",
@@ -12385,7 +12204,7 @@ dependencies = [
  "async-trait",
  "bytes 1.5.0",
  "derivative",
- "futures 0.3.28",
+ "futures 0.3.30",
  "mio 0.8.8",
  "serde",
  "socket2 0.4.9",
@@ -12855,7 +12674,7 @@ dependencies = [
  "cooked-waker",
  "dashmap",
  "derivative",
- "futures 0.3.28",
+ "futures 0.3.30",
  "getrandom",
  "heapless",
  "hex",
