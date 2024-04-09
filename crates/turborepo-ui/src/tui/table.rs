@@ -9,6 +9,7 @@ use ratatui::{
         Block, BorderType, Borders, Cell, Paragraph, Row, StatefulWidget, Table, TableState, Widget,
     },
 };
+use tracing::debug;
 
 use super::{
     task::{Finished, Planned, Running, Task},
@@ -16,7 +17,8 @@ use super::{
     Error,
 };
 
-const FOOTER_TEXT: &str = "Use arrow keys to navigate";
+const FOOTER_TEXT: &str = "Use arrow keys to navigate. Press `Enter` to interact with a task and \
+                           `Ctrl-Z` to stop interacting";
 
 /// A widget that renders a table of their tasks and their current status
 ///
@@ -78,7 +80,10 @@ impl TaskTable {
         let planned_idx = self
             .planned
             .binary_search_by(|planned_task| planned_task.name().cmp(task))
-            .map_err(|_| Error::TaskNotFound { name: task.into() })?;
+            .map_err(|_| {
+                debug!("could not find '{task}' to start");
+                Error::TaskNotFound { name: task.into() }
+            })?;
         let planned = self.planned.remove(planned_idx);
         let old_row_idx = self.finished.len() + self.running.len() + planned_idx;
         let new_row_idx = self.finished.len() + self.running.len();
@@ -107,7 +112,10 @@ impl TaskTable {
             .running
             .iter()
             .position(|running| running.name() == task)
-            .ok_or_else(|| Error::TaskNotFound { name: task.into() })?;
+            .ok_or_else(|| {
+                debug!("could not find '{task}' to finish");
+                Error::TaskNotFound { name: task.into() }
+            })?;
         let old_row_idx = self.finished.len() + running_idx;
         let new_row_idx = self.finished.len();
         let running = self.running.remove(running_idx);
@@ -170,6 +178,13 @@ impl TaskTable {
         } else {
             None
         }
+    }
+
+    pub fn tasks_started(&self) -> impl Iterator<Item = &str> + '_ {
+        self.finished
+            .iter()
+            .map(|task| task.name())
+            .chain(self.running.iter().map(|task| task.name()))
     }
 
     fn finished_rows(&self, duration_width: u16) -> impl Iterator<Item = Row> + '_ {

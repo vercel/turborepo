@@ -199,6 +199,9 @@ pub struct Args {
     pub check_for_update: bool,
     #[clap(long = "__test-run", global = true, hide = true)]
     pub test_run: bool,
+    /// Enable the experimental UI
+    #[clap(long, hide = true, global = true)]
+    pub experimental_ui: bool,
     #[clap(flatten, next_help_heading = "Run Arguments")]
     // We don't serialize this because by the time we're calling
     // Go, we've moved it to the command field as a Command::Run
@@ -260,6 +263,9 @@ pub enum DaemonCommand {
     },
     /// Shows the daemon logs
     Logs,
+    #[clap(hide = true)]
+    /// Watches packages and which are changed
+    Watch,
 }
 
 #[derive(Subcommand, Copy, Clone, Debug, Serialize, PartialEq)]
@@ -1201,7 +1207,6 @@ pub async fn run(
                 let _ = logger.enable_chrome_tracing(file_path, include_args);
             }
             let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
-
             args.track(&event);
             event.track_run_code_path(CodePath::Rust);
             let exit_code = run::run(base, event).await.inspect(|code| {

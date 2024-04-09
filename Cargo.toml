@@ -66,7 +66,13 @@ turbopack = [
 ]
 
 # List of the packages can be compiled against wasm32-wasi target.
-turbopack-wasi = ["path:crates/turbo-tasks-hash"]
+turbopack-wasi = [
+  "path:crates/turbo-tasks-auto-hash-map",
+  "path:crates/turbo-tasks-hash",
+  "path:crates/turbo-tasks-macro",
+  "path:crates/turbo-tasks-macros-shared",
+  "path:crates/turbo-tasks-build",
+]
 
 [workspace.lints.clippy]
 too_many_arguments = "allow"
@@ -100,14 +106,16 @@ miette = { version = "5.10.0", features = ["fancy"] }
 mdxjs = "0.1.23"
 modularize_imports = { version = "0.68.7" }
 styled_components = { version = "0.96.6" }
-styled_jsx = { version = "0.73.9" }
-swc_core = { version = "0.90.22", features = [
+styled_jsx = { version = "0.73.10" }
+swc_core = { version = "0.90.24", features = [
   "ecma_loader_lru",
   "ecma_loader_parking_lot",
 ] }
 swc_emotion = { version = "0.72.6" }
 swc_relay = { version = "0.44.5" }
-testing = { version = "0.35.20" }
+testing = { version = "0.35.21" }
+# Temporary: Reference the latest git minor version of pathfinder_simd until it's published.
+pathfinder_simd = "0.5.3"
 
 auto-hash-map = { path = "crates/turbo-tasks-auto-hash-map" }
 node-file-trace = { path = "crates/node-file-trace", default-features = false }
@@ -269,7 +277,7 @@ smallvec = { version = "1.13.1", features = [
   "union",
   "const_new",
 ] }
-sourcemap = "6.0.2"
+sourcemap = "6.4.1"
 syn = "1.0.107"
 tempfile = "3.3.0"
 test-case = "3.0.0"
@@ -280,10 +288,12 @@ tokio-util = { version = "0.7.7", features = ["io"] }
 tracing = "0.1.37"
 tracing-appender = "0.2.2"
 tracing-subscriber = "0.3.16"
-# Latest release (0.1.8) doesn't include necessary changes for us to use our vendored vt100
-tui-term = { git = "https://github.com/a-kenji/tui-term.git", rev = "96da15fb9974bb8f77b0e937abbdb2c3b8e932aa", default-features = false }
+tui-term = { version = "0.1.9", default-features = false }
 url = "2.2.2"
 urlencoding = "2.1.2"
 webbrowser = "0.8.7"
 which = "4.4.0"
 unicode-segmentation = "1.10.1"
+
+[patch.crates-io]
+pathfinder_simd = { git = "https://github.com/servo/pathfinder", rev = "30419d" }

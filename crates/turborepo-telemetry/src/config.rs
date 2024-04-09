@@ -1,10 +1,17 @@
+/// Configuration for telemetry.
+///
+/// This module is responsible for reading and writing the telemetry
+/// configuration file.
+///
+/// NOTE: There is a port of this crate that is used to instrument node
+/// projects. Any changes made here should be reflected there as well.
+///
+/// https://github.com/vercel/turbo/blob/main/packages/turbo-telemetry/src/config.ts
 use std::env;
 
 use chrono::{DateTime, Utc};
 pub use config::{Config, ConfigError, File, FileFormat};
-use hex;
 use serde::{Deserialize, Serialize};
-use serde_json;
 use sha2::{Digest, Sha256};
 use tracing::{debug, error};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};

@@ -24,7 +24,7 @@ pub(crate) mod scan;
 pub(crate) mod telemetry;
 pub(crate) mod unlink;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CommandBase {
     pub repo_root: AbsoluteSystemPathBuf,
     pub ui: UI,
@@ -68,6 +68,7 @@ impl CommandBase {
             .with_token(self.args.token.clone())
             .with_timeout(self.args.remote_cache_timeout)
             .with_preflight(self.args.preflight.then_some(true))
+            .with_experimental_ui(self.args.experimental_ui.then_some(true))
             .build()
     }
 

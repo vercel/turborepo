@@ -256,6 +256,11 @@ impl DeserializationVisitor for RawTaskDefinitionVisitor {
                         result.output_mode = Some(Spanned::new(output_mode).with_range(range));
                     }
                 }
+                "interactive" => {
+                    if let Some(interactive) = bool::deserialize(&value, &key_text, diagnostics) {
+                        result.interactive = Some(Spanned::new(interactive).with_range(range));
+                    }
+                }
                 unknown_key => {
                     diagnostics.push(create_unknown_key_diagnostic_from_struct(
                         &result,
@@ -664,7 +669,8 @@ impl WithMetadata for RawTaskDefinition {
         self.pass_through_env.add_text(text.clone());
         self.persistent.add_text(text.clone());
         self.outputs.add_text(text.clone());
-        self.output_mode.add_text(text);
+        self.output_mode.add_text(text.clone());
+        self.interactive.add_text(text);
     }
 
     fn add_path(&mut self, path: Arc<str>) {
@@ -678,7 +684,8 @@ impl WithMetadata for RawTaskDefinition {
         self.pass_through_env.add_path(path.clone());
         self.persistent.add_path(path.clone());
         self.outputs.add_path(path.clone());
-        self.output_mode.add_path(path);
+        self.output_mode.add_path(path.clone());
+        self.interactive.add_path(path);
     }
 }
 

@@ -6,13 +6,14 @@ use std::{
 use ratatui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Layout},
-    text::Text,
     widgets::Widget,
     Frame, Terminal,
 };
+use tracing::debug;
+use tui_term::widget::PseudoTerminal;
 
-const HEIGHT: u16 = 60;
-const PANE_HEIGHT: u16 = 40;
+const DEFAULT_APP_HEIGHT: u16 = 60;
+const PANE_SIZE_RATIO: f32 = 3.0 / 4.0;
 const FRAMERATE: Duration = Duration::from_millis(3);
 
 use super::{input, AppReceiver, Error, Event, TaskTable, TerminalPane};
@@ -24,8 +25,14 @@ pub struct App<I> {
     interact: bool,
 }
 
+pub enum Direction {
+    Up,
+    Down,
+}
+
 impl<I> App<I> {
     pub fn new(rows: u16, cols: u16, tasks: Vec<String>) -> Self {
+        debug!("tasks: {tasks:?}");
         let mut this = Self {
             table: TaskTable::new(tasks.clone()),
             pane: TerminalPane::new(rows, cols, tasks),
@@ -52,8 +59,26 @@ impl<I> App<I> {
     }
 
     pub fn interact(&mut self, interact: bool) {
-        self.interact = interact;
-        self.pane.highlight(interact);
+        let Some(selected_task) = self.table.selected() else {
+            return;
+        };
+        if self.pane.has_stdin(selected_task) {
+            self.interact = interact;
+            self.pane.highlight(interact);
+        }
+    }
+
+    pub fn scroll(&mut self, direction: Direction) {
+        let Some(selected_task) = self.table.selected() else {
+            return;
+        };
+        self.pane
+            .scroll(selected_task, direction)
+            .expect("selected task should be in pane");
+    }
+
+    pub fn term_size(&self) -> (u16, u16) {
+        self.pane.term_size()
     }
 }
 
@@ -75,10 +100,11 @@ impl<I: std::io::Write> App<I> {
 /// Handle the rendering of the `App` widget based on events received by
 /// `receiver`
 pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
-    let mut terminal = startup()?;
+    let (mut terminal, app_height) = startup()?;
     let size = terminal.size()?;
 
-    let app: App<Box<dyn io::Write + Send>> = App::new(PANE_HEIGHT, size.width, tasks);
+    let pane_height = (f32::from(app_height) * PANE_SIZE_RATIO) as u16;
+    let app: App<Box<dyn io::Write + Send>> = App::new(pane_height, size.width, tasks);
 
     let result = run_app_inner(&mut terminal, app, receiver);
 
@@ -99,11 +125,8 @@ fn run_app_inner<B: Backend>(
     let mut last_render = Instant::now();
 
     while let Some(event) = poll(app.interact, &receiver, last_render + FRAMERATE) {
-        if let Some(message) = update(&mut app, event)? {
-            // TODO: use term emulator to properly render this, blocked by PR #7713
-            terminal.insert_before(1, |buf| {
-                Text::raw(String::from_utf8_lossy(&message)).render(buf.area, buf)
-            })?;
+        if let Some(message) = update(terminal, &mut app, event)? {
+            persist_bytes(terminal, &message)?;
         }
         if app.done {
             break;
@@ -113,6 +136,9 @@ fn run_app_inner<B: Backend>(
             last_render = Instant::now();
         }
     }
+
+    let started_tasks = app.table.tasks_started().collect();
+    app.pane.render_remaining(started_tasks, terminal)?;
 
     Ok(())
 }
@@ -129,29 +155,40 @@ fn poll(interact: bool, receiver: &AppReceiver, deadline: Instant) -> Option<Eve
 }
 
 /// Configures terminal for rendering App
-fn startup() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
+fn startup() -> io::Result<(Terminal<CrosstermBackend<Stdout>>, u16)> {
     crossterm::terminal::enable_raw_mode()?;
-    let backend = CrosstermBackend::new(io::stdout());
+    let mut stdout = io::stdout();
+    crossterm::execute!(stdout, crossterm::event::EnableMouseCapture)?;
+    let backend = CrosstermBackend::new(stdout);
+
+    // We need to reserve at least 1 line for writing persistent lines.
+    let height = DEFAULT_APP_HEIGHT.min(backend.size()?.height.saturating_sub(1));
+
     let mut terminal = Terminal::with_options(
         backend,
         ratatui::TerminalOptions {
-            viewport: ratatui::Viewport::Inline(HEIGHT),
+            viewport: ratatui::Viewport::Inline(height),
         },
     )?;
     terminal.hide_cursor()?;
 
-    Ok(terminal)
+    Ok((terminal, height))
 }
 
 /// Restores terminal to expected state
-fn cleanup<B: Backend>(mut terminal: Terminal<B>) -> io::Result<()> {
+fn cleanup<B: Backend + io::Write>(mut terminal: Terminal<B>) -> io::Result<()> {
     terminal.clear()?;
+    crossterm::execute!(
+        terminal.backend_mut(),
+        crossterm::event::DisableMouseCapture
+    )?;
     crossterm::terminal::disable_raw_mode()?;
     terminal.show_cursor()?;
     Ok(())
 }
 
-fn update(
+fn update<B: Backend>(
+    terminal: &mut Terminal<B>,
     app: &mut App<Box<dyn io::Write + Send>>,
     event: Event,
 ) -> Result<Option<Vec<u8>>, Error> {
@@ -173,12 +210,19 @@ fn update(
         }
         Event::EndTask { task } => {
             app.table.finish_task(&task)?;
+            app.pane.render_screen(&task, terminal)?;
         }
         Event::Up => {
             app.previous();
         }
         Event::Down => {
             app.next();
+        }
+        Event::ScrollUp => {
+            app.scroll(Direction::Up);
+        }
+        Event::ScrollDown => {
+            app.scroll(Direction::Down);
         }
         Event::EnterInteractive => {
             app.interact(true);
@@ -197,8 +241,50 @@ fn update(
 }
 
 fn view<I>(app: &mut App<I>, f: &mut Frame) {
-    let vertical = Layout::vertical([Constraint::Min(5), Constraint::Length(PANE_HEIGHT)]);
+    let (term_height, _) = app.term_size();
+    let vertical = Layout::vertical([Constraint::Min(5), Constraint::Length(term_height)]);
     let [table, pane] = vertical.areas(f.size());
     app.table.stateful_render(f, table);
     f.render_widget(&app.pane, pane);
+}
+
+/// Write provided bytes to a section of the screen that won't get rewritten
+fn persist_bytes(terminal: &mut Terminal<impl Backend>, bytes: &[u8]) -> Result<(), Error> {
+    let size = terminal.size()?;
+    let mut parser = turborepo_vt100::Parser::new(size.height, size.width, 128);
+    parser.process(bytes);
+    let screen = parser.entire_screen();
+    let (height, _) = screen.size();
+    terminal.insert_before(height as u16, |buf| {
+        PseudoTerminal::new(&screen).render(buf.area, buf)
+    })?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use ratatui::{backend::TestBackend, buffer::Buffer};
+
+    use super::*;
+
+    #[test]
+    fn test_persist_bytes() {
+        let mut term = Terminal::with_options(
+            TestBackend::new(10, 7),
+            ratatui::TerminalOptions {
+                viewport: ratatui::Viewport::Inline(3),
+            },
+        )
+        .unwrap();
+        persist_bytes(&mut term, b"two\r\nlines").unwrap();
+        term.backend().assert_buffer(&Buffer::with_lines(vec![
+            "two       ",
+            "lines     ",
+            "          ",
+            "          ",
+            "          ",
+            "          ",
+            "          ",
+        ]));
+    }
 }

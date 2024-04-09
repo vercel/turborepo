@@ -1,12 +1,12 @@
 use std::{
-    fmt::{Debug, Display, Formatter},
+    fmt::{Debug, Display},
     io::Write,
 };
 
 use console::{Style, StyledObject};
 use tracing::error;
 
-use crate::UI;
+use crate::{LineWriter, UI};
 
 /// Writes messages with different prefixes, depending on log level. Note that
 /// this does output the prefix when message is empty, unlike the Go
@@ -109,14 +109,6 @@ pub struct PrefixedWriter<W> {
     inner: LineWriter<PrefixedWriterInner<W>>,
 }
 
-impl<W> Debug for PrefixedWriter<W> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("PrefixedWriter")
-            .field("prefix", &self.inner.writer.prefix)
-            .finish()
-    }
-}
-
 impl<W: Write> PrefixedWriter<W> {
     pub fn new(ui: UI, prefix: StyledObject<impl Display>, writer: W) -> Self {
         Self {
@@ -173,48 +165,6 @@ impl<W: Write> Write for PrefixedWriterInner<W> {
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        self.writer.flush()
-    }
-}
-
-/// Writer that will buffer writes so the underlying writer is only called with
-/// writes that end in a newline
-struct LineWriter<W> {
-    writer: W,
-    buffer: Vec<u8>,
-}
-
-impl<W: Write> LineWriter<W> {
-    pub fn new(writer: W) -> Self {
-        Self {
-            writer,
-            buffer: Vec::with_capacity(512),
-        }
-    }
-}
-
-impl<W: Write> Write for LineWriter<W> {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        for line in buf.split_inclusive(|c| *c == b'\n') {
-            if line.ends_with(b"\n") {
-                if self.buffer.is_empty() {
-                    self.writer.write_all(line)?;
-                } else {
-                    self.buffer.extend_from_slice(line);
-                    self.writer.write_all(&self.buffer)?;
-                    self.buffer.clear();
-                }
-            } else {
-                // This should only happen on the last chunk?
-                self.buffer.extend_from_slice(line)
-            }
-        }
-
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        // We don't flush our buffer as that would lead to a write without a newline
         self.writer.flush()
     }
 }
@@ -290,6 +240,7 @@ mod test {
     }
 
     #[test_case(&["foo"], "" ; "no newline")]
+    #[test_case(&["\n"], "\n" ; "one newline")]
     #[test_case(&["foo\n"], "foo\n" ; "single newline")]
     #[test_case(&["foo ", "bar ", "baz\n"], "foo bar baz\n" ; "building line")]
     #[test_case(&["multiple\nlines\nin\none"], "multiple\nlines\nin\n" ; "multiple lines")]
@@ -317,9 +268,11 @@ mod test {
             .write_all(b", now\nbut \ranother one starts")
             .unwrap();
         writer.write_all(b" done\n").unwrap();
+        writer.write_all(b"\n").unwrap();
         assert_eq!(
             String::from_utf8(buffer).unwrap(),
-            "turbo > not a line yet, now\nturbo > but \rturbo > another one starts done\n"
+            "turbo > not a line yet, now\nturbo > but \rturbo > another one starts done\nturbo > \
+             \n"
         );
     }
 }
