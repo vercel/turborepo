@@ -359,7 +359,7 @@ impl Request {
                 path: path.clone(),
                 query,
                 force_in_lookup_dir: *force_in_lookup_dir,
-                fragment: fragment.clone(),
+                fragment: *fragment,
             }
             .cell(),
             Request::Relative {
@@ -371,7 +371,7 @@ impl Request {
                 path: path.clone(),
                 query,
                 force_in_lookup_dir: *force_in_lookup_dir,
-                fragment: fragment.clone(),
+                fragment: *fragment,
             }
             .cell(),
             Request::Module {
@@ -383,7 +383,7 @@ impl Request {
                 module: module.clone(),
                 path: path.clone(),
                 query,
-                fragment: fragment.clone(),
+                fragment: *fragment,
             }
             .cell(),
             Request::ServerRelative {
@@ -393,7 +393,7 @@ impl Request {
             } => Request::ServerRelative {
                 path: path.clone(),
                 query,
-                fragment: fragment.clone(),
+                fragment: *fragment,
             }
             .cell(),
             Request::Windows {
@@ -403,7 +403,7 @@ impl Request {
             } => Request::Windows {
                 path: path.clone(),
                 query,
-                fragment: fragment.clone(),
+                fragment: *fragment,
             }
             .cell(),
             Request::Empty => self,
@@ -540,7 +540,7 @@ impl Request {
                 Self::ServerRelative {
                     path: pat,
                     query: *query,
-                    fragment: fragment.clone(),
+                    fragment: *fragment,
                 }
                 .cell()
             }
@@ -554,7 +554,7 @@ impl Request {
                 Self::Windows {
                     path: pat,
                     query: *query,
-                    fragment: fragment.clone(),
+                    fragment: *fragment,
                 }
                 .cell()
             }
@@ -574,8 +574,8 @@ impl Request {
                 Self::Uri {
                     protocol: protocol.clone(),
                     remainder,
-                    query: query.clone(),
-                    fragment: fragment.clone(),
+                    query: *query,
+                    fragment: *fragment,
                 }
                 .cell()
             }

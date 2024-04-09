@@ -1849,7 +1849,7 @@ async fn resolve_relative_request(
             Some(request)
         },
         query,
-        fragment.clone(),
+        fragment,
     )
     .await?
     {
@@ -1900,7 +1900,7 @@ async fn resolve_relative_request(
                                 options_value,
                                 options,
                                 query,
-                                fragment.clone(),
+                                fragment,
                             )
                             .await?,
                         );
@@ -1918,7 +1918,7 @@ async fn resolve_relative_request(
                         options_value,
                         options,
                         query,
-                        fragment.clone(),
+                        fragment,
                     )
                     .await?,
                 );
@@ -2057,7 +2057,7 @@ async fn resolve_module_request(
             full_pattern.into_string()
         },
         query,
-        fragment.clone(),
+        fragment,
     )
     .await?
     {
@@ -2092,7 +2092,7 @@ async fn resolve_module_request(
                     Value::new(path.clone()),
                     package_path,
                     query,
-                    fragment.clone(),
+                    fragment,
                     options,
                 ));
             }
@@ -2106,7 +2106,7 @@ async fn resolve_module_request(
                         options_value,
                         options,
                         query,
-                        fragment.clone(),
+                        fragment,
                     )
                     .await?;
                     results.push(resolved)
@@ -2309,7 +2309,7 @@ async fn resolved(
         options_value,
         |package_path| package_path.get_relative_path_to(path_ref),
         query,
-        fragment.clone(),
+        fragment,
     )
     .await?
     {
