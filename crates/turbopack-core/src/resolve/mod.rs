@@ -2129,7 +2129,7 @@ async fn resolve_module_request(
             "/".to_string().into(),
             path.clone(),
         ]);
-        let relative = Request::relative(Value::new(pattern), query, true, fragment.clone());
+        let relative = Request::relative(Value::new(pattern), query, fragment, true);
         let relative_result =
             resolve_internal_boxed(lookup_path, relative.resolve().await?, options).await?;
         let relative_result = relative_result.with_replaced_request_key(
@@ -2213,7 +2213,7 @@ async fn resolve_into_package(
         let mut new_pat = path.clone();
         new_pat.push_front(".".to_string().into());
 
-        let relative = Request::relative(Value::new(new_pat), query, true, fragment);
+        let relative = Request::relative(Value::new(new_pat), query, fragment, true);
         results
             .push(resolve_internal_inline(package_path, relative.resolve().await?, options).await?);
     }
