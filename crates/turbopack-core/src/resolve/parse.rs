@@ -282,8 +282,8 @@ impl Request {
     pub fn relative(
         request: Value<Pattern>,
         query: Vc<String>,
-        force_in_lookup_dir: bool,
         fragment: Vc<String>,
+        force_in_lookup_dir: bool,
     ) -> Vc<Self> {
         Self::cell(Request::Relative {
             path: request.into_value(),
