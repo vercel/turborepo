@@ -1,4 +1,4 @@
-// eslint-disable-next-line camelcase
+// eslint-disable-next-line camelcase -- This is a test file
 import child_process, {
   type ChildProcess,
   type ExecException,
@@ -11,6 +11,7 @@ import {
   validateLogs,
 } from "@turbo/test-utils";
 import { turboIgnore } from "../src/ignore";
+import { TurboIgnoreTelemetry, TelemetryConfig } from "@turbo/telemetry";
 
 function expectBuild(mockExit: SpyExit) {
   expect(mockExit.exit).toHaveBeenCalledWith(1);
@@ -24,6 +25,22 @@ describe("turboIgnore()", () => {
   mockEnv();
   const mockExit = spyExit();
   const mockConsole = spyConsole();
+
+  const telemetry = new TurboIgnoreTelemetry({
+    api: "https://example.com",
+    packageInfo: {
+      name: "turbo-ignore",
+      version: "1.0.0",
+    },
+    config: new TelemetryConfig({
+      configPath: "test-config-path",
+      config: {
+        telemetry_enabled: false,
+        telemetry_id: "telemetry-test-id",
+        telemetry_salt: "telemetry-salt",
+      },
+    }),
+  });
 
   it("throws error and allows build when exec fails", () => {
     const mockExec = jest
@@ -39,7 +56,7 @@ describe("turboIgnore()", () => {
         return {} as unknown as ChildProcess;
       });
 
-    turboIgnore("test-workspace", {});
+    turboIgnore("test-workspace", { telemetry });
 
     expect(mockExec).toHaveBeenCalledWith(
       `npx turbo run build --filter="test-workspace...[HEAD^]" --dry=json`,
@@ -117,7 +134,7 @@ describe("turboIgnore()", () => {
         return {} as unknown as ChildProcess;
       });
 
-    turboIgnore("test-workspace", {});
+    turboIgnore("test-workspace", { telemetry });
 
     expect(mockExec).toHaveBeenCalledWith(
       `npx turbo run build --filter="test-workspace...[too-far-back]" --dry=json`,
@@ -607,7 +624,7 @@ describe("turboIgnore()", () => {
     mockExec.mockRestore();
   });
 
-  it("passes max buffer to turbo exectuion", () => {
+  it("passes max buffer to turbo execution", () => {
     const mockExec = jest
       .spyOn(child_process, "exec")
       .mockImplementation((command, options, callback) => {
@@ -622,6 +639,35 @@ describe("turboIgnore()", () => {
       });
 
     turboIgnore(undefined, { directory: "__fixtures__/app", maxBuffer: 1024 });
+
+    expect(mockExec).toHaveBeenCalledWith(
+      `npx turbo run build --filter="test-app...[HEAD^]" --dry=json`,
+      expect.objectContaining({ maxBuffer: 1024 }),
+      expect.anything()
+    );
+
+    mockExec.mockRestore();
+  });
+
+  it("runs with telemetry", () => {
+    const mockExec = jest
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
+        if (callback) {
+          return callback(
+            null,
+            '{"packages": [],"tasks":[]}',
+            "stderr"
+          ) as unknown as ChildProcess;
+        }
+        return {} as unknown as ChildProcess;
+      });
+
+    turboIgnore(undefined, {
+      directory: "__fixtures__/app",
+      maxBuffer: 1024,
+      telemetry,
+    });
 
     expect(mockExec).toHaveBeenCalledWith(
       `npx turbo run build --filter="test-app...[HEAD^]" --dry=json`,
