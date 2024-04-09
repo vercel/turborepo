@@ -1623,7 +1623,7 @@ async fn resolve_internal_inline(
             } => {
                 let mut new_pat = path.clone();
                 new_pat.push_front(".".to_string().into());
-                let relative = Request::relative(Value::new(new_pat), *query, true, *fragment);
+                let relative = Request::relative(Value::new(new_pat), *query, *fragment, true);
 
                 if !has_alias {
                     ResolvingIssue {
@@ -1650,7 +1650,11 @@ async fn resolve_internal_inline(
                 )
                 .await?
             }
-            Request::Windows { path: _, query: _ } => {
+            Request::Windows {
+                path: _,
+                query: _,
+                fragment: _,
+            } => {
                 if !has_alias {
                     ResolvingIssue {
                         severity: IssueSeverity::Error.cell(),
