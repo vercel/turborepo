@@ -65,7 +65,10 @@ impl AppReceiver {
         match self.primary.recv_deadline(deadline) {
             Ok(event) => Ok(event),
             Err(mpsc::RecvTimeoutError::Timeout) => Ok(Event::Tick),
-            Err(mpsc::RecvTimeoutError::Disconnected) => Err(mpsc::RecvError),
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                println!("disconnected!!");
+                Err(mpsc::RecvError)
+            }
         }
     }
 }

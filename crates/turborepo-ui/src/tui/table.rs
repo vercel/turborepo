@@ -71,30 +71,54 @@ impl TaskTable {
     /// Mark the given planned task as started
     /// Errors if given task wasn't a planned task
     pub fn start_task(&mut self, task: &str) -> Result<(), Error> {
-        let planned_idx = self
+        if let Ok(planned_idx) = self
             .planned
             .binary_search_by(|planned_task| planned_task.name().cmp(task))
-            .map_err(|_| {
-                debug!("could not find '{task}' to start");
-                Error::TaskNotFound { name: task.into() }
-            })?;
-        let planned = self.planned.remove(planned_idx);
-        let old_row_idx = self.finished.len() + self.running.len() + planned_idx;
-        let new_row_idx = self.finished.len() + self.running.len();
-        let running = planned.start();
-        self.running.push(running);
+        {
+            let planned = self.planned.remove(planned_idx);
+            let old_row_idx = self.finished.len() + self.running.len() + planned_idx;
+            let new_row_idx = self.finished.len() + self.running.len();
+            let running = planned.start();
+            self.running.push(running);
 
-        if let Some(selected_idx) = self.scroll.selected() {
-            // If task that was just started is selected, then update selection to follow
-            // task
-            if selected_idx == old_row_idx {
-                self.scroll.select(Some(new_row_idx));
-            } else if new_row_idx <= selected_idx && selected_idx < old_row_idx {
-                // If the selected task is between the old and new row positions
-                // then increment the selection index to keep selection the same.
-                self.scroll.select(Some(selected_idx + 1));
+            if let Some(selected_idx) = self.scroll.selected() {
+                // If task that was just started is selected, then update selection to follow
+                // task
+                if selected_idx == old_row_idx {
+                    self.scroll.select(Some(new_row_idx));
+                } else if new_row_idx <= selected_idx && selected_idx < old_row_idx {
+                    // If the selected task is between the old and new row positions
+                    // then increment the selection index to keep selection the same.
+                    self.scroll.select(Some(selected_idx + 1));
+                }
             }
+        } else if let Some(finished_idx) = self
+            .finished
+            .iter()
+            .position(|finished_task| finished_task.name() == task)
+        {
+            let finished = self.finished.remove(finished_idx);
+            let old_row_idx = finished_idx;
+            let new_row_idx = self.finished.len() + self.running.len();
+            let running = finished.start();
+            self.running.push(running);
+
+            if let Some(selected_idx) = self.scroll.selected() {
+                // If task that was just started is selected, then update selection to follow
+                // task
+                if selected_idx == old_row_idx {
+                    self.scroll.select(Some(new_row_idx));
+                } else if new_row_idx <= selected_idx && selected_idx < old_row_idx {
+                    // If the selected task is between the old and new row positions
+                    // then increment the selection index to keep selection the same.
+                    self.scroll.select(Some(selected_idx + 1));
+                }
+            }
+        } else {
+            debug!("could not find '{task}' to start");
+            return Err(Error::TaskNotFound { name: task.into() });
         }
+
         self.tick();
         Ok(())
     }

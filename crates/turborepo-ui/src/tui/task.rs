@@ -70,8 +70,16 @@ impl Task<Running> {
 }
 
 impl Task<Finished> {
-    pub fn start(&self) -> Instant {
+    pub fn start_time(&self) -> Instant {
         self.state.start
+    }
+    pub fn start(self) -> Task<Running> {
+        Task {
+            name: self.name,
+            state: Running {
+                start: Instant::now(),
+            },
+        }
     }
 
     pub fn end(&self) -> Instant {

@@ -126,7 +126,6 @@ fn run_app_inner<B: Backend + std::io::Write>(
     // Render initial state to paint the screen
     terminal.draw(|f| view(app, f))?;
     let mut last_render = Instant::now();
-
     while let Some(event) = poll(app.interact, &receiver, last_render + FRAMERATE) {
         update(app, event)?;
         if app.done {
