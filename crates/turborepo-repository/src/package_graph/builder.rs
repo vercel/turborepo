@@ -593,8 +593,6 @@ impl PackageInfo {
 mod test {
     use std::assert_matches::assert_matches;
 
-    use turbopath::AbsoluteSystemPathBuf;
-
     use super::*;
 
     struct MockDiscovery;

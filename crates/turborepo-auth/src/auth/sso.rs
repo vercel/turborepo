@@ -143,8 +143,6 @@ mod tests {
 
     use async_trait::async_trait;
     use reqwest::{Method, RequestBuilder, Response};
-    use turborepo_api_client::Client;
-    use turborepo_ui::UI;
     use turborepo_vercel_api::{
         CachingStatus, CachingStatusResponse, Membership, Role, SpacesResponse, Team,
         TeamsResponse, User, UserResponse, VerifiedSsoUser,

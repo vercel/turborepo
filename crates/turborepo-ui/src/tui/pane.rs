@@ -237,7 +237,7 @@ mod test {
     // Used by assert_buffer_eq
     #[allow(unused_imports)]
     use indoc::indoc;
-    use ratatui::{assert_buffer_eq, buffer::Buffer, layout::Rect, style::Style};
+    use ratatui::{assert_buffer_eq, buffer::Buffer, layout::Rect};
 
     use super::*;
 
