@@ -621,13 +621,17 @@ importers:
         version: 5.3.3
 
   packages/turbo-ignore:
+    dependencies:
+      '@turbo/telemetry':
+        specifier: workspace:*
+        version: link:../turbo-telemetry
+      commander:
+        specifier: ^11.0.0
+        version: 11.0.0
     devDependencies:
       '@turbo/eslint-config':
         specifier: workspace:*
         version: link:../eslint-config
-      '@turbo/telemetry':
-        specifier: workspace:*
-        version: link:../turbo-telemetry
       '@turbo/test-utils':
         specifier: workspace:*
         version: link:../turbo-test-utils
@@ -646,9 +650,6 @@ importers:
       '@types/node':
         specifier: ^18.17.2
         version: 18.17.4
-      commander:
-        specifier: ^11.0.0
-        version: 11.0.0
       jest:
         specifier: ^27.4.3
         version: 27.5.1(ts-node@10.9.1)
@@ -4855,6 +4856,7 @@ packages:
   /commander@11.0.0:
     resolution: {integrity: sha512-9HMlXtt/BNoYr8ooyjjNRdIilOTkVJXB+GhxMTtOKwk0R4j4lS4NpjuqmRxroBfnfTSHQIHQB7wryHhXarNjmQ==}
     engines: {node: '>=16'}
+    dev: false
 
   /commander@2.20.3:
     resolution: {integrity: sha512-GpVkmM8vF2vQUkj2LvZmD35JxeJOLCwJ9cUkugyk2nuhbv3+mJvpLYYt+0+USMxE+oj+ey/lJEnhZw75x/OMcQ==}
