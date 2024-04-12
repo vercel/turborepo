@@ -1029,9 +1029,10 @@ pub async fn run(
     let mut command = if let Some(command) = mem::take(&mut cli_args.command) {
         command
     } else {
-        let run_args = mem::take(&mut cli_args.run_args)
-            .ok_or_else(|| Error::NoCommand(Backtrace::capture()))?;
-        let execution_args = mem::take(&mut cli_args.execution_args)
+        let run_args = cli_args.run_args.take().unwrap_or_default();
+        let execution_args = cli_args
+            .execution_args
+            .take()
             .ok_or_else(|| Error::NoCommand(Backtrace::capture()))?;
         if execution_args.tasks.is_empty() {
             let mut cmd = <Args as CommandFactory>::command();
