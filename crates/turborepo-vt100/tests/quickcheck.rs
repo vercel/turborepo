@@ -1,5 +1,3 @@
-use turborepo_vt100 as vt100;
-
 use quickcheck::Arbitrary as _;
 
 mod helpers;

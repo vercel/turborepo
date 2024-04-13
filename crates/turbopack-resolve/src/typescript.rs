@@ -27,6 +27,7 @@ use turbopack_core::{
 };
 
 use crate::ecmascript::get_condition_maps;
+
 #[turbo_tasks::value(shared)]
 pub struct TsConfigIssue {
     pub severity: Vc<IssueSeverity>,
@@ -374,7 +375,6 @@ pub async fn type_resolve(
         module: m,
         path: p,
         query: _,
-        fragment: _,
     } = &*request.await?
     {
         let m = if let Some(stripped) = m.strip_prefix('@') {
@@ -385,7 +385,6 @@ pub async fn type_resolve(
         Some(Request::module(
             format!("@types/{m}"),
             Value::new(p.clone()),
-            Vc::<String>::default(),
             Vc::<String>::default(),
         ))
     } else {

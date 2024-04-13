@@ -93,7 +93,6 @@ impl FromStr for PackageJson {
 
 #[cfg(test)]
 mod test {
-    use anyhow::Result;
     use pretty_assertions::assert_eq;
     use serde_json::json;
     use test_case::test_case;
