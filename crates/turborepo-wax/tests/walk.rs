@@ -3,7 +3,7 @@
 use std::{collections::HashSet, path::PathBuf};
 
 use build_fs_tree::{dir, file, Build, FileSystemTree};
-use tempfile::{self, TempDir};
+use tempfile::TempDir;
 use wax::{
     walk::{Entry, FileIterator, WalkBehavior},
     Glob,
