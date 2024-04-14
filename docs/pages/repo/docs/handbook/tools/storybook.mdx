@@ -78,7 +78,7 @@ Next, we need to scaffold Storybook:
 
       ```shell
       cd workshop
-      pnpm dlx sb init --skip-install
+      pnpm dlx sb init
       pnpm install --save-dev @storybook/cli   # Manually install deps and CLI
       ```
 
@@ -157,7 +157,7 @@ And `yarn install` to make sure that your `ui` package is installed in the `work
   // ...
   {
     "dependencies": {
-      "ui": "workspace:*",
+      "@repo/ui": "workspace:*",
       // ...
     }
   }
@@ -170,7 +170,7 @@ And `pnpm install` one more time to make sure that your `ui` package is installe
 3. Replace the `Button` import in the `Button.stories.tsx` so that it comes from your `ui` package:
 
 ```jsx filename="apps/workshop/src/stories/Button.stories.tsx"
-import { Button } from 'ui'
+import { Button } from '@repo/ui/button'
 ```
 
 ### 4. Align tasks
