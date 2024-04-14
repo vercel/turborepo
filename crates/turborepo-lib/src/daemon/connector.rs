@@ -411,11 +411,12 @@ enum WaitAction {
 mod test {
     use std::assert_matches::assert_matches;
 
-    use sysinfo::Pid;
     use tokio::{
         select,
         sync::{oneshot::Sender, Mutex},
     };
+    use tokio_stream::wrappers::ReceiverStream;
+    use tonic::{Request, Response, Status};
     use tower::ServiceBuilder;
     use tracing::info;
     use turbopath::AbsoluteSystemPathBuf;
@@ -423,7 +424,7 @@ mod test {
     use super::*;
     use crate::daemon::{
         default_timeout_layer::DefaultTimeoutLayer,
-        proto::{self, turbod_client::TurbodClient},
+        proto::{self, PackageChangesRequest},
     };
 
     #[cfg(not(target_os = "windows"))]
@@ -637,6 +638,14 @@ mod test {
             &self,
             _req: tonic::Request<proto::DiscoverPackagesRequest>,
         ) -> Result<tonic::Response<proto::DiscoverPackagesResponse>, tonic::Status> {
+            unimplemented!()
+        }
+
+        type PackageChangesStream = ReceiverStream<Result<proto::PackageChangeEvent, Status>>;
+        async fn package_changes(
+            &self,
+            _req: Request<PackageChangesRequest>,
+        ) -> Result<Response<Self::PackageChangesStream>, Status> {
             unimplemented!()
         }
     }

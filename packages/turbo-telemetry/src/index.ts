@@ -5,3 +5,4 @@ export { withTelemetryCommand } from "./cli";
 
 // Event Classes
 export { CreateTurboTelemetry } from "./events/create-turbo";
+export { TurboIgnoreTelemetry } from "./events/turbo-ignore";

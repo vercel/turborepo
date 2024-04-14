@@ -11,7 +11,7 @@ use anyhow::{bail, Result};
 use indexmap::{indexmap, IndexMap, IndexSet};
 use serde::{Deserialize, Serialize};
 use tracing::{Instrument, Level};
-use turbo_tasks::{trace::TraceRawVcs, TryJoinIterExt, Value, ValueToString, Vc};
+use turbo_tasks::{trace::TraceRawVcs, TaskInput, TryJoinIterExt, Value, ValueToString, Vc};
 use turbo_tasks_fs::{
     util::{normalize_path, normalize_request},
     FileSystemEntryType, FileSystemPath, RealPathResult,
@@ -379,9 +379,8 @@ impl ModuleResolveResultOption {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, TraceRawVcs)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, TraceRawVcs, TaskInput)]
 pub enum ExternalType {
-    OriginalReference,
     Url,
     CommonJs,
     EcmaScriptModule,
@@ -390,7 +389,6 @@ pub enum ExternalType {
 impl Display for ExternalType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ExternalType::OriginalReference => write!(f, "original reference"),
             ExternalType::CommonJs => write!(f, "commonjs"),
             ExternalType::EcmaScriptModule => write!(f, "esm"),
             ExternalType::Url => write!(f, "url"),
@@ -1254,6 +1252,7 @@ pub async fn resolve_raw(
 
     let mut results = Vec::new();
 
+    let lookup_dir_str = lookup_dir.to_string().await?;
     let pat = path.await?;
     if let Some(pat) = pat
         .filter_could_match("/ROOT/")
@@ -1262,10 +1261,11 @@ pub async fn resolve_raw(
         let path = Pattern::new(pat);
         let matches = read_matches(lookup_dir.root(), "/ROOT/".to_string(), true, path).await?;
         if matches.len() > 10000 {
+            let path_str = path.to_string().await?;
             println!(
                 "WARN: resolving abs pattern {} in {} leads to {} results",
-                path.to_string().await?,
-                lookup_dir.to_string().await?,
+                path_str,
+                lookup_dir_str,
                 matches.len()
             );
         } else {
@@ -1283,7 +1283,7 @@ pub async fn resolve_raw(
             println!(
                 "WARN: resolving pattern {} in {} leads to {} results",
                 pat,
-                lookup_dir.to_string().await?,
+                lookup_dir_str,
                 matches.len()
             );
         }
@@ -2331,7 +2331,9 @@ async fn handle_exports_imports_field(
     let mut results = Vec::new();
     let mut conditions_state = HashMap::new();
 
-    let req = format!("{}{}", path, &*query.await?);
+    let query_str = query.await?;
+
+    let req = format!("{}{}", path, query_str);
     let values = exports_imports_field
         .lookup(&req)
         .map(AliasMatch::try_into_self)
@@ -2545,7 +2547,11 @@ impl ValueToString for ModulePart {
             ModulePart::RenamedExport {
                 original_export,
                 export,
-            } => format!("export {} as {}", original_export.await?, export.await?),
+            } => {
+                let original_export = original_export.await?;
+                let export = export.await?;
+                format!("export {} as {}", original_export, export)
+            }
             ModulePart::RenamedNamespace { export } => {
                 format!("export * as {}", export.await?)
             }
