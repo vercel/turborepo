@@ -199,6 +199,9 @@ pub struct Args {
     pub check_for_update: bool,
     #[clap(long = "__test-run", global = true, hide = true)]
     pub test_run: bool,
+    /// Enable the experimental UI
+    #[clap(long, hide = true, global = true)]
+    pub experimental_ui: bool,
     #[clap(flatten, next_help_heading = "Run Arguments")]
     // We don't serialize this because by the time we're calling
     // Go, we've moved it to the command field as a Command::Run
@@ -260,6 +263,9 @@ pub enum DaemonCommand {
     },
     /// Shows the daemon logs
     Logs,
+    #[clap(hide = true)]
+    /// Watches packages and which are changed
+    Watch,
 }
 
 #[derive(Subcommand, Copy, Clone, Debug, Serialize, PartialEq)]
@@ -627,7 +633,7 @@ fn path_non_empty(s: &str) -> Result<Utf8PathBuf, String> {
 ])]
 pub struct RunArgs {
     /// Override the filesystem cache directory.
-    #[clap(long, value_parser = path_non_empty)]
+    #[clap(long, value_parser = path_non_empty, env = "TURBO_CACHE_DIR")]
     pub cache_dir: Option<Utf8PathBuf>,
     /// Set the number of concurrent cache operations (default 10)
     #[clap(long, default_value_t = DEFAULT_NUM_WORKERS)]
@@ -1201,7 +1207,6 @@ pub async fn run(
                 let _ = logger.enable_chrome_tracing(file_path, include_args);
             }
             let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
-
             args.track(&event);
             event.track_run_code_path(CodePath::Rust);
             let exit_code = run::run(base, event).await.inspect(|code| {
@@ -2376,5 +2381,16 @@ mod test {
         assert!(Args::try_parse_from(["turbo", "build", "--cache-dir"]).is_err());
         assert!(Args::try_parse_from(["turbo", "build", "--cache-dir="]).is_err());
         assert!(Args::try_parse_from(["turbo", "build", "--cache-dir", ""]).is_err());
+    }
+
+    #[test]
+    fn test_preflight() {
+        assert!(!Args::try_parse_from(["turbo", "build",]).unwrap().preflight);
+        assert!(
+            Args::try_parse_from(["turbo", "build", "--preflight"])
+                .unwrap()
+                .preflight
+        );
+        assert!(Args::try_parse_from(["turbo", "build", "--preflight=true"]).is_err());
     }
 }

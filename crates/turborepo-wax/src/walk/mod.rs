@@ -80,7 +80,7 @@ use std::{
 };
 
 use thiserror::Error;
-use walkdir::{self, DirEntry, Error, WalkDir};
+use walkdir::{DirEntry, Error, WalkDir};
 
 pub use crate::walk::glob::{GlobEntry, GlobWalker};
 use crate::{
@@ -1084,7 +1084,7 @@ mod tests {
 
     use build_fs_tree::{dir, file, Build, FileSystemTree};
     use path_slash::PathBufExt;
-    use tempfile::{self, TempDir};
+    use tempfile::TempDir;
 
     use crate::{
         walk::{

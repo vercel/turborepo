@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use anyhow::{bail, Context, Result};
 use turbo_tasks::Vc;
-use turbo_tasks_fs::{File, FileContent};
+use turbo_tasks_fs::{glob::Glob, File, FileContent};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{ChunkableModule, ChunkingContext, EvaluatableAsset},
@@ -40,14 +40,18 @@ impl EcmascriptModuleFacadeModule {
     }
 
     #[turbo_tasks::function]
-    pub fn async_module(self: Vc<Self>) -> Vc<AsyncModule> {
-        AsyncModule {
-            placeable: Vc::upcast(self),
-            references: self.references(),
+    pub async fn async_module(self: Vc<Self>) -> Result<Vc<AsyncModule>> {
+        let import_externals =
+            if let Some(async_module) = *self.await?.module.get_async_module().await? {
+                async_module.await?.import_externals
+            } else {
+                false
+            };
+        Ok(AsyncModule {
             has_top_level_await: false,
-            import_externals: false,
+            import_externals,
         }
-        .cell()
+        .cell())
     }
 }
 
@@ -245,11 +249,14 @@ impl EcmascriptChunkPlaceable for EcmascriptModuleFacadeModule {
     }
 
     #[turbo_tasks::function]
-    async fn is_marked_as_side_effect_free(&self) -> Result<Vc<bool>> {
+    async fn is_marked_as_side_effect_free(
+        &self,
+        side_effect_free_packages: Vc<Glob>,
+    ) -> Result<Vc<bool>> {
         Ok(match *self.ty.await? {
-            ModulePart::Evaluation | ModulePart::Facade => {
-                self.module.is_marked_as_side_effect_free()
-            }
+            ModulePart::Evaluation | ModulePart::Facade => self
+                .module
+                .is_marked_as_side_effect_free(side_effect_free_packages),
             ModulePart::Exports
             | ModulePart::RenamedExport { .. }
             | ModulePart::RenamedNamespace { .. } => Vc::cell(true),

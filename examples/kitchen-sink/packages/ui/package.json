@@ -11,15 +11,15 @@
     "dist/**"
   ],
   "scripts": {
-    "build": "tsup src/index.tsx --format esm,cjs --dts --external react",
+    "build": "tsup",
     "clean": "rm -rf dist",
-    "dev": "tsup src/index.tsx --format esm,cjs --watch --dts --external react",
+    "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "test": "jest"
   },
   "jest": {
-    "preset": "@repo/jest-presets/jest/browser"
+    "preset": "@repo/jest-presets/browser"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",

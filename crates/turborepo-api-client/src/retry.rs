@@ -60,5 +60,5 @@ fn should_retry_request(error: &reqwest::Error) -> bool {
         }
     }
 
-    false
+    error.is_request() || error.is_timeout()
 }

@@ -13,6 +13,8 @@ pub enum Error {
     DependencyPath(#[from] nom::error::Error<String>),
     #[error("Unable to find '{0}' other than reference in dependenciesMeta")]
     MissingInjectedPackage(String),
+    #[error("unsupported lockfile version: {0}")]
+    UnsupportedVersion(String),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -25,6 +27,13 @@ struct LockfileVersion {
 enum VersionFormat {
     String,
     Float,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SupportedLockfileVersion {
+    V5,
+    V6,
+    V7,
 }
 
 pub fn pnpm_subgraph(

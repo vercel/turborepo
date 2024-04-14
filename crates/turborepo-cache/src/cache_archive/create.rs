@@ -164,7 +164,7 @@ mod tests {
     use anyhow::Result;
     use tempfile::tempdir;
     use test_case::test_case;
-    use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
     use super::*;
     use crate::cache_archive::restore::CacheReader;

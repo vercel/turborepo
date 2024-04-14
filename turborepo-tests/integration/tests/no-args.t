@@ -42,7 +42,7 @@ Make sure exit code is 2 when no args are passed
   
   Run Arguments:
         --cache-dir <CACHE_DIR>
-            Override the filesystem cache directory
+            Override the filesystem cache directory [env: TURBO_CACHE_DIR=]
         --cache-workers <CACHE_WORKERS>
             Set the number of concurrent cache operations (default 10) [default: 10]
         --concurrency <CONCURRENCY>

@@ -9,13 +9,13 @@
   ],
   "scripts": {
     "build": "tsup",
-    "watch": "tsup --watch",
+    "dev": "tsup --watch",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
     "test": "jest"
   },
   "jest": {
-    "preset": "@repo/jest-presets/jest/node"
+    "preset": "@repo/jest-presets/node"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",

@@ -27,6 +27,7 @@ mod global_deps_package_change_mapper;
 pub(crate) mod globwatcher;
 mod hash;
 mod opts;
+mod package_changes_watcher;
 mod process;
 mod rewrite_json;
 mod run;

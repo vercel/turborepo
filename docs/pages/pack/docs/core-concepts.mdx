@@ -42,23 +42,3 @@ In the future, we’re planning to persist this cache - either to the filesystem
 This approach makes Turbopack extremely fast at computing incremental updates to your apps. This optimizes Turbopack for handling updates in development, meaning your dev server will always respond snappily to changes.
 
 In the future, a persistent cache will open the door to much faster production builds. By remembering work done _across runs_, new production builds could only rebuild changed files - potentially leading to enormous time savings.
-
-## Compiling by Request
-
-The Turbo engine helps provide extremely fast _updates_ on your dev server, but there’s another important metric to consider - startup time. The faster your dev server can start running, the faster you can get to work.
-
-There are two ways to make a process faster - work faster, or do less work. For starting up a dev server, the way to do less work is to compile _only the code that’s needed_ to get started.
-
-### Page-level compilation
-
-Versions of Next.js from 2-3 years ago used to compile the _entire application_ before showing your dev server. In [Next.js 11](https://nextjs.org/blog/next-11), we began compiling _only the code on the page you requested._
-
-That’s better, but it’s not perfect. When you navigate to `/users`, we’ll bundle all the client and server modules, dynamic-imported modules, and referenced CSS and images. That means if a large part of your page is hidden from view, or hidden behind tabs, we’ll still compile it anyway.
-
-### Request-level compilation
-
-Turbopack is smart enough to compile _only the code you request_. That means if a browser requests HTML, we compile only the HTML - not anything that is referenced by the HTML.
-
-If a browser wants some CSS, we’ll compile only that - without compiling referenced images. Got a big charting library behind `next/dynamic`? Doesn’t compile it until the tab showing the chart is shown. Turbopack even knows _to not compile source maps unless your Chrome DevTools are open_.
-
-If we were to use native ESM, we’d get similar behavior. Except that Native ESM produces a _lot_ of requests to the server, as discussed in our [Why Turbopack](/pack/docs/why-turbopack) section. With request-level compilation, we get to both reduce the number of requests _and_ use native speed to compile them. As you can see in our [benchmarks](/pack/docs/benchmarks), this provides significant performance improvements.

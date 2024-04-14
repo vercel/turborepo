@@ -1,3 +1,5 @@
+import { type TurboIgnoreTelemetry } from "@turbo/telemetry";
+
 export type NonFatalErrorKey =
   | "MISSING_LOCKFILE"
   | "NO_PACKAGE_MANAGER"
@@ -24,4 +26,6 @@ export interface TurboIgnoreOptions {
   fallback?: string;
   // The maxBuffer for the child process in KB
   maxBuffer?: number;
+  // The telemetry client
+  telemetry?: TurboIgnoreTelemetry;
 }

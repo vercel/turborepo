@@ -161,7 +161,7 @@ impl Pattern {
     /// Order into Alternatives -> Concatenation -> Constant/Dynamic
     /// Merge when possible
     pub fn normalize(&mut self) {
-        let mut alternatives = vec![Vec::new()];
+        let mut alternatives = [Vec::new()];
         match self {
             Pattern::Constant(c) => {
                 for alt in alternatives.iter_mut() {
@@ -458,7 +458,7 @@ impl Pattern {
                     static ref FORBIDDEN: Regex =
                         Regex::new(r"(/|^)(ROOT|\.|/|(node_modules|__tests?__)(/|$))").unwrap();
                     static ref FORBIDDEN_MATCH: Regex = Regex::new(r"\.d\.ts$|\.map$").unwrap();
-                };
+                }
                 if let Some(m) = FORBIDDEN.find(value) {
                     MatchResult::Consumed {
                         remaining: value,
@@ -569,7 +569,7 @@ impl Pattern {
                     static ref FORBIDDEN: Regex =
                         Regex::new(r"(/|^)(\.|(node_modules|__tests?__)(/|$))").unwrap();
                     static ref FORBIDDEN_MATCH: Regex = Regex::new(r"\.d\.ts$|\.map$").unwrap();
-                };
+                }
                 if let Some(m) = FORBIDDEN.find(value) {
                     NextConstantUntilResult::Consumed(value, Some(m.start()))
                 } else if FORBIDDEN_MATCH.find(value).is_some() {

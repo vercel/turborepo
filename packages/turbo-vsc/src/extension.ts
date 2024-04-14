@@ -82,7 +82,8 @@ export function activate(context: ExtensionContext) {
     if (turboPath == null) {
       turboPath = cp.execSync(
         // attempt to source two well known version managers
-        'sh -c \'source "$HOME/.nvm/nvm.sh" > /dev/null 2>&1; source "$HOME/.asdf/asdf.sh" > /dev/null 2>&1; which turbo\'',
+        // as well as adding the bun global bin to the path
+        'sh -c \'source "$HOME/.nvm/nvm.sh" > /dev/null 2>&1; source "$HOME/.asdf/asdf.sh" > /dev/null 2>&1; export PATH="$HOME/.bun/bin:$PATH"; which turbo\'',
         options
       );
     }
@@ -406,6 +407,10 @@ function findLocalTurbo(): string | undefined {
     },
     () => {
       const binFolder = cp.execSync("pnpm bin", options).trim();
+      return path.join(binFolder, "turbo");
+    },
+    () => {
+      const binFolder = cp.execSync("bun pm bin", options).trim();
       return path.join(binFolder, "turbo");
     },
   ];

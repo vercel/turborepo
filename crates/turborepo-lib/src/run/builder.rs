@@ -58,11 +58,15 @@ pub struct RunBuilder {
     repo_root: AbsoluteSystemPathBuf,
     ui: UI,
     version: &'static str,
+    experimental_ui: bool,
+    api_client: APIClient,
 }
 
 impl RunBuilder {
-    pub fn new(base: CommandBase, api_auth: Option<APIAuth>) -> Result<Self, Error> {
-        let processes = ProcessManager::infer();
+    pub fn new(base: CommandBase) -> Result<Self, Error> {
+        let api_auth = base.api_auth()?;
+        let api_client = base.api_client()?;
+
         let mut opts: Opts = base.args().try_into()?;
         let config = base.config()?;
         let is_linked = turborepo_api_client::is_linked(&api_auth);
@@ -86,14 +90,24 @@ impl RunBuilder {
             opts.run_opts.experimental_space_id = config.spaces_id().map(|s| s.to_owned());
         }
         let version = base.version();
+        let experimental_ui = config.experimental_ui();
+        let processes = ProcessManager::new(
+            // We currently only use a pty if the following are met:
+            // - we're attached to a tty
+            atty::is(atty::Stream::Stdout) &&
+            // - if we're on windows, we're using the UI
+            (!cfg!(windows) || experimental_ui),
+        );
         let CommandBase { repo_root, ui, .. } = base;
         Ok(Self {
             processes,
             opts,
+            api_client,
             api_auth,
             repo_root,
             ui,
             version,
+            experimental_ui,
         })
     }
 
@@ -116,12 +130,11 @@ impl RunBuilder {
             .then(|| start_analytics(api_auth, api_client))
     }
 
-    #[tracing::instrument(skip(self, signal_handler, api_client))]
+    #[tracing::instrument(skip(self, signal_handler))]
     pub async fn build(
         mut self,
         signal_handler: &SignalHandler,
         telemetry: CommandEventBuilder,
-        api_client: APIClient,
     ) -> Result<Run, Error> {
         tracing::trace!(
             platform = %TurboState::platform_name(),
@@ -137,7 +150,7 @@ impl RunBuilder {
         }
 
         let (analytics_sender, analytics_handle) =
-            Self::initialize_analytics(self.api_auth.clone(), api_client.clone()).unzip();
+            Self::initialize_analytics(self.api_auth.clone(), self.api_client.clone()).unzip();
 
         let scm = {
             let repo_root = self.repo_root.clone();
@@ -155,7 +168,7 @@ impl RunBuilder {
         // we only track the remote cache if we're linked because this defaults to
         // Vercel
         if is_linked {
-            run_telemetry.track_remote_cache(api_client.base_url());
+            run_telemetry.track_remote_cache(self.api_client.base_url());
         }
         let _is_structured_output = self.opts.run_opts.graph.is_some()
             || matches!(self.opts.run_opts.dry_run, Some(DryRunMode::Json));
@@ -287,7 +300,7 @@ impl RunBuilder {
         let async_cache = AsyncCache::new(
             &self.opts.cache_opts,
             &self.repo_root,
-            api_client.clone(),
+            self.api_client.clone(),
             self.api_auth.clone(),
             analytics_sender,
         )?;
@@ -302,6 +315,7 @@ impl RunBuilder {
             &root_package_json,
             is_single_package,
         )?;
+        root_turbo_json.track_usage(&run_telemetry);
 
         pkg_dep_graph.validate()?;
 
@@ -349,6 +363,7 @@ impl RunBuilder {
             pkg_dep_graph.remove_package_dependencies();
             engine = self.build_engine(&pkg_dep_graph, &root_turbo_json, &filtered_pkgs)?;
         }
+        engine.track_usage(&run_telemetry);
 
         let color_selector = ColorSelector::default();
 
@@ -371,6 +386,7 @@ impl RunBuilder {
         Ok(Run {
             version: self.version,
             ui: self.ui,
+            experimental_ui: self.experimental_ui,
             analytics_handle,
             start_at,
             processes: self.processes,
@@ -378,7 +394,7 @@ impl RunBuilder {
             task_access,
             repo_root: self.repo_root,
             opts: self.opts,
-            api_client,
+            api_client: self.api_client,
             api_auth: self.api_auth,
             env_at_execution_start,
             filtered_pkgs,
@@ -419,7 +435,11 @@ impl RunBuilder {
 
         if !self.opts.run_opts.parallel {
             engine
-                .validate(pkg_dep_graph, self.opts.run_opts.concurrency)
+                .validate(
+                    pkg_dep_graph,
+                    self.opts.run_opts.concurrency,
+                    self.experimental_ui,
+                )
                 .map_err(Error::EngineValidation)?;
         }
 

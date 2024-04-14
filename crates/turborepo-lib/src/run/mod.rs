@@ -10,6 +10,7 @@ mod scope;
 pub(crate) mod summary;
 pub mod task_access;
 pub mod task_id;
+pub mod watch;
 
 use std::{collections::HashSet, io::Write, sync::Arc};
 
@@ -42,6 +43,7 @@ use crate::{
 pub struct Run {
     version: &'static str,
     ui: UI,
+    experimental_ui: bool,
     start_at: DateTime<Local>,
     processes: ProcessManager,
     run_telemetry: GenericEventBuilder,
@@ -220,6 +222,7 @@ impl Run {
             self.processes.clone(),
             &self.repo_root,
             global_env,
+            self.experimental_ui,
         );
 
         if self.opts.run_opts.dry_run.is_some() {

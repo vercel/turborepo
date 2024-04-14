@@ -73,6 +73,14 @@ impl PackageJson {
             .chain(self.optional_dependencies.iter().flatten())
             .chain(self.dependencies.iter().flatten())
     }
+
+    /// Returns the command for script_name if it is non-empty
+    pub fn command(&self, script_name: &str) -> Option<&str> {
+        self.scripts
+            .get(script_name)
+            .filter(|command| !command.is_empty())
+            .map(|command| command.as_str())
+    }
 }
 
 impl FromStr for PackageJson {
@@ -85,7 +93,6 @@ impl FromStr for PackageJson {
 
 #[cfg(test)]
 mod test {
-    use anyhow::Result;
     use pretty_assertions::assert_eq;
     use serde_json::json;
     use test_case::test_case;

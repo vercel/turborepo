@@ -425,7 +425,6 @@ jobs:
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
         with:
-          components: rustfmt
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Run cargo fmt check
@@ -513,8 +512,7 @@ jobs:
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
         with:
-          components: clippy
-          targets: wasm32-unknown-unknown,wasm32-wasi-preview1-threads
+          targets: wasm32-unknown-unknown,wasm32-wasip1-threads
 
       - name: Run cargo check release
         run: |
@@ -522,7 +520,7 @@ jobs:
 
       - name: Run cargo check for the wasi targets
         run: |
-          RUSTFLAGS="-D warnings -A deprecated" cargo groups check turbopack-wasi --release
+          CARGO_BUILD_TARGET="wasm32-wasip1-threads" RUSTFLAGS="-D warnings -A deprecated" cargo groups check turbopack-wasi --release
 
   turbopack_rust_clippy:
     needs: [turbopack_rust_check]
@@ -539,7 +537,6 @@ jobs:
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
         with:
-          components: clippy
           targets: wasm32-unknown-unknown
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 

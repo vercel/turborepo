@@ -250,6 +250,7 @@ impl TaskIdProvider for &dyn TaskIdProvider {
     }
 }
 
+#[allow(clippy::manual_non_exhaustive)]
 pub struct UpdateInfo {
     pub duration: Duration,
     pub tasks: usize,
@@ -460,7 +461,7 @@ impl<B: Backend + 'static> TurboTasks<B> {
 
         let this = self.pin();
         let future = async move {
-            #[allow(clippy::blocks_in_if_conditions)]
+            #[allow(clippy::blocks_in_conditions)]
             while CURRENT_TASK_STATE
                 .scope(Default::default(), async {
                     if this.stopped.load(Ordering::Acquire) {
@@ -798,17 +799,18 @@ impl<B: Backend + 'static> TurboTasks<B> {
     }
 
     fn finish_current_task_state(&self) -> bool {
-        CURRENT_TASK_STATE.with(|cell| {
+        let (stateful, tasks) = CURRENT_TASK_STATE.with(|cell| {
             let CurrentTaskState {
                 tasks_to_notify,
                 stateful,
             } = &mut *cell.borrow_mut();
-            let tasks = take(tasks_to_notify);
-            if !tasks.is_empty() {
-                self.backend.invalidate_tasks(&tasks, self);
-            }
-            *stateful
-        })
+            (*stateful, take(tasks_to_notify))
+        });
+
+        if !tasks.is_empty() {
+            self.backend.invalidate_tasks(&tasks, self);
+        }
+        stateful
     }
 
     pub fn backend(&self) -> &B {
@@ -1394,6 +1396,10 @@ pub fn mark_stateful() {
         let CurrentTaskState { stateful, .. } = &mut *cell.borrow_mut();
         *stateful = true;
     })
+}
+
+pub fn prevent_gc() {
+    mark_stateful();
 }
 
 /// Notifies scheduled tasks for execution.

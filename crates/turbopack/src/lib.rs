@@ -20,7 +20,7 @@ use std::{
 };
 
 use anyhow::{bail, Result};
-use css::{CssModuleAsset, GlobalCssAsset, ModuleCssAsset};
+use css::{CssModuleAsset, ModuleCssAsset};
 use ecmascript::{
     chunk::EcmascriptChunkPlaceable,
     references::{follow_reexports, FollowExportsResult},
@@ -31,7 +31,7 @@ use graph::{aggregate, AggregatedGraph, AggregatedGraphNodeContent};
 use module_options::{ModuleOptions, ModuleOptionsContext, ModuleRuleEffect, ModuleType};
 use tracing::Instrument;
 use turbo_tasks::{Completion, Value, ValueToString, Vc};
-use turbo_tasks_fs::FileSystemPath;
+use turbo_tasks_fs::{glob::Glob, FileSystemPath};
 pub use turbopack_core::condition;
 use turbopack_core::{
     asset::Asset,
@@ -46,13 +46,14 @@ use turbopack_core::{
         CssReferenceSubType, EcmaScriptModulesReferenceSubType, InnerAssets, ReferenceType,
     },
     resolve::{
-        options::ResolveOptions, origin::PlainResolveOrigin, parse::Request, resolve, ModulePart,
-        ModuleResolveResult, ModuleResolveResultItem, ResolveResult,
+        options::ResolveOptions, origin::PlainResolveOrigin, parse::Request, resolve, ExternalType,
+        ModulePart, ModuleResolveResult, ModuleResolveResultItem, ResolveResult,
     },
     source::Source,
 };
 pub use turbopack_css as css;
 pub use turbopack_ecmascript as ecmascript;
+use turbopack_ecmascript::references::external_module::{CachedExternalModule, CachedExternalType};
 use turbopack_json::JsonModuleAsset;
 use turbopack_mdx::MdxModuleAsset;
 pub use turbopack_resolve::{resolve::resolve_options, resolve_options_context};
@@ -171,11 +172,17 @@ async fn apply_module_type(
                         }
                     }
                     Some(TreeShakingMode::ReexportsOnly) => {
+                        let side_effect_free_packages =
+                            module_asset_context.side_effect_free_packages();
+
                         let module = builder.build();
                         if let Some(part) = part {
                             match *part.await? {
                                 ModulePart::Evaluation => {
-                                    if *module.is_marked_as_side_effect_free().await? {
+                                    if *module
+                                        .is_marked_as_side_effect_free(side_effect_free_packages)
+                                        .await?
+                                    {
                                         return Ok(ProcessResult::Ignore.cell());
                                     }
                                     if *module.get_exports().needs_facade().await? {
@@ -195,9 +202,14 @@ async fn apply_module_type(
                                                 ModulePart::exports(),
                                             )),
                                             part,
+                                            side_effect_free_packages,
                                         )
                                     } else {
-                                        apply_reexport_tree_shaking(Vc::upcast(module), part)
+                                        apply_reexport_tree_shaking(
+                                            Vc::upcast(module),
+                                            part,
+                                            side_effect_free_packages,
+                                        )
                                     }
                                 }
                                 _ => bail!(
@@ -219,10 +231,12 @@ async fn apply_module_type(
         }
         ModuleType::Json => Vc::upcast(JsonModuleAsset::new(source)),
         ModuleType::Raw => Vc::upcast(RawModule::new(source)),
-        ModuleType::CssGlobal => Vc::upcast(GlobalCssAsset::new(
-            source,
-            Vc::upcast(module_asset_context),
-        )),
+        ModuleType::CssGlobal => {
+            return Ok(module_asset_context.process(
+                source,
+                Value::new(ReferenceType::Css(CssReferenceSubType::Internal)),
+            ))
+        }
         ModuleType::CssModule => Vc::upcast(ModuleCssAsset::new(
             source,
             Vc::upcast(module_asset_context),
@@ -266,6 +280,7 @@ async fn apply_module_type(
 async fn apply_reexport_tree_shaking(
     module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
     part: Vc<ModulePart>,
+    side_effect_free_packages: Vc<Glob>,
 ) -> Result<Vc<Box<dyn Module>>> {
     if let ModulePart::Export(export) = *part.await? {
         let export = export.await?;
@@ -273,7 +288,7 @@ async fn apply_reexport_tree_shaking(
             module: final_module,
             export_name: new_export,
             ..
-        } = &*follow_reexports(module, export.clone_value()).await?;
+        } = &*follow_reexports(module, export.clone_value(), side_effect_free_packages).await?;
         let module = if let Some(new_export) = new_export {
             if *new_export == *export {
                 Vc::upcast(*final_module)
@@ -390,6 +405,23 @@ impl ModuleAssetContext {
         reference_type: Value<ReferenceType>,
     ) -> Vc<ProcessResult> {
         process_default(self, source, reference_type, Vec::new())
+    }
+
+    #[turbo_tasks::function]
+    pub async fn side_effect_free_packages(self: Vc<Self>) -> Result<Vc<Glob>> {
+        let pkgs = &*self
+            .await?
+            .module_options_context
+            .await?
+            .side_effect_free_packages;
+
+        let mut globs = Vec::with_capacity(pkgs.len());
+
+        for pkg in pkgs {
+            globs.push(Glob::new(format!("**/node_modules/{{{}}}/**", pkg)));
+        }
+
+        Ok(Glob::alternatives(globs))
     }
 }
 
@@ -532,7 +564,25 @@ async fn process_default_internal(
         }
     }
 
-    let module_type = current_module_type.unwrap_or(ModuleType::Raw).cell();
+    let module_type = match current_module_type {
+        Some(module_type) => module_type,
+        None => {
+            ModuleIssue {
+                ident,
+                title: StyledString::Text("Unknown module type".to_string()).cell(),
+                description: StyledString::Text(
+                    r"This module doesn't have an associated type. Use a known file extension, or register a loader for it.
+
+Read more: https://nextjs.org/docs/app/api-reference/next-config-js/turbo#webpack-loaders".to_string(),
+                )
+                .cell(),
+            }
+            .cell()
+            .emit();
+
+            return Ok(ProcessResult::Ignore.cell());
+        }
+    }.cell();
 
     Ok(apply_module_type(
         current_source,
@@ -614,7 +664,8 @@ impl AssetContext for ModuleAssetContext {
     ) -> Result<Vc<ModuleResolveResult>> {
         let this = self.await?;
         let transition = this.transition;
-        Ok(result
+
+        let result = result
             .await?
             .map_module(|source| {
                 let reference_type = reference_type.clone();
@@ -630,8 +681,12 @@ impl AssetContext for ModuleAssetContext {
                     })
                 }
             })
-            .await?
-            .into())
+            .await?;
+
+        let result =
+            replace_externals(result, this.module_options_context.await?.import_externals).await?;
+
+        Ok(result.cell())
     }
 
     #[turbo_tasks::function]
@@ -790,6 +845,41 @@ async fn top_references(list: Vc<ReferencesList>) -> Result<Vc<ReferencesList>> 
             .collect(),
     }
     .into())
+}
+
+/// Replaces the externals in the result with `ExternalModuleAsset` instances.
+pub async fn replace_externals(
+    mut result: ModuleResolveResult,
+    import_externals: bool,
+) -> Result<ModuleResolveResult> {
+    for item in result.primary.values_mut() {
+        let ModuleResolveResultItem::External(request, ty) = item else {
+            continue;
+        };
+
+        let external_type = match ty {
+            ExternalType::CommonJs => CachedExternalType::CommonJs,
+            ExternalType::EcmaScriptModule => {
+                if import_externals {
+                    CachedExternalType::EcmaScriptViaImport
+                } else {
+                    CachedExternalType::EcmaScriptViaRequire
+                }
+            }
+            ExternalType::Url => {
+                // we don't want to wrap url externals.
+                continue;
+            }
+        };
+
+        let module = CachedExternalModule::new(request.clone(), external_type)
+            .resolve()
+            .await?;
+
+        *item = ModuleResolveResultItem::Module(Vc::upcast(module));
+    }
+
+    Ok(result)
 }
 
 pub fn register() {

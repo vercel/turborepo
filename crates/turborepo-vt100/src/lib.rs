@@ -33,7 +33,6 @@
 //! );
 //! ```
 
-#![warn(clippy::cargo)]
 #![warn(clippy::pedantic)]
 #![warn(clippy::nursery)]
 #![warn(clippy::as_conversions)]
@@ -57,6 +56,8 @@ mod perform;
 mod row;
 mod screen;
 mod term;
+#[cfg(feature = "tui-term")]
+mod tui_term;
 
 pub use attrs::Color;
 pub use callbacks::Callbacks;

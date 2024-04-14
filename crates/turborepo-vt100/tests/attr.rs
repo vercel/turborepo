@@ -1,5 +1,3 @@
-use turborepo_vt100 as vt100;
-
 mod helpers;
 
 #[test]
