@@ -79,7 +79,6 @@ Next, we need to scaffold Storybook:
       ```shell
       cd workshop
       pnpm dlx sb init
-      pnpm install --save-dev @storybook/cli   # Manually install deps and CLI
       ```
 
   </Tab>
@@ -172,6 +171,8 @@ And `pnpm install` one more time to make sure that your `ui` package is installe
 ```jsx filename="apps/workshop/src/stories/Button.stories.tsx"
 import { Button } from '@repo/ui/button'
 ```
+
+Note: In the end after going through Storybook's onboarding, you can [uninstall the onboarding addon](https://github.com/storybookjs/addon-onboarding/blob/main/README.md)
 
 ### 4. Align tasks
 
