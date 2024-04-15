@@ -74,10 +74,9 @@ impl WatchClient {
             execution_args: execution_args.clone(),
         });
 
-        // We currently don't actually need the whole Run struct, just the filtered
-        // packages. But in the future we'll likely need it to more efficiently
-        // spawn tasks.
-        let mut run = RunBuilder::new(new_base)?
+        let mut main_run_handle: Option<JoinHandle<_>> = None;
+
+        let run = RunBuilder::new(new_base)?
             .build(&handler, telemetry.clone())
             .await?;
 

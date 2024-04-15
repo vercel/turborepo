@@ -209,7 +209,59 @@ impl Engine<Built> {
         }
     }
 
-    pub fn get_engine_for_persistent_tasks(&self) -> Engine<Built> {
+    /// Creates an `Engine` with persistent tasks filtered out. Used in watch
+    /// mode to re-run the non-persistent tasks.
+    pub fn create_engine_without_persistent_tasks(&self) -> Engine<Built> {
+        let mut new_graph = self.task_graph.filter_map(
+            |node_idx, node| {
+                if let TaskNode::Task(task) = &self.task_graph[node_idx] {
+                    let def = self
+                        .task_definitions
+                        .get(task)
+                        .expect("task should have definition");
+
+                    if !def.persistent {
+                        return Some(node.clone());
+                    }
+                }
+
+                None
+            },
+            |_, _| Some(()),
+        );
+
+        let root_index = new_graph
+            .node_indices()
+            .find(|index| new_graph[*index] == TaskNode::Root)
+            .expect("root node should be present");
+
+        let task_lookup: HashMap<_, _> = new_graph
+            .node_indices()
+            .filter_map(|index| {
+                let task = new_graph
+                    .node_weight(index)
+                    .expect("node index should be present");
+                match task {
+                    TaskNode::Root => None,
+                    TaskNode::Task(task) => Some((task.clone(), index)),
+                }
+            })
+            .collect();
+
+        Engine {
+            marker: std::marker::PhantomData,
+            root_index,
+            task_graph: new_graph,
+            task_lookup,
+            task_definitions: self.task_definitions.clone(),
+            task_locations: self.task_locations.clone(),
+            package_tasks: self.package_tasks.clone(),
+            has_persistent_tasks: false,
+        }
+    }
+
+    /// Creates an `Engine` that is only the persistent tasks.
+    pub fn create_engine_for_persistent_tasks(&self) -> Engine<Built> {
         let mut new_graph = self.task_graph.filter_map(
             |node_idx, node| {
                 if let TaskNode::Task(task) = &self.task_graph[node_idx] {
