@@ -212,7 +212,7 @@ impl Engine<Built> {
     /// Creates an `Engine` with persistent tasks filtered out. Used in watch
     /// mode to re-run the non-persistent tasks.
     pub fn create_engine_without_persistent_tasks(&self) -> Engine<Built> {
-        let mut new_graph = self.task_graph.filter_map(
+        let new_graph = self.task_graph.filter_map(
             |node_idx, node| {
                 if let TaskNode::Task(task) = &self.task_graph[node_idx] {
                     let def = self

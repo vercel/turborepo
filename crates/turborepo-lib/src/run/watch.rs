@@ -76,7 +76,7 @@ impl WatchClient {
 
         let mut main_run_handle: Option<JoinHandle<_>> = None;
 
-        let run = RunBuilder::new(new_base)?
+        let mut run = RunBuilder::new(new_base)?
             .build(&handler, telemetry.clone())
             .await?;
 
