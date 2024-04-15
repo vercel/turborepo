@@ -440,10 +440,20 @@ function asyncModule(
   }
 
   function asyncResult(err?: any) {
+    let currentExports = exports;
+
+    // in case `exportNamespace` was called,
+    // we need to restore the promise export.
+    if (module.exports !== promise) {
+      currentExports = module.exports;
+      promise[turbopackExports] = currentExports;
+      module.exports = module.namespaceObject = promise;
+    }
+
     if (err) {
       reject((promise[turbopackError] = err));
     } else {
-      resolve(exports);
+      resolve(currentExports);
     }
 
     resolveQueue(queue);
