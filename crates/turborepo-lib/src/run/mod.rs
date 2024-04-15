@@ -66,6 +66,9 @@ pub struct Run {
 }
 
 impl Run {
+    fn has_persistent_tasks(&self) -> bool {
+        self.engine.has_persistent_tasks
+    }
     fn print_run_prelude(&self) {
         let targets_list = self.opts.run_opts.tasks.join(", ");
         if self.opts.run_opts.single_package {

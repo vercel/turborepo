@@ -43,7 +43,9 @@ impl<N: Eq + Hash + Copy + Send + 'static> Walker<N, Start> {
         }
         // We will be emitting at most txs.len() nodes so emitting a node should never
         // block
-        let (node_tx, node_rx) = mpsc::channel(txs.len());
+        //
+        // Always have at least 1 entry in buffer or this will panic
+        let (node_tx, node_rx) = mpsc::channel(std::cmp::max(txs.len(), 1));
         let join_handles = FuturesUnordered::new();
         for node in graph.node_identifiers() {
             let tx = txs.remove(&node).expect("should have sender for all nodes");
