@@ -199,7 +199,7 @@ mod tests {
 
     #[test_case(Spanned { value: 10, range: Some(0..2), path: None, text: None }, "10")]
     #[test_case(Spanned { value: "hello world", range: None, path: None, text: Some(Arc::from("hello world")) }, "\"hello world\"")]
-    #[test_case(Spanned { value: json!({ "name": "George", "age": 100 }), range: None, path: None, text: Some(Arc::from("hello world")) }, "{\"age\":100,\"name\":\"George\"}")]
+    #[test_case(Spanned { value: json!({ "name": "George", "age": 100 }), range: None, path: None, text: Some(Arc::from("hello world")) }, "{\"name\":\"George\",\"age\":100}")]
     fn test_serialize_spanned<T>(spanned_value: Spanned<T>, expected: &str)
     where
         T: serde::Serialize,
