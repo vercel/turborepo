@@ -19,9 +19,7 @@ describe("utils", () => {
       const input = "a-sensitive-value";
       const salt = "private-salt";
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call -- reasons
       const result1 = utils.oneWayHashWithSalt({ input, salt });
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call -- reasons
       const result2 = utils.oneWayHashWithSalt({
         input: `${input}-${input}`,
         salt,
@@ -34,7 +32,6 @@ describe("utils", () => {
   describe("defaultConfigPath", () => {
     test("supports overriding by env var", async () => {
       process.env.TURBO_CONFIG_DIR_PATH = "/tmp";
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call -- reasons
       const result = await utils.defaultConfigPath();
       assert.equal(result, "/tmp/turborepo/telemetry.json");
     });
