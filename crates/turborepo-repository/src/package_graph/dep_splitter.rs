@@ -206,7 +206,7 @@ impl<'a> fmt::Display for DependencyVersion<'a> {
 #[cfg(test)]
 mod test {
     use test_case::test_case;
-    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+    use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
     use crate::package_json::PackageJson;

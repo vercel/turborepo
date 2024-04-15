@@ -602,7 +602,6 @@ mod tests {
 
     use pretty_assertions::assert_eq;
     use tempfile::tempdir;
-    use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
 

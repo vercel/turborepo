@@ -11,9 +11,7 @@ use std::env;
 
 use chrono::{DateTime, Utc};
 pub use config::{Config, ConfigError, File, FileFormat};
-use hex;
 use serde::{Deserialize, Serialize};
-use serde_json;
 use sha2::{Digest, Sha256};
 use tracing::{debug, error};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};

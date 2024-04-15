@@ -605,8 +605,6 @@ mod tests {
     const PNPM_V7_PEER: &[u8] = include_bytes!("../../fixtures/pnpm-v7-peer.yaml").as_slice();
     const PNPM_V7_PATCH: &[u8] = include_bytes!("../../fixtures/pnpm-v7-patch.yaml").as_slice();
 
-    use std::any::Any;
-
     use super::*;
     use crate::{Lockfile, Package};
 

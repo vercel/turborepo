@@ -29,11 +29,10 @@ pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i3
 
     let handler = SignalHandler::new(signal);
 
-    let api_auth = base.api_auth()?;
-    let api_client = base.api_client()?;
-    let run_builder = RunBuilder::new(base, api_auth)?;
+    let run_builder = RunBuilder::new(base)?;
+
     let run_fut = async {
-        let run = run_builder.build(&handler, telemetry, api_client).await?;
+        let run = run_builder.build(&handler, telemetry).await?;
         run.run().await
     };
 

@@ -3,10 +3,19 @@ CARGO_WORKSPACE_DIR = { value = "", relative = true }
 TURBO_PNPM_WORKSPACE_DIR = { value = "", relative = true }
 
 [build]
-rustflags = ["--cfg", "tokio_unstable"]
+rustflags = [
+  "--cfg",
+  "tokio_unstable",
+  "-Zshare-generics=y", # make the current crate share its generic instantiations
+  "-Zthreads=8", # parallel frontend https://blog.rust-lang.org/2023/11/09/parallel-rustc.html
+  "-Csymbol-mangling-version=v0",
+]
 rustdocflags = ["-Znormalize-docs"]
 
 [target.x86_64-pc-windows-msvc]
+linker = "rust-lld"
+
+[target.aarch64-apple-darwin]
 linker = "rust-lld"
 
 [alias]
@@ -21,11 +30,3 @@ tp-test = "nextest run --workspace --release --no-fail-fast --exclude turbo --ex
 tp-bench-test = "test --benches --workspace --release --no-fail-fast --exclude turbopack-bench --exclude turbo --exclude turborepo-* --exclude turbopath --exclude wax --exclude globwalk --exclude globwatch --exclude pidlock"
 tp-check = "check --workspace --exclude turbo --exclude turborepo-* --exclude turbopath --exclude wax --exclude globwalk --exclude globwatch --exclude pidlock"
 tp-clippy = "clippy --workspace --exclude turbo --exclude turborepo-* --exclude turbopath --exclude wax --exclude globwalk --exclude globwatch --exclude pidlock"
-
-[target.'cfg(all())']
-rustflags = [
-  "--cfg",
-  "tokio_unstable",
-  "-Zshare-generics=y",
-  "-Csymbol-mangling-version=v0",
-]

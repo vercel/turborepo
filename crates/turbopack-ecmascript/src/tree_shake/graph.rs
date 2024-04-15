@@ -124,9 +124,6 @@ impl Default for ItemData {
     }
 }
 
-#[derive(Debug)]
-pub(super) struct VarInfo {}
-
 #[derive(Debug, Clone)]
 pub struct InternedGraph<T>
 where
@@ -548,10 +545,8 @@ impl DepGraph {
                         _ => {}
                     },
                     ModuleDecl::ExportNamed(NamedExport {
-                        src: None,
-                        specifiers,
-                        ..
-                    }) => {
+                        src, specifiers, ..
+                    }) if src.is_none() => {
                         // We are not interested in re-exports.
                         for s in specifiers {
                             match s {

@@ -37,7 +37,7 @@ impl PackageInference {
     pub fn calculate(
         turbo_root: &AbsoluteSystemPath,
         pkg_inference_path: &AnchoredSystemPathBuf,
-        pkg_graph: &package_graph::PackageGraph,
+        pkg_graph: &PackageGraph,
     ) -> Self {
         debug!(
             "Using {} as a basis for selecting packages",
@@ -78,16 +78,15 @@ impl PackageInference {
         };
 
         if let Some(name) = &self.package_name {
-            selector.name_pattern = name.to_owned();
+            selector.name_pattern.clone_from(name);
         }
 
-        if selector.parent_dir != turbopath::AnchoredSystemPathBuf::default() {
+        if selector.parent_dir != AnchoredSystemPathBuf::default() {
             let repo_relative_parent_dir = self.directory_root.join(&selector.parent_dir);
-            let clean_parent_dir =
-                path_clean::clean(std::path::Path::new(repo_relative_parent_dir.as_path()))
-                    .into_os_string()
-                    .into_string()
-                    .expect("path was valid utf8 before cleaning");
+            let clean_parent_dir = path_clean::clean(Path::new(repo_relative_parent_dir.as_path()))
+                .into_os_string()
+                .into_string()
+                .expect("path was valid utf8 before cleaning");
             selector.parent_dir = AnchoredSystemPathBuf::try_from(clean_parent_dir.as_str())
                 .expect("path wasn't absolute before cleaning");
         } else if self.package_name.is_none() {
@@ -167,7 +166,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     /// It applies the following rules:
     pub(crate) fn resolve(
         &self,
-        patterns: &Vec<String>,
+        patterns: &[String],
     ) -> Result<(HashSet<PackageName>, bool), ResolutionError> {
         // inference is None only if we are in the root
         let is_all_packages = patterns.is_empty() && self.inference.is_none();
@@ -513,7 +512,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     fn packages_changed_in_range(
         &self,
         git_range: &GitRange,
-    ) -> Result<HashSet<PackageName>, ChangeMapError> {
+    ) -> Result<HashSet<PackageName>, ResolutionError> {
         self.change_detector
             .changed_packages(&git_range.from_ref, git_range.to_ref.as_deref())
     }
@@ -607,7 +606,6 @@ mod test {
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
     use turborepo_repository::{
-        change_mapper::ChangeMapError,
         discovery::PackageDiscovery,
         package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME},
         package_json::PackageJson,
@@ -615,7 +613,9 @@ mod test {
     };
 
     use super::{FilterResolver, PackageInference, TargetSelector};
-    use crate::run::scope::{change_detector::GitChangeDetector, target_selector::GitRange};
+    use crate::run::scope::{
+        change_detector::GitChangeDetector, target_selector::GitRange, ResolutionError,
+    };
 
     fn get_name(name: &str) -> (Option<&str>, &str) {
         if let Some(idx) = name.rfind('/') {
@@ -1190,7 +1190,7 @@ mod test {
             &self,
             from: &str,
             to: Option<&str>,
-        ) -> Result<HashSet<PackageName>, ChangeMapError> {
+        ) -> Result<HashSet<PackageName>, ResolutionError> {
             Ok(self
                 .0
                 .get(&(from, to))
