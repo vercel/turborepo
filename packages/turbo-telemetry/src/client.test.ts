@@ -256,7 +256,8 @@ describe("TelemetryClient", () => {
       "x-turbo-telemetry-id" in mockPost.mock.calls[0].arguments[1].headers,
       true
     );
-    assert.matches(
+
+    assert.match(
       mockPost.mock.calls[0].arguments[1].headers["User-Agent"],
       /create-turbo 1\.0\.0/
     );
