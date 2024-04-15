@@ -43,7 +43,7 @@ pub enum Error {
     WorkspaceAtFilesystemRoot,
     #[error("at least one target must be specified")]
     NoWorkspaceSpecified,
-    #[error("invalid scope: package {0} not found")]
+    #[error("invalid scope: package with name {0} in package.json not found")]
     MissingWorkspace(PackageName),
     #[error("Cannot prune without parsed lockfile")]
     MissingLockfile,
