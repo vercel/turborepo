@@ -97,26 +97,50 @@ impl EcmascriptChunkItem for AsyncLoaderChunkItem {
             .map(|chunk_data| EcmascriptChunkData::new(chunk_data))
             .collect();
 
-        let code = if let Some(id) = id {
-            formatdoc! {
-                r#"
-                    __turbopack_export_value__((__turbopack_import__) => {{
-                        return Promise.all({chunks:#}.map((chunk) => __turbopack_load__(chunk))).then(() => {{
-                            return __turbopack_import__({id});
+        let code = match (id, chunks_data.is_empty()) {
+            (Some(id), true) => {
+                formatdoc! {
+                    r#"
+                        __turbopack_export_value__((__turbopack_import__) => {{
+                            return Promise.resolve().then(() => {{
+                                return __turbopack_import__({id});
+                            }});
                         }});
-                    }});
-                "#,
-                chunks = StringifyJs(&chunks_data),
-                id = StringifyJs(id),
+                    "#,
+                    id = StringifyJs(id),
+                }
             }
-        } else {
-            formatdoc! {
-                r#"
-                    __turbopack_export_value__((__turbopack_import__) => {{
-                        return Promise.all({chunks:#}.map((chunk) => __turbopack_load__(chunk))).then(() => {{}});
-                    }});
-                "#,
-                chunks = StringifyJs(&chunks_data),
+            (Some(id), false) => {
+                formatdoc! {
+                    r#"
+                        __turbopack_export_value__((__turbopack_import__) => {{
+                            return Promise.all({chunks:#}.map((chunk) => __turbopack_load__(chunk))).then(() => {{
+                                return __turbopack_import__({id});
+                            }});
+                        }});
+                    "#,
+                    chunks = StringifyJs(&chunks_data),
+                    id = StringifyJs(id),
+                }
+            }
+            (None, true) => {
+                formatdoc! {
+                    r#"
+                        __turbopack_export_value__((__turbopack_import__) => {{
+                            return Promise.resolve();
+                        }});
+                    "#,
+                }
+            }
+            (None, false) => {
+                formatdoc! {
+                    r#"
+                        __turbopack_export_value__((__turbopack_import__) => {{
+                            return Promise.all({chunks:#}.map((chunk) => __turbopack_load__(chunk))).then(() => {{}});
+                        }});
+                    "#,
+                    chunks = StringifyJs(&chunks_data),
+                }
             }
         };
 
