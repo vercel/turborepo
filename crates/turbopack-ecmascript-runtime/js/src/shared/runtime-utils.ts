@@ -147,7 +147,11 @@ function exportValue(module: Module, value: any) {
 }
 
 function exportNamespace(module: Module, namespace: any) {
-  module.exports = module.namespaceObject = namespace;
+  if (isAsyncModuleExt(module.exports)) {
+    module.exports[turbopackExports] = namespace;
+  } else {
+    module.exports = module.namespaceObject = namespace;
+  }
 }
 
 function createGetter(obj: Record<string | symbol, any>, key: string | symbol) {
@@ -440,20 +444,10 @@ function asyncModule(
   }
 
   function asyncResult(err?: any) {
-    let currentExports = exports;
-
-    // in case `exportNamespace` was called,
-    // we need to restore the promise export.
-    if (module.exports !== promise) {
-      currentExports = module.exports;
-      promise[turbopackExports] = currentExports;
-      module.exports = module.namespaceObject = promise;
-    }
-
     if (err) {
       reject((promise[turbopackError] = err));
     } else {
-      resolve(currentExports);
+      resolve(promise[turbopackExports]);
     }
 
     resolveQueue(queue);
