@@ -32,8 +32,18 @@ pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i3
     let run_builder = RunBuilder::new(base)?;
 
     let run_fut = async {
-        let run = run_builder.build(&handler, telemetry).await?;
-        run.run().await
+        let (analytics_sender, analytics_handle) = run_builder.start_analytics();
+        let run = run_builder
+            .with_analytics_sender(analytics_sender)
+            .build(&handler, telemetry)
+            .await?;
+        let result = run.run().await;
+
+        if let Some(analytics_handle) = analytics_handle {
+            analytics_handle.close_with_timeout().await;
+        }
+
+        result
     };
 
     let handler_fut = handler.done();
