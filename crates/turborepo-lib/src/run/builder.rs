@@ -451,7 +451,7 @@ impl RunBuilder {
         // If we have an initial task, we prune out the engine to only
         // tasks that are reachable from that initial task.
         if let Some(entrypoint_package) = &self.entrypoint_package {
-            engine = engine.create_engine_for_subgraph(entrypoint_package)?;
+            engine = engine.create_engine_for_subgraph(entrypoint_package);
         }
 
         if !self.opts.run_opts.parallel {

@@ -135,10 +135,7 @@ impl Engine<Built> {
     /// Creates an instance of `Engine` that only contains tasks that depend on
     /// tasks from a given package. This is useful for watch mode, where we
     /// need to re-run only a portion of the task graph.
-    pub fn create_engine_for_subgraph(
-        &self,
-        changed_package: &PackageName,
-    ) -> Result<Engine<Built>, BuilderError> {
+    pub fn create_engine_for_subgraph(&self, changed_package: &PackageName) -> Engine<Built> {
         let entrypoint_indices: &[petgraph::graph::NodeIndex] = self
             .package_tasks
             .get(changed_package)
@@ -181,7 +178,7 @@ impl Engine<Built> {
             })
             .collect();
 
-        Ok(Engine {
+        Engine {
             marker: std::marker::PhantomData,
             root_index: self.root_index,
             task_graph: new_graph,
@@ -189,7 +186,7 @@ impl Engine<Built> {
             task_definitions: self.task_definitions.clone(),
             task_locations: self.task_locations.clone(),
             package_tasks: self.package_tasks.clone(),
-        })
+        }
     }
 
     pub fn dependencies(&self, task_id: &TaskId) -> Option<HashSet<&TaskNode>> {
