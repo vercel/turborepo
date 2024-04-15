@@ -685,37 +685,12 @@ pub struct RunArgs {
     #[clap(short = 'F', long, group = "scope-filter-group")]
     pub filter: Vec<String>,
 
-    /// DEPRECATED: Specify package(s) to act as entry
-    /// points for task execution. Supports globs.
-    #[clap(long, group = "scope-filter-group")]
-    pub scope: Vec<String>,
-
     //  ignore filters out files from scope and filter, so we require it here
     // -----------------------
     /// Files to ignore when calculating changed files from '--filter'.
     /// Supports globs.
     #[clap(long, requires = "scope-filter-group")]
     pub ignore: Vec<String>,
-
-    //  since only works with scope, so we require it here
-    // -----------------------
-    /// DEPRECATED: Limit/Set scope to changed packages
-    /// since a mergebase. This uses the git diff ${target_branch}...
-    /// mechanism to identify which packages have changed.
-    #[clap(long, requires = "scope")]
-    pub since: Option<String>,
-
-    //  include_dependencies only works with scope, so we require it here
-    // -----------------------
-    /// DEPRECATED: Include the dependencies of tasks in execution.
-    #[clap(long, requires = "scope")]
-    pub include_dependencies: bool,
-
-    //  no_deps only works with scope, so we require it here
-    // -----------------------
-    /// DEPRECATED: Exclude dependent task consumers from execution.
-    #[clap(long, requires = "scope")]
-    pub no_deps: bool,
 
     /// Avoid saving task results to the cache. Useful for development/watch
     /// tasks.
@@ -829,9 +804,7 @@ impl RunArgs {
 
         // default to true
         track_usage!(telemetry, self.continue_execution, |val| val);
-        track_usage!(telemetry, self.include_dependencies, |val| val);
         track_usage!(telemetry, self.single_package, |val| val);
-        track_usage!(telemetry, self.no_deps, |val| val);
         track_usage!(telemetry, self.no_cache, |val| val);
         track_usage!(telemetry, self.daemon, |val| val);
         track_usage!(telemetry, self.no_daemon, |val| val);
@@ -844,7 +817,6 @@ impl RunArgs {
         track_usage!(telemetry, &self.cache_dir, Option::is_some);
         track_usage!(telemetry, &self.profile, Option::is_some);
         track_usage!(telemetry, &self.force, Option::is_some);
-        track_usage!(telemetry, &self.since, Option::is_some);
         track_usage!(telemetry, &self.pkg_inference_root, Option::is_some);
         track_usage!(telemetry, &self.anon_profile, Option::is_some);
         track_usage!(telemetry, &self.summarize, Option::is_some);
@@ -892,10 +864,6 @@ impl RunArgs {
         // track sizes
         if !self.filter.is_empty() {
             telemetry.track_arg_value("filter:length", self.filter.len(), EventType::NonSensitive);
-        }
-
-        if !self.scope.is_empty() {
-            telemetry.track_arg_value("scope:length", self.scope.len(), EventType::NonSensitive);
         }
 
         if !self.ignore.is_empty() {
@@ -1686,19 +1654,6 @@ mod test {
         "multiple ignores"
 	)]
     #[test_case::test_case(
-		&["turbo", "run", "build", "--scope", "test", "--include-dependencies"],
-        Args {
-            command: Some(Command::Run(Box::new(RunArgs {
-                tasks: vec!["build".to_string()],
-                include_dependencies: true,
-                scope: vec!["test".to_string()],
-                ..get_default_run_args()
-            }))),
-            ..Args::default()
-        } ;
-        "include dependencies"
-	)]
-    #[test_case::test_case(
 		&["turbo", "run", "build", "--no-cache"],
         Args {
             command: Some(Command::Run(Box::new(RunArgs {
@@ -1730,19 +1685,6 @@ mod test {
             }))),
             ..Args::default()
         }
-	)]
-    #[test_case::test_case(
-		&["turbo", "run", "build", "--scope", "test", "--no-deps"],
-        Args {
-            command: Some(Command::Run(Box::new(RunArgs {
-                tasks: vec!["build".to_string()],
-                scope: vec!["test".to_string()],
-                no_deps: true,
-                ..get_default_run_args()
-            }))),
-            ..Args::default()
-        } ;
-        "no deps"
 	)]
     #[test_case::test_case(
 		&["turbo", "run", "build", "--output-logs", "full"],
@@ -1915,30 +1857,6 @@ mod test {
         "remote_only=false works"
 	)]
     #[test_case::test_case(
-		&["turbo", "run", "build", "--scope", "foo", "--scope", "bar"],
-        Args {
-            command: Some(Command::Run(Box::new(RunArgs {
-                tasks: vec!["build".to_string()],
-                scope: vec!["foo".to_string(), "bar".to_string()],
-                ..get_default_run_args()
-            }))),
-            ..Args::default()
-        }
-	)]
-    #[test_case::test_case(
-		&["turbo", "run", "build", "--scope", "test", "--since", "foo"],
-        Args {
-            command: Some(Command::Run(Box::new(RunArgs {
-                tasks: vec!["build".to_string()],
-                scope: vec!["test".to_string()],
-                since: Some("foo".to_string()),
-                ..get_default_run_args()
-            }))),
-            ..Args::default()
-        } ;
-        "scope and since"
-	)]
-    #[test_case::test_case(
 		&["turbo", "build"],
         Args {
             run_args: Some(RunArgs {
@@ -1983,17 +1901,17 @@ mod test {
     )]
     #[test_case::test_case(
         &["turbo", "run", "build", "--since", "foo"],
-        "the following required arguments were not provided" ;
+        "unexpected argument '--since' found" ;
         "since without filter or scope"
     )]
     #[test_case::test_case(
         &["turbo", "run", "build", "--include-dependencies"],
-        "the following required arguments were not provided" ;
+        "unexpected argument '--include-dependencies' found" ;
         "include-dependencies without filter or scope"
     )]
     #[test_case::test_case(
         &["turbo", "run", "build", "--no-deps"],
-        "the following required arguments were not provided" ;
+        "unexpected argument '--no-deps' found" ;
         "no-deps without filter or scope"
     )]
     fn test_parse_run_failures(args: &[&str], expected: &str) {
