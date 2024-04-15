@@ -148,11 +148,13 @@ jobs:
         uses: ./.github/actions/setup-capnproto
 
       - name: Rust Setup
-        uses: actions-rs/toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          profile: minimal
-          override: true
-          target: ${{ matrix.settings.target }}
+          target: ${{ inputs.targets }}
+          # needed to not make it override the defaults
+          rustflags: ""
+          # we want more specific settings
+          cache: false
 
       - name: Build Setup
         shell: bash
