@@ -159,18 +159,15 @@ impl Engine<Built> {
 
         let new_graph = self.task_graph.filter_map(
             |node_idx, node| {
-                match &self.task_graph[node_idx] {
-                    TaskNode::Root => {}
-                    TaskNode::Task(task) => {
-                        // We only want to include tasks that are not persistent
-                        let def = self
-                            .task_definitions
-                            .get(task)
-                            .expect("task should have definition");
+                if let TaskNode::Task(task) = &self.task_graph[node_idx] {
+                    // We only want to include tasks that are not persistent
+                    let def = self
+                        .task_definitions
+                        .get(task)
+                        .expect("task should have definition");
 
-                        if def.persistent {
-                            return None;
-                        }
+                    if def.persistent {
+                        return None;
                     }
                 }
                 // If the node is reachable from any of the entrypoint tasks, we include it
@@ -209,6 +206,64 @@ impl Engine<Built> {
             package_tasks: self.package_tasks.clone(),
             // We've filtered out persistent tasks
             has_persistent_tasks: false,
+        }
+    }
+
+    pub fn get_engine_for_persistent_tasks(&self) -> Engine<Built> {
+        let mut new_graph = self.task_graph.filter_map(
+            |node_idx, node| {
+                if let TaskNode::Task(task) = &self.task_graph[node_idx] {
+                    let def = self
+                        .task_definitions
+                        .get(task)
+                        .expect("task should have definition");
+
+                    if def.persistent {
+                        return Some(node.clone());
+                    }
+                }
+
+                None
+            },
+            |_, _| Some(()),
+        );
+
+        let root_index = new_graph
+            .node_indices()
+            .find(|index| new_graph[*index] == TaskNode::Root)
+            .expect("root node should be present");
+
+        // Connect persistent tasks to root
+        for index in new_graph.node_indices() {
+            if new_graph[index] == TaskNode::Root {
+                continue;
+            }
+
+            new_graph.add_edge(root_index, index, ());
+        }
+
+        let task_lookup: HashMap<_, _> = new_graph
+            .node_indices()
+            .filter_map(|index| {
+                let task = new_graph
+                    .node_weight(index)
+                    .expect("node index should be present");
+                match task {
+                    TaskNode::Root => None,
+                    TaskNode::Task(task) => Some((task.clone(), index)),
+                }
+            })
+            .collect();
+
+        Engine {
+            marker: std::marker::PhantomData,
+            root_index,
+            task_graph: new_graph,
+            task_lookup,
+            task_definitions: self.task_definitions.clone(),
+            task_locations: self.task_locations.clone(),
+            package_tasks: self.package_tasks.clone(),
+            has_persistent_tasks: true,
         }
     }
 
