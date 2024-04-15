@@ -36,6 +36,7 @@ workspace = true
 atty = { workspace = true }
 axum = { workspace = true }
 biome_deserialize = { workspace = true }
+biome_deserialize_macros = "0.5.7"
 biome_diagnostics = { workspace = true }
 biome_json_parser = { workspace = true }
 biome_json_syntax = { workspace = true }
@@ -130,7 +131,6 @@ uds_windows = "1.0.2"
 wax = { workspace = true }
 webbrowser = { workspace = true }
 which = { workspace = true }
-biome_deserialize_macros = "0.5.7"
 
 
 [target.'cfg(target_os = "windows")'.dependencies]
