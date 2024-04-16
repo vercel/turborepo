@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "scripts": {
     "clean": "make clean",
-    "build": "make"
+    "build": "make",
+    "build:release": "cargo build -p turbo --profile release-turborepo"
   }
 }
