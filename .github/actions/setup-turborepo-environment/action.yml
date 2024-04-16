@@ -16,7 +16,6 @@ runs:
       uses: ./.github/actions/setup-node
       with:
         extra-flags: --no-optional
-        node-version: "20"
 
     - name: "Setup Rust"
       uses: ./.github/actions/setup-rust
