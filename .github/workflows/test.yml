@@ -219,10 +219,15 @@ jobs:
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.3
 
-      - uses: ./.github/actions/setup-turborepo-environment
+      - name: Setup Turborepo Environment
+        uses: ./.github/actions/setup-turborepo-environment
         with:
           windows: ${{ matrix.os.runner == 'windows-latest' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
       # We explicitly unset RUSTC_WRAPPER if it is an empty string as causes build issues
       - run: |
           if [ -z "${RUSTC_WRAPPER}" ]; then
@@ -269,10 +274,15 @@ jobs:
         shell: bash
         run: git config --global core.autocrlf input
       - uses: actions/checkout@v3
-      - uses: ./.github/actions/setup-turborepo-environment
+
+      - name: Setup Turborepo Environment
+        uses: ./.github/actions/setup-turborepo-environment
         with:
           windows: ${{ matrix.os.runner == 'windows-latest' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
 
       - name: Setup Graphviz
         uses: ts-graphviz/setup-graphviz@v1
@@ -308,9 +318,13 @@ jobs:
         shell: bash
         run: corepack disable
 
-      - uses: ./.github/actions/setup-turborepo-environment
+      - name: Setup Turborepo Environment
+        uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
 
       - name: Check examples
         shell: bash
@@ -363,11 +377,14 @@ jobs:
           ref: ${{ github.ref }}
           fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}
 
-      - name: Build turborepo CLI from source
+      - name: Setup Turborepo Environment
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node-version: "20"
+
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
 
       - name: Run tests
         # We manually set TURBO_API to an empty string to override Hetzner env
@@ -843,9 +860,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - uses: ./.github/actions/setup-turborepo-environment
+      - name: Setup Turborepo Environment
+        uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
 
       - name: Lint
         # Filters some workspaces out:
