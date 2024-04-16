@@ -1,23 +1,12 @@
 TURBO_VERSION = $(shell cat ../version.txt | sed -n '1 p')
 TURBO_TAG = $(shell cat ../version.txt | sed -n '2 p')
 
-EXT :=
-ifeq ($(OS),Windows_NT)
-	UNAME := Windows
-	EXT = .exe
-else
-	UNAME := $(shell uname -s)
-endif
-
 CLI_DIR = $(shell pwd)
 
 # We do not set go-turbo as a dependency because the Rust build.rs
 # script will call it for us and copy over the binary
 turbo:
 	cargo build -p turbo
-
-turbo-prod:
-	cargo build --release --manifest-path ../crates/turborepo/Cargo.toml
 
 turbo-capnp:
 	cd ../crates/turborepo-lib/src/hash && capnp compile -I std -ogo proto.capnp && mv ./proto.capnp.go ../../../../cli/internal/fs/hash/capnp
@@ -107,13 +96,10 @@ ifneq ($(SKIP_PUBLISH),--skip-publish)
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-types-$(TURBO_VERSION).tgz
 endif
 
-clean: clean-build clean-rust
+clean: clean-rust
 
 clean-rust:
 	cargo clean
-
-clean-build:
-	rm -f turbo
 
 # use target fixture-<some directory under turborepo-tests/integration/fixtures> to set up the testbed directory
 .PHONY=fixture-%
