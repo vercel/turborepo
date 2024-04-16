@@ -65,16 +65,8 @@ Test help flag
             Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json. Use "infer" to defer to existence of "passThroughEnv" or "globalPassThroughEnv" in turbo.json. (default infer) [default: infer] [possible values: infer, loose, strict]
     -F, --filter <FILTER>
             Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
-        --scope <SCOPE>
-            DEPRECATED: Specify package(s) to act as entry points for task execution. Supports globs
         --ignore <IGNORE>
             Files to ignore when calculating changed files from '--filter'. Supports globs
-        --since <SINCE>
-            DEPRECATED: Limit/Set scope to changed packages since a mergebase. This uses the git diff ${target_branch}... mechanism to identify which packages have changed
-        --include-dependencies
-            DEPRECATED: Include the dependencies of tasks in execution
-        --no-deps
-            DEPRECATED: Exclude dependent task consumers from execution
         --no-cache
             Avoid saving task results to the cache. Useful for development/watch tasks
         --daemon
@@ -170,16 +162,8 @@ Test help flag
             Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json. Use "infer" to defer to existence of "passThroughEnv" or "globalPassThroughEnv" in turbo.json. (default infer) [default: infer] [possible values: infer, loose, strict]
     -F, --filter <FILTER>
             Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
-        --scope <SCOPE>
-            DEPRECATED: Specify package(s) to act as entry points for task execution. Supports globs
         --ignore <IGNORE>
             Files to ignore when calculating changed files from '--filter'. Supports globs
-        --since <SINCE>
-            DEPRECATED: Limit/Set scope to changed packages since a mergebase. This uses the git diff ${target_branch}... mechanism to identify which packages have changed
-        --include-dependencies
-            DEPRECATED: Include the dependencies of tasks in execution
-        --no-deps
-            DEPRECATED: Exclude dependent task consumers from execution
         --no-cache
             Avoid saving task results to the cache. Useful for development/watch tasks
         --daemon
