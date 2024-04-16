@@ -383,6 +383,7 @@ jobs:
         with:
           windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node-version: "20"
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo

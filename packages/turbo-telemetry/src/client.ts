@@ -1,7 +1,7 @@
 import got, { type Response } from "got";
 import { logger } from "@turbo/utils";
 import { v4 as uuidv4 } from "uuid";
-import { buildUserAgent } from "./utils";
+import utils from "./utils";
 import { TelemetryConfig } from "./config";
 import type { Event, PackageInfo } from "./events/types";
 
@@ -69,7 +69,7 @@ export class TelemetryClient {
           headers: {
             "x-turbo-telemetry-id": this.config.id,
             "x-turbo-session-id": this.sessionId,
-            "User-Agent": buildUserAgent(this.packageInfo),
+            "User-Agent": utils.buildUserAgent(this.packageInfo),
           },
         })
       );
