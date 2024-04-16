@@ -48,6 +48,7 @@ jobs:
         with:
           windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node-version: "20"
 
       - name: Run tests
         # Manually set TURBO_API to an empty string to override Hetzner env
