@@ -30,9 +30,6 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: Install Global Turbo
-        uses: ./.github/actions/install-global-turbo
-
       - name: Build
         run: cd cli && make turbo-prod
 
@@ -87,9 +84,6 @@ jobs:
         with:
           windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Install Global Turbo
-        uses: ./.github/actions/install-global-turbo
 
       - name: Build Turborepo from source
         run: cd cli && make turbo-prod
