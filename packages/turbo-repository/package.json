@@ -8,7 +8,7 @@
     "build": "napi build --platform -p turborepo-napi --cargo-cwd ../../ --cargo-name turborepo_napi native --js false --dts ../js/index.d.ts && mkdir -p js/dist && cp js/index.js js/dist/index.js && cp js/index.d.ts js/dist/index.d.ts",
     "build:release": "napi build --release --platform -p turborepo-napi --cargo-cwd ../../ --cargo-name turborepo_napi native --js false",
     "package": "node scripts/publish.mjs",
-    "test": "node --import tsx --test __test__/*.test.ts"
+    "test": "node --import tsx --test __tests__/*.test.ts"
   },
   "keywords": [],
   "author": "",
