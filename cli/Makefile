@@ -3,11 +3,6 @@ TURBO_TAG = $(shell cat ../version.txt | sed -n '2 p')
 
 CLI_DIR = $(shell pwd)
 
-# We do not set go-turbo as a dependency because the Rust build.rs
-# script will call it for us and copy over the binary
-turbo:
-	cargo build -p turbo
-
 .PHONY: install
 install:
 	pnpm install
