@@ -221,7 +221,7 @@ jobs:
 
       - uses: ./.github/actions/setup-turborepo-environment
         with:
-          windows: ${{ matrix.os.name == 'windows' }}
+          windows: ${{ matrix.os.runner == 'windows-latest' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
       # We explicitly unset RUSTC_WRAPPER if it is an empty string as causes build issues
       - run: |
@@ -366,7 +366,6 @@ jobs:
       - name: Build turborepo CLI from source
         uses: ./.github/actions/setup-turborepo-environment
         with:
-          windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Run tests
@@ -458,7 +457,6 @@ jobs:
       - name: Setup Turborepo Environment
         uses: ./.github/actions/setup-turborepo-environment
         with:
-          windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Run cargo check
@@ -480,7 +478,6 @@ jobs:
       - name: Setup Turborepo Environment
         uses: ./.github/actions/setup-turborepo-environment
         with:
-          windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Run cargo clippy
@@ -657,7 +654,7 @@ jobs:
       - name: Setup Turborepo Environment
         uses: ./.github/actions/setup-turborepo-environment
         with:
-          windows: ${{ matrix.os.name == 'windows' }}
+          windows: ${{ matrix.os.runner == 'windows-latest' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Run tests
