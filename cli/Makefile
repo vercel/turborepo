@@ -8,9 +8,6 @@ CLI_DIR = $(shell pwd)
 turbo:
 	cargo build -p turbo
 
-turbo-capnp:
-	cd ../crates/turborepo-lib/src/hash && capnp compile -I std -ogo proto.capnp && mv ./proto.capnp.go ../../../../cli/internal/fs/hash/capnp
-
 .PHONY: install
 install:
 	pnpm install
