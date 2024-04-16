@@ -147,12 +147,22 @@ jobs:
       - name: Setup capnproto
         uses: ./.github/actions/setup-capnproto
 
+      - name: Setup Rust Up
+        if: ${{ matrix.settings.container-setup }}
+        # setup-rust-toolchain uses the --retry-connrefused flag with curl to install rustup
+        # this flag was added in curl 7.52.0, but the Ubuntu version we use only has 7.47.0
+        run: |
+          curl --proto '=https' --tlsv1.2 --retry 10 --location --silent --show-error --fail "https://sh.rustup.rs" | sh -s -- --default-toolchain none -y
+          echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> $GITHUB_PATH
+
       - name: Rust Setup
-        uses: actions-rs/toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          profile: minimal
-          override: true
           target: ${{ matrix.settings.target }}
+          # needed to not make it override the defaults
+          rustflags: ""
+          # we want more specific settings
+          cache: false
 
       - name: Build Setup
         shell: bash
