@@ -26,8 +26,8 @@ runs:
         save-cache: true
         github-token: ${{ inputs.github-token }}
 
-    - name: "Setup capnproto"
-      uses: ./.github/actions/setup-capnproto
+    # - name: "Setup capnproto"
+    #   uses: ./.github/actions/setup-capnproto
 
     - name: Install Turbo globally
       shell: bash
