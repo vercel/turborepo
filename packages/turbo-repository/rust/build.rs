@@ -1,9 +1,9 @@
 fn main() {
-    #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
+    #[cfg(not(target_os = "macos"))]
     napi_build::setup();
 
     // This is a workaround for napi always including a GCC specific flag.
-    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    #[cfg(target_os = "macos")]
     {
         println!("cargo:rerun-if-env-changed=DEBUG_GENERATED_CODE");
         println!("cargo:rerun-if-env-changed=TYPE_DEF_TMP_PATH");
