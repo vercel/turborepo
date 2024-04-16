@@ -6,7 +6,6 @@ use std::{
 };
 
 use chrono::Local;
-use rayon::iter::ParallelBridge;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
@@ -46,7 +45,6 @@ use crate::{
     run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},
     shim::TurboState,
     signal::{SignalHandler, SignalSubscriber},
-    task_hash::PackageInputsHashes,
     turbo_json::TurboJson,
     DaemonConnector,
 };
@@ -60,6 +58,7 @@ pub struct RunBuilder {
     version: &'static str,
     experimental_ui: bool,
     api_client: APIClient,
+    analytics_sender: Option<AnalyticsSender>,
 }
 
 impl RunBuilder {
@@ -108,6 +107,7 @@ impl RunBuilder {
             ui,
             version,
             experimental_ui,
+            analytics_sender: None,
         })
     }
 
@@ -119,15 +119,22 @@ impl RunBuilder {
         });
     }
 
-    fn initialize_analytics(
-        api_auth: Option<APIAuth>,
-        api_client: APIClient,
-    ) -> Option<(AnalyticsSender, AnalyticsHandle)> {
+    pub fn with_analytics_sender(mut self, analytics_sender: Option<AnalyticsSender>) -> Self {
+        self.analytics_sender = analytics_sender;
+        self
+    }
+
+    // Starts analytics and returns handle. This is not included in the main `build`
+    // function because we don't want the handle stored in the `Run` struct.
+    pub fn start_analytics(&self) -> (Option<AnalyticsSender>, Option<AnalyticsHandle>) {
         // If there's no API auth, we don't want to record analytics
-        let api_auth = api_auth?;
+        let Some(api_auth) = self.api_auth.clone() else {
+            return (None, None);
+        };
         api_auth
             .is_linked()
-            .then(|| start_analytics(api_auth, api_client))
+            .then(|| start_analytics(api_auth, self.api_client.clone()))
+            .unzip()
     }
 
     #[tracing::instrument(skip(self, signal_handler))]
@@ -148,9 +155,6 @@ impl RunBuilder {
         if let Some(subscriber) = signal_handler.subscribe() {
             self.connect_process_manager(subscriber);
         }
-
-        let (analytics_sender, analytics_handle) =
-            Self::initialize_analytics(self.api_auth.clone(), self.api_client.clone()).unzip();
 
         let scm = {
             let repo_root = self.repo_root.clone();
@@ -302,7 +306,7 @@ impl RunBuilder {
             &self.repo_root,
             self.api_client.clone(),
             self.api_auth.clone(),
-            analytics_sender,
+            self.analytics_sender.take(),
         )?;
 
         // restore config from task access trace if it's enabled
@@ -349,16 +353,6 @@ impl RunBuilder {
         let env_at_execution_start = EnvironmentVariableMap::infer();
         let mut engine = self.build_engine(&pkg_dep_graph, &root_turbo_json, &filtered_pkgs)?;
 
-        let workspaces = pkg_dep_graph.packages().collect();
-        let package_inputs_hashes = PackageInputsHashes::calculate_file_hashes(
-            &scm,
-            engine.tasks().par_bridge(),
-            workspaces,
-            engine.task_definitions(),
-            &self.repo_root,
-            &run_telemetry,
-        )?;
-
         if self.opts.run_opts.parallel {
             pkg_dep_graph.remove_package_dependencies();
             engine = self.build_engine(&pkg_dep_graph, &root_turbo_json, &filtered_pkgs)?;
@@ -387,7 +381,6 @@ impl RunBuilder {
             version: self.version,
             ui: self.ui,
             experimental_ui: self.experimental_ui,
-            analytics_handle,
             start_at,
             processes: self.processes,
             run_telemetry,
@@ -400,7 +393,6 @@ impl RunBuilder {
             filtered_pkgs,
             pkg_dep_graph: Arc::new(pkg_dep_graph),
             root_turbo_json,
-            package_inputs_hashes,
             scm,
             engine: Arc::new(engine),
             run_cache,

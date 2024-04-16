@@ -16,9 +16,9 @@ use std::{collections::HashSet, io::Write, sync::Arc};
 
 pub use cache::{ConfigCache, RunCache, TaskCache};
 use chrono::{DateTime, Local};
+use rayon::iter::ParallelBridge;
 use tracing::debug;
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_analytics::AnalyticsHandle;
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
@@ -55,13 +55,11 @@ pub struct Run {
     filtered_pkgs: HashSet<PackageName>,
     pkg_dep_graph: Arc<PackageGraph>,
     root_turbo_json: TurboJson,
-    package_inputs_hashes: PackageInputsHashes,
     scm: SCM,
     run_cache: Arc<RunCache>,
     signal_handler: SignalHandler,
     engine: Arc<Engine>,
     task_access: TaskAccess,
-    analytics_handle: Option<AnalyticsHandle>,
 }
 
 impl Run {
@@ -96,24 +94,10 @@ impl Run {
         }
     }
 
-    pub async fn run(mut self) -> Result<i32, Error> {
-        let analytics_handle = self.analytics_handle.take();
-        let result = self.run_with_analytics().await;
-
-        if let Some(analytics_handle) = analytics_handle {
-            analytics_handle.close_with_timeout().await;
-        }
-
-        result
-    }
-
-    // We split this into a separate function because we need
-    // to close the AnalyticsHandle regardless of whether the run succeeds or not
-    async fn run_with_analytics(self) -> Result<i32, Error> {
+    pub async fn run(&self) -> Result<i32, Error> {
         if self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none() {
             self.print_run_prelude();
         }
-
         if let Some(subscriber) = self.signal_handler.subscribe() {
             let run_cache = self.run_cache.clone();
             tokio::spawn(async move {
@@ -136,6 +120,16 @@ impl Run {
             )?;
             return Ok(0);
         }
+
+        let workspaces = self.pkg_dep_graph.packages().collect();
+        let package_inputs_hashes = PackageInputsHashes::calculate_file_hashes(
+            &self.scm,
+            self.engine.tasks().par_bridge(),
+            workspaces,
+            self.engine.task_definitions(),
+            &self.repo_root,
+            &self.run_telemetry,
+        )?;
 
         let root_workspace = self
             .pkg_dep_graph
@@ -202,7 +196,7 @@ impl Run {
             &self.repo_root,
             self.version,
             self.opts.run_opts.experimental_space_id.clone(),
-            self.api_client,
+            self.api_client.clone(),
             self.api_auth.clone(),
             Vendor::get_user(),
             &self.scm,
@@ -210,11 +204,11 @@ impl Run {
 
         let mut visitor = Visitor::new(
             self.pkg_dep_graph.clone(),
-            self.run_cache,
+            self.run_cache.clone(),
             run_tracker,
-            self.task_access,
+            &self.task_access,
             &self.opts.run_opts,
-            self.package_inputs_hashes,
+            package_inputs_hashes,
             &self.env_at_execution_start,
             &global_hash,
             self.opts.run_opts.env_mode,
@@ -256,7 +250,7 @@ impl Run {
         visitor
             .finish(
                 exit_code,
-                self.filtered_pkgs,
+                &self.filtered_pkgs,
                 global_hash_inputs,
                 &self.engine,
                 &self.env_at_execution_start,

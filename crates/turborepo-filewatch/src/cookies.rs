@@ -491,6 +491,10 @@ impl<T, U: CookieReady + Clone> CookiedOptionalWatch<T, U> {
         self.value.wait_for(|f| f.is_some()).await?;
         Ok(SomeRef(self.value.borrow()))
     }
+
+    pub(crate) fn watch(&self) -> watch::Receiver<Option<T>> {
+        self.value.clone()
+    }
 }
 
 pub struct CookieRegister(watch::Sender<usize>, AbsoluteSystemPathBuf);

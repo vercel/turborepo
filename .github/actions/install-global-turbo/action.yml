@@ -1,0 +1,12 @@
+name: "Install Global Turbo"
+description: "Installs turbo globally. Expects Node and npm to already be installed"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Turbo globally
+      shell: bash
+      run: |
+        VERSION=$(npm view turbo --json | jq -r '.versions | last')
+        echo "Latest published version: $VERSION"
+        npm i -g turbo@$VERSION
