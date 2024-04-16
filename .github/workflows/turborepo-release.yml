@@ -92,6 +92,7 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node-version: "20"
       - name: Run JS Package Tests
         run: turbo run check-types test --filter="./packages/*" --color
 
