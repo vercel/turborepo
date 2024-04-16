@@ -1,3 +1,5 @@
+import { describe, test } from "node:test";
+import { strict as assert } from "node:assert";
 import * as path from "node:path";
 import { Workspace, Package, PackageManager } from "../js/dist/index.js";
 
@@ -40,12 +42,11 @@ describe("affectedPackages", () => {
     },
   ];
 
-  test.each(tests)(
-    "$description",
-    async (testParams: AffectedPackagesTestParams) => {
-      const { files, expected } = testParams;
+  for (const { description, files, expected } of tests) {
+    test(description, async () => {
       const dir = path.resolve(__dirname, "./fixtures/monorepo");
       const workspace = await Workspace.find(dir);
+
       const reduced: PackageReduced[] = (
         await workspace.affectedPackages(files)
       ).map((pkg) => {
@@ -55,7 +56,7 @@ describe("affectedPackages", () => {
         };
       });
 
-      expect(reduced).toEqual(expected);
-    }
-  );
+      assert.deepEqual(reduced, expected);
+    });
+  }
 });
