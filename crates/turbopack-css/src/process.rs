@@ -117,7 +117,7 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
         match self {
             StyleSheetLike::LightningCss(ss) => {
                 let mut srcmap = if enable_srcmap {
-                    Some(parcel_sourcemap::SourceMap::new("/turbopack"))
+                    Some(parcel_sourcemap::SourceMap::new(""))
                 } else {
                     None
                 };
@@ -494,7 +494,7 @@ pub async fn parse_css(
                             *file_content,
                             string.into_owned(),
                             fs_path,
-                            ident_str,
+                            &format!("/turbopack/{ident_str}"),
                             source,
                             origin,
                             import_context,
@@ -976,7 +976,7 @@ impl GenerateSourceMap for ParseCssResultSourceMap {
                 let mut builder = SourceMapBuilder::new(None);
 
                 for src in source_map.get_sources() {
-                    builder.add_source(src);
+                    builder.add_source(&format!("/turbopack/{src}"));
                 }
 
                 for (idx, content) in source_map.get_sources_content().iter().enumerate() {
