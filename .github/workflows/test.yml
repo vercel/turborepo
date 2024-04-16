@@ -225,6 +225,9 @@ jobs:
           windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
       # We explicitly unset RUSTC_WRAPPER if it is an empty string as causes build issues
       - run: |
           if [ -z "${RUSTC_WRAPPER}" ]; then
