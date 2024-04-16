@@ -114,7 +114,7 @@ pub struct RunSummary<'a> {
     global_hash_summary: GlobalHashSummary<'a>,
     #[serde(skip_serializing_if = "Option::is_none")]
     execution: Option<ExecutionSummary<'a>>,
-    packages: Vec<PackageName>,
+    packages: Vec<&'a PackageName>,
     env_mode: EnvMode,
     framework_inference: bool,
     tasks: Vec<TaskSummary>,
@@ -202,7 +202,7 @@ impl RunTracker {
         exit_code: i32,
         end_time: DateTime<Local>,
         run_opts: &'a RunOpts,
-        packages: HashSet<PackageName>,
+        packages: &'a HashSet<PackageName>,
         global_hash_summary: GlobalHashSummary<'a>,
         global_env_mode: EnvMode,
         task_factory: TaskSummaryFactory<'a>,
@@ -237,7 +237,7 @@ impl RunTracker {
             id: Ksuid::new(None, None),
             version: RUN_SUMMARY_SCHEMA_VERSION.to_string(),
             turbo_version: self.version,
-            packages: packages.into_iter().sorted().collect(),
+            packages: packages.iter().sorted().collect(),
             execution: Some(execution_summary),
             env_mode: global_env_mode,
             framework_inference: run_opts.framework_inference,
@@ -272,7 +272,7 @@ impl RunTracker {
         repo_root: &'a AbsoluteSystemPath,
         package_inference_root: Option<&AnchoredSystemPath>,
         run_opts: &'a RunOpts,
-        packages: HashSet<PackageName>,
+        packages: &'a HashSet<PackageName>,
         global_hash_summary: GlobalHashSummary<'a>,
         global_env_mode: cli::EnvMode,
         engine: &'a Engine,
@@ -468,7 +468,7 @@ impl<'a> RunSummary<'a> {
                 }
                 let dir = pkg_dep_graph
                     .package_info(pkg)
-                    .ok_or_else(|| Error::MissingWorkspace(pkg.clone()))?
+                    .ok_or_else(|| Error::MissingWorkspace((*pkg).to_owned()))?
                     .package_path();
 
                 writeln!(tab_writer, "{}\t{}", pkg, dir)?;
