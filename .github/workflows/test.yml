@@ -21,7 +21,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - name: Find PR Comment
+      - name: Find PR Comments
         id: comment
         if: github.event_name == 'pull_request'
         uses: peter-evans/find-comment@v2
@@ -233,7 +233,7 @@ jobs:
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
           fi
-          turbo run build --filter=cli --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+          turbo run build --force --filter=cli --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
         shell: bash
         env:
           SCCACHE_BUCKET: turborepo-sccache
@@ -332,7 +332,7 @@ jobs:
         # Concurrency being 1 is a big hammer here.
         # It's a quick fix for non-deterministic behaviors we're seeing around package resolution.
         # We could likely do some hacking to reparallelize this, but it's not worth it right now.
-        run: turbo run test --filter="@turborepo-examples-tests/*" --continue --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict --concurrency=1
+        run: turbo run  --force test --filter="@turborepo-examples-tests/*" --continue --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict --concurrency=1
 
       # Disable corepack again. actions/setup-node's "Post" step runs at the end of
       # this job invokes other package managers, and corepack throws an error.
@@ -393,7 +393,7 @@ jobs:
         # to run when turbo core changes. This job (`js_packages`) does not run on turborpeo core
         # changes, and we don't want to enable that beahvior for _all_ our JS packages.
         run: |
-          TURBO_API= turbo run check-types test --filter=docs --filter="!turborepo-repository" --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
+          TURBO_API= turbo run check-types test --force --filter=docs --filter="!turborepo-repository" --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
 
   turbopack_typescript:
     name: Turbopack TypeScript files
