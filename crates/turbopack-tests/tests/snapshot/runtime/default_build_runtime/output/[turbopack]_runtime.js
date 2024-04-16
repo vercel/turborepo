@@ -84,11 +84,7 @@ function exportValue(module, value) {
     module.exports = value;
 }
 function exportNamespace(module, namespace) {
-    if (isAsyncModuleExt(module.exports)) {
-        module.exports[turbopackExports] = namespace;
-    } else {
-        module.exports = module.namespaceObject = namespace;
-    }
+    module.exports = module.namespaceObject = namespace;
 }
 function createGetter(obj, key) {
     return ()=>obj[key];
@@ -248,18 +244,27 @@ function asyncModule(module, body, hasAwait) {
         resolved: true
     }) : undefined;
     const depQueues = new Set();
-    ensureDynamicExports(module, module.exports);
-    const exports = module.exports;
     const { resolve, reject, promise: rawPromise } = createPromise();
     const promise = Object.assign(rawPromise, {
-        [turbopackExports]: exports,
+        [turbopackExports]: module.exports,
         [turbopackQueues]: (fn)=>{
             queue && fn(queue);
             depQueues.forEach(fn);
             promise["catch"](()=>{});
         }
     });
-    module.exports = module.namespaceObject = promise;
+    const attributes = {
+        get () {
+            return promise;
+        },
+        set (v) {
+            if (v !== promise) {
+                promise[turbopackExports] = v;
+            }
+        }
+    };
+    Object.defineProperty(module, "exports", attributes);
+    Object.defineProperty(module, "namespaceObject", attributes);
     function handleAsyncDependencies(deps) {
         const currentDeps = wrapDeps(deps);
         const getResult = ()=>currentDeps.map((d)=>{

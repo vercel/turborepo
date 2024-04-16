@@ -156,6 +156,12 @@ fn get_messages(js_results: JsResult) -> Vec<String> {
 async fn run(resource: PathBuf, snapshot_mode: IssueSnapshotMode) -> Result<JsResult> {
     register();
 
+    // Clean up old output files.
+    let output_path = resource.join("output");
+    if output_path.exists() {
+        std::fs::remove_dir_all(&output_path)?;
+    }
+
     let tt = TurboTasks::new(MemoryBackend::default());
     tt.run_once(async move {
         let resource_str = resource.to_str().unwrap();
