@@ -248,8 +248,13 @@ pub(crate) async fn config_loader_source(
     // Bundling would break the ability to use `require.resolve` in the config file.
     let code = formatdoc! {
         r#"
-            const configPath = `${{process.cwd()}}/{config_path}`;
+            import { pathToFileUrl } from 'url';
 
+            const configPath = `${{process.cwd()}}/{config_path}`;
+            // Absolute paths don't work with ESM imports on Windows:
+            // https://github.com/nodejs/node/issues/31710
+            // convert it to a file:// URL, which works on all platforms
+            const configUrl = pathToFileUrl(configPath).toString();
             const mod = await __turbopack_external_import__(configPath);
 
             export default mod.default ?? mod;
