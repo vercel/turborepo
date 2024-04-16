@@ -4,9 +4,9 @@ use camino::{Utf8Component, Utf8Path};
 use path_clean::PathClean;
 use serde::Serialize;
 
-use crate::{AnchoredSystemPathBuf, PathError, RelativeUnixPathBuf};
+use crate::{AnchoredSystemPathBuf, PathError, PathRelation, RelativeUnixPathBuf};
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Hash)]
 #[serde(transparent)]
 pub struct AnchoredSystemPath(Utf8Path);
 
@@ -123,5 +123,60 @@ impl AnchoredSystemPath {
 
     pub fn clean(&self) -> AnchoredSystemPathBuf {
         AnchoredSystemPathBuf(self.0.as_std_path().clean().try_into().unwrap())
+    }
+
+    /// relation_to_path does a lexical comparison of path components to
+    /// determine how this path relates to the given path. In the event that
+    /// the paths are the same, we return `Parent`, much the way that `contains`
+    /// would return `true`.
+    pub fn relation_to_path(&self, other: &Self) -> PathRelation {
+        let mut self_components = self.components();
+        let mut other_components = other.components();
+        loop {
+            match (self_components.next(), other_components.next()) {
+                // Non-matching component, the paths diverge
+                (Some(self_component), Some(other_component))
+                    if self_component != other_component =>
+                {
+                    return PathRelation::Divergent
+                }
+                // A matching component, continue iterating
+                (Some(_), Some(_)) => {}
+                // We've reached the end of a possible parent without hitting a
+                // non-matching component. Return Parent.
+                (None, _) => return PathRelation::Parent,
+                // We've hit the end of the other path without hitting the
+                // end of this path. Since we haven't hit a non-matching component,
+                // our path must be a child
+                (_, None) => return PathRelation::Child,
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use test_case::test_case;
+
+    use crate::{AnchoredSystemPathBuf, PathRelation};
+
+    #[test_case(&["a", "b"], &["a", "b"], PathRelation::Parent ; "equal paths return parent")]
+    #[test_case(&["a"], &["a", "b"], PathRelation::Parent ; "a is a parent of a/b")]
+    #[test_case(&["a", "b"], &["a"], PathRelation::Child ; "a/b is a child of a")]
+    #[test_case(&["a", "b"], &["a", "c"], PathRelation::Divergent ; "a/b and a/c are divergent")]
+    fn test_path_relation(
+        abs_path_components: &[&str],
+        other_components: &[&str],
+        expected: PathRelation,
+    ) {
+        let abs_path = AnchoredSystemPathBuf::try_from("")
+            .unwrap()
+            .join_components(abs_path_components);
+        let other_path = AnchoredSystemPathBuf::try_from("")
+            .unwrap()
+            .join_components(other_components);
+
+        let relation = abs_path.relation_to_path(&other_path);
+        assert_eq!(relation, expected);
     }
 }
