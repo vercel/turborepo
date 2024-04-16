@@ -310,7 +310,6 @@ jobs:
 
       - uses: ./.github/actions/setup-turborepo-environment
         with:
-          windows: ${{ matrix.os.runner == 'windows-latest' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Check examples
