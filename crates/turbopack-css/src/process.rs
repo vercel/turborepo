@@ -494,7 +494,7 @@ pub async fn parse_css(
                             *file_content,
                             string.into_owned(),
                             fs_path,
-                            &format!("/turbopack/{ident_str}"),
+                            ident_str,
                             source,
                             origin,
                             import_context,
