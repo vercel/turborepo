@@ -9,38 +9,11 @@ Setup
   
   [1]
 
-  $ ${TURBO} run build --since main
-   ERROR  the following required arguments were not provided:
-    --scope <SCOPE>
-  
-  Usage: turbo(\.exe)? run --scope <SCOPE> --since <SINCE> (re)
-  
-  For more information, try '--help'.
-  
-  [1]
   $ ${TURBO} run build --ignore 'app/**'
    ERROR  the following required arguments were not provided:
-    <--filter <FILTER>|--scope <SCOPE>>
+    <--filter <FILTER>>
   
-  Usage: turbo(\.exe)? run --ignore <IGNORE> <--filter <FILTER>|--scope <SCOPE>> (re)
-  
-  For more information, try '--help'.
-  
-  [1]
-  $ ${TURBO} run build --no-deps
-   ERROR  the following required arguments were not provided:
-    --scope <SCOPE>
-  
-  Usage: turbo(\.exe)? run --scope <SCOPE> --no-deps (re)
-  
-  For more information, try '--help'.
-  
-  [1]
-  $ ${TURBO} run build --include-dependencies
-   ERROR  the following required arguments were not provided:
-    --scope <SCOPE>
-  
-  Usage: turbo(\.exe)? run --scope <SCOPE> --include-dependencies (re)
+  Usage: turbo(\.exe)? run --ignore <IGNORE> <--filter <FILTER>> (re)
   
   For more information, try '--help'.
   
