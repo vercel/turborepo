@@ -1,5 +1,6 @@
 use std::{backtrace, backtrace::Backtrace, env, fmt, fmt::Display, io, mem, process};
 
+use biome_deserialize_macros::Deserializable;
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{
     builder::NonEmptyStringValueParser, ArgAction, ArgGroup, CommandFactory, Parser, Subcommand,
@@ -8,7 +9,7 @@ use clap::{
 use clap_complete::{generate, Shell};
 pub use error::Error;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::AnonAPIClient;
 use turborepo_repository::inference::{RepoMode, RepoState};
@@ -43,8 +44,10 @@ const DEFAULT_NUM_WORKERS: u32 = 10;
 const SUPPORTED_GRAPH_FILE_EXTENSIONS: [&str; 8] =
     ["svg", "png", "jpg", "pdf", "json", "html", "mermaid", "dot"];
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize, ValueEnum)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize, ValueEnum, Deserializable)]
 pub enum OutputLogsMode {
+    // biome also obeys serde rename directives,
+    // so the `Deserializable` derive will work properly here
     #[serde(rename = "full")]
     Full,
     #[serde(rename = "none")]
@@ -1049,6 +1052,7 @@ pub async fn run(
     root_telemetry.track_cpus(num_cpus::get());
     // track args
     cli_args.track(&root_telemetry);
+    warn_all_deprecated_flags(&cli_args);
 
     let cli_result = match cli_args.command.as_ref().unwrap() {
         Command::Bin { .. } => {
@@ -1257,6 +1261,39 @@ pub async fn run(
     }
 
     cli_result
+}
+
+fn warn_all_deprecated_flags(args: &Args) {
+    if args.trace.is_some() {
+        warn_flag_removal("--trace");
+    }
+
+    if args.heap.is_some() {
+        warn_flag_removal("--heap");
+    }
+
+    if args.cpu_profile.is_some() {
+        warn_flag_removal("--cpuprofile");
+    }
+
+    if let Some(Command::Run(run_args)) = args.command.as_ref() {
+        if run_args.since.is_some() {
+            warn_flag_removal("--since");
+        }
+        if !run_args.scope.is_empty() {
+            warn_flag_removal("--scope");
+        }
+        if run_args.include_dependencies {
+            warn_flag_removal("--include-dependencies");
+        }
+        if run_args.no_deps {
+            warn_flag_removal("--no-deps");
+        }
+    }
+}
+
+fn warn_flag_removal(flag: &str) {
+    warn!("{flag} is deprecated and will be removed in 2.0");
 }
 
 #[cfg(test)]
