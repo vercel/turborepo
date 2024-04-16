@@ -1,5 +1,6 @@
 {
   "name": "turborepo-tests-integration",
+  "description": "do these pass in CI",
   "scripts": {
     "test": "cross-env COREPACK_ENABLE_DOWNLOAD_PROMPT=0 ./node_modules/.bin/prysk tests",
     "test:interactive": "cross-env COREPACK_ENABLE_DOWNLOAD_PROMPT=0 PRYSK_INTERACTIVE=true ./node_modules/.bin/prysk tests",
