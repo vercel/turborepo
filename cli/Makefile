@@ -15,10 +15,6 @@ turbo-capnp:
 install:
 	pnpm install
 
-corepack:
-	which corepack || npm install -g corepack@latest
-	corepack enable
-
 build: install
 	cd $(CLI_DIR)/../ && pnpm build:turbo
 	cd $(CLI_DIR)/../ && pnpm turbo-prebuilt build --filter=create-turbo...
