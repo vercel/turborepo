@@ -76,9 +76,6 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: Install Global Turbo
-        uses: ./.github/actions/install-global-turbo
-
       - name: Run Rust Unit Tests
         run: cargo groups test turborepo
 
