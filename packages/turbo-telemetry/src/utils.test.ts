@@ -1,4 +1,6 @@
-import { oneWayHashWithSalt, defaultConfigPath } from "./utils";
+import { describe, test } from "node:test";
+import { strict as assert } from "node:assert";
+import utils from "./utils";
 
 describe("utils", () => {
   describe("oneWayHashWithSalt", () => {
@@ -6,9 +8,10 @@ describe("utils", () => {
       const input = "a-sensitive-value";
       const salt = "private-salt";
 
-      const result = oneWayHashWithSalt({ input, salt });
-      expect(result).toMatchInlineSnapshot(
-        `"568d39ba8435f9c37e80e01c6bb6e27d7b65b4edf837e44dee662ffc99206eec"`
+      const result = utils.oneWayHashWithSalt({ input, salt });
+      assert.equal(
+        result,
+        "568d39ba8435f9c37e80e01c6bb6e27d7b65b4edf837e44dee662ffc99206eec"
       );
     });
 
@@ -16,18 +19,21 @@ describe("utils", () => {
       const input = "a-sensitive-value";
       const salt = "private-salt";
 
-      const result1 = oneWayHashWithSalt({ input, salt });
-      const result2 = oneWayHashWithSalt({ input: `${input}-${input}`, salt });
+      const result1 = utils.oneWayHashWithSalt({ input, salt });
+      const result2 = utils.oneWayHashWithSalt({
+        input: `${input}-${input}`,
+        salt,
+      });
 
-      expect(result1.length).toEqual(result2.length);
+      assert.equal(result1.length, result2.length);
     });
   });
 
   describe("defaultConfigPath", () => {
     test("supports overriding by env var", async () => {
       process.env.TURBO_CONFIG_DIR_PATH = "/tmp";
-      const result = await defaultConfigPath();
-      expect(result).toEqual("/tmp/turborepo/telemetry.json");
+      const result = await utils.defaultConfigPath();
+      assert.equal(result, "/tmp/turborepo/telemetry.json");
     });
   });
 });
