@@ -1,8 +1,11 @@
 use anyhow::{bail, Result};
 use indexmap::IndexSet;
 use rustc_hash::FxHashMap;
-use swc_core::ecma::ast::{Id, Module, Program};
-use turbo_tasks::Vc;
+use swc_core::{
+    common::util::take::Take,
+    ecma::ast::{Id, Module, Program},
+};
+use turbo_tasks::{vdbg, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     resolve::{origin::ResolveOrigin, ModulePart},
@@ -10,7 +13,10 @@ use turbopack_core::{
 };
 
 use self::graph::{DepGraph, ItemData, ItemId, ItemIdGroupKind, Mode, SplitModuleResult};
-use crate::{analyzer::graph::EvalContext, parse::ParseResult, EcmascriptModuleAsset};
+use crate::{
+    analyzer::graph::EvalContext, parse::ParseResult, swc_comments::ImmutableComments,
+    EcmascriptModuleAsset,
+};
 
 pub mod asset;
 pub mod chunk_item;
@@ -378,8 +384,35 @@ pub(super) async fn part_of_module(
     let split_data = split_data.await?;
 
     match &*split_data {
-        SplitResult::Ok { modules, .. } => {
+        SplitResult::Ok {
+            modules,
+            entrypoints,
+            ..
+        } => {
             if matches!(&*part.await?, ModulePart::Exports) {
+                // match &*modules[0].await? {
+                //     ParseResult::Ok {
+                //         comments,
+                //         eval_context,
+                //         globals,
+                //         source_map,
+                //         ..
+                //     } => {
+                //         let program = Program::Module(Module::dummy());
+                //         let eval_context =
+                //             EvalContext::new(&program,
+                // eval_context.unresolved_mark, None);
+                //         return Ok(ParseResult::Ok {
+                //             program,
+                //             comments: comments.clone(),
+                //             eval_context,
+                //             globals: globals.clone(),
+                //             source_map: source_map.clone(),
+                //         }
+                //         .cell());
+                //     }
+                //     _ => unreachable!(),
+                // }
                 return Ok(modules[0]);
             }
 

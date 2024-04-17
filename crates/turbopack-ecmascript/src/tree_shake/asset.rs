@@ -67,6 +67,16 @@ impl Module for EcmascriptModulePartAsset {
         };
 
         let part_id = if matches!(&*self.part.await?, ModulePart::Exports) {
+            // let evaluation = Vc::upcast(SingleModuleReference::new(
+            //     Vc::upcast(EcmascriptModulePartAsset::new(
+            //         self.full_module,
+            //         ModulePart::evaluation(),
+            //         self.import_externals,
+            //     )),
+            //     Vc::cell("ecmascript module part".to_string()),
+            // ));
+            // return Ok(Vc::cell(vec![evaluation]));
+
             0
         } else {
             get_part_id(&split_data, self.part)
