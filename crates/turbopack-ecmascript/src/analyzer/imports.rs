@@ -136,6 +136,7 @@ pub(crate) enum ImportedSymbol {
     ModuleEvaluation,
     Symbol(JsWord),
     Namespace,
+    Part(u32),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -376,13 +377,34 @@ pub(crate) fn orig_name(n: &ModuleExportName) -> JsWord {
     }
 }
 
+fn parse_with(with: Option<&ObjectLit>) -> Option<u32> {
+    let with = with?;
+
+    for prop in &with.props {
+        if let PropOrSpread::Prop(prop) = prop {
+            if let Prop::KeyValue(KeyValueProp {
+                key: PropName::Ident(key),
+                value,
+            }) = &**prop
+            {
+                if key.sym == "__turbopack_chunk__" {
+                    if let Expr::Lit(Lit::Num(Number { value, .. })) = &**value {
+                        return Some(*value as _);
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
 fn get_import_symbol_from_import(
     specifier: &ImportSpecifier,
     with: Option<&ObjectLit>,
 ) -> ImportedSymbol {
-    dbg!(&with);
-    if let Some(with) = with.and_then(|with| with.as_import_with()) {
-        dbg!(&with.values);
+    if let Some(part_id) = parse_with(with) {
+        return ImportedSymbol::Part(part_id);
     }
 
     match specifier {
@@ -401,7 +423,9 @@ fn get_import_symbol_from_export(
     specifier: &ExportSpecifier,
     with: Option<&ObjectLit>,
 ) -> ImportedSymbol {
-    dbg!(with);
+    if let Some(part_id) = parse_with(with) {
+        return ImportedSymbol::Part(part_id);
+    }
 
     match specifier {
         ExportSpecifier::Named(ExportNamedSpecifier { orig, .. }) => {
