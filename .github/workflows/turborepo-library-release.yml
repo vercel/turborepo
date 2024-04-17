@@ -47,9 +47,13 @@ jobs:
             install: |
               apk update && apk upgrade
               apk add libc6-compat curl
+              echo /root/.cargo/bin >> ${GITHUB_PATH}
+              echo /usr/local/cargo/bin/rustup >> ${GITHUB_PATH}
+              export PATH=/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
             setup: |
-              pnpm install
               rustup show active-toolchain
+              dirname $(rustup which cargo) >> ${GITHUB_PATH}
+              pnpm install
 
           - host: ubuntu-latest
             target: "aarch64-unknown-linux-musl"
@@ -65,6 +69,7 @@ jobs:
               export PATH=/aarch64-linux-musl-cross/bin:/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
               rustup show active-toolchain
               rustup target add aarch64-unknown-linux-musl
+              dirname $(rustup which cargo) >> ${GITHUB_PATH}
               pnpm install
             rust_env: CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc RUSTFLAGS="-Ctarget-feature=-crt-static"
 
