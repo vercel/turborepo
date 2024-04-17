@@ -32,7 +32,7 @@ impl<'a> DepPath<'a> {
         input: &'a str,
     ) -> Result<Self, nom::error::Error<String>> {
         let (_, dep_path) = match version {
-            SupportedLockfileVersion::V7 => parse_dep_path_v7(input),
+            SupportedLockfileVersion::V7AndV9 => parse_dep_path_v7(input),
             SupportedLockfileVersion::V5 | SupportedLockfileVersion::V6 => parse_dep_path(input),
         }
         .map_err(|e| e.to_owned())
