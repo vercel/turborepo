@@ -31,7 +31,7 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Build
-        run: cd cli && make turbo-prod
+        run: pnpm -F cli build:release
 
       - name: Run benchmarks
         run: pnpm -F @turbo/benchmark benchmark
@@ -86,7 +86,7 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Build Turborepo from source
-        run: cd cli && make turbo-prod
+        run: pnpm -F cli build:release
 
       - name: Run benchmarks
         shell: bash
