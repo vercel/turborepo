@@ -338,9 +338,6 @@ pub(super) async fn split(
                 modules,
             } = dep_graph.split_module(&format!("./{filename}").into(), &items);
 
-            dbg!(&entrypoints);
-            dbg!(&part_deps);
-
             let modules = modules
                 .into_iter()
                 .map(|module| {
@@ -379,6 +376,10 @@ pub(super) async fn part_of_module(
 
     match &*split_data {
         SplitResult::Ok { modules, .. } => {
+            if matches!(&*part.await?, ModulePart::Exports) {
+                return Ok(modules[0]);
+            }
+
             let part_id = get_part_id(&split_data, part).await?;
 
             Ok(modules[part_id as usize])

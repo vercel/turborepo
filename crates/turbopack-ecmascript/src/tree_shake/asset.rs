@@ -66,13 +66,17 @@ impl Module for EcmascriptModulePartAsset {
             }
         };
 
-        let part_id = get_part_id(&split_data, self.part)
-            .await
-            .with_context(|| format!("part {:?} is not found in the module", self.part))?;
+        let part_id = if matches!(&*self.part.await?, ModulePart::Exports) {
+            0
+        } else {
+            get_part_id(&split_data, self.part)
+                .await
+                .with_context(|| format!("part {:?} is not found in the module", self.part))?
+        };
 
         let deps = match deps.get(&part_id) {
-            Some(v) => v,
-            None => bail!("part {:?} is not found in the module", part_id),
+            Some(v) => &**v,
+            None => &[],
         };
 
         let mut assets = deps
