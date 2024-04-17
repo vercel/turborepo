@@ -184,6 +184,8 @@ pub(super) enum Mode {
 pub(super) struct SplitModuleResult {
     pub entrypoints: FxHashMap<Key, u32>,
 
+    pub uri_of_module: JsWord,
+
     /// Dependency between parts.
     pub part_deps: FxHashMap<u32, Vec<u32>>,
     pub modules: Vec<Module>,
@@ -348,6 +350,7 @@ impl DepGraph {
         SplitModuleResult {
             entrypoints: exports,
             part_deps,
+            uri_of_module: uri_of_module.clone(),
             modules,
         }
     }

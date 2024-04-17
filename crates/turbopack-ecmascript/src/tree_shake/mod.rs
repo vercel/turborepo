@@ -2,6 +2,7 @@ use anyhow::{bail, Result};
 use indexmap::IndexSet;
 use rustc_hash::FxHashMap;
 use swc_core::{
+    atoms::Atom,
     common::{util::take::Take, DUMMY_SP},
     ecma::{
         ast::{
@@ -300,6 +301,9 @@ pub(crate) enum SplitResult {
 
         #[turbo_tasks(debug_ignore, trace_ignore)]
         deps: FxHashMap<u32, Vec<u32>>,
+
+        #[turbo_tasks(debug_ignore, trace_ignore)]
+        uri_of_module: Atom,
     },
     Unparseable,
     NotFound,
@@ -345,6 +349,7 @@ pub(super) async fn split(
                 entrypoints,
                 part_deps,
                 modules,
+                uri_of_module,
             } = dep_graph.split_module(&format!("./{filename}").into(), &items);
 
             dbg!(&entrypoints);
@@ -371,6 +376,7 @@ pub(super) async fn split(
                 entrypoints,
                 deps: part_deps,
                 modules,
+                uri_of_module,
             }
             .cell())
         }
@@ -387,7 +393,12 @@ pub(super) async fn part_of_module(
     let split_data = split_data.await?;
 
     match &*split_data {
-        SplitResult::Ok { modules, deps, .. } => {
+        SplitResult::Ok {
+            modules,
+            deps,
+            uri_of_module,
+            ..
+        } => {
             if matches!(&*part.await?, ModulePart::Exports) {
                 match &*modules[0].await? {
                     ParseResult::Ok {
@@ -420,7 +431,7 @@ pub(super) async fn part_of_module(
                                 .body
                                 .push(ModuleItem::ModuleDecl(ModuleDecl::ExportAll(ExportAll {
                                     span: DUMMY_SP,
-                                    src: Box::new("".into()),
+                                    src: Box::new(uri_of_module.clone().into()),
                                     type_only: false,
                                     with: Some(Box::new(chunk_prop)),
                                 })));
