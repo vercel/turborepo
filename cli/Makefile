@@ -3,13 +3,9 @@ TURBO_TAG = $(shell cat ../version.txt | sed -n '2 p')
 
 CLI_DIR = $(shell pwd)
 
-.PHONY: install
-install:
-	pnpm install
-
-build: install
-	cd $(CLI_DIR)/../ && pnpm build:turbo
-	cd $(CLI_DIR)/../ && pnpm turbo-prebuilt build \
+# This only builds JS packages
+build:
+	cd $(CLI_DIR)/../ && turbo build \
 		--filter=create-turbo \
 		--filter=@turbo/codemod \
 		--filter=turbo-ignore \
@@ -48,7 +44,7 @@ stage-release:
 	git push origin staging-$(TURBO_VERSION) --tags --force
 
 .PHONY: publish-turbo
-publish-turbo: clean build
+publish-turbo: build
 	echo "Version: $(TURBO_VERSION)"
 	echo "Tag: $(TURBO_TAG)"
 
@@ -85,11 +81,6 @@ ifneq ($(SKIP_PUBLISH),--skip-publish)
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../eslint-config-turbo-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-types-$(TURBO_VERSION).tgz
 endif
-
-clean: clean-rust
-
-clean-rust:
-	cargo clean
 
 # use target fixture-<some directory under turborepo-tests/integration/fixtures> to set up the testbed directory
 .PHONY=fixture-%
