@@ -11,7 +11,7 @@ use anyhow::{bail, Result};
 use indexmap::{indexmap, IndexMap, IndexSet};
 use serde::{Deserialize, Serialize};
 use tracing::{Instrument, Level};
-use turbo_tasks::{trace::TraceRawVcs, vdbg, TryJoinIterExt, Value, ValueToString, Vc};
+use turbo_tasks::{trace::TraceRawVcs, TryJoinIterExt, Value, ValueToString, Vc};
 use turbo_tasks_fs::{
     util::{normalize_path, normalize_request},
     FileSystemEntryType, FileSystemPath, RealPathResult,
@@ -1882,7 +1882,6 @@ async fn resolve_relative_request(
 
         new_path.normalize();
     };
-    dbg!(&new_path);
 
     let mut results = Vec::new();
     let matches = read_matches(
@@ -1894,7 +1893,6 @@ async fn resolve_relative_request(
     .await?;
 
     for m in matches.iter() {
-        vdbg!(m);
         if let PatternMatch::File(matched_pattern, path) = m {
             let mut matches_without_extension = false;
             if !options_value.fully_specified {
