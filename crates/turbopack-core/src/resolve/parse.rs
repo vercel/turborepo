@@ -56,6 +56,8 @@ pub enum Request {
 }
 
 fn split_off_query_fragment(raw: String) -> (Pattern, Vc<String>, Vc<String>) {
+    dbg!(&raw);
+
     let Some((raw, query)) = raw.split_once('?') else {
         if let Some((raw, fragment)) = raw.split_once('#') {
             return (
@@ -131,6 +133,7 @@ impl Request {
                     Request::Empty
                 } else if r.starts_with('/') {
                     let (path, query, fragment) = split_off_query_fragment(r);
+                    dbg!(&path, &query, &fragment);
 
                     Request::ServerRelative {
                         path,
@@ -143,6 +146,7 @@ impl Request {
                     }
                 } else if r.starts_with("./") || r.starts_with("../") || r == "." || r == ".." {
                     let (path, query, fragment) = split_off_query_fragment(r);
+                    dbg!(&path, &query, &fragment);
 
                     Request::Relative {
                         path,
@@ -160,6 +164,7 @@ impl Request {
 
                     if WINDOWS_PATH.is_match(&r) {
                         let (path, query, fragment) = split_off_query_fragment(r);
+                        dbg!(&path, &query, &fragment);
 
                         return Request::Windows {
                             path,
