@@ -400,56 +400,56 @@ pub(super) async fn part_of_module(
             ..
         } => {
             if matches!(&*part.await?, ModulePart::Exports) {
-                match &*modules[0].await? {
-                    ParseResult::Ok {
-                        comments,
-                        eval_context,
-                        globals,
-                        source_map,
-                        ..
-                    } => {
-                        let mut module = Module::dummy();
+                if let ParseResult::Ok {
+                    comments,
+                    eval_context,
+                    globals,
+                    source_map,
+                    ..
+                } = &*modules[0].await?
+                {
+                    let mut module = Module::dummy();
 
-                        for &export_part_id in deps.keys() {
-                            // Skip ModuleEvaluation
-                            if export_part_id == 0 {
-                                continue;
-                            }
+                    for &export_part_id in deps.keys() {
+                        // Skip ModuleEvaluation
+                        if export_part_id == 0 {
+                            continue;
+                        }
 
-                            // We can't use quote! as `with` is not standard yet
-                            let chunk_prop = ObjectLit {
+                        // We can't use quote! as `with` is not standard yet
+                        let chunk_prop = ObjectLit {
+                            span: DUMMY_SP,
+                            props: vec![PropOrSpread::Prop(Box::new(Prop::KeyValue(
+                                KeyValueProp {
+                                    key: quote_ident!("__turbopack_chunk__").into(),
+                                    value: (export_part_id as usize).into(),
+                                },
+                            )))],
+                        };
+
+                        module
+                            .body
+                            .push(ModuleItem::ModuleDecl(ModuleDecl::ExportAll(ExportAll {
                                 span: DUMMY_SP,
-                                props: vec![PropOrSpread::Prop(Box::new(Prop::KeyValue(
-                                    KeyValueProp {
-                                        key: quote_ident!("__turbopack_chunk__").into(),
-                                        value: (export_part_id as usize).into(),
-                                    },
-                                )))],
-                            };
-
-                            module
-                                .body
-                                .push(ModuleItem::ModuleDecl(ModuleDecl::ExportAll(ExportAll {
-                                    span: DUMMY_SP,
-                                    src: Box::new(uri_of_module.clone().into()),
-                                    type_only: false,
-                                    with: Some(Box::new(chunk_prop)),
-                                })));
-                        }
-
-                        let program = Program::Module(module);
-                        let eval_context =
-                            EvalContext::new(&program, eval_context.unresolved_mark, None);
-                        return Ok(ParseResult::Ok {
-                            program,
-                            comments: comments.clone(),
-                            eval_context,
-                            globals: globals.clone(),
-                            source_map: source_map.clone(),
-                        }
-                        .cell());
+                                src: Box::new(uri_of_module.clone().into()),
+                                type_only: false,
+                                with: Some(Box::new(chunk_prop)),
+                            })));
                     }
-                    _ => unreachable!(),
+
+                    let program = Program::Module(module);
+                    let eval_context =
+                        EvalContext::new(&program, eval_context.unresolved_mark, None);
+                    return Ok(ParseResult::Ok {
+                        program,
+                        comments: comments.clone(),
+                        eval_context,
+                        globals: globals.clone(),
+                        source_map: source_map.clone(),
+                    }
+                    .cell());
+                } else {
+                    unreachable!()
                 }
             }
 
