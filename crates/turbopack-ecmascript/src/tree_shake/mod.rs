@@ -2,10 +2,16 @@ use anyhow::{bail, Result};
 use indexmap::IndexSet;
 use rustc_hash::FxHashMap;
 use swc_core::{
-    common::util::take::Take,
-    ecma::ast::{Id, Module, Program},
+    common::{util::take::Take, DUMMY_SP},
+    ecma::{
+        ast::{
+            ExportAll, Id, KeyValueProp, Module, ModuleDecl, ModuleItem, ObjectLit, Program, Prop,
+            PropOrSpread,
+        },
+        utils::quote_ident,
+    },
 };
-use turbo_tasks::{vdbg, Vc};
+use turbo_tasks::Vc;
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     resolve::{origin::ResolveOrigin, ModulePart},
@@ -13,10 +19,7 @@ use turbopack_core::{
 };
 
 use self::graph::{DepGraph, ItemData, ItemId, ItemIdGroupKind, Mode, SplitModuleResult};
-use crate::{
-    analyzer::graph::EvalContext, parse::ParseResult, swc_comments::ImmutableComments,
-    EcmascriptModuleAsset,
-};
+use crate::{analyzer::graph::EvalContext, parse::ParseResult, EcmascriptModuleAsset};
 
 pub mod asset;
 pub mod chunk_item;
@@ -384,36 +387,59 @@ pub(super) async fn part_of_module(
     let split_data = split_data.await?;
 
     match &*split_data {
-        SplitResult::Ok {
-            modules,
-            entrypoints,
-            ..
-        } => {
+        SplitResult::Ok { modules, deps, .. } => {
             if matches!(&*part.await?, ModulePart::Exports) {
-                // match &*modules[0].await? {
-                //     ParseResult::Ok {
-                //         comments,
-                //         eval_context,
-                //         globals,
-                //         source_map,
-                //         ..
-                //     } => {
-                //         let program = Program::Module(Module::dummy());
-                //         let eval_context =
-                //             EvalContext::new(&program,
-                // eval_context.unresolved_mark, None);
-                //         return Ok(ParseResult::Ok {
-                //             program,
-                //             comments: comments.clone(),
-                //             eval_context,
-                //             globals: globals.clone(),
-                //             source_map: source_map.clone(),
-                //         }
-                //         .cell());
-                //     }
-                //     _ => unreachable!(),
-                // }
-                return Ok(modules[0]);
+                match &*modules[0].await? {
+                    ParseResult::Ok {
+                        comments,
+                        eval_context,
+                        globals,
+                        source_map,
+                        ..
+                    } => {
+                        let mut module = Module::dummy();
+
+                        for &export_part_id in deps.keys() {
+                            // Skip ModuleEvaluation
+                            if export_part_id == 0 {
+                                continue;
+                            }
+
+                            // We can't use quote! as `with` is not standard yet
+                            let chunk_prop = ObjectLit {
+                                span: DUMMY_SP,
+                                props: vec![PropOrSpread::Prop(Box::new(Prop::KeyValue(
+                                    KeyValueProp {
+                                        key: quote_ident!("__turbopack_chunk__").into(),
+                                        value: (export_part_id as usize).into(),
+                                    },
+                                )))],
+                            };
+
+                            module
+                                .body
+                                .push(ModuleItem::ModuleDecl(ModuleDecl::ExportAll(ExportAll {
+                                    span: DUMMY_SP,
+                                    src: Box::new("".into()),
+                                    type_only: false,
+                                    with: Some(Box::new(chunk_prop)),
+                                })));
+                        }
+
+                        let program = Program::Module(module);
+                        let eval_context =
+                            EvalContext::new(&program, eval_context.unresolved_mark, None);
+                        return Ok(ParseResult::Ok {
+                            program,
+                            comments: comments.clone(),
+                            eval_context,
+                            globals: globals.clone(),
+                            source_map: source_map.clone(),
+                        }
+                        .cell());
+                    }
+                    _ => unreachable!(),
+                }
             }
 
             let part_id = get_part_id(&split_data, part).await?;
