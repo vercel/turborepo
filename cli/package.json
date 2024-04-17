@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "clean": "make clean",
+    "clean": "cargo clean -p turbo",
     "build": "cargo build -p turbo",
     "build:release": "cargo build -p turbo --profile release-turborepo"
   }
