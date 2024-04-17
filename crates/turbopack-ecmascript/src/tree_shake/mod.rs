@@ -338,6 +338,9 @@ pub(super) async fn split(
                 modules,
             } = dep_graph.split_module(&format!("./{filename}").into(), &items);
 
+            dbg!(&entrypoints);
+            dbg!(&part_deps);
+
             let modules = modules
                 .into_iter()
                 .map(|module| {
