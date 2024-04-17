@@ -66,27 +66,27 @@ impl Module for EcmascriptModulePartAsset {
             }
         };
 
-        let part_id = if matches!(&*self.part.await?, ModulePart::Exports) {
-            // let evaluation = Vc::upcast(SingleModuleReference::new(
-            //     Vc::upcast(EcmascriptModulePartAsset::new(
-            //         self.full_module,
-            //         ModulePart::evaluation(),
-            //         self.import_externals,
-            //     )),
-            //     Vc::cell("ecmascript module part".to_string()),
-            // ));
-            // return Ok(Vc::cell(vec![evaluation]));
-
-            0
+        let deps_vec;
+        // ModulePart::Exports contains all reexports and a reexport of the Locals
+        let deps = if matches!(&*self.part.await?, ModulePart::Exports) {
+            deps_vec = deps
+                .keys()
+                .copied()
+                .filter(|&v| {
+                    // Exclude ModuleEvaluation
+                    v != 0
+                })
+                .collect::<Vec<_>>();
+            &*deps_vec
         } else {
-            get_part_id(&split_data, self.part)
+            let part_id = get_part_id(&split_data, self.part)
                 .await
-                .with_context(|| format!("part {:?} is not found in the module", self.part))?
-        };
+                .with_context(|| format!("part {:?} is not found in the module", self.part))?;
 
-        let deps = match deps.get(&part_id) {
-            Some(v) => &**v,
-            None => &[],
+            match deps.get(&part_id) {
+                Some(v) => &**v,
+                None => &[],
+            }
         };
 
         let mut assets = deps
