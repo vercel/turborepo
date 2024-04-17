@@ -45,6 +45,7 @@ jobs:
             target: "x86_64-unknown-linux-musl"
             container: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2023-09-17-alpine
             install: |
+              apk update && apk upgrade
               apk add libc6-compat curl
             setup: |
               pnpm install
@@ -53,6 +54,7 @@ jobs:
             target: "aarch64-unknown-linux-musl"
             container: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2023-09-17-alpine
             install: |
+              apk update && apk upgrade
               apk add libc6-compat curl
               echo /root/.cargo/bin >> ${GITHUB_PATH}
               echo /usr/local/cargo/bin/rustup >> ${GITHUB_PATH}
