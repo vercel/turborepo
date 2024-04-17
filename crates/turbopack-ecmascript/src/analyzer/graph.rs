@@ -259,6 +259,7 @@ pub fn create_graph(m: &Program, eval_context: &EvalContext) -> VarGraph {
     graph
 }
 
+#[derive(Clone)]
 pub struct EvalContext {
     pub(crate) unresolved_mark: Mark,
     pub(crate) imports: ImportMap,
