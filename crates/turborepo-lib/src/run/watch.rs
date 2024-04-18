@@ -68,7 +68,7 @@ impl WatchClient {
 
         let mut new_base = base.clone();
         new_base.args_mut().command = Some(Command::Run {
-            run_args: Box::new(RunArgs::default()),
+            run_args: Box::default(),
             execution_args: execution_args.clone(),
         });
 
@@ -171,7 +171,7 @@ impl WatchClient {
                 current_runs.insert(
                     package_name,
                     tokio::spawn(async move {
-                        let mut run = RunBuilder::new(new_base)?
+                        let run = RunBuilder::new(new_base)?
                             .build(&handler, telemetry)
                             .await?;
                         run.run().await
