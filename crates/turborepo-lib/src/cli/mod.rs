@@ -1346,17 +1346,17 @@ fn warn_all_deprecated_flags(args: &Args) {
         warn_flag_removal("--cpuprofile");
     }
 
-    if let Some(Command::Run(run_args)) = args.command.as_ref() {
-        if run_args.since.is_some() {
+    if let Some(Command::Run { execution_args, .. }) = args.command.as_ref() {
+        if execution_args.since.is_some() {
             warn_flag_removal("--since");
         }
-        if !run_args.scope.is_empty() {
+        if !execution_args.scope.is_empty() {
             warn_flag_removal("--scope");
         }
-        if run_args.include_dependencies {
+        if execution_args.include_dependencies {
             warn_flag_removal("--include-dependencies");
         }
-        if run_args.no_deps {
+        if execution_args.no_deps {
             warn_flag_removal("--no-deps");
         }
     }
