@@ -72,6 +72,8 @@ impl Module for EcmascriptModulePartAsset {
 
         // ModulePart::Exports contains all reexports and a reexport of the Locals
         let deps = if matches!(&*self.part.await?, ModulePart::Exports) {
+            let analyze = analyze(self.full_module, self.part).await?;
+
             let mut references = vec![];
 
             for key in entrypoints.keys() {
@@ -103,6 +105,8 @@ impl Module for EcmascriptModulePartAsset {
                     }
                 }
             }
+
+            references.extend(analyze.references.await?.iter().cloned());
 
             return Ok(Vc::cell(references));
         } else {
