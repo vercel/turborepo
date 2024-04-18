@@ -75,17 +75,32 @@ impl Module for EcmascriptModulePartAsset {
             let mut references = vec![];
 
             for key in entrypoints.keys() {
-                if let Key::Export(e) = key {
-                    let reference = Vc::upcast(SingleModuleReference::new(
-                        Vc::upcast(EcmascriptModulePartAsset::new(
-                            self.full_module,
-                            ModulePart::export(e.clone()),
-                            self.import_externals,
-                        )),
-                        Vc::cell("ecmascript export".to_string()),
-                    ));
+                match key {
+                    Key::Export(e) => {
+                        let reference = Vc::upcast(SingleModuleReference::new(
+                            Vc::upcast(EcmascriptModulePartAsset::new(
+                                self.full_module,
+                                ModulePart::export(e.clone()),
+                                self.import_externals,
+                            )),
+                            Vc::cell(format!("ecmascript export '{e}'")),
+                        ));
 
-                    references.push(reference);
+                        references.push(reference);
+                    }
+
+                    Key::ModuleEvaluation => {
+                        let reference = Vc::upcast(SingleModuleReference::new(
+                            Vc::upcast(EcmascriptModulePartAsset::new(
+                                self.full_module,
+                                ModulePart::evaluation(),
+                                self.import_externals,
+                            )),
+                            Vc::cell("ecmascript module evaluation".to_string()),
+                        ));
+
+                        references.push(reference);
+                    }
                 }
             }
 
