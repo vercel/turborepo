@@ -352,6 +352,8 @@ pub(super) async fn split(
                 uri_of_module,
             } = dep_graph.split_module(&format!("./{filename}").into(), &items);
 
+            debug_assert_ne!(modules.len(), 0, "modules.len() == 0");
+
             dbg!(&modules);
             dbg!(&entrypoints);
             dbg!(&part_deps);
