@@ -1586,6 +1586,23 @@ async fn resolve_internal_inline(
                 force_in_lookup_dir,
                 fragment,
             } => {
+                if !fragment.await?.is_empty() {
+                    if let Ok(result) = resolve_relative_request(
+                        lookup_path,
+                        request,
+                        options,
+                        options_value,
+                        path,
+                        *query,
+                        *force_in_lookup_dir,
+                        *fragment,
+                    )
+                    .await
+                    {
+                        return Ok(result);
+                    }
+                }
+                // Resolve without fragment
                 resolve_relative_request(
                     lookup_path,
                     request,
@@ -1594,7 +1611,7 @@ async fn resolve_internal_inline(
                     path,
                     *query,
                     *force_in_lookup_dir,
-                    *fragment,
+                    Vc::cell(String::new()),
                 )
                 .await?
             }
@@ -1858,12 +1875,13 @@ async fn resolve_relative_request(
 
     let mut new_path = path_pattern.clone();
 
+    let fragment_val = fragment.await?;
+
     {
-        let fragment = fragment.await?;
-        if !fragment.is_empty() {
+        if !fragment_val.is_empty() {
             new_path.push(Pattern::Alternatives(
                 once(Pattern::Constant("".to_string()))
-                    .chain(once(Pattern::Constant(format!("#{fragment}"))))
+                    .chain(once(Pattern::Constant(format!("#{fragment_val}"))))
                     .collect(),
             ));
         }
@@ -1896,7 +1914,7 @@ async fn resolve_relative_request(
 
     for m in matches.iter() {
         if let PatternMatch::File(matched_pattern, path) = m {
-            let mut matches_without_extension = false;
+            let mut pushed = false;
             if !options_value.fully_specified {
                 for ext in options_value.extensions.iter() {
                     let Some(matched_pattern) = matched_pattern.strip_suffix(ext) else {
@@ -1916,11 +1934,34 @@ async fn resolve_relative_request(
                             )
                             .await?,
                         );
-                        matches_without_extension = true;
+                        pushed = true;
                     }
                 }
             }
-            if !matches_without_extension || path_pattern.is_match(matched_pattern) {
+            if !fragment_val.is_empty() {
+                // If the fragment is not empty, we need to strip it from the matched pattern
+                if let Some(matched_pattern) = matched_pattern
+                    .strip_suffix(&**fragment_val)
+                    .and_then(|s| s.strip_suffix('#'))
+                {
+                    results.push(
+                        resolved(
+                            RequestKey::new(matched_pattern.to_string()),
+                            *path,
+                            lookup_path,
+                            request,
+                            options_value,
+                            options,
+                            query,
+                            Vc::cell(String::new()),
+                        )
+                        .await?,
+                    );
+                    pushed = true;
+                }
+            }
+
+            if !pushed || path_pattern.is_match(matched_pattern) {
                 results.push(
                     resolved(
                         RequestKey::new(matched_pattern.clone()),
