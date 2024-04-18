@@ -5,7 +5,7 @@ use turborepo_telemetry::events::command::CommandEventBuilder;
 use crate::{commands::CommandBase, run, run::builder::RunBuilder, signal::SignalHandler};
 
 #[cfg(windows)]
-pub async fn get_signal() -> Result<impl Future<Output = Option<()>>, run::Error> {
+pub fn get_signal() -> Result<impl Future<Output = Option<()>>, run::Error> {
     let mut ctrl_c = tokio::signal::windows::ctrl_c().map_err(run::Error::SignalHandler)?;
     Ok(async move { ctrl_c.recv().await })
 }
