@@ -1,2 +1,4 @@
-export { cat as fakeCat } from './lib'
+import { fakeCat } from "./module";
 
+
+console.log(fakeCat)

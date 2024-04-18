@@ -1,2 +1,3 @@
-export * as lib from './lib'
+import {lib} from './module'
 
+console.log(lib.cat)
