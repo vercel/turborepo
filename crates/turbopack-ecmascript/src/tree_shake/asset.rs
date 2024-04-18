@@ -9,7 +9,9 @@ use turbopack_core::{
     resolve::ModulePart,
 };
 
-use super::{chunk_item::EcmascriptModulePartChunkItem, get_part_id, split_module, SplitResult};
+use super::{
+    chunk_item::EcmascriptModulePartChunkItem, get_part_id, split_module, Key, SplitResult,
+};
 use crate::{
     chunk::{EcmascriptChunkPlaceable, EcmascriptExports},
     references::analyse_ecmascript_module,
@@ -59,18 +61,35 @@ impl Module for EcmascriptModulePartAsset {
     async fn references(&self) -> Result<Vc<ModuleReferences>> {
         let split_data = split_module(self.full_module).await?;
 
-        let deps = match &*split_data {
-            SplitResult::Ok { deps, .. } => deps,
+        let (deps, entrypoints) = match &*split_data {
+            SplitResult::Ok {
+                deps, entrypoints, ..
+            } => (deps, entrypoints),
             _ => {
                 bail!("failed to split module")
             }
         };
 
-        let deps_vec;
         // ModulePart::Exports contains all reexports and a reexport of the Locals
         let deps = if matches!(&*self.part.await?, ModulePart::Exports) {
-            deps_vec = deps.keys().copied().collect::<Vec<_>>();
-            &*deps_vec
+            let mut references = vec![];
+
+            for key in entrypoints.keys() {
+                if let Key::Export(e) = key {
+                    let reference = Vc::upcast(SingleModuleReference::new(
+                        Vc::upcast(EcmascriptModulePartAsset::new(
+                            self.full_module,
+                            ModulePart::export(e.clone()),
+                            self.import_externals,
+                        )),
+                        Vc::cell("ecmascript export".to_string()),
+                    ));
+
+                    references.push(reference);
+                }
+            }
+
+            return Ok(Vc::cell(references));
         } else {
             let part_id = get_part_id(&split_data, self.part)
                 .await
