@@ -33,7 +33,10 @@ enum VersionFormat {
 enum SupportedLockfileVersion {
     V5,
     V6,
-    V7,
+    // As of pnpm@9.0.0-rc.0 the lockfile version will now match the pnpm version
+    // Lockfile version 7.0 and 9.0 are both the same version
+    // See https://github.com/pnpm/pnpm/pull/7861
+    V7AndV9,
 }
 
 pub fn pnpm_subgraph(

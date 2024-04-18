@@ -4,7 +4,7 @@ import path from "node:path";
 import { configDir } from "dirs-next";
 import type { PackageInfo } from "./events/types";
 
-export function buildUserAgent(packageInfo: PackageInfo): string {
+function buildUserAgent(packageInfo: PackageInfo): string {
   const nodeVersion = process.version;
   const operatingSystem = os.type();
   const architecture = os.arch();
@@ -12,7 +12,7 @@ export function buildUserAgent(packageInfo: PackageInfo): string {
   return `${packageInfo.name} ${packageInfo.version} ${nodeVersion} ${operatingSystem} ${architecture}`;
 }
 
-export async function defaultConfigPath() {
+async function defaultConfigPath() {
   const dir = process.env.TURBO_CONFIG_DIR_PATH
     ? process.env.TURBO_CONFIG_DIR_PATH
     : await configDir();
@@ -24,12 +24,14 @@ export async function defaultConfigPath() {
   return path.join(dir, "turborepo", "telemetry.json");
 }
 
-export function oneWayHashWithSalt({
-  input,
-  salt,
-}: {
-  input: string;
-  salt: string;
-}) {
+function oneWayHashWithSalt({ input, salt }: { input: string; salt: string }) {
   return crypto.createHash("sha256").update(`${salt}${input}`).digest("hex");
 }
+
+// Exported asn an object instead of export keyword, so that these functions
+// can be mocked in tests.
+export default {
+  buildUserAgent,
+  oneWayHashWithSalt,
+  defaultConfigPath,
+};

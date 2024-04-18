@@ -47,7 +47,7 @@ pub enum PackageWatchError {
 // If we're in an invalid state, this will be an Err with a description of the
 // reason. Typically we don't care though, as the user could be in the middle of
 // making a change.
-type DiscoveryData = Result<DiscoveryResponse, String>;
+pub(crate) type DiscoveryData = Result<DiscoveryResponse, String>;
 
 /// Watches the filesystem for changes to packages and package managers.
 pub struct PackageWatcher {
@@ -78,6 +78,10 @@ impl PackageWatcher {
             _handle: handle,
             package_discovery_lazy,
         })
+    }
+
+    pub(crate) fn watch_discovery(&self) -> watch::Receiver<Option<DiscoveryData>> {
+        self.package_discovery_lazy.watch()
     }
 
     pub async fn discover_packages(&self) -> Option<Result<DiscoveryResponse, PackageWatchError>> {
