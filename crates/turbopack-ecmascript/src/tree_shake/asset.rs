@@ -70,9 +70,38 @@ impl Module for EcmascriptModulePartAsset {
             }
         };
 
-        // TODO: ModulePart::Facade: evaluation & exports
-
         let analyze = analyze(self.full_module, self.part).await?;
+
+        // Facade depends on evaluation and re-exports
+        if matches!(&*self.part.await?, ModulePart::Facade) {
+            let mut references = vec![];
+
+            let reference = Vc::upcast(SingleModuleReference::new(
+                Vc::upcast(EcmascriptModulePartAsset::new(
+                    self.full_module,
+                    ModulePart::evaluation(),
+                    self.import_externals,
+                )),
+                Vc::cell(format!("ecmascript module evaluation")),
+            ));
+
+            references.push(reference);
+
+            let reference = Vc::upcast(SingleModuleReference::new(
+                Vc::upcast(EcmascriptModulePartAsset::new(
+                    self.full_module,
+                    ModulePart::exports(),
+                    self.import_externals,
+                )),
+                Vc::cell(format!("ecmascript reexports")),
+            ));
+
+            references.push(reference);
+
+            references.extend(analyze.references.await?.iter().cloned());
+
+            return Ok(Vc::cell(references));
+        }
 
         // ModulePart::Exports contains all reexports and a reexport of the Locals
         let deps = if matches!(&*self.part.await?, ModulePart::Exports) {
