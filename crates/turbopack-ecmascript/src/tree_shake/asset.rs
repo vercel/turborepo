@@ -70,10 +70,12 @@ impl Module for EcmascriptModulePartAsset {
             }
         };
 
+        // TODO: ModulePart::Facade: evaluation & exports
+
+        let analyze = analyze(self.full_module, self.part).await?;
+
         // ModulePart::Exports contains all reexports and a reexport of the Locals
         let deps = if matches!(&*self.part.await?, ModulePart::Exports) {
-            let analyze = analyze(self.full_module, self.part).await?;
-
             let mut references = vec![];
 
             for key in entrypoints.keys() {
@@ -92,16 +94,17 @@ impl Module for EcmascriptModulePartAsset {
                     }
 
                     Key::ModuleEvaluation => {
-                        let reference = Vc::upcast(SingleModuleReference::new(
-                            Vc::upcast(EcmascriptModulePartAsset::new(
-                                self.full_module,
-                                ModulePart::evaluation(),
-                                self.import_externals,
-                            )),
-                            Vc::cell("ecmascript module evaluation".to_string()),
-                        ));
+                        // let reference =
+                        // Vc::upcast(SingleModuleReference::new(
+                        //     Vc::upcast(EcmascriptModulePartAsset::new(
+                        //         self.full_module,
+                        //         ModulePart::evaluation(),
+                        //         self.import_externals,
+                        //     )),
+                        //     Vc::cell("ecmascript module
+                        // evaluation".to_string()), ));
 
-                        references.push(reference);
+                        // references.push(reference);
                     }
                 }
             }
@@ -133,8 +136,6 @@ impl Module for EcmascriptModulePartAsset {
                 )))
             })
             .collect::<Result<Vec<_>>>()?;
-
-        let analyze = analyze(self.full_module, self.part).await?;
 
         assets.extend(analyze.references.await?.iter().cloned());
 
