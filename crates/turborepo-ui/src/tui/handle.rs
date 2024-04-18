@@ -4,7 +4,7 @@ use std::{
 };
 
 use super::Event;
-use crate::LineWriter;
+use crate::{tui::task::TaskResult, LineWriter};
 
 /// Struct for sending app events to TUI rendering
 #[derive(Debug, Clone)]
@@ -99,11 +99,12 @@ impl TuiTask {
     }
 
     /// Mark the task as finished
-    pub fn finish(&self) -> Vec<u8> {
+    pub fn finish(&self, result: TaskResult) -> Vec<u8> {
         self.handle
             .primary
             .send(Event::EndTask {
                 task: self.name.clone(),
+                result,
             })
             .ok();
         self.logs.lock().expect("logs lock poisoned").clone()

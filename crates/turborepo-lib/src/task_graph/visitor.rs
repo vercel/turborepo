@@ -1051,10 +1051,14 @@ impl DryRunExecContext {
 }
 
 impl<W: Write> TaskOutput<W> {
-    pub fn finish(self, use_error: bool) -> std::io::Result<Option<Vec<u8>>> {
+    pub fn finish(self, is_error: bool) -> std::io::Result<Option<Vec<u8>>> {
         match self {
-            TaskOutput::Direct(client) => client.finish(use_error),
-            TaskOutput::UI(client) => Ok(Some(client.finish())),
+            TaskOutput::Direct(client) => client.finish(is_error),
+            TaskOutput::UI(client) => Ok(Some(client.finish(if is_error {
+                tui::TaskResult::Failure
+            } else {
+                tui::TaskResult::Success
+            }))),
         }
     }
 

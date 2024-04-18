@@ -13,6 +13,7 @@ pub use handle::{AppReceiver, AppSender, PersistedWriterInner, TuiTask};
 use input::input;
 pub use pane::TerminalPane;
 pub use table::TaskTable;
+pub use task::TaskResult;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

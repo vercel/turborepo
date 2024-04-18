@@ -12,6 +12,13 @@ pub struct Running {
 pub struct Finished {
     start: Instant,
     end: Instant,
+    result: TaskResult,
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub enum TaskResult {
+    Success,
+    Failure,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
@@ -45,7 +52,7 @@ impl Task<Planned> {
 }
 
 impl Task<Running> {
-    pub fn finish(self) -> Task<Finished> {
+    pub fn finish(self, result: TaskResult) -> Task<Finished> {
         let Task {
             name,
             state: Running { start },
@@ -55,6 +62,7 @@ impl Task<Running> {
             state: Finished {
                 start,
                 end: Instant::now(),
+                result,
             },
         }
     }

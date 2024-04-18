@@ -1,22 +1,19 @@
 use std::time::Instant;
 
-use itertools::Itertools;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
     style::{Color, Style},
     text::Line,
-    widgets::{
-        Block, BorderType, Borders, Cell, Paragraph, Row, StatefulWidget, Table, TableState, Widget,
-    },
+    widgets::{Block, BorderType, Borders, Paragraph, StatefulWidget, TableState, Tabs, Widget},
 };
 use tracing::debug;
 
 use super::{
     task::{Finished, Planned, Running, Task},
-    task_duration::TaskDuration,
     Error,
 };
+use crate::tui::task::TaskResult;
 
 const FOOTER_TEXT: &str = "Use arrow keys to navigate. Press `Enter` to interact with a task and \
                            `Ctrl-Z` to stop interacting";
@@ -108,7 +105,7 @@ impl TaskTable {
 
     /// Mark the given running task as finished
     /// Errors if given task wasn't a running task
-    pub fn finish_task(&mut self, task: &str) -> Result<(), Error> {
+    pub fn finish_task(&mut self, task: &str, result: TaskResult) -> Result<(), Error> {
         let running_idx = self
             .running
             .iter()
@@ -120,7 +117,7 @@ impl TaskTable {
         let old_row_idx = self.finished.len() + running_idx;
         let new_row_idx = self.finished.len();
         let running = self.running.remove(running_idx);
-        self.finished.push(running.finish());
+        self.finished.push(running.finish(result));
 
         if let Some(selected_row) = self.scroll.selected() {
             // If task that was just started is selected, then update selection to follow
@@ -188,22 +185,22 @@ impl TaskTable {
             .chain(self.running.iter().map(|task| task.name()))
     }
 
-    fn finished_tasks(&self) -> impl Iterator<Item = Cell> + '_ {
+    fn finished_tasks(&self) -> impl Iterator<Item = String> + '_ {
         self.finished
             .iter()
-            .map(move |task| Cell::new(format!("🟢 {}", task.name())))
+            .map(move |task| format!("🟢 {}", task.name()))
     }
 
-    fn running_tasks(&self) -> impl Iterator<Item = Cell> + '_ {
+    fn running_tasks(&self) -> impl Iterator<Item = String> + '_ {
         self.running
             .iter()
-            .map(move |task| Cell::new(format!("🟡 {}", task.name())))
+            .map(move |task| format!("🟡 {}", task.name()))
     }
 
-    fn planned_tasks(&self) -> impl Iterator<Item = Cell> + '_ {
+    fn planned_tasks(&self) -> impl Iterator<Item = String> + '_ {
         self.planned
             .iter()
-            .map(move |task| Cell::new(format!("⚪ {}", task.name())))
+            .map(move |task| format!("⚪ {}", task.name()))
     }
 
     /// Convenience method which renders and updates scroll state
@@ -241,7 +238,7 @@ impl<'a> StatefulWidget for &'a TaskTable {
     fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer, state: &mut Self::State) {
         let areas = Layout::default()
             .direction(ratatui::layout::Direction::Vertical)
-            .constraints([Constraint::Max(1), Constraint::Length(2)])
+            .constraints([Constraint::Max(1), Constraint::Length(1)])
             .split(area);
         let tasks = self
             .finished_tasks()
@@ -249,10 +246,11 @@ impl<'a> StatefulWidget for &'a TaskTable {
             .chain(self.planned_tasks())
             .collect::<Vec<_>>();
 
-        let table = Table::default()
-            .rows([Row::new(tasks)])
-            .highlight_style(Style::default().fg(Color::Yellow));
-        StatefulWidget::render(table, areas[0], buf, state);
+        let mut tabs = Tabs::new(tasks).highlight_style(Style::default().fg(Color::Yellow));
+        if let Some(selected) = state.selected() {
+            tabs = tabs.select(selected);
+        }
+        Widget::render(tabs, areas[0], buf);
         TaskTable::render_footer(areas[1], buf);
     }
 }
@@ -298,7 +296,7 @@ mod test {
         table.start_task("a").unwrap();
         assert_eq!(table.scroll.selected(), Some(0), "b stays selected");
         assert_eq!(table.selected(), Some("b"), "selected b");
-        table.finish_task("a").unwrap();
+        table.finish_task("a", TaskResult::Success).unwrap();
         assert_eq!(table.scroll.selected(), Some(1), "b stays selected");
         assert_eq!(table.selected(), Some("b"), "selected b");
     }

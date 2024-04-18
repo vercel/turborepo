@@ -1,3 +1,5 @@
+use crate::tui::task::TaskResult;
+
 pub enum Event {
     StartTask {
         task: String,
@@ -8,14 +10,15 @@ pub enum Event {
     },
     EndTask {
         task: String,
+        result: TaskResult,
     },
     Stop,
     Tick,
     Log {
         message: Vec<u8>,
     },
-    Up,
-    Down,
+    Left,
+    Right,
     ScrollUp,
     ScrollDown,
     SetStdin {

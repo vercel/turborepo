@@ -103,7 +103,7 @@ pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
     let (mut terminal, app_height) = startup()?;
     let size = terminal.size()?;
 
-    let pane_height = (f32::from(app_height) * PANE_SIZE_RATIO) as u16;
+    let pane_height = app_height - 2;
     let app: App<Box<dyn io::Write + Send>> = App::new(pane_height, size.width, tasks);
 
     let result = run_app_inner(&mut terminal, app, receiver);
@@ -208,14 +208,14 @@ fn update<B: Backend>(
         Event::Log { message } => {
             return Ok(Some(message));
         }
-        Event::EndTask { task } => {
-            app.table.finish_task(&task)?;
+        Event::EndTask { task, result } => {
+            app.table.finish_task(&task, result)?;
             app.pane.render_screen(&task, terminal)?;
         }
-        Event::Up => {
+        Event::Left => {
             app.previous();
         }
-        Event::Down => {
+        Event::Right => {
             app.next();
         }
         Event::ScrollUp => {
@@ -242,7 +242,7 @@ fn update<B: Backend>(
 
 fn view<I>(app: &mut App<I>, f: &mut Frame) {
     let (term_height, _) = app.term_size();
-    let vertical = Layout::vertical([Constraint::Min(5), Constraint::Length(term_height)]);
+    let vertical = Layout::vertical([Constraint::Min(2), Constraint::Length(term_height)]);
     let [table, pane] = vertical.areas(f.size());
     app.table.stateful_render(f, table);
     f.render_widget(&app.pane, pane);
