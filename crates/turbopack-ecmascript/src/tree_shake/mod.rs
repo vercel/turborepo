@@ -404,6 +404,69 @@ pub(super) async fn part_of_module(
         } => {
             debug_assert_ne!(modules.len(), 0, "modules.len() == 0");
 
+            if matches!(&*part.await?, ModulePart::Facade) {
+                if let ParseResult::Ok {
+                    comments,
+                    eval_context,
+                    globals,
+                    source_map,
+                    ..
+                } = &*modules[0].await?
+                {
+                    let mut module = Module::dummy();
+
+                    // We can't use quote! as `with` is not standard yet
+                    let chunk_prop = ObjectLit {
+                        span: DUMMY_SP,
+                        props: vec![PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
+                            key: quote_ident!("__turbopack_chunk__").into(),
+                            value: "module evaluation".into(),
+                        })))],
+                    };
+
+                    module
+                        .body
+                        .push(ModuleItem::ModuleDecl(ModuleDecl::ExportAll(ExportAll {
+                            span: DUMMY_SP,
+                            src: Box::new(uri_of_module.clone().into()),
+                            type_only: false,
+                            with: Some(Box::new(chunk_prop)),
+                        })));
+
+                    // We can't use quote! as `with` is not standard yet
+                    let chunk_prop = ObjectLit {
+                        span: DUMMY_SP,
+                        props: vec![PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
+                            key: quote_ident!("__turbopack_chunk__").into(),
+                            value: "exports".into(),
+                        })))],
+                    };
+
+                    module
+                        .body
+                        .push(ModuleItem::ModuleDecl(ModuleDecl::ExportAll(ExportAll {
+                            span: DUMMY_SP,
+                            src: Box::new(uri_of_module.clone().into()),
+                            type_only: false,
+                            with: Some(Box::new(chunk_prop)),
+                        })));
+
+                    let program = Program::Module(module);
+                    let eval_context =
+                        EvalContext::new(&program, eval_context.unresolved_mark, None);
+                    return Ok(ParseResult::Ok {
+                        program,
+                        comments: comments.clone(),
+                        eval_context,
+                        globals: globals.clone(),
+                        source_map: source_map.clone(),
+                    }
+                    .cell());
+                } else {
+                    unreachable!()
+                }
+            }
+
             if matches!(&*part.await?, ModulePart::Exports) {
                 if let ParseResult::Ok {
                     comments,
