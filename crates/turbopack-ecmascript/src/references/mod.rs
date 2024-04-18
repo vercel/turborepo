@@ -185,7 +185,9 @@ impl AnalyzeEcmascriptModuleResultBuilder {
     where
         R: Upcast<Box<dyn ModuleReference>>,
     {
-        self.references.insert(Vc::upcast(reference));
+        let r = Vc::upcast(reference);
+        self.references.insert(r);
+        vdbg!("Adding reference", r);
         self.local_references.insert(Vc::upcast(reference));
     }
 
@@ -580,6 +582,8 @@ pub(crate) async fn analyse_ecmascript_module_internal(
         // passing that to other turbo tasks functions later.
         *r = r.resolve().await?;
     }
+    vdbg!("Import references", &import_references);
+
     for r in import_references.iter() {
         // `add_import_reference` will avoid adding duplicate references
         analysis.add_import_reference(*r);
