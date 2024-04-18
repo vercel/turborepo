@@ -1857,7 +1857,8 @@ async fn resolve_relative_request(
     }
 
     let mut new_path = path_pattern.clone();
-    if !options_value.fully_specified {
+
+    {
         let fragment = fragment.await?;
         if !fragment.is_empty() {
             new_path.push(Pattern::Alternatives(
@@ -1866,7 +1867,8 @@ async fn resolve_relative_request(
                     .collect(),
             ));
         }
-
+    }
+    if !options_value.fully_specified {
         // Add the extensions as alternatives to the path
         // read_matches keeps the order of alternatives intact
         new_path.push(Pattern::Alternatives(
