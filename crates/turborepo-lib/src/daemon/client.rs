@@ -4,12 +4,12 @@ use globwalk::ValidatedGlob;
 use thiserror::Error;
 use tonic::{Code, IntoRequest, Status};
 use tracing::info;
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
 
 use super::{
     connector::{DaemonConnector, DaemonConnectorError},
     endpoint::SocketOpenError,
-    proto::DiscoverPackagesResponse,
+    proto::{DiscoverPackagesResponse, GetFileHashesResponse},
     Paths,
 };
 use crate::{
@@ -156,7 +156,22 @@ impl<T> DaemonClient<T> {
             .package_changes(proto::PackageChangesRequest {})
             .await?
             .into_inner();
+        Ok(response)
+    }
 
+    pub async fn get_file_hashes(
+        &mut self,
+        package_path: &AnchoredSystemPath,
+        inputs: &[String],
+    ) -> Result<GetFileHashesResponse, DaemonError> {
+        let response = self
+            .client
+            .get_file_hashes(proto::GetFileHashesRequest {
+                package_path: package_path.to_string(),
+                input_globs: inputs.to_vec(),
+            })
+            .await?
+            .into_inner();
         Ok(response)
     }
 }

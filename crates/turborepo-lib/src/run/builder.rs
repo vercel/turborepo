@@ -366,7 +366,7 @@ impl RunBuilder {
             &self.repo_root,
             &self.opts.runcache_opts,
             color_selector,
-            daemon,
+            daemon.clone(),
             self.ui,
             self.opts.run_opts.dry_run.is_some(),
         ));
@@ -397,6 +397,7 @@ impl RunBuilder {
             engine: Arc::new(engine),
             run_cache,
             signal_handler: signal_handler.clone(),
+            daemon,
         })
     }
 
