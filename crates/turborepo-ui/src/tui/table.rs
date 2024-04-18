@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use itertools::Itertools;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
@@ -187,43 +188,22 @@ impl TaskTable {
             .chain(self.running.iter().map(|task| task.name()))
     }
 
-    fn finished_rows(&self, duration_width: u16) -> impl Iterator<Item = Row> + '_ {
-        self.finished.iter().map(move |task| {
-            Row::new(vec![
-                Cell::new(task.name()),
-                Cell::new(TaskDuration::new(
-                    duration_width,
-                    self.start,
-                    self.current,
-                    task.start(),
-                    Some(task.end()),
-                )),
-            ])
-        })
+    fn finished_tasks(&self) -> impl Iterator<Item = Cell> + '_ {
+        self.finished
+            .iter()
+            .map(move |task| Cell::new(format!("🟢 {}", task.name())))
     }
 
-    fn running_rows(&self, duration_width: u16) -> impl Iterator<Item = Row> + '_ {
-        self.running.iter().map(move |task| {
-            Row::new(vec![
-                Cell::new(task.name()),
-                Cell::new(TaskDuration::new(
-                    duration_width,
-                    self.start,
-                    self.current,
-                    task.start(),
-                    None,
-                )),
-            ])
-        })
+    fn running_tasks(&self) -> impl Iterator<Item = Cell> + '_ {
+        self.running
+            .iter()
+            .map(move |task| Cell::new(format!("🟡 {}", task.name())))
     }
 
-    fn planned_rows(&self, duration_width: u16) -> impl Iterator<Item = Row> + '_ {
-        self.planned.iter().map(move |task| {
-            Row::new(vec![
-                Cell::new(task.name()),
-                Cell::new(" ".repeat(duration_width as usize)),
-            ])
-        })
+    fn planned_tasks(&self) -> impl Iterator<Item = Cell> + '_ {
+        self.planned
+            .iter()
+            .map(move |task| Cell::new(format!("⚪ {}", task.name())))
     }
 
     /// Convenience method which renders and updates scroll state
@@ -259,30 +239,19 @@ impl<'a> StatefulWidget for &'a TaskTable {
     type State = TableState;
 
     fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer, state: &mut Self::State) {
-        let width = area.width;
-        let (name_width, status_width) = self.column_widths(width);
         let areas = Layout::default()
             .direction(ratatui::layout::Direction::Vertical)
-            .constraints([Constraint::Min(2), Constraint::Length(2)])
+            .constraints([Constraint::Max(1), Constraint::Length(2)])
             .split(area);
-        let table = Table::new(
-            self.finished_rows(status_width)
-                .chain(self.running_rows(status_width))
-                .chain(self.planned_rows(status_width)),
-            [
-                Constraint::Min(name_width),
-                Constraint::Length(status_width),
-            ],
-        )
-        .highlight_style(Style::default().fg(Color::Yellow))
-        .header(
-            ["Task\n----", "Status\n------"]
-                .iter()
-                .copied()
-                .map(Cell::from)
-                .collect::<Row>()
-                .height(2),
-        );
+        let tasks = self
+            .finished_tasks()
+            .chain(self.running_tasks())
+            .chain(self.planned_tasks())
+            .collect::<Vec<_>>();
+
+        let table = Table::default()
+            .rows([Row::new(tasks)])
+            .highlight_style(Style::default().fg(Color::Yellow));
         StatefulWidget::render(table, areas[0], buf, state);
         TaskTable::render_footer(areas[1], buf);
     }

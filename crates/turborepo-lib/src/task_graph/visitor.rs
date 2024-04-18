@@ -315,16 +315,16 @@ impl<'a> Visitor<'a> {
             result.unwrap_or_else(|e| panic!("task executor panicked: {e}"));
         }
         drop(factory);
-        if let Some(handle) = ui {
-            handle.stop();
-            if let Err(e) = render_thread_handle
-                .unwrap()
-                .await
-                .expect("render thread panicked")
-            {
-                error!("error encountered rendering tui: {e}");
-            }
-        }
+        // if let Some(handle) = ui {
+        //     handle.stop();
+        //     if let Err(e) = render_thread_handle
+        //         .unwrap()
+        //         .await
+        //         .expect("render thread panicked")
+        //     {
+        //         error!("error encountered rendering tui: {e}");
+        //     }
+        // }
 
         // Write out the traced-config.json file if we have one
         self.task_access.save().await;
