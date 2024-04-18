@@ -5,7 +5,7 @@ use swc_core::{
     ecma::ast::{self, Expr, ExprStmt, Ident, Lit, ModuleItem, Program, Script, Stmt},
     quote,
 };
-use turbo_tasks::{Value, ValueToString, Vc};
+use turbo_tasks::{vdbg, Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::{
         ChunkItemExt, ChunkableModule, ChunkableModuleReference, ChunkingContext, ChunkingType,
@@ -122,6 +122,7 @@ impl EsmAssetReference {
         export_name: Option<Vc<ModulePart>>,
         import_externals: bool,
     ) -> Vc<Self> {
+        vdbg!(export_name);
         Self::cell(EsmAssetReference {
             origin,
             request,

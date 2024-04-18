@@ -408,7 +408,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
     };
 
     let parsed = if let Some(part) = part {
-        vdbg!("Calling split() on", path);
+        vdbg!("Calling split() on", path, part);
         let parsed = parse(source, ty, transforms);
         let split_data = split(path, source, parsed);
         part_of_module(split_data, part)
