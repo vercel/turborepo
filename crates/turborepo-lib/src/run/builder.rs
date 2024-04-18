@@ -408,7 +408,7 @@ impl RunBuilder {
             run_telemetry,
             task_access,
             repo_root: self.repo_root,
-            opts: self.opts,
+            opts: Arc::new(self.opts),
             api_client: self.api_client,
             api_auth: self.api_auth,
             env_at_execution_start,

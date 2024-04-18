@@ -41,6 +41,7 @@ use crate::{
     DaemonClient, DaemonConnector,
 };
 
+#[derive(Clone)]
 pub struct Run {
     version: &'static str,
     ui: UI,
@@ -49,7 +50,7 @@ pub struct Run {
     processes: ProcessManager,
     run_telemetry: GenericEventBuilder,
     repo_root: AbsoluteSystemPathBuf,
-    opts: Opts,
+    opts: Arc<Opts>,
     api_client: APIClient,
     api_auth: Option<APIAuth>,
     env_at_execution_start: EnvironmentVariableMap,
@@ -98,6 +99,22 @@ impl Run {
         } else {
             cprintln!(self.ui, GREY, "• Remote caching disabled");
         }
+    }
+
+    pub fn create_run_for_persistent_tasks(&self) -> Self {
+        let mut new_run = self.clone();
+        let new_engine = new_run.engine.create_engine_for_persistent_tasks();
+        new_run.engine = Arc::new(new_engine);
+
+        new_run
+    }
+
+    pub fn create_run_without_persistent_tasks(&self) -> Self {
+        let mut new_run = self.clone();
+        let new_engine = new_run.engine.create_engine_without_persistent_tasks();
+        new_run.engine = Arc::new(new_engine);
+
+        new_run
     }
 
     pub async fn run(&mut self) -> Result<i32, Error> {
