@@ -352,6 +352,7 @@ pub(super) async fn split(
                 uri_of_module,
             } = dep_graph.split_module(&format!("./{filename}").into(), &items);
 
+            dbg!(&modules.len());
             dbg!(&entrypoints);
             dbg!(&part_deps);
 
