@@ -1,5 +1,5 @@
 use anyhow::{bail, Context, Result};
-use turbo_tasks::Vc;
+use turbo_tasks::{vdbg, Vc};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{ChunkableModule, ChunkingContext},
@@ -69,14 +69,7 @@ impl Module for EcmascriptModulePartAsset {
         let deps_vec;
         // ModulePart::Exports contains all reexports and a reexport of the Locals
         let deps = if matches!(&*self.part.await?, ModulePart::Exports) {
-            deps_vec = deps
-                .keys()
-                .copied()
-                .filter(|&v| {
-                    // Exclude ModuleEvaluation
-                    v != 0
-                })
-                .collect::<Vec<_>>();
+            deps_vec = deps.keys().copied().collect::<Vec<_>>();
             &*deps_vec
         } else {
             let part_id = get_part_id(&split_data, self.part)
@@ -161,5 +154,6 @@ async fn analyze(
     module: Vc<EcmascriptModuleAsset>,
     part: Vc<ModulePart>,
 ) -> Result<Vc<AnalyzeEcmascriptModuleResult>> {
+    vdbg!("analyze, with module part", part);
     Ok(analyse_ecmascript_module(module, Some(part)))
 }
