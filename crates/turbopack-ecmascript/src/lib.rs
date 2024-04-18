@@ -55,7 +55,7 @@ pub use transform::{
     TransformContext, TransformPlugin, UnsupportedServerActionIssue,
 };
 use turbo_tasks::{
-    trace::TraceRawVcs, ReadRef, TaskInput, TryJoinIterExt, Value, ValueToString, Vc,
+    trace::TraceRawVcs, vdbg, ReadRef, TaskInput, TryJoinIterExt, Value, ValueToString, Vc,
 };
 use turbo_tasks_fs::{rope::Rope, FileJsonContent, FileSystemPath};
 use turbopack_core::{
@@ -367,6 +367,7 @@ impl EcmascriptModuleAsset {
 
     #[turbo_tasks::function]
     pub fn analyze(self: Vc<Self>) -> Vc<AnalyzeEcmascriptModuleResult> {
+        vdbg!("analyze, without part");
         analyse_ecmascript_module(self, None)
     }
 

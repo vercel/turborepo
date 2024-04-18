@@ -395,11 +395,11 @@ pub(super) async fn part_of_module(
     match &*split_data {
         SplitResult::Ok {
             modules,
-            deps,
             uri_of_module,
+            entrypoints,
             ..
         } => {
-            if matches!(&*part.await?, ModulePart::Exports) {
+            if matches!(&*part.await?, ModulePart::Exports) && !modules.is_empty() {
                 if let ParseResult::Ok {
                     comments,
                     eval_context,
@@ -408,9 +408,13 @@ pub(super) async fn part_of_module(
                     ..
                 } = &*modules[0].await?
                 {
+                    dbg!(&entrypoints.values());
+                    let mut export_part_ids = entrypoints.values().copied().collect::<Vec<_>>();
+                    export_part_ids.sort();
+
                     let mut module = Module::dummy();
 
-                    for &export_part_id in deps.keys() {
+                    for export_part_id in export_part_ids {
                         // Skip ModuleEvaluation
                         if export_part_id == 0 {
                             continue;
