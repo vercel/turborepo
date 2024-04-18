@@ -352,7 +352,7 @@ pub(super) async fn split(
                 uri_of_module,
             } = dep_graph.split_module(&format!("./{filename}").into(), &items);
 
-            dbg!(&modules.len());
+            dbg!(&modules);
             dbg!(&entrypoints);
             dbg!(&part_deps);
 
@@ -400,7 +400,9 @@ pub(super) async fn part_of_module(
             entrypoints,
             ..
         } => {
-            if matches!(&*part.await?, ModulePart::Exports) && !modules.is_empty() {
+            debug_assert_ne!(modules.len(), 0, "modules.len() == 0");
+
+            if matches!(&*part.await?, ModulePart::Exports) {
                 if let ParseResult::Ok {
                     comments,
                     eval_context,
@@ -409,18 +411,12 @@ pub(super) async fn part_of_module(
                     ..
                 } = &*modules[0].await?
                 {
-                    dbg!(&entrypoints.values());
                     let mut export_part_ids = entrypoints.values().copied().collect::<Vec<_>>();
                     export_part_ids.sort();
 
                     let mut module = Module::dummy();
 
                     for export_part_id in export_part_ids {
-                        // Skip ModuleEvaluation
-                        if export_part_id == 0 {
-                            continue;
-                        }
-
                         // We can't use quote! as `with` is not standard yet
                         let chunk_prop = ObjectLit {
                             span: DUMMY_SP,
