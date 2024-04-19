@@ -584,7 +584,6 @@ pub(crate) async fn analyse_ecmascript_module_internal(
         // passing that to other turbo tasks functions later.
         *r = r.resolve().await?;
     }
-    vdbg!("Import references", &import_references);
 
     for r in import_references.iter() {
         // `add_import_reference` will avoid adding duplicate references
