@@ -52,7 +52,7 @@ pub enum Error {
     #[error("watch interrupted due to signal")]
     SignalInterrupt,
     #[error("package change error")]
-    PackageChangeError(#[from] tonic::Status),
+    PackageChange(#[from] tonic::Status),
 }
 
 impl WatchClient {
