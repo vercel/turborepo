@@ -124,11 +124,6 @@ impl RunBuilder {
         self
     }
 
-    pub fn hide_prelude(mut self) -> Self {
-        self.should_print_prelude_override = Some(false);
-        self
-    }
-
     fn connect_process_manager(&self, signal_subscriber: SignalSubscriber) {
         let manager = self.processes.clone();
         tokio::spawn(async move {

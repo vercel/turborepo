@@ -74,8 +74,6 @@ impl WatchClient {
             execution_args: execution_args.clone(),
         });
 
-        let mut main_run_handle: Option<JoinHandle<_>> = None;
-
         let mut run = RunBuilder::new(new_base)?
             .build(&handler, telemetry.clone())
             .await?;
@@ -93,6 +91,8 @@ impl WatchClient {
         let mut events = client.package_changes().await?;
         let mut current_runs: HashMap<PackageName, JoinHandle<Result<i32, run::Error>>> =
             HashMap::new();
+        let mut persistent_tasks_handle = None;
+
         let event_fut = async {
             while let Some(event) = events.next().await {
                 let event = event?;
@@ -103,6 +103,7 @@ impl WatchClient {
                     &base,
                     &telemetry,
                     &handler,
+                    &mut persistent_tasks_handle,
                 )
                 .await?;
             }
@@ -130,6 +131,7 @@ impl WatchClient {
         base: &CommandBase,
         telemetry: &CommandEventBuilder,
         handler: &SignalHandler,
+        persistent_tasks_handle: &mut Option<JoinHandle<Result<i32, run::Error>>>,
     ) -> Result<(), Error> {
         // Should we recover here?
         match event {
@@ -212,8 +214,24 @@ impl WatchClient {
                     .build(handler, telemetry.clone())
                     .await?;
 
-                // Execute run
-                run.run().await?;
+                if run.has_persistent_tasks() {
+                    // Abort old run
+                    if let Some(run) = persistent_tasks_handle.take() {
+                        run.abort();
+                    }
+
+                    let mut persistent_run = run.create_run_for_persistent_tasks();
+                    // If we have persistent tasks, we run them on a separate thread
+                    // since persistent tasks don't finish
+                    *persistent_tasks_handle =
+                        Some(tokio::spawn(async move { persistent_run.run().await }));
+
+                    // But we still run the regular tasks blocking
+                    let mut non_persistent_run = run.create_run_without_persistent_tasks();
+                    non_persistent_run.run().await?;
+                } else {
+                    run.run().await?;
+                }
             }
             proto::package_change_event::Event::Error(proto::PackageChangeError { message }) => {
                 return Err(DaemonError::Unavailable(message).into());

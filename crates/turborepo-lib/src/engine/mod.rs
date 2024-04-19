@@ -175,7 +175,7 @@ impl Engine<Built> {
                     .iter()
                     .any(|idx| {
                         node_distances
-                            .get(&(**idx, node_idx))
+                            .get(&(*idx, node_idx))
                             .map_or(false, |dist| *dist != i32::MAX)
                     })
                     .then_some(node.clone())
