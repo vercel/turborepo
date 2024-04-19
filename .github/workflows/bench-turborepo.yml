@@ -25,12 +25,13 @@ jobs:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-node
 
-      - uses: ./.github/actions/setup-turborepo-environment
+      - name: Setup Turborepo Environment
+        uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Build
-        run: cd cli && make turbo-prod
+        run: pnpm -F cli build:release
 
       - name: Run benchmarks
         run: pnpm -F @turbo/benchmark benchmark
@@ -78,13 +79,14 @@ jobs:
         if: ${{ matrix.os.runner == 'windows-latest'}}
         run: rustup target add x86_64-pc-windows-gnu
 
-      - uses: ./.github/actions/setup-turborepo-environment
+      - name: Setup Turborepo Environment
+        uses: ./.github/actions/setup-turborepo-environment
         with:
           windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Build Turborepo from source
-        run: cd cli && make turbo-prod
+        run: pnpm -F cli build:release
 
       - name: Run benchmarks
         shell: bash

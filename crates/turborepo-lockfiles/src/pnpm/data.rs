@@ -187,7 +187,7 @@ impl PnpmLockfile {
             SupportedLockfileVersion::V5 | SupportedLockfileVersion::V6 => {
                 self.packages.as_ref().map(|pkgs| pkgs.contains_key(key))
             }
-            SupportedLockfileVersion::V7 => {
+            SupportedLockfileVersion::V7AndV9 => {
                 self.snapshots.as_ref().map(|snaps| snaps.contains_key(key))
             }
         }
@@ -221,7 +221,7 @@ impl PnpmLockfile {
             return SupportedLockfileVersion::V5;
         }
         match self.lockfile_version.version.as_str() {
-            "7.0" => SupportedLockfileVersion::V7,
+            "7.0" | "9.0" => SupportedLockfileVersion::V7AndV9,
             _ => SupportedLockfileVersion::V6,
         }
     }
@@ -230,7 +230,7 @@ impl PnpmLockfile {
         match self.version() {
             SupportedLockfileVersion::V5 => format!("/{name}/{version}"),
             SupportedLockfileVersion::V6 => format!("/{name}@{version}"),
-            SupportedLockfileVersion::V7 => format!("{name}@{version}"),
+            SupportedLockfileVersion::V7AndV9 => format!("{name}@{version}"),
         }
     }
 
@@ -298,7 +298,7 @@ impl PnpmLockfile {
             let patch_key = format!("{}@{}", dp.name, dp.version);
             if let Some(patch) = patches.get(&patch_key).filter(|patch| {
                 // In V7 patch hash isn't included in packages key, so no need to check
-                matches!(self.version(), SupportedLockfileVersion::V7)
+                matches!(self.version(), SupportedLockfileVersion::V7AndV9)
                     || dp.patch_hash() == Some(&patch.hash)
             }) {
                 pruned_patches.insert(patch_key, patch.clone());
@@ -604,6 +604,7 @@ mod tests {
     const PNPM_V7: &[u8] = include_bytes!("../../fixtures/pnpm-v7.yaml").as_slice();
     const PNPM_V7_PEER: &[u8] = include_bytes!("../../fixtures/pnpm-v7-peer.yaml").as_slice();
     const PNPM_V7_PATCH: &[u8] = include_bytes!("../../fixtures/pnpm-v7-patch.yaml").as_slice();
+    const PNPM_V9: &[u8] = include_bytes!("../../fixtures/pnpm-v9.yaml").as_slice();
 
     use super::*;
     use crate::{Lockfile, Package};
@@ -615,6 +616,7 @@ mod tests {
     #[test_case(PNPM_V7)]
     #[test_case(PNPM_V7_PEER)]
     #[test_case(PNPM_V7_PATCH)]
+    #[test_case(PNPM_V9)]
     fn test_roundtrip(fixture: &[u8]) {
         let lockfile = PnpmLockfile::from_bytes(fixture).unwrap();
         let serialized_lockfile = serde_yaml::to_string(&lockfile).unwrap();
@@ -855,6 +857,17 @@ mod tests {
             version: "5.1.0(ajv@8.11.0)".into(),
         }))
         ; "v7 peer 2"
+    )]
+    #[test_case(
+        PNPM_V9,
+        "",
+        "turbo",
+        "canary",
+        Ok(Some(crate::Package {
+            key: "turbo@1.13.3-canary.1".into(),
+            version: "1.13.3-canary.1".into(),
+        }))
+        ; "v9"
     )]
     fn test_resolve_package(
         lockfile: &[u8],

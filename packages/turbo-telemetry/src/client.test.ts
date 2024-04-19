@@ -1,17 +1,17 @@
+import { describe, it, mock, beforeEach } from "node:test";
+import { strict as assert } from "node:assert";
 import got from "got";
 import { TelemetryClient } from "./client";
 import { TelemetryConfig } from "./config";
 
-jest.mock("got", () => ({
-  post: jest.fn(),
-}));
-
 describe("TelemetryClient", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    mock.reset();
   });
 
-  it("sends request when batch size is reached", () => {
+  it("sends request when batch size is reached", (t) => {
+    const mockPost = mock.fn();
+    t.mock.method(got, "post", mockPost);
     const config = new TelemetryConfig({
       configPath: "test-config-path",
       config: {
@@ -43,42 +43,87 @@ describe("TelemetryClient", () => {
       status: "end",
     });
 
-    expect(got.post).toHaveBeenCalled();
-    expect(got.post).toHaveBeenCalledWith(
-      "https://example.com/api/turborepo/v1/events",
-      expect.objectContaining({
-        json: [
-          {
-            package: {
-              id: expect.any(String) as string,
-              key: "command:test-command",
-              value: "start",
-              package_name: "create-turbo",
-              package_version: "1.0.0",
-            },
-          },
-          {
-            package: {
-              id: expect.any(String) as string,
-              key: "command:test-command",
-              value: "end",
-              package_name: "create-turbo",
-              package_version: "1.0.0",
-            },
-          },
-        ],
-        headers: {
-          "User-Agent": expect.stringContaining("create-turbo 1.0.0") as string,
-          "x-turbo-session-id": expect.any(String) as string,
-          "x-turbo-telemetry-id": "telemetry-test-id",
-        },
-      })
+    assert.equal(mockPost.mock.callCount() > 0, true);
+
+    assert.deepEqual(
+      mockPost.mock.calls[0].arguments[0],
+      "https://example.com/api/turborepo/v1/events"
     );
 
-    expect(client.hasPendingEvents()).toBe(false);
+    assert.equal(mockPost.mock.calls[0].arguments[1].json.length, 2);
+    assert.deepEqual(
+      Object.keys(mockPost.mock.calls[0].arguments[1].json[0].package),
+      ["id", "key", "value", "package_name", "package_version", "parent_id"]
+    );
+
+    assert.equal(
+      typeof mockPost.mock.calls[0].arguments[1].json[0].package.id,
+      "string"
+    );
+    assert.equal(
+      mockPost.mock.calls[0].arguments[1].json[0].package.key,
+      "command:test-command"
+    );
+    assert.equal(
+      mockPost.mock.calls[0].arguments[1].json[0].package.value,
+      "start"
+    );
+    assert.equal(
+      mockPost.mock.calls[0].arguments[1].json[0].package.package_name,
+      "create-turbo"
+    );
+    assert.equal(
+      mockPost.mock.calls[0].arguments[1].json[0].package.package_version,
+      "1.0.0"
+    );
+
+    assert.deepEqual(
+      Object.keys(mockPost.mock.calls[0].arguments[1].json[1].package),
+      ["id", "key", "value", "package_name", "package_version", "parent_id"]
+    );
+    assert.equal(
+      typeof mockPost.mock.calls[0].arguments[1].json[1].package.id,
+      "string"
+    );
+    assert.equal(
+      mockPost.mock.calls[0].arguments[1].json[1].package.key,
+      "command:test-command"
+    );
+    assert.equal(
+      mockPost.mock.calls[0].arguments[1].json[1].package.value,
+      "end"
+    );
+    assert.equal(
+      mockPost.mock.calls[0].arguments[1].json[1].package.package_name,
+      "create-turbo"
+    );
+    assert.equal(
+      mockPost.mock.calls[0].arguments[1].json[1].package.package_version,
+      "1.0.0"
+    );
+
+    assert.equal(
+      "x-turbo-session-id" in mockPost.mock.calls[0].arguments[1].headers,
+      true
+    );
+    assert.equal(
+      "x-turbo-telemetry-id" in mockPost.mock.calls[0].arguments[1].headers,
+      true
+    );
+    assert.equal(
+      /create-turbo 1\.0\.0/.test(
+        mockPost.mock.calls[0].arguments[1].headers["User-Agent"]
+      ),
+      true
+    );
+
+    assert.equal(client.hasPendingEvents(), false);
   });
 
-  it("does not send request before batch size is reached", () => {
+  it("does not send request before batch size is reached", (t) => {
+    const mockPost = mock.fn();
+    t.mock.method(got, "post", mockPost);
+
     const config = new TelemetryConfig({
       configPath: "test-config-path",
       config: {
@@ -101,11 +146,13 @@ describe("TelemetryClient", () => {
       command: "test-command",
       status: "start",
     });
-    expect(got.post).not.toHaveBeenCalled();
-    expect(client.hasPendingEvents()).toBe(true);
+    assert.equal(mockPost.mock.callCount(), 0);
+    assert.equal(client.hasPendingEvents(), true);
   });
 
-  it("does not send request if telemetry is disabled", () => {
+  it("does not send request if telemetry is disabled", (t) => {
+    const mockPost = mock.fn();
+    t.mock.method(got, "post", mockPost);
     const config = new TelemetryConfig({
       configPath: "test-config-path",
       config: {
@@ -128,11 +175,16 @@ describe("TelemetryClient", () => {
       command: "test-command",
       status: "start",
     });
-    expect(got.post).not.toHaveBeenCalled();
-    expect(client.hasPendingEvents()).toBe(false);
+    assert.equal(mockPost.mock.callCount(), 0);
+    assert.equal(client.hasPendingEvents(), false);
   });
 
-  it("flushes events when closed even if batch size is not reached", async () => {
+  it("flushes events when closed even if batch size is not reached", async (t) => {
+    const mockPost = mock.fn((_url, _opts) => {
+      // do nothing with either arg
+    });
+    t.mock.method(got, "post", mockPost);
+
     const config = new TelemetryConfig({
       configPath: "test-config-path",
       config: {
@@ -159,33 +211,57 @@ describe("TelemetryClient", () => {
       command: "test-command",
       status: "start",
     });
-    expect(got.post).not.toHaveBeenCalled();
+
+    assert.equal(mockPost.mock.callCount(), 0);
 
     await client.close();
 
-    expect(got.post).toHaveBeenCalled();
-    expect(got.post).toHaveBeenCalledWith(
-      "https://example.com/api/turborepo/v1/events",
-      expect.objectContaining({
-        json: [
-          {
-            package: {
-              id: expect.any(String) as string,
-              key: "command:test-command",
-              value: "start",
-              package_name: "create-turbo",
-              package_version: "1.0.0",
-            },
-          },
-        ],
-        headers: {
-          "User-Agent": expect.stringContaining("create-turbo 1.0.0") as string,
-          "x-turbo-session-id": expect.any(String) as string,
-          "x-turbo-telemetry-id": "telemetry-test-id",
-        },
-      })
+    assert.equal(mockPost.mock.callCount(), 1);
+    assert.equal(
+      mockPost.mock.calls[0].arguments[0],
+      "https://example.com/api/turborepo/v1/events"
     );
 
-    expect(client.hasPendingEvents()).toBe(false);
+    assert.equal(mockPost.mock.calls[0].arguments[1].json.length, 1);
+    assert.deepEqual(
+      Object.keys(mockPost.mock.calls[0].arguments[1].json[0].package),
+      ["id", "key", "value", "package_name", "package_version", "parent_id"]
+    );
+    assert.equal(
+      typeof mockPost.mock.calls[0].arguments[1].json[0].package.id,
+      "string"
+    );
+    assert.equal(
+      mockPost.mock.calls[0].arguments[1].json[0].package.key,
+      "command:test-command"
+    );
+    assert.equal(
+      mockPost.mock.calls[0].arguments[1].json[0].package.value,
+      "start"
+    );
+    assert.equal(
+      mockPost.mock.calls[0].arguments[1].json[0].package.package_name,
+      "create-turbo"
+    );
+    assert.equal(
+      mockPost.mock.calls[0].arguments[1].json[0].package.package_version,
+      "1.0.0"
+    );
+
+    assert.equal(
+      "x-turbo-session-id" in mockPost.mock.calls[0].arguments[1].headers,
+      true
+    );
+    assert.equal(
+      "x-turbo-telemetry-id" in mockPost.mock.calls[0].arguments[1].headers,
+      true
+    );
+
+    assert.match(
+      mockPost.mock.calls[0].arguments[1].headers["User-Agent"],
+      /create-turbo 1\.0\.0/
+    );
+
+    assert.equal(client.hasPendingEvents(), false);
   });
 });

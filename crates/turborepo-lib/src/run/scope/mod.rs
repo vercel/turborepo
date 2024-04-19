@@ -1,7 +1,7 @@
 mod change_detector;
 mod filter;
 mod simple_glob;
-mod target_selector;
+pub mod target_selector;
 
 use std::collections::HashSet;
 

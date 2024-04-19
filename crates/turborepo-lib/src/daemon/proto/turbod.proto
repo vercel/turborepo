@@ -27,6 +27,8 @@ service Turbod {
   rpc DiscoverPackagesBlocking (DiscoverPackagesRequest) returns (DiscoverPackagesResponse);
 
   rpc PackageChanges (PackageChangesRequest) returns (stream PackageChangeEvent);
+
+  rpc GetFileHashes (GetFileHashesRequest) returns (GetFileHashesResponse);
 }
 
 message HelloRequest {
@@ -94,7 +96,8 @@ message DiscoverPackagesRequest {
 
 }
 
-message PackageChangesRequest {}
+message PackageChangesRequest {
+}
 
 message PackageChangeEvent {
   oneof event {
@@ -122,7 +125,6 @@ message DiscoverPackagesResponse {
 message PackageFiles {
   string package_json = 1;
   optional string turbo_json = 2;
-
 }
 
 enum PackageManager {
@@ -133,4 +135,15 @@ enum PackageManager {
   Yarn = 4;
   Bun = 5;
   Pnpm9 = 6;
+}
+
+message GetFileHashesRequest {
+  // AnchoredSystemPathBuf
+  string package_path = 1;
+  repeated string input_globs = 2;
+}
+
+message GetFileHashesResponse {
+  // RelativeUnixPathBuf -> Hash
+  map<string, string> file_hashes = 1;
 }
