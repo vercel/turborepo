@@ -51,6 +51,8 @@ pub enum Error {
     ConnectionClosed,
     #[error("watch interrupted due to signal")]
     SignalInterrupt,
+    #[error("package change error")]
+    PackageChangeError(#[from] tonic::Status),
 }
 
 impl WatchClient {
@@ -94,7 +96,7 @@ impl WatchClient {
             HashMap::new();
         let event_fut = async {
             while let Some(event) = events.next().await {
-                let event = event.unwrap();
+                let event = event?;
                 Self::handle_change_event(
                     &mut run,
                     event.event.unwrap(),
