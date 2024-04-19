@@ -632,7 +632,7 @@ impl DepGraph {
                     ModuleDecl::ExportDefaultDecl(_) | ModuleDecl::ExportDefaultExpr(_) => {
                         exports.push((js_word!("default"), Default::default()));
                     }
-                    ModuleDecl::ExportAll(ExportAll { src, .. }) => {
+                    ModuleDecl::ExportAll(item) => {
                         // One item for the import for re-export
                         let id = ItemId::Item {
                             index,
@@ -644,11 +644,9 @@ impl DepGraph {
                             ItemData {
                                 is_hoisted: true,
                                 side_effects: true,
-                                content: ModuleItem::ModuleDecl(ModuleDecl::Import(ImportDecl {
-                                    specifiers: Default::default(),
-                                    src: src.clone(),
-                                    ..ImportDecl::dummy()
-                                })),
+                                content: ModuleItem::ModuleDecl(ModuleDecl::ExportAll(
+                                    item.clone(),
+                                )),
                                 ..Default::default()
                             },
                         );
