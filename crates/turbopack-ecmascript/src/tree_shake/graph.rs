@@ -10,7 +10,7 @@ use petgraph::{
 };
 use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
 use swc_core::{
-    common::{util::take::Take, DUMMY_SP},
+    common::{util::take::Take, SyntaxContext, DUMMY_SP},
     ecma::{
         ast::{
             op, ClassDecl, Decl, ExportDecl, ExportNamedSpecifier, ExportSpecifier, Expr, ExprStmt,
@@ -27,6 +27,7 @@ use super::{
     util::{ids_captured_by, ids_used_by, ids_used_by_ignoring_nested},
     Key,
 };
+use crate::analyzer::imports::orig_name;
 
 /// The id of an item
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -547,11 +548,66 @@ impl DepGraph {
                         }
                         _ => {}
                     },
-                    ModuleDecl::ExportNamed(NamedExport {
-                        src, specifiers, ..
-                    }) if src.is_none() => {
+                    ModuleDecl::ExportNamed(item) => {
+                        if let Some(src) = &item.src {
+                            // One item for the import for re-export
+                            let id = ItemId::Item {
+                                index,
+                                kind: ItemIdItemKind::ImportOfModule,
+                            };
+                            ids.push(id.clone());
+                            items.insert(
+                                id,
+                                ItemData {
+                                    is_hoisted: true,
+                                    side_effects: true,
+                                    content: ModuleItem::ModuleDecl(ModuleDecl::Import(
+                                        ImportDecl {
+                                            specifiers: Default::default(),
+                                            src: src.clone(),
+                                            ..ImportDecl::dummy()
+                                        },
+                                    )),
+                                    ..Default::default()
+                                },
+                            );
+                        }
+
                         // We are not interested in re-exports.
-                        for s in specifiers {
+                        for (si, s) in item.specifiers.iter().enumerate() {
+                            let local = match s {
+                                ExportSpecifier::Named(s) => Some(orig_name(&s.orig)),
+                                ExportSpecifier::Default(s) => Some("default".into()),
+                                ExportSpecifier::Namespace(s) => None,
+                            };
+                            let local = local.map(|v| (v, SyntaxContext::empty()));
+
+                            if let Some(..) = &item.src {
+                                let id = ItemId::Item {
+                                    index,
+                                    kind: ItemIdItemKind::ImportBinding(si as _),
+                                };
+                                ids.push(id.clone());
+
+                                if let Some(local) = local {
+                                    items.insert(
+                                        id,
+                                        ItemData {
+                                            is_hoisted: true,
+                                            var_decls: [local].into_iter().collect(),
+                                            pure: true,
+                                            content: ModuleItem::ModuleDecl(
+                                                ModuleDecl::ExportNamed(NamedExport {
+                                                    specifiers: vec![s.clone()],
+                                                    ..item.clone()
+                                                }),
+                                            ),
+                                            ..Default::default()
+                                        },
+                                    );
+                                }
+                            }
+
                             match s {
                                 ExportSpecifier::Named(s) => {
                                     match s.exported.as_ref().unwrap_or(&s.orig) {
