@@ -604,22 +604,6 @@ impl TurboJson {
             }
         };
 
-        if repo_root.join_component("Cargo.toml").exists() {
-            turbo_json.pipeline.insert(
-                TaskName::from("build").into_root_task(),
-                Spanned::new(RawTaskDefinition {
-                    cache: Some(Spanned::new(true)),
-                    inputs: Some(vec![
-                        Spanned::new("Cargo.toml".into()),
-                        Spanned::new("Cargo.lock".into()),
-                        Spanned::new("**/*.rs".into()),
-                    ]),
-                    outputs: Some(vec![Spanned::new("target".into())]),
-                    ..RawTaskDefinition::default()
-                }),
-            );
-        }
-
         // TODO: Add location info from package.json
         for script_name in root_package_json.scripts.keys() {
             let task_name = TaskName::from(script_name.as_str());
