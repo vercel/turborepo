@@ -607,10 +607,13 @@ impl proto::turbod_server::Turbod for TurboGrpcServiceInner {
         tokio::spawn(async move {
             loop {
                 let event = match package_changes_rx.recv().await {
-                    Err(err) => {
-                        error!("package changes stream closed: {}", err);
-                        break;
-                    }
+                    Err(err) => proto::PackageChangeEvent {
+                        event: Some(proto::package_change_event::Event::Error(
+                            proto::PackageChangeError {
+                                message: err.to_string(),
+                            },
+                        )),
+                    },
                     Ok(PackageChangeEvent::Package { name }) => proto::PackageChangeEvent {
                         event: Some(proto::package_change_event::Event::PackageChanged(
                             proto::PackageChanged {

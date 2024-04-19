@@ -117,6 +117,10 @@ impl CommandBase {
         &self.args
     }
 
+    pub fn args_mut(&mut self) -> &mut Args {
+        &mut self.args
+    }
+
     pub fn api_client(&self) -> Result<APIClient, ConfigError> {
         let config = self.config()?;
         let api_url = config.api_url();

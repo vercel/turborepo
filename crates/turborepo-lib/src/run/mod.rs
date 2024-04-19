@@ -62,6 +62,7 @@ pub struct Run {
     engine: Arc<Engine>,
     task_access: TaskAccess,
     daemon: Option<DaemonClient<DaemonConnector>>,
+    should_print_prelude: bool,
 }
 
 impl Run {
@@ -97,7 +98,7 @@ impl Run {
     }
 
     pub async fn run(&mut self) -> Result<i32, Error> {
-        if self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none() {
+        if self.should_print_prelude {
             self.print_run_prelude();
         }
         if let Some(subscriber) = self.signal_handler.subscribe() {
