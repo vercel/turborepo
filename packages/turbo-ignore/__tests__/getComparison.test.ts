@@ -1,3 +1,4 @@
+// eslint-disable-next-line camelcase -- This is a test file
 import child_process from "node:child_process";
 import { spyConsole, mockEnv, validateLogs } from "@turbo/test-utils";
 import { getComparison } from "../src/getComparison";

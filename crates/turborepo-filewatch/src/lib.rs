@@ -38,6 +38,7 @@ pub mod cookies;
 #[cfg(target_os = "macos")]
 mod fsevent;
 pub mod globwatcher;
+pub mod hash_watcher;
 mod optional_watch;
 pub mod package_watcher;
 

@@ -3,7 +3,7 @@ import { getWorkspace } from "../src/getWorkspace";
 
 describe("getWorkspace()", () => {
   const mockConsole = spyConsole();
-  it("getWorkspace returns workspace from arg", async () => {
+  it("getWorkspace returns workspace from arg", () => {
     expect(
       getWorkspace({
         workspace: "test-workspace",
@@ -16,7 +16,7 @@ describe("getWorkspace()", () => {
     );
   });
 
-  it("getWorkspace returns workspace from package.json", async () => {
+  it("getWorkspace returns workspace from package.json", () => {
     expect(
       getWorkspace({
         directory: "./__fixtures__/app",
@@ -28,7 +28,7 @@ describe("getWorkspace()", () => {
     );
   });
 
-  it("getWorkspace used current directory if not specified", async () => {
+  it("getWorkspace used current directory if not specified", () => {
     expect(getWorkspace({})).toEqual("turbo-ignore");
     expect(mockConsole.log).toHaveBeenCalledWith(
       "≫  ",
@@ -36,7 +36,7 @@ describe("getWorkspace()", () => {
     );
   });
 
-  it("getWorkspace returns null when no arg is provided and package.json is missing name field", async () => {
+  it("getWorkspace returns null when no arg is provided and package.json is missing name field", () => {
     expect(
       getWorkspace({
         directory: "./__fixtures__/invalid-app",
@@ -48,7 +48,7 @@ describe("getWorkspace()", () => {
     );
   });
 
-  it("getWorkspace returns null when no arg is provided and package.json can be found", async () => {
+  it("getWorkspace returns null when no arg is provided and package.json can be found", () => {
     expect(
       getWorkspace({
         directory: "./__fixtures__/no-app",

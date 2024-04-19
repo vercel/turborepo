@@ -26,7 +26,7 @@ This sounds complex, but it's extremely easy to set up.
 
 ## Our first internal package
 
-We're going to create a shared `math-helpers` package inside our monorepo.
+We're going to create a shared `@repo/math-helpers` package inside our monorepo.
 
 ### 1. Create your monorepo
 
@@ -44,7 +44,7 @@ Create a `package.json`:
 
 ```json filename="packages/math-helpers/package.json"
 {
-  "name": "math-helpers",
+  "name": "@repo/math-helpers",
   "version": "0.0.1",
   "dependencies": {
     // Use whatever version of TypeScript you're using
@@ -95,7 +95,7 @@ We're now going to import the package and see what happens. Go into one of your 
 ```jsonc filename="apps/web/package.json"
 {
   "dependencies": {
-    "math-helpers": "*"
+    "@repo/math-helpers": "*"
   }
 }
 ```
@@ -104,7 +104,7 @@ We're now going to import the package and see what happens. Go into one of your 
 ```jsonc filename="apps/web/package.json"
 {
   "dependencies": {
-    "math-helpers": "*"
+    "@repo/math-helpers": "*"
   }
 }
 ```
@@ -113,7 +113,7 @@ We're now going to import the package and see what happens. Go into one of your 
 ```jsonc filename="apps/web/package.json"
 {
   "dependencies": {
-    "math-helpers": "workspace:*"
+    "@repo/math-helpers": "workspace:*"
   }
 }
 ```
@@ -122,10 +122,10 @@ We're now going to import the package and see what happens. Go into one of your 
 
 [Install all packages from root](/repo/docs/handbook/package-installation) to ensure that dependency works.
 
-Now add an import from `math-helpers` into one of your app's source files:
+Now add an import from `@repo/math-helpers` into one of your app's source files:
 
 ```diff
-+ import { add } from "math-helpers";
++ import { add } from "@repo/math-helpers";
 
 + add(1, 2);
 ```
@@ -133,7 +133,7 @@ Now add an import from `math-helpers` into one of your app's source files:
 You'll likely see an error!
 
 ```
-Cannot find module 'math-helpers' or its corresponding type declarations.
+Cannot find module '@repo/math-helpers' or its corresponding type declarations.
 ```
 
 That's because we've missed a step. We haven't told our `math-helpers/package.json` what the entry point to our package is.
@@ -144,7 +144,7 @@ Go back to `packages/math-helpers/package.json` and add a field: `exports`:
 
 ```json filename="packages/math-helpers/package.json"
 {
-  "name": "math-helpers",
+  "name": "@repo/math-helpers",
   "exports": {
     ".": "./src/index.ts"
   },
@@ -154,7 +154,7 @@ Go back to `packages/math-helpers/package.json` and add a field: `exports`:
 }
 ```
 
-Now, anything that imports our `math-helpers` module will be pointed directly towards the `src/index.ts` file - _that's_ the file that they will import.
+Now, anything that imports our `@repo/math-helpers` module will be pointed directly towards the `src/index.ts` file - _that's_ the file that they will import.
 
 Go back to `apps/web/pages/index.tsx`. The error should be gone!
 
@@ -203,7 +203,7 @@ The fix is simple - we need to tell Next.js to bundle the files from certain pac
     ```ts filename="apps/web/next.config.js"
     /** @type {import('next').NextConfig} */
     const nextConfig = {
-      transpilePackages: ['math-helpers'],
+      transpilePackages: ['@repo/math-helpers'],
     };
 
     module.exports = nextConfig;
@@ -221,7 +221,7 @@ The fix is simple - we need to tell Next.js to bundle the files from certain pac
 
 ### 7. Summary
 
-We are now able to add any amount of code into our `math-helpers` package, and use it in any app in our monorepo. We don't even need to build our package - it just works.
+We are now able to add any amount of code into our `@repo/math-helpers` package, and use it in any app in our monorepo. We don't even need to build our package - it just works.
 
 This pattern is extremely powerful for creating pieces of code that can be easily shared between teams.
 

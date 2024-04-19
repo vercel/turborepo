@@ -12,7 +12,7 @@ use ratatui::{
     },
     Terminal,
 };
-use tracing::debug;
+use tracing::{debug, debug_span};
 use tui_term::widget::PseudoTerminal;
 use turborepo_vt100 as vt100;
 
@@ -188,13 +188,24 @@ impl<W> TerminalOutput<W> {
         self.cols = cols;
     }
 
+    #[tracing::instrument(skip(self, terminal))]
     fn persist_screen<B: Backend>(
         &mut self,
         task_name: &str,
         terminal: &mut Terminal<B>,
     ) -> Result<(), Error> {
-        let screen = self.parser.entire_screen();
+        let mut screen = self.parser.entire_screen();
+        let width = terminal.size()?.width;
+        // number of lines we can render before hitting the hidden area limit of ratatui
+        let max_lines = (u16::MAX / width).saturating_sub(2);
         let (rows, _) = screen.size();
+        let lines_to_render = if rows <= (max_lines as usize) {
+            (rows + 2) as u16
+        } else {
+            screen.with_max_lines(Some(max_lines as usize));
+            max_lines + 2
+        };
+        debug!("rendering {} lines", lines_to_render);
         let mut cursor = tui_term::widget::Cursor::default();
         cursor.hide();
         let title = format!(" {task_name} >");
@@ -203,9 +214,10 @@ impl<W> TerminalOutput<W> {
             .title(title.as_str())
             .title(Title::from(title.as_str()).position(Position::Bottom));
         let term = PseudoTerminal::new(&screen).cursor(cursor).block(block);
-        terminal.insert_before((rows as u16).saturating_add(2), |buf| {
-            term.render(buf.area, buf)
-        })?;
+        let span = debug_span!("insert before");
+        let _guard = span.enter();
+        terminal.insert_before(lines_to_render, |buf| term.render(buf.area, buf))?;
+        drop(_guard);
         self.has_been_persisted = true;
 
         Ok(())
@@ -237,7 +249,7 @@ mod test {
     // Used by assert_buffer_eq
     #[allow(unused_imports)]
     use indoc::indoc;
-    use ratatui::{assert_buffer_eq, buffer::Buffer, layout::Rect, style::Style};
+    use ratatui::{assert_buffer_eq, buffer::Buffer, layout::Rect};
 
     use super::*;
 

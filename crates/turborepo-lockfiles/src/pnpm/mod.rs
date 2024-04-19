@@ -10,7 +10,7 @@ use crate::Lockfile;
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("error parsing dependency path: {0}")]
-    DependencyPath(#[from] nom::error::Error<String>),
+    DependencyPath(#[from] dep_path::Error),
     #[error("Unable to find '{0}' other than reference in dependenciesMeta")]
     MissingInjectedPackage(String),
     #[error("unsupported lockfile version: {0}")]
@@ -33,7 +33,10 @@ enum VersionFormat {
 enum SupportedLockfileVersion {
     V5,
     V6,
-    V7,
+    // As of pnpm@9.0.0-rc.0 the lockfile version will now match the pnpm version
+    // Lockfile version 7.0 and 9.0 are both the same version
+    // See https://github.com/pnpm/pnpm/pull/7861
+    V7AndV9,
 }
 
 pub fn pnpm_subgraph(
