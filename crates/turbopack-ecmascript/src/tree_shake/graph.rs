@@ -13,10 +13,10 @@ use swc_core::{
     common::{util::take::Take, SyntaxContext, DUMMY_SP},
     ecma::{
         ast::{
-            op, ClassDecl, Decl, ExportDecl, ExportNamedSpecifier, ExportSpecifier, Expr, ExprStmt,
-            FnDecl, Id, Ident, ImportDecl, ImportNamedSpecifier, ImportSpecifier, KeyValueProp,
-            Lit, Module, ModuleDecl, ModuleExportName, ModuleItem, NamedExport, ObjectLit, Prop,
-            PropName, PropOrSpread, Stmt, VarDecl,
+            op, ClassDecl, Decl, ExportAll, ExportDecl, ExportNamedSpecifier, ExportSpecifier,
+            Expr, ExprStmt, FnDecl, Id, Ident, ImportDecl, ImportNamedSpecifier, ImportSpecifier,
+            KeyValueProp, Lit, Module, ModuleDecl, ModuleExportName, ModuleItem, NamedExport,
+            ObjectLit, Prop, PropName, PropOrSpread, Stmt, VarDecl,
         },
         atoms::{js_word, JsWord},
         utils::{find_pat_ids, quote_ident},
@@ -577,12 +577,12 @@ impl DepGraph {
                         for (si, s) in item.specifiers.iter().enumerate() {
                             let local = match s {
                                 ExportSpecifier::Named(s) => Some(orig_name(&s.orig)),
-                                ExportSpecifier::Default(s) => Some("default".into()),
-                                ExportSpecifier::Namespace(s) => None,
+                                ExportSpecifier::Default(..) => Some("default".into()),
+                                ExportSpecifier::Namespace(..) => None,
                             };
                             let local = local.map(|v| (v, SyntaxContext::empty()));
 
-                            if let Some(..) = &item.src {
+                            if item.src.is_some() {
                                 let id = ItemId::Item {
                                     index,
                                     kind: ItemIdItemKind::ImportBinding(si as _),
@@ -632,8 +632,26 @@ impl DepGraph {
                     ModuleDecl::ExportDefaultDecl(_) | ModuleDecl::ExportDefaultExpr(_) => {
                         exports.push((js_word!("default"), Default::default()));
                     }
-                    ModuleDecl::ExportAll(_) => {
-                        // noop as this is a reexport.
+                    ModuleDecl::ExportAll(ExportAll { src, .. }) => {
+                        // One item for the import for re-export
+                        let id = ItemId::Item {
+                            index,
+                            kind: ItemIdItemKind::ImportOfModule,
+                        };
+                        ids.push(id.clone());
+                        items.insert(
+                            id,
+                            ItemData {
+                                is_hoisted: true,
+                                side_effects: true,
+                                content: ModuleItem::ModuleDecl(ModuleDecl::Import(ImportDecl {
+                                    specifiers: Default::default(),
+                                    src: src.clone(),
+                                    ..ImportDecl::dummy()
+                                })),
+                                ..Default::default()
+                            },
+                        );
                     }
                     _ => {}
                 }
