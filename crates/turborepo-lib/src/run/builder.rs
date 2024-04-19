@@ -63,7 +63,7 @@ pub struct RunBuilder {
     // We will then prune away any tasks that do not depend on tasks inside
     // this package.
     entrypoint_package: Option<PackageName>,
-    should_print_prelude: Option<bool>,
+    should_print_prelude_override: Option<bool>,
 }
 
 impl RunBuilder {
@@ -115,12 +115,17 @@ impl RunBuilder {
             experimental_ui,
             analytics_sender: None,
             entrypoint_package: None,
-            should_print_prelude: None,
+            should_print_prelude_override: None,
         })
     }
 
     pub fn with_entrypoint_package(mut self, entrypoint_package: PackageName) -> Self {
         self.entrypoint_package = Some(entrypoint_package);
+        self
+    }
+
+    pub fn hide_prelude(mut self) -> Self {
+        self.should_print_prelude_override = Some(false);
         self
     }
 
@@ -134,11 +139,6 @@ impl RunBuilder {
 
     pub fn with_analytics_sender(mut self, analytics_sender: Option<AnalyticsSender>) -> Self {
         self.analytics_sender = analytics_sender;
-        self
-    }
-
-    pub fn hide_prelude(mut self) -> Self {
-        self.should_print_prelude = Some(false);
         self
     }
 
@@ -395,9 +395,9 @@ impl RunBuilder {
             self.opts.run_opts.env_mode = EnvMode::Strict;
         }
 
-        let should_print_prelude = self
-            .should_print_prelude
-            .unwrap_or(self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none());
+        let should_print_prelude = self.should_print_prelude_override.unwrap_or_else(|| {
+            self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none()
+        });
 
         Ok(Run {
             version: self.version,
