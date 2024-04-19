@@ -112,7 +112,6 @@ fn parse_dep_path_v9(input: &str) -> Result<DepPath, Error> {
 
     let (version, peer_suffix) = match version.find('(') {
         Some(paren_index) if version.ends_with(')') => {
-            // TODO: safety of the split?
             let (version, peer_suffix) = version.split_at(paren_index);
             (version, Some(peer_suffix))
         }
