@@ -545,27 +545,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
 
     let mut evaluation_references = Vec::new();
 
-    vdbg!("Part of module", part);
-    let part_v = match part {
-        Some(v) => Some(v.await?),
-        None => None,
-    };
-    for (i, r) in eval_context
-        .imports
-        .references()
-        .filter(|r| {
-            // Side effect imports generated for ImportItem while splitting module should be
-            // skipped
-            match &r.imported_symbol {
-                ImportedSymbol::Namespace => !matches!(
-                    part_v.as_deref(),
-                    Some(ModulePart::Exports | ModulePart::Facade)
-                ),
-                _ => true,
-            }
-        })
-        .enumerate()
-    {
+    for (i, r) in eval_context.imports.references().enumerate() {
         let r = EsmAssetReference::new(
             origin,
             Request::parse(Value::new(r.module_path.to_string().into())),
