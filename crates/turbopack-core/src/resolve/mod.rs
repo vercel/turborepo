@@ -1919,7 +1919,31 @@ async fn resolve_relative_request(
                     let Some(matched_pattern) = matched_pattern.strip_suffix(ext) else {
                         continue;
                     };
-                    if path_pattern.is_match(matched_pattern) {
+
+                    if !fragment_val.is_empty() {
+                        // If the fragment is not empty, we need to strip it from the matched
+                        // pattern
+                        if let Some(matched_pattern) = matched_pattern
+                            .strip_suffix(&**fragment_val)
+                            .and_then(|s| s.strip_suffix('#'))
+                        {
+                            results.push(
+                                resolved(
+                                    RequestKey::new(matched_pattern.to_string()),
+                                    *path,
+                                    lookup_path,
+                                    request,
+                                    options_value,
+                                    options,
+                                    query,
+                                    Vc::cell(String::new()),
+                                )
+                                .await?,
+                            );
+                            pushed = true;
+                        }
+                    }
+                    if !pushed && path_pattern.is_match(matched_pattern) {
                         results.push(
                             resolved(
                                 RequestKey::new(matched_pattern.to_string()),
