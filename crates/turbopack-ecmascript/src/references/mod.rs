@@ -559,7 +559,8 @@ pub(crate) async fn analyse_ecmascript_module_internal(
                     }
                     ImportedSymbol::Symbol(name) => Some(ModulePart::export(name.to_string())),
                     ImportedSymbol::Part(part_id) => Some(ModulePart::internal(*part_id)),
-                    ImportedSymbol::Namespace => None,
+                    // We cannot use None here, because it becomes ModulePart::facade()
+                    ImportedSymbol::Namespace => Some(ModulePart::exports()),
                     ImportedSymbol::Exports => Some(ModulePart::exports()),
                 },
                 Some(TreeShakingMode::ReexportsOnly) => match &r.imported_symbol {
@@ -568,7 +569,8 @@ pub(crate) async fn analyse_ecmascript_module_internal(
                         Some(ModulePart::evaluation())
                     }
                     ImportedSymbol::Symbol(name) => Some(ModulePart::export(name.to_string())),
-                    ImportedSymbol::Namespace => None,
+                    // We cannot use None here, because it becomes ModulePart::facade()
+                    ImportedSymbol::Namespace => Some(ModulePart::exports()),
                     ImportedSymbol::Part(part_id) => Some(ModulePart::internal(*part_id)),
                     ImportedSymbol::Exports => Some(ModulePart::exports()),
                 },
