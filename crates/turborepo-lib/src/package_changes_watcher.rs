@@ -1,16 +1,25 @@
-use std::{cell::RefCell, collections::HashSet, ops::DerefMut};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    ops::DerefMut,
+    sync::Arc,
+};
 
 use ignore::gitignore::Gitignore;
 use notify::Event;
 use radix_trie::{Trie, TrieCommon};
 use tokio::sync::{broadcast, oneshot, Mutex};
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf};
-use turborepo_filewatch::{NotifyError, OptionalWatch};
+use turborepo_filewatch::{
+    hash_watcher::{HashSpec, HashWatcher},
+    NotifyError, OptionalWatch,
+};
 use turborepo_repository::{
     change_mapper::{ChangeMapper, GlobalDepsPackageChangeMapper, PackageChanges},
     package_graph::{PackageGraph, PackageGraphBuilder, PackageName, WorkspacePackage},
     package_json::PackageJson,
 };
+use turborepo_scm::package_deps::GitHashes;
 
 use crate::turbo_json::TurboJson;
 
@@ -35,11 +44,17 @@ impl PackageChangesWatcher {
     pub fn new(
         repo_root: AbsoluteSystemPathBuf,
         file_events_lazy: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
+        hash_watcher: Arc<HashWatcher>,
     ) -> Self {
         let (exit_tx, exit_rx) = oneshot::channel();
         let (package_change_events_tx, package_change_events_rx) =
             broadcast::channel(CHANGE_EVENT_CHANNEL_CAPACITY);
-        let subscriber = Subscriber::new(repo_root, file_events_lazy, package_change_events_tx);
+        let subscriber = Subscriber::new(
+            repo_root,
+            file_events_lazy,
+            package_change_events_tx,
+            hash_watcher,
+        );
 
         let _handle = tokio::spawn(subscriber.watch(exit_rx));
         Self {
@@ -80,6 +95,7 @@ struct Subscriber {
     changed_files: Mutex<RefCell<ChangedFiles>>,
     repo_root: AbsoluteSystemPathBuf,
     package_change_events_tx: broadcast::Sender<PackageChangeEvent>,
+    hash_watcher: Arc<HashWatcher>,
 }
 
 // This is a workaround because `ignore` doesn't match against a path's
@@ -127,12 +143,14 @@ impl Subscriber {
         repo_root: AbsoluteSystemPathBuf,
         file_events_lazy: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
         package_change_events_tx: broadcast::Sender<PackageChangeEvent>,
+        hash_watcher: Arc<HashWatcher>,
     ) -> Self {
         Subscriber {
             repo_root,
             file_events_lazy,
             changed_files: Default::default(),
             package_change_events_tx,
+            hash_watcher,
         }
     }
 
@@ -170,6 +188,33 @@ impl Subscriber {
             },
             root_gitignore,
         ))
+    }
+
+    async fn is_same_hash(
+        &self,
+        pkg: &WorkspacePackage,
+        package_file_hashes: &mut HashMap<AnchoredSystemPathBuf, GitHashes>,
+    ) -> bool {
+        let Ok(hash) = self
+            .hash_watcher
+            .get_file_hashes(HashSpec {
+                package_path: pkg.path.clone(),
+                // TODO: Support inputs
+                inputs: None,
+            })
+            .await
+        else {
+            return false;
+        };
+
+        let old_hash = package_file_hashes.get(&pkg.path).cloned();
+
+        if Some(&hash) != old_hash.as_ref() {
+            package_file_hashes.insert(pkg.path.clone(), hash);
+            return false;
+        }
+
+        true
     }
 
     async fn watch(mut self, exit_rx: oneshot::Receiver<()>) {
@@ -222,6 +267,9 @@ impl Subscriber {
             else {
                 return;
             };
+            // We store the hash of the package's files. If the hash is already
+            // in here, we don't need to recompute it
+            let mut package_file_hashes = HashMap::new();
 
             let mut change_mapper = match repo_state.get_change_mapper() {
                 Some(change_mapper) => change_mapper,
@@ -335,11 +383,13 @@ impl Subscriber {
                         }
 
                         for pkg in filtered_pkgs {
-                            let _ =
-                                self.package_change_events_tx
-                                    .send(PackageChangeEvent::Package {
+                            if !self.is_same_hash(&pkg, &mut package_file_hashes).await {
+                                let _ = self.package_change_events_tx.send(
+                                    PackageChangeEvent::Package {
                                         name: pkg.name.clone(),
-                                    });
+                                    },
+                                );
+                            }
                         }
                     }
                     Err(err) => {

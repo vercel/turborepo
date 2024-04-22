@@ -136,7 +136,11 @@ impl FileWatching {
             scm,
         ));
 
-        let package_changes_watcher = Arc::new(PackageChangesWatcher::new(repo_root, recv.clone()));
+        let package_changes_watcher = Arc::new(PackageChangesWatcher::new(
+            repo_root,
+            recv.clone(),
+            hash_watcher.clone(),
+        ));
 
         Ok(FileWatching {
             watcher,
