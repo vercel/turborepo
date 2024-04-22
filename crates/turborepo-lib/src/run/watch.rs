@@ -23,6 +23,7 @@ pub struct WatchClient {}
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
     #[error("failed to connect to daemon")]
+    #[diagnostic(transparent)]
     Daemon(#[from] DaemonError),
     #[error("failed to connect to daemon")]
     DaemonConnector(#[from] DaemonConnectorError),
@@ -33,6 +34,7 @@ pub enum Error {
     #[error("could not start turbo")]
     Start(std::io::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Run(#[from] run::Error),
     #[error("`--since` is not supported in watch mode")]
     SinceNotSupported,
