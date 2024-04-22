@@ -362,8 +362,12 @@ pub(super) async fn split(
                 .into_iter()
                 .map(|module| {
                     let program = Program::Module(module);
-                    let eval_context =
-                        EvalContext::new(&program, eval_context.unresolved_mark, Some(source));
+                    let eval_context = EvalContext::new(
+                        &program,
+                        eval_context.unresolved_mark,
+                        false,
+                        Some(source),
+                    );
 
                     ParseResult::cell(ParseResult::Ok {
                         program,
@@ -453,7 +457,7 @@ pub(super) async fn part_of_module(
 
                     let program = Program::Module(module);
                     let eval_context =
-                        EvalContext::new(&program, eval_context.unresolved_mark, None);
+                        EvalContext::new(&program, eval_context.unresolved_mark, true, None);
                     return Ok(ParseResult::Ok {
                         program,
                         comments: comments.clone(),
@@ -505,7 +509,7 @@ pub(super) async fn part_of_module(
 
                     let program = Program::Module(module);
                     let eval_context =
-                        EvalContext::new(&program, eval_context.unresolved_mark, None);
+                        EvalContext::new(&program, eval_context.unresolved_mark, true, None);
                     return Ok(ParseResult::Ok {
                         program,
                         comments: comments.clone(),

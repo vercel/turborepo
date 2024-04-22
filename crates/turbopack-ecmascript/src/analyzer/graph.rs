@@ -268,11 +268,12 @@ impl EvalContext {
     pub fn new(
         module: &Program,
         unresolved_mark: Mark,
+        skip_namespace: bool,
         source: Option<Vc<Box<dyn Source>>>,
     ) -> Self {
         Self {
             unresolved_mark,
-            imports: ImportMap::analyze(module, source),
+            imports: ImportMap::analyze(module, skip_namespace, source),
         }
     }
 
