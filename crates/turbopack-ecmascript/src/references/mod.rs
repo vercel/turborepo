@@ -546,6 +546,12 @@ pub(crate) async fn analyse_ecmascript_module_internal(
     let mut evaluation_references = Vec::new();
 
     for (i, r) in eval_context.imports.references().enumerate() {
+        // Side effect imports generated for ImportItem while splitting module should be
+        // skipped
+        if part.is_some() && matches!(r.imported_symbol, ImportedSymbol::Namespace) {
+            continue;
+        }
+
         let r = EsmAssetReference::new(
             origin,
             Request::parse(Value::new(r.module_path.to_string().into())),
@@ -559,8 +565,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
                     }
                     ImportedSymbol::Symbol(name) => Some(ModulePart::export(name.to_string())),
                     ImportedSymbol::Part(part_id) => Some(ModulePart::internal(*part_id)),
-                    // We cannot use None here, because it becomes ModulePart::facade()
-                    ImportedSymbol::Namespace => Some(ModulePart::exports()),
+                    ImportedSymbol::Namespace => None,
                     ImportedSymbol::Exports => Some(ModulePart::exports()),
                 },
                 Some(TreeShakingMode::ReexportsOnly) => match &r.imported_symbol {
@@ -569,8 +574,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
                         Some(ModulePart::evaluation())
                     }
                     ImportedSymbol::Symbol(name) => Some(ModulePart::export(name.to_string())),
-                    // We cannot use None here, because it becomes ModulePart::facade()
-                    ImportedSymbol::Namespace => Some(ModulePart::exports()),
+                    ImportedSymbol::Namespace => None,
                     ImportedSymbol::Part(part_id) => Some(ModulePart::internal(*part_id)),
                     ImportedSymbol::Exports => Some(ModulePart::exports()),
                 },
