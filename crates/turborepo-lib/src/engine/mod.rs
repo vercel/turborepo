@@ -213,19 +213,20 @@ impl Engine<Built> {
     /// mode to re-run the non-persistent tasks.
     pub fn create_engine_without_persistent_tasks(&self) -> Engine<Built> {
         let new_graph = self.task_graph.filter_map(
-            |node_idx, node| {
-                if let TaskNode::Task(task) = &self.task_graph[node_idx] {
+            |node_idx, node| match &self.task_graph[node_idx] {
+                TaskNode::Task(task) => {
                     let def = self
                         .task_definitions
                         .get(task)
                         .expect("task should have definition");
 
                     if !def.persistent {
-                        return Some(node.clone());
+                        Some(node.clone())
+                    } else {
+                        None
                     }
                 }
-
-                None
+                TaskNode::Root => Some(node.clone()),
             },
             |_, _| Some(()),
         );
@@ -263,19 +264,20 @@ impl Engine<Built> {
     /// Creates an `Engine` that is only the persistent tasks.
     pub fn create_engine_for_persistent_tasks(&self) -> Engine<Built> {
         let mut new_graph = self.task_graph.filter_map(
-            |node_idx, node| {
-                if let TaskNode::Task(task) = &self.task_graph[node_idx] {
+            |node_idx, node| match &self.task_graph[node_idx] {
+                TaskNode::Task(task) => {
                     let def = self
                         .task_definitions
                         .get(task)
                         .expect("task should have definition");
 
                     if def.persistent {
-                        return Some(node.clone());
+                        Some(node.clone())
+                    } else {
+                        None
                     }
                 }
-
-                None
+                TaskNode::Root => Some(node.clone()),
             },
             |_, _| Some(()),
         );
@@ -566,6 +568,7 @@ mod test {
     };
 
     use super::*;
+    use crate::run::task_id::TaskName;
 
     struct DummyDiscovery<'a>(&'a TempDir);
 
@@ -585,7 +588,11 @@ mod test {
 
                     let scripts = if had_build {
                         BTreeMap::from_iter(
-                            [("build".to_string(), "echo built!".to_string())].into_iter(),
+                            [
+                                ("build".to_string(), "echo built!".to_string()),
+                                ("dev".to_string(), "echo running dev!".to_string()),
+                            ]
+                            .into_iter(),
                         )
                     } else {
                         BTreeMap::default()
@@ -670,5 +677,101 @@ mod test {
 
         // if our limit is greater, then it should pass
         engine.validate(&graph, 4, false).expect("ok");
+    }
+
+    #[tokio::test]
+    async fn test_prune_persistent_tasks() {
+        // Verifies that we can prune the `Engine` to include only the persistent tasks
+        // or only the non-persistent tasks.
+
+        let mut engine = Engine::new();
+
+        // add two packages with a persistent build task
+        for package in ["a", "b"] {
+            let build_task_id = TaskId::new(package, "build");
+            let dev_task_id = TaskId::new(package, "dev");
+
+            engine.get_index(&build_task_id);
+            engine.add_definition(build_task_id.clone(), TaskDefinition::default());
+
+            engine.get_index(&dev_task_id);
+            engine.add_definition(
+                dev_task_id,
+                TaskDefinition {
+                    persistent: true,
+                    task_dependencies: vec![Spanned::new(TaskName::from(build_task_id))],
+                    ..Default::default()
+                },
+            );
+        }
+
+        let engine = engine.seal();
+
+        let persistent_tasks_engine = engine.create_engine_for_persistent_tasks();
+        for node in persistent_tasks_engine.tasks() {
+            if let TaskNode::Task(task_id) = node {
+                let def = persistent_tasks_engine
+                    .task_definition(task_id)
+                    .expect("task should have definition");
+                assert!(def.persistent, "task should be persistent");
+            }
+        }
+
+        let non_persistent_tasks_engine = engine.create_engine_without_persistent_tasks();
+        for node in non_persistent_tasks_engine.tasks() {
+            if let TaskNode::Task(task_id) = node {
+                let def = non_persistent_tasks_engine
+                    .task_definition(task_id)
+                    .expect("task should have definition");
+                assert!(!def.persistent, "task should not be persistent");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_get_subgraph_for_package() {
+        // Verifies that we can prune the `Engine` to include only the persistent tasks
+        // or only the non-persistent tasks.
+
+        let mut engine = Engine::new();
+
+        // Add two tasks in package `a`
+        let a_build_task_id = TaskId::new("a", "build");
+        let a_dev_task_id = TaskId::new("a", "dev");
+
+        let a_build_idx = engine.get_index(&a_build_task_id);
+        engine.add_definition(a_build_task_id.clone(), TaskDefinition::default());
+
+        engine.get_index(&a_dev_task_id);
+        engine.add_definition(a_dev_task_id.clone(), TaskDefinition::default());
+
+        // Add two tasks in package `b` where the `build` task depends
+        // on the `build` task from package `a`
+        let b_build_task_id = TaskId::new("b", "build");
+        let b_dev_task_id = TaskId::new("b", "dev");
+
+        let b_build_idx = engine.get_index(&b_build_task_id);
+        engine.add_definition(
+            b_build_task_id.clone(),
+            TaskDefinition {
+                task_dependencies: vec![Spanned::new(TaskName::from(a_build_task_id.clone()))],
+                ..Default::default()
+            },
+        );
+
+        engine.get_index(&b_dev_task_id);
+        engine.add_definition(b_dev_task_id.clone(), TaskDefinition::default());
+        engine.task_graph.add_edge(b_build_idx, a_build_idx, ());
+
+        let engine = engine.seal();
+        let subgraph = engine.create_engine_for_subgraph(&PackageName::from("a"));
+
+        // Verify that the subgraph only contains tasks from package `a` and the `build`
+        // task from package `b`
+        let tasks: Vec<_> = subgraph.tasks().collect();
+        assert_eq!(tasks.len(), 3);
+        assert!(tasks.contains(&&TaskNode::Task(a_build_task_id)));
+        assert!(tasks.contains(&&TaskNode::Task(a_dev_task_id)));
+        assert!(tasks.contains(&&TaskNode::Task(b_build_task_id)));
     }
 }
