@@ -648,6 +648,13 @@ mod test {
         ) -> Result<Response<Self::PackageChangesStream>, Status> {
             unimplemented!()
         }
+
+        async fn get_file_hashes(
+            &self,
+            _req: tonic::Request<proto::GetFileHashesRequest>,
+        ) -> Result<tonic::Response<proto::GetFileHashesResponse>, tonic::Status> {
+            unimplemented!()
+        }
     }
 
     #[tokio::test]

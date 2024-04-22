@@ -1,13 +1,16 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use rayon::prelude::*;
 use serde::Serialize;
 use thiserror::Error;
 use tracing::{debug, Span};
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
+use turbopath::{
+    AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf,
+};
 use turborepo_cache::CacheHitMetadata;
 use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap, ResolvedEnvMode};
 use turborepo_repository::package_graph::{PackageInfo, PackageName};
@@ -23,6 +26,7 @@ use crate::{
     opts::RunOpts,
     run::task_id::TaskId,
     task_graph::TaskDefinition,
+    DaemonClient, DaemonConnector,
 };
 
 #[derive(Debug, Error)]
@@ -74,11 +78,12 @@ impl PackageInputsHashes {
         task_definitions: &HashMap<TaskId<'static>, TaskDefinition>,
         repo_root: &AbsoluteSystemPath,
         telemetry: &GenericEventBuilder,
+        daemon: &mut Option<DaemonClient<DaemonConnector>>,
     ) -> Result<PackageInputsHashes, Error> {
         tracing::trace!(scm_manual=%scm.is_manual(), "scm running in {} mode", if scm.is_manual() { "manual" } else { "git" });
 
         let span = Span::current();
-
+        let handle = tokio::runtime::Handle::current();
         let (hashes, expanded_hashes): (HashMap<_, _>, HashMap<_, _>) = all_tasks
             .filter_map(|task| {
                 let span = tracing::info_span!(parent: &span, "calculate_file_hash", ?task);
@@ -86,6 +91,10 @@ impl PackageInputsHashes {
                 let TaskNode::Task(task_id) = task else {
                     return None;
                 };
+
+                let mut daemon = daemon
+                    .as_ref() // Option::ref
+                    .cloned();
 
                 let task_definition = match task_definitions
                     .get(task_id)
@@ -115,14 +124,74 @@ impl PackageInputsHashes {
                     .unwrap_or_else(|| AnchoredSystemPath::new("").unwrap());
 
                 let scm_telemetry = package_task_event.child();
-                let mut hash_object = match scm.get_package_file_hashes(
-                    repo_root,
-                    package_path,
-                    &task_definition.inputs,
-                    Some(scm_telemetry),
-                ) {
-                    Ok(hash_object) => hash_object,
-                    Err(err) => return Some(Err(err.into())),
+                // Try hashing with the daemon, if we have a connection. If we don't, or if we
+                // timeout or get an error, fallback to local hashing
+                let hash_object = daemon
+                    .as_mut()
+                    .and_then(|daemon| {
+                        let handle = handle.clone();
+                        // We need an async block here because the timeout must be created with an
+                        // active tokio context. Constructing it directly in
+                        // the rayon thread doesn't provide one and will crash at runtime.
+                        handle
+                            .block_on(async {
+                                tokio::time::timeout(
+                                    Duration::from_millis(100),
+                                    daemon.get_file_hashes(package_path, &task_definition.inputs),
+                                )
+                                .await
+                            })
+                            .map_err(|e| {
+                                tracing::debug!(
+                                    "daemon file hashing timed out for {}",
+                                    package_path
+                                );
+                                e
+                            })
+                            .ok() // If we timed out, we don't need to error,
+                                  // just return None so we can move on to local
+                    })
+                    .and_then(|result| {
+                        match result {
+                            Ok(hashes_resp) => Some(
+                                hashes_resp
+                                    .file_hashes
+                                    .into_iter()
+                                    .map(|(path, hash)| {
+                                        (
+                                            RelativeUnixPathBuf::new(path)
+                                                .expect("daemon returns relative unix paths"),
+                                            hash,
+                                        )
+                                    })
+                                    .collect::<HashMap<_, _>>(),
+                            ),
+                            Err(e) => {
+                                // Daemon could've failed for various reasons. We can still try
+                                // local hashing.
+                                tracing::debug!(
+                                    "daemon file hashing failed for {}: {}",
+                                    package_path,
+                                    e
+                                );
+                                None
+                            }
+                        }
+                    });
+                let mut hash_object = match hash_object {
+                    Some(hash_object) => hash_object,
+                    None => {
+                        let local_hash_result = scm.get_package_file_hashes(
+                            repo_root,
+                            package_path,
+                            &task_definition.inputs,
+                            Some(scm_telemetry),
+                        );
+                        match local_hash_result {
+                            Ok(hash_object) => hash_object,
+                            Err(err) => return Some(Err(err.into())),
+                        }
+                    }
                 };
                 if let Some(dot_env) = &task_definition.dot_env {
                     if !dot_env.is_empty() {
