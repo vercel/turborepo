@@ -147,7 +147,7 @@ impl TaskCache {
             fallible_write(
                 &mut terminal_output,
                 &format!(
-                    "cache miss, executing {}\n",
+                    "cache miss, executing {}\r\n",
                     color!(self.ui, GREY, "{}", self.hash)
                 ),
             );
@@ -195,7 +195,7 @@ impl TaskCache {
                 fallible_write(
                     &mut terminal_output,
                     &format!(
-                        "cache bypass, force executing {}\n",
+                        "cache bypass, force executing {}\r\n",
                         color!(self.ui, GREY, "{}", self.hash)
                     ),
                 );
@@ -246,7 +246,7 @@ impl TaskCache {
                     fallible_write(
                         &mut terminal_output,
                         &format!(
-                            "cache miss, executing {}\n",
+                            "cache miss, executing {}\r\n",
                             color!(self.ui, GREY, "{}", self.hash)
                         ),
                     );
@@ -297,7 +297,7 @@ impl TaskCache {
                 fallible_write(
                     &mut terminal_output,
                     &format!(
-                        "cache hit{}, suppressing logs {}\n",
+                        "cache hit{}, suppressing logs {}\r\n",
                         more_context,
                         color!(self.ui, GREY, "{}", self.hash)
                     ),
@@ -308,7 +308,7 @@ impl TaskCache {
                 fallible_write(
                     &mut terminal_output,
                     &format!(
-                        "cache hit{}, replaying logs {}\n",
+                        "cache hit{}, replaying logs {}\r\n",
                         more_context,
                         color!(self.ui, GREY, "{}", self.hash)
                     ),
