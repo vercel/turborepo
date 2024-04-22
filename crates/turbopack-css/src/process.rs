@@ -976,7 +976,7 @@ impl GenerateSourceMap for ParseCssResultSourceMap {
                 let mut builder = SourceMapBuilder::new(None);
 
                 for src in source_map.get_sources() {
-                    builder.add_source(&format!("/turbopack/{src}"));
+                    builder.add_source(&format!("/{SOURCE_MAP_ROOT_NAME}/{src}"));
                 }
 
                 for (idx, content) in source_map.get_sources_content().iter().enumerate() {
