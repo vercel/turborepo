@@ -258,6 +258,7 @@ function asyncModule(module, body, hasAwait) {
             return promise;
         },
         set (v) {
+            // Calling `esmExport` leads to this.
             if (v !== promise) {
                 promise[turbopackExports] = v;
             }
