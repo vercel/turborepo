@@ -354,7 +354,7 @@ pub(super) async fn split(
 
             debug_assert_ne!(modules.len(), 0, "modules.len() == 0");
 
-            dbg!(&modules);
+            // dbg!(&modules);
             dbg!(&entrypoints);
             dbg!(&part_deps);
 
