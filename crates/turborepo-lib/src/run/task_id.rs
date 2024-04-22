@@ -43,6 +43,15 @@ impl<'a> From<TaskId<'a>> for String {
     }
 }
 
+impl TaskId<'static> {
+    pub fn from_static(package: String, task: String) -> Self {
+        TaskId {
+            package: package.into(),
+            task: task.into(),
+        }
+    }
+}
+
 impl<'a> TaskId<'a> {
     pub fn new(package: &'a str, task: &'a str) -> Self {
         TaskId::try_from(task).unwrap_or_else(|_| Self {

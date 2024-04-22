@@ -80,7 +80,7 @@ impl PackageWatcher {
         })
     }
 
-    pub(crate) fn watch_discovery(&self) -> watch::Receiver<Option<DiscoveryData>> {
+    pub fn watch_discovery(&self) -> watch::Receiver<Option<DiscoveryData>> {
         self.package_discovery_lazy.watch()
     }
 
