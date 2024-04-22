@@ -548,8 +548,13 @@ pub(crate) async fn analyse_ecmascript_module_internal(
     for (i, r) in eval_context.imports.references().enumerate() {
         // Side effect imports generated for ImportItem while splitting module should be
         // skipped
-        if part.is_some() && matches!(r.imported_symbol, ImportedSymbol::Namespace) {
-            continue;
+        if let Some(part) = part {
+            if matches!(&*part.await?, ModulePart::Facade | ModulePart::Exports)
+                && options.tree_shaking_mode.is_some()
+                && matches!(r.imported_symbol, ImportedSymbol::Namespace)
+            {
+                continue;
+            }
         }
 
         let r = EsmAssetReference::new(
