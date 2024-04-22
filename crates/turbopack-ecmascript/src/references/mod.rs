@@ -548,14 +548,6 @@ pub(crate) async fn analyse_ecmascript_module_internal(
     for (i, r) in eval_context.imports.references().enumerate() {
         // Side effect imports generated for ImportItem while splitting module should be
         // skipped
-        if let Some(part) = part {
-            if matches!(&*part.await?, ModulePart::Facade | ModulePart::Exports)
-                && options.tree_shaking_mode.is_some()
-                && matches!(r.imported_symbol, ImportedSymbol::Namespace)
-            {
-                continue;
-            }
-        }
 
         let r = EsmAssetReference::new(
             origin,
@@ -570,8 +562,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
                     }
                     ImportedSymbol::Symbol(name) => Some(ModulePart::export(name.to_string())),
                     ImportedSymbol::Part(part_id) => Some(ModulePart::internal(*part_id)),
-                    ImportedSymbol::Namespace => None,
-                    ImportedSymbol::Exports => Some(ModulePart::exports()),
+                    ImportedSymbol::Namespace => Some(ModulePart::exports()),
                 },
                 Some(TreeShakingMode::ReexportsOnly) => match &r.imported_symbol {
                     ImportedSymbol::ModuleEvaluation => {
@@ -579,9 +570,8 @@ pub(crate) async fn analyse_ecmascript_module_internal(
                         Some(ModulePart::evaluation())
                     }
                     ImportedSymbol::Symbol(name) => Some(ModulePart::export(name.to_string())),
-                    ImportedSymbol::Namespace => None,
+                    ImportedSymbol::Namespace => Some(ModulePart::exports()),
                     ImportedSymbol::Part(part_id) => Some(ModulePart::internal(*part_id)),
-                    ImportedSymbol::Exports => Some(ModulePart::exports()),
                 },
                 None => None,
             },
