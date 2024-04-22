@@ -1,7 +1,7 @@
 "use client";
 
+import { useEffect, useState, ChangeEvent, FormEvent } from "react";
 import { Button } from "@repo/ui/button";
-import { useEffect, useState } from "react";
 
 const API_HOST = process.env.NEXT_PUBLIC_API_HOST || "http://localhost:3001";
 
@@ -15,10 +15,10 @@ export default function Web() {
     setError(undefined);
   }, [name]);
 
-  const onChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+  const onChange = (e: ChangeEvent<HTMLInputElement>) =>
     setName(e.target.value);
 
-  const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     try {
