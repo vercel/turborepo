@@ -43,11 +43,15 @@ jobs:
           ref: ${{ github.ref }}
           fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}
 
-      - name: Build turborepo CLI from source
+      - name: Setup Turborepo Environment
         uses: ./.github/actions/setup-turborepo-environment
         with:
           windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node-version: "20"
+
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
 
       - name: Run tests
         # Manually set TURBO_API to an empty string to override Hetzner env

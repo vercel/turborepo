@@ -38,6 +38,7 @@ use crate::{
     task_graph::Visitor,
     task_hash::{get_external_deps_hash, PackageInputsHashes},
     turbo_json::TurboJson,
+    DaemonClient, DaemonConnector,
 };
 
 pub struct Run {
@@ -60,6 +61,8 @@ pub struct Run {
     signal_handler: SignalHandler,
     engine: Arc<Engine>,
     task_access: TaskAccess,
+    daemon: Option<DaemonClient<DaemonConnector>>,
+    should_print_prelude: bool,
 }
 
 impl Run {
@@ -94,8 +97,8 @@ impl Run {
         }
     }
 
-    pub async fn run(&self) -> Result<i32, Error> {
-        if self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none() {
+    pub async fn run(&mut self) -> Result<i32, Error> {
+        if self.should_print_prelude {
             self.print_run_prelude();
         }
         if let Some(subscriber) = self.signal_handler.subscribe() {
@@ -129,6 +132,7 @@ impl Run {
             self.engine.task_definitions(),
             &self.repo_root,
             &self.run_telemetry,
+            &mut self.daemon,
         )?;
 
         let root_workspace = self

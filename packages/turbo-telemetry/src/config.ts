@@ -3,7 +3,7 @@ import { logger } from "@turbo/utils";
 import chalk from "chalk";
 import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
-import { defaultConfigPath, oneWayHashWithSalt } from "./utils";
+import utils from "./utils";
 
 const DEBUG_ENV_VAR = "TURBO_TELEMETRY_DEBUG";
 const DISABLED_ENV_VAR = "TURBO_TELEMETRY_DISABLED";
@@ -51,7 +51,7 @@ export class TelemetryConfig {
 
   static async fromDefaultConfig(): Promise<TelemetryConfig | undefined> {
     try {
-      const configPath = await defaultConfigPath();
+      const configPath = await utils.defaultConfigPath();
       return TelemetryConfig.fromConfigPath(configPath);
     } catch (e) {
       return undefined;
@@ -73,7 +73,7 @@ export class TelemetryConfig {
   }): TelemetryConfig | undefined {
     const RawTelemetryId = uuidv4();
     const telemetrySalt = uuidv4();
-    const telemetryId = oneWayHashWithSalt({
+    const telemetryId = utils.oneWayHashWithSalt({
       input: RawTelemetryId,
       salt: telemetrySalt,
     });
@@ -194,7 +194,7 @@ export class TelemetryConfig {
   }
 
   oneWayHash(input: string): string {
-    return oneWayHashWithSalt({
+    return utils.oneWayHashWithSalt({
       input,
       salt: this.config.telemetry_salt,
     });
