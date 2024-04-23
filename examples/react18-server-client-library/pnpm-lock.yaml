@@ -23,7 +23,7 @@ importers:
 
   apps/docs:
     dependencies:
-      '@repo/ui':
+      'my-lib':
         specifier: workspace:*
         version: link:../../packages/ui
       next:
@@ -66,7 +66,7 @@ importers:
 
   apps/web:
     dependencies:
-      '@repo/ui':
+      'my-lib':
         specifier: workspace:*
         version: link:../../packages/ui
       next:
