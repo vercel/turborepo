@@ -590,7 +590,13 @@ impl DepGraph {
                                 ExportSpecifier::Default(s) => s.exported.sym.clone(),
                                 ExportSpecifier::Namespace(s) => orig_name(&s.name),
                             };
+                            let export = imported
+                                .as_ref()
+                                .map(orig_name)
+                                .unwrap_or_else(|| local.clone());
+
                             let local = private_ident!(local);
+                            let export = private_ident!(export);
 
                             if let Some(src) = &item.src {
                                 let id = ItemId::Item {
@@ -598,7 +604,7 @@ impl DepGraph {
                                     kind: ItemIdItemKind::ImportBinding(si as _),
                                 };
                                 ids.push(id.clone());
-                                exports.push(local.to_id());
+                                exports.push(export.to_id());
 
                                 items.insert(
                                     id,
@@ -626,26 +632,26 @@ impl DepGraph {
                                         ..Default::default()
                                     },
                                 );
-                            }
-
-                            match s {
-                                ExportSpecifier::Named(s) => {
-                                    match s.exported.as_ref().unwrap_or(&s.orig) {
+                            } else {
+                                match s {
+                                    ExportSpecifier::Named(s) => {
+                                        match s.exported.as_ref().unwrap_or(&s.orig) {
+                                            ModuleExportName::Ident(i) => {
+                                                exports.push(i.to_id());
+                                            }
+                                            ModuleExportName::Str(..) => {}
+                                        }
+                                    }
+                                    ExportSpecifier::Default(..) => {
+                                        exports.push((js_word!("default"), Default::default()));
+                                    }
+                                    ExportSpecifier::Namespace(s) => match &s.name {
                                         ModuleExportName::Ident(i) => {
                                             exports.push(i.to_id());
                                         }
                                         ModuleExportName::Str(..) => {}
-                                    }
+                                    },
                                 }
-                                ExportSpecifier::Default(..) => {
-                                    exports.push((js_word!("default"), Default::default()));
-                                }
-                                ExportSpecifier::Namespace(s) => match &s.name {
-                                    ModuleExportName::Ident(i) => {
-                                        exports.push(i.to_id());
-                                    }
-                                    ModuleExportName::Str(..) => {}
-                                },
                             }
                         }
                     }
