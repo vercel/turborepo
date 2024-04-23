@@ -106,10 +106,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Setup Turborepo Environment
-        uses: ./.github/actions/setup-turborepo-environment
+      - name: "Setup Node"
+        uses: ./.github/actions/setup-node
         with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          extra-flags: --no-optional
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
