@@ -49,8 +49,8 @@ jobs:
               apk add libc6-compat curl
               echo /root/.cargo/bin >> ${GITHUB_PATH}
               echo /usr/local/cargo/bin/rustup >> ${GITHUB_PATH}
-              export PATH=/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
             setup: |
+              export PATH=/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
               rustup show active-toolchain
               dirname $(rustup which cargo) >> ${GITHUB_PATH}
               pnpm install
@@ -64,7 +64,6 @@ jobs:
               echo /root/.cargo/bin >> ${GITHUB_PATH}
               echo /usr/local/cargo/bin/rustup >> ${GITHUB_PATH}
               echo /aarch64-linux-musl-cross/bin >> ${GITHUB_PATH}
-              export PATH=/aarch64-linux-musl-cross/bin:/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
             setup: |
               export PATH=/aarch64-linux-musl-cross/bin:/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
               rustup show active-toolchain
