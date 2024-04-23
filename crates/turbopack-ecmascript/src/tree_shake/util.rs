@@ -4,8 +4,8 @@ use indexmap::IndexSet;
 use rustc_hash::FxHasher;
 use swc_core::ecma::{
     ast::{
-        AssignTarget, BlockStmtOrExpr, Constructor, Expr, Function, Id, Ident, MemberProp, Pat,
-        PropName,
+        AssignTarget, BlockStmtOrExpr, Constructor, ExportNamedSpecifier, Expr, Function, Id,
+        Ident, MemberProp, NamedExport, Pat, PropName,
     },
     visit::{noop_visit_type, visit_obj_and_computed, Visit, VisitWith},
 };
@@ -57,6 +57,10 @@ impl Visit for IdentUsageCollector {
         n.visit_children_with(self);
     }
 
+    fn visit_export_named_specifier(&mut self, n: &ExportNamedSpecifier) {
+        n.orig.visit_with(self);
+    }
+
     fn visit_expr(&mut self, e: &Expr) {
         self.with_mode(Mode::Read, |this| {
             e.visit_children_with(this);
@@ -86,6 +90,14 @@ impl Visit for IdentUsageCollector {
         if let MemberProp::Computed(..) = n {
             n.visit_children_with(self);
         }
+    }
+
+    fn visit_named_export(&mut self, n: &NamedExport) {
+        if n.src.is_some() {
+            return;
+        }
+
+        n.visit_children_with(self);
     }
 
     fn visit_pat(&mut self, p: &Pat) {
