@@ -585,13 +585,13 @@ impl DepGraph {
                             let local = local.map(|v| (v, SyntaxContext::empty()));
 
                             if item.src.is_some() {
-                                let id = ItemId::Item {
-                                    index,
-                                    kind: ItemIdItemKind::ImportBinding(si as _),
-                                };
-                                ids.push(id.clone());
-
                                 if let Some(local) = local {
+                                    let id = ItemId::Item {
+                                        index,
+                                        kind: ItemIdItemKind::ImportBinding(si as _),
+                                    };
+                                    ids.push(id.clone());
+
                                     items.insert(
                                         id,
                                         ItemData {
