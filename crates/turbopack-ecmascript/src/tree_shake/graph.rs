@@ -823,20 +823,24 @@ impl DepGraph {
                     src: Some(..),
                     ..
                 })) => {
-                    // let data = ItemData {
-                    //     read_vars: reexport_local.map(|v|
-                    // v.to_id()).into_iter().collect(),
-                    //     side_effects: true,
-                    //     content: item.clone(),
-                    //     ..Default::default()
-                    // };
+                    let data = ItemData {
+                        read_vars: reexport_local
+                            .as_ref()
+                            .map(|v| v.to_id())
+                            .into_iter()
+                            .collect(),
+                        side_effects: true,
+                        content: item.clone(),
+                        export: reexport_local.map(|v| v.to_id()),
+                        ..Default::default()
+                    };
 
-                    // let id = ItemId::Item {
-                    //     index,
-                    //     kind: ItemIdItemKind::Normal,
-                    // };
-                    // ids.push(id.clone());
-                    // items.insert(id, data);
+                    let id = ItemId::Item {
+                        index,
+                        kind: ItemIdItemKind::Normal,
+                    };
+                    ids.push(id.clone());
+                    items.insert(id, data);
                 }
 
                 _ => {
