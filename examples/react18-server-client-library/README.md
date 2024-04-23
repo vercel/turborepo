@@ -1,6 +1,6 @@
 # Turborepo starter
 
-This is an official starter Turborepo.
+This is an official starter Turborepo, showing how Turborepo can be used with `tsup` and [`esbuild-plugin-react18`](https://github.com/react18-tools/esbuild-plugin-react18) to create React18 libraries supporting both server and client components. For more details visit [GitHub repo](https://github.com/react18-tools/esbuild-plugin-react18) and [this GitHub Repo Template](https://github.com/react18-tools/turborepo-template)
 
 ## Using this example
 
