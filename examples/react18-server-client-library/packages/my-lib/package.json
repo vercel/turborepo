@@ -9,6 +9,7 @@
   },
   "scripts": {
     "lint": "eslint . --max-warnings 0",
+    "test": "vitest run --coverage",
     "generate:component": "turbo gen react-component"
   },
   "devDependencies": {
