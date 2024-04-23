@@ -575,7 +575,7 @@ impl DepGraph {
 
                         // We are not interested in re-exports.
                         for (si, s) in item.specifiers.iter().enumerate() {
-                            let imported = match s {
+                            let orig = match s {
                                 ExportSpecifier::Named(s) => s.exported.clone(),
                                 ExportSpecifier::Default(s) => Some(ModuleExportName::Ident(
                                     Ident::new("default".into(), DUMMY_SP),
@@ -590,13 +590,9 @@ impl DepGraph {
                                 ExportSpecifier::Default(s) => s.exported.sym.clone(),
                                 ExportSpecifier::Namespace(s) => orig_name(&s.name),
                             };
-                            let export = imported
-                                .as_ref()
-                                .map(orig_name)
-                                .unwrap_or_else(|| local.clone());
 
                             let local = private_ident!(local);
-                            let export = private_ident!(export);
+                            exports.push(local.to_id());
 
                             if let Some(src) = &item.src {
                                 let id = ItemId::Item {
@@ -604,7 +600,6 @@ impl DepGraph {
                                     kind: ItemIdItemKind::ImportBinding(si as _),
                                 };
                                 ids.push(id.clone());
-                                exports.push(export.to_id());
 
                                 items.insert(
                                     id,
@@ -619,7 +614,7 @@ impl DepGraph {
                                                     ImportNamedSpecifier {
                                                         span: DUMMY_SP,
                                                         local,
-                                                        imported,
+                                                        imported: orig,
                                                         is_type_only: false,
                                                     },
                                                 )],
