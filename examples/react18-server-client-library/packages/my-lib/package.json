@@ -8,6 +8,7 @@
     "./code": "./src/code.tsx"
   },
   "scripts": {
+    "build": "tsup src",
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run --coverage",
     "generate:component": "turbo gen react-component"
