@@ -258,16 +258,7 @@ trait ResolvedConfigurationOptions {
 
 impl ResolvedConfigurationOptions for PackageJson {
     fn get_configuration_options(self) -> Result<ConfigurationOptions, Error> {
-        match &self.legacy_turbo_config {
-            Some(legacy_turbo_config) => {
-                let synthetic_raw_turbo_json: RawTurboJson = RawTurboJson::parse(
-                    &legacy_turbo_config.to_string(),
-                    AnchoredSystemPath::new("package.json").unwrap(),
-                )?;
-                synthetic_raw_turbo_json.get_configuration_options()
-            }
-            None => Ok(ConfigurationOptions::default()),
-        }
+        Ok(ConfigurationOptions::default())
     }
 }
 

@@ -546,14 +546,6 @@ impl TurboJson {
         root_package_json: &PackageJson,
         include_synthesized_from_root_package_json: bool,
     ) -> Result<TurboJson, Error> {
-        if root_package_json.legacy_turbo_config.is_some() {
-            println!(
-                "[WARNING] \"turbo\" in package.json is no longer supported. Migrate to {} by \
-                 running \"npx @turbo/codemod create-turbo-config\"\n",
-                CONFIG_FILE
-            );
-        }
-
         let turbo_from_files = Self::read(repo_root, &dir.join_component(CONFIG_FILE));
         let turbo_from_trace =
             Self::read(repo_root, &dir.join_components(&TASK_ACCESS_CONFIG_PATH));
@@ -832,14 +824,6 @@ mod tests {
             ),
             ..TurboJson::default()
         }
-    )]
-    #[test_case(
-        Some("{}"),
-        PackageJson {
-            legacy_turbo_config: Some(serde_json::Value::String("build".to_string())),
-            ..PackageJson::default()
-        },
-        TurboJson::default()
     )]
     #[test_case(
         Some(r#"{
