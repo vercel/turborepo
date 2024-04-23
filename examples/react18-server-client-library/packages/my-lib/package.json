@@ -2,11 +2,9 @@
   "name": "my-lib",
   "version": "0.0.0",
   "private": true,
-  "exports": {
-    "./button": "./src/button.tsx",
-    "./card": "./src/card.tsx",
-    "./code": "./src/code.tsx"
-  },
+  "main": "dist/index.js",
+  "types": "dist/inedx.d.ts",
+  "files": ["dist/**"],
   "scripts": {
     "build": "tsup src",
     "lint": "eslint . --max-warnings 0",

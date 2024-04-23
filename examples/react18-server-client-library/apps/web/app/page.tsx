@@ -1,8 +1,7 @@
 import Image from "next/image";
-import { Card } from "my-lib/card";
-import { Code } from "my-lib/code";
+import { Card } from "my-lib/dist/server";
 import styles from "./page.module.css";
-import { Button } from "my-lib/button";
+import { Button } from "my-lib";
 
 function Gradient({
   conic,
@@ -55,25 +54,21 @@ export default function Page(): JSX.Element {
   return (
     <main className={styles.main}>
       <div className={styles.description}>
-        <p>
-          examples/basic&nbsp;
-          <Code className={styles.code}>web</Code>
-        </p>
+        <a
+          href="https://github.com/vercel/turbo/tree/main/examples/react18-server-client-library"
+          rel="noopener noreferrer"
+          target="_blank"
+        >
+          examples/rsc&nbsp;
+          <code className={styles.code}>web</code>
+        </a>
         <div>
           <a
-            href="https://vercel.com?utm_source=create-turbo&utm_medium=basic&utm_campaign=create-turbo"
+            href="https://mayank-chaudhari.vercel.app/"
             rel="noopener noreferrer"
             target="_blank"
           >
-            By{" "}
-            <Image
-              alt="Vercel Logo"
-              className={styles.vercelLogo}
-              height={24}
-              priority
-              src="/vercel.svg"
-              width={100}
-            />
+            By Mayank
           </a>
         </div>
       </div>
