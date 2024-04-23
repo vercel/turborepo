@@ -1,15 +1,16 @@
 use std::{io, time::Duration};
 
 use globwalk::ValidatedGlob;
+use miette::Diagnostic;
 use thiserror::Error;
 use tonic::{Code, IntoRequest, Status};
 use tracing::info;
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
 
 use super::{
     connector::{DaemonConnector, DaemonConnectorError},
     endpoint::SocketOpenError,
-    proto::DiscoverPackagesResponse,
+    proto::{DiscoverPackagesResponse, GetFileHashesResponse},
     Paths,
 };
 use crate::{
@@ -156,7 +157,22 @@ impl<T> DaemonClient<T> {
             .package_changes(proto::PackageChangesRequest {})
             .await?
             .into_inner();
+        Ok(response)
+    }
 
+    pub async fn get_file_hashes(
+        &mut self,
+        package_path: &AnchoredSystemPath,
+        inputs: &[String],
+    ) -> Result<GetFileHashesResponse, DaemonError> {
+        let response = self
+            .client
+            .get_file_hashes(proto::GetFileHashesRequest {
+                package_path: package_path.to_string(),
+                input_globs: inputs.to_vec(),
+            })
+            .await?
+            .into_inner();
         Ok(response)
     }
 }
@@ -185,7 +201,7 @@ fn format_repo_relative_glob(glob: &str) -> String {
     glob.replace(':', "\\:")
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum DaemonError {
     /// The server was connected but is now unavailable.
     #[error("server is unavailable: {0}")]
@@ -193,8 +209,9 @@ pub enum DaemonError {
     #[error("error opening socket: {0}")]
     SocketOpen(#[from] SocketOpenError),
     /// The server is running a different version of turborepo.
-    #[error("version mismatch: {0:?}")]
-    VersionMismatch(Option<String>),
+    #[error("version mismatch: {0}")]
+    #[diagnostic(help("try restarting the daemon with `turbo daemon restart`."))]
+    VersionMismatch(String),
     /// There is an issue with the underlying grpc transport.
     #[error("bad grpc transport: {0}")]
     GrpcTransport(#[from] tonic::transport::Error),
@@ -240,10 +257,10 @@ pub enum DaemonError {
 impl From<Status> for DaemonError {
     fn from(status: Status) -> DaemonError {
         match status.code() {
-            Code::FailedPrecondition => {
-                DaemonError::VersionMismatch(Some(status.message().to_owned()))
+            Code::FailedPrecondition => DaemonError::VersionMismatch(status.message().to_owned()),
+            Code::Unimplemented => {
+                DaemonError::VersionMismatch("rpc not implemented on daemon".to_string())
             }
-            Code::Unimplemented => DaemonError::VersionMismatch(None),
             Code::Unavailable => DaemonError::Unavailable(status.message().to_string()),
             c => DaemonError::GrpcFailure(c),
         }

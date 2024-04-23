@@ -55,7 +55,7 @@ pub struct StopExecution;
 impl Engine {
     /// Execute a task graph by sending task ids to the visitor
     /// while respecting concurrency limits.
-    /// The visitor is expected to handle any error handling on it's end.
+    /// The visitor is expected to handle any error handling on its end.
     /// We enforce this by only allowing the returning of a sentinel error
     /// type which will stop any further execution of tasks.
     /// This will not stop any task which is currently running, simply it will

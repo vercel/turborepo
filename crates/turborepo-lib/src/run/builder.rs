@@ -6,7 +6,6 @@ use std::{
 };
 
 use chrono::Local;
-use rayon::iter::ParallelBridge;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
@@ -46,7 +45,6 @@ use crate::{
     run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},
     shim::TurboState,
     signal::{SignalHandler, SignalSubscriber},
-    task_hash::PackageInputsHashes,
     turbo_json::TurboJson,
     DaemonConnector,
 };
@@ -60,6 +58,12 @@ pub struct RunBuilder {
     version: &'static str,
     experimental_ui: bool,
     api_client: APIClient,
+    analytics_sender: Option<AnalyticsSender>,
+    // In watch mode, we can have a changed package that we want to serve as an entrypoint.
+    // We will then prune away any tasks that do not depend on tasks inside
+    // this package.
+    entrypoint_package: Option<PackageName>,
+    should_print_prelude_override: Option<bool>,
 }
 
 impl RunBuilder {
@@ -99,6 +103,7 @@ impl RunBuilder {
             (!cfg!(windows) || experimental_ui),
         );
         let CommandBase { repo_root, ui, .. } = base;
+
         Ok(Self {
             processes,
             opts,
@@ -108,7 +113,20 @@ impl RunBuilder {
             ui,
             version,
             experimental_ui,
+            analytics_sender: None,
+            entrypoint_package: None,
+            should_print_prelude_override: None,
         })
+    }
+
+    pub fn with_entrypoint_package(mut self, entrypoint_package: PackageName) -> Self {
+        self.entrypoint_package = Some(entrypoint_package);
+        self
+    }
+
+    pub fn hide_prelude(mut self) -> Self {
+        self.should_print_prelude_override = Some(false);
+        self
     }
 
     fn connect_process_manager(&self, signal_subscriber: SignalSubscriber) {
@@ -119,15 +137,22 @@ impl RunBuilder {
         });
     }
 
-    fn initialize_analytics(
-        api_auth: Option<APIAuth>,
-        api_client: APIClient,
-    ) -> Option<(AnalyticsSender, AnalyticsHandle)> {
+    pub fn with_analytics_sender(mut self, analytics_sender: Option<AnalyticsSender>) -> Self {
+        self.analytics_sender = analytics_sender;
+        self
+    }
+
+    // Starts analytics and returns handle. This is not included in the main `build`
+    // function because we don't want the handle stored in the `Run` struct.
+    pub fn start_analytics(&self) -> (Option<AnalyticsSender>, Option<AnalyticsHandle>) {
         // If there's no API auth, we don't want to record analytics
-        let api_auth = api_auth?;
+        let Some(api_auth) = self.api_auth.clone() else {
+            return (None, None);
+        };
         api_auth
             .is_linked()
-            .then(|| start_analytics(api_auth, api_client))
+            .then(|| start_analytics(api_auth, self.api_client.clone()))
+            .unzip()
     }
 
     #[tracing::instrument(skip(self, signal_handler))]
@@ -148,9 +173,6 @@ impl RunBuilder {
         if let Some(subscriber) = signal_handler.subscribe() {
             self.connect_process_manager(subscriber);
         }
-
-        let (analytics_sender, analytics_handle) =
-            Self::initialize_analytics(self.api_auth.clone(), self.api_client.clone()).unzip();
 
         let scm = {
             let repo_root = self.repo_root.clone();
@@ -302,7 +324,7 @@ impl RunBuilder {
             &self.repo_root,
             self.api_client.clone(),
             self.api_auth.clone(),
-            analytics_sender,
+            self.analytics_sender.take(),
         )?;
 
         // restore config from task access trace if it's enabled
@@ -349,16 +371,6 @@ impl RunBuilder {
         let env_at_execution_start = EnvironmentVariableMap::infer();
         let mut engine = self.build_engine(&pkg_dep_graph, &root_turbo_json, &filtered_pkgs)?;
 
-        let workspaces = pkg_dep_graph.packages().collect();
-        let package_inputs_hashes = PackageInputsHashes::calculate_file_hashes(
-            &scm,
-            engine.tasks().par_bridge(),
-            workspaces,
-            engine.task_definitions(),
-            &self.repo_root,
-            &run_telemetry,
-        )?;
-
         if self.opts.run_opts.parallel {
             pkg_dep_graph.remove_package_dependencies();
             engine = self.build_engine(&pkg_dep_graph, &root_turbo_json, &filtered_pkgs)?;
@@ -372,7 +384,7 @@ impl RunBuilder {
             &self.repo_root,
             &self.opts.runcache_opts,
             color_selector,
-            daemon,
+            daemon.clone(),
             self.ui,
             self.opts.run_opts.dry_run.is_some(),
         ));
@@ -383,11 +395,14 @@ impl RunBuilder {
             self.opts.run_opts.env_mode = EnvMode::Strict;
         }
 
+        let should_print_prelude = self.should_print_prelude_override.unwrap_or_else(|| {
+            self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none()
+        });
+
         Ok(Run {
             version: self.version,
             ui: self.ui,
             experimental_ui: self.experimental_ui,
-            analytics_handle,
             start_at,
             processes: self.processes,
             run_telemetry,
@@ -400,11 +415,12 @@ impl RunBuilder {
             filtered_pkgs,
             pkg_dep_graph: Arc::new(pkg_dep_graph),
             root_turbo_json,
-            package_inputs_hashes,
             scm,
             engine: Arc::new(engine),
             run_cache,
             signal_handler: signal_handler.clone(),
+            daemon,
+            should_print_prelude,
         })
     }
 
@@ -414,7 +430,7 @@ impl RunBuilder {
         root_turbo_json: &TurboJson,
         filtered_pkgs: &HashSet<PackageName>,
     ) -> Result<Engine, Error> {
-        let engine = EngineBuilder::new(
+        let mut engine = EngineBuilder::new(
             &self.repo_root,
             pkg_dep_graph,
             self.opts.run_opts.single_package,
@@ -432,6 +448,12 @@ impl RunBuilder {
             Spanned::new(TaskName::from(task.as_str()).into_owned())
         }))
         .build()?;
+
+        // If we have an initial task, we prune out the engine to only
+        // tasks that are reachable from that initial task.
+        if let Some(entrypoint_package) = &self.entrypoint_package {
+            engine = engine.create_engine_for_subgraph(entrypoint_package);
+        }
 
         if !self.opts.run_opts.parallel {
             engine

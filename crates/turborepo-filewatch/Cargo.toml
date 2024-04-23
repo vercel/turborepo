@@ -10,17 +10,18 @@ license = "MPL-2.0"
 workspace = true
 
 [dependencies]
-anyhow = { workspace = true }
-dashmap = { workspace = true }
 futures = { version = "0.3.26" }
 itertools = { workspace = true }
+nibble_vec = "0.1.0"
 notify = { workspace = true }
+radix_trie = "0.2.1"
 thiserror = "1.0.38"
 tokio = { workspace = true, features = ["full", "time"] }
 tracing = "0.1.37"
 tracing-test = "0.2.4"
 turbopath = { workspace = true }
 turborepo-repository = { version = "0.1.0", path = "../turborepo-repository" }
+turborepo-scm = { workspace = true }
 walkdir = "2.3.3"
 wax = { workspace = true }
 
@@ -35,6 +36,7 @@ version = "1.0.4"
 version = "0.2.4"
 
 [dev-dependencies]
+git2 = { version = "0.16.1", default-features = false }
 tempfile = { workspace = true }
 tokio-scoped = "0.2.0"
 

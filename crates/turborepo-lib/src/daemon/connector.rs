@@ -411,7 +411,6 @@ enum WaitAction {
 mod test {
     use std::assert_matches::assert_matches;
 
-    use sysinfo::Pid;
     use tokio::{
         select,
         sync::{oneshot::Sender, Mutex},
@@ -425,7 +424,7 @@ mod test {
     use super::*;
     use crate::daemon::{
         default_timeout_layer::DefaultTimeoutLayer,
-        proto::{self, turbod_client::TurbodClient, PackageChangesRequest},
+        proto::{self, PackageChangesRequest},
     };
 
     #[cfg(not(target_os = "windows"))]
@@ -647,6 +646,13 @@ mod test {
             &self,
             _req: Request<PackageChangesRequest>,
         ) -> Result<Response<Self::PackageChangesStream>, Status> {
+            unimplemented!()
+        }
+
+        async fn get_file_hashes(
+            &self,
+            _req: tonic::Request<proto::GetFileHashesRequest>,
+        ) -> Result<tonic::Response<proto::GetFileHashesResponse>, tonic::Status> {
             unimplemented!()
         }
     }

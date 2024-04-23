@@ -19,6 +19,7 @@ Test help flag
     logout      Logout to your Vercel account
     prune       Prepare a subset of your monorepo
     run         Run tasks across projects in your monorepo
+    watch       Arguments used in run and watch
     unlink      Unlink the current directory from your Vercel organization and disable Remote Caching
   
   Options:
@@ -41,16 +42,32 @@ Test help flag
     -h, --help                            Print help
   
   Run Arguments:
-        --cache-dir <CACHE_DIR>
-            Override the filesystem cache directory [env: TURBO_CACHE_DIR=]
         --cache-workers <CACHE_WORKERS>
             Set the number of concurrent cache operations (default 10) [default: 10]
+        --dry-run [<DRY_RUN>]
+            [possible values: text, json]
+        --graph [<GRAPH>]
+            Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html, .mermaid, .dot). Outputs dot graph to stdout when if no filename is provided
+        --no-cache
+            Avoid saving task results to the cache. Useful for development/watch tasks
+        --[no-]daemon
+            Force turbo to either use or not use the local daemon. If unset turbo will use the default detection logic
+        --profile <PROFILE>
+            File to write turbo's performance profile output into. You can load the file up in chrome://tracing to see which parts of your build were slow
+        --anon-profile <ANON_PROFILE>
+            File to write turbo's performance profile output into. All identifying data omitted from the profile
+        --remote-cache-read-only [<BOOL>]
+            Treat remote cache as read only [env: TURBO_REMOTE_CACHE_READ_ONLY=] [default: false] [possible values: true, false]
+        --summarize [<SUMMARIZE>]
+            Generate a summary of the turbo run [env: TURBO_RUN_SUMMARY=] [possible values: true, false]
+        --parallel
+            Execute all tasks in parallel
+        --cache-dir <CACHE_DIR>
+            Override the filesystem cache directory [env: TURBO_CACHE_DIR=]
         --concurrency <CONCURRENCY>
             Limit the concurrency of task execution. Use 1 for serial (i.e. one-at-a-time) execution
         --continue
             Continue execution even if a task exits with an error or non-zero exit code. The default behavior is to bail
-        --dry-run [<DRY_RUN>]
-            [possible values: text, json]
         --single-package
             Run turbo in single-package mode
         --force [<FORCE>]
@@ -59,8 +76,6 @@ Test help flag
             Specify whether or not to do framework inference for tasks [default: true] [possible values: true, false]
         --global-deps <GLOBAL_DEPS>
             Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
-        --graph [<GRAPH>]
-            Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html, .mermaid, .dot). Outputs dot graph to stdout when if no filename is provided
         --env-mode [<ENV_MODE>]
             Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json. Use "infer" to defer to existence of "passThroughEnv" or "globalPassThroughEnv" in turbo.json. (default infer) [default: infer] [possible values: infer, loose, strict]
     -F, --filter <FILTER>
@@ -75,30 +90,14 @@ Test help flag
             DEPRECATED: Include the dependencies of tasks in execution
         --no-deps
             DEPRECATED: Exclude dependent task consumers from execution
-        --no-cache
-            Avoid saving task results to the cache. Useful for development/watch tasks
-        --daemon
-            
-        --no-daemon
-            Force turbo to either use or not use the local daemon. If unset turbo will use the default detection logic
         --output-logs <OUTPUT_LOGS>
             Set type of process output logging. Use "full" to show all output. Use "hash-only" to show only turbo-computed task hashes. Use "new-only" to show only new output with only hashes for cached tasks. Use "none" to hide process output. (default full) [possible values: full, none, hash-only, new-only, errors-only]
         --log-order <LOG_ORDER>
             Set type of task output order. Use "stream" to show output as soon as it is available. Use "grouped" to show output when a command has finished execution. Use "auto" to let turbo decide based on its own heuristics. (default auto) [env: TURBO_LOG_ORDER=] [default: auto] [possible values: auto, stream, grouped]
         --only
             Only executes the tasks specified, does not execute parent tasks
-        --parallel
-            Execute all tasks in parallel
-        --profile <PROFILE>
-            File to write turbo's performance profile output into. You can load the file up in chrome://tracing to see which parts of your build were slow
-        --anon-profile <ANON_PROFILE>
-            File to write turbo's performance profile output into. All identifying data omitted from the profile
         --remote-only [<BOOL>]
             Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache [env: TURBO_REMOTE_ONLY=] [default: false] [possible values: true, false]
-        --remote-cache-read-only [<BOOL>]
-            Treat remote cache as read only [env: TURBO_REMOTE_CACHE_READ_ONLY=] [default: false] [possible values: true, false]
-        --summarize [<SUMMARIZE>]
-            Generate a summary of the turbo run [env: TURBO_RUN_SUMMARY=] [possible values: true, false]
         --log-prefix <LOG_PREFIX>
             Use "none" to remove prefixes from task logs. Use "task" to get task id prefixing. Use "auto" to let turbo decide how to prefix the logs based on the execution environment. In most cases this will be the same as "task". Note that tasks running in parallel interleave their logs, so removing prefixes can make it difficult to associate logs with tasks. Use --log-order=grouped to prevent interleaving. (default auto) [default: auto] [possible values: auto, none, task]
 
@@ -124,6 +123,7 @@ Test help flag
     logout      Logout to your Vercel account
     prune       Prepare a subset of your monorepo
     run         Run tasks across projects in your monorepo
+    watch       Arguments used in run and watch
     unlink      Unlink the current directory from your Vercel organization and disable Remote Caching
   
   Options:
@@ -146,16 +146,32 @@ Test help flag
     -h, --help                            Print help
   
   Run Arguments:
-        --cache-dir <CACHE_DIR>
-            Override the filesystem cache directory [env: TURBO_CACHE_DIR=]
         --cache-workers <CACHE_WORKERS>
             Set the number of concurrent cache operations (default 10) [default: 10]
+        --dry-run [<DRY_RUN>]
+            [possible values: text, json]
+        --graph [<GRAPH>]
+            Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html, .mermaid, .dot). Outputs dot graph to stdout when if no filename is provided
+        --no-cache
+            Avoid saving task results to the cache. Useful for development/watch tasks
+        --[no-]daemon
+            Force turbo to either use or not use the local daemon. If unset turbo will use the default detection logic
+        --profile <PROFILE>
+            File to write turbo's performance profile output into. You can load the file up in chrome://tracing to see which parts of your build were slow
+        --anon-profile <ANON_PROFILE>
+            File to write turbo's performance profile output into. All identifying data omitted from the profile
+        --remote-cache-read-only [<BOOL>]
+            Treat remote cache as read only [env: TURBO_REMOTE_CACHE_READ_ONLY=] [default: false] [possible values: true, false]
+        --summarize [<SUMMARIZE>]
+            Generate a summary of the turbo run [env: TURBO_RUN_SUMMARY=] [possible values: true, false]
+        --parallel
+            Execute all tasks in parallel
+        --cache-dir <CACHE_DIR>
+            Override the filesystem cache directory [env: TURBO_CACHE_DIR=]
         --concurrency <CONCURRENCY>
             Limit the concurrency of task execution. Use 1 for serial (i.e. one-at-a-time) execution
         --continue
             Continue execution even if a task exits with an error or non-zero exit code. The default behavior is to bail
-        --dry-run [<DRY_RUN>]
-            [possible values: text, json]
         --single-package
             Run turbo in single-package mode
         --force [<FORCE>]
@@ -164,8 +180,6 @@ Test help flag
             Specify whether or not to do framework inference for tasks [default: true] [possible values: true, false]
         --global-deps <GLOBAL_DEPS>
             Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
-        --graph [<GRAPH>]
-            Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html, .mermaid, .dot). Outputs dot graph to stdout when if no filename is provided
         --env-mode [<ENV_MODE>]
             Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json. Use "infer" to defer to existence of "passThroughEnv" or "globalPassThroughEnv" in turbo.json. (default infer) [default: infer] [possible values: infer, loose, strict]
     -F, --filter <FILTER>
@@ -180,30 +194,14 @@ Test help flag
             DEPRECATED: Include the dependencies of tasks in execution
         --no-deps
             DEPRECATED: Exclude dependent task consumers from execution
-        --no-cache
-            Avoid saving task results to the cache. Useful for development/watch tasks
-        --daemon
-            
-        --no-daemon
-            Force turbo to either use or not use the local daemon. If unset turbo will use the default detection logic
         --output-logs <OUTPUT_LOGS>
             Set type of process output logging. Use "full" to show all output. Use "hash-only" to show only turbo-computed task hashes. Use "new-only" to show only new output with only hashes for cached tasks. Use "none" to hide process output. (default full) [possible values: full, none, hash-only, new-only, errors-only]
         --log-order <LOG_ORDER>
             Set type of task output order. Use "stream" to show output as soon as it is available. Use "grouped" to show output when a command has finished execution. Use "auto" to let turbo decide based on its own heuristics. (default auto) [env: TURBO_LOG_ORDER=] [default: auto] [possible values: auto, stream, grouped]
         --only
             Only executes the tasks specified, does not execute parent tasks
-        --parallel
-            Execute all tasks in parallel
-        --profile <PROFILE>
-            File to write turbo's performance profile output into. You can load the file up in chrome://tracing to see which parts of your build were slow
-        --anon-profile <ANON_PROFILE>
-            File to write turbo's performance profile output into. All identifying data omitted from the profile
         --remote-only [<BOOL>]
             Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache [env: TURBO_REMOTE_ONLY=] [default: false] [possible values: true, false]
-        --remote-cache-read-only [<BOOL>]
-            Treat remote cache as read only [env: TURBO_REMOTE_CACHE_READ_ONLY=] [default: false] [possible values: true, false]
-        --summarize [<SUMMARIZE>]
-            Generate a summary of the turbo run [env: TURBO_RUN_SUMMARY=] [possible values: true, false]
         --log-prefix <LOG_PREFIX>
             Use "none" to remove prefixes from task logs. Use "task" to get task id prefixing. Use "auto" to let turbo decide how to prefix the logs based on the execution environment. In most cases this will be the same as "task". Note that tasks running in parallel interleave their logs, so removing prefixes can make it difficult to associate logs with tasks. Use --log-order=grouped to prevent interleaving. (default auto) [default: auto] [possible values: auto, none, task]
 

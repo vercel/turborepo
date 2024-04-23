@@ -10,8 +10,8 @@ import {
   mockEnv,
   validateLogs,
 } from "@turbo/test-utils";
-import { turboIgnore } from "../src/ignore";
 import { TurboIgnoreTelemetry, TelemetryConfig } from "@turbo/telemetry";
+import { turboIgnore } from "../src/ignore";
 
 function expectBuild(mockExit: SpyExit) {
   expect(mockExit.exit).toHaveBeenCalledWith(1);

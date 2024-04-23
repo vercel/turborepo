@@ -32,6 +32,11 @@ pub struct BrowserChunkingContextBuilder {
 }
 
 impl BrowserChunkingContextBuilder {
+    pub fn name(mut self, name: String) -> Self {
+        self.chunking_context.name = Some(name);
+        self
+    }
+
     pub fn hot_module_replacement(mut self) -> Self {
         self.chunking_context.enable_hot_module_replacement = true;
         self
@@ -85,6 +90,7 @@ impl BrowserChunkingContextBuilder {
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(Debug, Clone, Hash, PartialOrd, Ord)]
 pub struct BrowserChunkingContext {
+    name: Option<String>,
     /// This path get stripped off of chunk paths before generating output asset
     /// paths.
     context_path: Vc<FileSystemPath>,
@@ -130,6 +136,7 @@ impl BrowserChunkingContext {
     ) -> BrowserChunkingContextBuilder {
         BrowserChunkingContextBuilder {
             chunking_context: BrowserChunkingContext {
+                name: None,
                 context_path,
                 output_root,
                 client_root,
@@ -231,6 +238,15 @@ impl BrowserChunkingContext {
 
 #[turbo_tasks::value_impl]
 impl ChunkingContext for BrowserChunkingContext {
+    #[turbo_tasks::function]
+    fn name(&self) -> Vc<String> {
+        if let Some(name) = &self.name {
+            Vc::cell(name.clone())
+        } else {
+            Vc::cell("unknown".to_string())
+        }
+    }
+
     #[turbo_tasks::function]
     fn context_path(&self) -> Vc<FileSystemPath> {
         self.context_path
@@ -347,13 +363,15 @@ impl ChunkingContext for BrowserChunkingContext {
     ) -> Result<Vc<ChunkGroupResult>> {
         let span = tracing::info_span!("chunking", module = *module.ident().to_string().await?);
         async move {
+            let this = self.await?;
+            let input_availability_info = availability_info.into_value();
             let MakeChunkGroupResult {
                 chunks,
                 availability_info,
             } = make_chunk_group(
                 Vc::upcast(self),
                 [Vc::upcast(module)],
-                availability_info.into_value(),
+                input_availability_info,
             )
             .await?;
 
@@ -362,12 +380,28 @@ impl ChunkingContext for BrowserChunkingContext {
                 .map(|chunk| self.generate_chunk(*chunk))
                 .collect();
 
-            assets.push(self.generate_chunk_list_register_chunk(
-                module.ident(),
-                EvaluatableAssets::empty(),
-                Vc::cell(assets.clone()),
-                Value::new(EcmascriptDevChunkListSource::Dynamic),
-            ));
+            if this.enable_hot_module_replacement {
+                let mut ident = module.ident();
+                match input_availability_info {
+                    AvailabilityInfo::Root => {}
+                    AvailabilityInfo::Untracked => {
+                        ident = ident.with_modifier(Vc::cell("untracked".to_string()));
+                    }
+                    AvailabilityInfo::Complete {
+                        available_chunk_items,
+                    } => {
+                        ident = ident.with_modifier(Vc::cell(
+                            available_chunk_items.hash().await?.to_string(),
+                        ));
+                    }
+                }
+                assets.push(self.generate_chunk_list_register_chunk(
+                    ident,
+                    EvaluatableAssets::empty(),
+                    Vc::cell(assets.clone()),
+                    Value::new(EcmascriptDevChunkListSource::Dynamic),
+                ));
+            }
 
             // Resolve assets
             for asset in assets.iter_mut() {
@@ -396,6 +430,7 @@ impl ChunkingContext for BrowserChunkingContext {
             tracing::info_span!("chunking", chunking_type = "evaluated", ident = *ident)
         };
         async move {
+            let this = self.await?;
             let availability_info = availability_info.into_value();
 
             let evaluatable_assets_ref = evaluatable_assets.await?;
@@ -419,12 +454,14 @@ impl ChunkingContext for BrowserChunkingContext {
 
             let other_assets = Vc::cell(assets.clone());
 
-            assets.push(self.generate_chunk_list_register_chunk(
-                ident,
-                evaluatable_assets,
-                other_assets,
-                Value::new(EcmascriptDevChunkListSource::Entry),
-            ));
+            if this.enable_hot_module_replacement {
+                assets.push(self.generate_chunk_list_register_chunk(
+                    ident,
+                    evaluatable_assets,
+                    other_assets,
+                    Value::new(EcmascriptDevChunkListSource::Entry),
+                ));
+            }
 
             assets.push(self.generate_evaluate_chunk(ident, other_assets, evaluatable_assets));
 
