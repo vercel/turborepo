@@ -1,5 +1,5 @@
 {
-  "name": "my-turborepo",
+  "name": "t2",
   "private": true,
   "scripts": {
     "build": "turbo build",
@@ -8,12 +8,13 @@
     "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {
+    "@changesets/cli": "^2.27.1",
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "prettier": "^3.2.5",
-    "turbo": "^1.12.4"
+    "turbo": "latest"
   },
-  "packageManager": "pnpm@8.9.0",
+  "packageManager": "pnpm@9.0.2",
   "engines": {
     "node": ">=18"
   }
