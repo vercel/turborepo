@@ -580,7 +580,7 @@ impl DepGraph {
                                     Some(orig_name(s.exported.as_ref().unwrap_or(&s.orig)))
                                 }
                                 ExportSpecifier::Default(s) => Some(s.exported.sym.clone()),
-                                ExportSpecifier::Namespace(..) => None,
+                                ExportSpecifier::Namespace(s) => Some(orig_name(&s.name)),
                             };
                             let local = local.map(|v| (v, SyntaxContext::empty()));
 
