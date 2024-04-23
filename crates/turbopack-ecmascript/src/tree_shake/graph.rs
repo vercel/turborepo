@@ -854,7 +854,10 @@ impl DepGraph {
         }
 
         for (export, export_name) in exports {
-            let id = ItemId::Group(ItemIdGroupKind::Export(export.clone()));
+            let id = ItemId::Group(ItemIdGroupKind::Export(match &export_name {
+                Some(ModuleExportName::Ident(v)) => v.to_id(),
+                _ => export.clone(),
+            }));
             ids.push(id.clone());
             items.insert(
                 id.clone(),
