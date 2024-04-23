@@ -225,6 +225,7 @@ impl DepGraph {
         uri_of_module: &JsWord,
         data: &FxHashMap<ItemId, ItemData>,
     ) -> SplitModuleResult {
+        dbg!(&data);
         let groups = self.finalize(data);
         let mut exports = FxHashMap::default();
         let mut part_deps = FxHashMap::<_, Vec<_>>::default();
