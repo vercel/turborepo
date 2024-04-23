@@ -112,6 +112,9 @@ jobs:
         run: |
           cd packages/turbo-repository
           echo $PATH
+          export PATH=/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
+          echo $PATH
+          echo $GITHUB_PATH
           cat $GITHUB_PATH
           ${{ matrix.settings.rust_env }} pnpm build:release --target=${{ matrix.settings.target }}
 
