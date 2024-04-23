@@ -3,7 +3,7 @@ use indexmap::IndexSet;
 use rustc_hash::FxHashMap;
 use swc_core::{
     atoms::Atom,
-    common::{util::take::Take, DUMMY_SP},
+    common::{util::take::Take, DUMMY_SP, GLOBALS},
     ecma::{
         ast::{
             ExportAll, Id, KeyValueProp, Module, ModuleDecl, ModuleItem, ObjectLit, Program, Prop,
@@ -341,7 +341,7 @@ pub(super) async fn split(
             globals,
             ..
         } => {
-            let (mut dep_graph, items) = Analyzer::analyze(module);
+            let (mut dep_graph, items) = GLOBALS.set(globals, || Analyzer::analyze(module));
 
             dep_graph.handle_weak(Mode::Production);
 
