@@ -207,7 +207,7 @@ jobs:
               - "x64"
               - "metal"
           - name: macos
-            runner: macos-12
+            runner: macos-latest
           - name: windows
             runner: windows-latest
     steps:
@@ -260,7 +260,7 @@ jobs:
       matrix:
         os:
           - runner: ubuntu-latest
-          - runner: macos-12
+          - runner: macos-latest
           - runner: windows-latest
     steps:
       # On Windows, set autocrlf to input so that when the repo is cloned down
@@ -357,7 +357,7 @@ jobs:
               - "x64"
               - "metal"
           - name: macos
-            runner: macos-12
+            runner: macos-latest
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
@@ -652,7 +652,7 @@ jobs:
               - "metal"
             nextest: linux
           - name: macos
-            runner: macos-12
+            runner: macos-latest
             nextest: mac
           - name: windows
             runner: windows-latest
