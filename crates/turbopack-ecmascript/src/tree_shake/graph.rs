@@ -825,9 +825,6 @@ impl DepGraph {
                 })) => {
                     let data = ItemData {
                         read_vars: reexport_local.map(|v| v.to_id()).into_iter().collect(),
-                        eventual_read_vars: Default::default(),
-                        write_vars: Default::default(),
-                        eventual_write_vars: Default::default(),
                         side_effects: true,
                         content: item.clone(),
                         ..Default::default()
