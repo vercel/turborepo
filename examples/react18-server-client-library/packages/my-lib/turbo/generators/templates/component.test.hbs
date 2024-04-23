@@ -1,0 +1,12 @@
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, test } from "vitest";
+import { {{ pascalCase name }} } from "./{{ kebabCase name }}";
+
+describe.concurrent("{{ kebabCase name }}", () => {
+	afterEach(cleanup);
+
+	test("check if h1 heading exists", ({ expect }) => {
+		render(<{{ pascalCase name }} />);
+		expect(screen.getByTestId("{{ kebabCase name }}-h1").textContent).toBe("{{ name }}");
+	});
+});
