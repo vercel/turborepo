@@ -531,6 +531,8 @@ impl DepGraph {
         let mut ids = vec![];
 
         for (index, item) in module.body.iter().enumerate() {
+            let mut reexport_local = None;
+
             // Fill exports
             if let ModuleItem::ModuleDecl(item) = item {
                 match item {
@@ -600,6 +602,10 @@ impl DepGraph {
                                     Some(s.name.clone()),
                                 ),
                             };
+
+                            let local =
+                                Ident::new(format!("_reexport_{}", local.sym).into(), local.span);
+                            reexport_local = Some(local.clone());
 
                             exports.push((local.to_id(), exported.clone()));
 
@@ -812,6 +818,29 @@ impl DepGraph {
                     ids.push(id.clone());
                     items.insert(id, data);
                 }
+
+                ModuleItem::ModuleDecl(ModuleDecl::ExportNamed(NamedExport {
+                    src: Some(..),
+                    ..
+                })) => {
+                    let data = ItemData {
+                        read_vars: reexport_local.map(|v| v.to_id()).into_iter().collect(),
+                        eventual_read_vars: Default::default(),
+                        write_vars: Default::default(),
+                        eventual_write_vars: Default::default(),
+                        side_effects: true,
+                        content: item.clone(),
+                        ..Default::default()
+                    };
+
+                    let id = ItemId::Item {
+                        index,
+                        kind: ItemIdItemKind::Normal,
+                    };
+                    ids.push(id.clone());
+                    items.insert(id, data);
+                }
+
                 _ => {
                     // Default to normal
 
