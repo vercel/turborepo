@@ -863,10 +863,11 @@ impl DepGraph {
         }
 
         for (local, export_name) in exports {
-            let id = ItemId::Group(ItemIdGroupKind::Export(match &export_name {
+            let name = match &export_name {
                 Some(ModuleExportName::Ident(v)) => v.to_id(),
                 _ => local.clone(),
-            }));
+            };
+            let id = ItemId::Group(ItemIdGroupKind::Export(name.clone()));
             ids.push(id.clone());
             items.insert(
                 id.clone(),
@@ -883,7 +884,7 @@ impl DepGraph {
                         type_only: false,
                         with: None,
                     })),
-                    export: Some(local.0.clone()),
+                    export: Some(name.0),
                     ..Default::default()
                 },
             );
