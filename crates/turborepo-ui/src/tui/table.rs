@@ -5,9 +5,12 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Style},
     text::Line,
-    widgets::{Block, BorderType, Borders, Paragraph, StatefulWidget, TableState, Tabs, Widget},
+    widgets::{
+        Block, BorderType, Borders, Paragraph, Row, StatefulWidget, Table, TableState, Tabs, Widget,
+    },
 };
 use tracing::debug;
+use turborepo_vt100::Cell;
 
 use super::{
     task::{Finished, Planned, Running, Task},
@@ -210,16 +213,8 @@ impl TaskTable {
         self.scroll = scroll;
     }
 
-    fn column_widths(&self, parent_width: u16) -> (u16, u16) {
-        // We trim names to be 40 long (+1 for column divider)
-        let name_col_width = 40.min(self.task_column_width) + 1;
-        if name_col_width + 2 < parent_width {
-            let status_width = parent_width - (name_col_width + 2);
-            (name_col_width, status_width)
-        } else {
-            // If there isn't any space for the task status, just don't display anything
-            (name_col_width, 0)
-        }
+    pub fn column_width(&self) -> u16 {
+        40.min(self.task_column_width) + 1
     }
 
     fn render_footer(area: Rect, buf: &mut Buffer) {
@@ -236,22 +231,19 @@ impl<'a> StatefulWidget for &'a TaskTable {
     type State = TableState;
 
     fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer, state: &mut Self::State) {
-        let areas = Layout::default()
-            .direction(ratatui::layout::Direction::Vertical)
-            .constraints([Constraint::Max(1), Constraint::Length(1)])
-            .split(area);
-        let tasks = self
-            .finished_tasks()
-            .chain(self.running_tasks())
-            .chain(self.planned_tasks())
-            .collect::<Vec<_>>();
+        let name_width = self.column_width();
+        let areas = Layout::vertical([Constraint::Length(2), Constraint::Min(2)]).split(area);
+        let table = Table::new(
+            self.finished_tasks()
+                .chain(self.running_tasks())
+                .chain(self.planned_tasks())
+                .map(|task| Row::new(vec![task]).height(1)),
+            [Constraint::Min(name_width)],
+        )
+        .highlight_style(Style::default().fg(Color::Yellow));
 
-        let mut tabs = Tabs::new(tasks).highlight_style(Style::default().fg(Color::Yellow));
-        if let Some(selected) = state.selected() {
-            tabs = tabs.select(selected);
-        }
-        Widget::render(tabs, areas[0], buf);
-        TaskTable::render_footer(areas[1], buf);
+        //TaskTable::render_footer(areas[0], buf);
+        StatefulWidget::render(table, areas[1], buf, state);
     }
 }
 

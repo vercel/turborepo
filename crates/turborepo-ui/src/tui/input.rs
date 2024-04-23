@@ -51,8 +51,8 @@ fn translate_key_event(interact: bool, key_event: KeyEvent) -> Option<Event> {
         KeyCode::Char('n') if key_event.modifiers == KeyModifiers::CONTROL => {
             Some(Event::ScrollDown)
         }
-        KeyCode::Left => Some(Event::Left),
-        KeyCode::Right => Some(Event::Right),
+        KeyCode::Up => Some(Event::Up),
+        KeyCode::Down => Some(Event::Down),
         KeyCode::Enter => Some(Event::EnterInteractive),
         _ => None,
     }

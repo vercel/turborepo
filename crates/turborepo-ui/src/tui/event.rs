@@ -17,8 +17,8 @@ pub enum Event {
     Log {
         message: Vec<u8>,
     },
-    Left,
-    Right,
+    Up,
+    Down,
     ScrollUp,
     ScrollDown,
     SetStdin {

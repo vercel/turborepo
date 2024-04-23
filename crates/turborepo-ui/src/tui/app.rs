@@ -212,10 +212,10 @@ fn update<B: Backend>(
             app.table.finish_task(&task, result)?;
             app.pane.render_screen(&task, terminal)?;
         }
-        Event::Left => {
+        Event::Up => {
             app.previous();
         }
-        Event::Right => {
+        Event::Down => {
             app.next();
         }
         Event::ScrollUp => {
@@ -241,9 +241,10 @@ fn update<B: Backend>(
 }
 
 fn view<I>(app: &mut App<I>, f: &mut Frame) {
-    let (term_height, _) = app.term_size();
-    let vertical = Layout::vertical([Constraint::Min(2), Constraint::Length(term_height)]);
-    let [table, pane] = vertical.areas(f.size());
+    let column_width = app.table.column_width();
+    let horizontal =
+        Layout::horizontal([Constraint::Length(column_width + 2), Constraint::Fill(1)]);
+    let [table, pane] = horizontal.areas(f.size());
     app.table.stateful_render(f, table);
     f.render_widget(&app.pane, pane);
 }
