@@ -10,13 +10,13 @@ use petgraph::{
 };
 use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
 use swc_core::{
-    common::{util::take::Take, Mark, SyntaxContext, DUMMY_SP},
+    common::{util::take::Take, DUMMY_SP},
     ecma::{
         ast::{
-            op, ClassDecl, Decl, ExportAll, ExportDecl, ExportNamedSpecifier, ExportSpecifier,
-            Expr, ExprStmt, FnDecl, Id, Ident, ImportDecl, ImportNamedSpecifier, ImportSpecifier,
-            KeyValueProp, Lit, Module, ModuleDecl, ModuleExportName, ModuleItem, NamedExport,
-            ObjectLit, Prop, PropName, PropOrSpread, Stmt, VarDecl,
+            op, ClassDecl, Decl, ExportDecl, ExportNamedSpecifier, ExportSpecifier, Expr, ExprStmt,
+            FnDecl, Id, Ident, ImportDecl, ImportNamedSpecifier, ImportSpecifier, KeyValueProp,
+            Lit, Module, ModuleDecl, ModuleExportName, ModuleItem, NamedExport, ObjectLit, Prop,
+            PropName, PropOrSpread, Stmt, VarDecl,
         },
         atoms::{js_word, JsWord},
         utils::{find_pat_ids, private_ident, quote_ident, IdentExt},
@@ -105,7 +105,7 @@ pub(crate) struct ItemData {
 
     pub content: ModuleItem,
 
-    pub export: Option<Id>,
+    pub export: Option<JsWord>,
 }
 
 impl Default for ItemData {
@@ -257,7 +257,7 @@ impl DepGraph {
                         required_vars.insert(id);
 
                         if let Some(export) = &data[item].export {
-                            exports.insert(Key::Export(export.0.to_string()), ix as u32);
+                            exports.insert(Key::Export(export.to_string()), ix as u32);
                         }
                     }
                     ItemId::Group(ItemIdGroupKind::ModuleEvaluation) => {
@@ -531,8 +531,6 @@ impl DepGraph {
         let mut ids = vec![];
 
         for (index, item) in module.body.iter().enumerate() {
-            let mut reexport_local = None;
-
             // Fill exports
             if let ModuleItem::ModuleDecl(item) = item {
                 match item {
@@ -605,7 +603,6 @@ impl DepGraph {
 
                             let local =
                                 Ident::new(format!("_reexport_{}", local.sym).into(), local.span);
-                            reexport_local = Some(local.clone());
 
                             exports.push((local.to_id(), exported.clone()));
 
@@ -628,7 +625,7 @@ impl DepGraph {
                                                 specifiers: vec![ImportSpecifier::Named(
                                                     ImportNamedSpecifier {
                                                         span: DUMMY_SP,
-                                                        local,
+                                                        local: local.clone(),
                                                         imported: orig,
                                                         is_type_only: false,
                                                     },
@@ -822,26 +819,7 @@ impl DepGraph {
                 ModuleItem::ModuleDecl(ModuleDecl::ExportNamed(NamedExport {
                     src: Some(..),
                     ..
-                })) => {
-                    let data = ItemData {
-                        read_vars: reexport_local
-                            .as_ref()
-                            .map(|v| v.to_id())
-                            .into_iter()
-                            .collect(),
-                        side_effects: true,
-                        content: item.clone(),
-                        export: reexport_local.map(|v| v.to_id()),
-                        ..Default::default()
-                    };
-
-                    let id = ItemId::Item {
-                        index,
-                        kind: ItemIdItemKind::Normal,
-                    };
-                    ids.push(id.clone());
-                    items.insert(id, data);
-                }
+                })) => {}
 
                 _ => {
                     // Default to normal
@@ -905,7 +883,7 @@ impl DepGraph {
                         type_only: false,
                         with: None,
                     })),
-                    export: Some(local.clone()),
+                    export: Some(local.0.clone()),
                     ..Default::default()
                 },
             );
