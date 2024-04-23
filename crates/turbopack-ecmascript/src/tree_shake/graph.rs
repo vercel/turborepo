@@ -576,8 +576,10 @@ impl DepGraph {
                         // We are not interested in re-exports.
                         for (si, s) in item.specifiers.iter().enumerate() {
                             let local = match s {
-                                ExportSpecifier::Named(s) => Some(orig_name(&s.orig)),
-                                ExportSpecifier::Default(..) => Some("default".into()),
+                                ExportSpecifier::Named(s) => {
+                                    Some(orig_name(s.exported.as_ref().unwrap_or(&s.orig)))
+                                }
+                                ExportSpecifier::Default(s) => Some(s.exported.sym.clone()),
                                 ExportSpecifier::Namespace(..) => None,
                             };
                             let local = local.map(|v| (v, SyntaxContext::empty()));
@@ -599,6 +601,7 @@ impl DepGraph {
                                             content: ModuleItem::ModuleDecl(
                                                 ModuleDecl::ExportNamed(NamedExport {
                                                     specifiers: vec![s.clone()],
+                                                    src: None,
                                                     ..item.clone()
                                                 }),
                                             ),
