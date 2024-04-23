@@ -853,10 +853,10 @@ impl DepGraph {
             );
         }
 
-        for (export, export_name) in exports {
+        for (local, export_name) in exports {
             let id = ItemId::Group(ItemIdGroupKind::Export(match &export_name {
                 Some(ModuleExportName::Ident(v)) => v.to_id(),
-                _ => export.clone(),
+                _ => local.clone(),
             }));
             ids.push(id.clone());
             items.insert(
@@ -866,7 +866,7 @@ impl DepGraph {
                         span: DUMMY_SP,
                         specifiers: vec![ExportSpecifier::Named(ExportNamedSpecifier {
                             span: DUMMY_SP,
-                            orig: ModuleExportName::Ident(export.clone().into()),
+                            orig: ModuleExportName::Ident(local.clone().into()),
                             exported: export_name,
                             is_type_only: false,
                         })],
@@ -874,7 +874,7 @@ impl DepGraph {
                         type_only: false,
                         with: None,
                     })),
-                    export: Some(export.clone()),
+                    export: Some(local.clone()),
                     ..Default::default()
                 },
             );
