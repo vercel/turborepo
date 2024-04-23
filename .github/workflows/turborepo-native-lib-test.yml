@@ -25,7 +25,7 @@ jobs:
               - "x64"
               - "metal"
           - name: macos
-            runner: macos-latest
+            runner: macos-12
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
