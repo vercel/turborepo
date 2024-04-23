@@ -16,6 +16,11 @@ interface CardProps {
  *
  * Looking for a much more practical example for use of client and
  * server components together in a library? Check out - https://github.com/react18-tools/nextjs-themes
+ *
+ * @param className - CSS className
+ * @param title - Card title
+ * @param children - Card description provided as children
+ * @param href - Link to the resource
  */
 
 export function Card({
