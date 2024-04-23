@@ -111,6 +111,8 @@ jobs:
       - name: Build native library
         run: |
           cd packages/turbo-repository
+          echo $PATH
+          cat $GITHUB_PATH
           ${{ matrix.settings.rust_env }} pnpm build:release --target=${{ matrix.settings.target }}
 
       - name: Upload Artifacts
