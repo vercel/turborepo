@@ -292,22 +292,21 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
         let mut task_dependencies: Vec<Spanned<TaskName>> = Vec::new();
         if let Some(depends_on) = raw_task.depends_on {
             for dependency in depends_on.into_inner() {
-                let (dependency, span) = dependency.split();
+                let (span, text) = dependency.span_and_text("turbo.json");
+                let (dependency, depspan) = dependency.split();
                 let dependency: String = dependency.into();
-                if let Some(dependency) = dependency.strip_prefix(ENV_PIPELINE_DELIMITER) {
-                    println!(
-                        "[DEPRECATED] Declaring an environment variable in \"dependsOn\" is \
-                         deprecated, found {}. Use the \"env\" key or use `npx @turbo/codemod \
-                         migrate-env-var-dependencies`.\n",
-                        dependency
-                    );
-                    env_var_dependencies.insert(dependency.to_string());
+                if let Some(_) = dependency.strip_prefix(ENV_PIPELINE_DELIMITER) {
+                    return Err(Error::InvalidDependsOnValue {
+                        field: "dependsOn",
+                        span,
+                        text,
+                    });
                 } else if let Some(topo_dependency) =
                     dependency.strip_prefix(TOPOLOGICAL_PIPELINE_DELIMITER)
                 {
-                    topological_dependencies.push(span.to(topo_dependency.to_string().into()));
+                    topological_dependencies.push(depspan.to(topo_dependency.to_string().into()));
                 } else {
-                    task_dependencies.push(span.to(dependency.into()));
+                    task_dependencies.push(depspan.to(dependency.into()));
                 }
             }
         }
@@ -465,25 +464,21 @@ impl TryFrom<RawTurboJson> for TurboJson {
         }
 
         for global_dep in raw_turbo.global_dependencies.into_iter().flatten() {
-            if let Some(env_var) = global_dep.strip_prefix(ENV_PIPELINE_DELIMITER) {
-                println!(
-                    "[DEPRECATED] Declaring an environment variable in \"dependsOn\" is \
-                     deprecated, found {}. Use the \"env\" key or use `npx @turbo/codemod \
-                     migrate-env-var-dependencies`.\n",
-                    env_var
-                );
-
-                global_env.insert(env_var.to_string());
+            if let Some(_) = global_dep.strip_prefix(ENV_PIPELINE_DELIMITER) {
+                let (span, text) = global_dep.span_and_text("turbo.json");
+                return Err(Error::InvalidDependsOnValue {
+                    field: "globalDependencies",
+                    span,
+                    text,
+                });
+            } else if Utf8Path::new(&global_dep.value).is_absolute() {
+                let (span, text) = global_dep.span_and_text("turbo.json");
+                return Err(Error::AbsolutePathInConfig {
+                    field: "globalDependencies",
+                    span,
+                    text,
+                });
             } else {
-                if Utf8Path::new(&global_dep.value).is_absolute() {
-                    let (span, text) = global_dep.span_and_text("turbo.json");
-                    return Err(Error::AbsolutePathInConfig {
-                        field: "globalDependencies",
-                        span,
-                        text,
-                    });
-                }
-
                 global_file_dependencies.insert(global_dep.into_inner().into());
             }
         }
