@@ -10,7 +10,7 @@ use petgraph::{
 };
 use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
 use swc_core::{
-    common::{util::take::Take, SyntaxContext, DUMMY_SP},
+    common::{util::take::Take, Mark, SyntaxContext, DUMMY_SP},
     ecma::{
         ast::{
             op, ClassDecl, Decl, ExportAll, ExportDecl, ExportNamedSpecifier, ExportSpecifier,
@@ -19,7 +19,7 @@ use swc_core::{
             ObjectLit, Prop, PropName, PropOrSpread, Stmt, VarDecl,
         },
         atoms::{js_word, JsWord},
-        utils::{find_pat_ids, quote_ident},
+        utils::{find_pat_ids, private_ident, quote_ident},
     },
 };
 
@@ -575,40 +575,57 @@ impl DepGraph {
 
                         // We are not interested in re-exports.
                         for (si, s) in item.specifiers.iter().enumerate() {
+                            let imported = match s {
+                                ExportSpecifier::Named(s) => s.exported.clone(),
+                                ExportSpecifier::Default(s) => Some(ModuleExportName::Ident(
+                                    Ident::new("default".into(), DUMMY_SP),
+                                )),
+                                ExportSpecifier::Namespace(s) => None,
+                            };
+
                             let local = match s {
                                 ExportSpecifier::Named(s) => {
-                                    Some(orig_name(s.exported.as_ref().unwrap_or(&s.orig)))
+                                    orig_name(s.exported.as_ref().unwrap_or(&s.orig))
                                 }
-                                ExportSpecifier::Default(s) => Some(s.exported.sym.clone()),
-                                ExportSpecifier::Namespace(s) => Some(orig_name(&s.name)),
+                                ExportSpecifier::Default(s) => s.exported.sym.clone(),
+                                ExportSpecifier::Namespace(s) => orig_name(&s.name),
                             };
-                            let local = local.map(|v| (v, SyntaxContext::empty()));
+                            let local = private_ident!(local);
 
-                            if item.src.is_some() {
-                                if let Some(local) = local {
-                                    let id = ItemId::Item {
-                                        index,
-                                        kind: ItemIdItemKind::ImportBinding(si as _),
-                                    };
-                                    ids.push(id.clone());
+                            if let Some(src) = &item.src {
+                                let id = ItemId::Item {
+                                    index,
+                                    kind: ItemIdItemKind::ImportBinding(si as _),
+                                };
+                                ids.push(id.clone());
+                                exports.push(local.to_id());
 
-                                    items.insert(
-                                        id,
-                                        ItemData {
-                                            is_hoisted: true,
-                                            var_decls: [local].into_iter().collect(),
-                                            pure: true,
-                                            content: ModuleItem::ModuleDecl(
-                                                ModuleDecl::ExportNamed(NamedExport {
-                                                    specifiers: vec![s.clone()],
-                                                    src: None,
-                                                    ..item.clone()
-                                                }),
-                                            ),
-                                            ..Default::default()
-                                        },
-                                    );
-                                }
+                                items.insert(
+                                    id,
+                                    ItemData {
+                                        is_hoisted: true,
+                                        var_decls: [local.to_id()].into_iter().collect(),
+                                        pure: true,
+                                        content: ModuleItem::ModuleDecl(ModuleDecl::Import(
+                                            ImportDecl {
+                                                span: DUMMY_SP,
+                                                specifiers: vec![ImportSpecifier::Named(
+                                                    ImportNamedSpecifier {
+                                                        span: DUMMY_SP,
+                                                        local,
+                                                        imported,
+                                                        is_type_only: false,
+                                                    },
+                                                )],
+                                                src: src.clone(),
+                                                type_only: false,
+                                                with: None,
+                                                phase: Default::default(),
+                                            },
+                                        )),
+                                        ..Default::default()
+                                    },
+                                );
                             }
 
                             match s {
