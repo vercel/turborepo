@@ -18,7 +18,15 @@ use crate::{
     DaemonConnector, DaemonPaths,
 };
 
-pub struct WatchClient {}
+pub struct WatchClient {
+    run: Run,
+    persistent_tasks_handle: Option<JoinHandle<Result<i32, run::Error>>>,
+    current_runs: HashMap<PackageName, JoinHandle<Result<i32, run::Error>>>,
+    connector: DaemonConnector,
+    base: CommandBase,
+    telemetry: CommandEventBuilder,
+    handler: SignalHandler,
+}
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
@@ -51,6 +59,8 @@ pub enum Error {
     },
     #[error("daemon connection closed")]
     ConnectionClosed,
+    #[error("failed to subscribe to signal handler, shutting down")]
+    NoSignalHandler,
     #[error("watch interrupted due to signal")]
     SignalInterrupt,
     #[error("package change error")]
@@ -58,13 +68,9 @@ pub enum Error {
 }
 
 impl WatchClient {
-    pub async fn start(base: CommandBase, telemetry: CommandEventBuilder) -> Result<(), Error> {
+    pub async fn new(base: CommandBase, telemetry: CommandEventBuilder) -> Result<Self, Error> {
         let signal = commands::run::get_signal()?;
         let handler = SignalHandler::new(signal);
-        let Some(signal_subscriber) = handler.subscribe() else {
-            tracing::warn!("failed to subscribe to signal handler, shutting down");
-            return Ok(());
-        };
 
         let Some(Command::Watch(execution_args)) = &base.args().command else {
             unreachable!()
@@ -76,11 +82,9 @@ impl WatchClient {
             execution_args: execution_args.clone(),
         });
 
-        let mut run = RunBuilder::new(new_base)?
+        let run = RunBuilder::new(new_base)?
             .build(&handler, telemetry.clone())
             .await?;
-
-        run.print_run_prelude();
 
         let connector = DaemonConnector {
             can_start_server: true,
@@ -88,26 +92,31 @@ impl WatchClient {
             paths: DaemonPaths::from_repo_root(&base.repo_root),
         };
 
+        Ok(Self {
+            base,
+            run,
+            connector,
+            handler,
+            telemetry,
+            persistent_tasks_handle: None,
+            current_runs: HashMap::new(),
+        })
+    }
+
+    pub async fn start(&mut self) -> Result<(), Error> {
+        let connector = self.connector.clone();
         let mut client = connector.connect().await?;
 
         let mut events = client.package_changes().await?;
-        let mut current_runs: HashMap<PackageName, JoinHandle<Result<i32, run::Error>>> =
-            HashMap::new();
-        let mut persistent_tasks_handle = None;
+
+        self.run.print_run_prelude();
+
+        let signal_subscriber = self.handler.subscribe().ok_or(Error::NoSignalHandler)?;
 
         let event_fut = async {
             while let Some(event) = events.next().await {
                 let event = event?;
-                Self::handle_change_event(
-                    &mut run,
-                    event.event.unwrap(),
-                    &mut current_runs,
-                    &base,
-                    &telemetry,
-                    &handler,
-                    &mut persistent_tasks_handle,
-                )
-                .await?;
+                self.handle_change_event(event.event.unwrap()).await?;
             }
 
             Err(Error::ConnectionClosed)
@@ -127,13 +136,8 @@ impl WatchClient {
     }
 
     async fn handle_change_event(
-        run: &mut Run,
+        &mut self,
         event: proto::package_change_event::Event,
-        current_runs: &mut HashMap<PackageName, JoinHandle<Result<i32, run::Error>>>,
-        base: &CommandBase,
-        telemetry: &CommandEventBuilder,
-        handler: &SignalHandler,
-        persistent_tasks_handle: &mut Option<JoinHandle<Result<i32, run::Error>>>,
     ) -> Result<(), Error> {
         // Should we recover here?
         match event {
@@ -142,11 +146,11 @@ impl WatchClient {
             }) => {
                 let package_name = PackageName::from(package_name);
                 // If not in the filtered pkgs, ignore
-                if !run.filtered_pkgs.contains(&package_name) {
+                if !self.run.filtered_pkgs.contains(&package_name) {
                     return Ok(());
                 }
 
-                let mut args = base.args().clone();
+                let mut args = self.base.args().clone();
                 args.command = args.command.map(|c| {
                     if let Command::Watch(execution_args) = c {
                         Command::Run {
@@ -162,18 +166,22 @@ impl WatchClient {
                     }
                 });
 
-                let new_base =
-                    CommandBase::new(args, base.repo_root.clone(), get_version(), base.ui);
+                let new_base = CommandBase::new(
+                    args,
+                    self.base.repo_root.clone(),
+                    get_version(),
+                    self.base.ui,
+                );
 
                 // TODO: Add logic on when to abort vs wait
-                if let Some(run) = current_runs.remove(&package_name) {
+                if let Some(run) = self.current_runs.remove(&package_name) {
                     run.abort();
                 }
 
-                let signal_handler = handler.clone();
-                let telemetry = telemetry.clone();
+                let signal_handler = self.handler.clone();
+                let telemetry = self.telemetry.clone();
 
-                current_runs.insert(
+                self.current_runs.insert(
                     package_name.clone(),
                     tokio::spawn(async move {
                         let mut run = RunBuilder::new(new_base)?
@@ -187,7 +195,7 @@ impl WatchClient {
                 );
             }
             proto::package_change_event::Event::RediscoverPackages(_) => {
-                let mut args = base.args().clone();
+                let mut args = self.base.args().clone();
                 args.command = args.command.map(|c| {
                     if let Command::Watch(execution_args) = c {
                         Command::Run {
@@ -203,36 +211,41 @@ impl WatchClient {
                     }
                 });
 
-                let base = CommandBase::new(args, base.repo_root.clone(), get_version(), base.ui);
+                let base = CommandBase::new(
+                    args,
+                    self.base.repo_root.clone(),
+                    get_version(),
+                    self.base.ui,
+                );
 
                 // When we rediscover, stop all current runs
-                for (_, run) in current_runs.drain() {
+                for (_, run) in self.current_runs.drain() {
                     run.abort();
                 }
 
                 // rebuild run struct
-                *run = RunBuilder::new(base.clone())?
+                self.run = RunBuilder::new(base.clone())?
                     .hide_prelude()
-                    .build(handler, telemetry.clone())
+                    .build(&self.handler, self.telemetry.clone())
                     .await?;
 
-                if run.has_persistent_tasks() {
+                if self.run.has_persistent_tasks() {
                     // Abort old run
-                    if let Some(run) = persistent_tasks_handle.take() {
+                    if let Some(run) = self.persistent_tasks_handle.take() {
                         run.abort();
                     }
 
-                    let mut persistent_run = run.create_run_for_persistent_tasks();
+                    let mut persistent_run = self.run.create_run_for_persistent_tasks();
                     // If we have persistent tasks, we run them on a separate thread
                     // since persistent tasks don't finish
-                    *persistent_tasks_handle =
+                    self.persistent_tasks_handle =
                         Some(tokio::spawn(async move { persistent_run.run().await }));
 
                     // But we still run the regular tasks blocking
-                    let mut non_persistent_run = run.create_run_without_persistent_tasks();
+                    let mut non_persistent_run = self.run.create_run_without_persistent_tasks();
                     non_persistent_run.run().await?;
                 } else {
-                    run.run().await?;
+                    self.run.run().await?;
                 }
             }
             proto::package_change_event::Event::Error(proto::PackageChangeError { message }) => {
