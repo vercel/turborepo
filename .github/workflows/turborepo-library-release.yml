@@ -109,13 +109,11 @@ jobs:
         if: ${{ matrix.settings.setup }}
 
       - name: Build native library
+        # For some reason PATH modifications from Setup toolchain aren't populated
+        # when using the nodejs-rust alpine container.
         run: |
-          cd packages/turbo-repository
-          echo $PATH
           export PATH=/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
-          echo $PATH
-          echo $GITHUB_PATH
-          cat $GITHUB_PATH
+          cd packages/turbo-repository
           ${{ matrix.settings.rust_env }} pnpm build:release --target=${{ matrix.settings.target }}
 
       - name: Upload Artifacts
