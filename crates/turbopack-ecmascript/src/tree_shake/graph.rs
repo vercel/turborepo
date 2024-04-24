@@ -39,7 +39,8 @@ pub(crate) enum ItemId {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) enum ItemIdGroupKind {
     ModuleEvaluation,
-    Export(Id),
+    /// `(local, export_name)``
+    Export(Id, JsWord),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -255,7 +256,7 @@ impl DepGraph {
 
             for item in group {
                 match item {
-                    ItemId::Group(ItemIdGroupKind::Export(id)) => {
+                    ItemId::Group(ItemIdGroupKind::Export(id, _)) => {
                         required_vars.insert(id);
 
                         if let Some(export) = &data[item].export {
@@ -437,6 +438,8 @@ impl DepGraph {
             }
         }
 
+        dbg!(&self.g.graph_ix);
+
         // Expand **starting** nodes
         for (ix, id) in self.g.graph_ix.iter().enumerate() {
             // If a node is reachable from two or more nodes, it should be in a
@@ -464,6 +467,8 @@ impl DepGraph {
             }
         }
 
+        dbg!(&groups);
+
         loop {
             let mut changed = false;
 
@@ -478,6 +483,8 @@ impl DepGraph {
                 break;
             }
         }
+
+        dbg!(&groups);
 
         let mut groups = groups.into_iter().map(|v| v.0).collect::<Vec<_>>();
 
@@ -869,7 +876,7 @@ impl DepGraph {
                 Some(ModuleExportName::Ident(v)) => v.to_id(),
                 _ => local.clone(),
             };
-            let id = ItemId::Group(ItemIdGroupKind::Export(name.clone()));
+            let id = ItemId::Group(ItemIdGroupKind::Export(local.clone(), name.0.clone()));
             ids.push(id.clone());
             items.insert(
                 id.clone(),

@@ -199,7 +199,7 @@ fn run(input: PathBuf) {
                 for e in &entries {
                     let key = match e {
                         ItemIdGroupKind::ModuleEvaluation => Key::ModuleEvaluation,
-                        ItemIdGroupKind::Export(e) => Key::Export(e.0.to_string()),
+                        ItemIdGroupKind::Export(_, name) => Key::Export(name.to_string()),
                     };
 
                     let index = entrypoints[&key];
@@ -230,7 +230,7 @@ fn run(input: PathBuf) {
                 &exports.join(","),
                 exports
                     .into_iter()
-                    .map(|e| ItemIdGroupKind::Export((e.into(), Default::default())))
+                    .map(|e| ItemIdGroupKind::Export(((*e).into(), Default::default()), e.into()))
                     .collect(),
                 true,
             );
@@ -349,7 +349,7 @@ where
 fn render_item_id(id: &ItemId) -> Option<String> {
     match id {
         ItemId::Group(ItemIdGroupKind::ModuleEvaluation) => Some("ModuleEvaluation".into()),
-        ItemId::Group(ItemIdGroupKind::Export(id)) => Some(format!("export {}", id.0)),
+        ItemId::Group(ItemIdGroupKind::Export(_, name)) => Some(format!("export {name}")),
         _ => None,
     }
 }

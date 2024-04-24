@@ -71,6 +71,8 @@ impl Analyzer<'_> {
 
         analyzer.handle_exports(module);
 
+        dbg!(&g.g);
+
         (g, items)
     }
 
@@ -237,10 +239,10 @@ impl Analyzer<'_> {
                         self.g
                             .add_strong_deps(item_id, self.last_side_effects.iter());
                     }
-                    ItemIdGroupKind::Export(id) => {
+                    ItemIdGroupKind::Export(local, _) => {
                         // Create a strong dependency to LAST_WRITES for this var
 
-                        if let Some(state) = self.vars.get(id) {
+                        if let Some(state) = self.vars.get(local) {
                             self.g.add_strong_deps(item_id, state.last_writes.iter());
                         }
                     }
