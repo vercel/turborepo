@@ -158,3 +158,23 @@ pub fn remove_upper_count<C: AggregationContext>(
         }
     }
 }
+
+pub(super) fn get_aggregated_remove_change<C: AggregationContext>(
+    ctx: &C,
+    guard: &C::Guard<'_>,
+) -> Option<C::DataChange> {
+    match &**guard {
+        AggregationNode::Leaf { .. } => guard.get_remove_change(),
+        AggregationNode::Aggegating(aggegating) => ctx.data_to_remove_change(&aggegating.data),
+    }
+}
+
+pub(super) fn get_aggregated_add_change<C: AggregationContext>(
+    ctx: &C,
+    guard: &C::Guard<'_>,
+) -> Option<C::DataChange> {
+    match &**guard {
+        AggregationNode::Leaf { .. } => guard.get_add_change(),
+        AggregationNode::Aggegating(aggegating) => ctx.data_to_add_change(&aggegating.data),
+    }
+}

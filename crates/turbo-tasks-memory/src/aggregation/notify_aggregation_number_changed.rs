@@ -1,6 +1,6 @@
 use super::{
-    followers::{add_follower, add_follower_count, remove_follower, remove_follower_count},
-    increase_aggregation_number, AggegatingNode, AggregationContext, AggregationNode,
+    add_followers::add_follower, increase_aggregation_number, uppers::get_aggregated_remove_change,
+    AggegatingNode, AggregationContext, AggregationNode, PreparedOperation,
 };
 
 pub(super) fn notify_aggregation_number_changed<C: AggregationContext>(
@@ -34,17 +34,27 @@ pub(super) fn notify_aggregation_number_changed<C: AggregationContext>(
     }
     // Inner is currently higher than the upper. That's an invariant violation.
     // We convert the inner to a follower.
-    add_follower(ctx, upper, upper_id, inner_id);
+    add_follower(ctx, upper, inner_id);
     let mut follower = ctx.node(inner_id);
     let count = follower.uppers_mut().remove_entry(upper_id) - 1;
-    if count == 0 {
+    let remove_change = if count > -1 {
+        // An upper was removed, we need to update aggregated data.
+        get_aggregated_remove_change(ctx, &mut follower)
+    } else {
+        None
+    };
+    drop(follower);
+    if count == 0 && remove_change.is_none() {
         return;
     }
-    drop(follower);
-    let upper = ctx.node(upper_id);
-    if count > 0 {
-        add_follower_count(ctx, upper, upper_id, inner_id, count as usize);
-    } else {
-        remove_follower_count(ctx, upper, inner_id, (-count) as usize);
-    }
+    let mut upper = ctx.node(upper_id);
+    let remove_job = remove_change.and_then(|remove_change| upper.apply_change(ctx, remove_change));
+    let add_follower_job =
+        (count > 0).then(|| upper.add_follower_count(ctx, inner_id, count as usize));
+    let remove_follower_job =
+        (count < 0).then(|| upper.remove_follower_count(ctx, inner_id, (-count) as usize));
+    drop(upper);
+    remove_job.apply(ctx);
+    add_follower_job.apply(ctx);
+    remove_follower_job.apply(ctx);
 }

@@ -1,8 +1,8 @@
 use std::{cmp::Ordering, hash::Hash};
 
 use super::{
-    followers::add_follower, increase_aggregation_number, uppers::add_upper, AggregationContext,
-    AggregationNode, PreparedOperation,
+    add_followers::add_follower, increase_aggregation_number, uppers::add_upper,
+    AggregationContext, AggregationNode, PreparedOperation,
 };
 
 impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
@@ -100,7 +100,7 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNotifyNewFollower<C
                                 }
                             }
                             Ordering::Greater => {
-                                add_follower(ctx, upper, &upper_id, &follower_id);
+                                add_follower(ctx, upper, &follower_id);
                                 return;
                             }
                         }

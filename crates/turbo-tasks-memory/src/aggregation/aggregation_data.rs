@@ -17,9 +17,9 @@ where
         AggregationDataGuard { guard }
     } else {
         increase_aggregation_number(ctx, guard, node_id, u32::MAX);
-        AggregationDataGuard {
-            guard: ctx.node(node_id),
-        }
+        let guard = ctx.node(node_id);
+        debug_assert!(guard.aggregation_number() == u32::MAX);
+        AggregationDataGuard { guard }
     }
 }
 

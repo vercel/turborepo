@@ -1,8 +1,8 @@
 use std::{cmp::Ordering, hash::Hash, mem::take};
 
 use super::{
-    followers::remove_follower_all_count,
     notify_aggregation_number_changed,
+    remove_followers::remove_follower_all_count,
     uppers::{add_upper, add_upper_count, remove_upper_count},
     AggegatingNode, AggregationContext, AggregationNode, AggregationNodeGuard, PreparedOperation,
     StackVec,
@@ -47,13 +47,15 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedIncreaseAggregation
             for upper_id in &uppers {
                 let upper = ctx.node(upper_id);
                 let aggregation_number = upper.aggregation_number();
-                if aggregation_number > max {
-                    max = aggregation_number;
-                }
-                if aggregation_number == new_aggregation_number {
-                    new_aggregation_number += 1;
-                    if max >= new_aggregation_number {
-                        need_to_run = true;
+                if aggregation_number != u32::MAX {
+                    if aggregation_number > max {
+                        max = aggregation_number;
+                    }
+                    if aggregation_number == new_aggregation_number {
+                        new_aggregation_number += 1;
+                        if max >= new_aggregation_number {
+                            need_to_run = true;
+                        }
                     }
                 }
             }
@@ -151,7 +153,7 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedIncreaseAggregation
                         drop(follower);
                         let node = ctx.node(&node_id);
                         node_aggregation_number = node.aggregation_number();
-                        if node_aggregation_number > follower_aggregation_number {
+                        if follower_aggregation_number > node_aggregation_number {
                             break;
                         }
                     }

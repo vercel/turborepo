@@ -4,15 +4,16 @@ use smallvec::SmallVec;
 
 use crate::count_hash_set::CountHashSet;
 
+mod add_followers;
 mod aggregation_data;
 mod change;
-mod followers;
 mod increase;
 mod lost_edge;
 mod new_edge;
 mod notify_aggregation_number_changed;
 mod notify_lost_follower;
 mod notify_new_follower;
+mod remove_followers;
 mod root_query;
 #[cfg(test)]
 mod tests;

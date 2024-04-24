@@ -523,7 +523,7 @@ fn chain_double_connected() {
     let mut current = root.clone();
     let mut current2 = Node::new(2);
     current.add_child(&ctx, current2.clone());
-    for i in 3..=30 {
+    for i in 3..=100 {
         let node = Node::new(i);
         current.add_child(&ctx, node.clone());
         current2.add_child(&ctx, node.clone());
@@ -534,16 +534,16 @@ fn chain_double_connected() {
 
     {
         let aggregated = aggregation_data(&ctx, &current);
-        assert_eq!(aggregated.value, 1201);
+        assert_eq!(aggregated.value, 26049);
     }
     check_invariants(&ctx, once(current.clone()));
-    assert_eq!(ctx.additions.load(Ordering::SeqCst), 78);
+    assert_eq!(ctx.additions.load(Ordering::SeqCst), 953);
     ctx.additions.store(0, Ordering::SeqCst);
 
     print(&ctx, &current, true);
 }
 
-const RECT_SIZE: usize = 20;
+const RECT_SIZE: usize = 10;
 const RECT_MULT: usize = 100;
 
 #[test]
@@ -555,6 +555,7 @@ fn rectangle_tree() {
         add_value: false,
     };
     let mut nodes: Vec<Vec<Arc<Node>>> = Vec::new();
+    let mut extra_nodes = Vec::new();
     for y in 0..RECT_SIZE {
         let mut line: Vec<Arc<Node>> = Vec::new();
         for x in 0..RECT_SIZE {
@@ -568,18 +569,26 @@ fn rectangle_tree() {
             let value = (x + y * RECT_MULT) as u32;
             let node = Node::new(value);
             if x == 0 || y == 0 {
+                let extra_node = Node::new(value + 100000);
+                prepare_aggregation_data(&ctx, &NodeRef(extra_node.clone()));
+                extra_node.add_child(&ctx, node.clone());
+                extra_nodes.push(extra_node);
                 prepare_aggregation_data(&ctx, &NodeRef(node.clone()));
             }
             for parent in parents {
-                parent.add_child(&ctx, node.clone());
+                parent.add_child_unchecked(&ctx, node.clone());
+            }
+            if x == 0 || y == 0 {
+                prepare_aggregation_data(&ctx, &NodeRef(node.clone()));
             }
             line.push(node);
         }
         nodes.push(line);
     }
 
-    let root = NodeRef(nodes[0][0].clone());
+    check_invariants(&ctx, extra_nodes.iter().cloned().map(NodeRef));
 
+    let root = NodeRef(extra_nodes[0].clone());
     print(&ctx, &root, false);
 }
 
@@ -646,10 +655,9 @@ fn many_children() {
     // might vary so we accept a few slow children
     assert!(number_of_slow_children < 3);
 
-    let root = NodeRef(roots[0].clone());
-
     check_invariants(&ctx, roots.iter().cloned().map(NodeRef));
 
+    // let root = NodeRef(roots[0].clone());
     // print(&ctx, &root, false);
 }
 
