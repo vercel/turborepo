@@ -82,7 +82,7 @@ impl Module for EcmascriptModulePartAsset {
                     ModulePart::evaluation(),
                     self.import_externals,
                 )),
-                Vc::cell(format!("ecmascript module evaluation")),
+                Vc::cell("ecmascript module evaluation".to_string()),
             ));
 
             references.push(reference);
@@ -93,7 +93,7 @@ impl Module for EcmascriptModulePartAsset {
                     ModulePart::exports(),
                     self.import_externals,
                 )),
-                Vc::cell(format!("ecmascript reexports")),
+                Vc::cell("ecmascript reexports".to_string()),
             ));
 
             references.push(reference);
