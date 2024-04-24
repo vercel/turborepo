@@ -227,6 +227,7 @@ impl DepGraph {
     ) -> SplitModuleResult {
         dbg!(&data);
         let groups = self.finalize(data);
+        dbg!(&groups);
         let mut exports = FxHashMap::default();
         let mut part_deps = FxHashMap::<_, Vec<_>>::default();
 
