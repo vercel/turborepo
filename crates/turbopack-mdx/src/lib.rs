@@ -2,6 +2,7 @@
 #![feature(arbitrary_self_types)]
 
 use anyhow::{anyhow, Context, Result};
+use markdown::unist::Point;
 use mdxjs::{compile, MdxParseOptions, Options};
 use turbo_tasks::{Value, ValueDefault, Vc};
 use turbo_tasks_fs::{rope::Rope, File, FileContent, FileSystemPath};
@@ -10,6 +11,7 @@ use turbopack_core::{
     chunk::{AsyncModuleInfo, ChunkItem, ChunkType, ChunkableModule, ChunkingContext},
     context::AssetContext,
     ident::AssetIdent,
+    issue::{Issue, IssueStage, OptionIssueSource, OptionStyledString, StyledString},
     module::Module,
     reference::ModuleReferences,
     resolve::origin::ResolveOrigin,
@@ -147,8 +149,14 @@ async fn into_ecmascript_module_asset(
         ..Default::default()
     };
     // TODO: upstream mdx currently bubbles error as string
-    let mdx_jsx_component =
-        compile(&file.content().to_str()?, &options).map_err(|e| anyhow!("{}", e))?;
+    let mdx_jsx_component = compile(&file.content().to_str()?, &options);
+
+    let mdx_jsx_component = match mdx_jsx_component {
+        Ok(mdx_jsx_component) => mdx_jsx_component,
+        Err(err) => {
+            return err;
+        }
+    };
 
     let source = VirtualSource::new_with_ident(
         this.source.ident(),
@@ -165,6 +173,47 @@ async fn into_ecmascript_module_asset(
         Value::new(Default::default()),
         this.asset_context.compile_time_info(),
     ))
+}
+
+#[turbo_tasks::value]
+struct MdxIssue {
+    /// Place of message.
+    path: Vc<FileSystemPath>,
+    loc: Vc<OptionIssueSource>,
+    /// Reason for message (should use markdown).
+    reason: String,
+    /// Category of message.
+    rule_id: Box<String>,
+    /// Namespace of message.
+    source: Box<String>,
+}
+
+#[turbo_tasks::value_impl]
+impl Issue for MdxIssue {
+    #[turbo_tasks::function]
+    fn file_path(&self) -> Vc<FileSystemPath> {
+        self.path.clone()
+    }
+
+    #[turbo_tasks::function]
+    fn source(&self) -> Vc<OptionIssueSource> {
+        self.loc
+    }
+
+    #[turbo_tasks::function]
+    fn stage(self: Vc<Self>) -> Vc<IssueStage> {
+        IssueStage::Parse.cell()
+    }
+
+    #[turbo_tasks::function]
+    fn title(self: Vc<Self>) -> Vc<StyledString> {
+        StyledString::Text("MDX Parse Error".to_string()).cell()
+    }
+
+    #[turbo_tasks::function]
+    fn description(&self) -> Vc<OptionStyledString> {
+        Vc::cell(Some(StyledString::Text(self.reason.clone()).cell()))
+    }
 }
 
 #[turbo_tasks::value_impl]
