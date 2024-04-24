@@ -45,24 +45,30 @@ jobs:
             target: "x86_64-unknown-linux-musl"
             container: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2023-09-17-alpine
             install: |
+              apk update && apk upgrade
               apk add libc6-compat curl
+              echo /root/.cargo/bin >> ${GITHUB_PATH}
+              echo /usr/local/cargo/bin/rustup >> ${GITHUB_PATH}
             setup: |
+              export PATH=/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
+              rustup show active-toolchain
+              dirname $(rustup which cargo) >> ${GITHUB_PATH}
               pnpm install
 
           - host: ubuntu-latest
             target: "aarch64-unknown-linux-musl"
             container: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2023-09-17-alpine
             install: |
+              apk update && apk upgrade
               apk add libc6-compat curl
               echo /root/.cargo/bin >> ${GITHUB_PATH}
               echo /usr/local/cargo/bin/rustup >> ${GITHUB_PATH}
               echo /aarch64-linux-musl-cross/bin >> ${GITHUB_PATH}
-              export PATH=/aarch64-linux-musl-cross/bin:/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
             setup: |
               export PATH=/aarch64-linux-musl-cross/bin:/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
-              rustup default $(cat ./rust-toolchain)-aarch64-unknown-linux-musl
+              rustup show active-toolchain
               rustup target add aarch64-unknown-linux-musl
-              rustup toolchain install $(cat ./rust-toolchain)
+              dirname $(rustup which cargo) >> ${GITHUB_PATH}
               pnpm install
             rust_env: CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc RUSTFLAGS="-Ctarget-feature=-crt-static"
 
@@ -103,7 +109,10 @@ jobs:
         if: ${{ matrix.settings.setup }}
 
       - name: Build native library
+        # For some reason PATH modifications from Setup toolchain aren't populated
+        # when using the nodejs-rust alpine container.
         run: |
+          export PATH=/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
           cd packages/turbo-repository
           ${{ matrix.settings.rust_env }} pnpm build:release --target=${{ matrix.settings.target }}
 
