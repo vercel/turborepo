@@ -419,7 +419,7 @@ pub(super) async fn part_of_module(
                     let chunk_prop = ObjectLit {
                         span: DUMMY_SP,
                         props: vec![PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
-                            key: quote_ident!("__turbopack_chunk__").into(),
+                            key: quote_ident!("__turbopack_part__").into(),
                             value: "module evaluation".into(),
                         })))],
                     };
@@ -437,7 +437,7 @@ pub(super) async fn part_of_module(
                     let chunk_prop = ObjectLit {
                         span: DUMMY_SP,
                         props: vec![PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
-                            key: quote_ident!("__turbopack_chunk__").into(),
+                            key: quote_ident!("__turbopack_part__").into(),
                             value: "exports".into(),
                         })))],
                     };
@@ -487,7 +487,7 @@ pub(super) async fn part_of_module(
                             span: DUMMY_SP,
                             props: vec![PropOrSpread::Prop(Box::new(Prop::KeyValue(
                                 KeyValueProp {
-                                    key: quote_ident!("__turbopack_chunk__").into(),
+                                    key: quote_ident!("__turbopack_part__").into(),
                                     value: (export_part_id as usize).into(),
                                 },
                             )))],

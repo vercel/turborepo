@@ -409,7 +409,7 @@ fn parse_with(with: Option<&ObjectLit>) -> Option<ImportedSymbol> {
                 value,
             }) = &**prop
             {
-                if key.sym == "__turbopack_chunk__" {
+                if key.sym == "__turbopack_part__" {
                     if let Expr::Lit(Lit::Num(Number { value, .. })) = &**value {
                         return Some(ImportedSymbol::Part(*value as _));
                     }

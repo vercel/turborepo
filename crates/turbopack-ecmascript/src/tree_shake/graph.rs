@@ -579,7 +579,7 @@ impl DepGraph {
                                     Some(s.orig.clone()),
                                     match s.exported.as_ref().unwrap_or(&s.orig) {
                                         ModuleExportName::Ident(i) => i.clone().private(),
-                                        ModuleExportName::Str(i) => private_ident!("_tmp"),
+                                        ModuleExportName::Str(..) => private_ident!("_tmp"),
                                     },
                                     s.exported.clone(),
                                 ),
@@ -595,7 +595,7 @@ impl DepGraph {
                                     None,
                                     match &s.name {
                                         ModuleExportName::Ident(i) => i.clone().private(),
-                                        ModuleExportName::Str(i) => private_ident!("_tmp"),
+                                        ModuleExportName::Str(..) => private_ident!("_tmp"),
                                     },
                                     Some(s.name.clone()),
                                 ),
@@ -940,7 +940,7 @@ impl DepGraph {
     }
 }
 
-const ASSERT_CHUNK_KEY: &str = "__turbopack_chunk__";
+const ASSERT_CHUNK_KEY: &str = "__turbopack_part__";
 
 fn create_turbopack_chunk_id_assert(dep: u32) -> ObjectLit {
     ObjectLit {
