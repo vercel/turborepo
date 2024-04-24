@@ -9,7 +9,6 @@ use crate::{
     chunk::{ChunkItem, ModuleId},
     environment::Environment,
     ident::AssetIdent,
-    module::Module,
     output::{OutputAsset, OutputAssets},
 };
 
