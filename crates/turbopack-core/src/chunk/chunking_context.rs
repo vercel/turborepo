@@ -62,12 +62,6 @@ pub trait ChunkingContext {
     /// Reference Source Map Assets for chunks
     fn reference_chunk_source_maps(self: Vc<Self>, chunk: Vc<Box<dyn OutputAsset>>) -> Vc<bool>;
 
-    fn can_be_in_same_chunk(
-        self: Vc<Self>,
-        asset_a: Vc<Box<dyn Module>>,
-        asset_b: Vc<Box<dyn Module>>,
-    ) -> Vc<bool>;
-
     /// Returns a URL (relative or absolute, depending on the asset prefix) to
     /// the static asset based on its `ident`.
     fn asset_url(self: Vc<Self>, ident: Vc<AssetIdent>) -> Result<Vc<String>>;
