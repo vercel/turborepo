@@ -1,5 +1,5 @@
 use anyhow::{bail, Context, Result};
-use turbo_tasks::{vdbg, Vc};
+use turbo_tasks::Vc;
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{ChunkableModule, ChunkingContext},
@@ -207,6 +207,5 @@ async fn analyze(
     module: Vc<EcmascriptModuleAsset>,
     part: Vc<ModulePart>,
 ) -> Result<Vc<AnalyzeEcmascriptModuleResult>> {
-    vdbg!("analyze, with module part", part);
     Ok(analyse_ecmascript_module(module, Some(part)))
 }

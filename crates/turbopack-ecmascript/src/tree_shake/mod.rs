@@ -71,8 +71,6 @@ impl Analyzer<'_> {
 
         analyzer.handle_exports(module);
 
-        dbg!(&g.g);
-
         (g, items)
     }
 
@@ -355,10 +353,6 @@ pub(super) async fn split(
             } = dep_graph.split_module(&format!("./{filename}").into(), &items);
 
             debug_assert_ne!(modules.len(), 0, "modules.len() == 0");
-
-            // dbg!(&modules);
-            dbg!(&entrypoints);
-            dbg!(&part_deps);
 
             let modules = modules
                 .into_iter()

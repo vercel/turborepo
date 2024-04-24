@@ -27,7 +27,6 @@ use super::{
     util::{ids_captured_by, ids_used_by, ids_used_by_ignoring_nested},
     Key,
 };
-use crate::analyzer::imports::orig_name;
 
 /// The id of an item
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -226,9 +225,7 @@ impl DepGraph {
         uri_of_module: &JsWord,
         data: &FxHashMap<ItemId, ItemData>,
     ) -> SplitModuleResult {
-        dbg!(&data);
         let groups = self.finalize(data);
-        dbg!(&groups);
         let mut exports = FxHashMap::default();
         let mut part_deps = FxHashMap::<_, Vec<_>>::default();
 
@@ -438,8 +435,6 @@ impl DepGraph {
             }
         }
 
-        dbg!(&self.g.graph_ix);
-
         // Expand **starting** nodes
         for (ix, id) in self.g.graph_ix.iter().enumerate() {
             // If a node is reachable from two or more nodes, it should be in a
@@ -467,8 +462,6 @@ impl DepGraph {
             }
         }
 
-        dbg!(&groups);
-
         loop {
             let mut changed = false;
 
@@ -483,8 +476,6 @@ impl DepGraph {
                 break;
             }
         }
-
-        dbg!(&groups);
 
         let mut groups = groups.into_iter().map(|v| v.0).collect::<Vec<_>>();
 
