@@ -116,8 +116,7 @@ jobs:
         uses: ./.github/actions/install-global-turbo
 
       - name: Lint
-        # Filters some workspaces out:
-        # - Other `@vercel/*` packages because ??
+        # Filters some packages out, but not sure why
         run: |
           turbo run lint \
           --filter=!@vercel/devlow-bench \
