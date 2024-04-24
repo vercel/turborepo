@@ -330,19 +330,19 @@ graph TD
 ## Part 0
 ```js
 import { c1_3 } from "entry.js" assert {
-    __turbopack_chunk__: 4
+    __turbopack_part__: 4
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 6
+    __turbopack_part__: 6
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 7
+    __turbopack_part__: 7
 };
 import { c2_2 } from "entry.js" assert {
-    __turbopack_chunk__: 5
+    __turbopack_part__: 5
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 8
+    __turbopack_part__: 8
 };
 "module evaluation";
 c1_3();
@@ -352,7 +352,7 @@ c2_2();
 ## Part 1
 ```js
 import { c1_1 } from "entry.js" assert {
-    __turbopack_chunk__: 4
+    __turbopack_part__: 4
 };
 export { c1_1 };
 
@@ -360,7 +360,7 @@ export { c1_1 };
 ## Part 2
 ```js
 import { c1_3 } from "entry.js" assert {
-    __turbopack_chunk__: 4
+    __turbopack_part__: 4
 };
 export { c1_3 };
 
@@ -368,7 +368,7 @@ export { c1_3 };
 ## Part 3
 ```js
 import { c2_2 } from "entry.js" assert {
-    __turbopack_chunk__: 5
+    __turbopack_part__: 5
 };
 export { c2_2 };
 
@@ -376,10 +376,10 @@ export { c2_2 };
 ## Part 4
 ```js
 import { d1 } from "entry.js" assert {
-    __turbopack_chunk__: 6
+    __turbopack_part__: 6
 };
 import { d2 } from "entry.js" assert {
-    __turbopack_chunk__: 7
+    __turbopack_part__: 7
 };
 function c1_1() {
     return c1_2();
@@ -395,7 +395,7 @@ function c1_3() {
 ## Part 5
 ```js
 import { d3 } from "entry.js" assert {
-    __turbopack_chunk__: 8
+    __turbopack_part__: 8
 };
 function c2_1() {
     return c2_2(d3);
@@ -455,10 +455,10 @@ c2_2();
 ## Part 0
 ```js
 import { c1_3 } from "entry.js" assert {
-    __turbopack_chunk__: 4
+    __turbopack_part__: 4
 };
 import { c2_2 } from "entry.js" assert {
-    __turbopack_chunk__: 5
+    __turbopack_part__: 5
 };
 "module evaluation";
 c1_3();
@@ -468,7 +468,7 @@ c2_2();
 ## Part 1
 ```js
 import { c1_1 } from "entry.js" assert {
-    __turbopack_chunk__: 4
+    __turbopack_part__: 4
 };
 export { c1_1 };
 
@@ -476,7 +476,7 @@ export { c1_1 };
 ## Part 2
 ```js
 import { c1_3 } from "entry.js" assert {
-    __turbopack_chunk__: 4
+    __turbopack_part__: 4
 };
 export { c1_3 };
 
@@ -484,7 +484,7 @@ export { c1_3 };
 ## Part 3
 ```js
 import { c2_2 } from "entry.js" assert {
-    __turbopack_chunk__: 5
+    __turbopack_part__: 5
 };
 export { c2_2 };
 
@@ -492,10 +492,10 @@ export { c2_2 };
 ## Part 4
 ```js
 import { d1 } from "entry.js" assert {
-    __turbopack_chunk__: 6
+    __turbopack_part__: 6
 };
 import { d2 } from "entry.js" assert {
-    __turbopack_chunk__: 7
+    __turbopack_part__: 7
 };
 function c1_1() {
     return c1_2();
@@ -511,7 +511,7 @@ function c1_3() {
 ## Part 5
 ```js
 import { d3 } from "entry.js" assert {
-    __turbopack_chunk__: 8
+    __turbopack_part__: 8
 };
 function c2_1() {
     return c2_2(d3);

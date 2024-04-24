@@ -130,7 +130,7 @@ graph TD
 ## Part 1
 ```js
 import { dog } from "entry.js" assert {
-    __turbopack_chunk__: 3
+    __turbopack_part__: 3
 };
 export { DOG };
 const DOG = dog;
@@ -140,7 +140,7 @@ export { DOG };
 ## Part 2
 ```js
 import { dog } from "entry.js" assert {
-    __turbopack_chunk__: 3
+    __turbopack_part__: 3
 };
 export { CHIMERA };
 const cat = "cat";
@@ -169,7 +169,7 @@ export { dog };
 ## Part 1
 ```js
 import { dog } from "entry.js" assert {
-    __turbopack_chunk__: 3
+    __turbopack_part__: 3
 };
 export { DOG };
 const DOG = dog;
@@ -179,7 +179,7 @@ export { DOG };
 ## Part 2
 ```js
 import { dog } from "entry.js" assert {
-    __turbopack_chunk__: 3
+    __turbopack_part__: 3
 };
 export { CHIMERA };
 const cat = "cat";

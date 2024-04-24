@@ -393,22 +393,22 @@ graph TD
 ## Part 0
 ```js
 import { foobarCopy } from "entry.js" assert {
-    __turbopack_chunk__: 9
+    __turbopack_part__: 9
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 11
+    __turbopack_part__: 11
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 5
+    __turbopack_part__: 5
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 8
+    __turbopack_part__: 8
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 10
+    __turbopack_part__: 10
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 6
+    __turbopack_part__: 6
 };
 "module evaluation";
 import "module";
@@ -420,16 +420,16 @@ import "other";
 ## Part 1
 ```js
 import { internal } from "entry.js" assert {
-    __turbopack_chunk__: 11
+    __turbopack_part__: 11
 };
 import { foobar } from "entry.js" assert {
-    __turbopack_chunk__: 5
+    __turbopack_part__: 5
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 8
+    __turbopack_part__: 8
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 10
+    __turbopack_part__: 10
 };
 export { external1 };
 function external1() {
@@ -440,13 +440,13 @@ function external1() {
 ## Part 2
 ```js
 import { foobar } from "entry.js" assert {
-    __turbopack_chunk__: 5
+    __turbopack_part__: 5
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 8
+    __turbopack_part__: 8
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 10
+    __turbopack_part__: 10
 };
 export { foobar };
 
@@ -454,7 +454,7 @@ export { foobar };
 ## Part 3
 ```js
 import { foo } from "entry.js" assert {
-    __turbopack_chunk__: 6
+    __turbopack_part__: 6
 };
 export { foo };
 
@@ -462,10 +462,10 @@ export { foo };
 ## Part 4
 ```js
 import "entry.js" assert {
-    __turbopack_chunk__: 6
+    __turbopack_part__: 6
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 9
+    __turbopack_part__: 9
 };
 export { external2 };
 function external2() {
@@ -482,7 +482,7 @@ export { foobar };
 ## Part 6
 ```js
 import { foobar } from "entry.js" assert {
-    __turbopack_chunk__: 5
+    __turbopack_part__: 5
 };
 const foo = foobar;
 export { foo };
@@ -497,10 +497,10 @@ export { bar };
 ## Part 8
 ```js
 import { bar } from "entry.js" assert {
-    __turbopack_chunk__: 7
+    __turbopack_part__: 7
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 6
+    __turbopack_part__: 6
 };
 foobar += bar;
 export { foobar };
@@ -509,10 +509,10 @@ export { foobar };
 ## Part 9
 ```js
 import { foobar } from "entry.js" assert {
-    __turbopack_chunk__: 5
+    __turbopack_part__: 5
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 8
+    __turbopack_part__: 8
 };
 let foobarCopy = foobar;
 export { foobarCopy };
@@ -521,10 +521,10 @@ export { foobarCopy };
 ## Part 10
 ```js
 import "entry.js" assert {
-    __turbopack_chunk__: 6
+    __turbopack_part__: 6
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 9
+    __turbopack_part__: 9
 };
 foobar += "foo";
 export { foobar };
@@ -533,13 +533,13 @@ export { foobar };
 ## Part 11
 ```js
 import { foobar } from "entry.js" assert {
-    __turbopack_chunk__: 5
+    __turbopack_part__: 5
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 8
+    __turbopack_part__: 8
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 10
+    __turbopack_part__: 10
 };
 import { upper } from "module";
 function internal() {
@@ -576,10 +576,10 @@ console.log(foobarCopy);
 ## Part 0
 ```js
 import { foobar } from "entry.js" assert {
-    __turbopack_chunk__: 5
+    __turbopack_part__: 5
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 7
+    __turbopack_part__: 7
 };
 "module evaluation";
 import "module";
@@ -592,13 +592,13 @@ export { foobarCopy };
 ## Part 1
 ```js
 import { foobar } from "entry.js" assert {
-    __turbopack_chunk__: 5
+    __turbopack_part__: 5
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 7
+    __turbopack_part__: 7
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 8
+    __turbopack_part__: 8
 };
 export { external1 };
 function external1() {
@@ -613,13 +613,13 @@ function internal() {
 ## Part 2
 ```js
 import { foobar } from "entry.js" assert {
-    __turbopack_chunk__: 5
+    __turbopack_part__: 5
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 7
+    __turbopack_part__: 7
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 8
+    __turbopack_part__: 8
 };
 export { foobar };
 
@@ -627,7 +627,7 @@ export { foobar };
 ## Part 3
 ```js
 import { foobar } from "entry.js" assert {
-    __turbopack_chunk__: 5
+    __turbopack_part__: 5
 };
 export { foo };
 const foo = foobar;
@@ -657,7 +657,7 @@ export { bar };
 ## Part 7
 ```js
 import { bar } from "entry.js" assert {
-    __turbopack_chunk__: 6
+    __turbopack_part__: 6
 };
 foobar += bar;
 export { foobar };
