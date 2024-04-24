@@ -1,9 +1,12 @@
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashSet, sync::Mutex};
 
 use futures::StreamExt;
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
-use tokio::{select, task::JoinHandle};
+use tokio::{
+    select,
+    task::{yield_now, JoinHandle},
+};
 use turborepo_repository::package_graph::PackageName;
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
@@ -18,10 +21,29 @@ use crate::{
     DaemonConnector, DaemonPaths,
 };
 
+enum ChangedPackages {
+    All,
+    Some(HashSet<PackageName>),
+}
+
+impl Default for ChangedPackages {
+    fn default() -> Self {
+        ChangedPackages::Some(HashSet::new())
+    }
+}
+
+impl ChangedPackages {
+    pub fn is_empty(&self) -> bool {
+        match self {
+            ChangedPackages::All => false,
+            ChangedPackages::Some(pkgs) => pkgs.is_empty(),
+        }
+    }
+}
+
 pub struct WatchClient {
     run: Run,
     persistent_tasks_handle: Option<JoinHandle<Result<i32, run::Error>>>,
-    current_runs: HashMap<PackageName, JoinHandle<Result<i32, run::Error>>>,
     connector: DaemonConnector,
     base: CommandBase,
     telemetry: CommandEventBuilder,
@@ -99,7 +121,6 @@ impl WatchClient {
             handler,
             telemetry,
             persistent_tasks_handle: None,
-            current_runs: HashMap::new(),
         })
     }
 
@@ -113,13 +134,24 @@ impl WatchClient {
 
         let signal_subscriber = self.handler.subscribe().ok_or(Error::NoSignalHandler)?;
 
+        let changed_packages = Mutex::new(RefCell::new(ChangedPackages::default()));
+
         let event_fut = async {
             while let Some(event) = events.next().await {
                 let event = event?;
-                self.handle_change_event(event.event.unwrap()).await?;
+                Self::handle_change_event(&changed_packages, event.event.unwrap()).await?;
             }
 
             Err(Error::ConnectionClosed)
+        };
+
+        let run_fut = async {
+            loop {
+                if !changed_packages.lock().unwrap().borrow().is_empty() {
+                    self.execute_run(&changed_packages).await?;
+                }
+                yield_now().await;
+            }
         };
 
         select! {
@@ -132,11 +164,14 @@ impl WatchClient {
             result = event_fut => {
                 result
             }
+            run_result = run_fut => {
+                run_result
+            }
         }
     }
 
     async fn handle_change_event(
-        &mut self,
+        changed_packages: &Mutex<RefCell<ChangedPackages>>,
         event: proto::package_change_event::Event,
     ) -> Result<(), Error> {
         // Should we recover here?
@@ -145,10 +180,42 @@ impl WatchClient {
                 package_name,
             }) => {
                 let package_name = PackageName::from(package_name);
-                // If not in the filtered pkgs, ignore
-                if !self.run.filtered_pkgs.contains(&package_name) {
-                    return Ok(());
+
+                match changed_packages.lock().unwrap().get_mut() {
+                    ChangedPackages::All => {
+                        // If we've already changed all packages, ignore
+                    }
+                    ChangedPackages::Some(ref mut pkgs) => {
+                        pkgs.insert(package_name);
+                    }
                 }
+            }
+            proto::package_change_event::Event::RediscoverPackages(_) => {
+                *changed_packages.lock().unwrap().get_mut() = ChangedPackages::All;
+            }
+            proto::package_change_event::Event::Error(proto::PackageChangeError { message }) => {
+                return Err(DaemonError::Unavailable(message).into());
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn execute_run(
+        &mut self,
+        changed_packages: &Mutex<RefCell<ChangedPackages>>,
+    ) -> Result<i32, Error> {
+        let changed_packages = changed_packages.lock().unwrap().take();
+        // Should we recover here?
+        match changed_packages {
+            ChangedPackages::Some(packages) => {
+                let packages = packages
+                    .into_iter()
+                    .filter(|pkg| {
+                        // If not in the filtered pkgs, ignore
+                        self.run.filtered_pkgs.contains(&pkg)
+                    })
+                    .collect();
 
                 let mut args = self.base.args().clone();
                 args.command = args.command.map(|c| {
@@ -173,28 +240,18 @@ impl WatchClient {
                     self.base.ui,
                 );
 
-                // TODO: Add logic on when to abort vs wait
-                if let Some(run) = self.current_runs.remove(&package_name) {
-                    run.abort();
-                }
-
                 let signal_handler = self.handler.clone();
                 let telemetry = self.telemetry.clone();
 
-                self.current_runs.insert(
-                    package_name.clone(),
-                    tokio::spawn(async move {
-                        let mut run = RunBuilder::new(new_base)?
-                            .with_entrypoint_package(package_name)
-                            .hide_prelude()
-                            .build(&signal_handler, telemetry)
-                            .await?;
+                let mut run = RunBuilder::new(new_base)?
+                    .with_entrypoint_packages(packages)
+                    .hide_prelude()
+                    .build(&signal_handler, telemetry)
+                    .await?;
 
-                        run.run().await
-                    }),
-                );
+                Ok(run.run().await?)
             }
-            proto::package_change_event::Event::RediscoverPackages(_) => {
+            ChangedPackages::All => {
                 let mut args = self.base.args().clone();
                 args.command = args.command.map(|c| {
                     if let Command::Watch(execution_args) = c {
@@ -218,11 +275,6 @@ impl WatchClient {
                     self.base.ui,
                 );
 
-                // When we rediscover, stop all current runs
-                for (_, run) in self.current_runs.drain() {
-                    run.abort();
-                }
-
                 // rebuild run struct
                 self.run = RunBuilder::new(base.clone())?
                     .hide_prelude()
@@ -243,16 +295,11 @@ impl WatchClient {
 
                     // But we still run the regular tasks blocking
                     let mut non_persistent_run = self.run.create_run_without_persistent_tasks();
-                    non_persistent_run.run().await?;
+                    Ok(non_persistent_run.run().await?)
                 } else {
-                    self.run.run().await?;
+                    Ok(self.run.run().await?)
                 }
             }
-            proto::package_change_event::Event::Error(proto::PackageChangeError { message }) => {
-                return Err(DaemonError::Unavailable(message).into());
-            }
         }
-
-        Ok(())
     }
 }
