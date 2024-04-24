@@ -768,7 +768,8 @@ mod test {
         engine.task_graph.add_edge(b_build_idx, a_build_idx, ());
 
         let engine = engine.seal();
-        let subgraph = engine.create_engine_for_subgraph(&PackageName::from("a"));
+        let subgraph =
+            engine.create_engine_for_subgraph(&[PackageName::from("a")].into_iter().collect());
 
         // Verify that the subgraph only contains tasks from package `a` and the `build`
         // task from package `b`

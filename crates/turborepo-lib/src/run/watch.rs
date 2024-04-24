@@ -213,7 +213,7 @@ impl WatchClient {
                     .into_iter()
                     .filter(|pkg| {
                         // If not in the filtered pkgs, ignore
-                        self.run.filtered_pkgs.contains(&pkg)
+                        self.run.filtered_pkgs.contains(pkg)
                     })
                     .collect();
 
