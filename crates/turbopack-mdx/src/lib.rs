@@ -1,8 +1,7 @@
 #![feature(min_specialization)]
 #![feature(arbitrary_self_types)]
 
-use anyhow::{anyhow, Context, Result};
-use markdown::unist::Point;
+use anyhow::{Context, Result};
 use mdxjs::{compile, MdxParseOptions, Options};
 use turbo_tasks::{Value, ValueDefault, Vc};
 use turbo_tasks_fs::{rope::Rope, File, FileContent, FileSystemPath};
@@ -11,11 +10,15 @@ use turbopack_core::{
     chunk::{AsyncModuleInfo, ChunkItem, ChunkType, ChunkableModule, ChunkingContext},
     context::AssetContext,
     ident::AssetIdent,
-    issue::{Issue, IssueStage, OptionIssueSource, OptionStyledString, StyledString},
+    issue::{
+        Issue, IssueExt, IssueSource, IssueStage, OptionIssueSource, OptionStyledString,
+        StyledString,
+    },
     module::Module,
     reference::ModuleReferences,
     resolve::origin::ResolveOrigin,
     source::Source,
+    source_pos::SourcePos,
     virtual_source::VirtualSource,
 };
 use turbopack_ecmascript::{
@@ -154,7 +157,41 @@ async fn into_ecmascript_module_asset(
     let mdx_jsx_component = match mdx_jsx_component {
         Ok(mdx_jsx_component) => mdx_jsx_component,
         Err(err) => {
-            return err;
+            let loc = Vc::cell(err.place.map(|p| {
+                let (start, end) = match *p {
+                    markdown::message::Place::Position(p) => (
+                        SourcePos {
+                            line: p.start.line,
+                            column: p.start.column,
+                        },
+                        SourcePos {
+                            line: p.end.line,
+                            column: p.end.column,
+                        },
+                    ),
+                    markdown::message::Place::Point(p) => {
+                        let p = SourcePos {
+                            line: p.line,
+                            column: p.column,
+                        };
+                        (p, p)
+                    }
+                };
+
+                IssueSource::from_line_col(this.source, start, end)
+            }));
+
+            MdxIssue {
+                path: this.source.ident().path(),
+                loc,
+                reason: err.reason,
+                mdx_rule_id: *err.rule_id,
+                mdx_source: *err.source,
+            }
+            .cell()
+            .emit();
+
+            String::new()
         }
     };
 
@@ -183,16 +220,16 @@ struct MdxIssue {
     /// Reason for message (should use markdown).
     reason: String,
     /// Category of message.
-    rule_id: Box<String>,
+    mdx_rule_id: String,
     /// Namespace of message.
-    source: Box<String>,
+    mdx_source: String,
 }
 
 #[turbo_tasks::value_impl]
 impl Issue for MdxIssue {
     #[turbo_tasks::function]
     fn file_path(&self) -> Vc<FileSystemPath> {
-        self.path.clone()
+        self.path
     }
 
     #[turbo_tasks::function]
