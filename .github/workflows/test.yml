@@ -455,6 +455,31 @@ jobs:
         with:
           command: check licenses
 
+  rust_clippy:
+    needs: [determine_jobs]
+    if: needs.determine_jobs.outputs.rust == 'true' ||
+      needs.determine_jobs.outputs.cargo_on_main == 'true' ||
+      needs.determine_jobs.outputs.cargo_only == 'true'
+    name: Rust clippy
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Turborepo Environment
+        uses: ./.github/actions/setup-turborepo-environment
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Run cargo clippy
+        run: |
+          cargo clippy --workspace --all-targets --features rustls-tls \
+            -- --deny clippy::all --deny warnings --allow clippy::too_many_arguments
+
   turborepo_rust_check:
     needs: [determine_jobs]
     # We test dependency changes only on main

@@ -39,10 +39,7 @@ fn find_root(mut node: NodeRef) -> NodeRef {
     }
 }
 
-fn check_invariants<'a>(
-    ctx: &NodeAggregationContext<'a>,
-    node_ids: impl IntoIterator<Item = NodeRef>,
-) {
+fn check_invariants(ctx: &NodeAggregationContext, node_ids: impl IntoIterator<Item = NodeRef>) {
     let mut queue = node_ids.into_iter().collect::<Vec<_>>();
     // print(ctx, &queue[0], true);
     let mut visited = HashSet::new();
@@ -100,7 +97,7 @@ fn check_invariants<'a>(
                     }
 
                     // All followers should also be connected to all uppers
-                    let missing_uppers = uppers.iter().filter(|&upper_id| {
+                    let mut missing_uppers = uppers.iter().filter(|&upper_id| {
                         if follower_uppers
                             .iter()
                             .any(|follower_upper_id| follower_upper_id == upper_id)
@@ -116,7 +113,7 @@ fn check_invariants<'a>(
                             false
                         }
                     });
-                    for missing_upper in missing_uppers {
+                    if let Some(missing_upper) = missing_uppers.next() {
                         let upper_value = {
                             let upper = ctx.node(missing_upper);
                             upper.guard.value
