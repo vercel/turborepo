@@ -14,9 +14,9 @@ use swc_core::{
     ecma::{
         ast::{
             op, ClassDecl, Decl, ExportDecl, ExportNamedSpecifier, ExportSpecifier, Expr, ExprStmt,
-            FnDecl, Id, Ident, ImportDecl, ImportNamedSpecifier, ImportSpecifier, KeyValueProp,
-            Lit, Module, ModuleDecl, ModuleExportName, ModuleItem, NamedExport, ObjectLit, Prop,
-            PropName, PropOrSpread, Stmt, VarDecl,
+            FnDecl, Id, Ident, ImportDecl, ImportNamedSpecifier, ImportSpecifier,
+            ImportStarAsSpecifier, KeyValueProp, Lit, Module, ModuleDecl, ModuleExportName,
+            ModuleItem, NamedExport, ObjectLit, Prop, PropName, PropOrSpread, Stmt, VarDecl,
         },
         atoms::{js_word, JsWord},
         utils::{find_pat_ids, private_ident, quote_ident, IdentExt},
@@ -622,6 +622,20 @@ impl DepGraph {
                                 };
                                 ids.push(id.clone());
 
+                                let import = match s {
+                                    ExportSpecifier::Namespace(..) => {
+                                        ImportSpecifier::Namespace(ImportStarAsSpecifier {
+                                            span: DUMMY_SP,
+                                            local: local.clone(),
+                                        })
+                                    }
+                                    _ => ImportSpecifier::Named(ImportNamedSpecifier {
+                                        span: DUMMY_SP,
+                                        local: local.clone(),
+                                        imported: orig,
+                                        is_type_only: false,
+                                    }),
+                                };
                                 items.insert(
                                     id,
                                     ItemData {
@@ -631,14 +645,7 @@ impl DepGraph {
                                         content: ModuleItem::ModuleDecl(ModuleDecl::Import(
                                             ImportDecl {
                                                 span: DUMMY_SP,
-                                                specifiers: vec![ImportSpecifier::Named(
-                                                    ImportNamedSpecifier {
-                                                        span: DUMMY_SP,
-                                                        local: local.clone(),
-                                                        imported: orig,
-                                                        is_type_only: false,
-                                                    },
-                                                )],
+                                                specifiers: vec![import],
                                                 src: src.clone(),
                                                 type_only: false,
                                                 with: None,
