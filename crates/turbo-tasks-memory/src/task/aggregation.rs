@@ -1,7 +1,7 @@
 use std::{
-    borrow::Cow,
     hash::{BuildHasher, Hash},
     mem::take,
+    ops::{ControlFlow, Deref, DerefMut},
 };
 
 use auto_hash_map::{map::Entry, AutoMap};
@@ -11,9 +11,9 @@ use turbo_tasks::{event::Event, RawVc, TaskId, TaskIdSet, TraitTypeId, TurboTask
 
 use super::{meta_state::TaskMetaStateWriteGuard, TaskStateType};
 use crate::{
-    aggregation_tree::{
-        aggregation_info, AggregationContext, AggregationInfoReference, AggregationItemLock,
-        AggregationTreeLeaf,
+    aggregation::{
+        aggregation_data, AggregationContext, AggregationDataGuard, AggregationNode,
+        AggregationNodeGuard, RootQuery,
     },
     MemoryBackend,
 };
@@ -34,10 +34,6 @@ impl CollectiblesInfo {
     fn is_unset(&self) -> bool {
         self.collectibles.is_empty() && self.dependent_tasks.is_empty()
     }
-}
-
-pub enum RootInfoType {
-    IsActive,
 }
 
 pub struct Aggregated {
@@ -191,8 +187,8 @@ impl<'a> TaskAggregationContext<'a> {
         }
     }
 
-    pub fn aggregation_info(&self, id: TaskId) -> AggregationInfoReference<Aggregated> {
-        aggregation_info(self, &id)
+    pub fn aggregation_data<'l>(&'l self, id: TaskId) -> AggregationDataGuard<TaskGuard<'l>> {
+        aggregation_data(self, &id)
     }
 }
 
@@ -215,26 +211,21 @@ impl<'a> Drop for TaskAggregationContext<'a> {
 }
 
 impl<'a> AggregationContext for TaskAggregationContext<'a> {
-    type ItemLock<'l> = TaskGuard<'l> where Self: 'l;
-    type Info = Aggregated;
-    type ItemChange = TaskChange;
-    type ItemRef = TaskId;
-    type RootInfo = bool;
-    type RootInfoType = RootInfoType;
+    type Guard<'l> = TaskGuard<'l> where Self: 'l;
+    type Data = Aggregated;
+    type DataChange = TaskChange;
+    type NodeRef = TaskId;
 
-    fn item<'b>(&'b self, reference: &TaskId) -> Self::ItemLock<'b> {
+    fn node<'b>(&'b self, reference: &TaskId) -> Self::Guard<'b> {
         let task = self.backend.task(*reference);
-        TaskGuard {
-            id: *reference,
-            guard: task.state_mut(),
-        }
+        TaskGuard::new(*reference, task.state_mut())
     }
 
     fn apply_change(
         &self,
         info: &mut Aggregated,
-        change: &Self::ItemChange,
-    ) -> Option<Self::ItemChange> {
+        change: &Self::DataChange,
+    ) -> Option<Self::DataChange> {
         let mut unfinished = 0;
         if info.unfinished > 0 {
             info.unfinished += change.unfinished;
@@ -309,19 +300,19 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
         }
     }
 
-    fn info_to_add_change(&self, info: &Aggregated) -> Option<Self::ItemChange> {
+    fn data_to_add_change(&self, data: &Aggregated) -> Option<Self::DataChange> {
         let mut change = TaskChange::default();
-        if info.unfinished > 0 {
+        if data.unfinished > 0 {
             change.unfinished = 1;
         }
         #[cfg(feature = "track_unfinished")]
-        for (&task, &count) in info.unfinished_tasks.iter() {
+        for (&task, &count) in data.unfinished_tasks.iter() {
             change.unfinished_tasks_update.push((task, count));
         }
-        for (&task, &count) in info.dirty_tasks.iter() {
+        for (&task, &count) in data.dirty_tasks.iter() {
             change.dirty_tasks_update.push((task, count));
         }
-        for (trait_type_id, collectibles_info) in info.collectibles.iter() {
+        for (trait_type_id, collectibles_info) in data.collectibles.iter() {
             for (collectible, count) in collectibles_info.collectibles.iter() {
                 change
                     .collectibles
@@ -335,19 +326,19 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
         }
     }
 
-    fn info_to_remove_change(&self, info: &Aggregated) -> Option<Self::ItemChange> {
+    fn data_to_remove_change(&self, data: &Aggregated) -> Option<Self::DataChange> {
         let mut change = TaskChange::default();
-        if info.unfinished > 0 {
+        if data.unfinished > 0 {
             change.unfinished = -1;
         }
         #[cfg(feature = "track_unfinished")]
-        for (&task, &count) in info.unfinished_tasks.iter() {
+        for (&task, &count) in data.unfinished_tasks.iter() {
             change.unfinished_tasks_update.push((task, -count));
         }
-        for (&task, &count) in info.dirty_tasks.iter() {
+        for (&task, &count) in data.dirty_tasks.iter() {
             change.dirty_tasks_update.push((task, -count));
         }
-        for (trait_type_id, collectibles_info) in info.collectibles.iter() {
+        for (trait_type_id, collectibles_info) in data.collectibles.iter() {
             for (collectible, count) in collectibles_info.collectibles.iter() {
                 change
                     .collectibles
@@ -360,58 +351,77 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
             Some(change)
         }
     }
+}
 
-    fn new_root_info(&self, _root_info_type: &RootInfoType) -> Self::RootInfo {
-        false
-    }
+#[derive(Default)]
+pub struct ActiveQuery {
+    active: bool,
+}
 
-    fn info_to_root_info(
-        &self,
-        info: &Aggregated,
-        root_info_type: &RootInfoType,
-    ) -> Self::RootInfo {
-        match root_info_type {
-            RootInfoType::IsActive => info.root_type.is_some(),
-        }
-    }
+impl RootQuery for ActiveQuery {
+    type Data = Aggregated;
+    type Result = bool;
 
-    fn merge_root_info(
-        &self,
-        root_info: &mut Self::RootInfo,
-        other: Self::RootInfo,
-    ) -> std::ops::ControlFlow<()> {
-        if other {
-            *root_info = true;
-            std::ops::ControlFlow::Break(())
+    fn query(&mut self, data: &Self::Data) -> ControlFlow<()> {
+        if data.root_type.is_some() {
+            self.active = true;
+            ControlFlow::Break(())
         } else {
-            std::ops::ControlFlow::Continue(())
+            ControlFlow::Continue(())
         }
+    }
+
+    fn result(self) -> Self::Result {
+        self.active
     }
 }
 
 pub struct TaskGuard<'l> {
-    pub(super) id: TaskId,
-    pub(super) guard: TaskMetaStateWriteGuard<'l>,
+    id: TaskId,
+    guard: TaskMetaStateWriteGuard<'l>,
 }
 
-impl<'l> AggregationItemLock for TaskGuard<'l> {
-    type Info = Aggregated;
-    type ItemRef = TaskId;
-    type ItemChange = TaskChange;
-    type ChildrenIter<'a> = impl Iterator<Item = Cow<'a, TaskId>> + 'a where Self: 'a;
+impl<'l> TaskGuard<'l> {
+    pub fn new(id: TaskId, mut guard: TaskMetaStateWriteGuard<'l>) -> Self {
+        guard.ensure_at_least_partial();
+        Self { id, guard }
+    }
 
-    fn leaf(&mut self) -> &mut AggregationTreeLeaf<Self::Info, Self::ItemRef> {
-        self.guard.ensure_at_least_partial();
+    pub fn into_inner(self) -> TaskMetaStateWriteGuard<'l> {
+        self.guard
+    }
+}
+
+impl<'l> Deref for TaskGuard<'l> {
+    type Target = AggregationNode<
+        <Self as AggregationNodeGuard>::NodeRef,
+        <Self as AggregationNodeGuard>::Data,
+    >;
+
+    fn deref(&self) -> &Self::Target {
         match self.guard {
-            TaskMetaStateWriteGuard::Full(ref mut guard) => &mut guard.aggregation_leaf,
+            TaskMetaStateWriteGuard::Full(ref guard) => &guard.aggregation_node,
+            TaskMetaStateWriteGuard::Partial(ref guard) => &guard.aggregation_leaf,
+            TaskMetaStateWriteGuard::Unloaded(_) => unreachable!(),
+        }
+    }
+}
+
+impl<'l> DerefMut for TaskGuard<'l> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match self.guard {
+            TaskMetaStateWriteGuard::Full(ref mut guard) => &mut guard.aggregation_node,
             TaskMetaStateWriteGuard::Partial(ref mut guard) => &mut guard.aggregation_leaf,
             TaskMetaStateWriteGuard::Unloaded(_) => unreachable!(),
         }
     }
+}
 
-    fn reference(&self) -> &Self::ItemRef {
-        &self.id
-    }
+impl<'l> AggregationNodeGuard for TaskGuard<'l> {
+    type Data = Aggregated;
+    type NodeRef = TaskId;
+    type DataChange = TaskChange;
+    type ChildrenIter<'a> = impl Iterator<Item = TaskId> + 'a where Self: 'a;
 
     fn number_of_children(&self) -> usize {
         match self.guard {
@@ -434,14 +444,14 @@ impl<'l> AggregationItemLock for TaskGuard<'l> {
                     let outdated_children = match &guard.state_type {
                         TaskStateType::InProgress {
                             outdated_children, ..
-                        } => Some(outdated_children.iter().map(Cow::Borrowed)),
+                        } => Some(outdated_children.iter().copied()),
                         _ => None,
                     };
                     Some(
                         guard
                             .children
                             .iter()
-                            .map(Cow::Borrowed)
+                            .copied()
                             .chain(outdated_children.into_iter().flatten()),
                     )
                     .into_iter()
@@ -449,9 +459,7 @@ impl<'l> AggregationItemLock for TaskGuard<'l> {
                 }
                 #[cfg(not(feature = "lazy_remove_children"))]
                 {
-                    Some(guard.children.iter().map(Cow::Borrowed))
-                        .into_iter()
-                        .flatten()
+                    Some(guard.children.iter().copied()).into_iter().flatten()
                 }
             }
             TaskMetaStateWriteGuard::Partial(_) | TaskMetaStateWriteGuard::Unloaded(_) => {
@@ -460,7 +468,7 @@ impl<'l> AggregationItemLock for TaskGuard<'l> {
         }
     }
 
-    fn get_add_change(&self) -> Option<Self::ItemChange> {
+    fn get_add_change(&self) -> Option<Self::DataChange> {
         match self.guard {
             TaskMetaStateWriteGuard::Full(ref guard) => {
                 let mut change = TaskChange::default();
@@ -505,7 +513,7 @@ impl<'l> AggregationItemLock for TaskGuard<'l> {
         }
     }
 
-    fn get_remove_change(&self) -> Option<Self::ItemChange> {
+    fn get_remove_change(&self) -> Option<Self::DataChange> {
         match self.guard {
             TaskMetaStateWriteGuard::Full(ref guard) => {
                 let mut change = TaskChange::default();
@@ -549,9 +557,41 @@ impl<'l> AggregationItemLock for TaskGuard<'l> {
             TaskMetaStateWriteGuard::Partial(_) | TaskMetaStateWriteGuard::Unloaded(_) => None,
         }
     }
+
+    fn get_initial_data(&self) -> Self::Data {
+        let mut data = Aggregated::default();
+        if let Some(TaskChange {
+            unfinished,
+            #[cfg(feature = "track_unfinished")]
+            unfinished_tasks_update,
+            dirty_tasks_update,
+            collectibles,
+        }) = self.get_add_change()
+        {
+            data.unfinished = unfinished;
+            #[cfg(feature = "track_unfinished")]
+            {
+                data.unfinished_tasks = unfinished_tasks_update.into_iter().collect();
+            }
+            data.dirty_tasks = dirty_tasks_update.into_iter().collect();
+            data.collectibles = collectibles
+                .into_iter()
+                .map(|(trait_type_id, collectible, count)| {
+                    (
+                        trait_type_id,
+                        CollectiblesInfo {
+                            collectibles: [(collectible, count)].iter().cloned().collect(),
+                            dependent_tasks: TaskIdSet::default(),
+                        },
+                    )
+                })
+                .collect();
+        }
+        data
+    }
 }
 
-pub type TaskAggregationTreeLeaf = AggregationTreeLeaf<Aggregated, TaskId>;
+pub type TaskAggregationNode = AggregationNode<TaskId, Aggregated>;
 
 fn update_count_entry<K: Eq + Hash, H: BuildHasher + Default, const I: usize>(
     entry: Entry<'_, K, i32, H, I>,

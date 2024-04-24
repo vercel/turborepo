@@ -45,6 +45,16 @@ impl<T, H: Default> Default for CountHashSet<T, H> {
     }
 }
 
+impl<T: Eq + Hash, H: BuildHasher + Default> FromIterator<T> for CountHashSet<T, H> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        let mut set = CountHashSet::default();
+        for item in iter {
+            set.add(item);
+        }
+        set
+    }
+}
+
 impl<T, H: Default> CountHashSet<T, H> {
     pub fn new() -> Self {
         Self::default()
@@ -188,6 +198,19 @@ impl<T: Eq + Hash, H: BuildHasher + Default> CountHashSet<T, H> {
                 }
             }
             RawEntry::Vacant(_) => RemoveIfEntryResult::NotPresent,
+        }
+    }
+
+    pub fn remove_entry(&mut self, item: &T) -> isize {
+        match self.inner.raw_entry_mut(item) {
+            RawEntry::Occupied(e) => {
+                let value = e.remove();
+                if value < 0 {
+                    self.negative_entries -= 1;
+                }
+                value
+            }
+            RawEntry::Vacant(_) => 0,
         }
     }
 
