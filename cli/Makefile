@@ -1,44 +1,19 @@
 TURBO_VERSION = $(shell cat ../version.txt | sed -n '1 p')
 TURBO_TAG = $(shell cat ../version.txt | sed -n '2 p')
 
-EXT :=
-ifeq ($(OS),Windows_NT)
-	UNAME := Windows
-	EXT = .exe
-else
-	UNAME := $(shell uname -s)
-endif
-
 CLI_DIR = $(shell pwd)
 
-# We do not set go-turbo as a dependency because the Rust build.rs
-# script will call it for us and copy over the binary
-turbo:
-	cargo build -p turbo
-
-turbo-prod:
-	cargo build --release --manifest-path ../crates/turborepo/Cargo.toml
-
-turbo-capnp:
-	cd ../crates/turborepo-lib/src/hash && capnp compile -I std -ogo proto.capnp && mv ./proto.capnp.go ../../../../cli/internal/fs/hash/capnp
-
-install: | ./package.json
-	pnpm install --filter=cli
-
-corepack:
-	which corepack || npm install -g corepack@latest
-	corepack enable
-
-build: install
-	cd $(CLI_DIR)/../ && pnpm build:turbo
-	cd $(CLI_DIR)/../ && pnpm install --filter=create-turbo && pnpm turbo-prebuilt build --filter=create-turbo...
-	cd $(CLI_DIR)/../ && pnpm install --filter=@turbo/codemod && pnpm turbo-prebuilt build --filter=@turbo/codemod...
-	cd $(CLI_DIR)/../ && pnpm install --filter=turbo-ignore && pnpm turbo-prebuilt build --filter=turbo-ignore...
-	cd $(CLI_DIR)/../ && pnpm install --filter=@turbo/workspaces && pnpm turbo-prebuilt build --filter=@turbo/workspaces...
-	cd $(CLI_DIR)/../ && pnpm install --filter=@turbo/gen && pnpm turbo-prebuilt build --filter=@turbo/gen...
-	cd $(CLI_DIR)/../ && pnpm install --filter=eslint-plugin-turbo && pnpm turbo-prebuilt build --filter=eslint-plugin-turbo...
-	cd $(CLI_DIR)/../ && pnpm install --filter=eslint-config-turbo && pnpm turbo-prebuilt build --filter=eslint-config-turbo...
-	cd $(CLI_DIR)/../ && pnpm install --filter=@turbo/types && pnpm turbo-prebuilt build --filter=@turbo/types...
+# This only builds JS packages
+build:
+	cd $(CLI_DIR)/../ && turbo build \
+		--filter=create-turbo \
+		--filter=@turbo/codemod \
+		--filter=turbo-ignore \
+		--filter=@turbo/workspaces \
+		--filter=@turbo/gen \
+		--filter=eslint-plugin-turbo \
+		--filter=eslint-config-turbo \
+		--filter=@turbo/types
 
 .PHONY: stage-release
 stage-release:
@@ -69,7 +44,7 @@ stage-release:
 	git push origin staging-$(TURBO_VERSION) --tags --force
 
 .PHONY: publish-turbo
-publish-turbo: clean build
+publish-turbo: build
 	echo "Version: $(TURBO_VERSION)"
 	echo "Tag: $(TURBO_TAG)"
 
@@ -106,14 +81,6 @@ ifneq ($(SKIP_PUBLISH),--skip-publish)
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../eslint-config-turbo-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-types-$(TURBO_VERSION).tgz
 endif
-
-clean: clean-build clean-rust
-
-clean-rust:
-	cargo clean
-
-clean-build:
-	rm -f turbo
 
 # use target fixture-<some directory under turborepo-tests/integration/fixtures> to set up the testbed directory
 .PHONY=fixture-%

@@ -59,6 +59,11 @@ pub struct RunBuilder {
     experimental_ui: bool,
     api_client: APIClient,
     analytics_sender: Option<AnalyticsSender>,
+    // In watch mode, we can have a changed package that we want to serve as an entrypoint.
+    // We will then prune away any tasks that do not depend on tasks inside
+    // this package.
+    entrypoint_package: Option<PackageName>,
+    should_print_prelude_override: Option<bool>,
 }
 
 impl RunBuilder {
@@ -98,6 +103,7 @@ impl RunBuilder {
             (!cfg!(windows) || experimental_ui),
         );
         let CommandBase { repo_root, ui, .. } = base;
+
         Ok(Self {
             processes,
             opts,
@@ -108,7 +114,19 @@ impl RunBuilder {
             version,
             experimental_ui,
             analytics_sender: None,
+            entrypoint_package: None,
+            should_print_prelude_override: None,
         })
+    }
+
+    pub fn with_entrypoint_package(mut self, entrypoint_package: PackageName) -> Self {
+        self.entrypoint_package = Some(entrypoint_package);
+        self
+    }
+
+    pub fn hide_prelude(mut self) -> Self {
+        self.should_print_prelude_override = Some(false);
+        self
     }
 
     fn connect_process_manager(&self, signal_subscriber: SignalSubscriber) {
@@ -366,7 +384,7 @@ impl RunBuilder {
             &self.repo_root,
             &self.opts.runcache_opts,
             color_selector,
-            daemon,
+            daemon.clone(),
             self.ui,
             self.opts.run_opts.dry_run.is_some(),
         ));
@@ -377,6 +395,10 @@ impl RunBuilder {
             self.opts.run_opts.env_mode = EnvMode::Strict;
         }
 
+        let should_print_prelude = self.should_print_prelude_override.unwrap_or_else(|| {
+            self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none()
+        });
+
         Ok(Run {
             version: self.version,
             ui: self.ui,
@@ -386,7 +408,7 @@ impl RunBuilder {
             run_telemetry,
             task_access,
             repo_root: self.repo_root,
-            opts: self.opts,
+            opts: Arc::new(self.opts),
             api_client: self.api_client,
             api_auth: self.api_auth,
             env_at_execution_start,
@@ -397,6 +419,8 @@ impl RunBuilder {
             engine: Arc::new(engine),
             run_cache,
             signal_handler: signal_handler.clone(),
+            daemon,
+            should_print_prelude,
         })
     }
 
@@ -406,7 +430,7 @@ impl RunBuilder {
         root_turbo_json: &TurboJson,
         filtered_pkgs: &HashSet<PackageName>,
     ) -> Result<Engine, Error> {
-        let engine = EngineBuilder::new(
+        let mut engine = EngineBuilder::new(
             &self.repo_root,
             pkg_dep_graph,
             self.opts.run_opts.single_package,
@@ -424,6 +448,12 @@ impl RunBuilder {
             Spanned::new(TaskName::from(task.as_str()).into_owned())
         }))
         .build()?;
+
+        // If we have an initial task, we prune out the engine to only
+        // tasks that are reachable from that initial task.
+        if let Some(entrypoint_package) = &self.entrypoint_package {
+            engine = engine.create_engine_for_subgraph(entrypoint_package);
+        }
 
         if !self.opts.run_opts.parallel {
             engine

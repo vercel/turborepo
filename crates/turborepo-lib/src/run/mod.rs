@@ -38,8 +38,10 @@ use crate::{
     task_graph::Visitor,
     task_hash::{get_external_deps_hash, PackageInputsHashes},
     turbo_json::TurboJson,
+    DaemonClient, DaemonConnector,
 };
 
+#[derive(Clone)]
 pub struct Run {
     version: &'static str,
     ui: UI,
@@ -48,7 +50,7 @@ pub struct Run {
     processes: ProcessManager,
     run_telemetry: GenericEventBuilder,
     repo_root: AbsoluteSystemPathBuf,
-    opts: Opts,
+    opts: Arc<Opts>,
     api_client: APIClient,
     api_auth: Option<APIAuth>,
     env_at_execution_start: EnvironmentVariableMap,
@@ -60,9 +62,14 @@ pub struct Run {
     signal_handler: SignalHandler,
     engine: Arc<Engine>,
     task_access: TaskAccess,
+    daemon: Option<DaemonClient<DaemonConnector>>,
+    should_print_prelude: bool,
 }
 
 impl Run {
+    fn has_persistent_tasks(&self) -> bool {
+        self.engine.has_persistent_tasks
+    }
     fn print_run_prelude(&self) {
         let targets_list = self.opts.run_opts.tasks.join(", ");
         if self.opts.run_opts.single_package {
@@ -94,8 +101,24 @@ impl Run {
         }
     }
 
-    pub async fn run(&self) -> Result<i32, Error> {
-        if self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none() {
+    pub fn create_run_for_persistent_tasks(&self) -> Self {
+        let mut new_run = self.clone();
+        let new_engine = new_run.engine.create_engine_for_persistent_tasks();
+        new_run.engine = Arc::new(new_engine);
+
+        new_run
+    }
+
+    pub fn create_run_without_persistent_tasks(&self) -> Self {
+        let mut new_run = self.clone();
+        let new_engine = new_run.engine.create_engine_without_persistent_tasks();
+        new_run.engine = Arc::new(new_engine);
+
+        new_run
+    }
+
+    pub async fn run(&mut self) -> Result<i32, Error> {
+        if self.should_print_prelude {
             self.print_run_prelude();
         }
         if let Some(subscriber) = self.signal_handler.subscribe() {
@@ -129,6 +152,7 @@ impl Run {
             self.engine.task_definitions(),
             &self.repo_root,
             &self.run_telemetry,
+            &mut self.daemon,
         )?;
 
         let root_workspace = self

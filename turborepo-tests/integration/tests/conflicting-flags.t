@@ -1,13 +1,14 @@
 Setup
   $ . ${TESTDIR}/../../helpers/setup_integration_test.sh
   $ ${TURBO} run build --daemon --no-daemon
-   ERROR  the argument '--daemon' cannot be used with '--no-daemon'
+   ERROR  the argument '--\[no-\]daemon' cannot be used with '--no-daemon' (re)
   
-  Usage: turbo(\.exe)? run --daemon (re)
+  Usage: turbo(\.exe)? run --\[no-\]daemon (re)
   
   For more information, try '--help'.
   
   [1]
+
   $ ${TURBO} run build --since main
    ERROR  the following required arguments were not provided:
     --scope <SCOPE>
