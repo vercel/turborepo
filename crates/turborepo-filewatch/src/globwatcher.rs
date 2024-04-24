@@ -33,6 +33,10 @@ impl GlobSet {
         inputs.extend(self.exclude_raw.iter().cloned());
         inputs
     }
+
+    pub fn matches(&self, input: &RelativeUnixPath) -> bool {
+        self.include.values().any(|glob| glob.is_match(input)) && !self.exclude.is_match(input)
+    }
 }
 
 impl std::fmt::Debug for GlobSet {
@@ -132,6 +136,16 @@ impl GlobSet {
             (includes, excludes)
         };
         Self::from_raw(includes, excludes)
+    }
+
+    pub fn is_package_local(&self) -> bool {
+        self.include
+            .keys()
+            .all(|raw_glob| !raw_glob.starts_with("../"))
+            && self
+                .exclude_raw
+                .iter()
+                .all(|raw_glob| !raw_glob.starts_with("../"))
     }
 }
 
