@@ -1,10 +1,11 @@
-use std::{cell::RefCell, collections::HashSet, sync::Mutex};
+use std::collections::HashSet;
 
 use futures::StreamExt;
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 use tokio::{
     select,
+    sync::watch,
     task::{yield_now, JoinHandle},
 };
 use turborepo_repository::package_graph::PackageName;
@@ -21,7 +22,7 @@ use crate::{
     DaemonConnector, DaemonPaths,
 };
 
-enum ChangedPackages {
+pub enum ChangedPackages {
     All,
     Some(HashSet<PackageName>),
 }
@@ -87,6 +88,10 @@ pub enum Error {
     SignalInterrupt,
     #[error("package change error")]
     PackageChange(#[from] tonic::Status),
+    #[error("changed packages channel closed, cannot receive new changes")]
+    ChangedPackagesRecv(#[from] watch::error::RecvError),
+    #[error("changed packages channel closed, cannot send new changes")]
+    ChangedPackagesSend(#[from] watch::error::SendError<ChangedPackages>),
 }
 
 impl WatchClient {
@@ -134,12 +139,12 @@ impl WatchClient {
 
         let signal_subscriber = self.handler.subscribe().ok_or(Error::NoSignalHandler)?;
 
-        let changed_packages = Mutex::new(RefCell::new(ChangedPackages::default()));
+        let (changed_pkgs_tx, mut changed_pkgs_rx) = watch::channel(ChangedPackages::default());
 
         let event_fut = async {
             while let Some(event) = events.next().await {
                 let event = event?;
-                Self::handle_change_event(&changed_packages, event.event.unwrap()).await?;
+                Self::handle_change_event(&changed_pkgs_tx, event.event.unwrap()).await?;
             }
 
             Err(Error::ConnectionClosed)
@@ -147,9 +152,11 @@ impl WatchClient {
 
         let run_fut = async {
             loop {
-                if !changed_packages.lock().unwrap().borrow().is_empty() {
-                    self.execute_run(&changed_packages).await?;
-                }
+                changed_pkgs_rx.changed().await?;
+                let changed_pkgs = changed_pkgs_rx.borrow_and_update();
+
+                self.execute_run(&changed_pkgs).await?;
+
                 yield_now().await;
             }
         };
@@ -171,7 +178,7 @@ impl WatchClient {
     }
 
     async fn handle_change_event(
-        changed_packages: &Mutex<RefCell<ChangedPackages>>,
+        changed_packages_tx: &watch::Sender<ChangedPackages>,
         event: proto::package_change_event::Event,
     ) -> Result<(), Error> {
         // Should we recover here?
@@ -181,17 +188,17 @@ impl WatchClient {
             }) => {
                 let package_name = PackageName::from(package_name);
 
-                match changed_packages.lock().unwrap().get_mut() {
-                    ChangedPackages::All => {
-                        // If we've already changed all packages, ignore
-                    }
+                changed_packages_tx.send_if_modified(|changed_pkgs| match changed_pkgs {
+                    ChangedPackages::All => false,
                     ChangedPackages::Some(ref mut pkgs) => {
                         pkgs.insert(package_name);
+
+                        true
                     }
-                }
+                });
             }
             proto::package_change_event::Event::RediscoverPackages(_) => {
-                *changed_packages.lock().unwrap().get_mut() = ChangedPackages::All;
+                changed_packages_tx.send(ChangedPackages::All)?;
             }
             proto::package_change_event::Event::Error(proto::PackageChangeError { message }) => {
                 return Err(DaemonError::Unavailable(message).into());
@@ -201,20 +208,17 @@ impl WatchClient {
         Ok(())
     }
 
-    async fn execute_run(
-        &mut self,
-        changed_packages: &Mutex<RefCell<ChangedPackages>>,
-    ) -> Result<i32, Error> {
-        let changed_packages = changed_packages.lock().unwrap().take();
+    async fn execute_run(&mut self, changed_packages: &ChangedPackages) -> Result<i32, Error> {
         // Should we recover here?
         match changed_packages {
             ChangedPackages::Some(packages) => {
                 let packages = packages
-                    .into_iter()
+                    .iter()
                     .filter(|pkg| {
                         // If not in the filtered pkgs, ignore
                         self.run.filtered_pkgs.contains(pkg)
                     })
+                    .cloned()
                     .collect();
 
                 let mut args = self.base.args().clone();
