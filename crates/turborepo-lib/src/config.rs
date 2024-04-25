@@ -9,7 +9,6 @@ use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_auth::{TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE};
 use turborepo_dirs::{config_dir, vercel_config_dir};
 use turborepo_errors::TURBO_SITE;
-use turborepo_repository::package_json::{Error as PackageJsonError, PackageJson};
 
 pub use crate::turbo_json::RawTurboJson;
 use crate::{commands::CommandBase, turbo_json};
@@ -264,21 +263,6 @@ fn non_empty_str(s: Option<&str>) -> Option<&str> {
 
 trait ResolvedConfigurationOptions {
     fn get_configuration_options(self) -> Result<ConfigurationOptions, Error>;
-}
-
-impl ResolvedConfigurationOptions for PackageJson {
-    fn get_configuration_options(self) -> Result<ConfigurationOptions, Error> {
-        match &self.legacy_turbo_config {
-            Some(legacy_turbo_config) => {
-                let synthetic_raw_turbo_json: RawTurboJson = RawTurboJson::parse(
-                    &legacy_turbo_config.to_string(),
-                    AnchoredSystemPath::new("package.json").unwrap(),
-                )?;
-                synthetic_raw_turbo_json.get_configuration_options()
-            }
-            None => Ok(ConfigurationOptions::default()),
-        }
-    }
 }
 
 impl ResolvedConfigurationOptions for RawTurboJson {
@@ -622,7 +606,6 @@ impl TurborepoConfigBuilder {
 
     pub fn build(&self) -> Result<ConfigurationOptions, Error> {
         // Priority, from least significant to most significant:
-        // - shared configuration (package.json .turbo)
         // - shared configuration (turbo.json)
         // - global configuration (~/.turbo/config.json)
         // - local configuration (<REPO_ROOT>/.turbo/config.json)
@@ -630,16 +613,6 @@ impl TurborepoConfigBuilder {
         // - CLI arguments
         // - builder pattern overrides.
 
-        let root_package_json = PackageJson::load(&self.repo_root.join_component("package.json"))
-            .or_else(|e| {
-            if let PackageJsonError::Io(e) = &e {
-                if matches!(e.kind(), std::io::ErrorKind::NotFound) {
-                    return Ok(Default::default());
-                }
-            }
-
-            Err(e)
-        })?;
         let turbo_json = RawTurboJson::read(
             &self.repo_root,
             AnchoredSystemPath::new("turbo.json").unwrap(),
@@ -661,7 +634,6 @@ impl TurborepoConfigBuilder {
         let override_env_var_config = get_override_env_var_config(&env_vars)?;
 
         let sources = [
-            root_package_json.get_configuration_options(),
             turbo_json.get_configuration_options(),
             global_config.get_configuration_options(),
             global_auth.get_configuration_options(),
