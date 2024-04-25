@@ -12,4 +12,5 @@ pub async fn split_scopes(
     entry: Vc<ModuleId>,
     deps: Vc<FxHashMap<ModuleId, ModuleIds>>,
 ) -> Result<Vc<ModuleScope>> {
+    // If a module is imported only as lazy, it should be in a separate scope
 }
