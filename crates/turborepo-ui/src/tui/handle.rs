@@ -119,6 +119,20 @@ impl TuiTask {
             .ok();
     }
 
+    pub fn status(&self, status: &str) {
+        // Since this will be rendered via ratatui we any ANSI escape codes will not be
+        // handled.
+        // TODO: prevent the status from having ANSI codes in this scenario
+        let status = console::strip_ansi_codes(status).into_owned();
+        self.handle
+            .primary
+            .send(Event::Status {
+                task: self.name.clone(),
+                status,
+            })
+            .ok();
+    }
+
     /// Return a `PersistedWriter` which will properly write provided bytes to
     /// a persisted section of the terminal.
     ///

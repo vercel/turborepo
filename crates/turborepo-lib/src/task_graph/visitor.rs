@@ -41,7 +41,7 @@ use crate::{
         },
         task_access::TaskAccess,
         task_id::TaskId,
-        RunCache, TaskCache,
+        CacheOutput, RunCache, TaskCache,
     },
     task_hash::{self, PackageInputsHashes, TaskHashTracker, TaskHashTrackerState, TaskHasher},
 };
@@ -803,14 +803,20 @@ impl ExecContext {
         }
     }
 
-    fn prefixed_ui<W: Write>(&self, stdout: W, stderr: W) -> PrefixedUI<W> {
-        Visitor::prefixed_ui(
-            self.ui,
-            self.is_github_actions,
-            stdout,
-            stderr,
-            self.pretty_prefix.clone(),
-        )
+    fn prefixed_ui<'a, W: Write>(
+        &self,
+        output_client: &'a TaskOutput<W>,
+    ) -> TaskCacheOutput<OutputWriter<'a, W>> {
+        match output_client {
+            TaskOutput::Direct(client) => TaskCacheOutput::Direct(Visitor::prefixed_ui(
+                self.ui,
+                self.is_github_actions,
+                client.stdout(),
+                client.stderr(),
+                self.pretty_prefix.clone(),
+            )),
+            TaskOutput::UI(task) => TaskCacheOutput::UI(task.clone()),
+        }
     }
 
     async fn execute_inner(
@@ -819,7 +825,7 @@ impl ExecContext {
         telemetry: &PackageTaskEventBuilder,
     ) -> ExecOutcome {
         let task_start = Instant::now();
-        let mut prefixed_ui = self.prefixed_ui(output_client.stdout(), output_client.stderr());
+        let mut prefixed_ui = self.prefixed_ui(output_client);
 
         if self.experimental_ui {
             if let TaskOutput::UI(task) = output_client {
@@ -827,19 +833,9 @@ impl ExecContext {
             }
         }
 
-        // When the UI is enabled we don't want to have the prefix appear on the
-        // replayed logs.
-        let alt_log_replay_writer = match output_client {
-            TaskOutput::UI(task) => Some(task.clone()),
-            TaskOutput::Direct(_) => None,
-        };
         match self
             .task_cache
-            .restore_outputs(
-                prefixed_ui.output_prefixed_writer(),
-                alt_log_replay_writer,
-                telemetry,
-            )
+            .restore_outputs(&mut prefixed_ui, telemetry)
             .await
         {
             Ok(Some(status)) => {
@@ -855,7 +851,7 @@ impl ExecContext {
             Ok(None) => (),
             Err(e) => {
                 telemetry.track_error(TrackedErrors::ErrorFetchingFromCache);
-                prefixed_ui.error(format!("error fetching from cache: {e}"));
+                prefixed_ui.error(&format!("error fetching from cache: {e}"));
             }
         }
 
@@ -897,7 +893,7 @@ impl ExecContext {
             // Turbo was unable to spawn a process
             Some(Err(e)) => {
                 // Note: we actually failed to spawn, but this matches the Go output
-                prefixed_ui.error(format!("command finished with error: {e}"));
+                prefixed_ui.error(&format!("command finished with error: {e}"));
                 let error_string = e.to_string();
                 self.errors
                     .lock()
@@ -922,11 +918,7 @@ impl ExecContext {
             }
         }
 
-        let mut stdout_writer = match self.task_cache.output_writer(if self.experimental_ui {
-            Either::Left(output_client.stdout())
-        } else {
-            Either::Right(prefixed_ui.output_prefixed_writer())
-        }) {
+        let mut stdout_writer = match self.task_cache.output_writer(prefixed_ui.task_writer()) {
             Ok(w) => w,
             Err(e) => {
                 telemetry.track_error(TrackedErrors::FailedToCaptureOutputs);
@@ -982,10 +974,7 @@ impl ExecContext {
                 if let Err(e) = stdout_writer.flush() {
                     error!("error flushing logs: {e}");
                 }
-                if let Err(e) = self
-                    .task_cache
-                    .on_error(prefixed_ui.output_prefixed_writer())
-                {
+                if let Err(e) = self.task_cache.on_error(&mut prefixed_ui) {
                     error!("error reading logs: {e}");
                 }
                 let error = TaskErrorCause::from_execution(process.label().to_string(), code);
@@ -993,7 +982,7 @@ impl ExecContext {
                 if self.continue_on_error {
                     prefixed_ui.warn("command finished with error, but continuing...");
                 } else {
-                    prefixed_ui.error(format!("command finished with error: {error}"));
+                    prefixed_ui.error(&format!("command finished with error: {error}"));
                 }
                 self.errors.lock().expect("lock poisoned").push(TaskError {
                     task_id: self.task_id_for_display.clone(),
@@ -1050,6 +1039,59 @@ impl DryRunExecContext {
     }
 }
 
+/// Struct for displaying information about task's cache
+enum TaskCacheOutput<W> {
+    Direct(PrefixedUI<W>),
+    UI(TuiTask),
+}
+
+impl<W: Write> TaskCacheOutput<W> {
+    fn task_writer(&mut self) -> Either<turborepo_ui::PrefixedWriter<&mut W>, TuiTask> {
+        match self {
+            TaskCacheOutput::Direct(prefixed) => Either::Left(prefixed.output_prefixed_writer()),
+            TaskCacheOutput::UI(task) => Either::Right(task.clone()),
+        }
+    }
+
+    fn warn(&mut self, message: impl std::fmt::Display) {
+        match self {
+            TaskCacheOutput::Direct(prefixed) => prefixed.warn(message),
+            TaskCacheOutput::UI(task) => {
+                let _ = write!(task, "\r\n{message}\r\n");
+            }
+        }
+    }
+}
+
+impl<W: Write> CacheOutput for TaskCacheOutput<W> {
+    fn status(&mut self, message: &str) {
+        match self {
+            TaskCacheOutput::Direct(direct) => direct.output(message),
+            TaskCacheOutput::UI(task) => task.status(message),
+        }
+    }
+
+    fn error(&mut self, message: &str) {
+        match self {
+            TaskCacheOutput::Direct(prefixed) => prefixed.error(message),
+            TaskCacheOutput::UI(task) => {
+                let _ = write!(task, "{message}\r\n");
+            }
+        }
+    }
+
+    fn replay_logs(&mut self, log_file: &AbsoluteSystemPath) -> Result<(), turborepo_ui::Error> {
+        match self {
+            TaskCacheOutput::Direct(direct) => {
+                let writer = direct.output_prefixed_writer();
+                turborepo_ui::replay_logs(writer, log_file)
+            }
+            TaskCacheOutput::UI(task) => turborepo_ui::replay_logs(task, log_file),
+        }
+    }
+}
+
+/// Struct for displaying information about task
 impl<W: Write> TaskOutput<W> {
     pub fn finish(self, use_error: bool) -> std::io::Result<Option<Vec<u8>>> {
         match self {

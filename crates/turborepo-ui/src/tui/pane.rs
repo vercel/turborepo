@@ -32,6 +32,7 @@ struct TerminalOutput<W> {
     parser: vt100::Parser,
     stdin: Option<W>,
     has_been_persisted: bool,
+    status: Option<String>,
 }
 
 impl<W> TerminalPane<W> {
@@ -97,6 +98,12 @@ impl<W> TerminalPane<W> {
         }
         self.displayed = Some(task.into());
 
+        Ok(())
+    }
+
+    pub fn set_status(&mut self, task: &str, status: String) -> Result<(), Error> {
+        let task = self.task_mut(task)?;
+        task.status = Some(status);
         Ok(())
     }
 
@@ -177,6 +184,14 @@ impl<W> TerminalOutput<W> {
             rows,
             cols,
             has_been_persisted: false,
+            status: None,
+        }
+    }
+
+    fn title(&self, task_name: &str) -> String {
+        match self.status.as_deref() {
+            Some(status) => format!(" {task_name} > {status}"),
+            None => format!(" {task_name} >"),
         }
     }
 
@@ -208,7 +223,7 @@ impl<W> TerminalOutput<W> {
         debug!("rendering {} lines", lines_to_render);
         let mut cursor = tui_term::widget::Cursor::default();
         cursor.hide();
-        let title = format!(" {task_name} >");
+        let title = self.title(task_name);
         let block = Block::default()
             .borders(Borders::ALL)
             .title(title.as_str())
@@ -235,7 +250,7 @@ impl<W> Widget for &TerminalPane<W> {
         let screen = task.parser.screen();
         let mut block = Block::default()
             .borders(Borders::ALL)
-            .title(format!(" {task_name} >"));
+            .title(task.title(task_name));
         if self.highlight {
             block = block.border_style(Style::new().fg(ratatui::style::Color::Yellow));
         }
