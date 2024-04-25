@@ -240,7 +240,7 @@ describe("TelemetryConfig", () => {
           telemetry_enabled: true,
           telemetry_id: "123456",
           telemetry_salt: "private-salt",
-          telemetry_alerted: new Date(),
+          telemetry_alerted: new Date().toISOString(),
         },
       });
 
@@ -389,7 +389,7 @@ describe("TelemetryConfig", () => {
           telemetry_enabled: true,
           telemetry_id: "123456",
           telemetry_salt: "private-salt",
-          telemetry_alerted: new Date(),
+          telemetry_alerted: new Date().toISOString(),
         },
       });
 
@@ -401,11 +401,6 @@ describe("TelemetryConfig", () => {
     test("should set telemetry_alerted to current date and write the config if telemetry_alerted is undefined", (t) => {
       const mockWriteFileSync = mock.fn();
       t.mock.method(fs, "writeFileSync", mockWriteFileSync);
-      mock.timers.enable({
-        apis: ["Date"],
-        now: new Date("2021-01-01T00:00:00.000Z"),
-      });
-
       const result = telemetryConfig.alertShown();
 
       assert.equal(result, true);
