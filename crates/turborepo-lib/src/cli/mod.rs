@@ -695,24 +695,6 @@ pub struct ExecutionArgs {
     #[clap(long, requires = "scope-filter-group")]
     pub ignore: Vec<String>,
 
-    /// Avoid saving task results to the cache. Useful for development/watch
-    /// tasks.
-    #[clap(long)]
-    pub no_cache: bool,
-
-    // clap does not have negation flags such as --daemon and --no-daemon
-    // so we need to use a group to enforce that only one of them is set.
-    // we set the long name as [no-]daemon with an alias of daemon such
-    // that we can merge the help text together for both flags
-    // -----------------------
-    #[clap(long = "daemon", group = "daemon-group")]
-    daemon: bool,
-
-    /// Force turbo to either use or not use the local daemon. If unset
-    /// turbo will use the default detection logic.
-    #[clap(long, group = "daemon-group")]
-    no_daemon: bool,
-
     /// Set type of process output logging. Use "full" to show
     /// all output. Use "hash-only" to show only turbo-computed
     /// task hashes. Use "new-only" to show only new output with
@@ -759,9 +741,6 @@ impl ExecutionArgs {
 
         track_usage!(telemetry, self.continue_execution, |val| val);
         track_usage!(telemetry, self.single_package, |val| val);
-        track_usage!(telemetry, self.no_cache, |val| val);
-        track_usage!(telemetry, self.daemon, |val| val);
-        track_usage!(telemetry, self.no_daemon, |val| val);
         track_usage!(telemetry, self.only, |val| val);
         track_usage!(telemetry, self.remote_only, |val| val);
         track_usage!(telemetry, &self.cache_dir, Option::is_some);
