@@ -8,4 +8,4 @@ use turbopack_core::chunk::{ModuleId, ModuleIds};
 pub struct ModuleGroup {}
 
 #[turbo_tasks::function]
-pub async fn group_modules(deps: &FxHashMap<ModuleId, ModuleIds>) -> Result<Vc<ModuleGroup>> {}
+pub async fn group_modules(deps: Vc<FxHashMap<ModuleId, ModuleIds>>) -> Result<Vc<ModuleGroup>> {}
