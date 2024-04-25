@@ -102,6 +102,14 @@ pub enum Error {
         #[source_code]
         text: NamedSource,
     },
+    #[error("`{field}` cannot contain an environment variable")]
+    InvalidDependsOnValue {
+        field: &'static str,
+        #[label("environment variable found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+    },
     #[error("`{field}` cannot contain an absolute path")]
     AbsolutePathInConfig {
         field: &'static str,
