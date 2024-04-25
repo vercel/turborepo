@@ -295,7 +295,7 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
                 let (span, text) = dependency.span_and_text("turbo.json");
                 let (dependency, depspan) = dependency.split();
                 let dependency: String = dependency.into();
-                if let Some(_) = dependency.strip_prefix(ENV_PIPELINE_DELIMITER) {
+                if dependency.strip_prefix(ENV_PIPELINE_DELIMITER).is_some() {
                     return Err(Error::InvalidDependsOnValue {
                         field: "dependsOn",
                         span,
@@ -464,7 +464,7 @@ impl TryFrom<RawTurboJson> for TurboJson {
         }
 
         for global_dep in raw_turbo.global_dependencies.into_iter().flatten() {
-            if let Some(_) = global_dep.strip_prefix(ENV_PIPELINE_DELIMITER) {
+            if global_dep.strip_prefix(ENV_PIPELINE_DELIMITER).is_some() {
                 let (span, text) = global_dep.span_and_text("turbo.json");
                 return Err(Error::InvalidDependsOnValue {
                     field: "globalDependencies",
