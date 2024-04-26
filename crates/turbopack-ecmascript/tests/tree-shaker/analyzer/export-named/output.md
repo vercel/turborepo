@@ -68,7 +68,7 @@ graph TD
 ```mermaid
 graph TD
     N0["Items: [ItemId(ModuleEvaluation), ItemId(0, ImportOfModule)]"];
-    N1["Items: [ItemId(Export((\"_reexport_fakeCat\", #1), \"fakeCat\")), ItemId(0, ImportBinding(0))]"];
+    N1["Items: [ItemId(Export((&quot;_reexport_fakeCat&quot;, #1), &quot;fakeCat&quot;)), ItemId(0, ImportBinding(0))]"];
 ```
 # Modules (dev)
 ## Part 0
