@@ -988,8 +988,6 @@ impl DepGraph {
             );
         }
 
-        dbg!(&items);
-
         (ids, items)
     }
 
