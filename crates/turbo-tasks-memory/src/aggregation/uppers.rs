@@ -23,31 +23,47 @@ pub fn add_upper_count<C: AggregationContext>(
     count: usize,
 ) -> isize {
     // TODO add_clonable_count could return the current count for better performance
-    let (optimize, count) = match &mut *node {
+    let (added, count) = match &mut *node {
         AggregationNode::Leaf { uppers, .. } => {
             if uppers.add_clonable_count(upper_id, count) {
                 let count = uppers.get_count(upper_id);
-                let uppers_len = uppers.len();
-                let optimize = (uppers_len > MAX_UPPERS
-                    && (uppers_len - MAX_UPPERS).count_ones() == 1)
-                    .then(|| (true, uppers.iter().cloned().collect::<StackVec<_>>()));
-                let add_change = node.get_add_change();
-                let children = node.children().collect::<StackVec<_>>();
-                drop(node);
-                let mut upper = ctx.node(upper_id);
-                let add_prepared =
-                    add_change.and_then(|add_change| upper.apply_change(ctx, add_change));
-                let prepared = children
-                    .into_iter()
-                    .map(|child_id| upper.notify_new_follower(ctx, upper_id, &child_id))
-                    .collect::<StackVec<_>>();
-                drop(upper);
-                add_prepared.apply(ctx);
-                prepared.apply(ctx);
-                (optimize, count)
+                (true, count)
             } else {
-                (None, uppers.get_count(upper_id))
+                (false, uppers.get_count(upper_id))
             }
+        }
+        AggregationNode::Aggegating(aggegating) => {
+            let AggegatingNode { ref mut uppers, .. } = **aggegating;
+            if uppers.add_clonable_count(upper_id, count) {
+                let count = uppers.get_count(upper_id);
+                (true, count)
+            } else {
+                (false, uppers.get_count(upper_id))
+            }
+        }
+    };
+    if added {
+        on_added(ctx, node, node_id, upper_id);
+    }
+    count
+}
+
+pub fn on_added<C: AggregationContext>(
+    ctx: &C,
+    mut node: C::Guard<'_>,
+    node_id: &C::NodeRef,
+    upper_id: &C::NodeRef,
+) {
+    let uppers = node.uppers();
+    let uppers_len = uppers.len();
+    let optimize = (uppers_len > MAX_UPPERS && (uppers_len - MAX_UPPERS).count_ones() == 1)
+        .then(|| (true, uppers.iter().cloned().collect::<StackVec<_>>()));
+    let (add_change, followers) = match &mut *node {
+        AggregationNode::Leaf { uppers, .. } => {
+            let add_change = node.get_add_change();
+            let children = node.children().collect::<StackVec<_>>();
+            drop(node);
+            (add_change, children)
         }
         AggregationNode::Aggegating(aggegating) => {
             let AggegatingNode {
@@ -55,31 +71,25 @@ pub fn add_upper_count<C: AggregationContext>(
                 ref followers,
                 ..
             } = **aggegating;
-            if uppers.add_clonable_count(upper_id, count) {
-                let count = uppers.get_count(upper_id);
-                let add_change = ctx.data_to_add_change(&aggegating.data);
-                let followers = followers.iter().cloned().collect::<StackVec<_>>();
-                let uppers_len = uppers.len();
-                let optimize = (uppers_len > MAX_UPPERS
-                    && (uppers_len - MAX_UPPERS).count_ones() == 1)
-                    .then(|| (false, uppers.iter().cloned().collect::<StackVec<_>>()));
-                drop(node);
-                let mut upper = ctx.node(upper_id);
-                let add_prepared =
-                    add_change.and_then(|add_change| upper.apply_change(ctx, add_change));
-                let prepared = followers
-                    .into_iter()
-                    .map(|child_id| upper.notify_new_follower(ctx, upper_id, &child_id))
-                    .collect::<StackVec<_>>();
-                drop(upper);
-                add_prepared.apply(ctx);
-                prepared.apply(ctx);
-                (optimize, count)
-            } else {
-                (None, uppers.get_count(upper_id))
-            }
+            let add_change = ctx.data_to_add_change(&aggegating.data);
+            let followers = followers.iter().cloned().collect::<StackVec<_>>();
+            drop(node);
+
+            (add_change, followers)
         }
     };
+
+    // Make sure to propagate the change to the upper node
+    let mut upper = ctx.node(upper_id);
+    let add_prepared = add_change.and_then(|add_change| upper.apply_change(ctx, add_change));
+    let prepared = followers
+        .into_iter()
+        .map(|child_id| upper.notify_new_follower(ctx, upper_id, &child_id))
+        .collect::<StackVec<_>>();
+    drop(upper);
+    add_prepared.apply(ctx);
+    prepared.apply(ctx);
+
     // This heuristic ensures that we don’t have too many upper edges, which would
     // degrade update performance
     if let Some((leaf, uppers)) = optimize {
@@ -112,7 +122,6 @@ pub fn add_upper_count<C: AggregationContext>(
             }
         }
     }
-    count
 }
 
 pub fn remove_upper_count<C: AggregationContext>(
@@ -166,7 +175,7 @@ pub fn remove_positive_upper_count<C: AggregationContext>(
     }
 }
 
-fn on_removed<C: AggregationContext>(ctx: &C, node: C::Guard<'_>, upper_id: &C::NodeRef) {
+pub fn on_removed<C: AggregationContext>(ctx: &C, node: C::Guard<'_>, upper_id: &C::NodeRef) {
     match &*node {
         AggregationNode::Leaf { .. } => {
             let remove_change = node.get_remove_change();

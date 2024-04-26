@@ -2,17 +2,102 @@ use std::cmp::Ordering;
 
 use super::{
     followers::{
-        add_follower_count, remove_follower_count, remove_positive_follower_count,
+        self, add_follower_count, remove_follower_count, remove_positive_follower_count,
         RemovePositveFollowerCountResult,
     },
     increase_aggregation_number,
     uppers::{
-        add_upper_count, remove_positive_upper_count, remove_upper_count,
+        self, add_upper_count, remove_positive_upper_count, remove_upper_count,
         RemovePositiveUpperCountResult,
     },
-    AggregationContext, AggregationNode,
+    AggegatingNode, AggregationContext, AggregationNode,
 };
 use crate::count_hash_set::RemovePositiveCountResult;
+
+// Migrated followers to uppers or uppers to followers depending on the
+// aggregation numbers of the nodes involved in the edge. Might increase targets
+// aggregation number if they are equal.
+pub(super) fn balance_edge_double_lock<C: AggregationContext>(
+    ctx: &C,
+    upper_id: &C::NodeRef,
+    target_id: &C::NodeRef,
+    mut upper_aggregation_number: u32,
+    mut target_aggregation_number: u32,
+    _is_inner: bool,
+) {
+    loop {
+        // Locking both in that order is fine
+        let mut upper = ctx.node(&upper_id);
+        let mut target = ctx.node(&target_id);
+        upper_aggregation_number = upper.aggregation_number();
+        target_aggregation_number = target.aggregation_number();
+        let root = upper_aggregation_number == u32::MAX || target_aggregation_number == u32::MAX;
+        let order = if root {
+            Ordering::Greater
+        } else {
+            upper_aggregation_number.cmp(&target_aggregation_number)
+        };
+        let AggregationNode::Aggegating(aggregating) = &mut *upper else {
+            unreachable!();
+        };
+        match order {
+            Ordering::Less => {
+                // target should be a follower of upper
+                let mut added_follower = false;
+                let mut removed_upper = false;
+                let removed_count = target.uppers_mut().remove_entry(upper_id);
+                if removed_count < 0 {
+                    target
+                        .uppers_mut()
+                        .remove_clonable_count(upper_id, -removed_count as usize);
+                } else if removed_count > 0 {
+                    removed_upper = true;
+                    added_follower = aggregating
+                        .followers
+                        .add_clonable_count(target_id, removed_count as usize);
+                }
+                if removed_upper {
+                    drop(upper);
+                    uppers::on_removed(ctx, target, upper_id);
+                    upper = ctx.node(&upper_id);
+                }
+                if added_follower {
+                    followers::on_added(ctx, upper, target_id);
+                }
+                return;
+            }
+            Ordering::Equal => {
+                drop(upper);
+                increase_aggregation_number(ctx, target, target_id, target_aggregation_number + 1);
+            }
+            Ordering::Greater => {
+                // target should be an inner node of upper
+                let mut added_upper = false;
+                let mut removed_follower = false;
+                let removed_count = aggregating.followers.remove_entry(target_id);
+                if removed_count < 0 {
+                    aggregating
+                        .followers
+                        .remove_clonable_count(target_id, -removed_count as usize);
+                } else if removed_count > 0 {
+                    removed_follower = true;
+                    added_upper = target
+                        .uppers_mut()
+                        .add_clonable_count(upper_id, removed_count as usize);
+                }
+                if removed_follower {
+                    drop(target);
+                    followers::on_removed(ctx, upper, target_id);
+                    target = ctx.node(&target_id);
+                }
+                if added_upper {
+                    uppers::on_added(ctx, target, target_id, upper_id);
+                }
+                return;
+            }
+        }
+    }
+}
 
 // Migrated followers to uppers or uppers to followers depending on the
 // aggregation numbers of the nodes involved in the edge. Might increase targets
