@@ -13,12 +13,12 @@ use swc_core::{
     common::{util::take::Take, DUMMY_SP},
     ecma::{
         ast::{
-            op, ClassDecl, Decl, ExportDecl, ExportNamedSpecifier, ExportSpecifier, Expr, ExprStmt,
-            FnDecl, Id, Ident, ImportDecl, ImportNamedSpecifier, ImportSpecifier,
+            op, ClassDecl, Decl, DefaultDecl, ExportDecl, ExportNamedSpecifier, ExportSpecifier,
+            Expr, ExprStmt, FnDecl, Id, Ident, ImportDecl, ImportNamedSpecifier, ImportSpecifier,
             ImportStarAsSpecifier, KeyValueProp, Lit, Module, ModuleDecl, ModuleExportName,
             ModuleItem, NamedExport, ObjectLit, Prop, PropName, PropOrSpread, Stmt, VarDecl,
         },
-        atoms::{js_word, JsWord},
+        atoms::JsWord,
         utils::{find_pat_ids, private_ident, quote_ident, IdentExt},
     },
 };
@@ -594,8 +594,8 @@ impl DepGraph {
                                 ExportSpecifier::Named(s) => (
                                     Some(s.orig.clone()),
                                     match s.exported.as_ref().unwrap_or(&s.orig) {
-                                        ModuleExportName::Ident(i) => i.clone().private(),
-                                        ModuleExportName::Str(..) => private_ident!("_tmp"),
+                                        ModuleExportName::Ident(i) => i.clone(),
+                                        ModuleExportName::Str(..) => quote_ident!("_tmp"),
                                     },
                                     s.exported.clone(),
                                 ),
@@ -604,25 +604,24 @@ impl DepGraph {
                                         "default".into(),
                                         DUMMY_SP,
                                     ))),
-                                    private_ident!("default"),
+                                    quote_ident!("default"),
                                     Some(ModuleExportName::Ident(s.exported.clone())),
                                 ),
                                 ExportSpecifier::Namespace(s) => (
                                     None,
                                     match &s.name {
-                                        ModuleExportName::Ident(i) => i.clone().private(),
-                                        ModuleExportName::Str(..) => private_ident!("_tmp"),
+                                        ModuleExportName::Ident(i) => i.clone(),
+                                        ModuleExportName::Str(..) => quote_ident!("_tmp"),
                                     },
                                     Some(s.name.clone()),
                                 ),
                             };
 
                             if item.src.is_some() {
-                                local = Ident::new(
+                                local.sym =
                                     magic_identifier::mangle(&format!("reexport {}", local.sym))
-                                        .into(),
-                                    local.span,
-                                );
+                                        .into();
+                                local = local.private();
                             }
 
                             exports.push((local.to_id(), exported.clone()));
@@ -670,10 +669,77 @@ impl DepGraph {
                             }
                         }
                     }
-                    ModuleDecl::ExportDefaultDecl(_) | ModuleDecl::ExportDefaultExpr(_) => {
-                        let id = (js_word!("default"), Default::default());
-                        exports.push((id, None));
+
+                    ModuleDecl::ExportDefaultDecl(export) => {
+                        let id = match &export.decl {
+                            DefaultDecl::Class(c) => c.ident.clone(),
+                            DefaultDecl::Fn(f) => f.ident.clone(),
+                            DefaultDecl::TsInterfaceDecl(_) => unreachable!(),
+                        };
+
+                        let default_var = id.unwrap_or_else(|| {
+                            private_ident!(magic_identifier::mangle("default export"))
+                        });
+
+                        // {
+                        //     let used_ids = ids_used_by_ignoring_nested(&export.decl);
+                        //     let captured_ids = ids_captured_by(&export.decl);
+                        //     let data = ItemData {
+                        //         read_vars: used_ids.read,
+                        //         eventual_read_vars: captured_ids.read,
+                        //         write_vars: used_ids.write,
+                        //         eventual_write_vars: captured_ids.write,
+                        //         var_decls: [default_var.to_id()].into_iter().collect(),
+                        //         side_effects: true,
+                        //         content: item.clone(),
+                        //         ..Default::default()
+                        //     };
+
+                        //     let id = ItemId::Item {
+                        //         index,
+                        //         kind: ItemIdItemKind::Normal,
+                        //     };
+                        //     ids.push(id.clone());
+                        //     items.insert(id, data);
+                        // }
+
+                        exports.push((
+                            default_var.to_id(),
+                            Some(ModuleExportName::Ident(quote_ident!("default"))),
+                        ));
                     }
+                    ModuleDecl::ExportDefaultExpr(export) => {
+                        let default_var =
+                            private_ident!(magic_identifier::mangle("default export"));
+
+                        // {
+                        //     let used_ids = ids_used_by_ignoring_nested(&export.expr);
+                        //     let captured_ids = ids_captured_by(&export.expr);
+                        //     let data = ItemData {
+                        //         read_vars: used_ids.read,
+                        //         eventual_read_vars: captured_ids.read,
+                        //         write_vars: used_ids.write,
+                        //         eventual_write_vars: captured_ids.write,
+                        //         var_decls: [default_var.to_id()].into_iter().collect(),
+                        //         side_effects: true,
+                        //         content: item.clone(),
+                        //         ..Default::default()
+                        //     };
+
+                        //     let id = ItemId::Item {
+                        //         index,
+                        //         kind: ItemIdItemKind::Normal,
+                        //     };
+                        //     ids.push(id.clone());
+                        //     items.insert(id, data);
+                        // }
+
+                        exports.push((
+                            default_var.to_id(),
+                            Some(ModuleExportName::Ident(quote_ident!("default"))),
+                        ));
+                    }
+
                     ModuleDecl::ExportAll(item) => {
                         // One item for the import for re-export
                         let id = ItemId::Item {
@@ -751,6 +817,7 @@ impl DepGraph {
                         );
                     }
                 }
+
                 ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
                     decl: Decl::Fn(f),
                     ..
@@ -846,10 +913,11 @@ impl DepGraph {
                     items.insert(id, data);
                 }
 
-                ModuleItem::ModuleDecl(ModuleDecl::ExportNamed(NamedExport {
-                    src: Some(..),
-                    ..
-                })) => {}
+                ModuleItem::ModuleDecl(
+                    ModuleDecl::ExportDefaultDecl(..)
+                    | ModuleDecl::ExportDefaultExpr(..)
+                    | ModuleDecl::ExportNamed(NamedExport { src: Some(..), .. }),
+                ) => {}
 
                 _ => {
                     // Default to normal
@@ -919,6 +987,8 @@ impl DepGraph {
                 },
             );
         }
+
+        dbg!(&items);
 
         (ids, items)
     }
