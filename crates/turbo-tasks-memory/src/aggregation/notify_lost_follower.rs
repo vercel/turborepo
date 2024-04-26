@@ -60,7 +60,9 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNotifyLostFollower<
                 upper_id,
                 follower_id,
             } => {
+                let mut try_count = 0;
                 loop {
+                    try_count += 1;
                     let mut follower = ctx.node(&follower_id);
                     match follower.uppers_mut().remove_if_entry(&upper_id) {
                         RemoveIfEntryResult::PartiallyRemoved => {
@@ -95,6 +97,13 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNotifyLostFollower<
                         }
                         RemoveIfEntryResult::NotPresent => {
                             drop(follower);
+                            if try_count > 100 {
+                                panic!(
+                                    "The graph is malformed, we need to remove either follower or \
+                                     upper but neither exists."
+                                );
+                                break;
+                            }
                             // retry, concurrency
                             let mut upper = ctx.node(&upper_id);
                             let AggregationNode::Aggegating(aggregating) = &mut *upper else {
