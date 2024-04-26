@@ -37,7 +37,8 @@ impl<'a> YarnDetector<'a> {
             return Ok(version.clone());
         }
 
-        let yarn_binary = which("yarn")?;
+        let binary = "yarn";
+        let yarn_binary = which(binary).map_err(|e| Error::Which(e, binary.to_string()))?;
         let output = Command::new(yarn_binary)
             .arg("--version")
             .current_dir(self.repo_root)
