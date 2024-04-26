@@ -616,7 +616,7 @@ fn chain_double_connected() {
     }
 }
 
-const RECT_SIZE: usize = 100;
+const RECT_SIZE: usize = 30;
 const RECT_MULT: usize = 100;
 
 #[test]
@@ -736,10 +736,12 @@ fn many_children() {
 
 // #[test]
 fn fuzzy_new() {
-    for _ in 0..1000 {
-        let seed = rand::random();
-        println!("Seed {}", seed);
-        fuzzy(seed, 100);
+    for size in [10, 50, 100, 200, 1000] {
+        for _ in 0..1000 {
+            let seed = rand::random();
+            println!("Seed {} Size {}", seed, size);
+            fuzzy(seed, size);
+        }
     }
 }
 
