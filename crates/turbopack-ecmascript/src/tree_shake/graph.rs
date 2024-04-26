@@ -681,27 +681,27 @@ impl DepGraph {
                             private_ident!(magic_identifier::mangle("default export"))
                         });
 
-                        // {
-                        //     let used_ids = ids_used_by_ignoring_nested(&export.decl);
-                        //     let captured_ids = ids_captured_by(&export.decl);
-                        //     let data = ItemData {
-                        //         read_vars: used_ids.read,
-                        //         eventual_read_vars: captured_ids.read,
-                        //         write_vars: used_ids.write,
-                        //         eventual_write_vars: captured_ids.write,
-                        //         var_decls: [default_var.to_id()].into_iter().collect(),
-                        //         side_effects: true,
-                        //         content: item.clone(),
-                        //         ..Default::default()
-                        //     };
+                        {
+                            let used_ids = ids_used_by_ignoring_nested(&export.decl);
+                            let captured_ids = ids_captured_by(&export.decl);
+                            let data = ItemData {
+                                read_vars: used_ids.read,
+                                eventual_read_vars: captured_ids.read,
+                                write_vars: used_ids.write,
+                                eventual_write_vars: captured_ids.write,
+                                var_decls: [default_var.to_id()].into_iter().collect(),
+                                side_effects: true,
+                                content: ModuleItem::ModuleDecl(item.clone()),
+                                ..Default::default()
+                            };
 
-                        //     let id = ItemId::Item {
-                        //         index,
-                        //         kind: ItemIdItemKind::Normal,
-                        //     };
-                        //     ids.push(id.clone());
-                        //     items.insert(id, data);
-                        // }
+                            let id = ItemId::Item {
+                                index,
+                                kind: ItemIdItemKind::Normal,
+                            };
+                            ids.push(id.clone());
+                            items.insert(id, data);
+                        }
 
                         exports.push((
                             default_var.to_id(),
@@ -712,27 +712,27 @@ impl DepGraph {
                         let default_var =
                             private_ident!(magic_identifier::mangle("default export"));
 
-                        // {
-                        //     let used_ids = ids_used_by_ignoring_nested(&export.expr);
-                        //     let captured_ids = ids_captured_by(&export.expr);
-                        //     let data = ItemData {
-                        //         read_vars: used_ids.read,
-                        //         eventual_read_vars: captured_ids.read,
-                        //         write_vars: used_ids.write,
-                        //         eventual_write_vars: captured_ids.write,
-                        //         var_decls: [default_var.to_id()].into_iter().collect(),
-                        //         side_effects: true,
-                        //         content: item.clone(),
-                        //         ..Default::default()
-                        //     };
+                        {
+                            let used_ids = ids_used_by_ignoring_nested(&export.expr);
+                            let captured_ids = ids_captured_by(&export.expr);
+                            let data = ItemData {
+                                read_vars: used_ids.read,
+                                eventual_read_vars: captured_ids.read,
+                                write_vars: used_ids.write,
+                                eventual_write_vars: captured_ids.write,
+                                var_decls: [default_var.to_id()].into_iter().collect(),
+                                side_effects: true,
+                                content: ModuleItem::ModuleDecl(item.clone()),
+                                ..Default::default()
+                            };
 
-                        //     let id = ItemId::Item {
-                        //         index,
-                        //         kind: ItemIdItemKind::Normal,
-                        //     };
-                        //     ids.push(id.clone());
-                        //     items.insert(id, data);
-                        // }
+                            let id = ItemId::Item {
+                                index,
+                                kind: ItemIdItemKind::Normal,
+                            };
+                            ids.push(id.clone());
+                            items.insert(id, data);
+                        }
 
                         exports.push((
                             default_var.to_id(),
