@@ -240,6 +240,11 @@ impl Analyzer<'_> {
                     ItemIdGroupKind::Export(local, _) => {
                         // Create a strong dependency to LAST_WRITES for this var
 
+                        debug_assert!(
+                            self.vars.contains_key(local),
+                            "vars: {:?}\nlocal:{local:?}",
+                            self.vars
+                        );
                         if let Some(state) = self.vars.get(local) {
                             self.g.add_strong_deps(item_id, state.last_writes.iter());
                         }
