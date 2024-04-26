@@ -231,6 +231,16 @@ impl DepGraph {
 
         let mut modules = vec![];
 
+        if groups.graph_ix.is_empty() {
+            // If there's no dependency, all nodes are in the module evaluaiotn group.
+            modules.push(Module {
+                span: DUMMY_SP,
+                body: data.values().map(|v| v.content.clone()).collect(),
+                shebang: None,
+            });
+            exports.insert(Key::ModuleEvaluation, 0);
+        }
+
         for (ix, group) in groups.graph_ix.iter().enumerate() {
             let mut chunk = Module {
                 span: DUMMY_SP,
@@ -407,6 +417,8 @@ impl DepGraph {
         let mut groups = vec![];
         let mut global_done = FxHashSet::default();
 
+        dbg!(&self.g.graph_ix);
+
         // Module evaluation node and export nodes starts a group
         for id in self.g.graph_ix.iter() {
             let ix = self.g.get_node(id);
@@ -521,6 +533,8 @@ impl DepGraph {
                 }
             }
         }
+
+        dbg!(&new_graph);
 
         new_graph
     }
@@ -676,6 +690,8 @@ impl DepGraph {
                     _ => {}
                 }
             }
+
+            dbg!(&exports);
 
             match item {
                 ModuleItem::ModuleDecl(ModuleDecl::Import(item)) => {
