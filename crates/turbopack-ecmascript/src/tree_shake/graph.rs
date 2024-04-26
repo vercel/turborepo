@@ -482,7 +482,8 @@ impl DepGraph {
         // We need to sort, because we start from the group item and add others start
         // from them. But the final module should be in the order of the original code.
         for group in groups.iter_mut() {
-            group.sort()
+            group.sort();
+            group.dedup();
         }
 
         let mut new_graph = InternedGraph::default();
