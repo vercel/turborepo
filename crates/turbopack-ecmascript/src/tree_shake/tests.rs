@@ -324,7 +324,7 @@ where
             mermaid,
             "    N{}[\"{}\"];",
             i,
-            render(item).replace('"', "\\\"").replace([';', '\n'], "")
+            render(item).replace([';', '\n'], "").replace('"', "&quot;")
         )
         .unwrap();
     }
