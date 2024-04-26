@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use anyhow::{bail, Result};
 use indexmap::IndexSet;
 use rustc_hash::FxHashMap;
@@ -40,7 +42,7 @@ pub struct Analyzer<'a> {
     vars: FxHashMap<Id, VarState>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 struct VarState {
     /// The module items that might trigger side effects on that variable.
     /// We also store if this is a `const` write, so no further change will
@@ -48,6 +50,14 @@ struct VarState {
     last_writes: Vec<ItemId>,
     /// The module items that might read that variable.
     last_reads: Vec<ItemId>,
+}
+
+fn get_var<'a>(map: &'a FxHashMap<Id, VarState>, id: &Id) -> Cow<'a, VarState> {
+    let v = map.get(&id);
+    match v {
+        Some(v) => Cow::Borrowed(v),
+        None => Cow::Owned(Default::default()),
+    }
 }
 
 impl Analyzer<'_> {
@@ -124,15 +134,9 @@ impl Analyzer<'_> {
                     // var.
 
                     // (the writes need to be executed before this read)
-                    debug_assert!(
-                        self.vars.contains_key(id),
-                        "vars: {:?}\nid: {:?}",
-                        self.vars,
-                        id
-                    );
-                    if let Some(state) = self.vars.get(id) {
-                        self.g.add_strong_deps(item_id, state.last_writes.iter());
-                    }
+                    let state = get_var(&self.vars, id);
+
+                    self.g.add_strong_deps(item_id, state.last_writes.iter());
                 }
 
                 // For each var in WRITE_VARS:
@@ -143,15 +147,8 @@ impl Analyzer<'_> {
                     // (the reads need to be executed before this write, when
                     // it’s needed)
 
-                    debug_assert!(
-                        self.vars.contains_key(id),
-                        "vars: {:?}\nid: {:?}",
-                        self.vars,
-                        id
-                    );
-                    if let Some(state) = self.vars.get(id) {
-                        self.g.add_weak_deps(item_id, state.last_reads.iter());
-                    }
+                    let state = get_var(&self.vars, id);
+                    self.g.add_weak_deps(item_id, state.last_reads.iter());
                 }
 
                 if item.side_effects {
@@ -163,16 +160,10 @@ impl Analyzer<'_> {
                     // Create weak dependencies to all LAST_WRITES and
                     // LAST_READS.
                     for id in eventual_ids.iter() {
-                        debug_assert!(
-                            self.vars.contains_key(id),
-                            "vars: {:?}\nid: {:?}",
-                            self.vars,
-                            id
-                        );
-                        if let Some(state) = self.vars.get(id) {
-                            self.g.add_weak_deps(item_id, state.last_writes.iter());
-                            self.g.add_weak_deps(item_id, state.last_reads.iter());
-                        }
+                        let state = get_var(&self.vars, id);
+
+                        self.g.add_weak_deps(item_id, state.last_writes.iter());
+                        self.g.add_weak_deps(item_id, state.last_reads.iter());
                     }
                 }
 
@@ -223,15 +214,8 @@ impl Analyzer<'_> {
                     // Create a strong dependency to all module items listed in
                     // LAST_WRITES for that var.
 
-                    debug_assert!(
-                        self.vars.contains_key(id),
-                        "vars: {:?}\nid: {:?}",
-                        self.vars,
-                        id
-                    );
-                    if let Some(state) = self.vars.get(id) {
-                        self.g.add_strong_deps(item_id, state.last_writes.iter());
-                    }
+                    let state = get_var(&self.vars, id);
+                    self.g.add_strong_deps(item_id, state.last_writes.iter());
                 }
 
                 // For each var in EVENTUAL_WRITE_VARS:
@@ -239,15 +223,9 @@ impl Analyzer<'_> {
                     // Create a weak dependency to all module items listed in
                     // LAST_READS for that var.
 
-                    debug_assert!(
-                        self.vars.contains_key(id),
-                        "vars: {:?}\nid: {:?}",
-                        self.vars,
-                        id
-                    );
-                    if let Some(state) = self.vars.get(id) {
-                        self.g.add_weak_deps(item_id, state.last_reads.iter());
-                    }
+                    let state = get_var(&self.vars, id);
+
+                    self.g.add_weak_deps(item_id, state.last_reads.iter());
                 }
 
                 // (no state update happens, since this is only triggered by
@@ -270,14 +248,9 @@ impl Analyzer<'_> {
                     ItemIdGroupKind::Export(local, _) => {
                         // Create a strong dependency to LAST_WRITES for this var
 
-                        debug_assert!(
-                            self.vars.contains_key(local),
-                            "vars: {:?}\nlocal:{local:?}",
-                            self.vars
-                        );
-                        if let Some(state) = self.vars.get(local) {
-                            self.g.add_strong_deps(item_id, state.last_writes.iter());
-                        }
+                        let state = get_var(&self.vars, local);
+
+                        self.g.add_strong_deps(item_id, state.last_writes.iter());
                     }
                 }
             }
