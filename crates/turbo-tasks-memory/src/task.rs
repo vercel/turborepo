@@ -2024,7 +2024,7 @@ impl Task {
             cells,
             output,
             collectibles,
-            aggregation_node: mut aggregation_leaf,
+            mut aggregation_node,
             stats,
             // can be dropped as it will be recomputed on next execution
             stateful: _,
@@ -2039,12 +2039,12 @@ impl Task {
         // Remove all children, as they will be added again when this task is executed
         // again
         let remove_job = (!children.is_empty())
-            .then(|| aggregation_leaf.handle_lost_edges(&aggregation_context, &self.id, children));
+            .then(|| aggregation_node.handle_lost_edges(&aggregation_context, &self.id, children));
 
         // Remove all collectibles, as they will be added again when this task is
         // executed again.
         let collectibles_job = if let Some(collectibles) = collectibles.into_inner() {
-            aggregation_leaf.apply_change(
+            aggregation_node.apply_change(
                 &aggregation_context,
                 TaskChange {
                     collectibles: collectibles
@@ -2069,7 +2069,7 @@ impl Task {
             *state = TaskMetaState::Unloaded(UnloadedTaskState { stats_type });
         } else {
             *state = TaskMetaState::Partial(Box::new(PartialTaskState {
-                aggregation_leaf,
+                aggregation_leaf: aggregation_node,
                 stats_type,
             }));
         }

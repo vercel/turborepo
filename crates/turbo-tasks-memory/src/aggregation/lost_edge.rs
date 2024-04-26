@@ -87,6 +87,7 @@ enum PreparedLostEdgeInner<C: AggregationContext> {
 }
 
 impl<C: AggregationContext> PreparedOperation<C> for PreparedLostEdge<C> {
+    type Result = ();
     fn apply(self, ctx: &C) {
         match self.inner {
             PreparedLostEdgeInner::Leaf { uppers, target_id } => {
@@ -130,6 +131,7 @@ enum PreparedLostEdgesInner<C: AggregationContext> {
 }
 
 impl<C: AggregationContext> PreparedOperation<C> for PreparedLostEdges<C> {
+    type Result = ();
     fn apply(self, ctx: &C) {
         match self.inner {
             PreparedLostEdgesInner::Leaf { uppers, target_ids } => {

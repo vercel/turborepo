@@ -1,11 +1,8 @@
-use std::{cmp::Ordering, hash::Hash, mem::take};
+use std::{hash::Hash, mem::take};
 
 use super::{
-    notify_aggregation_number_changed,
-    remove_followers::remove_follower_all_count,
-    uppers::{add_upper, add_upper_count, remove_upper_count},
-    AggegatingNode, AggregationContext, AggregationNode, AggregationNodeGuard, PreparedOperation,
-    StackVec,
+    balance_edge::balance_edge, AggegatingNode, AggregationContext, AggregationNode,
+    AggregationNodeGuard, PreparedOperation, StackVec,
 };
 pub(super) const LEAF_NUMBER: u8 = 4;
 
@@ -34,11 +31,12 @@ pub struct PreparedIncreaseAggregationNumber<C: AggregationContext> {
 }
 
 impl<C: AggregationContext> PreparedOperation<C> for PreparedIncreaseAggregationNumber<C> {
+    type Result = ();
     fn apply(self, ctx: &C) {
         let PreparedIncreaseAggregationNumber {
             mut new_aggregation_number,
             node_id,
-            mut uppers,
+            uppers,
         } = self;
         let mut need_to_run = true;
         while need_to_run {
@@ -110,65 +108,19 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedIncreaseAggregation
                 followers
             }
         };
-        let mut node_aggregation_number = new_aggregation_number;
+        let node_aggregation_number = new_aggregation_number;
         for follower_id in followers {
-            loop {
-                let follower = ctx.node(&follower_id);
-                let follower_aggregation_number = follower.aggregation_number();
-                match (
-                    node_aggregation_number == u32::MAX,
-                    follower_aggregation_number.cmp(&node_aggregation_number),
-                ) {
-                    (true, _) | (false, Ordering::Less) => {
-                        // Convert follower into inner
-                        add_upper(ctx, follower, &follower_id, &node_id);
-                        let node = ctx.node(&node_id);
-                        node_aggregation_number = node.aggregation_number();
-                        let count = remove_follower_all_count(ctx, node, &follower_id) - 1;
-                        if count == 0 {
-                            break;
-                        }
-                        let follower = ctx.node(&follower_id);
-                        if count > 0 {
-                            add_upper_count(ctx, follower, &follower_id, &node_id, count as usize);
-                        } else {
-                            remove_upper_count(ctx, follower, &node_id, (-count) as usize);
-                        }
-                        // follower is not a follower anymore
-                        break;
-                    }
-                    (false, Ordering::Equal) => {
-                        increase_aggregation_number(
-                            ctx,
-                            follower,
-                            &follower_id,
-                            node_aggregation_number + 1,
-                        );
-                        // check again since everything might have
-                        // changed
-                    }
-                    (false, Ordering::Greater) => {
-                        // Looks good, but node aggregation number might have changed in
-                        // the meantime
-                        drop(follower);
-                        let node = ctx.node(&node_id);
-                        node_aggregation_number = node.aggregation_number();
-                        if follower_aggregation_number > node_aggregation_number {
-                            break;
-                        }
-                    }
-                }
-            }
+            balance_edge(
+                ctx,
+                &node_id,
+                &follower_id,
+                node_aggregation_number,
+                0,
+                false,
+            );
         }
         for upper_id in uppers {
-            let upper = ctx.node(&upper_id);
-            notify_aggregation_number_changed(
-                ctx,
-                upper,
-                &upper_id,
-                &node_id,
-                node_aggregation_number,
-            );
+            balance_edge(ctx, &upper_id, &node_id, 0, node_aggregation_number, true);
         }
     }
 }

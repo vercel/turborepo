@@ -1,5 +1,6 @@
 use std::{
     borrow::Borrow,
+    cmp::Ordering,
     collections::hash_map::RandomState,
     fmt::{Debug, Formatter},
     hash::{BuildHasher, Hash},
@@ -79,6 +80,12 @@ pub enum RemoveIfEntryResult {
     PartiallyRemoved,
     Removed,
     NotPresent,
+}
+
+pub struct RemovePositiveCountResult {
+    pub removed: bool,
+    pub removed_count: usize,
+    pub count: isize,
 }
 
 impl<T: Eq + Hash, H: BuildHasher + Default> CountHashSet<T, H> {
@@ -220,6 +227,13 @@ impl<T: Eq + Hash, H: BuildHasher + Default> CountHashSet<T, H> {
             count: self.inner.len() - self.negative_entries,
         }
     }
+
+    pub fn get_count(&self, item: &T) -> isize {
+        match self.inner.get(item) {
+            Some(value) => *value,
+            None => 0,
+        }
+    }
 }
 
 impl<T: Eq + Hash + Clone, H: BuildHasher + Default> CountHashSet<T, H> {
@@ -294,6 +308,73 @@ impl<T: Eq + Hash + Clone, H: BuildHasher + Default> CountHashSet<T, H> {
                 e.insert(item.clone(), -(count as isize));
                 self.negative_entries += 1;
                 false
+            }
+        }
+    }
+
+    /// Returns true when the value is no longer visible from outside
+    pub fn remove_positive_clonable_count(
+        &mut self,
+        item: &T,
+        count: usize,
+    ) -> RemovePositiveCountResult {
+        if count == 0 {
+            return RemovePositiveCountResult {
+                removed: false,
+                removed_count: 0,
+                count: self.inner.get(item).copied().unwrap_or(0),
+            };
+        }
+        match self.inner.raw_entry_mut(item) {
+            RawEntry::Occupied(mut e) => {
+                let value = e.get_mut();
+                let old = *value;
+                match old.cmp(&(count as isize)) {
+                    Ordering::Less => {
+                        if old < 0 {
+                            // It's already negative, can't remove anything
+                            RemovePositiveCountResult {
+                                removed: false,
+                                removed_count: 0,
+                                count: old,
+                            }
+                        } else {
+                            // It's removed completely with count remaining
+                            e.remove();
+                            RemovePositiveCountResult {
+                                removed: true,
+                                removed_count: old as usize,
+                                count: 0,
+                            }
+                        }
+                    }
+                    Ordering::Equal => {
+                        // It's perfectly removed
+                        e.remove();
+                        RemovePositiveCountResult {
+                            removed: true,
+                            removed_count: count,
+                            count: 0,
+                        }
+                    }
+                    Ordering::Greater => {
+                        // It's partially removed
+                        *value -= count as isize;
+                        RemovePositiveCountResult {
+                            removed: false,
+                            removed_count: count,
+                            count: *value,
+                        }
+                    }
+                }
+            }
+            RawEntry::Vacant(e) => {
+                // It's not present
+                RemovePositiveCountResult {
+                    removed: false,
+                    removed_count: 0,
+                    count: 0,
+                }
             }
         }
     }

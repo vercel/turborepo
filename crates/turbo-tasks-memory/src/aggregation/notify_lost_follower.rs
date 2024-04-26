@@ -1,8 +1,8 @@
 use std::hash::Hash;
 
 use super::{
-    AggegatingNode, AggregationContext, AggregationNode, AggregationNodeGuard, PreparedOperation,
-    StackVec,
+    uppers::get_aggregated_remove_change, AggegatingNode, AggregationContext, AggregationNode,
+    AggregationNodeGuard, PreparedOperation, StackVec,
 };
 use crate::count_hash_set::RemoveIfEntryResult;
 
@@ -45,6 +45,7 @@ pub(super) enum PreparedNotifyLostFollower<C: AggregationContext> {
 }
 
 impl<C: AggregationContext> PreparedOperation<C> for PreparedNotifyLostFollower<C> {
+    type Result = ();
     fn apply(self, ctx: &C) {
         match self {
             PreparedNotifyLostFollower::RemovedFollower {
@@ -66,7 +67,7 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNotifyLostFollower<
                             return;
                         }
                         RemoveIfEntryResult::Removed => {
-                            let remove_change = follower.get_remove_change();
+                            let remove_change = get_aggregated_remove_change(ctx, &follower);
                             let followers = match &*follower {
                                 AggregationNode::Leaf { .. } => {
                                     follower.children().collect::<StackVec<_>>()

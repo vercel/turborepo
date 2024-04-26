@@ -2,6 +2,7 @@ use super::{
     increase::LEAF_NUMBER, increase_aggregation_number, AggegatingNode, AggregationContext,
     AggregationNode, AggregationNodeGuard, PreparedOperation, StackVec,
 };
+use crate::count_hash_set::RemovePositiveCountResult;
 
 const MAX_UPPERS: usize = 4;
 
@@ -20,10 +21,12 @@ pub fn add_upper_count<C: AggregationContext>(
     node_id: &C::NodeRef,
     upper_id: &C::NodeRef,
     count: usize,
-) {
-    let optimize = match &mut *node {
+) -> isize {
+    // TODO add_clonable_count could return the current count for better performance
+    let (optimize, count) = match &mut *node {
         AggregationNode::Leaf { uppers, .. } => {
             if uppers.add_clonable_count(upper_id, count) {
+                let count = uppers.get_count(upper_id);
                 let uppers_len = uppers.len();
                 let optimize = (uppers_len > MAX_UPPERS
                     && (uppers_len - MAX_UPPERS).count_ones() == 1)
@@ -41,9 +44,9 @@ pub fn add_upper_count<C: AggregationContext>(
                 drop(upper);
                 add_prepared.apply(ctx);
                 prepared.apply(ctx);
-                optimize
+                (optimize, count)
             } else {
-                None
+                (None, uppers.get_count(upper_id))
             }
         }
         AggregationNode::Aggegating(aggegating) => {
@@ -53,6 +56,7 @@ pub fn add_upper_count<C: AggregationContext>(
                 ..
             } = **aggegating;
             if uppers.add_clonable_count(upper_id, count) {
+                let count = uppers.get_count(upper_id);
                 let add_change = ctx.data_to_add_change(&aggegating.data);
                 let followers = followers.iter().cloned().collect::<StackVec<_>>();
                 let uppers_len = uppers.len();
@@ -70,9 +74,9 @@ pub fn add_upper_count<C: AggregationContext>(
                 drop(upper);
                 add_prepared.apply(ctx);
                 prepared.apply(ctx);
-                optimize
+                (optimize, count)
             } else {
-                None
+                (None, uppers.get_count(upper_id))
             }
         }
     };
@@ -108,6 +112,7 @@ pub fn add_upper_count<C: AggregationContext>(
             }
         }
     }
+    count
 }
 
 pub fn remove_upper_count<C: AggregationContext>(
@@ -116,45 +121,86 @@ pub fn remove_upper_count<C: AggregationContext>(
     upper_id: &C::NodeRef,
     count: usize,
 ) {
-    match &mut *node {
+    let removed = match &mut *node {
+        AggregationNode::Leaf { uppers, .. } => uppers.remove_clonable_count(upper_id, count),
+        AggregationNode::Aggegating(aggegating) => {
+            let AggegatingNode { ref mut uppers, .. } = **aggegating;
+            uppers.remove_clonable_count(upper_id, count)
+        }
+    };
+    if removed {
+        on_removed(ctx, node, upper_id);
+    }
+}
+
+pub struct RemovePositiveUpperCountResult {
+    pub removed_count: usize,
+    pub remaining_count: isize,
+}
+
+pub fn remove_positive_upper_count<C: AggregationContext>(
+    ctx: &C,
+    mut node: C::Guard<'_>,
+    upper_id: &C::NodeRef,
+    count: usize,
+) -> RemovePositiveUpperCountResult {
+    let RemovePositiveCountResult {
+        removed,
+        removed_count,
+        count,
+    } = match &mut *node {
         AggregationNode::Leaf { uppers, .. } => {
-            if uppers.remove_clonable_count(upper_id, count) {
-                let remove_change = node.get_remove_change();
-                let children = node.children().collect::<StackVec<_>>();
-                drop(node);
-                let mut upper = ctx.node(upper_id);
-                let remove_prepared =
-                    remove_change.and_then(|remove_change| upper.apply_change(ctx, remove_change));
-                let prepared = children
-                    .into_iter()
-                    .map(|child_id| upper.notify_lost_follower(ctx, upper_id, &child_id))
-                    .collect::<StackVec<_>>();
-                drop(upper);
-                remove_prepared.apply(ctx);
-                prepared.apply(ctx);
-            }
+            uppers.remove_positive_clonable_count(upper_id, count)
         }
         AggregationNode::Aggegating(aggegating) => {
-            let AggegatingNode {
-                ref mut uppers,
-                ref followers,
-                ..
-            } = **aggegating;
-            if uppers.remove_clonable_count(upper_id, count) {
-                let remove_change = ctx.data_to_remove_change(&aggegating.data);
-                let followers = followers.iter().cloned().collect::<StackVec<_>>();
-                drop(node);
-                let mut upper = ctx.node(upper_id);
-                let remove_prepared =
-                    remove_change.and_then(|remove_change| upper.apply_change(ctx, remove_change));
-                let prepared = followers
-                    .into_iter()
-                    .map(|child_id| upper.notify_lost_follower(ctx, upper_id, &child_id))
-                    .collect::<StackVec<_>>();
-                drop(upper);
-                remove_prepared.apply(ctx);
-                prepared.apply(ctx);
-            }
+            let AggegatingNode { ref mut uppers, .. } = **aggegating;
+            uppers.remove_positive_clonable_count(upper_id, count)
+        }
+    };
+    if removed {
+        on_removed(ctx, node, upper_id);
+    }
+    RemovePositiveUpperCountResult {
+        removed_count,
+        remaining_count: count,
+    }
+}
+
+fn on_removed<C: AggregationContext>(ctx: &C, node: C::Guard<'_>, upper_id: &C::NodeRef) {
+    match &*node {
+        AggregationNode::Leaf { .. } => {
+            let remove_change = node.get_remove_change();
+            let children = node.children().collect::<StackVec<_>>();
+            drop(node);
+            let mut upper = ctx.node(upper_id);
+            let remove_prepared =
+                remove_change.and_then(|remove_change| upper.apply_change(ctx, remove_change));
+            let prepared = children
+                .into_iter()
+                .map(|child_id| upper.notify_lost_follower(ctx, upper_id, &child_id))
+                .collect::<StackVec<_>>();
+            drop(upper);
+            remove_prepared.apply(ctx);
+            prepared.apply(ctx);
+        }
+        AggregationNode::Aggegating(aggegating) => {
+            let remove_change = ctx.data_to_remove_change(&aggegating.data);
+            let followers = aggegating
+                .followers
+                .iter()
+                .cloned()
+                .collect::<StackVec<_>>();
+            drop(node);
+            let mut upper = ctx.node(upper_id);
+            let remove_prepared =
+                remove_change.and_then(|remove_change| upper.apply_change(ctx, remove_change));
+            let prepared = followers
+                .into_iter()
+                .map(|child_id| upper.notify_lost_follower(ctx, upper_id, &child_id))
+                .collect::<StackVec<_>>();
+            drop(upper);
+            remove_prepared.apply(ctx);
+            prepared.apply(ctx);
         }
     }
 }

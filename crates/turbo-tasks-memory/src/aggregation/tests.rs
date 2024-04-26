@@ -16,8 +16,8 @@ use ref_cast::RefCast;
 
 use self::aggregation_data::prepare_aggregation_data;
 use super::{
-    aggregation_data, apply_change, new_edge::handle_new_edge, AggregationContext, AggregationNode,
-    AggregationNodeGuard, RootQuery,
+    aggregation_data, apply_change, lost_edge::handle_lost_edge, new_edge::handle_new_edge,
+    AggregationContext, AggregationNode, AggregationNodeGuard, RootQuery,
 };
 use crate::aggregation::{query_root_info, PreparedOperation, StackVec};
 
@@ -224,6 +224,36 @@ impl Node {
             &NodeRef(self.clone()),
             &NodeRef(child),
         );
+    }
+
+    fn remove_child(
+        self: &Arc<Node>,
+        aggregation_context: &NodeAggregationContext,
+        child: &Arc<Node>,
+    ) {
+        self.remove_child_unchecked(aggregation_context, child);
+        check_invariants(aggregation_context, once(NodeRef(self.clone())));
+    }
+
+    fn remove_child_unchecked(
+        self: &Arc<Node>,
+        aggregation_context: &NodeAggregationContext,
+        child: &Arc<Node>,
+    ) {
+        let mut guard = self.inner.lock();
+        if let Some(idx) = guard
+            .children
+            .iter()
+            .position(|item| Arc::ptr_eq(item, child))
+        {
+            guard.children.swap_remove(idx);
+            handle_lost_edge(
+                aggregation_context,
+                unsafe { NodeGuard::new(guard, self.clone()) },
+                &NodeRef(self.clone()),
+                &NodeRef(child.clone()),
+            );
+        }
     }
 
     fn incr(self: &Arc<Node>, aggregation_context: &NodeAggregationContext) {
@@ -520,12 +550,18 @@ fn chain_double_connected() {
         add_value: true,
     };
     let root = Node::new(1);
+    let mut nodes = vec![root.clone()];
     let mut current = root.clone();
     let mut current2 = Node::new(2);
     current.add_child(&ctx, current2.clone());
+    nodes.push(current2.clone());
     for i in 3..=100 {
         let node = Node::new(i);
+        nodes.push(node.clone());
         current.add_child(&ctx, node.clone());
+        if i == 11 {
+            print(&ctx, &NodeRef(root.clone()), true);
+        }
         current2.add_child(&ctx, node.clone());
         current = current2;
         current2 = node;
@@ -541,9 +577,20 @@ fn chain_double_connected() {
     ctx.additions.store(0, Ordering::SeqCst);
 
     print(&ctx, &current, true);
+
+    for i in 2..nodes.len() {
+        nodes[i - 2].remove_child(&ctx, &nodes[i]);
+        nodes[i - 1].remove_child(&ctx, &nodes[i]);
+    }
+    nodes[0].remove_child(&ctx, &nodes[1]);
+
+    {
+        let aggregated = aggregation_data(&ctx, &current);
+        assert_eq!(aggregated.value, 1);
+    }
 }
 
-const RECT_SIZE: usize = 10;
+const RECT_SIZE: usize = 100;
 const RECT_MULT: usize = 100;
 
 #[test]
@@ -659,26 +706,6 @@ fn many_children() {
 
     // let root = NodeRef(roots[0].clone());
     // print(&ctx, &root, false);
-}
-
-fn connect_child(
-    aggregation_context: &NodeAggregationContext<'_>,
-    parent: &Arc<Node>,
-    child: &Arc<Node>,
-) {
-    let state = parent.inner.lock();
-    let node_guard = unsafe { NodeGuard::new(state, parent.clone()) };
-    let NodeGuard {
-        guard: mut state, ..
-    } = node_guard;
-    state.children.push(child.clone());
-    let job = state.aggregation_node.handle_new_edge(
-        aggregation_context,
-        &NodeRef(parent.clone()),
-        &NodeRef(child.clone()),
-    );
-    drop(state);
-    job.apply(aggregation_context);
 }
 
 fn print(aggregation_context: &NodeAggregationContext<'_>, current: &NodeRef, show_internal: bool) {

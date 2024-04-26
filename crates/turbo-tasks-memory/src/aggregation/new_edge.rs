@@ -46,6 +46,7 @@ enum PreparedNewEdge<C: AggregationContext> {
 }
 
 impl<C: AggregationContext> PreparedOperation<C> for PreparedNewEdge<C> {
+    type Result = ();
     fn apply(self, ctx: &C) {
         match self {
             PreparedNewEdge::Leaf {

@@ -10,14 +10,16 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
         change: C::DataChange,
     ) -> Option<PreparedChange<C>> {
         match self {
-            AggregationNode::Leaf { uppers, .. } => Some(PreparedChange {
+            AggregationNode::Leaf { uppers, .. } => (!uppers.is_empty()).then(|| PreparedChange {
                 uppers: uppers.iter().cloned().collect::<StackVec<_>>(),
                 change,
             }),
             AggregationNode::Aggegating(aggegating) => {
                 let AggegatingNode { data, uppers, .. } = &mut **aggegating;
                 let change = ctx.apply_change(data, &change);
-                if let Some(change) = change {
+                if uppers.is_empty() {
+                    None
+                } else if let Some(change) = change {
                     Some(PreparedChange {
                         uppers: uppers.iter().cloned().collect::<StackVec<_>>(),
                         change,
@@ -35,14 +37,18 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
         change: &'l C::DataChange,
     ) -> Option<PreparedChangeRef<'l, C>> {
         match self {
-            AggregationNode::Leaf { uppers, .. } => Some(PreparedChangeRef::Borrowed {
-                uppers: uppers.iter().cloned().collect::<StackVec<_>>(),
-                change,
-            }),
+            AggregationNode::Leaf { uppers, .. } => {
+                (!uppers.is_empty()).then(|| PreparedChangeRef::Borrowed {
+                    uppers: uppers.iter().cloned().collect::<StackVec<_>>(),
+                    change,
+                })
+            }
             AggregationNode::Aggegating(aggegating) => {
                 let AggegatingNode { data, uppers, .. } = &mut **aggegating;
                 let change = ctx.apply_change(data, change);
-                if let Some(change) = change {
+                if uppers.is_empty() {
+                    None
+                } else if let Some(change) = change {
                     Some(PreparedChangeRef::Owned {
                         uppers: uppers.iter().cloned().collect::<StackVec<_>>(),
                         change,
@@ -61,6 +67,7 @@ pub struct PreparedChange<C: AggregationContext> {
 }
 
 impl<C: AggregationContext> PreparedOperation<C> for PreparedChange<C> {
+    type Result = ();
     fn apply(self, ctx: &C) {
         let prepared = self
             .uppers
@@ -83,6 +90,7 @@ pub enum PreparedChangeRef<'l, C: AggregationContext> {
 }
 
 impl<'l, C: AggregationContext> PreparedOperation<C> for PreparedChangeRef<'l, C> {
+    type Result = ();
     fn apply(self, ctx: &C) {
         let (uppers, change) = match self {
             PreparedChangeRef::Borrowed { uppers, change } => (uppers, change),

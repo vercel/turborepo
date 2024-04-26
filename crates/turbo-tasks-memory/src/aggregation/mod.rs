@@ -4,22 +4,23 @@ use smallvec::SmallVec;
 
 use crate::count_hash_set::CountHashSet;
 
-mod add_followers;
 mod aggregation_data;
+mod balance_edge;
 mod change;
+mod followers;
 mod increase;
 mod lost_edge;
 mod new_edge;
 mod notify_aggregation_number_changed;
 mod notify_lost_follower;
 mod notify_new_follower;
-mod remove_followers;
 mod root_query;
 #[cfg(test)]
 mod tests;
 mod uppers;
 
 pub use aggregation_data::{aggregation_data, prepare_aggregation_data, AggregationDataGuard};
+pub(self) use balance_edge::balance_edge;
 pub use change::apply_change;
 pub use increase::increase_aggregation_number;
 pub(self) use notify_aggregation_number_changed::notify_aggregation_number_changed;
@@ -80,19 +81,24 @@ impl<I, A> AggregationNode<I, A> {
 
 #[must_use]
 pub trait PreparedOperation<C: AggregationContext> {
-    fn apply(self, ctx: &C);
+    type Result;
+    fn apply(self, ctx: &C) -> Self::Result;
 }
 
 impl<C: AggregationContext, T: PreparedOperation<C>> PreparedOperation<C> for Option<T> {
-    fn apply(self, ctx: &C) {
+    type Result = Option<T::Result>;
+    fn apply(self, ctx: &C) -> Self::Result {
         if let Some(prepared) = self {
-            prepared.apply(ctx);
+            Some(prepared.apply(ctx))
+        } else {
+            None
         }
     }
 }
 
 impl<C: AggregationContext, T: PreparedOperation<C>> PreparedOperation<C> for Vec<T> {
-    fn apply(self, ctx: &C) {
+    type Result = ();
+    fn apply(self, ctx: &C) -> Self::Result {
         for prepared in self {
             prepared.apply(ctx);
         }
@@ -102,7 +108,8 @@ impl<C: AggregationContext, T: PreparedOperation<C>> PreparedOperation<C> for Ve
 impl<C: AggregationContext, T: PreparedOperation<C>, const N: usize> PreparedOperation<C>
     for SmallVec<[T; N]>
 {
-    fn apply(self, ctx: &C) {
+    type Result = ();
+    fn apply(self, ctx: &C) -> Self::Result {
         for prepared in self {
             prepared.apply(ctx);
         }

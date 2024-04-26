@@ -1,11 +1,12 @@
 use std::{cmp::Ordering, hash::Hash};
 
 use super::{
-    add_followers::add_follower, increase_aggregation_number, uppers::add_upper,
-    AggregationContext, AggregationNode, PreparedOperation,
+    followers::add_follower, increase_aggregation_number, uppers::add_upper, AggregationContext,
+    AggregationNode, PreparedOperation,
 };
 
 impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
+    // Called when a inner node of the upper node has a new follower
     pub(super) fn notify_new_follower<C: AggregationContext<NodeRef = I, Data = D>>(
         &mut self,
         ctx: &C,
@@ -49,6 +50,7 @@ pub(super) enum PreparedNotifyNewFollower<C: AggregationContext> {
 }
 
 impl<C: AggregationContext> PreparedOperation<C> for PreparedNotifyNewFollower<C> {
+    type Result = ();
     fn apply(self, ctx: &C) {
         match self {
             PreparedNotifyNewFollower::AlreadyAdded => return,
