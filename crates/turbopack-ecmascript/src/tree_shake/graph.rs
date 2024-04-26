@@ -27,6 +27,7 @@ use super::{
     util::{ids_captured_by, ids_used_by, ids_used_by_ignoring_nested},
     Key,
 };
+use crate::magic_identifier;
 
 /// The id of an item
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -616,8 +617,10 @@ impl DepGraph {
                                 ),
                             };
 
-                            let local =
-                                Ident::new(format!("_reexport_{}", local.sym).into(), local.span);
+                            let local = Ident::new(
+                                magic_identifier::mangle(&format!("reexport {}", local.sym)).into(),
+                                local.span,
+                            );
 
                             exports.push((local.to_id(), exported.clone()));
 
