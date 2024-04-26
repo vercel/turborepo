@@ -124,6 +124,12 @@ impl Analyzer<'_> {
                     // var.
 
                     // (the writes need to be executed before this read)
+                    debug_assert!(
+                        self.vars.contains_key(id),
+                        "vars: {:?}\nid: {:?}",
+                        self.vars,
+                        id
+                    );
                     if let Some(state) = self.vars.get(id) {
                         self.g.add_strong_deps(item_id, state.last_writes.iter());
                     }
@@ -137,6 +143,12 @@ impl Analyzer<'_> {
                     // (the reads need to be executed before this write, when
                     // it’s needed)
 
+                    debug_assert!(
+                        self.vars.contains_key(id),
+                        "vars: {:?}\nid: {:?}",
+                        self.vars,
+                        id
+                    );
                     if let Some(state) = self.vars.get(id) {
                         self.g.add_weak_deps(item_id, state.last_reads.iter());
                     }
@@ -151,6 +163,12 @@ impl Analyzer<'_> {
                     // Create weak dependencies to all LAST_WRITES and
                     // LAST_READS.
                     for id in eventual_ids.iter() {
+                        debug_assert!(
+                            self.vars.contains_key(id),
+                            "vars: {:?}\nid: {:?}",
+                            self.vars,
+                            id
+                        );
                         if let Some(state) = self.vars.get(id) {
                             self.g.add_weak_deps(item_id, state.last_writes.iter());
                             self.g.add_weak_deps(item_id, state.last_reads.iter());
@@ -205,6 +223,12 @@ impl Analyzer<'_> {
                     // Create a strong dependency to all module items listed in
                     // LAST_WRITES for that var.
 
+                    debug_assert!(
+                        self.vars.contains_key(id),
+                        "vars: {:?}\nid: {:?}",
+                        self.vars,
+                        id
+                    );
                     if let Some(state) = self.vars.get(id) {
                         self.g.add_strong_deps(item_id, state.last_writes.iter());
                     }
@@ -215,6 +239,12 @@ impl Analyzer<'_> {
                     // Create a weak dependency to all module items listed in
                     // LAST_READS for that var.
 
+                    debug_assert!(
+                        self.vars.contains_key(id),
+                        "vars: {:?}\nid: {:?}",
+                        self.vars,
+                        id
+                    );
                     if let Some(state) = self.vars.get(id) {
                         self.g.add_weak_deps(item_id, state.last_reads.iter());
                     }
