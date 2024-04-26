@@ -92,11 +92,6 @@ impl Analyzer<'_> {
     ///
     /// Returns all (EVENTUAL_READ/WRITE_VARS) in the module.
     fn hoist_vars_and_bindings(&mut self, unresolved_ctxt: SyntaxContext) -> IndexSet<Id> {
-        for sym in ["globalThis"] {
-            let id = (sym.into(), unresolved_ctxt);
-            self.vars.insert(id, Default::default());
-        }
-
         let mut eventual_ids = IndexSet::default();
 
         for item_id in self.item_ids.iter() {
