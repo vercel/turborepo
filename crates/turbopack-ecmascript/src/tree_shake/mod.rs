@@ -5,7 +5,7 @@ use indexmap::IndexSet;
 use rustc_hash::FxHashMap;
 use swc_core::{
     atoms::Atom,
-    common::{util::take::Take, DUMMY_SP, GLOBALS},
+    common::{util::take::Take, SyntaxContext, DUMMY_SP, GLOBALS},
     ecma::{
         ast::{
             ExportAll, Id, KeyValueProp, Module, ModuleDecl, ModuleItem, ObjectLit, Program, Prop,
@@ -53,7 +53,7 @@ struct VarState {
 }
 
 fn get_var<'a>(map: &'a FxHashMap<Id, VarState>, id: &Id) -> Cow<'a, VarState> {
-    let v = map.get(&id);
+    let v = map.get(id);
     match v {
         Some(v) => Cow::Borrowed(v),
         None => Cow::Owned(Default::default()),
@@ -61,7 +61,10 @@ fn get_var<'a>(map: &'a FxHashMap<Id, VarState>, id: &Id) -> Cow<'a, VarState> {
 }
 
 impl Analyzer<'_> {
-    pub(super) fn analyze(module: &Module) -> (DepGraph, FxHashMap<ItemId, ItemData>) {
+    pub(super) fn analyze(
+        module: &Module,
+        unresolved_ctxt: SyntaxContext,
+    ) -> (DepGraph, FxHashMap<ItemId, ItemData>) {
         let mut g = DepGraph::default();
         let (item_ids, mut items) = g.init(module);
 
@@ -73,7 +76,7 @@ impl Analyzer<'_> {
             vars: Default::default(),
         };
 
-        let eventual_ids = analyzer.hoist_vars_and_bindings(module);
+        let eventual_ids = analyzer.hoist_vars_and_bindings(unresolved_ctxt);
 
         analyzer.evaluate_immediate(module, &eventual_ids);
 
@@ -88,7 +91,12 @@ impl Analyzer<'_> {
     ///
     ///
     /// Returns all (EVENTUAL_READ/WRITE_VARS) in the module.
-    fn hoist_vars_and_bindings(&mut self, _module: &Module) -> IndexSet<Id> {
+    fn hoist_vars_and_bindings(&mut self, unresolved_ctxt: SyntaxContext) -> IndexSet<Id> {
+        for sym in ["globalThis"] {
+            let id = (sym.into(), unresolved_ctxt);
+            self.vars.insert(id, Default::default());
+        }
+
         let mut eventual_ids = IndexSet::default();
 
         for item_id in self.item_ids.iter() {
@@ -349,7 +357,12 @@ pub(super) async fn split(
             globals,
             ..
         } => {
-            let (mut dep_graph, items) = GLOBALS.set(globals, || Analyzer::analyze(module));
+            let (mut dep_graph, items) = GLOBALS.set(globals, || {
+                Analyzer::analyze(
+                    module,
+                    SyntaxContext::empty().apply_mark(eval_context.unresolved_mark),
+                )
+            });
 
             dep_graph.handle_weak(Mode::Production);
 

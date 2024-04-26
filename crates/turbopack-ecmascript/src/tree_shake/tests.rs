@@ -10,16 +10,15 @@ use indexmap::IndexSet;
 use rustc_hash::FxHasher;
 use serde::Deserialize;
 use swc_core::{
-    common::{util::take::Take, SourceMap},
+    common::{util::take::Take, Mark, SourceMap, SyntaxContext},
     ecma::{
         ast::{EsVersion, Id, Module},
         atoms::JsWord,
         codegen::text_writer::JsWriter,
         parser::parse_file_as_module,
+        visit::VisitMutWith,
     },
-    testing::{
-        fixture, NormalizedOutput, {self},
-    },
+    testing::{self, fixture, NormalizedOutput},
 };
 
 use super::{
@@ -53,7 +52,7 @@ fn run(input: PathBuf) {
     testing::run_test(false, |cm, _handler| {
         let fm = cm.load_file(&input).unwrap();
 
-        let module = parse_file_as_module(
+        let mut module = parse_file_as_module(
             &fm,
             Default::default(),
             EsVersion::latest(),
@@ -61,6 +60,16 @@ fn run(input: PathBuf) {
             &mut vec![],
         )
         .unwrap();
+
+        let unresolved_mark = Mark::new();
+        let top_level_mark = Mark::new();
+        let unresolved_ctxt = SyntaxContext::empty().apply_mark(unresolved_mark);
+
+        module.visit_mut_with(&mut swc_core::ecma::transforms::base::resolver(
+            unresolved_mark,
+            top_level_mark,
+            false,
+        ));
 
         let mut g = DepGraph::default();
         let (item_ids, mut items) = g.init(&module);
@@ -133,7 +142,7 @@ fn run(input: PathBuf) {
             vars: Default::default(),
         };
 
-        let eventual_ids = analyzer.hoist_vars_and_bindings(&module);
+        let eventual_ids = analyzer.hoist_vars_and_bindings(unresolved_ctxt);
 
         writeln!(s, "# Phase 1").unwrap();
         writeln!(s, "```mermaid\n{}```", render_graph(&item_ids, analyzer.g)).unwrap();
