@@ -35,6 +35,8 @@ turbo-tasks-malloc = { workspace = true, default-features = false }
 criterion = { workspace = true, features = ["async_tokio"] }
 indexmap = { workspace = true }
 lazy_static = { workspace = true }
+rand = { workspace = true, features = ["small_rng"] }
+rstest = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 turbo-tasks-testing = { workspace = true }

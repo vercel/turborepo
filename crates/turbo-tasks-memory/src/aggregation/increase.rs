@@ -58,10 +58,14 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedIncreaseAggregation
                 }
             }
         }
+        drop(uppers);
         let mut node = ctx.node(&node_id);
+        if node.aggregation_number() >= new_aggregation_number {
+            return;
+        }
         let children = matches!(*node, AggregationNode::Leaf { .. })
             .then(|| node.children().collect::<StackVec<_>>());
-        let followers = match &mut *node {
+        let (uppers, followers) = match &mut *node {
             AggregationNode::Leaf {
                 aggregation_number,
                 uppers,
@@ -84,6 +88,7 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedIncreaseAggregation
                     prepared.apply(ctx);
                     return;
                 } else {
+                    let uppers_copy = uppers.iter().cloned().collect::<StackVec<_>>();
                     // Convert to Aggregating
                     *node = AggregationNode::Aggegating(Box::new(AggegatingNode {
                         aggregation_number: new_aggregation_number,
@@ -93,19 +98,21 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedIncreaseAggregation
                     }));
                     let followers = children;
                     drop(node);
-                    followers
+                    (uppers_copy, followers)
                 }
             }
             AggregationNode::Aggegating(aggegating) => {
                 let AggegatingNode {
                     followers,
+                    uppers,
                     aggregation_number,
                     ..
                 } = &mut **aggegating;
+                let uppers = uppers.iter().cloned().collect::<StackVec<_>>();
                 let followers = followers.iter().cloned().collect();
                 *aggregation_number = new_aggregation_number;
                 drop(node);
-                followers
+                (uppers, followers)
             }
         };
         let node_aggregation_number = new_aggregation_number;

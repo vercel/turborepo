@@ -10,9 +10,15 @@ use std::{
     time::Instant,
 };
 
+use indexmap::IndexSet;
 use nohash_hasher::IsEnabled;
 use parking_lot::{Mutex, MutexGuard};
+use rand::{
+    rngs::{SmallRng, StdRng},
+    Rng, SeedableRng,
+};
 use ref_cast::RefCast;
+use rstest::*;
 
 use self::aggregation_data::prepare_aggregation_data;
 use super::{
@@ -20,6 +26,20 @@ use super::{
     AggregationContext, AggregationNode, AggregationNodeGuard, RootQuery,
 };
 use crate::aggregation::{query_root_info, PreparedOperation, StackVec};
+
+fn find_root(mut node: NodeRef) -> NodeRef {
+    loop {
+        let lock = node.0.inner.lock();
+        let uppers = lock.aggregation_node.uppers();
+        if uppers.is_empty() {
+            drop(lock);
+            return node;
+        }
+        let upper = uppers.iter().next().unwrap().clone();
+        drop(lock);
+        node = upper;
+    }
+}
 
 fn check_invariants<'a>(ctx: &NodeAggregationContext<'a>, node_ids: impl Iterator<Item = NodeRef>) {
     let mut queue = node_ids.collect::<Vec<_>>();
@@ -33,70 +53,70 @@ fn check_invariants<'a>(ctx: &NodeAggregationContext<'a>, node_ids: impl Iterato
             }
         }
 
-        match &*node {
+        let aggregation_number = node.aggregation_number();
+        let node_value = node.guard.value;
+        let uppers = match &*node {
             AggregationNode::Leaf {
                 aggregation_number,
                 uppers,
                 ..
             } => {
-                let aggregation_number = *aggregation_number as u32;
-                for upper_id in uppers.iter().cloned() {
-                    {
-                        let upper = ctx.node(&upper_id);
-                        let upper_aggregation_number = upper.aggregation_number();
-                        assert!(
-                            upper_aggregation_number > aggregation_number
-                                || aggregation_number == u32::MAX,
-                            "upper #{} {} -> #{} {}",
-                            node.guard.value,
-                            aggregation_number,
-                            upper.guard.value,
-                            upper_aggregation_number
-                        );
-                    }
-                    if visited.insert(upper_id.clone()) {
-                        queue.push(upper_id);
-                    }
-                }
+                let uppers = uppers.iter().cloned().collect::<StackVec<_>>();
+                drop(node);
+                uppers
             }
             AggregationNode::Aggegating(aggegrating) => {
-                let aggregation_number = aggegrating.aggregation_number;
-                for upper_id in aggegrating.uppers.iter().cloned() {
-                    {
-                        let upper = ctx.node(&upper_id);
-                        let upper_aggregation_number = upper.aggregation_number();
-                        assert!(
-                            upper_aggregation_number > aggregation_number
-                                || aggregation_number == u32::MAX,
-                            "upper #{} {} -> #{} {}",
-                            node.guard.value,
-                            aggregation_number,
-                            upper.guard.value,
-                            upper_aggregation_number
-                        );
-                    }
-                    if visited.insert(upper_id.clone()) {
-                        queue.push(upper_id);
-                    }
-                }
-                for follower_id in aggegrating.followers.iter().cloned() {
+                let uppers = aggegrating.uppers.iter().cloned().collect::<StackVec<_>>();
+                let followers = aggegrating
+                    .followers
+                    .iter()
+                    .cloned()
+                    .collect::<StackVec<_>>();
+                drop(node);
+                for follower_id in followers {
                     {
                         let follower = ctx.node(&follower_id);
                         let follower_aggregation_number = follower.aggregation_number();
-                        assert!(
-                            follower_aggregation_number > aggregation_number
-                                || aggregation_number == u32::MAX,
-                            "follower #{} {} -> #{} {}",
-                            node.guard.value,
-                            aggregation_number,
-                            follower.guard.value,
-                            follower_aggregation_number
-                        );
+                        let condition = follower_aggregation_number > aggregation_number
+                            || aggregation_number == u32::MAX;
+                        if !condition {
+                            let msg = format!(
+                                "follower #{} {} -> #{} {}",
+                                node_value,
+                                aggregation_number,
+                                follower.guard.value,
+                                follower_aggregation_number
+                            );
+                            drop(follower);
+                            print(ctx, &find_root(follower_id.clone()), true);
+                            panic!("{msg}");
+                        }
                     }
                     if visited.insert(follower_id.clone()) {
                         queue.push(follower_id);
                     }
                 }
+                uppers
+            }
+        };
+        for upper_id in uppers {
+            {
+                let upper = ctx.node(&upper_id);
+                let upper_aggregation_number = upper.aggregation_number();
+                let condition =
+                    upper_aggregation_number > aggregation_number || aggregation_number == u32::MAX;
+                if !condition {
+                    let msg = format!(
+                        "upper #{} {} -> #{} {}",
+                        node_value, aggregation_number, upper.guard.value, upper_aggregation_number
+                    );
+                    drop(upper);
+                    print(ctx, &find_root(upper_id.clone()), true);
+                    panic!("{msg}");
+                }
+            }
+            if visited.insert(upper_id.clone()) {
+                queue.push(upper_id);
             }
         }
     }
@@ -104,12 +124,12 @@ fn check_invariants<'a>(ctx: &NodeAggregationContext<'a>, node_ids: impl Iterato
 
 fn print_graph<C: AggregationContext>(
     ctx: &C,
-    entry: &C::NodeRef,
+    entries: impl IntoIterator<Item = C::NodeRef>,
     show_internal: bool,
     name_fn: impl Fn(&C::NodeRef) -> String,
 ) {
-    let mut queue = vec![entry.clone()];
-    let mut visited = HashSet::new();
+    let mut queue = entries.into_iter().collect::<Vec<_>>();
+    let mut visited = queue.iter().cloned().collect::<HashSet<_>>();
     while let Some(node_id) = queue.pop() {
         let name = name_fn(&node_id);
         let node = ctx.node(&node_id);
@@ -167,6 +187,9 @@ fn print_graph<C: AggregationContext>(
                     "\"{}\" -> \"{}\" [style=dashed, color=green];",
                     name, upper_name
                 );
+                if visited.insert(upper_id.clone()) {
+                    queue.push(upper_id);
+                }
             }
             for follower_id in followers {
                 let follower_name = name_fn(&follower_id);
@@ -174,6 +197,9 @@ fn print_graph<C: AggregationContext>(
                     "\"{}\" -> \"{}\" [style=dashed, color=red];",
                     name, follower_name
                 );
+                if visited.insert(follower_id.clone()) {
+                    queue.push(follower_id);
+                }
             }
         }
     }
@@ -208,7 +234,7 @@ impl Node {
 
     fn add_child(self: &Arc<Node>, aggregation_context: &NodeAggregationContext, child: Arc<Node>) {
         self.add_child_unchecked(aggregation_context, child);
-        check_invariants(aggregation_context, once(NodeRef(self.clone())));
+        check_invariants(aggregation_context, once(find_root(NodeRef(self.clone()))));
     }
 
     fn add_child_unchecked(
@@ -708,9 +734,82 @@ fn many_children() {
     // print(&ctx, &root, false);
 }
 
-fn print(aggregation_context: &NodeAggregationContext<'_>, current: &NodeRef, show_internal: bool) {
+// #[test]
+fn fuzzy_new() {
+    for _ in 0..1000 {
+        let seed = rand::random();
+        println!("Seed {}", seed);
+        fuzzy(seed, 100);
+    }
+}
+
+#[rstest]
+#[case::a(4059591975, 10)]
+#[case::b(603692396, 100)]
+#[case::c(3317876847, 10)]
+fn fuzzy(#[case] seed: u32, #[case] count: u32) {
+    let something_with_lifetime = 0;
+    let ctx = NodeAggregationContext {
+        additions: AtomicU32::new(0),
+        something_with_lifetime: &something_with_lifetime,
+        add_value: false,
+    };
+
+    let mut seed_buffer = [0; 32];
+    seed_buffer[0..4].copy_from_slice(&seed.to_be_bytes());
+    let mut r = SmallRng::from_seed(seed_buffer);
+    let mut nodes = Vec::new();
+    for i in 0..count {
+        nodes.push(Node::new(i));
+    }
+    prepare_aggregation_data(&ctx, &NodeRef(nodes[0].clone()));
+
+    let mut edges = IndexSet::new();
+
+    for x in 0..1000 {
+        match r.gen_range(0..=2) {
+            0 | 1 => {
+                // if x == 47 {
+                //     print_all(&ctx, nodes.iter().cloned().map(NodeRef), true);
+                // }
+                // add edge
+                let parent = r.gen_range(0..nodes.len() - 1);
+                let child = r.gen_range(parent + 1..nodes.len());
+                // println!("add edge {} -> {}", parent, child);
+                if edges.insert((parent, child)) {
+                    nodes[parent].add_child(&ctx, nodes[child].clone());
+                }
+            }
+            2 => {
+                // remove edge
+                if edges.is_empty() {
+                    continue;
+                }
+                let i = r.gen_range(0..edges.len());
+                let (parent, child) = edges.swap_remove_index(i).unwrap();
+                // println!("remove edge {} -> {}", parent, child);
+                nodes[parent].remove_child(&ctx, &nodes[child]);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    for (parent, child) in edges {
+        nodes[parent].remove_child(&ctx, &nodes[child]);
+    }
+}
+
+fn print(aggregation_context: &NodeAggregationContext<'_>, root: &NodeRef, show_internal: bool) {
+    print_all(aggregation_context, once(root.clone()), show_internal);
+}
+
+fn print_all(
+    aggregation_context: &NodeAggregationContext<'_>,
+    nodes: impl IntoIterator<Item = NodeRef>,
+    show_internal: bool,
+) {
     println!("digraph {{");
-    print_graph(aggregation_context, current, show_internal, |item| {
+    print_graph(aggregation_context, nodes, show_internal, |item| {
         format!("#{}", item.0.inner.lock().value)
     });
     println!("\n}}");
