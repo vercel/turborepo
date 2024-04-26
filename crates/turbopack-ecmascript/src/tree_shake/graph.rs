@@ -590,7 +590,7 @@ impl DepGraph {
                         }
 
                         for (si, s) in item.specifiers.iter().enumerate() {
-                            let (orig, local, exported) = match s {
+                            let (orig, mut local, exported) = match s {
                                 ExportSpecifier::Named(s) => (
                                     Some(s.orig.clone()),
                                     match s.exported.as_ref().unwrap_or(&s.orig) {
@@ -617,10 +617,13 @@ impl DepGraph {
                                 ),
                             };
 
-                            let local = Ident::new(
-                                magic_identifier::mangle(&format!("reexport {}", local.sym)).into(),
-                                local.span,
-                            );
+                            if item.src.is_some() {
+                                local = Ident::new(
+                                    magic_identifier::mangle(&format!("reexport {}", local.sym))
+                                        .into(),
+                                    local.span,
+                                );
+                            }
 
                             exports.push((local.to_id(), exported.clone()));
 
