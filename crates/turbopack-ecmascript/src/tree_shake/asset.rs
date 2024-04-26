@@ -2,7 +2,7 @@ use anyhow::{bail, Context, Result};
 use turbo_tasks::Vc;
 use turbopack_core::{
     asset::{Asset, AssetContent},
-    chunk::{ChunkableModule, ChunkingContext},
+    chunk::{ChunkableModule, ChunkingContext, EvaluatableAsset},
     ident::AssetIdent,
     module::Module,
     reference::{ModuleReferences, SingleModuleReference},
@@ -209,3 +209,6 @@ async fn analyze(
 ) -> Result<Vc<AnalyzeEcmascriptModuleResult>> {
     Ok(analyse_ecmascript_module(module, Some(part)))
 }
+
+#[turbo_tasks::value_impl]
+impl EvaluatableAsset for EcmascriptModulePartAsset {}
