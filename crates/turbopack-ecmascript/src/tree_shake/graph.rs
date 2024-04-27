@@ -418,8 +418,6 @@ impl DepGraph {
         let mut groups = vec![];
         let mut global_done = FxHashSet::default();
 
-        dbg!(&self.g.graph_ix);
-
         // Module evaluation node and export nodes starts a group
         for id in self.g.graph_ix.iter() {
             let ix = self.g.get_node(id);
@@ -534,8 +532,6 @@ impl DepGraph {
                 }
             }
         }
-
-        dbg!(&new_graph);
 
         new_graph
     }
@@ -766,8 +762,6 @@ impl DepGraph {
                     _ => {}
                 }
             }
-
-            dbg!(&exports);
 
             match item {
                 ModuleItem::ModuleDecl(ModuleDecl::Import(item)) => {
