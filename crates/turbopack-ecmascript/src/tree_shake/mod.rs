@@ -76,7 +76,7 @@ impl Analyzer<'_> {
             vars: Default::default(),
         };
 
-        let eventual_ids = analyzer.hoist_vars_and_bindings(unresolved_ctxt);
+        let eventual_ids = analyzer.hoist_vars_and_bindings();
 
         analyzer.evaluate_immediate(module, &eventual_ids);
 
@@ -91,7 +91,7 @@ impl Analyzer<'_> {
     ///
     ///
     /// Returns all (EVENTUAL_READ/WRITE_VARS) in the module.
-    fn hoist_vars_and_bindings(&mut self, unresolved_ctxt: SyntaxContext) -> IndexSet<Id> {
+    fn hoist_vars_and_bindings(&mut self) -> IndexSet<Id> {
         let mut eventual_ids = IndexSet::default();
 
         for item_id in self.item_ids.iter() {

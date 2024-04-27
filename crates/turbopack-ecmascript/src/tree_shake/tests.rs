@@ -142,7 +142,7 @@ fn run(input: PathBuf) {
             vars: Default::default(),
         };
 
-        let eventual_ids = analyzer.hoist_vars_and_bindings(unresolved_ctxt);
+        let eventual_ids = analyzer.hoist_vars_and_bindings();
 
         writeln!(s, "# Phase 1").unwrap();
         writeln!(s, "```mermaid\n{}```", render_graph(&item_ids, analyzer.g)).unwrap();
