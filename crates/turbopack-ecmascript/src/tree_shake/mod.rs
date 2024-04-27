@@ -66,7 +66,7 @@ impl Analyzer<'_> {
         unresolved_ctxt: SyntaxContext,
     ) -> (DepGraph, FxHashMap<ItemId, ItemData>) {
         let mut g = DepGraph::default();
-        let (item_ids, mut items) = g.init(module);
+        let (item_ids, mut items) = g.init(module, unresolved_ctxt);
 
         let mut analyzer = Analyzer {
             g: &mut g,

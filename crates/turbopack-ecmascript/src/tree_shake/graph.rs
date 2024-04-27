@@ -10,7 +10,7 @@ use petgraph::{
 };
 use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
 use swc_core::{
-    common::{util::take::Take, DUMMY_SP},
+    common::{util::take::Take, SyntaxContext, DUMMY_SP},
     ecma::{
         ast::{
             op, ClassDecl, Decl, DefaultDecl, ExportDecl, ExportNamedSpecifier, ExportSpecifier,
@@ -541,7 +541,11 @@ impl DepGraph {
     }
 
     /// Fills information per module items
-    pub(super) fn init(&mut self, module: &Module) -> (Vec<ItemId>, FxHashMap<ItemId, ItemData>) {
+    pub(super) fn init(
+        &mut self,
+        module: &Module,
+        unresolved_ctxt: SyntaxContext,
+    ) -> (Vec<ItemId>, FxHashMap<ItemId, ItemData>) {
         let mut exports = vec![];
         let mut items = FxHashMap::default();
         let mut ids = vec![];
@@ -896,12 +900,19 @@ impl DepGraph {
                         used_ids.write.extend(extra_ids.write);
                     }
 
+                    let side_effects = used_ids
+                        .read
+                        .iter()
+                        .chain(used_ids.write.iter())
+                        .any(|id| id.1 == unresolved_ctxt);
+
                     let data = ItemData {
                         read_vars: used_ids.read,
                         eventual_read_vars: captured_ids.read,
                         write_vars: used_ids.write,
                         eventual_write_vars: captured_ids.write,
                         content: item.clone(),
+                        side_effects,
                         ..Default::default()
                     };
 

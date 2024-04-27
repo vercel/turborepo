@@ -72,7 +72,7 @@ fn run(input: PathBuf) {
         ));
 
         let mut g = DepGraph::default();
-        let (item_ids, mut items) = g.init(&module);
+        let (item_ids, mut items) = g.init(&module, unresolved_ctxt);
 
         let mut s = String::new();
 
