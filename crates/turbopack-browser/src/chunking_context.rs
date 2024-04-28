@@ -32,6 +32,11 @@ pub struct BrowserChunkingContextBuilder {
 }
 
 impl BrowserChunkingContextBuilder {
+    pub fn name(mut self, name: String) -> Self {
+        self.chunking_context.name = Some(name);
+        self
+    }
+
     pub fn hot_module_replacement(mut self) -> Self {
         self.chunking_context.enable_hot_module_replacement = true;
         self
@@ -85,6 +90,7 @@ impl BrowserChunkingContextBuilder {
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(Debug, Clone, Hash, PartialOrd, Ord)]
 pub struct BrowserChunkingContext {
+    name: Option<String>,
     /// This path get stripped off of chunk paths before generating output asset
     /// paths.
     context_path: Vc<FileSystemPath>,
@@ -130,6 +136,7 @@ impl BrowserChunkingContext {
     ) -> BrowserChunkingContextBuilder {
         BrowserChunkingContextBuilder {
             chunking_context: BrowserChunkingContext {
+                name: None,
                 context_path,
                 output_root,
                 client_root,
@@ -232,6 +239,15 @@ impl BrowserChunkingContext {
 #[turbo_tasks::value_impl]
 impl ChunkingContext for BrowserChunkingContext {
     #[turbo_tasks::function]
+    fn name(&self) -> Vc<String> {
+        if let Some(name) = &self.name {
+            Vc::cell(name.clone())
+        } else {
+            Vc::cell("unknown".to_string())
+        }
+    }
+
+    #[turbo_tasks::function]
     fn context_path(&self) -> Vc<FileSystemPath> {
         self.context_path
     }
@@ -292,24 +308,6 @@ impl ChunkingContext for BrowserChunkingContext {
             _ => {}
         }
         Ok(Vc::cell(source_maps))
-    }
-
-    #[turbo_tasks::function]
-    async fn can_be_in_same_chunk(
-        &self,
-        asset_a: Vc<Box<dyn Module>>,
-        asset_b: Vc<Box<dyn Module>>,
-    ) -> Result<Vc<bool>> {
-        let parent_dir = asset_a.ident().path().parent().await?;
-
-        let path = asset_b.ident().path().await?;
-        if let Some(rel_path) = parent_dir.get_path_to(&path) {
-            if !rel_path.starts_with("node_modules/") && !rel_path.contains("/node_modules/") {
-                return Ok(Vc::cell(true));
-            }
-        }
-
-        Ok(Vc::cell(false))
     }
 
     #[turbo_tasks::function]

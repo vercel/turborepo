@@ -739,7 +739,7 @@ jobs:
       matrix:
         os:
           - name: macos
-            runner: macos-latest
+            runner: macos-12
           - name: windows
             runner: windows-latest
     runs-on: ${{ matrix.os.runner }}
@@ -832,7 +832,7 @@ jobs:
       matrix:
         os:
           - name: macos
-            runner: macos-latest
+            runner: macos-12
           # Temporarily disable windows bench due to consistent timeouts
           # - name: windows
           #   runner: windows-2019
