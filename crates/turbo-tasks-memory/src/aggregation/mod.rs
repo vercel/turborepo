@@ -9,6 +9,8 @@ mod balance_edge;
 mod change;
 mod followers;
 mod increase;
+#[cfg(test)]
+mod loom_tests;
 mod lost_edge;
 mod new_edge;
 mod notify_aggregation_number_changed;

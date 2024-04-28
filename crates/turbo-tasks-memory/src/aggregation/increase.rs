@@ -74,18 +74,14 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedIncreaseAggregation
                 if new_aggregation_number < LEAF_NUMBER as u32 {
                     *aggregation_number = new_aggregation_number as u8;
                     drop(node);
-                    let prepared = children
-                        .into_iter()
-                        .map(|child_id| {
-                            let mut child = ctx.node(&child_id);
-                            child.increase_aggregation_number(
-                                ctx,
-                                &child_id,
-                                new_aggregation_number + 1,
-                            )
-                        })
-                        .collect::<StackVec<_>>();
-                    prepared.apply(ctx);
+                    for child_id in children {
+                        increase_aggregation_number(
+                            ctx,
+                            ctx.node(&child_id),
+                            &child_id,
+                            new_aggregation_number + 1,
+                        );
+                    }
                     return;
                 } else {
                     let uppers_copy = uppers.iter().cloned().collect::<StackVec<_>>();
