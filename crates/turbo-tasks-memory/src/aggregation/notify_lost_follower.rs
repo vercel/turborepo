@@ -128,6 +128,7 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNotifyLostFollower<
                                     return;
                                 }
                                 RemoveIfEntryResult::NotPresent => {
+                                    yield_now()
                                     // Retry, concurrency
                                 }
                             }
