@@ -19,7 +19,7 @@ impl Default for Debouncer {
 
 impl Debug for Debouncer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let serial = { self.serial.lock().expect("lock is valid").clone() };
+        let serial = { self.serial.lock().expect("lock is valid") };
         f.debug_struct("Debouncer")
             .field("is_pending", &serial.is_some())
             .field("timeout", &self.timeout)
