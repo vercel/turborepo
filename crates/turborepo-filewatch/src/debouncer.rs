@@ -1,4 +1,4 @@
-use std::{sync::Mutex, time::Duration};
+use std::{fmt::Debug, sync::Mutex, time::Duration};
 
 use tokio::{select, sync, time::Instant};
 use tracing::trace;
@@ -14,6 +14,16 @@ const DEFAULT_DEBOUNCE_TIMEOUT: Duration = Duration::from_millis(10);
 impl Default for Debouncer {
     fn default() -> Self {
         Self::new(DEFAULT_DEBOUNCE_TIMEOUT)
+    }
+}
+
+impl Debug for Debouncer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let serial = { self.serial.lock().expect("lock is valid").clone() };
+        f.debug_struct("Debouncer")
+            .field("is_pending", &serial.is_some())
+            .field("timeout", &self.timeout)
+            .finish()
     }
 }
 

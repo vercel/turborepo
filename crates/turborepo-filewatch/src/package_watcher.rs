@@ -1,16 +1,24 @@
 //! This module hosts the `PackageWatcher` type, which is used to watch the
 //! filesystem for changes to packages.
 
-use std::{collections::HashMap, path::Path};
+use std::{
+    collections::HashMap,
+    path::Path,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use futures::FutureExt;
 use notify::Event;
 use thiserror::Error;
 use tokio::{
-    join,
+    join, select,
     sync::{
         broadcast::{self, error::RecvError},
-        oneshot, watch,
+        mpsc, oneshot, watch,
     },
 };
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
@@ -24,6 +32,7 @@ use turborepo_repository::{
 
 use crate::{
     cookies::{CookieRegister, CookieWriter, CookiedOptionalWatch},
+    debouncer::Debouncer,
     optional_watch::OptionalWatch,
     NotifyError,
 };
@@ -48,6 +57,17 @@ pub enum PackageWatchError {
 // reason. Typically we don't care though, as the user could be in the middle of
 // making a change.
 pub(crate) type DiscoveryData = Result<DiscoveryResponse, String>;
+
+// Version is a type that exists to stamp an asynchronous hash computation
+// with a version so that we can ignore completion of outdated hash
+// computations.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct Version(usize);
+
+struct DiscoveryResult {
+    version: Version,
+    state: PackageState,
+}
 
 /// Watches the filesystem for changes to packages and package managers.
 pub struct PackageWatcher {
@@ -123,13 +143,14 @@ struct Subscriber {
     package_discovery_tx: watch::Sender<Option<DiscoveryData>>,
     package_discovery_lazy: CookiedOptionalWatch<DiscoveryData, ()>,
     cookie_tx: CookieRegister,
+    next_version: AtomicUsize,
 }
 
 /// PackageWatcher state. We either don't have a valid package manager,
 /// don't have valid globs, or we have both a package manager and globs
 /// and some maybe-empty set of workspaces.
 #[derive(Debug)]
-enum State {
+enum PackageState {
     NoPackageManager(String),
     InvalidGlobs(String),
     ValidWorkspaces {
@@ -137,6 +158,15 @@ enum State {
         filter: WorkspaceGlobs,
         workspaces: HashMap<AbsoluteSystemPathBuf, WorkspaceData>,
     },
+}
+
+#[derive(Debug)]
+enum State {
+    Pending {
+        debouncer: Arc<Debouncer>,
+        version: Version,
+    },
+    Ready(PackageState),
 }
 
 // Because our package manager detection is coupled with the workspace globs, we
@@ -173,7 +203,35 @@ impl Subscriber {
             package_discovery_tx,
             package_discovery_lazy,
             cookie_tx,
+            next_version: AtomicUsize::new(0),
         })
+    }
+
+    fn queue_rediscovery(
+        &self,
+        immediate: bool,
+        package_state_tx: mpsc::Sender<DiscoveryResult>,
+    ) -> (Version, Arc<Debouncer>) {
+        // Every time we're queuing rediscovery, we know our state is no longer valid,
+        // so reset it for any downstream consumers.
+        self.reset_discovery_data();
+        let version = Version(self.next_version.fetch_add(1, Ordering::SeqCst));
+        let debouncer = if immediate {
+            Debouncer::new(Duration::from_millis(0))
+        } else {
+            Debouncer::default()
+        };
+        let debouncer = Arc::new(debouncer);
+        let debouncer_copy = debouncer.clone();
+        let repo_root = self.repo_root.clone();
+        tokio::task::spawn(async move {
+            debouncer_copy.debounce().await;
+            let state = discovery_packages(repo_root).await;
+            let _ = package_state_tx
+                .send(DiscoveryResult { version, state })
+                .await;
+        });
+        (version, debouncer)
     }
 
     async fn watch_process(
@@ -186,29 +244,53 @@ impl Subscriber {
             Err(e) => return PackageWatcherProcessError::Filewatching(e),
         };
 
-        // state represents our current understanding of the underlying filesystem, and
-        // is expected to be mutated in place by handle_file_event. Both
-        // rediscover_everything and handle_file_event are responsible for
-        // broadcasting updates to state.
-        let mut state = self.rediscover_and_write_state().await;
+        let (package_state_tx, mut package_state_rx) = mpsc::channel::<DiscoveryResult>(256);
+
+        let (version, debouncer) = self.queue_rediscovery(true, package_state_tx.clone());
+
+        // state represents the current state of this process, and is expected to be
+        // updated in place by the various handler functions.
+        let mut state = State::Pending { debouncer, version };
 
         tracing::debug!("package watcher ready {:?}", state);
         loop {
-            let file_event = recv.recv().await;
-            match file_event {
-                Ok(Ok(event)) => self.handle_file_event(&mut state, &event).await,
-                // if we get an error, we need to re-discover the packages
-                Ok(Err(_)) => state = self.rediscover_and_write_state().await,
-                Err(e @ RecvError::Closed) => {
-                    return PackageWatcherProcessError::FilewatchingClosed(e)
-                }
-                // if we end up lagging, warn and rediscover packages
-                Err(RecvError::Lagged(count)) => {
-                    tracing::warn!("lagged behind {count} processing file watching events");
-                    state = self.rediscover_and_write_state().await;
+            select! {
+                Some(discovery_result) = package_state_rx.recv() => {
+                    self.handle_discovery_result(discovery_result, &mut state);
+                },
+                file_event = recv.recv() => {
+                    match file_event {
+                        Ok(Ok(event)) => self.handle_file_event(&mut state, &event, &package_state_tx).await,
+                        // if we get an error, we need to re-discover the packages
+                        Ok(Err(_)) => self.bump_or_queue_rediscovery(&mut state, &package_state_tx),
+                        Err(e @ RecvError::Closed) => {
+                            return PackageWatcherProcessError::FilewatchingClosed(e)
+                        }
+                        // if we end up lagging, warn and rediscover packages
+                        Err(RecvError::Lagged(count)) => {
+                            tracing::warn!("lagged behind {count} processing file watching events");
+                            self.bump_or_queue_rediscovery(&mut state, &package_state_tx);
+                        }
+                    }
                 }
             }
             tracing::trace!("package watcher state: {:?}", state);
+        }
+    }
+
+    fn handle_discovery_result(&self, package_result: DiscoveryResult, state: &mut State) {
+        if let State::Pending { version, .. } = state {
+            // If this response matches an outstanding rediscovery request, write out the
+            // corresponding state to downstream consumers and update our state
+            // accordingly.
+            //
+            // Note that depending on events that we received since this request was queued,
+            // we may have a higher version number, at which point we would
+            // ignore this update, as we know it is stale.
+            if package_result.version == *version {
+                self.write_state(&package_result.state);
+                *state = State::Ready(package_result.state);
+            }
         }
     }
 
@@ -243,7 +325,12 @@ impl Subscriber {
             .any(|invalidation_path| path.eq(invalidation_path as &AbsoluteSystemPath))
     }
 
-    async fn handle_file_event(&mut self, state: &mut State, file_event: &Event) {
+    async fn handle_file_event(
+        &mut self,
+        state: &mut State,
+        file_event: &Event,
+        package_state_tx: &mpsc::Sender<DiscoveryResult>,
+    ) {
         tracing::trace!("file event: {:?} {:?}", file_event.kind, file_event.paths);
 
         if file_event
@@ -252,10 +339,12 @@ impl Subscriber {
             .any(|path| self.path_invalidates_everything(path))
         {
             // root package.json changed, rediscover everything
-            *state = self.rediscover_and_write_state().await;
+            //*state = self.rediscover_and_write_state().await;
+            self.bump_or_queue_rediscovery(state, package_state_tx);
         } else {
             tracing::trace!("handling non-root package.json change");
-            self.handle_workspace_changes(state, file_event).await;
+            self.handle_workspace_changes(state, file_event, package_state_tx)
+                .await;
         }
 
         tracing::trace!("updating the cookies");
@@ -271,14 +360,48 @@ impl Subscriber {
         );
     }
 
+    fn bump_or_queue_rediscovery(
+        &self,
+        state: &mut State,
+        package_state_tx: &mpsc::Sender<DiscoveryResult>,
+    ) {
+        if let State::Pending { debouncer, .. } = state {
+            if debouncer.bump() {
+                // We successfully bumped the debouncer, which was already pending,
+                // so a new discovery will happen shortly.
+                return;
+            }
+        }
+        // We either failed to bump the debouncer, or we don't have a rediscovery
+        // queued, but we need one.
+        let (version, debouncer) = self.queue_rediscovery(false, package_state_tx.clone());
+        *state = State::Pending { debouncer, version }
+    }
+
     // checks if the file event contains any changes to package.json files, or
     // directories that would map to a workspace.
-    async fn handle_workspace_changes(&mut self, state: &mut State, file_event: &Event) {
+    async fn handle_workspace_changes(
+        &mut self,
+        state: &mut State,
+        file_event: &Event,
+        package_state_tx: &mpsc::Sender<DiscoveryResult>,
+    ) {
+        let package_state = match state {
+            State::Pending { .. } => {
+                // We can't assess this event until we have a valid package manager. To be safe,
+                // bump or queue another rediscovery, since this could race with the discovery
+                // in progress.
+                self.bump_or_queue_rediscovery(state, package_state_tx);
+                return;
+            }
+            State::Ready(package_state) => package_state,
+        };
+
         // If we don't have a valid package manager and workspace globs, nothing to be
         // done here
-        let State::ValidWorkspaces {
+        let PackageState::ValidWorkspaces {
             filter, workspaces, ..
-        } = state
+        } = package_state
         else {
             return;
         };
@@ -347,7 +470,7 @@ impl Subscriber {
         }
 
         if changed {
-            self.write_state(state);
+            self.write_state(package_state);
         }
     }
 
@@ -362,59 +485,9 @@ impl Subscriber {
         });
     }
 
-    async fn rediscover_and_write_state(&mut self) -> State {
-        // If we're rediscovering the package manager, clear all data
-        self.reset_discovery_data();
-        let state = self.rediscover().await;
-        self.write_state(&state);
-        state
-    }
-
-    async fn rediscover(&self) -> State {
-        // If we're rediscovering everything, we need to rediscover the package manager.
-        // It may have changed if a lockfile changed or package.json changed.
-        let discovery =
-            match LocalPackageDiscoveryBuilder::new(self.repo_root.clone(), None, None).build() {
-                Ok(discovery) => discovery,
-                Err(e) => return State::NoPackageManager(e.to_string()),
-            };
-        let initial_discovery = match discovery.discover_packages().await {
-            Ok(discovery) => discovery,
-            // If we failed the discovery, that's fine, we've reset the values, leave them as None
-            Err(e) => {
-                tracing::debug!("failed to rediscover packages: {}", e);
-                return State::NoPackageManager(e.to_string());
-            }
-        };
-
-        tracing::debug!("rediscovered packages: {:?}", initial_discovery);
-        let filter = match initial_discovery
-            .package_manager
-            .get_workspace_globs(&self.repo_root)
-        {
-            Ok(filter) => filter,
-            Err(e) => {
-                // If the globs are invalid, leave everything set to None
-                tracing::debug!("failed to get workspace globs: {}", e);
-                return State::InvalidGlobs(e.to_string());
-            }
-        };
-
-        let workspaces = initial_discovery
-            .workspaces
-            .into_iter()
-            .map(|p| (p.package_json.parent().expect("non-root").to_owned(), p))
-            .collect::<HashMap<_, _>>();
-        State::ValidWorkspaces {
-            package_manager: initial_discovery.package_manager,
-            filter,
-            workspaces,
-        }
-    }
-
-    fn write_state(&self, state: &State) {
+    fn write_state(&self, state: &PackageState) {
         match state {
-            State::NoPackageManager(e) | State::InvalidGlobs(e) => {
+            PackageState::NoPackageManager(e) | PackageState::InvalidGlobs(e) => {
                 self.package_discovery_tx.send_if_modified(|existing| {
                     let error_msg = e.to_string();
                     match existing {
@@ -426,7 +499,7 @@ impl Subscriber {
                     }
                 });
             }
-            State::ValidWorkspaces {
+            PackageState::ValidWorkspaces {
                 package_manager,
                 workspaces,
                 ..
@@ -440,6 +513,47 @@ impl Subscriber {
                 let _ = self.package_discovery_tx.send(Some(Ok(resp)));
             }
         }
+    }
+}
+
+async fn discovery_packages(repo_root: AbsoluteSystemPathBuf) -> PackageState {
+    // If we're rediscovering everything, we need to rediscover the package manager.
+    // It may have changed if a lockfile changed or package.json changed.
+    let discovery = match LocalPackageDiscoveryBuilder::new(repo_root.clone(), None, None).build() {
+        Ok(discovery) => discovery,
+        Err(e) => return PackageState::NoPackageManager(e.to_string()),
+    };
+    let initial_discovery = match discovery.discover_packages().await {
+        Ok(discovery) => discovery,
+        // If we failed the discovery, that's fine, we've reset the values, leave them as None
+        Err(e) => {
+            tracing::debug!("failed to rediscover packages: {}", e);
+            return PackageState::NoPackageManager(e.to_string());
+        }
+    };
+
+    tracing::debug!("rediscovered packages: {:?}", initial_discovery);
+    let filter = match initial_discovery
+        .package_manager
+        .get_workspace_globs(&repo_root)
+    {
+        Ok(filter) => filter,
+        Err(e) => {
+            // If the globs are invalid, leave everything set to None
+            tracing::debug!("failed to get workspace globs: {}", e);
+            return PackageState::InvalidGlobs(e.to_string());
+        }
+    };
+
+    let workspaces = initial_discovery
+        .workspaces
+        .into_iter()
+        .map(|p| (p.package_json.parent().expect("non-root").to_owned(), p))
+        .collect::<HashMap<_, _>>();
+    PackageState::ValidWorkspaces {
+        package_manager: initial_discovery.package_manager,
+        filter,
+        workspaces,
     }
 }
 
