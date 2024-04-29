@@ -22,7 +22,6 @@ use crate::{
     DaemonConnector, DaemonPaths,
 };
 
-#[derive(Clone)]
 pub enum ChangedPackages {
     All,
     Some(HashSet<PackageName>),
@@ -154,9 +153,11 @@ impl WatchClient {
         let run_fut = async {
             loop {
                 changed_pkgs_rx.changed().await?;
-                let changed_pkgs = { changed_pkgs_rx.borrow_and_update().clone() };
+                let changed_pkgs = changed_pkgs_rx.borrow_and_update();
 
-                self.execute_run(changed_pkgs).await?;
+                self.execute_run(&changed_pkgs).await?;
+
+                yield_now().await;
             }
         };
 
@@ -207,16 +208,17 @@ impl WatchClient {
         Ok(())
     }
 
-    async fn execute_run(&mut self, changed_packages: ChangedPackages) -> Result<i32, Error> {
+    async fn execute_run(&mut self, changed_packages: &ChangedPackages) -> Result<i32, Error> {
         // Should we recover here?
         match changed_packages {
             ChangedPackages::Some(packages) => {
                 let packages = packages
-                    .into_iter()
+                    .iter()
                     .filter(|pkg| {
                         // If not in the filtered pkgs, ignore
                         self.run.filtered_pkgs.contains(pkg)
                     })
+                    .cloned()
                     .collect();
 
                 let mut args = self.base.args().clone();
