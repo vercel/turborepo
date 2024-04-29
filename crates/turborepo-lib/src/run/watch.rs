@@ -1,12 +1,9 @@
-use std::{cell::RefCell, collections::HashSet, sync::Mutex};
+use std::{cell::RefCell, collections::HashSet};
 
 use futures::StreamExt;
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
-use tokio::{
-    select,
-    task::{yield_now, JoinHandle},
-};
+use tokio::{select, sync::Mutex, task::JoinHandle};
 use turborepo_repository::package_graph::PackageName;
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
@@ -134,6 +131,9 @@ impl WatchClient {
 
         let signal_subscriber = self.handler.subscribe().ok_or(Error::NoSignalHandler)?;
 
+        // We explicitly use a tokio::sync::Mutex here to avoid deadlocks.
+        // If we used a std::sync::Mutex, we could deadlock by spinning the lock
+        // and not yielding back to the tokio runtime.
         let changed_packages = Mutex::new(RefCell::new(ChangedPackages::default()));
 
         let event_fut = async {
@@ -147,10 +147,9 @@ impl WatchClient {
 
         let run_fut = async {
             loop {
-                if !changed_packages.lock().unwrap().borrow().is_empty() {
+                if !changed_packages.lock().await.borrow().is_empty() {
                     self.execute_run(&changed_packages).await?;
                 }
-                yield_now().await;
             }
         };
 
@@ -181,7 +180,7 @@ impl WatchClient {
             }) => {
                 let package_name = PackageName::from(package_name);
 
-                match changed_packages.lock().unwrap().get_mut() {
+                match changed_packages.lock().await.get_mut() {
                     ChangedPackages::All => {
                         // If we've already changed all packages, ignore
                     }
@@ -191,7 +190,7 @@ impl WatchClient {
                 }
             }
             proto::package_change_event::Event::RediscoverPackages(_) => {
-                *changed_packages.lock().unwrap().get_mut() = ChangedPackages::All;
+                *changed_packages.lock().await.get_mut() = ChangedPackages::All;
             }
             proto::package_change_event::Event::Error(proto::PackageChangeError { message }) => {
                 return Err(DaemonError::Unavailable(message).into());
@@ -205,7 +204,7 @@ impl WatchClient {
         &mut self,
         changed_packages: &Mutex<RefCell<ChangedPackages>>,
     ) -> Result<i32, Error> {
-        let changed_packages = changed_packages.lock().unwrap().take();
+        let changed_packages = changed_packages.lock().await.take();
         // Should we recover here?
         match changed_packages {
             ChangedPackages::Some(packages) => {
