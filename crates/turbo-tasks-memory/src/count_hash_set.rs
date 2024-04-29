@@ -368,7 +368,7 @@ impl<T: Eq + Hash + Clone, H: BuildHasher + Default> CountHashSet<T, H> {
                     }
                 }
             }
-            RawEntry::Vacant(e) => {
+            RawEntry::Vacant(_) => {
                 // It's not present
                 RemovePositiveCountResult {
                     removed: false,
