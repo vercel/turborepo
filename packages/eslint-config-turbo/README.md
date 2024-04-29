@@ -1,6 +1,6 @@
 # `eslint-config-turbo`
 
-Ease configuration for Turborepo
+Easy ESLint configuration for Turborepo
 
 ## Installation
 
