@@ -199,7 +199,6 @@ fn fuzzy_loom(#[case] seed: u32, #[case] count: u32) {
         thread::Builder::new()
             .stack_size(80000)
             .spawn(move || {
-                loom::skip_branch();
                 let ctx = NodeAggregationContext {};
 
                 let mut seed_buffer = [0; 32];
@@ -210,9 +209,10 @@ fn fuzzy_loom(#[case] seed: u32, #[case] count: u32) {
                     nodes.push(Node::new(i));
                 }
                 prepare_aggregation_data(&ctx, &NodeRef(nodes[0].clone()));
+                prepare_aggregation_data(&ctx, &NodeRef(nodes[1].clone()));
 
                 // setup graph
-                for _ in 0..50 {
+                for _ in 0..20 {
                     let parent = r.gen_range(0..nodes.len() - 1);
                     let child = r.gen_range(parent + 1..nodes.len());
                     let parent_node = nodes[parent].clone();
