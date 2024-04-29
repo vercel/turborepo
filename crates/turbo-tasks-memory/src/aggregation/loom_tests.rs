@@ -190,8 +190,11 @@ fn fuzzy_loom_new() {
 #[rstest]
 #[case::a(3302552607, 10)]
 #[case::b(3629477471, 50)]
+#[case::c(1006976052, 20)]
 fn fuzzy_loom(#[case] seed: u32, #[case] count: u32) {
-    loom::model(move || {
+    let mut builder = loom::model::Builder::new();
+    builder.max_branches = 1000000;
+    builder.check(move || {
         loom::skip_branch();
         thread::Builder::new()
             .stack_size(80000)
@@ -218,7 +221,7 @@ fn fuzzy_loom(#[case] seed: u32, #[case] count: u32) {
                 }
 
                 let mut edges = Vec::new();
-                for _ in 0..2 {
+                for _ in 0..3 {
                     let parent = r.gen_range(0..nodes.len() - 1);
                     let child = r.gen_range(parent + 1..nodes.len());
                     let parent_node = nodes[parent].clone();
