@@ -62,7 +62,7 @@ pub struct RunBuilder {
     // In watch mode, we can have a changed package that we want to serve as an entrypoint.
     // We will then prune away any tasks that do not depend on tasks inside
     // this package.
-    entrypoint_packages: Option<HashSet<PackageName>>,
+    entrypoint_package: Option<PackageName>,
     should_print_prelude_override: Option<bool>,
 }
 
@@ -114,13 +114,13 @@ impl RunBuilder {
             version,
             experimental_ui,
             analytics_sender: None,
-            entrypoint_packages: None,
+            entrypoint_package: None,
             should_print_prelude_override: None,
         })
     }
 
-    pub fn with_entrypoint_packages(mut self, entrypoint_packages: HashSet<PackageName>) -> Self {
-        self.entrypoint_packages = Some(entrypoint_packages);
+    pub fn with_entrypoint_package(mut self, entrypoint_package: PackageName) -> Self {
+        self.entrypoint_package = Some(entrypoint_package);
         self
     }
 
@@ -451,8 +451,8 @@ impl RunBuilder {
 
         // If we have an initial task, we prune out the engine to only
         // tasks that are reachable from that initial task.
-        if let Some(entrypoint_packages) = &self.entrypoint_packages {
-            engine = engine.create_engine_for_subgraph(entrypoint_packages);
+        if let Some(entrypoint_package) = &self.entrypoint_package {
+            engine = engine.create_engine_for_subgraph(entrypoint_package);
         }
 
         if !self.opts.run_opts.parallel {
