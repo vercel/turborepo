@@ -86,7 +86,7 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNotifyLostFollower<
                                 .map(|remove_change| upper.apply_change(ctx, remove_change));
                             let prepared = followers
                                 .into_iter()
-                                .map(|follower_id| {
+                                .filter_map(|follower_id| {
                                     upper.notify_lost_follower(ctx, &upper_id, &follower_id)
                                 })
                                 .collect::<StackVec<_>>();
