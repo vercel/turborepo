@@ -789,7 +789,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
     };
 
     enum Action {
-        Effect(Effect),
+        Effect(Box<Effect>),
         LeaveScope(u32),
     }
 
@@ -811,13 +811,13 @@ pub(crate) async fn analyse_ecmascript_module_internal(
             Action::Effect(effect) => effect,
         };
 
-        let add_effects = |effects: Vec<Effect>| {
+        let add_effects = |effects: Vec<Box<Effect>>| {
             queue_stack
                 .lock()
                 .extend(effects.into_iter().map(Action::Effect).rev())
         };
 
-        match effect {
+        match *effect {
             Effect::Conditional {
                 condition,
                 kind,
@@ -1106,7 +1106,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
         .await
 }
 
-fn handle_call_boxed<'a, G: Fn(Vec<Effect>) + Send + Sync + 'a>(
+fn handle_call_boxed<'a, G: Fn(Vec<Box<Effect>>) + Send + Sync + 'a>(
     ast_path: &'a [AstParentKind],
     span: Span,
     func: JsValue,
@@ -1130,7 +1130,7 @@ fn handle_call_boxed<'a, G: Fn(Vec<Effect>) + Send + Sync + 'a>(
     ))
 }
 
-async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
+async fn handle_call<G: Fn(Vec<Box<Effect>>) + Send + Sync>(
     ast_path: &[AstParentKind],
     span: Span,
     func: JsValue,

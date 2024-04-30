@@ -20,7 +20,7 @@ use crate::{analyzer::is_unresolved, utils::unparen};
 
 #[derive(Debug, Clone, Default)]
 pub struct EffectsBlock {
-    pub effects: Vec<Effect>,
+    pub effects: Vec<Box<Effect>>,
     /// The ast path to the block or expression.
     pub ast_path: Vec<AstParentKind>,
 }
@@ -219,7 +219,7 @@ impl Effect {
 pub struct VarGraph {
     pub values: HashMap<Id, JsValue>,
 
-    pub effects: Vec<Effect>,
+    pub effects: Vec<Box<Effect>>,
 }
 
 impl VarGraph {
@@ -647,7 +647,7 @@ impl EvalContext {
 struct Analyzer<'a> {
     data: &'a mut VarGraph,
 
-    effects: Vec<Effect>,
+    effects: Vec<Box<Effect>>,
 
     eval_context: &'a EvalContext,
 
@@ -711,8 +711,9 @@ impl Analyzer<'_> {
         self.add_value(id, value);
     }
 
+    #[inline]
     fn add_effect(&mut self, effect: Effect) {
-        self.effects.push(effect);
+        self.effects.push(Box::new(effect));
     }
 
     fn check_iife<'ast: 'r, 'r>(
