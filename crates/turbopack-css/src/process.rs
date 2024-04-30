@@ -895,7 +895,18 @@ impl lightningcss::visitor::Visitor<'_> for CssValidator {
     type Error = ();
 
     fn visit_types(&self) -> lightningcss::visitor::VisitTypes {
-        visit_types!(SELECTORS)
+        lightningcss::visitor::VisitTypes::all()
+    }
+
+    fn visit_property(
+        &mut self,
+        property: &mut lightningcss::properties::Property,
+    ) -> Result<(), Self::Error> {
+        match property {
+            lightningcss::properties::Property::GridTemplateAreas(p) => {}
+
+            _ => Ok(()),
+        }
     }
 
     fn visit_selector(
