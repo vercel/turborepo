@@ -18,7 +18,7 @@ Check
   Tasks to Run
   build
     Task                           = build\s* (re)
-    Hash                           = f09bf783beacf5c9\s* (re)
+    Hash                           = 45fcb56a23295f63
     Cached \(Local\)                 = false\s* (re)
     Cached \(Remote\)                = false\s* (re)
     Command                        = echo building > foo.txt\s* (re)
@@ -37,7 +37,7 @@ Check
     Framework                      =\s* (re)
   test
     Task                           = test\s* (re)
-    Hash                           = 8bfab5dc6b4ccb3b\s* (re)
+    Hash                           = 314a0e5a10072ae2
     Cached \(Local\)                 = false\s* (re)
     Cached \(Remote\)                = false\s* (re)
     Command                        = cat foo.txt\s* (re)
