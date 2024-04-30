@@ -1362,4 +1362,19 @@ mod tests {
         }",
         );
     }
+
+    #[test]
+    fn css_module_grid_lint() {
+        assert_lint_success(
+            r#"
+        .item1 {
+            grid-area: myArea;
+        }
+        .grid-container {
+            display: grid;
+            grid-template-areas: "myArea myArea";
+        }
+        "#,
+        );
+    }
 }
