@@ -49,6 +49,8 @@ mod aggregation;
 mod meta_state;
 mod stats;
 
+static GRAPH_MODIFICATION_MUTEX: Mutex<()> = Mutex::new(());
+
 #[derive(Hash, Copy, Clone, PartialEq, Eq)]
 pub enum TaskDependency {
     Output(TaskId),
@@ -848,6 +850,7 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
+        let guard = GRAPH_MODIFICATION_MUTEX.lock();
         let TaskMetaStateWriteGuard::Full(mut state) = self.state_mut() else {
             return;
         };
@@ -899,6 +902,7 @@ impl Task {
             change_job.apply(&aggregation_context);
             #[cfg(feature = "lazy_remove_children")]
             remove_job.apply(&aggregation_context);
+            drop(guard);
         }
         aggregation_context.apply_queued_updates();
     }
@@ -964,6 +968,7 @@ impl Task {
         let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
         let mut schedule_task = false;
         {
+            let mut guard = Some(GRAPH_MODIFICATION_MUTEX.lock());
             let mut change_job = None;
             #[cfg(feature = "lazy_remove_children")]
             let mut remove_job = None;
@@ -982,6 +987,9 @@ impl Task {
                         ref mut outdated_children,
                         ref mut outdated_collectibles,
                     } => {
+                        if outdated_children.is_empty() {
+                            guard = None;
+                        }
                         let event = event.take();
                         #[cfg(feature = "lazy_remove_children")]
                         let outdated_children = take(outdated_children);
@@ -1044,6 +1052,7 @@ impl Task {
             change_job.apply(&aggregation_context);
             #[cfg(feature = "lazy_remove_children")]
             remove_job.apply(&aggregation_context);
+            drop(guard);
         }
         if let TaskType::Once(_) = self.ty {
             // unset the root type, so tasks below are no longer active
@@ -1073,6 +1082,7 @@ impl Task {
             return;
         }
 
+        let guard = GRAPH_MODIFICATION_MUTEX.lock();
         let state = if force_schedule {
             TaskMetaStateWriteGuard::Full(self.full_state_mut())
         } else {
@@ -1220,6 +1230,7 @@ impl Task {
                 }
             }
         }
+        drop(guard);
         aggregation_context.apply_queued_updates();
     }
 
@@ -1471,6 +1482,7 @@ impl Task {
     ) {
         let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
         {
+            let guard = GRAPH_MODIFICATION_MUTEX.lock();
             let mut add_job = None;
             {
                 let mut state = self.full_state_mut();
@@ -1523,6 +1535,7 @@ impl Task {
                 });
                 job.apply(&aggregation_context);
             }
+            drop(guard);
         }
         aggregation_context.apply_queued_updates();
     }
@@ -1969,6 +1982,7 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> bool {
+        let guard = GRAPH_MODIFICATION_MUTEX.lock();
         let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
         let mut clear_dependencies = None;
         let mut change_job = None;
