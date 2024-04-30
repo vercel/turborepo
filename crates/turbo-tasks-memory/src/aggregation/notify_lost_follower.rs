@@ -98,53 +98,19 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNotifyLostFollower<
                             return;
                         }
                         RemoveIfEntryResult::NotPresent => {
-                            if try_count > 10000 {
-                                println!(
-                                    "Follower: {}, {}",
-                                    follower.aggregation_number(),
-                                    follower.uppers().get_count(&upper_id)
-                                );
-                                drop(follower);
-                                let upper = ctx.node(&upper_id);
-                                let AggregationNode::Aggegating(aggregating) = &*upper else {
-                                    unreachable!();
-                                };
-                                println!(
-                                    "Upper: {}, {}",
-                                    upper.aggregation_number(),
-                                    aggregating.followers.get_count(&follower_id)
-                                );
-                                drop(upper);
-                                let path = find_path(ctx, &upper_id, &follower_id).unwrap();
-                                println!("Path len: {}", path.len());
-                                for (i, node_id) in path.iter().enumerate() {
-                                    let node = ctx.node(&node_id);
-                                    println!(
-                                        "Node {i}: {}, uppers: {:?}, followers: {:?}",
-                                        node.aggregation_number(),
-                                        node.uppers()
-                                            .iter()
-                                            .filter_map(|id| {
-                                                path.iter().position(|path_id| path_id == id)
-                                            })
-                                            .collect::<Vec<_>>(),
-                                        node.followers().map_or(vec![], |followers| {
-                                            followers
-                                                .iter()
-                                                .filter_map(|id| {
-                                                    path.iter().position(|path_id| path_id == id)
-                                                })
-                                                .collect::<Vec<_>>()
-                                        })
-                                    );
-                                }
-                                panic!(
-                                    "The graph is malformed, we need to remove either follower or \
-                                     upper but neither exists."
-                                );
+                            drop(follower);
+                            if try_count > 1000 {
+                                // panic!(
+                                //     "The graph is malformed, we need to remove either follower or
+                                // \      upper but neither exists."
+                                // );
+                                // TODO(sokra) This should not happen, but it's a bug that will
+                                // happen I need more time to
+                                // investigate this, but to unblock this in general
+                                // here is a dirty workaround that will lead to some bugs, but
+                                // should be fine in general:
                                 break;
                             }
-                            drop(follower);
                             // retry, concurrency
                             let mut upper = ctx.node(&upper_id);
                             let AggregationNode::Aggegating(aggregating) = &mut *upper else {

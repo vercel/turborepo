@@ -51,15 +51,21 @@ mod stats;
 
 // TODO remove this lock for better performance after the concurrency problem is
 // solved
-static GRAPH_MODIFICATION_MUTEX: Mutex<()> = Mutex::new(());
+// static GRAPH_MODIFICATION_MUTEX: Mutex<()> = Mutex::new(());
 
-fn graph_modification_guard<'l>() -> MutexGuard<'l, ()> {
-    GRAPH_MODIFICATION_MUTEX.lock()
-}
-
-// fn graph_modification_guard() -> () {
-//     ()
+// fn graph_modification_guard<'l>() -> MutexGuard<'l, ()> {
+//     GRAPH_MODIFICATION_MUTEX.lock()
 // }
+
+fn graph_modification_guard() -> impl Drop {
+    struct Guard;
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            // do nothing
+        }
+    }
+    Guard
+}
 
 #[derive(Hash, Copy, Clone, PartialEq, Eq)]
 pub enum TaskDependency {
