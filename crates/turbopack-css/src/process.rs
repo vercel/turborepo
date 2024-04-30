@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{Arc, RwLock},
 };
 
@@ -572,8 +572,12 @@ async fn process_content(
             ) {
                 Ok(mut ss) => {
                     if matches!(ty, CssModuleAssetType::Module) {
-                        let mut validator = CssValidator { errors: Vec::new() };
+                        let mut validator = CssValidator {
+                            errors: Vec::new(),
+                            used_grid_areas: Default::default(),
+                        };
                         ss.visit(&mut validator).unwrap();
+                        validator.validate_done();
 
                         for err in validator.errors {
                             err.report(source, fs_path_vc);
@@ -676,8 +680,12 @@ async fn process_content(
         }
 
         if matches!(ty, CssModuleAssetType::Module) {
-            let mut validator = CssValidator { errors: vec![] };
+            let mut validator = CssValidator {
+                errors: vec![],
+                used_grid_areas: Default::default(),
+            };
             ss.visit_with(&mut validator);
+            validator.validate_done();
 
             for err in validator.errors {
                 err.report(source, fs_path_vc);
@@ -733,6 +741,10 @@ async fn process_content(
 /// is wrong for a css module because it doesn't have a class name.
 struct CssValidator {
     errors: Vec<CssError>,
+    used_grid_areas: HashSet<String>,
+}
+impl CssValidator {
+    fn validate_done(&mut self) {}
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -903,7 +915,9 @@ impl lightningcss::visitor::Visitor<'_> for CssValidator {
         property: &mut lightningcss::properties::Property,
     ) -> Result<(), Self::Error> {
         match property {
-            lightningcss::properties::Property::GridTemplateAreas(p) => {}
+            lightningcss::properties::Property::GridArea(p) => match p {},
+
+            lightningcss::properties::Property::GridTemplateAreas(p) => match p {},
 
             _ => Ok(()),
         }
@@ -1167,8 +1181,12 @@ mod tests {
         )
         .unwrap();
 
-        let mut validator = CssValidator { errors: Vec::new() };
+        let mut validator = CssValidator {
+            errors: Vec::new(),
+            used_grid_areas: Default::default(),
+        };
         ss.visit(&mut validator).unwrap();
+        validator.validate_done();
 
         validator.errors
     }
@@ -1189,8 +1207,12 @@ mod tests {
         )
         .unwrap();
 
-        let mut validator = CssValidator { errors: Vec::new() };
+        let mut validator = CssValidator {
+            errors: Vec::new(),
+            used_grid_areas: Default::default(),
+        };
         ss.visit_with(&mut validator);
+        validator.validate_done();
 
         validator.errors
     }
