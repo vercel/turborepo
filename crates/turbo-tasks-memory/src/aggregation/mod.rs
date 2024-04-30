@@ -79,6 +79,13 @@ impl<I, A> AggregationNode<I, A> {
             AggregationNode::Aggegating(aggegating) => &mut aggegating.uppers,
         }
     }
+
+    fn followers(&self) -> Option<&CountHashSet<I>> {
+        match self {
+            AggregationNode::Leaf { .. } => None,
+            AggregationNode::Aggegating(aggegating) => Some(&aggegating.followers),
+        }
+    }
 }
 
 #[must_use]
