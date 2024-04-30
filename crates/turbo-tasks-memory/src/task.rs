@@ -17,7 +17,7 @@ use std::{
 use anyhow::Result;
 use auto_hash_map::{AutoMap, AutoSet};
 use nohash_hasher::BuildNoHashHasher;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::{Mutex, MutexGuard, RwLock};
 use rustc_hash::FxHasher;
 use smallvec::SmallVec;
 use stats::TaskStats;
@@ -49,7 +49,17 @@ mod aggregation;
 mod meta_state;
 mod stats;
 
+// TODO remove this lock for better performance after the concurrency problem is
+// solved
 static GRAPH_MODIFICATION_MUTEX: Mutex<()> = Mutex::new(());
+
+fn graph_modification_guard<'l>() -> MutexGuard<'l, ()> {
+    GRAPH_MODIFICATION_MUTEX.lock()
+}
+
+// fn graph_modification_guard() -> () {
+//     ()
+// }
 
 #[derive(Hash, Copy, Clone, PartialEq, Eq)]
 pub enum TaskDependency {
@@ -850,7 +860,7 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
-        let guard = GRAPH_MODIFICATION_MUTEX.lock();
+        let guard = graph_modification_guard();
         let TaskMetaStateWriteGuard::Full(mut state) = self.state_mut() else {
             return;
         };
@@ -968,7 +978,7 @@ impl Task {
         let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
         let mut schedule_task = false;
         {
-            let mut guard = Some(GRAPH_MODIFICATION_MUTEX.lock());
+            let mut guard = Some(graph_modification_guard());
             let mut change_job = None;
             #[cfg(feature = "lazy_remove_children")]
             let mut remove_job = None;
@@ -1082,7 +1092,7 @@ impl Task {
             return;
         }
 
-        let guard = GRAPH_MODIFICATION_MUTEX.lock();
+        let guard = graph_modification_guard();
         let state = if force_schedule {
             TaskMetaStateWriteGuard::Full(self.full_state_mut())
         } else {
@@ -1482,7 +1492,7 @@ impl Task {
     ) {
         let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
         {
-            let guard = GRAPH_MODIFICATION_MUTEX.lock();
+            let guard = graph_modification_guard();
             let mut add_job = None;
             {
                 let mut state = self.full_state_mut();
@@ -1982,7 +1992,7 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> bool {
-        let guard = GRAPH_MODIFICATION_MUTEX.lock();
+        let guard = graph_modification_guard();
         let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
         let mut clear_dependencies = None;
         let mut change_job = None;
