@@ -1,5 +1,5 @@
 use anyhow::Result;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use turbo_tasks::Vc;
 use turbopack_core::chunk::{ModuleId, ModuleIds};
 
@@ -11,6 +11,11 @@ pub struct ModuleScope {}
 pub async fn split_scopes(
     entry: Vc<ModuleId>,
     deps: Vc<FxHashMap<ModuleId, ModuleIds>>,
+    lazy: Vc<FxHashSet<(ModuleId, ModuleId)>>,
 ) -> Result<Vc<ModuleScope>> {
     // If a module is imported only as lazy, it should be in a separate scope
+}
+
+pub trait DepGraph {
+    fn has_edge(&self, from: ModuleId, to: ModuleId) -> bool;
 }
