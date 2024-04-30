@@ -571,7 +571,7 @@ async fn process_content(
             ) {
                 Ok(mut ss) => {
                     if matches!(ty, CssModuleAssetType::Module) {
-                        let mut validator = CssValidator::default();
+                        let mut validator = CssModuleValidator::default();
                         ss.visit(&mut validator).unwrap();
                         validator.validate_done();
 
@@ -676,7 +676,7 @@ async fn process_content(
         }
 
         if matches!(ty, CssModuleAssetType::Module) {
-            let mut validator = CssValidator::default();
+            let mut validator = CssModuleValidator::default();
             ss.visit_with(&mut validator);
             validator.validate_done();
 
@@ -733,12 +733,12 @@ async fn process_content(
 ///
 /// is wrong for a css module because it doesn't have a class name.
 #[derive(Default)]
-struct CssValidator {
+struct CssModuleValidator {
     errors: Vec<CssError>,
     used_grid_areas: HashSet<String>,
     used_grid_templates: HashSet<String>,
 }
-impl CssValidator {
+impl CssModuleValidator {
     fn validate_done(&mut self) {
         for grid_area in &self.used_grid_areas {
             if !self.used_grid_templates.contains(grid_area) {
@@ -802,7 +802,7 @@ const CSS_MODULE_ERROR: &str =
     "Selector is not pure (pure selectors must contain at least one local class or id)";
 
 /// We only vist top-level selectors.
-impl swc_core::css::visit::Visit for CssValidator {
+impl swc_core::css::visit::Visit for CssModuleValidator {
     fn visit_complex_selector(&mut self, n: &ComplexSelector) {
         fn is_complex_not_pure(sel: &ComplexSelector) -> bool {
             sel.children.iter().all(|sel| match sel {
@@ -906,7 +906,7 @@ impl swc_core::css::visit::Visit for CssValidator {
 }
 
 /// We only vist top-level selectors.
-impl lightningcss::visitor::Visitor<'_> for CssValidator {
+impl lightningcss::visitor::Visitor<'_> for CssModuleValidator {
     type Error = ();
 
     fn visit_types(&self) -> lightningcss::visitor::VisitTypes {
@@ -1183,7 +1183,7 @@ mod tests {
         css::{ast::Stylesheet, parser::parser::ParserConfig, visit::VisitWith},
     };
 
-    use super::{CssError, CssValidator};
+    use super::{CssError, CssModuleValidator};
 
     fn lint_lightningcss(code: &str) -> Vec<CssError> {
         let mut ss = StyleSheet::parse(
@@ -1198,7 +1198,7 @@ mod tests {
         )
         .unwrap();
 
-        let mut validator = CssValidator::default();
+        let mut validator = CssModuleValidator::default();
         ss.visit(&mut validator).unwrap();
         validator.validate_done();
 
@@ -1221,7 +1221,7 @@ mod tests {
         )
         .unwrap();
 
-        let mut validator = CssValidator::default();
+        let mut validator = CssModuleValidator::default();
         ss.visit_with(&mut validator);
         validator.validate_done();
 
