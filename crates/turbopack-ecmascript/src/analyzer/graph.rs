@@ -647,6 +647,7 @@ impl EvalContext {
 struct Analyzer<'a> {
     data: &'a mut VarGraph,
 
+    #[allow(clippy::vec_box)]
     effects: Vec<Box<Effect>>,
 
     eval_context: &'a EvalContext,
@@ -713,7 +714,7 @@ impl Analyzer<'_> {
 
     #[inline]
     fn add_effect(&mut self, effect: Effect) {
-        self.effects.push(Box::new(effect));
+        self.effects.push(effect);
     }
 
     fn check_iife<'ast: 'r, 'r>(
