@@ -516,7 +516,7 @@ impl Subscriber {
     }
 }
 
-async fn discovery_packages(repo_root: AbsoluteSystemPathBuf) -> PackageState {
+async fn discover_packages(repo_root: AbsoluteSystemPathBuf) -> PackageState {
     // If we're rediscovering everything, we need to rediscover the package manager.
     // It may have changed if a lockfile changed or package.json changed.
     let discovery = match LocalPackageDiscoveryBuilder::new(repo_root.clone(), None, None).build() {
