@@ -41,8 +41,11 @@ fn find_root(mut node: NodeRef) -> NodeRef {
     }
 }
 
-fn check_invariants<'a>(ctx: &NodeAggregationContext<'a>, node_ids: impl Iterator<Item = NodeRef>) {
-    let mut queue = node_ids.collect::<Vec<_>>();
+fn check_invariants<'a>(
+    ctx: &NodeAggregationContext<'a>,
+    node_ids: impl IntoIterator<Item = NodeRef>,
+) {
+    let mut queue = node_ids.into_iter().collect::<Vec<_>>();
     // print(ctx, &queue[0], true);
     let mut visited = HashSet::new();
     while let Some(node_id) = queue.pop() {
@@ -250,6 +253,33 @@ impl Node {
             &NodeRef(self.clone()),
             &NodeRef(child),
         );
+    }
+
+    fn prepare_add_child<'c>(
+        self: &Arc<Node>,
+        aggregation_context: &'c NodeAggregationContext<'c>,
+        child: Arc<Node>,
+    ) -> impl PreparedOperation<NodeAggregationContext<'c>> {
+        let mut guard = self.inner.lock();
+        guard.children.push(child.clone());
+        guard.aggregation_node.handle_new_edge(
+            aggregation_context,
+            &NodeRef(self.clone()),
+            &NodeRef(child),
+        )
+    }
+
+    fn prepare_aggregation_number<'c>(
+        self: &Arc<Node>,
+        aggregation_context: &'c NodeAggregationContext<'c>,
+        aggregation_number: u32,
+    ) -> impl PreparedOperation<NodeAggregationContext<'c>> {
+        let mut guard = self.inner.lock();
+        guard.aggregation_node.increase_aggregation_number(
+            aggregation_context,
+            &NodeRef(self.clone()),
+            aggregation_number,
+        )
     }
 
     fn remove_child(
@@ -734,7 +764,50 @@ fn many_children() {
     // print(&ctx, &root, false);
 }
 
-// #[test]
+#[test]
+fn concurrent_modification() {
+    let something_with_lifetime = 0;
+    let ctx = NodeAggregationContext {
+        additions: AtomicU32::new(0),
+        something_with_lifetime: &something_with_lifetime,
+        add_value: true,
+    };
+    let root1 = Node::new(1);
+    let root2 = Node::new(2);
+    let helper = Node::new(3);
+    let inner_node = Node::new(10);
+    let outer_node1 = Node::new(11);
+    let outer_node2 = Node::new(12);
+    let outer_node3 = Node::new(13);
+    let outer_node4 = Node::new(14);
+    inner_node.add_child(&ctx, outer_node1.clone());
+    inner_node.add_child(&ctx, outer_node2.clone());
+    root2.add_child(&ctx, helper.clone());
+    outer_node1.prepare_aggregation_number(&ctx, 7).apply(&ctx);
+    outer_node3.prepare_aggregation_number(&ctx, 7).apply(&ctx);
+    root1.prepare_aggregation_number(&ctx, 8).apply(&ctx);
+    root2.prepare_aggregation_number(&ctx, 4).apply(&ctx);
+    helper.prepare_aggregation_number(&ctx, 3).apply(&ctx);
+
+    let add_job1 = root1.prepare_add_child(&ctx, inner_node.clone());
+    let add_job2 = inner_node.prepare_add_child(&ctx, outer_node3.clone());
+    let add_job3 = inner_node.prepare_add_child(&ctx, outer_node4.clone());
+    let add_job4 = helper.prepare_add_child(&ctx, inner_node.clone());
+
+    add_job4.apply(&ctx);
+    print_all(&ctx, [root1.clone(), root2.clone()].map(NodeRef), true);
+    add_job3.apply(&ctx);
+    print_all(&ctx, [root1.clone(), root2.clone()].map(NodeRef), true);
+    add_job2.apply(&ctx);
+    print_all(&ctx, [root1.clone(), root2.clone()].map(NodeRef), true);
+    add_job1.apply(&ctx);
+
+    print_all(&ctx, [root1.clone(), root2.clone()].map(NodeRef), true);
+
+    check_invariants(&ctx, [root1, root2].map(NodeRef));
+}
+
+#[test]
 fn fuzzy_new() {
     for size in [10, 50, 100, 200, 1000] {
         for _ in 0..1000 {
@@ -754,7 +827,7 @@ fn fuzzy(#[case] seed: u32, #[case] count: u32) {
     let ctx = NodeAggregationContext {
         additions: AtomicU32::new(0),
         something_with_lifetime: &something_with_lifetime,
-        add_value: false,
+        add_value: true,
     };
 
     let mut seed_buffer = [0; 32];
@@ -799,6 +872,17 @@ fn fuzzy(#[case] seed: u32, #[case] count: u32) {
     for (parent, child) in edges {
         nodes[parent].remove_child(&ctx, &nodes[child]);
     }
+
+    assert_eq!(aggregation_data(&ctx, &NodeRef(nodes[0].clone())).value, 0);
+
+    check_invariants(&ctx, nodes.iter().cloned().map(NodeRef));
+
+    for node in nodes {
+        let lock = node.inner.lock();
+        if let AggregationNode::Aggegating(a) = &lock.aggregation_node {
+            assert_eq!(a.data.value, lock.value as i32);
+        }
+    }
 }
 
 fn print(aggregation_context: &NodeAggregationContext<'_>, root: &NodeRef, show_internal: bool) {
@@ -812,7 +896,12 @@ fn print_all(
 ) {
     println!("digraph {{");
     print_graph(aggregation_context, nodes, show_internal, |item| {
-        format!("#{}", item.0.inner.lock().value)
+        let lock = item.0.inner.lock();
+        if let AggregationNode::Aggegating(a) = &lock.aggregation_node {
+            format!("#{} [{}]", lock.value, a.data.value)
+        } else {
+            format!("#{}", lock.value)
+        }
     });
     println!("\n}}");
 }
