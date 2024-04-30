@@ -25,7 +25,7 @@ use which::which;
 use crate::{
     discovery,
     package_json::{self, PackageJson},
-    package_manager::{bun::BunDetector, npm::NpmDetector, pnpm::PnpmDetector, yarn::YarnDetector},
+    package_manager::{pnpm::PnpmDetector, yarn::YarnDetector},
 };
 
 #[derive(Debug, Deserialize)]
@@ -420,10 +420,7 @@ impl PackageManager {
     ///
     /// TODO: consider if this method should not need an Option, and possibly be
     /// a method on PackageJSON
-    pub fn get_package_manager(
-        repo_root: &AbsoluteSystemPath,
-        package_json: &PackageJson,
-    ) -> Result<Self, Error> {
+    pub fn get_package_manager(package_json: &PackageJson) -> Result<Self, Error> {
         Self::read_package_manager(package_json)
     }
 
@@ -441,26 +438,6 @@ impl PackageManager {
             "yarn" => Ok(YarnDetector::detect_berry_or_yarn(&version)?),
             "pnpm" => Ok(PnpmDetector::detect_pnpm6_or_pnpm(&version)?),
             _ => Err(Error::UnsupportedPackageManager(manager.to_owned())),
-        }
-    }
-
-    fn detect_package_manager(repo_root: &AbsoluteSystemPath) -> Result<PackageManager, Error> {
-        let mut detected_package_managers = PnpmDetector::new(repo_root)
-            .chain(NpmDetector::new(repo_root))
-            .chain(YarnDetector::new(repo_root))
-            .chain(BunDetector::new(repo_root))
-            .collect::<Result<Vec<_>, Error>>()?;
-
-        match detected_package_managers.len() {
-            0 => Err(NoPackageManager.into()),
-            1 => Ok(detected_package_managers.pop().unwrap()),
-            _ => {
-                let managers = detected_package_managers
-                    .iter()
-                    .map(|mgr| mgr.to_string())
-                    .collect();
-                Err(Error::MultiplePackageManagers { managers })
-            }
         }
     }
 
@@ -822,31 +799,6 @@ mod tests {
         package_json.package_manager = Some("bun@1.0.1".to_string());
         let package_manager = PackageManager::read_package_manager(&package_json)?;
         assert_eq!(package_manager, PackageManager::Bun);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_detect_multiple_package_managers() -> Result<(), Error> {
-        let repo_root = tempdir()?;
-        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
-
-        let package_lock_json_path = repo_root.path().join(npm::LOCKFILE);
-        File::create(&package_lock_json_path)?;
-        let pnpm_lock_path = repo_root.path().join(pnpm::LOCKFILE);
-        File::create(pnpm_lock_path)?;
-
-        let error = PackageManager::detect_package_manager(&repo_root_path).unwrap_err();
-        assert_eq!(
-            error.to_string(),
-            "We detected multiple package managers in your repository: pnpm, npm. Please remove \
-             one of them."
-        );
-
-        fs::remove_file(&package_lock_json_path)?;
-
-        let package_manager = PackageManager::detect_package_manager(&repo_root_path)?;
-        assert_eq!(package_manager, PackageManager::Pnpm);
 
         Ok(())
     }

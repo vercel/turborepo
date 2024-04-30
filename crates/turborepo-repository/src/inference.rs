@@ -77,8 +77,7 @@ impl RepoState {
                     .ok()
                     .map(|package_json| {
                         // FIXME: We should save this package manager that we detected
-                        let package_manager =
-                            PackageManager::get_package_manager(path, &package_json);
+                        let package_manager = PackageManager::get_package_manager(&package_json);
                         let workspace_globs = package_manager
                             .as_ref()
                             .ok()

@@ -780,7 +780,9 @@ mod tests {
             .unwrap();
         repo_root
             .join_component("package.json")
-            .create_with_contents(r#"{"workspaces": ["packages/*"]}"#)
+            .create_with_contents(
+                r#"{"workspaces": ["packages/*"], "packageManager": "npm@10.0.0"}"#,
+            )
             .unwrap();
         repo_root
             .join_component("package-lock.json")
