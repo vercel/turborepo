@@ -1,9 +1,13 @@
-use std::{cell::RefCell, collections::HashSet};
+use std::{cell::RefCell, collections::HashSet, sync::Arc};
 
 use futures::StreamExt;
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
-use tokio::{select, sync::Mutex, task::JoinHandle};
+use tokio::{
+    select,
+    sync::{Mutex, Notify},
+    task::JoinHandle,
+};
 use turborepo_repository::package_graph::PackageName;
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
@@ -135,11 +139,14 @@ impl WatchClient {
         // If we used a std::sync::Mutex, we could deadlock by spinning the lock
         // and not yielding back to the tokio runtime.
         let changed_packages = Mutex::new(RefCell::new(ChangedPackages::default()));
+        let notify_run = Arc::new(Notify::new());
+        let notify_event = notify_run.clone();
 
         let event_fut = async {
             while let Some(event) = events.next().await {
                 let event = event?;
                 Self::handle_change_event(&changed_packages, event.event.unwrap()).await?;
+                notify_event.notify_one();
             }
 
             Err(Error::ConnectionClosed)
@@ -147,6 +154,7 @@ impl WatchClient {
 
         let run_fut = async {
             loop {
+                notify_run.notified().await;
                 let changed_packages_guard = changed_packages.lock().await;
                 if !changed_packages_guard.borrow().is_empty() {
                     let changed_packages = changed_packages_guard.take();
