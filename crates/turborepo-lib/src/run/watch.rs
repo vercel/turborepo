@@ -147,8 +147,10 @@ impl WatchClient {
 
         let run_fut = async {
             loop {
-                if !changed_packages.lock().await.borrow().is_empty() {
-                    self.execute_run(&changed_packages).await?;
+                let changed_packages_guard = changed_packages.lock().await;
+                if !changed_packages_guard.borrow().is_empty() {
+                    let changed_packages = changed_packages_guard.take();
+                    self.execute_run(changed_packages).await?;
                 }
             }
         };
@@ -200,11 +202,7 @@ impl WatchClient {
         Ok(())
     }
 
-    async fn execute_run(
-        &mut self,
-        changed_packages: &Mutex<RefCell<ChangedPackages>>,
-    ) -> Result<i32, Error> {
-        let changed_packages = changed_packages.lock().await.take();
+    async fn execute_run(&mut self, changed_packages: ChangedPackages) -> Result<i32, Error> {
         // Should we recover here?
         match changed_packages {
             ChangedPackages::Some(packages) => {
