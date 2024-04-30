@@ -11,7 +11,6 @@ use lightningcss::{
     stylesheet::{ParserOptions, PrinterOptions, StyleSheet, ToCssResult},
     targets::{Features, Targets},
     values::url::Url,
-    visit_types,
     visitor::Visit,
 };
 use once_cell::sync::Lazy;
@@ -572,10 +571,7 @@ async fn process_content(
             ) {
                 Ok(mut ss) => {
                     if matches!(ty, CssModuleAssetType::Module) {
-                        let mut validator = CssValidator {
-                            errors: Vec::new(),
-                            used_grid_areas: Default::default(),
-                        };
+                        let mut validator = CssValidator::default();
                         ss.visit(&mut validator).unwrap();
                         validator.validate_done();
 
@@ -680,10 +676,7 @@ async fn process_content(
         }
 
         if matches!(ty, CssModuleAssetType::Module) {
-            let mut validator = CssValidator {
-                errors: vec![],
-                used_grid_areas: Default::default(),
-            };
+            let mut validator = CssValidator::default();
             ss.visit_with(&mut validator);
             validator.validate_done();
 
@@ -739,12 +732,22 @@ async fn process_content(
 /// ```
 ///
 /// is wrong for a css module because it doesn't have a class name.
+#[derive(Default)]
 struct CssValidator {
     errors: Vec<CssError>,
     used_grid_areas: HashSet<String>,
+    used_grid_templates: HashSet<String>,
 }
 impl CssValidator {
-    fn validate_done(&mut self) {}
+    fn validate_done(&mut self) {
+        for grid_area in &self.used_grid_areas {
+            if !self.used_grid_templates.contains(grid_area) {
+                self.errors.push(CssError::UnknownGridAreaInModules {
+                    name: grid_area.to_string(),
+                });
+            }
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -915,12 +918,26 @@ impl lightningcss::visitor::Visitor<'_> for CssValidator {
         property: &mut lightningcss::properties::Property,
     ) -> Result<(), Self::Error> {
         match property {
-            lightningcss::properties::Property::GridArea(p) => match p {},
+            lightningcss::properties::Property::GridArea(p) => {
+                for line in [&p.row_start, &p.row_end, &p.column_start, &p.column_end] {
+                    if let lightningcss::properties::grid::GridLine::Area { name } = line {
+                        self.used_grid_areas.insert(name.to_string());
+                    }
+                }
+            }
 
-            lightningcss::properties::Property::GridTemplateAreas(p) => match p {},
+            lightningcss::properties::Property::GridTemplateAreas(
+                lightningcss::properties::grid::GridTemplateAreas::Areas { areas, .. },
+            ) => {
+                for area in areas.iter().flatten() {
+                    self.used_grid_templates.insert(area.clone());
+                }
+            }
 
-            _ => Ok(()),
+            _ => {}
         }
+
+        Ok(())
     }
 
     fn visit_selector(
@@ -1181,10 +1198,7 @@ mod tests {
         )
         .unwrap();
 
-        let mut validator = CssValidator {
-            errors: Vec::new(),
-            used_grid_areas: Default::default(),
-        };
+        let mut validator = CssValidator::default();
         ss.visit(&mut validator).unwrap();
         validator.validate_done();
 
@@ -1207,10 +1221,7 @@ mod tests {
         )
         .unwrap();
 
-        let mut validator = CssValidator {
-            errors: Vec::new(),
-            used_grid_areas: Default::default(),
-        };
+        let mut validator = CssValidator::default();
         ss.visit_with(&mut validator);
         validator.validate_done();
 
