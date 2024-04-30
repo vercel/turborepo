@@ -281,8 +281,9 @@ pub enum Error {
     MultiplePackageManagers { managers: Vec<String> },
     #[error(transparent)]
     Semver(#[from] node_semver::SemverError),
-    #[error(transparent)]
-    Which(#[from] which::Error),
+    #[error("{0}: {1}")]
+    // this will be something like "cannot find binary: <thing we tried to find>"
+    Which(which::Error, String),
     #[error("invalid utf8: {0}")]
     Utf8Error(#[from] std::string::FromUtf8Error),
     #[error(transparent)]
@@ -525,7 +526,8 @@ impl PackageManager {
         let lockfile_path = self.lockfile_path(root_path);
         let contents = match self {
             PackageManager::Bun => {
-                Command::new(which("bun")?)
+                let binary = "bun";
+                Command::new(which(binary).map_err(|e| Error::Which(e, binary.to_string()))?)
                     .arg(lockfile_path.to_string())
                     .current_dir(root_path.to_string())
                     .output()?

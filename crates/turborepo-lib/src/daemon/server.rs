@@ -18,7 +18,7 @@ use semver::Version;
 use thiserror::Error;
 use tokio::{
     select,
-    sync::{mpsc, oneshot},
+    sync::{broadcast::error::RecvError, mpsc, oneshot},
     task::JoinHandle,
 };
 use tokio_stream::wrappers::ReceiverStream;
@@ -594,7 +594,8 @@ impl proto::turbod_server::Turbod for TurboGrpcServiceInner {
             .package_changes_watcher
             .package_changes()
             .await;
-        let (tx, rx) = mpsc::channel(1);
+
+        let (tx, rx) = mpsc::channel(1024);
 
         tx.send(Ok(proto::PackageChangeEvent {
             event: Some(proto::package_change_event::Event::RediscoverPackages(
@@ -607,6 +608,14 @@ impl proto::turbod_server::Turbod for TurboGrpcServiceInner {
         tokio::spawn(async move {
             loop {
                 let event = match package_changes_rx.recv().await {
+                    Err(RecvError::Lagged(_)) => {
+                        warn!("package changes stream lagged");
+                        proto::PackageChangeEvent {
+                            event: Some(proto::package_change_event::Event::RediscoverPackages(
+                                proto::RediscoverPackages {},
+                            )),
+                        }
+                    }
                     Err(err) => proto::PackageChangeEvent {
                         event: Some(proto::package_change_event::Event::Error(
                             proto::PackageChangeError {

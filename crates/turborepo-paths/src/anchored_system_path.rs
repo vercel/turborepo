@@ -152,6 +152,15 @@ impl AnchoredSystemPath {
             }
         }
     }
+
+    // Note that this defers to Path::strip_prefix, which operates on components,
+    // and therefore enforces boundaries at path dividers.
+    pub fn strip_prefix(&self, other: &Self) -> Option<AnchoredSystemPathBuf> {
+        self.0
+            .strip_prefix(&other.0)
+            .ok()
+            .map(|path| AnchoredSystemPathBuf(path.to_owned()))
+    }
 }
 
 #[cfg(test)]

@@ -14,7 +14,7 @@ const ConfigSchema = z.object({
   telemetry_enabled: z.boolean(),
   telemetry_id: z.string(),
   telemetry_salt: z.string(),
-  telemetry_alerted: z.date().optional(),
+  telemetry_alerted: z.string().optional(),
 });
 
 type Config = z.infer<typeof ConfigSchema>;
@@ -188,7 +188,7 @@ export class TelemetryConfig {
       return true;
     }
 
-    this.config.telemetry_alerted = new Date();
+    this.config.telemetry_alerted = new Date().toISOString();
     this.tryWrite();
     return true;
   }
