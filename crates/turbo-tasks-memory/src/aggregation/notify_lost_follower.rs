@@ -1,4 +1,6 @@
-use std::hash::Hash;
+use std::{hash::Hash, thread::yield_now};
+
+use anyhow::{bail, Result};
 
 use super::{
     uppers::get_aggregated_remove_change, AggegatingNode, AggregationContext, AggregationNode,
@@ -96,14 +98,53 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNotifyLostFollower<
                             return;
                         }
                         RemoveIfEntryResult::NotPresent => {
-                            drop(follower);
-                            if try_count > 100 {
+                            if try_count > 10000 {
+                                println!(
+                                    "Follower: {}, {}",
+                                    follower.aggregation_number(),
+                                    follower.uppers().get_count(&upper_id)
+                                );
+                                drop(follower);
+                                let upper = ctx.node(&upper_id);
+                                let AggregationNode::Aggegating(aggregating) = &*upper else {
+                                    unreachable!();
+                                };
+                                println!(
+                                    "Upper: {}, {}",
+                                    upper.aggregation_number(),
+                                    aggregating.followers.get_count(&follower_id)
+                                );
+                                drop(upper);
+                                let path = find_path(ctx, &upper_id, &follower_id).unwrap();
+                                println!("Path len: {}", path.len());
+                                for (i, node_id) in path.iter().enumerate() {
+                                    let node = ctx.node(&node_id);
+                                    println!(
+                                        "Node {i}: {}, uppers: {:?}, followers: {:?}",
+                                        node.aggregation_number(),
+                                        node.uppers()
+                                            .iter()
+                                            .filter_map(|id| {
+                                                path.iter().position(|path_id| path_id == id)
+                                            })
+                                            .collect::<Vec<_>>(),
+                                        node.followers().map_or(vec![], |followers| {
+                                            followers
+                                                .iter()
+                                                .filter_map(|id| {
+                                                    path.iter().position(|path_id| path_id == id)
+                                                })
+                                                .collect::<Vec<_>>()
+                                        })
+                                    );
+                                }
                                 panic!(
                                     "The graph is malformed, we need to remove either follower or \
                                      upper but neither exists."
                                 );
                                 break;
                             }
+                            drop(follower);
                             // retry, concurrency
                             let mut upper = ctx.node(&upper_id);
                             let AggregationNode::Aggegating(aggregating) = &mut *upper else {
@@ -149,4 +190,25 @@ pub fn notify_lost_follower<C: AggregationContext>(
     let p = upper.notify_lost_follower(ctx, upper_id, follower_id);
     drop(upper);
     p.apply(ctx);
+}
+
+fn find_path<C: AggregationContext>(
+    ctx: &C,
+    start_id: &C::NodeRef,
+    end_id: &C::NodeRef,
+) -> Result<Vec<C::NodeRef>> {
+    let mut queue = vec![(start_id.clone(), vec![])];
+    while let Some((node_id, mut path)) = queue.pop() {
+        let node = ctx.node(&node_id);
+        if node_id == *end_id {
+            path.push(node_id);
+            return Ok(path);
+        }
+        for child_id in node.children() {
+            let mut new_path = path.clone();
+            new_path.push(node_id.clone());
+            queue.push((child_id, new_path));
+        }
+    }
+    bail!("No path found");
 }
