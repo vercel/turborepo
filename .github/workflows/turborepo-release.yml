@@ -115,7 +115,7 @@ jobs:
           - host: ubuntu-latest
             container: ubuntu:xenial
             container-options: "--platform=linux/amd64 --rm"
-            container-setup: "apt-get update && apt-get install -y curl musl-tools sudo"
+            container-setup: "apt-get update && apt-get install -y curl musl-tools sudo unzip"
             target: "x86_64-unknown-linux-musl"
             setup: "apt-get install -y build-essential clang-5.0 lldb-5.0 llvm-5.0-dev libclang-5.0-dev"
           - host: ubuntu-latest
@@ -144,8 +144,9 @@ jobs:
         run: ${{ matrix.settings.container-setup }}
 
       - name: Setup Protoc
-        uses: arduino/setup-protoc@v1.2.0
+        uses: arduino/setup-protoc@v2.1.0
         with:
+          version: "26.x"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup capnproto

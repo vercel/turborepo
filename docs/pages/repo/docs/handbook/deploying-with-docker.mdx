@@ -127,7 +127,9 @@ RUN apk update
 WORKDIR /app
 RUN yarn global add turbo
 COPY . .
-RUN turbo prune web --docker
+
+# Generate a partial monorepo with a pruned lockfile for a target workspace.
+RUN turbo prune web --docker # Assuming "web" is the name entered in the project's package.json: { name: "web" }
 
 # Add lockfile and package.json's of isolated subworkspace
 FROM base AS installer
