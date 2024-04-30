@@ -226,7 +226,7 @@ impl Subscriber {
         let repo_root = self.repo_root.clone();
         tokio::task::spawn(async move {
             debouncer_copy.debounce().await;
-            let state = discovery_packages(repo_root).await;
+            let state = discover_packages(repo_root).await;
             let _ = package_state_tx
                 .send(DiscoveryResult { version, state })
                 .await;
@@ -525,7 +525,6 @@ async fn discover_packages(repo_root: AbsoluteSystemPathBuf) -> PackageState {
     };
     let initial_discovery = match discovery.discover_packages().await {
         Ok(discovery) => discovery,
-        // If we failed the discovery, that's fine, we've reset the values, leave them as None
         Err(e) => {
             tracing::debug!("failed to rediscover packages: {}", e);
             return PackageState::NoPackageManager(e.to_string());
@@ -539,7 +538,6 @@ async fn discover_packages(repo_root: AbsoluteSystemPathBuf) -> PackageState {
     {
         Ok(filter) => filter,
         Err(e) => {
-            // If the globs are invalid, leave everything set to None
             tracing::debug!("failed to get workspace globs: {}", e);
             return PackageState::InvalidGlobs(e.to_string());
         }
