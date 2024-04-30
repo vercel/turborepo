@@ -179,6 +179,8 @@ impl Subscriber {
             return;
         };
 
+        // This just processes the events and puts the changed files into a `Trie`.
+        // Must be fast to avoid lagging the file events channel.
         let event_fut = async {
             loop {
                 match file_events.recv().await {
