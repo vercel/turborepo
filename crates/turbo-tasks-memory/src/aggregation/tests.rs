@@ -13,10 +13,7 @@ use std::{
 use indexmap::IndexSet;
 use nohash_hasher::IsEnabled;
 use parking_lot::{Mutex, MutexGuard};
-use rand::{
-    rngs::{SmallRng, StdRng},
-    Rng, SeedableRng,
-};
+use rand::{rngs::SmallRng, Rng, SeedableRng};
 use ref_cast::RefCast;
 use rstest::*;
 
@@ -59,11 +56,7 @@ fn check_invariants<'a>(
         let aggregation_number = node.aggregation_number();
         let node_value = node.guard.value;
         let uppers = match &*node {
-            AggregationNode::Leaf {
-                aggregation_number,
-                uppers,
-                ..
-            } => {
+            AggregationNode::Leaf { uppers, .. } => {
                 let uppers = uppers.iter().cloned().collect::<StackVec<_>>();
                 drop(node);
                 uppers
@@ -77,24 +70,64 @@ fn check_invariants<'a>(
                     .collect::<StackVec<_>>();
                 drop(node);
                 for follower_id in followers {
+                    let follower_aggregation_number;
+                    let follower_uppers;
+                    let follower_value;
                     {
                         let follower = ctx.node(&follower_id);
-                        let follower_aggregation_number = follower.aggregation_number();
-                        let condition = follower_aggregation_number > aggregation_number
-                            || aggregation_number == u32::MAX;
-                        if !condition {
-                            let msg = format!(
-                                "follower #{} {} -> #{} {}",
-                                node_value,
-                                aggregation_number,
-                                follower.guard.value,
-                                follower_aggregation_number
-                            );
-                            drop(follower);
-                            print(ctx, &find_root(follower_id.clone()), true);
-                            panic!("{msg}");
-                        }
+
+                        follower_aggregation_number = follower.aggregation_number();
+                        follower_uppers =
+                            follower.uppers().iter().cloned().collect::<StackVec<_>>();
+                        follower_value = follower.guard.value;
                     }
+
+                    // A follower should have a bigger aggregation number
+                    let condition = follower_aggregation_number > aggregation_number
+                        || aggregation_number == u32::MAX;
+                    if !condition {
+                        let msg = format!(
+                            "follower #{} {} -> #{} {}",
+                            node_value,
+                            aggregation_number,
+                            follower_value,
+                            follower_aggregation_number
+                        );
+                        print(ctx, &find_root(node_id.clone()), true);
+                        panic!("{msg}");
+                    }
+
+                    // All followers should also be connected to all uppers
+                    let missing_uppers = uppers.iter().filter(|&upper_id| {
+                        if follower_uppers
+                            .iter()
+                            .any(|follower_upper_id| follower_upper_id == upper_id)
+                        {
+                            return false;
+                        }
+                        let upper = ctx.node(upper_id);
+                        if let Some(followers) = upper.followers() {
+                            !followers
+                                .iter()
+                                .any(|follower_upper_id| follower_upper_id == &follower_id)
+                        } else {
+                            false
+                        }
+                    });
+                    for missing_upper in missing_uppers {
+                        let upper_value = {
+                            let upper = ctx.node(missing_upper);
+                            upper.guard.value
+                        };
+                        let msg = format!(
+                            "follower #{} -> #{} is not connected to upper #{}",
+                            node_value, follower_value, upper_value,
+                        );
+                        print(ctx, &find_root(node_id.clone()), true);
+                        panic!("{msg}");
+                    }
+
+                    // And visit them too
                     if visited.insert(follower_id.clone()) {
                         queue.push(follower_id);
                     }
