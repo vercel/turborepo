@@ -1240,6 +1240,11 @@ mod tests {
         assert_ne!(lint_swc(code), vec![], "swc: {code}");
     }
 
+    #[track_caller]
+    fn assert_lint_failure_only_lightning_css(code: &str) {
+        assert_ne!(lint_lightningcss(code), vec![], "lightningcss: {code}");
+    }
+
     #[test]
     fn css_module_pure_lint() {
         assert_lint_success(
@@ -1369,6 +1374,18 @@ mod tests {
             r#"
         .item1 {
             grid-area: myArea;
+        }
+        .grid-container {
+            display: grid;
+            grid-template-areas: "myArea myArea";
+        }
+        "#,
+        );
+
+        assert_lint_failure_only_lightning_css(
+            r#"
+        .item1 {
+            grid-area: my;
         }
         .grid-container {
             display: grid;
