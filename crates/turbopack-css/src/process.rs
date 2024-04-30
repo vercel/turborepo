@@ -739,6 +739,7 @@ struct CssValidator {
 enum CssError {
     SwcSelectorInModuleNotPure { span: Span },
     LightningCssSelectorInModuleNotPure { selector: String },
+    UnknownGridAreaInModules { name: String },
 }
 
 impl CssError {
@@ -761,6 +762,18 @@ impl CssError {
                 ParsingIssue {
                     file,
                     msg: Vc::cell(format!("{CSS_MODULE_ERROR}, (lightningcss, {selector})")),
+                    source: Vc::cell(None),
+                }
+                .cell()
+                .emit();
+            }
+
+            CssError::UnknownGridAreaInModules { name } => {
+                ParsingIssue {
+                    file,
+                    msg: Vc::cell(format!(
+                        "Cannot find grid-template-areas with name '{name}'"
+                    )),
                     source: Vc::cell(None),
                 }
                 .cell()
