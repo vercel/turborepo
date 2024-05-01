@@ -235,6 +235,8 @@ impl HTTPCache {
 
 #[cfg(test)]
 mod test {
+    use std::time::Duration;
+
     use anyhow::Result;
     use futures::future::try_join_all;
     use tempfile::tempdir;
@@ -276,7 +278,13 @@ mod test {
         let files = &test_case.files;
         let duration = test_case.duration;
 
-        let api_client = APIClient::new(format!("http://localhost:{}", port), 200, "2.0.0", true)?;
+        let api_client = APIClient::new(
+            format!("http://localhost:{}", port),
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            true,
+        )?;
         let opts = CacheOpts::default();
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
