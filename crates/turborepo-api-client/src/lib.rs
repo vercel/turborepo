@@ -2,9 +2,8 @@
 #![feature(error_generic_member_access)]
 #![deny(clippy::all)]
 
-use std::{backtrace::Backtrace, env};
+use std::{backtrace::Backtrace, env, future::Future};
 
-use async_trait::async_trait;
 use lazy_static::lazy_static;
 use regex::Regex;
 pub use reqwest::Response;
@@ -31,37 +30,47 @@ lazy_static! {
         Regex::new(r"(?i)(?:^|,) *authorization *(?:,|$)").unwrap();
 }
 
-#[async_trait]
 pub trait Client {
-    async fn get_user(&self, token: &str) -> Result<UserResponse>;
-    async fn get_teams(&self, token: &str) -> Result<TeamsResponse>;
-    async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>>;
+    fn get_user(&self, token: &str) -> impl Future<Output = Result<UserResponse>> + Send;
+    fn get_teams(&self, token: &str) -> impl Future<Output = Result<TeamsResponse>> + Send;
+    fn get_team(
+        &self,
+        token: &str,
+        team_id: &str,
+    ) -> impl Future<Output = Result<Option<Team>>> + Send;
     fn add_ci_header(request_builder: RequestBuilder) -> RequestBuilder;
-    async fn get_spaces(&self, token: &str, team_id: Option<&str>) -> Result<SpacesResponse>;
-    async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser>;
-    async fn handle_403(response: Response) -> Error;
+    fn get_spaces(
+        &self,
+        token: &str,
+        team_id: Option<&str>,
+    ) -> impl Future<Output = Result<SpacesResponse>> + Send;
+    fn verify_sso_token(
+        &self,
+        token: &str,
+        token_name: &str,
+    ) -> impl Future<Output = Result<VerifiedSsoUser>> + Send;
+    fn handle_403(response: Response) -> impl Future<Output = Error> + Send;
     fn make_url(&self, endpoint: &str) -> Result<Url>;
 }
 
-#[async_trait]
 pub trait CacheClient {
-    async fn get_artifact(
+    fn get_artifact(
         &self,
         hash: &str,
         token: &str,
         team_id: Option<&str>,
         team_slug: Option<&str>,
         method: Method,
-    ) -> Result<Option<Response>>;
-    async fn fetch_artifact(
+    ) -> impl Future<Output = Result<Option<Response>>> + Send;
+    fn fetch_artifact(
         &self,
         hash: &str,
         token: &str,
         team_id: Option<&str>,
         team_slug: Option<&str>,
-    ) -> Result<Option<Response>>;
+    ) -> impl Future<Output = Result<Option<Response>>> + Send;
     #[allow(clippy::too_many_arguments)]
-    async fn put_artifact(
+    fn put_artifact(
         &self,
         hash: &str,
         artifact_body: &[u8],
@@ -70,26 +79,28 @@ pub trait CacheClient {
         token: &str,
         team_id: Option<&str>,
         team_slug: Option<&str>,
-    ) -> Result<()>;
-    async fn artifact_exists(
+    ) -> impl Future<Output = Result<()>> + Send;
+    fn artifact_exists(
         &self,
         hash: &str,
         token: &str,
         team_id: Option<&str>,
         team_slug: Option<&str>,
-    ) -> Result<Option<Response>>;
-    async fn get_caching_status(
+    ) -> impl Future<Output = Result<Option<Response>>> + Send;
+    fn get_caching_status(
         &self,
         token: &str,
         team_id: Option<&str>,
         team_slug: Option<&str>,
-    ) -> Result<CachingStatusResponse>;
+    ) -> impl Future<Output = Result<CachingStatusResponse>> + Send;
 }
 
-#[async_trait]
 pub trait TokenClient {
-    async fn get_metadata(&self, token: &str) -> Result<ResponseTokenMetadata>;
-    async fn delete_token(&self, token: &str) -> Result<()>;
+    fn get_metadata(
+        &self,
+        token: &str,
+    ) -> impl Future<Output = Result<ResponseTokenMetadata>> + Send;
+    fn delete_token(&self, token: &str) -> impl Future<Output = Result<()>> + Send;
 }
 
 #[derive(Clone)]
@@ -113,7 +124,6 @@ pub fn is_linked(api_auth: &Option<APIAuth>) -> bool {
         .map_or(false, |api_auth| api_auth.is_linked())
 }
 
-#[async_trait]
 impl Client for APIClient {
     async fn get_user(&self, token: &str) -> Result<UserResponse> {
         let url = self.make_url("/v2/user")?;
@@ -262,7 +272,6 @@ impl Client for APIClient {
     }
 }
 
-#[async_trait]
 impl CacheClient for APIClient {
     async fn get_artifact(
         &self,
@@ -414,7 +423,6 @@ impl CacheClient for APIClient {
     }
 }
 
-#[async_trait]
 impl TokenClient for APIClient {
     async fn get_metadata(&self, token: &str) -> Result<ResponseTokenMetadata> {
         let endpoint = "/v5/user/tokens/current";
@@ -464,9 +472,9 @@ impl TokenClient for APIClient {
                         message: body.error.message,
                     });
                 }
-                return Err(Error::ForbiddenToken {
+                Err(Error::ForbiddenToken {
                     url: self.make_url(endpoint)?.to_string(),
-                });
+                })
             }
             _ => Err(response.error_for_status().unwrap_err().into()),
         }
@@ -516,9 +524,9 @@ impl TokenClient for APIClient {
                         message: body.error.message,
                     });
                 }
-                return Err(Error::ForbiddenToken {
+                Err(Error::ForbiddenToken {
                     url: self.make_url(endpoint)?.to_string(),
-                });
+                })
             }
             _ => Err(response.error_for_status().unwrap_err().into()),
         }
