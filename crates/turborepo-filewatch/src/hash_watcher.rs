@@ -392,6 +392,14 @@ impl Subscriber {
                     let _ = tx.send(Err(Error::UnsupportedGlob));
                     trace!("unsupported glob in query {:?}", spec);
                     return;
+                } else if spec.inputs.is_some() {
+                    // TODO(gsoltis): re-add support for inputs once we can handle $TURBO_DEFAULT$
+                    let _ = tx.send(Err(Error::UnsupportedGlob));
+                    trace!(
+                        "inputs currently unsupported for daemon file hashing {:?}",
+                        spec
+                    );
+                    return;
                 }
                 if let Some(state) = hashes.get_mut(&spec) {
                     match state {
@@ -636,7 +644,6 @@ mod tests {
     use super::{FileHashes, HashState};
     use crate::{
         cookies::CookieWriter,
-        globwatcher::GlobSet,
         hash_watcher::{HashSpec, HashWatcher},
         package_watcher::PackageWatcher,
         FileSystemWatcher,
@@ -1034,115 +1041,120 @@ mod tests {
         assert!(result.is_empty());
     }
 
-    #[tokio::test]
-    #[tracing_test::traced_test]
-    async fn test_basic_file_changes_with_inputs() {
-        let (_tmp, _repo, repo_root) = setup_fixture();
+    // #[tokio::test]
+    // #[tracing_test::traced_test]
+    // async fn test_basic_file_changes_with_inputs() {
+    //     let (_tmp, _repo, repo_root) = setup_fixture();
 
-        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+    //     let watcher =
+    // FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
 
-        let recv = watcher.watch();
-        let cookie_writer = CookieWriter::new(
-            watcher.cookie_dir(),
-            Duration::from_millis(100),
-            recv.clone(),
-        );
+    //     let recv = watcher.watch();
+    //     let cookie_writer = CookieWriter::new(
+    //         watcher.cookie_dir(),
+    //         Duration::from_millis(100),
+    //         recv.clone(),
+    //     );
 
-        let scm = SCM::new(&repo_root);
-        assert!(!scm.is_manual());
-        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer).unwrap();
-        let package_discovery = package_watcher.watch_discovery();
-        let hash_watcher =
-            HashWatcher::new(repo_root.clone(), package_discovery, watcher.watch(), scm);
+    //     let scm = SCM::new(&repo_root);
+    //     assert!(!scm.is_manual());
+    //     let package_watcher = PackageWatcher::new(repo_root.clone(), recv,
+    // cookie_writer).unwrap();     let package_discovery =
+    // package_watcher.watch_discovery();     let hash_watcher =
+    //         HashWatcher::new(repo_root.clone(), package_discovery,
+    // watcher.watch(), scm);
 
-        let foo_path = repo_root.join_components(&["packages", "foo"]);
-        let foo_inputs = GlobSet::from_raw(vec!["*-file".to_string()], vec![]).unwrap();
-        let foo_spec = HashSpec {
-            package_path: repo_root.anchor(&foo_path).unwrap(),
-            inputs: Some(foo_inputs),
-        };
-        // package.json is always included, whether it matches your inputs or not.
-        retry_get_hash(
-            &hash_watcher,
-            foo_spec.clone(),
-            Duration::from_secs(2),
-            make_expected(vec![
-                // Note that without inputs, we'd also get the .gitignore file
-                ("foo-file", "9317666a2e7b729b740c706ab79724952c97bde4"),
-                ("package.json", "395351bdd7167f351af3396d3225ebe97a7a4d13"),
-            ]),
-        )
-        .await;
+    //     let foo_path = repo_root.join_components(&["packages", "foo"]);
+    //     let foo_inputs = GlobSet::from_raw(vec!["*-file".to_string()],
+    // vec![]).unwrap();     let foo_spec = HashSpec {
+    //         package_path: repo_root.anchor(&foo_path).unwrap(),
+    //         inputs: Some(foo_inputs),
+    //     };
+    //     // package.json is always included, whether it matches your inputs or
+    // not.     retry_get_hash(
+    //         &hash_watcher,
+    //         foo_spec.clone(),
+    //         Duration::from_secs(2),
+    //         make_expected(vec![
+    //             // Note that without inputs, we'd also get the .gitignore
+    // file             ("foo-file",
+    // "9317666a2e7b729b740c706ab79724952c97bde4"),
+    // ("package.json", "395351bdd7167f351af3396d3225ebe97a7a4d13"),
+    //         ]),
+    //     )
+    //     .await;
 
-        // update foo-file
-        let foo_file_path = repo_root.join_components(&["packages", "foo", "foo-file"]);
-        foo_file_path
-            .create_with_contents("new foo-file contents")
-            .unwrap();
-        retry_get_hash(
-            &hash_watcher,
-            foo_spec.clone(),
-            Duration::from_secs(2),
-            make_expected(vec![
-                ("foo-file", "5f6796bbd23dcdc9d30d07a2d8a4817c34b7f1e7"),
-                ("package.json", "395351bdd7167f351af3396d3225ebe97a7a4d13"),
-            ]),
-        )
-        .await;
-    }
+    //     // update foo-file
+    //     let foo_file_path = repo_root.join_components(&["packages", "foo",
+    // "foo-file"]);     foo_file_path
+    //         .create_with_contents("new foo-file contents")
+    //         .unwrap();
+    //     retry_get_hash(
+    //         &hash_watcher,
+    //         foo_spec.clone(),
+    //         Duration::from_secs(2),
+    //         make_expected(vec![
+    //             ("foo-file", "5f6796bbd23dcdc9d30d07a2d8a4817c34b7f1e7"),
+    //             ("package.json", "395351bdd7167f351af3396d3225ebe97a7a4d13"),
+    //         ]),
+    //     )
+    //     .await;
+    // }
 
-    #[tokio::test]
-    #[tracing_test::traced_test]
-    async fn test_switch_branch_with_inputs() {
-        let (_tmp, repo, repo_root) = setup_fixture();
+    // #[tokio::test]
+    // #[tracing_test::traced_test]
+    // async fn test_switch_branch_with_inputs() {
+    //     let (_tmp, repo, repo_root) = setup_fixture();
 
-        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+    //     let watcher =
+    // FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
 
-        let recv = watcher.watch();
-        let cookie_writer = CookieWriter::new(
-            watcher.cookie_dir(),
-            Duration::from_millis(100),
-            recv.clone(),
-        );
+    //     let recv = watcher.watch();
+    //     let cookie_writer = CookieWriter::new(
+    //         watcher.cookie_dir(),
+    //         Duration::from_millis(100),
+    //         recv.clone(),
+    //     );
 
-        let scm = SCM::new(&repo_root);
-        assert!(!scm.is_manual());
-        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer).unwrap();
-        let package_discovery = package_watcher.watch_discovery();
-        let hash_watcher =
-            HashWatcher::new(repo_root.clone(), package_discovery, watcher.watch(), scm);
+    //     let scm = SCM::new(&repo_root);
+    //     assert!(!scm.is_manual());
+    //     let package_watcher = PackageWatcher::new(repo_root.clone(), recv,
+    // cookie_writer).unwrap();     let package_discovery =
+    // package_watcher.watch_discovery();     let hash_watcher =
+    //         HashWatcher::new(repo_root.clone(), package_discovery,
+    // watcher.watch(), scm);
 
-        let bar_path = repo_root.join_components(&["packages", "bar"]);
+    //     let bar_path = repo_root.join_components(&["packages", "bar"]);
 
-        let bar_inputs = GlobSet::from_raw(vec!["*z-file".to_string()], vec![]).unwrap();
-        let bar_spec = HashSpec {
-            package_path: repo_root.anchor(&bar_path).unwrap(),
-            inputs: Some(bar_inputs),
-        };
+    //     let bar_inputs = GlobSet::from_raw(vec!["*z-file".to_string()],
+    // vec![]).unwrap();     let bar_spec = HashSpec {
+    //         package_path: repo_root.anchor(&bar_path).unwrap(),
+    //         inputs: Some(bar_inputs),
+    //     };
 
-        // package.json is always included, whether it matches your inputs or not.
-        retry_get_hash(
-            &hash_watcher,
-            bar_spec.clone(),
-            Duration::from_secs(2),
-            make_expected(vec![(
-                "package.json",
-                "b39117e03f0dbe217b957f58a2ad78b993055088",
-            )]),
-        )
-        .await;
+    //     // package.json is always included, whether it matches your inputs or
+    // not.     retry_get_hash(
+    //         &hash_watcher,
+    //         bar_spec.clone(),
+    //         Duration::from_secs(2),
+    //         make_expected(vec![(
+    //             "package.json",
+    //             "b39117e03f0dbe217b957f58a2ad78b993055088",
+    //         )]),
+    //     )
+    //     .await;
 
-        create_fixture_branch(&repo, &repo_root);
+    //     create_fixture_branch(&repo, &repo_root);
 
-        retry_get_hash(
-            &hash_watcher,
-            bar_spec,
-            Duration::from_secs(2),
-            make_expected(vec![
-                ("baz-file", "a5395ccf1b8966f3ea805aff0851eac13acb3540"),
-                ("package.json", "b39117e03f0dbe217b957f58a2ad78b993055088"),
-            ]),
-        )
-        .await;
-    }
+    //     retry_get_hash(
+    //         &hash_watcher,
+    //         bar_spec,
+    //         Duration::from_secs(2),
+    //         make_expected(vec![
+    //             ("baz-file", "a5395ccf1b8966f3ea805aff0851eac13acb3540"),
+    //             ("package.json", "b39117e03f0dbe217b957f58a2ad78b993055088"),
+    //         ]),
+    //     )
+    //     .await;
+    // }
 }
