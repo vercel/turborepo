@@ -882,10 +882,8 @@ dependencies = [
     "biome_console",
     "biome_diagnostics",
     "biome_rowan",
-    "biome_unicode_table",
     "bitflags 2.5.0",
     "drop_bomb",
-    "unicode-bom",
 ]
 
 [[package]]
@@ -6815,11 +6813,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09c024468a378b7e36765cd36702b7a90cc3cba11654f6685c8f233408e89e92"
 dependencies = [
     "dyn-clone",
-    "indexmap 2.2.6",
     "schemars_derive",
     "serde",
     "serde_json",
-    "smallvec",
 ]
 
 [[package]]
@@ -6983,17 +6979,6 @@ dependencies = [
     "proc-macro2",
     "quote",
     "syn 2.0.58",
-]
-
-[[package]]
-name = "serde_ini"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb236687e2bb073a7521c021949be944641e671b8505a94069ca37b656c81139"
-dependencies = [
-    "result",
-    "serde",
-    "void",
 ]
 
 [[package]]
