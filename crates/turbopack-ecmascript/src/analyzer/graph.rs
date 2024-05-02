@@ -20,7 +20,7 @@ use crate::{analyzer::is_unresolved, utils::unparen};
 
 #[derive(Debug, Clone, Default)]
 pub struct EffectsBlock {
-    pub effects: Vec<Box<Effect>>,
+    pub effects: Vec<Effect>,
     /// The ast path to the block or expression.
     pub ast_path: Vec<AstParentKind>,
 }
@@ -219,7 +219,7 @@ impl Effect {
 pub struct VarGraph {
     pub values: HashMap<Id, JsValue>,
 
-    pub effects: Vec<Box<Effect>>,
+    pub effects: Vec<Effect>,
 }
 
 impl VarGraph {
@@ -647,8 +647,7 @@ impl EvalContext {
 struct Analyzer<'a> {
     data: &'a mut VarGraph,
 
-    #[allow(clippy::vec_box)]
-    effects: Vec<Box<Effect>>,
+    effects: Vec<Effect>,
 
     eval_context: &'a EvalContext,
 

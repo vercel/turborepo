@@ -789,7 +789,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
     };
 
     enum Action {
-        Effect(Box<Effect>),
+        Effect(Effect),
         LeaveScope(u32),
     }
 
@@ -797,7 +797,8 @@ pub(crate) async fn analyse_ecmascript_module_internal(
     // of an effect we might want to add more effects into the middle of the
     // processing. Using a stack where effects are appended in reverse
     // order allows us to do that. It's recursion implemented as Stack.
-    let mut queue_stack = Mutex::new(Vec::new());
+    let mut queue_stack: parking_lot::lock_api::Mutex<parking_lot::RawMutex, Vec<Action>> =
+        Mutex::new(Vec::new());
     queue_stack
         .get_mut()
         .extend(effects.into_iter().map(Action::Effect).rev());
@@ -811,13 +812,13 @@ pub(crate) async fn analyse_ecmascript_module_internal(
             Action::Effect(effect) => effect,
         };
 
-        let add_effects = |effects: Vec<Box<Effect>>| {
+        let add_effects = |effects: Vec<Effect>| {
             queue_stack
                 .lock()
                 .extend(effects.into_iter().map(Action::Effect).rev())
         };
 
-        match *effect {
+        match effect {
             Effect::Conditional {
                 condition,
                 kind,
@@ -1106,7 +1107,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
         .await
 }
 
-fn handle_call_boxed<'a, G: Fn(Vec<Box<Effect>>) + Send + Sync + 'a>(
+fn handle_call_boxed<'a, G: Fn(Vec<Effect>) + Send + Sync + 'a>(
     ast_path: &'a [AstParentKind],
     span: Span,
     func: JsValue,
@@ -1130,7 +1131,7 @@ fn handle_call_boxed<'a, G: Fn(Vec<Box<Effect>>) + Send + Sync + 'a>(
     ))
 }
 
-async fn handle_call<G: Fn(Vec<Box<Effect>>) + Send + Sync>(
+async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
     ast_path: &[AstParentKind],
     span: Span,
     func: JsValue,
