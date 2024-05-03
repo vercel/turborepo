@@ -1,4 +1,8 @@
-use std::{hash::Hash, ops::DerefMut};
+use std::{
+    hash::Hash,
+    ops::DerefMut,
+    sync::{atomic::AtomicU32, Arc},
+};
 
 use smallvec::SmallVec;
 
@@ -8,6 +12,7 @@ mod aggregation_data;
 mod balance_edge;
 mod change;
 mod followers;
+mod in_progress;
 mod increase;
 #[cfg(test)]
 mod loom_tests;
@@ -20,6 +25,7 @@ mod root_query;
 #[cfg(test)]
 mod tests;
 mod uppers;
+mod waiter;
 
 pub use aggregation_data::{aggregation_data, prepare_aggregation_data, AggregationDataGuard};
 pub(self) use balance_edge::balance_edge;
@@ -29,6 +35,8 @@ pub(self) use notify_lost_follower::notify_lost_follower;
 pub(self) use notify_new_follower::notify_new_follower;
 pub use optimize_queue::OptimizeQueue;
 pub use root_query::{query_root_info, RootQuery};
+
+use self::waiter::{PotentialWaiter, Waiter};
 
 type StackVec<I> = SmallVec<[I; 16]>;
 
@@ -54,6 +62,7 @@ pub struct AggegatingNode<I, D> {
     uppers: CountHashSet<I>,
     followers: CountHashSet<I>,
     data: D,
+    waiting_for_in_progress: PotentialWaiter,
 }
 
 impl<I, A> AggregationNode<I, A> {
@@ -139,6 +148,11 @@ pub trait AggregationContext {
 
     /// Gets mutable access to an item.
     fn node<'l>(&'l self, id: &Self::NodeRef) -> Self::Guard<'l>;
+
+    /// Get the atomic in progress counter for a node.
+    fn atomic_in_progress_counter<'l>(&self, id: &'l Self::NodeRef) -> &'l AtomicU32
+    where
+        Self: 'l;
 
     /// Apply a changeset to an aggregated data object. Returns a new changeset
     /// that should be applied to the next aggregation level. Might return None,

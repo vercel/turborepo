@@ -91,6 +91,10 @@ impl<I: Clone + Eq + Hash> OptimizeQueue<I> {
                     return;
                 }
             }
+            if is_processing.is_none() && inner.queue.is_empty() {
+                // Empty queue, fast return
+                return;
+            }
             in_progress = Arc::new(OptimizeQueueInProgress {
                 mutex: Mutex::new(()),
                 signal: AtomicBool::new(false),

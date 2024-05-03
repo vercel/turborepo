@@ -1,12 +1,14 @@
 use std::{cmp::Ordering, hash::Hash};
 
 use super::{
-    followers::add_follower, increase_aggregation_number, uppers::add_upper, AggregationContext,
-    AggregationNode, PreparedOperation,
+    followers::add_follower, in_progress::finish_in_progress_without_node,
+    increase_aggregation_number, uppers::add_upper, AggregationContext, AggregationNode,
+    PreparedOperation,
 };
 
 impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
     // Called when a inner node of the upper node has a new follower
+    // It's expected that the upper node is flagged as "in progress"
     pub(super) fn notify_new_follower<C: AggregationContext<NodeRef = I, Data = D>>(
         &mut self,
         ctx: &C,
@@ -17,6 +19,7 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
             unreachable!();
         };
         if aggregating.followers.add_if_entry(follower_id) {
+            self.finish_in_progress(ctx, upper_id);
             PreparedNotifyNewFollower::AlreadyAdded
         } else {
             let upper_aggregation_number = aggregating.aggregation_number;
@@ -60,6 +63,7 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNotifyNewFollower<C
             } => {
                 let follower = ctx.node(&follower_id);
                 add_upper(ctx, follower, &follower_id, &upper_id);
+                finish_in_progress_without_node(ctx, &upper_id);
             }
             PreparedNotifyNewFollower::FollowerOrInner {
                 mut upper_aggregation_number,
@@ -70,6 +74,7 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNotifyNewFollower<C
                 let follower_aggregation_number = follower.aggregation_number();
                 if follower_aggregation_number < upper_aggregation_number {
                     add_upper(ctx, follower, &follower_id, &upper_id);
+                    finish_in_progress_without_node(ctx, &upper_id);
                     return;
                 } else {
                     drop(follower);
@@ -102,6 +107,7 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNotifyNewFollower<C
                                 }
                             }
                             Ordering::Greater => {
+                                upper.finish_in_progress(ctx, &upper_id);
                                 add_follower(ctx, upper, &follower_id);
                                 return;
                             }

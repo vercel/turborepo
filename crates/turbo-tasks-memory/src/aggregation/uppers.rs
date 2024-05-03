@@ -1,6 +1,10 @@
 use super::{
-    increase::LEAF_NUMBER, increase_aggregation_number, AggegatingNode, AggregationContext,
-    AggregationNode, AggregationNodeGuard, PreparedOperation, StackVec,
+    in_progress::{
+        finish_in_progress_without_node, start_in_progress_all, start_in_progress_count,
+    },
+    increase::LEAF_NUMBER,
+    increase_aggregation_number, AggegatingNode, AggregationContext, AggregationNode,
+    AggregationNodeGuard, PreparedOperation, StackVec,
 };
 use crate::count_hash_set::RemovePositiveCountResult;
 
@@ -44,6 +48,8 @@ pub fn add_upper_count<C: AggregationContext>(
     };
     if added {
         on_added(ctx, node, node_id, upper_id);
+    } else {
+        drop(node);
     }
     count
 }
@@ -59,20 +65,18 @@ pub fn on_added<C: AggregationContext>(
     let optimize = (uppers_len > MAX_UPPERS && (uppers_len - MAX_UPPERS).count_ones() == 1)
         .then(|| (true, uppers.iter().cloned().collect::<StackVec<_>>()));
     let (add_change, followers) = match &mut *node {
-        AggregationNode::Leaf { uppers, .. } => {
+        AggregationNode::Leaf { .. } => {
             let add_change = node.get_add_change();
             let children = node.children().collect::<StackVec<_>>();
+            start_in_progress_count(ctx, upper_id, children.len() as u32);
             drop(node);
             (add_change, children)
         }
         AggregationNode::Aggegating(aggegating) => {
-            let AggegatingNode {
-                ref mut uppers,
-                ref followers,
-                ..
-            } = **aggegating;
+            let AggegatingNode { ref followers, .. } = **aggegating;
             let add_change = ctx.data_to_add_change(&aggegating.data);
             let followers = followers.iter().cloned().collect::<StackVec<_>>();
+            start_in_progress_count(ctx, upper_id, followers.len() as u32);
             drop(node);
 
             (add_change, followers)
@@ -184,6 +188,7 @@ pub fn on_removed<C: AggregationContext>(ctx: &C, node: C::Guard<'_>, upper_id: 
             let mut upper = ctx.node(upper_id);
             let remove_prepared =
                 remove_change.and_then(|remove_change| upper.apply_change(ctx, remove_change));
+            // start_in_progress_count(ctx, upper_id, children.len() as u32);
             let prepared = children
                 .into_iter()
                 .map(|child_id| upper.notify_lost_follower(ctx, upper_id, &child_id))
@@ -203,6 +208,7 @@ pub fn on_removed<C: AggregationContext>(ctx: &C, node: C::Guard<'_>, upper_id: 
             let mut upper = ctx.node(upper_id);
             let remove_prepared =
                 remove_change.and_then(|remove_change| upper.apply_change(ctx, remove_change));
+            // start_in_progress_count(ctx, upper_id, followers.len() as u32);
             let prepared = followers
                 .into_iter()
                 .map(|child_id| upper.notify_lost_follower(ctx, upper_id, &child_id))

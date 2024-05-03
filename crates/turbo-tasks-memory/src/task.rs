@@ -3,14 +3,12 @@ use std::{
     cell::RefCell,
     cmp::{max, Reverse},
     collections::{HashMap, HashSet},
-    fmt::{
-        Debug, Display, Formatter, {self},
-    },
+    fmt::{self, Debug, Display, Formatter},
     future::Future,
     hash::{BuildHasherDefault, Hash},
     mem::{replace, take},
     pin::Pin,
-    sync::Arc,
+    sync::{atomic::AtomicU32, Arc},
     time::{Duration, Instant},
 };
 
@@ -158,6 +156,8 @@ pub struct Task {
     /// The mutable state of the task
     /// Unset state is equal to a Dirty task that has not been executed yet
     state: RwLock<TaskMetaState>,
+    /// Atomic in progress counter for graph modification
+    graph_modification_in_progress_counter: AtomicU32,
 }
 
 impl Debug for Task {
@@ -459,6 +459,7 @@ impl Task {
                 description,
                 stats_type,
             )))),
+            graph_modification_in_progress_counter: AtomicU32::new(0),
         }
     }
 
@@ -476,6 +477,7 @@ impl Task {
                 description,
                 stats_type,
             )))),
+            graph_modification_in_progress_counter: AtomicU32::new(0),
         }
     }
 
@@ -493,6 +495,7 @@ impl Task {
                 description,
                 stats_type,
             )))),
+            graph_modification_in_progress_counter: AtomicU32::new(0),
         }
     }
 

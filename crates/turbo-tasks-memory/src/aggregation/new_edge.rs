@@ -1,9 +1,10 @@
 use std::hash::Hash;
 
 use super::{
+    in_progress::{start_in_progress, start_in_progress_all},
     increase_aggregation_number, notify_new_follower,
-    notify_new_follower::PreparedNotifyNewFollower, AggregationContext, AggregationNode,
-    PreparedOperation, StackVec,
+    notify_new_follower::PreparedNotifyNewFollower,
+    AggregationContext, AggregationNode, PreparedOperation, StackVec,
 };
 
 impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
@@ -21,15 +22,19 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
             } => {
                 let child_aggregation_number = *aggregation_number as u32 + 1;
                 let uppers = uppers.iter().cloned().collect::<StackVec<_>>();
+                start_in_progress_all(ctx, &uppers);
                 PreparedNewEdge::Leaf {
                     child_aggregation_number,
                     uppers,
                     target_id: target_id.clone(),
                 }
             }
-            AggregationNode::Aggegating(_) => PreparedNewEdge::Aggegating {
-                notify: self.notify_new_follower(ctx, origin_id, target_id),
-            },
+            AggregationNode::Aggegating(_) => {
+                start_in_progress(ctx, origin_id);
+                PreparedNewEdge::Aggegating {
+                    notify: self.notify_new_follower(ctx, origin_id, target_id),
+                }
+            }
         }
     }
 }

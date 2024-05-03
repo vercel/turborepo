@@ -1,8 +1,8 @@
 use std::{hash::Hash, mem::take};
 
 use super::{
-    AggegatingNode, AggregationContext, AggregationNode, AggregationNodeGuard, PreparedOperation,
-    StackVec,
+    waiter::PotentialWaiter, AggegatingNode, AggregationContext, AggregationNode,
+    AggregationNodeGuard, PreparedOperation, StackVec,
 };
 pub(super) const LEAF_NUMBER: u8 = 4;
 
@@ -91,6 +91,7 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedIncreaseAggregation
                         uppers: take(uppers),
                         followers: children.iter().cloned().collect(),
                         data: node.get_initial_data(),
+                        waiting_for_in_progress: PotentialWaiter::new(),
                     }));
                     let followers = children;
                     drop(node);

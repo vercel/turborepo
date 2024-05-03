@@ -1,5 +1,6 @@
 use super::{
-    notify_lost_follower, notify_new_follower, AggregationContext, AggregationNode, StackVec,
+    in_progress::start_in_progress_all, notify_lost_follower, notify_new_follower,
+    AggregationContext, AggregationNode, StackVec,
 };
 use crate::count_hash_set::RemovePositiveCountResult;
 
@@ -21,6 +22,7 @@ pub fn on_added<C: AggregationContext>(ctx: &C, mut node: C::Guard<'_>, follower
         unreachable!();
     };
     let uppers = aggregating.uppers.iter().cloned().collect::<StackVec<_>>();
+    start_in_progress_all(ctx, &uppers);
     drop(node);
     for upper_id in uppers {
         notify_new_follower(ctx, ctx.node(&upper_id), &upper_id, &follower_id);
@@ -42,6 +44,7 @@ pub fn add_follower_count<C: AggregationContext>(
     {
         let count = aggregating.followers.get_count(follower_id);
         let uppers = aggregating.uppers.iter().cloned().collect::<StackVec<_>>();
+        start_in_progress_all(ctx, &uppers);
         drop(node);
         for upper_id in uppers {
             notify_new_follower(ctx, ctx.node(&upper_id), &upper_id, &follower_id);

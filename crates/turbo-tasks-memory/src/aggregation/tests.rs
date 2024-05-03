@@ -47,6 +47,7 @@ fn check_invariants<'a>(
     // print(ctx, &queue[0], true);
     let mut visited = HashSet::new();
     while let Some(node_id) = queue.pop() {
+        assert_eq!(node_id.0.atomic.load(Ordering::SeqCst), 0);
         let node = ctx.node(&node_id);
         for child_id in node.children() {
             if visited.insert(child_id.clone()) {
@@ -243,12 +244,14 @@ fn print_graph<C: AggregationContext>(
 }
 
 struct Node {
+    atomic: AtomicU32,
     inner: Mutex<NodeInner>,
 }
 
 impl Node {
     fn new(value: u32) -> Arc<Self> {
         Arc::new(Node {
+            atomic: AtomicU32::new(0),
             inner: Mutex::new(NodeInner {
                 children: Vec::new(),
                 aggregation_node: AggregationNode::new(),
@@ -492,6 +495,13 @@ impl<'a> AggregationContext for NodeAggregationContext<'a> {
         unsafe { NodeGuard::new(guard, r) }
     }
 
+    fn atomic_in_progress_counter<'l>(&self, id: &'l Self::NodeRef) -> &'l AtomicU32
+    where
+        Self: 'l,
+    {
+        &id.0.atomic
+    }
+
     fn apply_change(&self, data: &mut Aggregated, change: &Change) -> Option<Change> {
         if data.value != 0 {
             self.additions.fetch_add(1, Ordering::SeqCst);
@@ -587,11 +597,13 @@ fn chain() {
     }
     assert_eq!(ctx.additions.load(Ordering::SeqCst), 192);
     ctx.additions.store(0, Ordering::SeqCst);
+    check_invariants(&ctx, once(current.clone()));
 
     {
         let root_info = query_root_info(&ctx, ActiveQuery::default(), NodeRef(leaf.clone()));
         assert!(!root_info);
     }
+    check_invariants(&ctx, once(current.clone()));
 
     leaf.incr(&ctx);
     // The change need to propagate through 3 aggregated nodes

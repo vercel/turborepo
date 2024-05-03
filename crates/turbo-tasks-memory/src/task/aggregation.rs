@@ -1,7 +1,9 @@
 use std::{
+    cmp::Ordering,
     hash::{BuildHasher, Hash},
     mem::take,
     ops::{ControlFlow, Deref, DerefMut},
+    sync::atomic::AtomicU32,
 };
 
 use auto_hash_map::{map::Entry, AutoMap};
@@ -221,6 +223,16 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
         TaskGuard::new(*reference, task.state_mut())
     }
 
+    fn atomic_in_progress_counter<'l>(&self, id: &'l TaskId) -> &'l AtomicU32
+    where
+        Self: 'l,
+    {
+        &self
+            .backend
+            .task(*id)
+            .graph_modification_in_progress_counter
+    }
+
     fn apply_change(
         &self,
         info: &mut Aggregated,
@@ -240,15 +252,28 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
             }
         }
         #[cfg(feature = "track_unfinished")]
+        let mut unfinished_tasks_update = Vec::new();
+        #[cfg(feature = "track_unfinished")]
         for &(task, count) in change.unfinished_tasks_update.iter() {
-            update_count_entry(info.unfinished_tasks.entry(task), count);
+            match update_count_entry(info.unfinished_tasks.entry(task), count) {
+                (_, UpdateCountEntryChange::Removed) => unfinished_tasks_update.push((task, -1)),
+                (_, UpdateCountEntryChange::Inserted) => unfinished_tasks_update.push((task, 1)),
+                _ => {}
+            }
         }
+        let mut dirty_tasks_update = Vec::new();
         let is_root = info.root_type.is_some();
         for &(task, count) in change.dirty_tasks_update.iter() {
-            let value = update_count_entry(info.dirty_tasks.entry(task), count);
-            if is_root && value > 0 && value <= count {
-                let mut tasks_to_schedule = self.dirty_tasks_to_schedule.lock();
-                tasks_to_schedule.get_or_insert_default().insert(task);
+            match update_count_entry(info.dirty_tasks.entry(task), count) {
+                (_, UpdateCountEntryChange::Removed) => dirty_tasks_update.push((task, -1)),
+                (_, UpdateCountEntryChange::Inserted) => {
+                    if is_root {
+                        let mut tasks_to_schedule = self.dirty_tasks_to_schedule.lock();
+                        tasks_to_schedule.get_or_insert_default().insert(task);
+                    }
+                    dirty_tasks_update.push((task, 1))
+                }
+                _ => {}
             }
         }
         for &(trait_type_id, collectible, count) in change.collectibles.iter() {
@@ -256,7 +281,7 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
             match collectibles_info_entry {
                 Entry::Occupied(mut e) => {
                     let collectibles_info = e.get_mut();
-                    let value = update_count_entry(
+                    let (value, _) = update_count_entry(
                         collectibles_info.collectibles.entry(collectible),
                         count,
                     );
@@ -289,8 +314,8 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
         let new_change = TaskChange {
             unfinished,
             #[cfg(feature = "track_unfinished")]
-            unfinished_tasks_update: change.unfinished_tasks_update.clone(),
-            dirty_tasks_update: change.dirty_tasks_update.clone(),
+            unfinished_tasks_update: unfinished_tasks_update,
+            dirty_tasks_update: dirty_tasks_update,
             collectibles: change.collectibles.clone(),
         };
         if new_change.is_empty() {
@@ -307,10 +332,14 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
         }
         #[cfg(feature = "track_unfinished")]
         for (&task, &count) in data.unfinished_tasks.iter() {
-            change.unfinished_tasks_update.push((task, count));
+            if count > 0 {
+                change.unfinished_tasks_update.push((task, 1));
+            }
         }
         for (&task, &count) in data.dirty_tasks.iter() {
-            change.dirty_tasks_update.push((task, count));
+            if count > 0 {
+                change.dirty_tasks_update.push((task, 1));
+            }
         }
         for (trait_type_id, collectibles_info) in data.collectibles.iter() {
             for (collectible, count) in collectibles_info.collectibles.iter() {
@@ -597,24 +626,48 @@ impl<'l> AggregationNodeGuard for TaskGuard<'l> {
 
 pub type TaskAggregationNode = AggregationNode<TaskId, Aggregated>;
 
+enum UpdateCountEntryChange {
+    Removed,
+    Inserted,
+    Updated,
+}
+
 fn update_count_entry<K: Eq + Hash, H: BuildHasher + Default, const I: usize>(
     entry: Entry<'_, K, i32, H, I>,
     update: i32,
-) -> i32 {
+) -> (i32, UpdateCountEntryChange) {
     match entry {
         Entry::Occupied(mut e) => {
             let value = e.get_mut();
-            *value += update;
-            if *value == 0 {
-                e.remove();
-                0
+            if *value < 0 {
+                *value += update;
+                match (*value).cmp(&0) {
+                    Ordering::Less => (*value, UpdateCountEntryChange::Updated),
+                    Ordering::Equal => {
+                        e.remove();
+                        (0, UpdateCountEntryChange::Updated)
+                    }
+                    Ordering::Greater => (*value, UpdateCountEntryChange::Inserted),
+                }
             } else {
-                *value
+                *value += update;
+                match (*value).cmp(&0) {
+                    Ordering::Less => (*value, UpdateCountEntryChange::Removed),
+                    Ordering::Equal => {
+                        e.remove();
+                        (0, UpdateCountEntryChange::Removed)
+                    }
+                    Ordering::Greater => (*value, UpdateCountEntryChange::Updated),
+                }
             }
         }
         Entry::Vacant(e) => {
-            e.insert(update);
-            update
+            if update == 0 {
+                (0, UpdateCountEntryChange::Updated)
+            } else {
+                e.insert(update);
+                (update, UpdateCountEntryChange::Inserted)
+            }
         }
     }
 }

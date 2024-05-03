@@ -32,12 +32,14 @@ use super::{
 use crate::aggregation::{query_root_info, PreparedOperation, StackVec};
 
 struct Node {
+    atomic: AtomicU32,
     inner: Mutex<NodeInner>,
 }
 
 impl Node {
     fn new(value: u32) -> Arc<Self> {
         Arc::new(Node {
+            atomic: AtomicU32::new(0),
             inner: Mutex::new(NodeInner {
                 children: Vec::new(),
                 aggregation_node: AggregationNode::new(),
@@ -163,15 +165,22 @@ impl AggregationContext for NodeAggregationContext {
         unsafe { NodeGuard::new(guard, r) }
     }
 
-    fn apply_change(&self, data: &mut Aggregated, change: &Change) -> Option<Change> {
+    fn atomic_in_progress_counter<'l>(&self, id: &'l NodeRef) -> &'l AtomicU32
+    where
+        Self: 'l,
+    {
+        &id.0.atomic
+    }
+
+    fn apply_change(&self, _data: &mut Aggregated, _change: &Change) -> Option<Change> {
         None
     }
 
-    fn data_to_add_change(&self, data: &Self::Data) -> Option<Self::DataChange> {
+    fn data_to_add_change(&self, _data: &Self::Data) -> Option<Self::DataChange> {
         None
     }
 
-    fn data_to_remove_change(&self, data: &Self::Data) -> Option<Self::DataChange> {
+    fn data_to_remove_change(&self, _data: &Self::Data) -> Option<Self::DataChange> {
         None
     }
 
@@ -183,10 +192,10 @@ impl AggregationContext for NodeAggregationContext {
 #[derive(Default)]
 struct Aggregated {}
 
-// #[test]
+#[test]
 fn fuzzy_loom_new() {
     for size in [10, 20] {
-        for _ in 0..100000 {
+        for _ in 0..1000 {
             let seed = rand::random();
             println!("Seed {} Size {}", seed, size);
             fuzzy_loom(seed, size);
