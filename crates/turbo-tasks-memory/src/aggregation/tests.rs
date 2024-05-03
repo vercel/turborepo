@@ -657,9 +657,6 @@ fn chain_double_connected() {
         let node = Node::new(i);
         nodes.push(node.clone());
         current.add_child(&ctx, node.clone());
-        if i == 11 {
-            print(&ctx, &NodeRef(root.clone()), true);
-        }
         current2.add_child(&ctx, node.clone());
         current = current2;
         current2 = node;

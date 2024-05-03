@@ -5,9 +5,9 @@ use super::{
     AggregationNodeGuard, PreparedInternalOperation, PreparedOperation, StackVec,
 };
 #[cfg(test)]
-pub(super) const LEAF_NUMBER: u8 = 4;
+pub(super) const LEAF_NUMBER: u32 = 8;
 #[cfg(not(test))]
-pub(super) const LEAF_NUMBER: u8 = 64;
+pub(super) const LEAF_NUMBER: u32 = 256;
 
 impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
     pub(super) fn increase_aggregation_number_internal<
@@ -89,7 +89,7 @@ impl<C: AggregationContext> PreparedInternalOperation<C>
                 uppers,
             } => {
                 let children = children.unwrap();
-                if new_aggregation_number < LEAF_NUMBER as u32 {
+                if new_aggregation_number < LEAF_NUMBER {
                     *aggregation_number = new_aggregation_number as u8;
                     drop(node);
                     for child_id in children {

@@ -7,6 +7,11 @@ use super::{
     PreparedInternalOperation, PreparedOperation, StackVec,
 };
 
+#[cfg(test)]
+const BUFFER_SPACE: u32 = 1;
+#[cfg(not(test))]
+const BUFFER_SPACE: u32 = 3;
+
 impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
     #[must_use]
     pub fn handle_new_edge<C: AggregationContext<NodeRef = I, Data = D>>(
@@ -20,7 +25,7 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
                 aggregation_number,
                 uppers,
             } => {
-                let child_aggregation_number = *aggregation_number as u32 + 1;
+                let child_aggregation_number = *aggregation_number as u32 + 1 + BUFFER_SPACE;
                 let uppers = uppers.iter().cloned().collect::<StackVec<_>>();
                 start_in_progress_all(ctx, &uppers);
                 PreparedNewEdge::Leaf {
