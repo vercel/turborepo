@@ -11,6 +11,7 @@ rustls-tls = ["reqwest/rustls-tls-native-roots"]
 
 [dev-dependencies]
 http = "0.2.9"
+httpmock = { workspace = true }
 port_scanner = { workspace = true }
 test-case = { workspace = true }
 turborepo-vercel-api-mock = { workspace = true }
