@@ -18,7 +18,7 @@ impl<I> BalanceQueue<I> {
     }
 
     pub fn balance_all(&mut self, edges: Vec<(I, I)>) {
-        self.queue.extend(edges.into_iter());
+        self.queue.extend(edges);
     }
 
     pub fn process<C: AggregationContext<NodeRef = I>>(mut self, ctx: &C) {

@@ -18,26 +18,26 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
         balance_queue: &mut BalanceQueue<I>,
         upper_id: &C::NodeRef,
         follower_id: &C::NodeRef,
-    ) -> PreparedNotifyNewFollower<C> {
+    ) -> Option<PreparedNotifyNewFollower<C>> {
         let AggregationNode::Aggegating(aggregating) = self else {
             unreachable!();
         };
         if aggregating.followers.add_if_entry(follower_id) {
             self.finish_in_progress(ctx, balance_queue, upper_id);
-            PreparedNotifyNewFollower::AlreadyAdded
+            None
         } else {
             let upper_aggregation_number = aggregating.aggregation_number;
             if upper_aggregation_number == u32::MAX {
-                PreparedNotifyNewFollower::Inner {
+                Some(PreparedNotifyNewFollower::Inner {
                     upper_id: upper_id.clone(),
                     follower_id: follower_id.clone(),
-                }
+                })
             } else {
-                PreparedNotifyNewFollower::FollowerOrInner {
+                Some(PreparedNotifyNewFollower::FollowerOrInner {
                     upper_aggregation_number,
                     upper_id: upper_id.clone(),
                     follower_id: follower_id.clone(),
-                }
+                })
             }
         }
     }
@@ -51,33 +51,32 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
         ctx: &C,
         upper_id: &C::NodeRef,
         follower_id: &C::NodeRef,
-    ) -> PreparedNotifyNewFollower<C> {
+    ) -> Option<PreparedNotifyNewFollower<C>> {
         let AggregationNode::Aggegating(aggregating) = self else {
             unreachable!();
         };
         if aggregating.followers.add_if_entry(follower_id) {
-            PreparedNotifyNewFollower::AlreadyAdded
+            None
         } else {
             start_in_progress(ctx, upper_id);
             let upper_aggregation_number = aggregating.aggregation_number;
             if upper_aggregation_number == u32::MAX {
-                PreparedNotifyNewFollower::Inner {
+                Some(PreparedNotifyNewFollower::Inner {
                     upper_id: upper_id.clone(),
                     follower_id: follower_id.clone(),
-                }
+                })
             } else {
-                PreparedNotifyNewFollower::FollowerOrInner {
+                Some(PreparedNotifyNewFollower::FollowerOrInner {
                     upper_aggregation_number,
                     upper_id: upper_id.clone(),
                     follower_id: follower_id.clone(),
-                }
+                })
             }
         }
     }
 }
 
 pub(super) enum PreparedNotifyNewFollower<C: AggregationContext> {
-    AlreadyAdded,
     Inner {
         upper_id: C::NodeRef,
         follower_id: C::NodeRef,
@@ -93,7 +92,6 @@ impl<C: AggregationContext> PreparedInternalOperation<C> for PreparedNotifyNewFo
     type Result = ();
     fn apply(self, ctx: &C, balance_queue: &mut BalanceQueue<C::NodeRef>) {
         match self {
-            PreparedNotifyNewFollower::AlreadyAdded => return,
             PreparedNotifyNewFollower::Inner {
                 upper_id,
                 follower_id,

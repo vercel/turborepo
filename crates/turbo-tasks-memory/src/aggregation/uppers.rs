@@ -102,7 +102,7 @@ pub fn on_added<C: AggregationContext>(
     if let Some((leaf, uppers)) = optimize {
         let count = uppers.len();
         let mut root_count = 0;
-        let mut min = LEAF_NUMBER as u32 - 1;
+        let mut min = LEAF_NUMBER - 1;
         let mut uppers_uppers = 0;
         for upper_id in uppers.into_iter() {
             let upper = ctx.node(&upper_id);

@@ -6,12 +6,12 @@ use super::{
 use crate::aggregation::balance_queue::BalanceQueue;
 
 /// Gives an reference to the root aggregated info for a given item.
-pub fn aggregation_data<'l, C: AggregationContext>(
+pub fn aggregation_data<'l, C>(
     ctx: &'l C,
     node_id: &C::NodeRef,
 ) -> AggregationDataGuard<C::Guard<'l>>
 where
-    C: 'l,
+    C: AggregationContext + 'l,
 {
     let guard = ctx.node(node_id);
     if guard.aggregation_number() == u32::MAX {

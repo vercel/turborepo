@@ -13,7 +13,6 @@ const BUFFER_SPACE: u32 = 1;
 const BUFFER_SPACE: u32 = 3;
 
 impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
-    #[must_use]
     pub fn handle_new_edge<C: AggregationContext<NodeRef = I, Data = D>>(
         &mut self,
         ctx: &C,
@@ -28,15 +27,15 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
                 let child_aggregation_number = *aggregation_number as u32 + 1 + BUFFER_SPACE;
                 let uppers = uppers.iter().cloned().collect::<StackVec<_>>();
                 start_in_progress_all(ctx, &uppers);
-                PreparedNewEdge::Leaf {
+                Some(PreparedNewEdge::Leaf {
                     child_aggregation_number,
                     uppers,
                     target_id: target_id.clone(),
-                }
+                })
             }
-            AggregationNode::Aggegating(_) => PreparedNewEdge::Aggegating {
-                notify: self.notify_new_follower_not_in_progress(ctx, origin_id, target_id),
-            },
+            AggregationNode::Aggegating(_) => self
+                .notify_new_follower_not_in_progress(ctx, origin_id, target_id)
+                .map(|notify| PreparedNewEdge::Aggegating { notify }),
         }
     }
 }

@@ -19,13 +19,11 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
                 let change = ctx.apply_change(data, &change);
                 if uppers.is_empty() {
                     None
-                } else if let Some(change) = change {
-                    Some(PreparedChange {
+                } else {
+                    change.map(|change| PreparedChange {
                         uppers: uppers.iter().cloned().collect::<StackVec<_>>(),
                         change,
                     })
-                } else {
-                    None
                 }
             }
         }
@@ -48,13 +46,11 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
                 let change = ctx.apply_change(data, change);
                 if uppers.is_empty() {
                     None
-                } else if let Some(change) = change {
-                    Some(PreparedChangeRef::Owned {
+                } else {
+                    change.map(|change| PreparedChangeRef::Owned {
                         uppers: uppers.iter().cloned().collect::<StackVec<_>>(),
                         change,
                     })
-                } else {
-                    None
                 }
             }
         }

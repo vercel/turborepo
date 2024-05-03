@@ -36,7 +36,7 @@ pub fn on_added<C: AggregationContext>(
             balance_queue,
             ctx.node(&upper_id),
             &upper_id,
-            &follower_id,
+            follower_id,
         );
     }
 }
@@ -65,7 +65,7 @@ pub fn add_follower_count<C: AggregationContext>(
                 balance_queue,
                 ctx.node(&upper_id),
                 &upper_id,
-                &follower_id,
+                follower_id,
             );
         }
         count
@@ -97,7 +97,7 @@ pub fn remove_follower_count<C: AggregationContext>(
                 balance_queue,
                 ctx.node(&upper_id),
                 &upper_id,
-                &follower_id,
+                follower_id,
             );
         }
     }
@@ -136,7 +136,7 @@ pub fn remove_positive_follower_count<C: AggregationContext>(
                 balance_queue,
                 ctx.node(&upper_id),
                 &upper_id,
-                &follower_id,
+                follower_id,
             );
         }
     }

@@ -23,10 +23,10 @@ mod tests;
 mod uppers;
 
 pub use aggregation_data::{aggregation_data, prepare_aggregation_data, AggregationDataGuard};
-pub(self) use balance_edge::balance_edge;
-pub(self) use increase::increase_aggregation_number_internal;
-pub(self) use notify_lost_follower::notify_lost_follower;
-pub(self) use notify_new_follower::notify_new_follower;
+use balance_edge::balance_edge;
+use increase::increase_aggregation_number_internal;
+use notify_lost_follower::notify_lost_follower;
+use notify_new_follower::notify_new_follower;
 pub use root_query::{query_root_info, RootQuery};
 
 use self::balance_queue::BalanceQueue;
@@ -100,11 +100,7 @@ pub trait PreparedOperation<C: AggregationContext> {
 impl<C: AggregationContext, T: PreparedOperation<C>> PreparedOperation<C> for Option<T> {
     type Result = Option<T::Result>;
     fn apply(self, ctx: &C) -> Self::Result {
-        if let Some(prepared) = self {
-            Some(prepared.apply(ctx))
-        } else {
-            None
-        }
+        self.map(|prepared| prepared.apply(ctx))
     }
 }
 
@@ -139,11 +135,7 @@ impl<C: AggregationContext, T: PreparedInternalOperation<C>> PreparedInternalOpe
 {
     type Result = Option<T::Result>;
     fn apply(self, ctx: &C, balance_queue: &mut BalanceQueue<C::NodeRef>) -> Self::Result {
-        if let Some(prepared) = self {
-            Some(prepared.apply(ctx, balance_queue))
-        } else {
-            None
-        }
+        self.map(|prepared| prepared.apply(ctx, balance_queue))
     }
 }
 

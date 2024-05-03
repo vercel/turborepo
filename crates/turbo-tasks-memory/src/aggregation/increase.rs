@@ -147,7 +147,7 @@ pub fn increase_aggregation_number_internal<C: AggregationContext>(
     node_id: &C::NodeRef,
     new_aggregation_number: u32,
 ) {
-    let prepared = node.increase_aggregation_number_internal(ctx, &node_id, new_aggregation_number);
+    let prepared = node.increase_aggregation_number_internal(ctx, node_id, new_aggregation_number);
     drop(node);
     prepared.apply(ctx, balance_queue);
 }

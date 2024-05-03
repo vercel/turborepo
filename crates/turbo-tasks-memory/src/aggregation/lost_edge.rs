@@ -54,6 +54,7 @@ impl<C: AggregationContext> From<StackVec<PreparedNotifyLostFollower<C>>> for Pr
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 enum PreparedLostEdgesInner<C: AggregationContext> {
     Leaf {
         uppers: StackVec<C::NodeRef>,

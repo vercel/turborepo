@@ -181,7 +181,7 @@ impl<'a> TaskAggregationContext<'a> {
         }
     }
 
-    pub fn aggregation_data<'l>(&'l self, id: TaskId) -> AggregationDataGuard<TaskGuard<'l>> {
+    pub fn aggregation_data(&self, id: TaskId) -> AggregationDataGuard<TaskGuard<'_>> {
         aggregation_data(self, &id)
     }
 }
@@ -307,7 +307,7 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
             unfinished,
             #[cfg(feature = "track_unfinished")]
             unfinished_tasks_update: unfinished_tasks_update,
-            dirty_tasks_update: dirty_tasks_update,
+            dirty_tasks_update,
             collectibles: change.collectibles.clone(),
         };
         if new_change.is_empty() {
