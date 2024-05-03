@@ -31,7 +31,7 @@ use turbo_tasks::{
 };
 
 use crate::{
-    aggregation::{aggregation_data, AggregationDataGuard, PreparedOperation},
+    aggregation::{aggregation_data, query_root_info, AggregationDataGuard, PreparedOperation},
     cell::Cell,
     gc::{to_exp_u8, GcPriority, GcStats, GcTaskState},
     output::{Output, OutputContent},
