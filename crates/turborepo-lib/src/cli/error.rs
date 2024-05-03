@@ -48,6 +48,8 @@ pub enum Error {
     #[diagnostic(transparent)]
     Run(#[from] run::Error),
     #[error(transparent)]
+    Scip(#[from] run::scip::Error),
+    #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]

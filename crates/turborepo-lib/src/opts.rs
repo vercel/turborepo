@@ -80,28 +80,43 @@ impl<'a> TryFrom<&'a Args> for Opts {
     type Error = self::Error;
 
     fn try_from(args: &'a Args) -> Result<Self, Self::Error> {
-        let Some(Command::Run {
+        if let Some(Command::Run {
             run_args,
             execution_args,
         }) = &args.command
-        else {
-            return Err(Error::ExpectedRun(Backtrace::capture()));
-        };
-        let run_and_execution_args = RunAndExecutionArgs {
-            run_args: run_args.as_ref(),
-            execution_args: execution_args.as_ref(),
-        };
-        let run_opts = RunOpts::try_from(run_and_execution_args)?;
-        let cache_opts = CacheOpts::from(run_and_execution_args);
-        let scope_opts = ScopeOpts::try_from(run_and_execution_args)?;
-        let runcache_opts = RunCacheOpts::from(run_and_execution_args);
+        {
+            let run_and_execution_args = RunAndExecutionArgs {
+                run_args: run_args.as_ref(),
+                execution_args: execution_args.as_ref(),
+            };
+            let run_opts = RunOpts::try_from(run_and_execution_args)?;
+            let cache_opts = CacheOpts::from(run_and_execution_args);
+            let scope_opts = ScopeOpts::try_from(run_and_execution_args)?;
+            let runcache_opts = RunCacheOpts::from(run_and_execution_args);
 
-        Ok(Self {
-            run_opts,
-            cache_opts,
-            scope_opts,
-            runcache_opts,
-        })
+            Ok(Self {
+                run_opts,
+                cache_opts,
+                scope_opts,
+                runcache_opts,
+            })
+        } else {
+            let run_and_execution_args = RunAndExecutionArgs {
+                run_args: &RunArgs::default(),
+                execution_args: &ExecutionArgs::default(),
+            };
+
+            let run_opts = RunOpts::try_from(run_and_execution_args)?;
+            let cache_opts = CacheOpts::from(run_and_execution_args);
+            let scope_opts = ScopeOpts::try_from(run_and_execution_args)?;
+            let runcache_opts = RunCacheOpts::from(run_and_execution_args);
+            Ok(Self {
+                run_opts,
+                cache_opts,
+                scope_opts,
+                runcache_opts,
+            })
+        }
     }
 }
 

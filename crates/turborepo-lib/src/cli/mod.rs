@@ -543,6 +543,10 @@ pub enum Command {
         #[clap(flatten)]
         execution_args: Box<ExecutionArgs>,
     },
+    Scip {
+        #[clap(long)]
+        out: Option<Utf8PathBuf>,
+    },
     Watch(Box<ExecutionArgs>),
     /// Unlink the current directory from your Vercel organization and disable
     /// Remote Caching
@@ -1226,6 +1230,17 @@ pub async fn run(
                 }
             })?;
             Ok(exit_code)
+        }
+        Command::Scip { out } => {
+            let event = CommandEventBuilder::new("scip").with_parent(&root_telemetry);
+
+            event.track_call();
+
+            let out = out.clone();
+            let base = CommandBase::new(cli_args, repo_root, version, ui);
+            crate::commands::scip::run(base, event, out).await?;
+
+            Ok(0)
         }
         Command::Watch(_) => {
             let event = CommandEventBuilder::new("watch").with_parent(&root_telemetry);

@@ -29,7 +29,6 @@ mod package_changes_watcher;
 mod process;
 mod rewrite_json;
 mod run;
-mod scip;
 mod shim;
 mod signal;
 mod task_graph;
