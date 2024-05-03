@@ -242,6 +242,15 @@ pub fn value(args: TokenStream, input: TokenStream) -> TokenStream {
                 });
             }
         }
+        if inner_type.is_none() {
+            item.span()
+                .unwrap()
+                .error(
+                    "#[turbo_tasks::value(transparent)] is only valid with single-item unit \
+                     structs",
+                )
+                .emit();
+        }
     }
 
     let ident = match &item {
