@@ -46,13 +46,12 @@ impl InputGlobs {
     pub fn from_raw(mut raw: Vec<String>) -> Result<Self, GlobError> {
         if raw.is_empty() {
             Ok(Self::Default)
+        } else if let Some(default_pos) = raw.iter().position(|g| g == INPUT_INCLUDE_DEFAULT_FILES)
+        {
+            raw.remove(default_pos);
+            Ok(Self::DefaultWithExtras(GlobSet::from_raw_unfiltered(raw)?))
         } else {
-            if let Some(default_pos) = raw.iter().position(|g| g == INPUT_INCLUDE_DEFAULT_FILES) {
-                raw.remove(default_pos);
-                Ok(Self::DefaultWithExtras(GlobSet::from_raw_unfiltered(raw)?))
-            } else {
-                Ok(Self::Specific(GlobSet::from_raw_unfiltered(raw)?))
-            }
+            Ok(Self::Specific(GlobSet::from_raw_unfiltered(raw)?))
         }
     }
 
