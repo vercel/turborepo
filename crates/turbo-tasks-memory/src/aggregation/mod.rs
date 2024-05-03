@@ -138,19 +138,19 @@ pub trait AggregationContext {
     /// Gets mutable access to an item.
     fn node<'l>(&'l self, id: &Self::NodeRef) -> Self::Guard<'l>;
 
-    /// Apply a changeset to an aggregated info object. Returns a new changeset
+    /// Apply a changeset to an aggregated data object. Returns a new changeset
     /// that should be applied to the next aggregation level. Might return None,
     /// if no change should be applied to the next level.
     fn apply_change(
         &self,
-        info: &mut Self::Data,
+        data: &mut Self::Data,
         change: &Self::DataChange,
     ) -> Option<Self::DataChange>;
 
-    /// Creates a changeset from an aggregated info object, that represents
+    /// Creates a changeset from an aggregated data object, that represents
     /// adding the aggregated node to an aggregated node of the next level.
     fn data_to_add_change(&self, data: &Self::Data) -> Option<Self::DataChange>;
-    /// Creates a changeset from an aggregated info object, that represents
+    /// Creates a changeset from an aggregated data object, that represents
     /// removing the aggregated node from an aggregated node of the next level.
     fn data_to_remove_change(&self, data: &Self::Data) -> Option<Self::DataChange>;
 }

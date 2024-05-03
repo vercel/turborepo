@@ -160,15 +160,15 @@ impl AggregationContext for NodeAggregationContext {
         unsafe { NodeGuard::new(guard, r) }
     }
 
-    fn apply_change(&self, info: &mut Aggregated, change: &Change) -> Option<Change> {
+    fn apply_change(&self, data: &mut Aggregated, change: &Change) -> Option<Change> {
         None
     }
 
-    fn data_to_add_change(&self, info: &Self::Data) -> Option<Self::DataChange> {
+    fn data_to_add_change(&self, data: &Self::Data) -> Option<Self::DataChange> {
         None
     }
 
-    fn data_to_remove_change(&self, info: &Self::Data) -> Option<Self::DataChange> {
+    fn data_to_remove_change(&self, data: &Self::Data) -> Option<Self::DataChange> {
         None
     }
 }

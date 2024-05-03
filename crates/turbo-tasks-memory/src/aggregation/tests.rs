@@ -490,20 +490,20 @@ impl<'a> AggregationContext for NodeAggregationContext<'a> {
         unsafe { NodeGuard::new(guard, r) }
     }
 
-    fn apply_change(&self, info: &mut Aggregated, change: &Change) -> Option<Change> {
-        if info.value != 0 {
+    fn apply_change(&self, data: &mut Aggregated, change: &Change) -> Option<Change> {
+        if data.value != 0 {
             self.additions.fetch_add(1, Ordering::SeqCst);
         }
         if self.add_value {
-            info.value += change.value;
+            data.value += change.value;
             Some(*change)
         } else {
             None
         }
     }
 
-    fn data_to_add_change(&self, info: &Self::Data) -> Option<Self::DataChange> {
-        let change = Change { value: info.value };
+    fn data_to_add_change(&self, data: &Self::Data) -> Option<Self::DataChange> {
+        let change = Change { value: data.value };
         if change.is_empty() {
             None
         } else {
@@ -511,8 +511,8 @@ impl<'a> AggregationContext for NodeAggregationContext<'a> {
         }
     }
 
-    fn data_to_remove_change(&self, info: &Self::Data) -> Option<Self::DataChange> {
-        let change = Change { value: -info.value };
+    fn data_to_remove_change(&self, data: &Self::Data) -> Option<Self::DataChange> {
+        let change = Change { value: -data.value };
         if change.is_empty() {
             None
         } else {
