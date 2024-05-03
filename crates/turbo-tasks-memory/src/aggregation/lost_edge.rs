@@ -1,39 +1,13 @@
 use std::hash::Hash;
 
 use super::{
-    in_progress::{start_in_progress, start_in_progress_all, start_in_progress_count},
-    notify_lost_follower,
+    in_progress::{start_in_progress, start_in_progress_count},
     notify_lost_follower::PreparedNotifyLostFollower,
     AggregationContext, AggregationNode, PreparedOperation, StackVec,
 };
 
 impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
-    pub fn handle_lost_edge<C: AggregationContext<NodeRef = I, Data = D>>(
-        &mut self,
-        ctx: &C,
-        origin_id: &C::NodeRef,
-        target_id: &C::NodeRef,
-    ) -> Option<PreparedLostEdge<C>> {
-        match self {
-            AggregationNode::Leaf { uppers, .. } => {
-                let uppers = uppers.iter().cloned().collect::<StackVec<_>>();
-                start_in_progress_all(ctx, &uppers);
-                Some(
-                    PreparedLostEdgeInner::Leaf {
-                        uppers,
-                        target_id: target_id.clone(),
-                    }
-                    .into(),
-                )
-            }
-            AggregationNode::Aggegating(_) => {
-                start_in_progress(ctx, origin_id);
-                let notify = self.notify_lost_follower(ctx, origin_id, target_id);
-                notify.map(|notify| notify.into())
-            }
-        }
-    }
-
+    #[must_use]
     pub fn handle_lost_edges<C: AggregationContext<NodeRef = I, Data = D>>(
         &mut self,
         ctx: &C,
@@ -58,50 +32,6 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
                     })
                     .collect::<StackVec<_>>();
                 (!notify.is_empty()).then(|| notify.into())
-            }
-        }
-    }
-}
-
-pub struct PreparedLostEdge<C: AggregationContext> {
-    inner: PreparedLostEdgeInner<C>,
-}
-
-impl<C: AggregationContext> From<PreparedLostEdgeInner<C>> for PreparedLostEdge<C> {
-    fn from(inner: PreparedLostEdgeInner<C>) -> Self {
-        Self { inner }
-    }
-}
-
-impl<C: AggregationContext> From<PreparedNotifyLostFollower<C>> for PreparedLostEdge<C> {
-    fn from(notify: PreparedNotifyLostFollower<C>) -> Self {
-        Self {
-            inner: PreparedLostEdgeInner::Aggregating { notify },
-        }
-    }
-}
-
-enum PreparedLostEdgeInner<C: AggregationContext> {
-    Leaf {
-        uppers: StackVec<C::NodeRef>,
-        target_id: C::NodeRef,
-    },
-    Aggregating {
-        notify: PreparedNotifyLostFollower<C>,
-    },
-}
-
-impl<C: AggregationContext> PreparedOperation<C> for PreparedLostEdge<C> {
-    type Result = ();
-    fn apply(self, ctx: &C) {
-        match self.inner {
-            PreparedLostEdgeInner::Leaf { uppers, target_id } => {
-                for upper_id in uppers {
-                    notify_lost_follower(ctx, ctx.node(&upper_id), &upper_id, &target_id);
-                }
-            }
-            PreparedLostEdgeInner::Aggregating { notify } => {
-                notify.apply(ctx);
             }
         }
     }
@@ -160,17 +90,7 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedLostEdges<C> {
     }
 }
 
-pub fn handle_lost_edge<C: AggregationContext>(
-    ctx: &C,
-    mut origin: C::Guard<'_>,
-    origin_id: &C::NodeRef,
-    target_id: &C::NodeRef,
-) {
-    let p = origin.handle_lost_edge(ctx, origin_id, target_id);
-    drop(origin);
-    p.apply(ctx);
-}
-
+#[cfg(test)]
 pub fn handle_lost_edges<C: AggregationContext>(
     ctx: &C,
     mut origin: C::Guard<'_>,

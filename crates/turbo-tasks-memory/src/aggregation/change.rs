@@ -103,19 +103,3 @@ impl<'l, C: AggregationContext> PreparedOperation<C> for PreparedChangeRef<'l, C
         prepared.apply(ctx);
     }
 }
-
-pub fn apply_change<C: AggregationContext>(ctx: &C, mut node: C::Guard<'_>, change: C::DataChange) {
-    let p = node.apply_change(ctx, change);
-    drop(node);
-    p.apply(ctx);
-}
-
-pub fn apply_change_ref<C: AggregationContext>(
-    ctx: &C,
-    mut node: C::Guard<'_>,
-    change: &C::DataChange,
-) {
-    let p = node.apply_change_ref(ctx, change);
-    drop(node);
-    p.apply(ctx);
-}

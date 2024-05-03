@@ -57,10 +57,3 @@ pub fn is_in_progress<C: AggregationContext>(ctx: &C, node_id: &C::NodeRef) -> b
         .load(std::sync::atomic::Ordering::Acquire);
     counter > 0
 }
-
-pub fn in_progress_count<C: AggregationContext>(ctx: &C, node_id: &C::NodeRef) -> u32 {
-    let counter = ctx
-        .atomic_in_progress_counter(node_id)
-        .load(std::sync::atomic::Ordering::Acquire);
-    counter
-}

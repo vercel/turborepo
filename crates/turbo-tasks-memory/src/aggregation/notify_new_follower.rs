@@ -1,12 +1,9 @@
 use std::{cmp::Ordering, hash::Hash};
 
 use super::{
-    balance_queue::{self, BalanceQueue},
-    followers::add_follower,
-    in_progress::finish_in_progress_without_node,
-    increase_aggregation_number_internal,
-    uppers::add_upper,
-    AggregationContext, AggregationNode, PreparedInternalOperation, PreparedOperation,
+    balance_queue::BalanceQueue, followers::add_follower,
+    in_progress::finish_in_progress_without_node, increase_aggregation_number_internal,
+    uppers::add_upper, AggregationContext, AggregationNode, PreparedInternalOperation,
 };
 
 impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {

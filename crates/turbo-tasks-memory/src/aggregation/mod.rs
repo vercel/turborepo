@@ -1,8 +1,4 @@
-use std::{
-    hash::Hash,
-    ops::DerefMut,
-    sync::{atomic::AtomicU32, Arc},
-};
+use std::{hash::Hash, ops::DerefMut, sync::atomic::AtomicU32};
 
 use smallvec::SmallVec;
 
@@ -29,16 +25,12 @@ mod waiter;
 
 pub use aggregation_data::{aggregation_data, prepare_aggregation_data, AggregationDataGuard};
 pub(self) use balance_edge::balance_edge;
-pub use change::apply_change;
 pub(self) use increase::increase_aggregation_number_internal;
 pub(self) use notify_lost_follower::notify_lost_follower;
 pub(self) use notify_new_follower::notify_new_follower;
 pub use root_query::{query_root_info, RootQuery};
 
-use self::{
-    balance_queue::BalanceQueue,
-    waiter::{PotentialWaiter, Waiter},
-};
+use self::{balance_queue::BalanceQueue, waiter::PotentialWaiter};
 
 type StackVec<I> = SmallVec<[I; 16]>;
 
@@ -91,6 +83,7 @@ impl<I, A> AggregationNode<I, A> {
         }
     }
 
+    #[cfg(test)]
     fn followers(&self) -> Option<&CountHashSet<I>> {
         match self {
             AggregationNode::Leaf { .. } => None,
@@ -225,8 +218,6 @@ pub trait AggregationNodeGuard:
     where
         Self: 'a;
 
-    /// Returns the number of children.
-    fn number_of_children(&self) -> usize;
     /// Returns an iterator over the children.
     fn children(&self) -> Self::ChildrenIter<'_>;
     /// Returns a changeset that represents the addition of the node.

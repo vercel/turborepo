@@ -74,35 +74,6 @@ pub fn add_follower_count<C: AggregationContext>(
     }
 }
 
-pub fn remove_follower<C: AggregationContext>(
-    ctx: &C,
-    mut node: C::Guard<'_>,
-    follower_id: &C::NodeRef,
-) {
-    let AggregationNode::Aggegating(aggregating) = &mut *node else {
-        unreachable!();
-    };
-    if aggregating.followers.remove_clonable(follower_id) {
-        on_removed(ctx, node, follower_id);
-    }
-}
-
-pub fn on_removed<C: AggregationContext>(
-    ctx: &C,
-    mut node: C::Guard<'_>,
-    follower_id: &C::NodeRef,
-) {
-    let AggregationNode::Aggegating(aggregating) = &mut *node else {
-        unreachable!();
-    };
-    let uppers = aggregating.uppers.iter().cloned().collect::<StackVec<_>>();
-    start_in_progress_all(ctx, &uppers);
-    drop(node);
-    for upper_id in uppers {
-        notify_lost_follower(ctx, ctx.node(&upper_id), &upper_id, &follower_id);
-    }
-}
-
 pub fn remove_follower_count<C: AggregationContext>(
     ctx: &C,
     mut node: C::Guard<'_>,

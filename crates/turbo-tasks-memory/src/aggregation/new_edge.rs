@@ -86,14 +86,3 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNewEdge<C> {
         balance_queue.process(ctx);
     }
 }
-
-pub fn handle_new_edge<C: AggregationContext>(
-    ctx: &C,
-    mut origin: C::Guard<'_>,
-    origin_id: &C::NodeRef,
-    target_id: &C::NodeRef,
-) {
-    let p = origin.handle_new_edge(ctx, origin_id, target_id);
-    drop(origin);
-    p.apply(ctx);
-}

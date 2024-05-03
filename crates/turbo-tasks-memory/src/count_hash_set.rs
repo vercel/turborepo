@@ -152,41 +152,6 @@ impl<T: Eq + Hash, H: BuildHasher + Default> CountHashSet<T, H> {
         }
     }
 
-    /// Returns true when the value is no longer visible from outside
-    pub fn remove_count(&mut self, item: T, count: usize) -> bool {
-        if count == 0 {
-            return false;
-        }
-        match self.inner.entry(item) {
-            Entry::Occupied(mut e) => {
-                let value = e.get_mut();
-                let old = *value;
-                *value -= count as isize;
-                if *value > 0 {
-                    // It was and still is positive
-                    false
-                } else if *value == 0 {
-                    // It was positive and has become zero
-                    e.remove();
-                    true
-                } else if old > 0 {
-                    // It was positive and is negative now
-                    self.negative_entries += 1;
-                    true
-                } else {
-                    // It was and still is negative
-                    false
-                }
-            }
-            Entry::Vacant(e) => {
-                // It was zero and is negative now
-                e.insert(-(count as isize));
-                self.negative_entries += 1;
-                false
-            }
-        }
-    }
-
     /// Removes an item if it is present.
     pub fn remove_if_entry(&mut self, item: &T) -> RemoveIfEntryResult {
         match self.inner.raw_entry_mut(item) {
@@ -205,19 +170,6 @@ impl<T: Eq + Hash, H: BuildHasher + Default> CountHashSet<T, H> {
                 }
             }
             RawEntry::Vacant(_) => RemoveIfEntryResult::NotPresent,
-        }
-    }
-
-    pub fn remove_entry(&mut self, item: &T) -> isize {
-        match self.inner.raw_entry_mut(item) {
-            RawEntry::Occupied(e) => {
-                let value = e.remove();
-                if value < 0 {
-                    self.negative_entries -= 1;
-                }
-                value
-            }
-            RawEntry::Vacant(_) => 0,
         }
     }
 
@@ -378,11 +330,6 @@ impl<T: Eq + Hash + Clone, H: BuildHasher + Default> CountHashSet<T, H> {
             }
         }
     }
-
-    /// Returns true, when the value is no longer visible from outside
-    pub fn remove_clonable(&mut self, item: &T) -> bool {
-        self.remove_clonable_count(item, 1)
-    }
 }
 
 fn filter<'a, T>((k, v): (&'a T, &'a isize)) -> Option<&'a T> {
@@ -438,19 +385,19 @@ mod tests {
         assert_eq!(set.len(), 2);
         assert!(!set.is_empty());
 
-        assert!(set.remove_count(2, 2));
+        assert!(set.remove_clonable_count(&2, 2));
         assert_eq!(set.len(), 1);
         assert!(!set.is_empty());
 
-        assert!(!set.remove_count(2, 1));
+        assert!(!set.remove_clonable_count(&2, 1));
         assert_eq!(set.len(), 1);
         assert!(!set.is_empty());
 
-        assert!(!set.remove_count(1, 1));
+        assert!(!set.remove_clonable_count(&1, 1));
         assert_eq!(set.len(), 1);
         assert!(!set.is_empty());
 
-        assert!(set.remove_count(1, 1));
+        assert!(set.remove_clonable_count(&1, 1));
         assert_eq!(set.len(), 0);
         assert!(set.is_empty());
 
@@ -470,15 +417,15 @@ mod tests {
         assert_eq!(set.len(), 0);
         assert!(set.is_empty());
 
-        assert!(set.add_clonable(&1));
+        assert!(set.add_clonable_count(&1, 1));
         assert_eq!(set.len(), 1);
         assert!(!set.is_empty());
 
-        assert!(!set.add_clonable(&1));
+        assert!(!set.add_clonable_count(&1, 1));
         assert_eq!(set.len(), 1);
         assert!(!set.is_empty());
 
-        assert!(set.add_clonable(&2));
+        assert!(set.add_clonable_count(&2, 1));
         assert_eq!(set.len(), 2);
         assert!(!set.is_empty());
 
@@ -546,7 +493,7 @@ mod tests {
         assert_eq!(set.len(), 0);
         assert!(set.is_empty());
 
-        assert!(!set.remove_count(1, 0));
+        assert!(!set.remove_clonable_count(&1, 0));
         assert_eq!(set.len(), 0);
         assert!(set.is_empty());
 
@@ -558,7 +505,7 @@ mod tests {
         assert_eq!(set.len(), 0);
         assert!(set.is_empty());
 
-        assert!(!set.remove_count(1, 1));
+        assert!(!set.remove_clonable_count(&1, 1));
         assert_eq!(set.len(), 0);
         assert!(set.is_empty());
 

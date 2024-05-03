@@ -14,7 +14,6 @@ use super::{
     },
     AggregationContext, AggregationNode,
 };
-use crate::aggregation::in_progress::in_progress_count;
 
 // Migrated followers to uppers or uppers to followers depending on the
 // aggregation numbers of the nodes involved in the edge. Might increase targets

@@ -1,11 +1,8 @@
 use std::{hash::Hash, mem::take};
 
 use super::{
-    balance_edge::balance_edge,
-    balance_queue::{self, BalanceQueue},
-    waiter::PotentialWaiter,
-    AggegatingNode, AggregationContext, AggregationNode, AggregationNodeGuard,
-    PreparedInternalOperation, PreparedOperation, StackVec,
+    balance_queue::BalanceQueue, waiter::PotentialWaiter, AggegatingNode, AggregationContext,
+    AggregationNode, AggregationNodeGuard, PreparedInternalOperation, PreparedOperation, StackVec,
 };
 pub(super) const LEAF_NUMBER: u8 = 4;
 
@@ -28,6 +25,7 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
         })
     }
 
+    #[cfg(test)]
     pub fn increase_aggregation_number<C: AggregationContext<NodeRef = I, Data = D>>(
         &mut self,
         _ctx: &C,
@@ -130,7 +128,6 @@ impl<C: AggregationContext> PreparedInternalOperation<C>
                 (uppers, followers)
             }
         };
-        let node_aggregation_number = new_aggregation_number;
         for follower_id in followers {
             balance_queue.balance(node_id.clone(), follower_id);
         }

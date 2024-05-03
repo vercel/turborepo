@@ -157,14 +157,6 @@ impl<'a> TaskAggregationContext<'a> {
         }
     }
 
-    pub fn take_scheduled_dirty_task(&mut self, task: TaskId) -> bool {
-        let dirty_task_to_schedule = self.dirty_tasks_to_schedule.get_mut();
-        dirty_task_to_schedule
-            .as_mut()
-            .map(|t| t.remove(&task))
-            .unwrap_or(false)
-    }
-
     pub fn apply_queued_updates(&mut self) {
         {
             let mut _span = None;
@@ -451,19 +443,6 @@ impl<'l> AggregationNodeGuard for TaskGuard<'l> {
     type NodeRef = TaskId;
     type DataChange = TaskChange;
     type ChildrenIter<'a> = impl Iterator<Item = TaskId> + 'a where Self: 'a;
-
-    fn number_of_children(&self) -> usize {
-        match self.guard {
-            TaskMetaStateWriteGuard::Full(ref guard) => match &guard.state_type {
-                #[cfg(feature = "lazy_remove_children")]
-                TaskStateType::InProgress {
-                    outdated_children, ..
-                } => guard.children.len() + outdated_children.len(),
-                _ => guard.children.len(),
-            },
-            TaskMetaStateWriteGuard::Partial(_) | TaskMetaStateWriteGuard::Unloaded(_) => 0,
-        }
-    }
 
     fn children(&self) -> Self::ChildrenIter<'_> {
         match self.guard {

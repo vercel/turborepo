@@ -1,9 +1,5 @@
 use super::{
-    balance_queue::BalanceQueue,
-    in_progress::{
-        finish_in_progress_without_node, start_in_progress_all, start_in_progress_count,
-    },
-    increase::LEAF_NUMBER,
+    balance_queue::BalanceQueue, in_progress::start_in_progress_count, increase::LEAF_NUMBER,
     increase_aggregation_number_internal, AggegatingNode, AggregationContext, AggregationNode,
     AggregationNodeGuard, PreparedInternalOperation, PreparedOperation, StackVec,
 };
@@ -243,15 +239,5 @@ pub(super) fn get_aggregated_remove_change<C: AggregationContext>(
     match &**guard {
         AggregationNode::Leaf { .. } => guard.get_remove_change(),
         AggregationNode::Aggegating(aggegating) => ctx.data_to_remove_change(&aggegating.data),
-    }
-}
-
-pub(super) fn get_aggregated_add_change<C: AggregationContext>(
-    ctx: &C,
-    guard: &C::Guard<'_>,
-) -> Option<C::DataChange> {
-    match &**guard {
-        AggregationNode::Leaf { .. } => guard.get_add_change(),
-        AggregationNode::Aggegating(aggegating) => ctx.data_to_add_change(&aggegating.data),
     }
 }

@@ -19,8 +19,8 @@ use rstest::*;
 
 use self::aggregation_data::prepare_aggregation_data;
 use super::{
-    aggregation_data, apply_change, lost_edge::handle_lost_edge, new_edge::handle_new_edge,
-    AggregationContext, AggregationNode, AggregationNodeGuard, RootQuery,
+    aggregation_data, lost_edge::handle_lost_edges, AggregationContext, AggregationNode,
+    AggregationNodeGuard, RootQuery,
 };
 use crate::aggregation::{query_root_info, PreparedOperation, StackVec};
 
@@ -283,12 +283,13 @@ impl Node {
     ) {
         let mut guard = self.inner.lock();
         guard.children.push(child.clone());
-        handle_new_edge(
+        let prepared = guard.aggregation_node.handle_new_edge(
             aggregation_context,
-            unsafe { NodeGuard::new(guard, self.clone()) },
             &NodeRef(self.clone()),
             &NodeRef(child),
         );
+        drop(guard);
+        prepared.apply(aggregation_context);
     }
 
     fn prepare_add_child<'c>(
@@ -339,11 +340,11 @@ impl Node {
             .position(|item| Arc::ptr_eq(item, child))
         {
             guard.children.swap_remove(idx);
-            handle_lost_edge(
+            handle_lost_edges(
                 aggregation_context,
                 unsafe { NodeGuard::new(guard, self.clone()) },
                 &NodeRef(self.clone()),
-                &NodeRef(child.clone()),
+                [NodeRef(child.clone())],
             );
         }
     }
@@ -351,11 +352,11 @@ impl Node {
     fn incr(self: &Arc<Node>, aggregation_context: &NodeAggregationContext) {
         let mut guard = self.inner.lock();
         guard.value += 10000;
-        apply_change(
-            aggregation_context,
-            unsafe { NodeGuard::new(guard, self.clone()) },
-            Change { value: 10000 },
-        );
+        let prepared = guard
+            .aggregation_node
+            .apply_change(aggregation_context, Change { value: 10000 });
+        drop(guard);
+        prepared.apply(aggregation_context);
         check_invariants(aggregation_context, once(NodeRef(self.clone())));
     }
 }
@@ -439,10 +440,6 @@ impl AggregationNodeGuard for NodeGuard {
     type NodeRef = NodeRef;
     type DataChange = Change;
     type ChildrenIter<'a> = impl Iterator<Item = NodeRef> + 'a;
-
-    fn number_of_children(&self) -> usize {
-        self.guard.children.len()
-    }
 
     fn children(&self) -> Self::ChildrenIter<'_> {
         self.guard
@@ -886,7 +883,7 @@ fn fuzzy(#[case] seed: u32, #[case] count: u32) {
 
     let mut edges = IndexSet::new();
 
-    for x in 0..1000 {
+    for _ in 0..1000 {
         match r.gen_range(0..=2) {
             0 | 1 => {
                 // if x == 47 {

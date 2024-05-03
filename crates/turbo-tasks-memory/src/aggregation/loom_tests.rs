@@ -1,34 +1,21 @@
 use std::{
-    collections::HashSet,
     hash::Hash,
-    iter::once,
-    ops::{ControlFlow, Deref, DerefMut},
-    sync::{
-        atomic::{AtomicU32, Ordering},
-        Arc,
-    },
-    time::Instant,
+    ops::{Deref, DerefMut},
+    sync::{atomic::AtomicU32, Arc},
 };
 
-use indexmap::IndexSet;
 use loom::{
     sync::{Mutex, MutexGuard},
     thread,
 };
 use nohash_hasher::IsEnabled;
-use rand::{
-    rngs::{SmallRng, StdRng},
-    Rng, SeedableRng,
-};
+use rand::{rngs::SmallRng, Rng, SeedableRng};
 use ref_cast::RefCast;
 use rstest::*;
 
-use self::aggregation_data::prepare_aggregation_data;
 use super::{
-    aggregation_data, apply_change, lost_edge::handle_lost_edge, new_edge::handle_new_edge,
-    AggregationContext, AggregationNode, AggregationNodeGuard, RootQuery,
+    aggregation_data, AggregationContext, AggregationNode, AggregationNodeGuard, PreparedOperation,
 };
-use crate::aggregation::{query_root_info, PreparedOperation, StackVec};
 
 struct Node {
     atomic: AtomicU32,
@@ -42,7 +29,7 @@ impl Node {
             inner: Mutex::new(NodeInner {
                 children: Vec::new(),
                 aggregation_node: AggregationNode::new(),
-                value,
+                _value: value,
             }),
         })
     }
@@ -50,12 +37,13 @@ impl Node {
     fn add_child(self: &Arc<Node>, aggregation_context: &NodeAggregationContext, child: Arc<Node>) {
         let mut guard = self.inner.lock().unwrap();
         guard.children.push(child.clone());
-        handle_new_edge(
+        let prepared = guard.aggregation_node.handle_new_edge(
             aggregation_context,
-            unsafe { NodeGuard::new(guard, self.clone()) },
             &NodeRef(self.clone()),
             &NodeRef(child),
         );
+        drop(guard);
+        prepared.apply(aggregation_context);
     }
 }
 
@@ -65,7 +53,7 @@ struct Change {}
 struct NodeInner {
     children: Vec<Arc<Node>>,
     aggregation_node: AggregationNode<NodeRef, Aggregated>,
-    value: u32,
+    _value: u32,
 }
 
 struct NodeAggregationContext {}
@@ -125,10 +113,6 @@ impl AggregationNodeGuard for NodeGuard {
     type NodeRef = NodeRef;
     type DataChange = Change;
     type ChildrenIter<'a> = impl Iterator<Item = NodeRef> + 'a;
-
-    fn number_of_children(&self) -> usize {
-        self.guard.children.len()
-    }
 
     fn children(&self) -> Self::ChildrenIter<'_> {
         self.guard
@@ -217,8 +201,8 @@ fn fuzzy_loom(#[case] seed: u32, #[case] count: u32) {
                 for i in 0..count {
                     nodes.push(Node::new(i));
                 }
-                prepare_aggregation_data(&ctx, &NodeRef(nodes[0].clone()));
-                prepare_aggregation_data(&ctx, &NodeRef(nodes[1].clone()));
+                aggregation_data(&ctx, &NodeRef(nodes[0].clone()));
+                aggregation_data(&ctx, &NodeRef(nodes[1].clone()));
 
                 // setup graph
                 for _ in 0..20 {

@@ -1,11 +1,8 @@
 use std::{hash::Hash, thread::yield_now, time::Instant};
 
-use anyhow::{bail, Result};
-
 use super::{
     in_progress::{
-        finish_in_progress_without_node, is_in_progress, start_in_progress, start_in_progress_all,
-        start_in_progress_count,
+        finish_in_progress_without_node, start_in_progress_all, start_in_progress_count,
     },
     uppers::get_aggregated_remove_change,
     AggegatingNode, AggregationContext, AggregationNode, AggregationNodeGuard, PreparedOperation,
@@ -172,25 +169,4 @@ pub fn notify_lost_follower<C: AggregationContext>(
     let p = upper.notify_lost_follower(ctx, upper_id, follower_id);
     drop(upper);
     p.apply(ctx);
-}
-
-fn find_path<C: AggregationContext>(
-    ctx: &C,
-    start_id: &C::NodeRef,
-    end_id: &C::NodeRef,
-) -> Result<Vec<C::NodeRef>> {
-    let mut queue = vec![(start_id.clone(), vec![])];
-    while let Some((node_id, mut path)) = queue.pop() {
-        let node = ctx.node(&node_id);
-        if node_id == *end_id {
-            path.push(node_id);
-            return Ok(path);
-        }
-        for child_id in node.children() {
-            let mut new_path = path.clone();
-            new_path.push(node_id.clone());
-            queue.push((child_id, new_path));
-        }
-    }
-    bail!("No path found");
 }

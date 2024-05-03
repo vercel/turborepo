@@ -9,10 +9,6 @@ pub struct Waiter {
 }
 
 impl Waiter {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     pub fn wait(&self) {
         let mut guard = self.mutex.lock();
         while !*guard {
