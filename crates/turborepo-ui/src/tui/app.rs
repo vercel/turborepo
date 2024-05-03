@@ -104,41 +104,38 @@ pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
     let size = terminal.size()?;
 
     let pane_height = (f32::from(app_height) * PANE_SIZE_RATIO) as u16;
-    let app: App<Box<dyn io::Write + Send>> = App::new(pane_height, size.width, tasks);
+    let mut app: App<Box<dyn io::Write + Send>> = App::new(pane_height, size.width, tasks);
 
-    let result = run_app_inner(&mut terminal, app, receiver);
+    let result = run_app_inner(&mut terminal, &mut app, receiver);
 
-    cleanup(terminal)?;
+    cleanup(terminal, app)?;
 
     result
 }
 
 // Break out inner loop so we can use `?` without worrying about cleaning up the
 // terminal.
-fn run_app_inner<B: Backend>(
+fn run_app_inner<B: Backend + std::io::Write>(
     terminal: &mut Terminal<B>,
-    mut app: App<Box<dyn io::Write + Send>>,
+    app: &mut App<Box<dyn io::Write + Send>>,
     receiver: AppReceiver,
 ) -> Result<(), Error> {
     // Render initial state to paint the screen
-    terminal.draw(|f| view(&mut app, f))?;
+    terminal.draw(|f| view(app, f))?;
     let mut last_render = Instant::now();
 
     while let Some(event) = poll(app.interact, &receiver, last_render + FRAMERATE) {
-        if let Some(message) = update(terminal, &mut app, event)? {
+        if let Some(message) = update(app, event)? {
             persist_bytes(terminal, &message)?;
         }
         if app.done {
             break;
         }
         if FRAMERATE <= last_render.elapsed() {
-            terminal.draw(|f| view(&mut app, f))?;
+            terminal.draw(|f| view(app, f))?;
             last_render = Instant::now();
         }
     }
-
-    let started_tasks = app.table.tasks_started().collect();
-    app.pane.render_remaining(started_tasks, terminal)?;
 
     Ok(())
 }
@@ -158,7 +155,11 @@ fn poll(interact: bool, receiver: &AppReceiver, deadline: Instant) -> Option<Eve
 fn startup() -> io::Result<(Terminal<CrosstermBackend<Stdout>>, u16)> {
     crossterm::terminal::enable_raw_mode()?;
     let mut stdout = io::stdout();
-    crossterm::execute!(stdout, crossterm::event::EnableMouseCapture)?;
+    crossterm::execute!(
+        stdout,
+        crossterm::event::EnableMouseCapture,
+        crossterm::terminal::EnterAlternateScreen
+    )?;
     let backend = CrosstermBackend::new(stdout);
 
     // We need to reserve at least 1 line for writing persistent lines.
@@ -167,7 +168,7 @@ fn startup() -> io::Result<(Terminal<CrosstermBackend<Stdout>>, u16)> {
     let mut terminal = Terminal::with_options(
         backend,
         ratatui::TerminalOptions {
-            viewport: ratatui::Viewport::Inline(height),
+            viewport: ratatui::Viewport::Fullscreen,
         },
     )?;
     terminal.hide_cursor()?;
@@ -176,19 +177,24 @@ fn startup() -> io::Result<(Terminal<CrosstermBackend<Stdout>>, u16)> {
 }
 
 /// Restores terminal to expected state
-fn cleanup<B: Backend + io::Write>(mut terminal: Terminal<B>) -> io::Result<()> {
+fn cleanup<B: Backend + io::Write, I>(
+    mut terminal: Terminal<B>,
+    mut app: App<I>,
+) -> io::Result<()> {
     terminal.clear()?;
     crossterm::execute!(
         terminal.backend_mut(),
-        crossterm::event::DisableMouseCapture
+        crossterm::event::DisableMouseCapture,
+        crossterm::terminal::LeaveAlternateScreen,
     )?;
+    let started_tasks = app.table.tasks_started().collect();
+    app.pane.render_remaining(started_tasks)?;
     crossterm::terminal::disable_raw_mode()?;
     terminal.show_cursor()?;
     Ok(())
 }
 
-fn update<B: Backend>(
-    terminal: &mut Terminal<B>,
+fn update(
     app: &mut App<Box<dyn io::Write + Send>>,
     event: Event,
 ) -> Result<Option<Vec<u8>>, Error> {
@@ -213,7 +219,6 @@ fn update<B: Backend>(
         }
         Event::EndTask { task } => {
             app.table.finish_task(&task)?;
-            app.pane.render_screen(&task, terminal)?;
         }
         Event::Up => {
             app.previous();
