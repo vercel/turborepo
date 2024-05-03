@@ -21,15 +21,18 @@ workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
+bytes.workspace = true
 chrono = { workspace = true, features = ["serde"] }
 lazy_static = { workspace = true }
 regex = { workspace = true }
-reqwest = { workspace = true, features = ["json"] }
+reqwest = { workspace = true, features = ["json", "stream"] }
 rustc_version_runtime = "0.2.1"
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
+tokio-stream = "0.1.15"
+tokio-util = { version = "0.7.10", features = ["codec"] }
 tracing = { workspace = true }
 turbopath = { workspace = true }
 turborepo-ci = { workspace = true }

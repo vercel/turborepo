@@ -8,7 +8,7 @@ use std::{backtrace::Backtrace, env, future::Future, time::Duration};
 use lazy_static::lazy_static;
 use regex::Regex;
 pub use reqwest::Response;
-use reqwest::{Method, RequestBuilder, StatusCode};
+use reqwest::{Body, Method, RequestBuilder, StatusCode};
 use serde::Deserialize;
 use turborepo_ci::{is_ci, Vendor};
 use turborepo_vercel_api::{
@@ -25,6 +25,9 @@ mod error;
 mod retry;
 pub mod spaces;
 pub mod telemetry;
+
+pub use bytes::Bytes;
+pub use tokio_stream::Stream;
 
 lazy_static! {
     static ref AUTHORIZATION_REGEX: Regex =
@@ -74,7 +77,7 @@ pub trait CacheClient {
     fn put_artifact(
         &self,
         hash: &str,
-        artifact_body: &[u8],
+        artifact_body: impl tokio_stream::Stream<Item = Result<bytes::Bytes>> + Send + Sync + 'static,
         duration: u64,
         tag: Option<&str>,
         token: &str,
@@ -358,7 +361,7 @@ impl CacheClient for APIClient {
     async fn put_artifact(
         &self,
         hash: &str,
-        artifact_body: &[u8],
+        artifact_body: impl tokio_stream::Stream<Item = Result<bytes::Bytes>> + Send + Sync + 'static,
         duration: u64,
         tag: Option<&str>,
         token: &str,
@@ -382,13 +385,15 @@ impl CacheClient for APIClient {
             request_url = preflight_response.location.clone();
         }
 
+        let stream = Body::wrap_stream(artifact_body);
+
         let mut request_builder = self
             .cache_client
             .put(request_url)
             .header("Content-Type", "application/octet-stream")
             .header("x-artifact-duration", duration.to_string())
             .header("User-Agent", self.user_agent.clone())
-            .body(artifact_body.to_vec());
+            .body(stream);
 
         if allow_auth {
             request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
