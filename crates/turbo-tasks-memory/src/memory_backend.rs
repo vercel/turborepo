@@ -29,13 +29,10 @@ use turbo_tasks::{
 };
 
 use crate::{
-    aggregation::OptimizeQueue,
     cell::RecomputingCell,
     gc::GcQueue,
     output::Output,
-    task::{
-        Task, TaskAggregationContext, TaskDependency, TaskDependencySet, DEPENDENCIES_TO_TRACK,
-    },
+    task::{Task, TaskDependency, TaskDependencySet, DEPENDENCIES_TO_TRACK},
 };
 
 pub struct MemoryBackend {
@@ -46,7 +43,6 @@ pub struct MemoryBackend {
     memory_limit: usize,
     gc_queue: Option<GcQueue>,
     idle_gc_active: AtomicBool,
-    optimize_queue: OptimizeQueue<TaskId>,
 }
 
 impl Default for MemoryBackend {
@@ -69,12 +65,7 @@ impl MemoryBackend {
             memory_limit,
             gc_queue: (memory_limit != usize::MAX).then(GcQueue::new),
             idle_gc_active: AtomicBool::new(false),
-            optimize_queue: OptimizeQueue::new(),
         }
-    }
-
-    pub fn optimize_queue(&self) -> &OptimizeQueue<TaskId> {
-        &self.optimize_queue
     }
 
     fn connect_task_child(

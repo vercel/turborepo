@@ -26,8 +26,7 @@ use rstest::*;
 use self::aggregation_data::prepare_aggregation_data;
 use super::{
     aggregation_data, apply_change, lost_edge::handle_lost_edge, new_edge::handle_new_edge,
-    optimize_queue::OptimizeQueue, AggregationContext, AggregationNode, AggregationNodeGuard,
-    RootQuery,
+    AggregationContext, AggregationNode, AggregationNodeGuard, RootQuery,
 };
 use crate::aggregation::{query_root_info, PreparedOperation, StackVec};
 
@@ -69,9 +68,7 @@ struct NodeInner {
     value: u32,
 }
 
-struct NodeAggregationContext {
-    optimize_queue: OptimizeQueue<NodeRef>,
-}
+struct NodeAggregationContext {}
 
 #[derive(Clone, RefCast)]
 #[repr(transparent)]
@@ -183,10 +180,6 @@ impl AggregationContext for NodeAggregationContext {
     fn data_to_remove_change(&self, _data: &Self::Data) -> Option<Self::DataChange> {
         None
     }
-
-    fn optimize_queue(&self) -> &OptimizeQueue<NodeRef> {
-        &self.optimize_queue
-    }
 }
 
 #[derive(Default)]
@@ -215,9 +208,7 @@ fn fuzzy_loom(#[case] seed: u32, #[case] count: u32) {
         thread::Builder::new()
             .stack_size(80000)
             .spawn(move || {
-                let ctx = NodeAggregationContext {
-                    optimize_queue: OptimizeQueue::new(),
-                };
+                let ctx = NodeAggregationContext {};
 
                 let mut seed_buffer = [0; 32];
                 seed_buffer[0..4].copy_from_slice(&seed.to_be_bytes());

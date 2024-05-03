@@ -71,12 +71,8 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNewEdge<C> {
                 for upper_id in uppers {
                     notify_new_follower(ctx, ctx.node(&upper_id), &upper_id, &target_id);
                 }
-                ctx.optimize_queue().process(ctx);
             }
-            PreparedNewEdge::Aggegating { notify } => {
-                notify.apply(ctx);
-                ctx.optimize_queue().process(ctx);
-            }
+            PreparedNewEdge::Aggegating { notify } => notify.apply(ctx),
         }
     }
 }

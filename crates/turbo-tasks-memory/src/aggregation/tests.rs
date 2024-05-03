@@ -20,8 +20,7 @@ use rstest::*;
 use self::aggregation_data::prepare_aggregation_data;
 use super::{
     aggregation_data, apply_change, lost_edge::handle_lost_edge, new_edge::handle_new_edge,
-    optimize_queue::OptimizeQueue, AggregationContext, AggregationNode, AggregationNodeGuard,
-    RootQuery,
+    AggregationContext, AggregationNode, AggregationNodeGuard, RootQuery,
 };
 use crate::aggregation::{query_root_info, PreparedOperation, StackVec};
 
@@ -383,7 +382,6 @@ struct NodeAggregationContext<'a> {
     #[allow(dead_code)]
     something_with_lifetime: &'a u32,
     add_value: bool,
-    optimize_queue: OptimizeQueue<NodeRef>,
 }
 
 #[derive(Clone, RefCast)]
@@ -531,10 +529,6 @@ impl<'a> AggregationContext for NodeAggregationContext<'a> {
             Some(change)
         }
     }
-
-    fn optimize_queue(&self) -> &OptimizeQueue<NodeRef> {
-        &self.optimize_queue
-    }
 }
 
 #[derive(Default)]
@@ -573,7 +567,6 @@ fn chain() {
         additions: AtomicU32::new(0),
         something_with_lifetime: &something_with_lifetime,
         add_value: true,
-        optimize_queue: OptimizeQueue::new(),
     };
     let root = Node::new(1);
     let mut current = root.clone();
@@ -656,7 +649,6 @@ fn chain_double_connected() {
         additions: AtomicU32::new(0),
         something_with_lifetime: &something_with_lifetime,
         add_value: true,
-        optimize_queue: OptimizeQueue::new(),
     };
     let root = Node::new(1);
     let mut nodes = vec![root.clone()];
@@ -682,7 +674,7 @@ fn chain_double_connected() {
         assert_eq!(aggregated.value, 26049);
     }
     check_invariants(&ctx, once(current.clone()));
-    assert_eq!(ctx.additions.load(Ordering::SeqCst), 969);
+    assert_eq!(ctx.additions.load(Ordering::SeqCst), 953);
     ctx.additions.store(0, Ordering::SeqCst);
 
     print(&ctx, &current, true);
@@ -709,7 +701,6 @@ fn rectangle_tree() {
         additions: AtomicU32::new(0),
         something_with_lifetime: &something_with_lifetime,
         add_value: false,
-        optimize_queue: OptimizeQueue::new(),
     };
     let mut nodes: Vec<Vec<Arc<Node>>> = Vec::new();
     let mut extra_nodes = Vec::new();
@@ -756,7 +747,6 @@ fn many_children() {
         additions: AtomicU32::new(0),
         something_with_lifetime: &something_with_lifetime,
         add_value: false,
-        optimize_queue: OptimizeQueue::new(),
     };
     let mut roots: Vec<Arc<Node>> = Vec::new();
     let mut children: Vec<Arc<Node>> = Vec::new();
@@ -826,7 +816,6 @@ fn concurrent_modification() {
         additions: AtomicU32::new(0),
         something_with_lifetime: &something_with_lifetime,
         add_value: true,
-        optimize_queue: OptimizeQueue::new(),
     };
     let root1 = Node::new(1);
     let root2 = Node::new(2);
@@ -863,7 +852,7 @@ fn concurrent_modification() {
     check_invariants(&ctx, [root1, root2].map(NodeRef));
 }
 
-// #[test]
+#[test]
 fn fuzzy_new() {
     for size in [10, 50, 100, 200, 1000] {
         for _ in 0..1000 {
@@ -884,7 +873,6 @@ fn fuzzy(#[case] seed: u32, #[case] count: u32) {
         additions: AtomicU32::new(0),
         something_with_lifetime: &something_with_lifetime,
         add_value: true,
-        optimize_queue: OptimizeQueue::new(),
     };
 
     let mut seed_buffer = [0; 32];

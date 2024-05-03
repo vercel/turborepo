@@ -15,7 +15,7 @@ use super::{meta_state::TaskMetaStateWriteGuard, TaskStateType};
 use crate::{
     aggregation::{
         aggregation_data, AggregationContext, AggregationDataGuard, AggregationNode,
-        AggregationNodeGuard, OptimizeQueue, RootQuery,
+        AggregationNodeGuard, RootQuery,
     },
     MemoryBackend,
 };
@@ -379,10 +379,6 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
         } else {
             Some(change)
         }
-    }
-
-    fn optimize_queue(&self) -> &OptimizeQueue<TaskId> {
-        self.backend.optimize_queue()
     }
 }
 
