@@ -67,7 +67,7 @@ impl<'a> EntireScreen<'a> {
                 wrapping = row.wrapped();
             }
             // If the row ended in non-default attributes, then clear them
-            if &attrs != &default {
+            if attrs != default {
                 crate::term::ClearAttrs.write_buf(&mut contents);
             }
             contents
