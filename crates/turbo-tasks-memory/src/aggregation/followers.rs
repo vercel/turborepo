@@ -1,11 +1,12 @@
 use super::{
-    in_progress::start_in_progress_all, notify_lost_follower, notify_new_follower,
-    AggregationContext, AggregationNode, StackVec,
+    balance_queue::BalanceQueue, in_progress::start_in_progress_all, notify_lost_follower,
+    notify_new_follower, AggregationContext, AggregationNode, StackVec,
 };
 use crate::count_hash_set::RemovePositiveCountResult;
 
 pub fn add_follower<C: AggregationContext>(
     ctx: &C,
+    balance_queue: &mut BalanceQueue<C::NodeRef>,
     mut node: C::Guard<'_>,
     follower_id: &C::NodeRef,
 ) {
@@ -13,11 +14,16 @@ pub fn add_follower<C: AggregationContext>(
         unreachable!();
     };
     if aggregating.followers.add_clonable(follower_id) {
-        on_added(ctx, node, follower_id);
+        on_added(ctx, balance_queue, node, follower_id);
     }
 }
 
-pub fn on_added<C: AggregationContext>(ctx: &C, mut node: C::Guard<'_>, follower_id: &C::NodeRef) {
+pub fn on_added<C: AggregationContext>(
+    ctx: &C,
+    balance_queue: &mut BalanceQueue<C::NodeRef>,
+    mut node: C::Guard<'_>,
+    follower_id: &C::NodeRef,
+) {
     let AggregationNode::Aggegating(aggregating) = &mut *node else {
         unreachable!();
     };
@@ -25,12 +31,19 @@ pub fn on_added<C: AggregationContext>(ctx: &C, mut node: C::Guard<'_>, follower
     start_in_progress_all(ctx, &uppers);
     drop(node);
     for upper_id in uppers {
-        notify_new_follower(ctx, ctx.node(&upper_id), &upper_id, &follower_id);
+        notify_new_follower(
+            ctx,
+            balance_queue,
+            ctx.node(&upper_id),
+            &upper_id,
+            &follower_id,
+        );
     }
 }
 
 pub fn add_follower_count<C: AggregationContext>(
     ctx: &C,
+    balance_queue: &mut BalanceQueue<C::NodeRef>,
     mut node: C::Guard<'_>,
     follower_id: &C::NodeRef,
     follower_count: usize,
@@ -47,7 +60,13 @@ pub fn add_follower_count<C: AggregationContext>(
         start_in_progress_all(ctx, &uppers);
         drop(node);
         for upper_id in uppers {
-            notify_new_follower(ctx, ctx.node(&upper_id), &upper_id, &follower_id);
+            notify_new_follower(
+                ctx,
+                balance_queue,
+                ctx.node(&upper_id),
+                &upper_id,
+                &follower_id,
+            );
         }
         count
     } else {
@@ -77,6 +96,7 @@ pub fn on_removed<C: AggregationContext>(
         unreachable!();
     };
     let uppers = aggregating.uppers.iter().cloned().collect::<StackVec<_>>();
+    start_in_progress_all(ctx, &uppers);
     drop(node);
     for upper_id in uppers {
         notify_lost_follower(ctx, ctx.node(&upper_id), &upper_id, &follower_id);
@@ -97,6 +117,7 @@ pub fn remove_follower_count<C: AggregationContext>(
         .remove_clonable_count(follower_id, follower_count)
     {
         let uppers = aggregating.uppers.iter().cloned().collect::<StackVec<_>>();
+        start_in_progress_all(ctx, &uppers);
         drop(node);
         for upper_id in uppers {
             notify_lost_follower(ctx, ctx.node(&upper_id), &upper_id, &follower_id);
@@ -128,6 +149,7 @@ pub fn remove_positive_follower_count<C: AggregationContext>(
 
     if removed {
         let uppers = aggregating.uppers.iter().cloned().collect::<StackVec<_>>();
+        start_in_progress_all(ctx, &uppers);
         drop(node);
         for upper_id in uppers {
             notify_lost_follower(ctx, ctx.node(&upper_id), &upper_id, &follower_id);

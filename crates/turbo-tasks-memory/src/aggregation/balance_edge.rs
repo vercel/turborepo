@@ -1,38 +1,40 @@
 use std::cmp::Ordering;
 
 use super::{
+    balance_queue::BalanceQueue,
     followers::{
-        self, add_follower_count, remove_follower_count, remove_positive_follower_count,
+        add_follower_count, remove_follower_count, remove_positive_follower_count,
         RemovePositveFollowerCountResult,
     },
-    increase_aggregation_number,
+    in_progress::is_in_progress,
+    increase_aggregation_number_internal,
     uppers::{
-        self, add_upper_count, remove_positive_upper_count, remove_upper_count,
+        add_upper_count, remove_positive_upper_count, remove_upper_count,
         RemovePositiveUpperCountResult,
     },
-    AggegatingNode, AggregationContext, AggregationNode,
+    AggregationContext, AggregationNode,
 };
-use crate::count_hash_set::RemovePositiveCountResult;
+use crate::aggregation::in_progress::in_progress_count;
 
 // Migrated followers to uppers or uppers to followers depending on the
 // aggregation numbers of the nodes involved in the edge. Might increase targets
 // aggregation number if they are equal.
 pub(super) fn balance_edge<C: AggregationContext>(
     ctx: &C,
+    balance_queue: &mut BalanceQueue<C::NodeRef>,
     upper_id: &C::NodeRef,
     target_id: &C::NodeRef,
     mut upper_aggregation_number: u32,
     mut target_aggregation_number: u32,
-    is_inner: bool,
 ) {
     // too many uppers on target
     let mut extra_uppers = 0;
     // too many followers on upper
     let mut extra_followers = 0;
     // The last info about uppers
-    let mut uppers_count = (!is_inner).then_some(0);
+    let mut uppers_count: Option<isize> = None;
     // The last info about followers
-    let mut followers_count = is_inner.then_some(0);
+    let mut followers_count = None;
 
     loop {
         let root = upper_aggregation_number == u32::MAX || target_aggregation_number == u32::MAX;
@@ -54,13 +56,13 @@ pub(super) fn balance_edge<C: AggregationContext>(
                     target_aggregation_number = target.aggregation_number();
                     if upper_aggregation_number == target_aggregation_number {
                         // increase target aggregation number
-                        increase_aggregation_number(
+                        increase_aggregation_number_internal(
                             ctx,
+                            balance_queue,
                             target,
                             &target_id,
                             target_aggregation_number + 1,
                         );
-                        continue;
                     }
                 }
             }
@@ -77,19 +79,37 @@ pub(super) fn balance_edge<C: AggregationContext>(
                         // add some extra followers
                         let count = uppers_count.unwrap_or(1) as usize;
                         extra_followers += count;
-                        followers_count = Some(add_follower_count(ctx, upper, &target_id, count));
-                        continue;
+                        followers_count = Some(add_follower_count(
+                            ctx,
+                            balance_queue,
+                            upper,
+                            &target_id,
+                            count,
+                        ));
                     }
                 } else {
                     // we already have extra followers, remove some uppers to balance
                     let count = extra_followers + extra_uppers;
                     let target = ctx.node(&target_id);
-                    let RemovePositiveUpperCountResult {
-                        removed_count,
-                        remaining_count,
-                    } = remove_positive_upper_count(ctx, target, &upper_id, count);
-                    decrease_numbers(removed_count, &mut extra_uppers, &mut extra_followers);
-                    uppers_count = Some(remaining_count);
+                    if is_in_progress(ctx, &upper_id) {
+                        drop(target);
+                        let mut upper = ctx.node(&upper_id);
+                        if is_in_progress(ctx, &upper_id) {
+                            let AggregationNode::Aggegating(aggregating) = &mut *upper else {
+                                unreachable!();
+                            };
+                            let waiter = aggregating.waiting_for_in_progress.waiter();
+                            drop(upper);
+                            waiter.wait();
+                        }
+                    } else {
+                        let RemovePositiveUpperCountResult {
+                            removed_count,
+                            remaining_count,
+                        } = remove_positive_upper_count(ctx, target, &upper_id, count);
+                        decrease_numbers(removed_count, &mut extra_uppers, &mut extra_followers);
+                        uppers_count = Some(remaining_count);
+                    }
                 }
             }
             Ordering::Greater => {
@@ -102,12 +122,30 @@ pub(super) fn balance_edge<C: AggregationContext>(
                     target_aggregation_number = target.aggregation_number();
                     if root || target_aggregation_number < upper_aggregation_number {
                         // target should be a inner node of upper
-                        // add some extra uppers
-                        let count = followers_count.unwrap_or(1) as usize;
-                        extra_uppers += count;
-                        uppers_count =
-                            Some(add_upper_count(ctx, target, &target_id, &upper_id, count));
-                        continue;
+                        if is_in_progress(ctx, &upper_id) {
+                            drop(target);
+                            let mut upper = ctx.node(&upper_id);
+                            if is_in_progress(ctx, &upper_id) {
+                                let AggregationNode::Aggegating(aggregating) = &mut *upper else {
+                                    unreachable!();
+                                };
+                                let waiter = aggregating.waiting_for_in_progress.waiter();
+                                drop(upper);
+                                waiter.wait();
+                            }
+                        } else {
+                            // add some extra uppers
+                            let count = followers_count.unwrap_or(1) as usize;
+                            extra_uppers += count;
+                            uppers_count = Some(add_upper_count(
+                                ctx,
+                                balance_queue,
+                                target,
+                                &target_id,
+                                &upper_id,
+                                count,
+                            ));
+                        }
                     }
                 } else {
                     // we already have extra uppers, try to remove some followers to balance

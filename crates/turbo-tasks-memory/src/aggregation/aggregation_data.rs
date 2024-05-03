@@ -1,8 +1,9 @@
 use std::ops::{Deref, DerefMut};
 
 use super::{
-    increase_aggregation_number, AggregationContext, AggregationNode, AggregationNodeGuard,
+    increase_aggregation_number_internal, AggregationContext, AggregationNode, AggregationNodeGuard,
 };
+use crate::aggregation::balance_queue::BalanceQueue;
 
 /// Gives an reference to the root aggregated info for a given item.
 pub fn aggregation_data<'l, C: AggregationContext>(
@@ -16,7 +17,9 @@ where
     if guard.aggregation_number() == u32::MAX {
         AggregationDataGuard { guard }
     } else {
-        increase_aggregation_number(ctx, guard, node_id, u32::MAX);
+        let mut balance_queue = BalanceQueue::new();
+        increase_aggregation_number_internal(ctx, &mut balance_queue, guard, node_id, u32::MAX);
+        balance_queue.process(ctx);
         let guard = ctx.node(node_id);
         debug_assert!(guard.aggregation_number() == u32::MAX);
         AggregationDataGuard { guard }
@@ -24,7 +27,15 @@ where
 }
 
 pub fn prepare_aggregation_data<C: AggregationContext>(ctx: &C, node_id: &C::NodeRef) {
-    increase_aggregation_number(ctx, ctx.node(node_id), node_id, u32::MAX);
+    let mut balance_queue = BalanceQueue::new();
+    increase_aggregation_number_internal(
+        ctx,
+        &mut balance_queue,
+        ctx.node(node_id),
+        node_id,
+        u32::MAX,
+    );
+    balance_queue.process(ctx);
 }
 
 /// A reference to the root aggregated info of a node.

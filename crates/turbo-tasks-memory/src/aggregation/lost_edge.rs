@@ -17,7 +17,7 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
         match self {
             AggregationNode::Leaf { uppers, .. } => {
                 let uppers = uppers.iter().cloned().collect::<StackVec<_>>();
-                // start_in_progress_all(ctx, &uppers);
+                start_in_progress_all(ctx, &uppers);
                 Some(
                     PreparedLostEdgeInner::Leaf {
                         uppers,
@@ -27,7 +27,7 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
                 )
             }
             AggregationNode::Aggegating(_) => {
-                // start_in_progress(ctx, origin_id);
+                start_in_progress(ctx, origin_id);
                 let notify = self.notify_lost_follower(ctx, origin_id, target_id);
                 notify.map(|notify| notify.into())
             }
@@ -44,16 +44,16 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
             AggregationNode::Leaf { uppers, .. } => {
                 let uppers = uppers.iter().cloned().collect::<StackVec<_>>();
                 let target_ids: StackVec<_> = target_ids.into_iter().collect();
-                // for upper_id in &uppers {
-                //     start_in_progress_count(ctx, upper_id, target_ids.len() as u32);
-                // }
+                for upper_id in &uppers {
+                    start_in_progress_count(ctx, upper_id, target_ids.len() as u32);
+                }
                 Some(PreparedLostEdgesInner::Leaf { uppers, target_ids }.into())
             }
             AggregationNode::Aggegating(_) => {
                 let notify = target_ids
                     .into_iter()
                     .filter_map(|target_id| {
-                        // start_in_progress(ctx, origin_id);
+                        start_in_progress(ctx, origin_id);
                         self.notify_lost_follower(ctx, origin_id, &target_id)
                     })
                     .collect::<StackVec<_>>();

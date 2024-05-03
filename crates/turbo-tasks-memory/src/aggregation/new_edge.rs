@@ -1,10 +1,11 @@
 use std::hash::Hash;
 
 use super::{
+    balance_queue::BalanceQueue,
     in_progress::{start_in_progress, start_in_progress_all},
-    increase_aggregation_number, notify_new_follower,
+    increase_aggregation_number_internal, notify_new_follower,
     notify_new_follower::PreparedNotifyNewFollower,
-    AggregationContext, AggregationNode, PreparedOperation, StackVec,
+    AggregationContext, AggregationNode, PreparedInternalOperation, PreparedOperation, StackVec,
 };
 
 impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
@@ -53,27 +54,36 @@ enum PreparedNewEdge<C: AggregationContext> {
 impl<C: AggregationContext> PreparedOperation<C> for PreparedNewEdge<C> {
     type Result = ();
     fn apply(self, ctx: &C) {
+        let mut balance_queue = BalanceQueue::new();
         match self {
             PreparedNewEdge::Leaf {
                 child_aggregation_number,
                 uppers,
                 target_id,
             } => {
+                for upper_id in uppers {
+                    notify_new_follower(
+                        ctx,
+                        &mut balance_queue,
+                        ctx.node(&upper_id),
+                        &upper_id,
+                        &target_id,
+                    );
+                }
                 {
                     // TODO add to prepared
-                    increase_aggregation_number(
+                    increase_aggregation_number_internal(
                         ctx,
+                        &mut balance_queue,
                         ctx.node(&target_id),
                         &target_id,
                         child_aggregation_number,
                     );
                 }
-                for upper_id in uppers {
-                    notify_new_follower(ctx, ctx.node(&upper_id), &upper_id, &target_id);
-                }
             }
-            PreparedNewEdge::Aggegating { notify } => notify.apply(ctx),
+            PreparedNewEdge::Aggegating { notify } => notify.apply(ctx, &mut balance_queue),
         }
+        balance_queue.process(ctx);
     }
 }
 

@@ -1,9 +1,12 @@
 use std::{cmp::Ordering, hash::Hash};
 
 use super::{
-    followers::add_follower, in_progress::finish_in_progress_without_node,
-    increase_aggregation_number, uppers::add_upper, AggregationContext, AggregationNode,
-    PreparedOperation,
+    balance_queue::{self, BalanceQueue},
+    followers::add_follower,
+    in_progress::finish_in_progress_without_node,
+    increase_aggregation_number_internal,
+    uppers::add_upper,
+    AggregationContext, AggregationNode, PreparedInternalOperation, PreparedOperation,
 };
 
 impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
@@ -52,9 +55,9 @@ pub(super) enum PreparedNotifyNewFollower<C: AggregationContext> {
     },
 }
 
-impl<C: AggregationContext> PreparedOperation<C> for PreparedNotifyNewFollower<C> {
+impl<C: AggregationContext> PreparedInternalOperation<C> for PreparedNotifyNewFollower<C> {
     type Result = ();
-    fn apply(self, ctx: &C) {
+    fn apply(self, ctx: &C, balance_queue: &mut BalanceQueue<C::NodeRef>) {
         match self {
             PreparedNotifyNewFollower::AlreadyAdded => return,
             PreparedNotifyNewFollower::Inner {
@@ -62,7 +65,7 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNotifyNewFollower<C
                 follower_id,
             } => {
                 let follower = ctx.node(&follower_id);
-                add_upper(ctx, follower, &follower_id, &upper_id);
+                add_upper(ctx, balance_queue, follower, &follower_id, &upper_id);
                 finish_in_progress_without_node(ctx, &upper_id);
             }
             PreparedNotifyNewFollower::FollowerOrInner {
@@ -73,7 +76,7 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNotifyNewFollower<C
                 let follower = ctx.node(&follower_id);
                 let follower_aggregation_number = follower.aggregation_number();
                 if follower_aggregation_number < upper_aggregation_number {
-                    add_upper(ctx, follower, &follower_id, &upper_id);
+                    add_upper(ctx, balance_queue, follower, &follower_id, &upper_id);
                     finish_in_progress_without_node(ctx, &upper_id);
                     return;
                 } else {
@@ -95,8 +98,9 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNotifyNewFollower<C
                                 let follower = ctx.node(&follower_id);
                                 let follower_aggregation_number = follower.aggregation_number();
                                 if follower_aggregation_number == upper_aggregation_number {
-                                    increase_aggregation_number(
+                                    increase_aggregation_number_internal(
                                         ctx,
+                                        balance_queue,
                                         follower,
                                         &follower_id,
                                         upper_aggregation_number + 1,
@@ -108,7 +112,7 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNotifyNewFollower<C
                             }
                             Ordering::Greater => {
                                 upper.finish_in_progress(ctx, &upper_id);
-                                add_follower(ctx, upper, &follower_id);
+                                add_follower(ctx, balance_queue, upper, &follower_id);
                                 return;
                             }
                         }
@@ -121,11 +125,12 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNotifyNewFollower<C
 
 pub fn notify_new_follower<C: AggregationContext>(
     ctx: &C,
+    balance_queue: &mut BalanceQueue<C::NodeRef>,
     mut upper: C::Guard<'_>,
     upper_id: &C::NodeRef,
     follower_id: &C::NodeRef,
 ) {
     let p = upper.notify_new_follower(ctx, upper_id, follower_id);
     drop(upper);
-    p.apply(ctx);
+    p.apply(ctx, balance_queue);
 }

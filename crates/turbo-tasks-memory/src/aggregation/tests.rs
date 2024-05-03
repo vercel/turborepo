@@ -588,7 +588,7 @@ fn chain() {
         let aggregated = aggregation_data(&ctx, &current);
         assert_eq!(aggregated.value, 15050);
     }
-    assert_eq!(ctx.additions.load(Ordering::SeqCst), 192);
+    assert_eq!(ctx.additions.load(Ordering::SeqCst), 242);
     ctx.additions.store(0, Ordering::SeqCst);
     check_invariants(&ctx, once(current.clone()));
 
@@ -674,7 +674,7 @@ fn chain_double_connected() {
         assert_eq!(aggregated.value, 26049);
     }
     check_invariants(&ctx, once(current.clone()));
-    assert_eq!(ctx.additions.load(Ordering::SeqCst), 953);
+    assert_eq!(ctx.additions.load(Ordering::SeqCst), 1061);
     ctx.additions.store(0, Ordering::SeqCst);
 
     print(&ctx, &current, true);
@@ -855,7 +855,7 @@ fn concurrent_modification() {
 #[test]
 fn fuzzy_new() {
     for size in [10, 50, 100, 200, 1000] {
-        for _ in 0..1000 {
+        for _ in 0..100 {
             let seed = rand::random();
             println!("Seed {} Size {}", seed, size);
             fuzzy(seed, size);

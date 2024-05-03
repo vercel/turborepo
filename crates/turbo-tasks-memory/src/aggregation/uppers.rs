@@ -1,10 +1,11 @@
 use super::{
+    balance_queue::BalanceQueue,
     in_progress::{
         finish_in_progress_without_node, start_in_progress_all, start_in_progress_count,
     },
     increase::LEAF_NUMBER,
-    increase_aggregation_number, AggegatingNode, AggregationContext, AggregationNode,
-    AggregationNodeGuard, PreparedOperation, StackVec,
+    increase_aggregation_number_internal, AggegatingNode, AggregationContext, AggregationNode,
+    AggregationNodeGuard, PreparedInternalOperation, PreparedOperation, StackVec,
 };
 use crate::count_hash_set::RemovePositiveCountResult;
 
@@ -12,15 +13,17 @@ const MAX_UPPERS: usize = 4;
 
 pub fn add_upper<C: AggregationContext>(
     ctx: &C,
+    balance_queue: &mut BalanceQueue<C::NodeRef>,
     node: C::Guard<'_>,
     node_id: &C::NodeRef,
     upper_id: &C::NodeRef,
 ) {
-    add_upper_count(ctx, node, node_id, upper_id, 1);
+    add_upper_count(ctx, balance_queue, node, node_id, upper_id, 1);
 }
 
 pub fn add_upper_count<C: AggregationContext>(
     ctx: &C,
+    balance_queue: &mut BalanceQueue<C::NodeRef>,
     mut node: C::Guard<'_>,
     node_id: &C::NodeRef,
     upper_id: &C::NodeRef,
@@ -47,7 +50,7 @@ pub fn add_upper_count<C: AggregationContext>(
         }
     };
     if added {
-        on_added(ctx, node, node_id, upper_id);
+        on_added(ctx, balance_queue, node, node_id, upper_id);
     } else {
         drop(node);
     }
@@ -56,6 +59,7 @@ pub fn add_upper_count<C: AggregationContext>(
 
 pub fn on_added<C: AggregationContext>(
     ctx: &C,
+    balance_queue: &mut BalanceQueue<C::NodeRef>,
     mut node: C::Guard<'_>,
     node_id: &C::NodeRef,
     upper_id: &C::NodeRef,
@@ -92,7 +96,7 @@ pub fn on_added<C: AggregationContext>(
         .collect::<StackVec<_>>();
     drop(upper);
     add_prepared.apply(ctx);
-    prepared.apply(ctx);
+    prepared.apply(ctx, balance_queue);
 
     // This heuristic ensures that we don’t have too many upper edges, which would
     // degrade update performance
@@ -115,13 +119,25 @@ pub fn on_added<C: AggregationContext>(
             }
         }
         if leaf {
-            increase_aggregation_number(ctx, ctx.node(node_id), node_id, min + 1);
+            increase_aggregation_number_internal(
+                ctx,
+                balance_queue,
+                ctx.node(node_id),
+                node_id,
+                min + 1,
+            );
         } else {
             let normal_count = count - root_count;
             if normal_count > 0 {
                 let avg_uppers_uppers = uppers_uppers / normal_count;
                 if count > avg_uppers_uppers && root_count * 2 < count {
-                    increase_aggregation_number(ctx, ctx.node(node_id), node_id, min + 1);
+                    increase_aggregation_number_internal(
+                        ctx,
+                        balance_queue,
+                        ctx.node(node_id),
+                        node_id,
+                        min + 1,
+                    );
                 }
             }
         }
@@ -188,7 +204,7 @@ pub fn on_removed<C: AggregationContext>(ctx: &C, node: C::Guard<'_>, upper_id: 
             let mut upper = ctx.node(upper_id);
             let remove_prepared =
                 remove_change.and_then(|remove_change| upper.apply_change(ctx, remove_change));
-            // start_in_progress_count(ctx, upper_id, children.len() as u32);
+            start_in_progress_count(ctx, upper_id, children.len() as u32);
             let prepared = children
                 .into_iter()
                 .map(|child_id| upper.notify_lost_follower(ctx, upper_id, &child_id))
@@ -208,7 +224,7 @@ pub fn on_removed<C: AggregationContext>(ctx: &C, node: C::Guard<'_>, upper_id: 
             let mut upper = ctx.node(upper_id);
             let remove_prepared =
                 remove_change.and_then(|remove_change| upper.apply_change(ctx, remove_change));
-            // start_in_progress_count(ctx, upper_id, followers.len() as u32);
+            start_in_progress_count(ctx, upper_id, followers.len() as u32);
             let prepared = followers
                 .into_iter()
                 .map(|child_id| upper.notify_lost_follower(ctx, upper_id, &child_id))

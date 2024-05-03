@@ -10,6 +10,7 @@ use crate::count_hash_set::CountHashSet;
 
 mod aggregation_data;
 mod balance_edge;
+mod balance_queue;
 mod change;
 mod followers;
 mod in_progress;
@@ -29,12 +30,15 @@ mod waiter;
 pub use aggregation_data::{aggregation_data, prepare_aggregation_data, AggregationDataGuard};
 pub(self) use balance_edge::balance_edge;
 pub use change::apply_change;
-pub(self) use increase::increase_aggregation_number;
+pub(self) use increase::increase_aggregation_number_internal;
 pub(self) use notify_lost_follower::notify_lost_follower;
 pub(self) use notify_new_follower::notify_new_follower;
 pub use root_query::{query_root_info, RootQuery};
 
-use self::waiter::{PotentialWaiter, Waiter};
+use self::{
+    balance_queue::BalanceQueue,
+    waiter::{PotentialWaiter, Waiter},
+};
 
 type StackVec<I> = SmallVec<[I; 16]>;
 
@@ -128,6 +132,47 @@ impl<C: AggregationContext, T: PreparedOperation<C>, const N: usize> PreparedOpe
     fn apply(self, ctx: &C) -> Self::Result {
         for prepared in self {
             prepared.apply(ctx);
+        }
+    }
+}
+
+#[must_use]
+pub trait PreparedInternalOperation<C: AggregationContext> {
+    type Result;
+    fn apply(self, ctx: &C, balance_queue: &mut BalanceQueue<C::NodeRef>) -> Self::Result;
+}
+
+impl<C: AggregationContext, T: PreparedInternalOperation<C>> PreparedInternalOperation<C>
+    for Option<T>
+{
+    type Result = Option<T::Result>;
+    fn apply(self, ctx: &C, balance_queue: &mut BalanceQueue<C::NodeRef>) -> Self::Result {
+        if let Some(prepared) = self {
+            Some(prepared.apply(ctx, balance_queue))
+        } else {
+            None
+        }
+    }
+}
+
+impl<C: AggregationContext, T: PreparedInternalOperation<C>> PreparedInternalOperation<C>
+    for Vec<T>
+{
+    type Result = ();
+    fn apply(self, ctx: &C, balance_queue: &mut BalanceQueue<C::NodeRef>) -> Self::Result {
+        for prepared in self {
+            prepared.apply(ctx, balance_queue);
+        }
+    }
+}
+
+impl<C: AggregationContext, T: PreparedInternalOperation<C>, const N: usize>
+    PreparedInternalOperation<C> for SmallVec<[T; N]>
+{
+    type Result = ();
+    fn apply(self, ctx: &C, balance_queue: &mut BalanceQueue<C::NodeRef>) -> Self::Result {
+        for prepared in self {
+            prepared.apply(ctx, balance_queue);
         }
     }
 }
