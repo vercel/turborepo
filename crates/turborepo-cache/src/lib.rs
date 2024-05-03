@@ -44,6 +44,10 @@ pub enum CacheError {
     InvalidFilePath(String, #[backtrace] Backtrace),
     #[error("failed to contact remote cache: {0}")]
     ApiClientError(Box<turborepo_api_client::Error>, #[backtrace] Backtrace),
+    #[error("the cache artifact for {0} was too large to upload within the timeout")]
+    TimeoutError(String),
+    #[error("could not connect to the cache")]
+    ConnectError,
     #[error("signing artifact failed: {0}")]
     SignatureError(#[from] SignatureError, #[backtrace] Backtrace),
     #[error("invalid duration")]
