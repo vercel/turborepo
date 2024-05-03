@@ -21,10 +21,8 @@ use super::{
 pub(super) fn balance_edge<C: AggregationContext>(
     ctx: &C,
     balance_queue: &mut BalanceQueue<C::NodeRef>,
-    upper_id: &C::NodeRef,
-    target_id: &C::NodeRef,
-    mut upper_aggregation_number: u32,
-    mut target_aggregation_number: u32,
+    upper_id: C::NodeRef,
+    target_id: C::NodeRef,
 ) {
     // too many uppers on target
     let mut extra_uppers = 0;
@@ -34,6 +32,9 @@ pub(super) fn balance_edge<C: AggregationContext>(
     let mut uppers_count: Option<isize> = None;
     // The last info about followers
     let mut followers_count = None;
+
+    let mut upper_aggregation_number = 0;
+    let mut target_aggregation_number = 0;
 
     loop {
         let root = upper_aggregation_number == u32::MAX || target_aggregation_number == u32::MAX;
@@ -97,15 +98,24 @@ pub(super) fn balance_edge<C: AggregationContext>(
                             let AggregationNode::Aggegating(aggregating) = &mut *upper else {
                                 unreachable!();
                             };
-                            let waiter = aggregating.waiting_for_in_progress.waiter();
+                            aggregating
+                                .enqueued_balancing
+                                .push((upper_id.clone(), target_id.clone()));
                             drop(upper);
-                            waiter.wait();
+                            // Somebody else will balance this edge
+                            return;
                         }
                     } else {
                         let RemovePositiveUpperCountResult {
                             removed_count,
                             remaining_count,
-                        } = remove_positive_upper_count(ctx, target, &upper_id, count);
+                        } = remove_positive_upper_count(
+                            ctx,
+                            balance_queue,
+                            target,
+                            &upper_id,
+                            count,
+                        );
                         decrease_numbers(removed_count, &mut extra_uppers, &mut extra_followers);
                         uppers_count = Some(remaining_count);
                     }
@@ -128,9 +138,12 @@ pub(super) fn balance_edge<C: AggregationContext>(
                                 let AggregationNode::Aggegating(aggregating) = &mut *upper else {
                                     unreachable!();
                                 };
-                                let waiter = aggregating.waiting_for_in_progress.waiter();
+                                aggregating
+                                    .enqueued_balancing
+                                    .push((upper_id.clone(), target_id.clone()));
                                 drop(upper);
-                                waiter.wait();
+                                // Somebody else will balance this edge
+                                return;
                             }
                         } else {
                             // add some extra uppers
@@ -153,7 +166,13 @@ pub(super) fn balance_edge<C: AggregationContext>(
                     let RemovePositveFollowerCountResult {
                         removed_count,
                         remaining_count,
-                    } = remove_positive_follower_count(ctx, upper, &target_id, count);
+                    } = remove_positive_follower_count(
+                        ctx,
+                        balance_queue,
+                        upper,
+                        &target_id,
+                        count,
+                    );
                     decrease_numbers(removed_count, &mut extra_followers, &mut extra_uppers);
                     followers_count = Some(remaining_count);
                 }
@@ -162,11 +181,11 @@ pub(super) fn balance_edge<C: AggregationContext>(
     }
     if extra_followers > 0 {
         let upper = ctx.node(&upper_id);
-        remove_follower_count(ctx, upper, &target_id, extra_followers);
+        remove_follower_count(ctx, balance_queue, upper, &target_id, extra_followers);
     }
     if extra_uppers > 0 {
         let target = ctx.node(&target_id);
-        remove_upper_count(ctx, target, &upper_id, extra_uppers);
+        remove_upper_count(ctx, balance_queue, target, &upper_id, extra_uppers);
     }
 }
 

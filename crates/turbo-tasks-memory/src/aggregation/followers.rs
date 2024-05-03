@@ -76,6 +76,7 @@ pub fn add_follower_count<C: AggregationContext>(
 
 pub fn remove_follower_count<C: AggregationContext>(
     ctx: &C,
+    balance_queue: &mut BalanceQueue<C::NodeRef>,
     mut node: C::Guard<'_>,
     follower_id: &C::NodeRef,
     follower_count: usize,
@@ -91,7 +92,13 @@ pub fn remove_follower_count<C: AggregationContext>(
         start_in_progress_all(ctx, &uppers);
         drop(node);
         for upper_id in uppers {
-            notify_lost_follower(ctx, ctx.node(&upper_id), &upper_id, &follower_id);
+            notify_lost_follower(
+                ctx,
+                balance_queue,
+                ctx.node(&upper_id),
+                &upper_id,
+                &follower_id,
+            );
         }
     }
 }
@@ -103,6 +110,7 @@ pub struct RemovePositveFollowerCountResult {
 
 pub fn remove_positive_follower_count<C: AggregationContext>(
     ctx: &C,
+    balance_queue: &mut BalanceQueue<C::NodeRef>,
     mut node: C::Guard<'_>,
     follower_id: &C::NodeRef,
     follower_count: usize,
@@ -123,7 +131,13 @@ pub fn remove_positive_follower_count<C: AggregationContext>(
         start_in_progress_all(ctx, &uppers);
         drop(node);
         for upper_id in uppers {
-            notify_lost_follower(ctx, ctx.node(&upper_id), &upper_id, &follower_id);
+            notify_lost_follower(
+                ctx,
+                balance_queue,
+                ctx.node(&upper_id),
+                &upper_id,
+                &follower_id,
+            );
         }
     }
     RemovePositveFollowerCountResult {

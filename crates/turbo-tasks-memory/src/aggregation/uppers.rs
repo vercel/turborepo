@@ -88,7 +88,7 @@ pub fn on_added<C: AggregationContext>(
     let add_prepared = add_change.and_then(|add_change| upper.apply_change(ctx, add_change));
     let prepared = followers
         .into_iter()
-        .map(|child_id| upper.notify_new_follower(ctx, upper_id, &child_id))
+        .map(|child_id| upper.notify_new_follower(ctx, balance_queue, upper_id, &child_id))
         .collect::<StackVec<_>>();
     drop(upper);
     add_prepared.apply(ctx);
@@ -142,6 +142,7 @@ pub fn on_added<C: AggregationContext>(
 
 pub fn remove_upper_count<C: AggregationContext>(
     ctx: &C,
+    balance_queue: &mut BalanceQueue<C::NodeRef>,
     mut node: C::Guard<'_>,
     upper_id: &C::NodeRef,
     count: usize,
@@ -154,7 +155,7 @@ pub fn remove_upper_count<C: AggregationContext>(
         }
     };
     if removed {
-        on_removed(ctx, node, upper_id);
+        on_removed(ctx, balance_queue, node, upper_id);
     }
 }
 
@@ -165,6 +166,7 @@ pub struct RemovePositiveUpperCountResult {
 
 pub fn remove_positive_upper_count<C: AggregationContext>(
     ctx: &C,
+    balance_queue: &mut BalanceQueue<C::NodeRef>,
     mut node: C::Guard<'_>,
     upper_id: &C::NodeRef,
     count: usize,
@@ -183,7 +185,7 @@ pub fn remove_positive_upper_count<C: AggregationContext>(
         }
     };
     if removed {
-        on_removed(ctx, node, upper_id);
+        on_removed(ctx, balance_queue, node, upper_id);
     }
     RemovePositiveUpperCountResult {
         removed_count,
@@ -191,7 +193,12 @@ pub fn remove_positive_upper_count<C: AggregationContext>(
     }
 }
 
-pub fn on_removed<C: AggregationContext>(ctx: &C, node: C::Guard<'_>, upper_id: &C::NodeRef) {
+pub fn on_removed<C: AggregationContext>(
+    ctx: &C,
+    balance_queue: &mut BalanceQueue<C::NodeRef>,
+    node: C::Guard<'_>,
+    upper_id: &C::NodeRef,
+) {
     match &*node {
         AggregationNode::Leaf { .. } => {
             let remove_change = node.get_remove_change();
@@ -203,11 +210,11 @@ pub fn on_removed<C: AggregationContext>(ctx: &C, node: C::Guard<'_>, upper_id: 
             start_in_progress_count(ctx, upper_id, children.len() as u32);
             let prepared = children
                 .into_iter()
-                .map(|child_id| upper.notify_lost_follower(ctx, upper_id, &child_id))
+                .map(|child_id| upper.notify_lost_follower(ctx, balance_queue, upper_id, &child_id))
                 .collect::<StackVec<_>>();
             drop(upper);
             remove_prepared.apply(ctx);
-            prepared.apply(ctx);
+            prepared.apply(ctx, balance_queue);
         }
         AggregationNode::Aggegating(aggegating) => {
             let remove_change = ctx.data_to_remove_change(&aggegating.data);
@@ -223,11 +230,11 @@ pub fn on_removed<C: AggregationContext>(ctx: &C, node: C::Guard<'_>, upper_id: 
             start_in_progress_count(ctx, upper_id, followers.len() as u32);
             let prepared = followers
                 .into_iter()
-                .map(|child_id| upper.notify_lost_follower(ctx, upper_id, &child_id))
+                .map(|child_id| upper.notify_lost_follower(ctx, balance_queue, upper_id, &child_id))
                 .collect::<StackVec<_>>();
             drop(upper);
             remove_prepared.apply(ctx);
-            prepared.apply(ctx);
+            prepared.apply(ctx, balance_queue);
         }
     }
 }

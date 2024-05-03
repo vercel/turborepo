@@ -21,7 +21,6 @@ mod root_query;
 #[cfg(test)]
 mod tests;
 mod uppers;
-mod waiter;
 
 pub use aggregation_data::{aggregation_data, prepare_aggregation_data, AggregationDataGuard};
 pub(self) use balance_edge::balance_edge;
@@ -30,7 +29,7 @@ pub(self) use notify_lost_follower::notify_lost_follower;
 pub(self) use notify_new_follower::notify_new_follower;
 pub use root_query::{query_root_info, RootQuery};
 
-use self::{balance_queue::BalanceQueue, waiter::PotentialWaiter};
+use self::balance_queue::BalanceQueue;
 
 type StackVec<I> = SmallVec<[I; 16]>;
 
@@ -56,7 +55,7 @@ pub struct AggegatingNode<I, D> {
     uppers: CountHashSet<I>,
     followers: CountHashSet<I>,
     data: D,
-    waiting_for_in_progress: PotentialWaiter,
+    enqueued_balancing: Vec<(I, I)>,
 }
 
 impl<I, A> AggregationNode<I, A> {

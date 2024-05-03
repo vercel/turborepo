@@ -1,11 +1,10 @@
 use std::hash::Hash;
 
 use super::{
-    balance_queue::BalanceQueue,
-    in_progress::{start_in_progress, start_in_progress_all},
+    balance_queue::BalanceQueue, in_progress::start_in_progress_all,
     increase_aggregation_number_internal, notify_new_follower,
-    notify_new_follower::PreparedNotifyNewFollower,
-    AggregationContext, AggregationNode, PreparedInternalOperation, PreparedOperation, StackVec,
+    notify_new_follower::PreparedNotifyNewFollower, AggregationContext, AggregationNode,
+    PreparedInternalOperation, PreparedOperation, StackVec,
 };
 
 impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
@@ -30,12 +29,9 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
                     target_id: target_id.clone(),
                 }
             }
-            AggregationNode::Aggegating(_) => {
-                start_in_progress(ctx, origin_id);
-                PreparedNewEdge::Aggegating {
-                    notify: self.notify_new_follower(ctx, origin_id, target_id),
-                }
-            }
+            AggregationNode::Aggegating(_) => PreparedNewEdge::Aggegating {
+                notify: self.notify_new_follower_not_in_progress(ctx, origin_id, target_id),
+            },
         }
     }
 }
@@ -61,15 +57,6 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNewEdge<C> {
                 uppers,
                 target_id,
             } => {
-                for upper_id in uppers {
-                    notify_new_follower(
-                        ctx,
-                        &mut balance_queue,
-                        ctx.node(&upper_id),
-                        &upper_id,
-                        &target_id,
-                    );
-                }
                 {
                     // TODO add to prepared
                     increase_aggregation_number_internal(
@@ -78,6 +65,15 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNewEdge<C> {
                         ctx.node(&target_id),
                         &target_id,
                         child_aggregation_number,
+                    );
+                }
+                for upper_id in uppers {
+                    notify_new_follower(
+                        ctx,
+                        &mut balance_queue,
+                        ctx.node(&upper_id),
+                        &upper_id,
+                        &target_id,
                     );
                 }
             }

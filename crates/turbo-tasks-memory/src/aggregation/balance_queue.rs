@@ -17,11 +17,15 @@ impl<I> BalanceQueue<I> {
         self.queue.push((upper_id, target_id));
     }
 
+    pub fn balance_all(&mut self, edges: Vec<(I, I)>) {
+        self.queue.extend(edges.into_iter());
+    }
+
     pub fn process<C: AggregationContext<NodeRef = I>>(mut self, ctx: &C) {
         while !self.queue.is_empty() {
             let queue = take(&mut self.queue);
             for (upper_id, target_id) in queue {
-                balance_edge(ctx, &mut self, &upper_id, &target_id, 0, 0);
+                balance_edge(ctx, &mut self, upper_id, target_id);
             }
         }
     }

@@ -1,8 +1,8 @@
 use std::{hash::Hash, mem::take};
 
 use super::{
-    balance_queue::BalanceQueue, waiter::PotentialWaiter, AggegatingNode, AggregationContext,
-    AggregationNode, AggregationNodeGuard, PreparedInternalOperation, PreparedOperation, StackVec,
+    balance_queue::BalanceQueue, AggegatingNode, AggregationContext, AggregationNode,
+    AggregationNodeGuard, PreparedInternalOperation, PreparedOperation, StackVec,
 };
 pub(super) const LEAF_NUMBER: u8 = 4;
 
@@ -107,7 +107,7 @@ impl<C: AggregationContext> PreparedInternalOperation<C>
                         uppers: take(uppers),
                         followers: children.iter().cloned().collect(),
                         data: node.get_initial_data(),
-                        waiting_for_in_progress: PotentialWaiter::new(),
+                        enqueued_balancing: Vec::new(),
                     }));
                     let followers = children;
                     drop(node);

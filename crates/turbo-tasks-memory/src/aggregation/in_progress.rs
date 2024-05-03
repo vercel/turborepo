@@ -1,11 +1,12 @@
-use std::hash::Hash;
+use std::{hash::Hash, mem::take};
 
-use super::{AggregationContext, AggregationNode, StackVec};
+use super::{balance_queue::BalanceQueue, AggregationContext, AggregationNode, StackVec};
 
 impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
     pub(super) fn finish_in_progress<C: AggregationContext<NodeRef = I, Data = D>>(
         &mut self,
         ctx: &C,
+        balance_queue: &mut BalanceQueue<I>,
         node_id: &I,
     ) {
         let value = ctx
@@ -14,13 +15,17 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
         debug_assert!(value > 0);
         if value == 1 {
             if let AggregationNode::Aggegating(aggegating) = &mut *self {
-                aggegating.waiting_for_in_progress.notify();
+                balance_queue.balance_all(take(&mut aggegating.enqueued_balancing))
             }
         }
     }
 }
 
-pub fn finish_in_progress_without_node<C: AggregationContext>(ctx: &C, node_id: &C::NodeRef) {
+pub fn finish_in_progress_without_node<C: AggregationContext>(
+    ctx: &C,
+    balance_queue: &mut BalanceQueue<C::NodeRef>,
+    node_id: &C::NodeRef,
+) {
     let value = ctx
         .atomic_in_progress_counter(node_id)
         .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
@@ -28,7 +33,7 @@ pub fn finish_in_progress_without_node<C: AggregationContext>(ctx: &C, node_id: 
     if value == 1 {
         let mut node = ctx.node(node_id);
         if let AggregationNode::Aggegating(aggegating) = &mut *node {
-            aggegating.waiting_for_in_progress.notify();
+            balance_queue.balance_all(take(&mut aggegating.enqueued_balancing))
         }
     }
 }

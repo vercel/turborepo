@@ -585,7 +585,7 @@ fn chain() {
         let aggregated = aggregation_data(&ctx, &current);
         assert_eq!(aggregated.value, 15050);
     }
-    assert_eq!(ctx.additions.load(Ordering::SeqCst), 242);
+    assert_eq!(ctx.additions.load(Ordering::SeqCst), 192);
     ctx.additions.store(0, Ordering::SeqCst);
     check_invariants(&ctx, once(current.clone()));
 
@@ -671,7 +671,7 @@ fn chain_double_connected() {
         assert_eq!(aggregated.value, 26049);
     }
     check_invariants(&ctx, once(current.clone()));
-    assert_eq!(ctx.additions.load(Ordering::SeqCst), 1061);
+    assert_eq!(ctx.additions.load(Ordering::SeqCst), 967);
     ctx.additions.store(0, Ordering::SeqCst);
 
     print(&ctx, &current, true);

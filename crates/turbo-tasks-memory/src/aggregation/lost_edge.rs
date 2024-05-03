@@ -1,9 +1,9 @@
 use std::hash::Hash;
 
 use super::{
-    in_progress::{start_in_progress, start_in_progress_count},
-    notify_lost_follower::PreparedNotifyLostFollower,
-    AggregationContext, AggregationNode, PreparedOperation, StackVec,
+    balance_queue::BalanceQueue, in_progress::start_in_progress_count,
+    notify_lost_follower::PreparedNotifyLostFollower, AggregationContext, AggregationNode,
+    PreparedInternalOperation, PreparedOperation, StackVec,
 };
 
 impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
@@ -27,8 +27,7 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
                 let notify = target_ids
                     .into_iter()
                     .filter_map(|target_id| {
-                        start_in_progress(ctx, origin_id);
-                        self.notify_lost_follower(ctx, origin_id, &target_id)
+                        self.notify_lost_follower_not_in_progress(ctx, origin_id, &target_id)
                     })
                     .collect::<StackVec<_>>();
                 (!notify.is_empty()).then(|| notify.into())
@@ -68,6 +67,7 @@ enum PreparedLostEdgesInner<C: AggregationContext> {
 impl<C: AggregationContext> PreparedOperation<C> for PreparedLostEdges<C> {
     type Result = ();
     fn apply(self, ctx: &C) {
+        let mut balance_queue = BalanceQueue::new();
         match self.inner {
             PreparedLostEdgesInner::Leaf { uppers, target_ids } => {
                 // TODO This could be more efficient
@@ -76,17 +76,23 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedLostEdges<C> {
                     let prepared = target_ids
                         .iter()
                         .filter_map(|target_id| {
-                            upper.notify_lost_follower(ctx, &upper_id, target_id)
+                            upper.notify_lost_follower(
+                                ctx,
+                                &mut balance_queue,
+                                &upper_id,
+                                target_id,
+                            )
                         })
                         .collect::<StackVec<_>>();
                     drop(upper);
-                    prepared.apply(ctx);
+                    prepared.apply(ctx, &mut balance_queue);
                 }
             }
             PreparedLostEdgesInner::Aggregating { notify } => {
-                notify.apply(ctx);
+                notify.apply(ctx, &mut balance_queue);
             }
         }
+        balance_queue.process(ctx);
     }
 }
 
