@@ -188,17 +188,17 @@ impl<W> TerminalOutput<W> {
     #[tracing::instrument(skip(self))]
     fn persist_screen(&mut self, task_name: &str) -> std::io::Result<()> {
         let screen = self.parser.entire_screen();
-        let title = format!("{task_name} >\r\n");
+        let title = self.title(task_name);
         let mut stdout = std::io::stdout().lock();
-        stdout.write_all("┌ ".as_bytes())?;
+        stdout.write_all("┌".as_bytes())?;
         stdout.write_all(title.as_bytes())?;
+        stdout.write_all(b"\r\n")?;
         for row in screen.rows_formatted(0, self.cols) {
             stdout.write_all("│ ".as_bytes())?;
             stdout.write_all(&row)?;
             stdout.write_all(b"\r\n")?;
         }
-        stdout.write_all("└ ".as_bytes())?;
-        stdout.write_all(title.as_bytes())?;
+        stdout.write_all("└────>\r\n".as_bytes())?;
         self.has_been_persisted = true;
 
         Ok(())
