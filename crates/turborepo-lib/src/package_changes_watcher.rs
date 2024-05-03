@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashSet, ops::DerefMut, path::PathBuf};
+use std::{cell::RefCell, collections::HashSet, ops::DerefMut};
 
 use ignore::gitignore::Gitignore;
 use notify::Event;
@@ -56,7 +56,8 @@ impl PackageChangesWatcher {
 
 enum ChangedFiles {
     All,
-    Some(Trie<PathBuf, ()>),
+    // Trie doesn't support PathBuf as a key on Windows, so we need to use `String`
+    Some(Trie<String, ()>),
 }
 
 impl ChangedFiles {
@@ -189,7 +190,9 @@ impl Subscriber {
                             self.changed_files.lock().await.borrow_mut().deref_mut()
                         {
                             for path in paths {
-                                trie.insert(path, ());
+                                if let Some(path) = path.to_str() {
+                                    trie.insert(path.to_string(), ());
+                                }
                             }
                         }
                     }
@@ -264,7 +267,7 @@ impl Subscriber {
                 };
 
                 let gitignore_path = self.repo_root.join_component(".gitignore");
-                if trie.get(gitignore_path.as_std_path()).is_some() {
+                if trie.get(gitignore_path.as_str()).is_some() {
                     let (new_root_gitignore, _) = Gitignore::new(&gitignore_path);
                     root_gitignore = new_root_gitignore;
                 }
@@ -272,7 +275,7 @@ impl Subscriber {
                 let changed_files: HashSet<_> = trie
                     .keys()
                     .filter_map(|p| {
-                        let p = AbsoluteSystemPathBuf::try_from(p.as_path()).ok()?;
+                        let p = AbsoluteSystemPathBuf::new(p).ok()?;
                         self.repo_root.anchor(p).ok()
                     })
                     .filter(|p| {
