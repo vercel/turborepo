@@ -1,4 +1,4 @@
-use std::{backtrace, backtrace::Backtrace};
+use std::backtrace;
 
 use thiserror::Error;
 use turbopath::AnchoredSystemPathBuf;

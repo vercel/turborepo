@@ -1,7 +1,8 @@
 use std::fs;
 
 use scip::types::{
-    symbol_information::Kind, Document, Index, Metadata, SymbolInformation, TextEncoding, ToolInfo,
+    symbol_information::Kind, Document, Index, Metadata, Relationship, SymbolInformation,
+    TextEncoding, ToolInfo,
 };
 use thiserror::Error;
 use turbopath::AbsoluteSystemPath;
@@ -25,34 +26,48 @@ impl Run {
     }
 }
 
+impl Run {
+    /// This follows a specific grammar. We can look into defining
+    /// a more correct format later: https://sourcegraph.com/github.com/sourcegraph/scip@6495bfbd33671ccd4a2358505fdf30058140ff32/-/blob/scip.proto?L147
+    fn create_symbol_for_package(&self, package_node: &PackageNode) -> String {
+        format!(
+            "{} {} {} {} {}/",
+            // Scheme
+            package_node.as_package_name(),
+            // Manager
+            self.pkg_dep_graph.package_manager(),
+            // Package Name
+            package_node.as_package_name(),
+            // Version
+            "*",
+            package_node.as_package_name()
+        )
+    }
+}
+
 impl<'a> Into<Index> for &'a Run {
     fn into(self) -> Index {
         let documents = self
             .pkg_dep_graph
             .packages()
             .map(|(pkg_name, pkg)| {
+                let pkg_node = PackageNode::Workspace(pkg_name.clone());
                 let symbols = self
                     .pkg_dep_graph
-                    .immediate_dependencies(&PackageNode::Workspace(pkg_name.clone()))
+                    .immediate_dependencies(&pkg_node)
                     .iter()
                     .flatten()
                     .map(|dep| SymbolInformation {
-                        // This follows a specific grammar. We can look into defining
-                        // a turbo format later: https://sourcegraph.com/github.com/sourcegraph/scip@6495bfbd33671ccd4a2358505fdf30058140ff32/-/blob/scip.proto?L147
-                        symbol: format!(
-                            "{} {} {} {} {}/",
-                            // Scheme
-                            dep.as_package_name(),
-                            // Manager
-                            self.pkg_dep_graph.package_manager(),
-                            // Package Name
-                            dep.as_package_name(),
-                            // Version
-                            "*",
-                            dep.as_package_name()
-                        ),
+                        symbol: self.create_symbol_for_package(dep),
                         documentation: vec![],
-                        relationships: vec![],
+                        relationships: vec![Relationship {
+                            symbol: self.create_symbol_for_package(&pkg_node),
+                            is_reference: false,
+                            is_implementation: true,
+                            is_type_definition: false,
+                            is_definition: false,
+                            special_fields: Default::default(),
+                        }],
                         kind: Kind::Package.into(),
                         display_name: dep.as_package_name().to_string(),
                         signature_documentation: Default::default(),
