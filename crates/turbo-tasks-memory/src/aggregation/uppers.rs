@@ -5,7 +5,10 @@ use super::{
 };
 use crate::count_hash_set::RemovePositiveCountResult;
 
+#[cfg(test)]
 const MAX_UPPERS: usize = 4;
+#[cfg(not(test))]
+const MAX_UPPERS: usize = 16;
 
 pub fn add_upper<C: AggregationContext>(
     ctx: &C,

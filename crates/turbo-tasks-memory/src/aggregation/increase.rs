@@ -4,7 +4,10 @@ use super::{
     balance_queue::BalanceQueue, AggegatingNode, AggregationContext, AggregationNode,
     AggregationNodeGuard, PreparedInternalOperation, PreparedOperation, StackVec,
 };
+#[cfg(test)]
 pub(super) const LEAF_NUMBER: u8 = 4;
+#[cfg(not(test))]
+pub(super) const LEAF_NUMBER: u8 = 64;
 
 impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
     pub(super) fn increase_aggregation_number_internal<
