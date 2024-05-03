@@ -17,7 +17,7 @@ use std::{
 use anyhow::Result;
 use auto_hash_map::{AutoMap, AutoSet};
 use nohash_hasher::BuildNoHashHasher;
-use parking_lot::{Mutex, MutexGuard, RwLock};
+use parking_lot::{Mutex, RwLock};
 use rustc_hash::FxHasher;
 use smallvec::SmallVec;
 use stats::TaskStats;
@@ -31,14 +31,12 @@ use turbo_tasks::{
 };
 
 use crate::{
-    aggregation::{
-        aggregation_data, prepare_aggregation_data, AggregationDataGuard, PreparedOperation,
-    },
+    aggregation::{aggregation_data, AggregationDataGuard, PreparedOperation},
     cell::Cell,
     gc::{to_exp_u8, GcPriority, GcStats, GcTaskState},
     output::{Output, OutputContent},
     stats::{ReferenceType, StatsReferences, StatsTaskType},
-    task::aggregation::{TaskAggregationContext, TaskChange},
+    task::aggregation::TaskChange,
     MemoryBackend,
 };
 
@@ -48,6 +46,8 @@ pub type NativeTaskFn = Box<dyn Fn() -> NativeTaskFuture + Send + Sync>;
 mod aggregation;
 mod meta_state;
 mod stats;
+
+pub use aggregation::TaskAggregationContext;
 
 // TODO remove this lock for better performance after the concurrency problem is
 // solved
@@ -1565,9 +1565,6 @@ impl Task {
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> Result<Result<T, EventListener>> {
         let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
-        if strongly_consistent {
-            prepare_aggregation_data(&aggregation_context, &self.id);
-        }
         let mut state = if strongly_consistent {
             let mut aggregation = aggregation_data(&aggregation_context, &self.id);
             if aggregation.unfinished > 0 {

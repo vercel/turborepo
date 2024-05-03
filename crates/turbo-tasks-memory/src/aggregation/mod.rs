@@ -15,6 +15,7 @@ mod lost_edge;
 mod new_edge;
 mod notify_lost_follower;
 mod notify_new_follower;
+mod optimize_queue;
 mod root_query;
 #[cfg(test)]
 mod tests;
@@ -26,6 +27,7 @@ pub use change::apply_change;
 pub(self) use increase::increase_aggregation_number;
 pub(self) use notify_lost_follower::notify_lost_follower;
 pub(self) use notify_new_follower::notify_new_follower;
+pub use optimize_queue::OptimizeQueue;
 pub use root_query::{query_root_info, RootQuery};
 
 type StackVec<I> = SmallVec<[I; 16]>;
@@ -153,6 +155,8 @@ pub trait AggregationContext {
     /// Creates a changeset from an aggregated data object, that represents
     /// removing the aggregated node from an aggregated node of the next level.
     fn data_to_remove_change(&self, data: &Self::Data) -> Option<Self::DataChange>;
+
+    fn optimize_queue(&self) -> &OptimizeQueue<Self::NodeRef>;
 }
 
 pub trait AggregationNodeGuard:

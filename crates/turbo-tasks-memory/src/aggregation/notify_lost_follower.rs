@@ -100,10 +100,10 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNotifyLostFollower<
                         RemoveIfEntryResult::NotPresent => {
                             drop(follower);
                             if try_count > 1000 {
-                                // panic!(
-                                //     "The graph is malformed, we need to remove either follower or
-                                // \      upper but neither exists."
-                                // );
+                                panic!(
+                                    "The graph is malformed, we need to remove either follower or \
+                                     upper but neither exists."
+                                );
                                 // TODO(sokra) This should not happen, but it's a bug that will
                                 // happen I need more time to
                                 // investigate this, but to unblock this in general

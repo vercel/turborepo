@@ -1,8 +1,8 @@
 use std::{hash::Hash, mem::take};
 
 use super::{
-    balance_edge::balance_edge, AggegatingNode, AggregationContext, AggregationNode,
-    AggregationNodeGuard, PreparedOperation, StackVec,
+    AggegatingNode, AggregationContext, AggregationNode, AggregationNodeGuard, PreparedOperation,
+    StackVec,
 };
 pub(super) const LEAF_NUMBER: u8 = 4;
 
@@ -111,19 +111,12 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedIncreaseAggregation
                 (uppers, followers)
             }
         };
-        let node_aggregation_number = new_aggregation_number;
+        let optimize_queue = &ctx.optimize_queue();
         for follower_id in followers {
-            balance_edge(
-                ctx,
-                &node_id,
-                &follower_id,
-                node_aggregation_number,
-                0,
-                false,
-            );
+            optimize_queue.balance_edge(node_id.clone(), follower_id);
         }
         for upper_id in uppers {
-            balance_edge(ctx, &upper_id, &node_id, 0, node_aggregation_number, true);
+            optimize_queue.balance_edge(upper_id, node_id.clone());
         }
     }
 }

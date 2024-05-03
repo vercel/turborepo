@@ -12,11 +12,15 @@ pub fn aggregation_data<'l, C: AggregationContext>(
 where
     C: 'l,
 {
-    let guard = ctx.node(node_id);
-    if guard.aggregation_number() == u32::MAX {
-        AggregationDataGuard { guard }
-    } else {
-        increase_aggregation_number(ctx, guard, node_id, u32::MAX);
+    {
+        let guard = ctx.node(node_id);
+        if guard.aggregation_number() == u32::MAX {
+            return AggregationDataGuard { guard };
+        }
+    }
+    increase_aggregation_number(ctx, ctx.node(&node_id), &node_id, u32::MAX);
+    ctx.optimize_queue().force_process(ctx);
+    {
         let guard = ctx.node(node_id);
         debug_assert!(guard.aggregation_number() == u32::MAX);
         AggregationDataGuard { guard }
@@ -24,7 +28,8 @@ where
 }
 
 pub fn prepare_aggregation_data<C: AggregationContext>(ctx: &C, node_id: &C::NodeRef) {
-    increase_aggregation_number(ctx, ctx.node(node_id), node_id, u32::MAX);
+    increase_aggregation_number(ctx, ctx.node(&node_id), &node_id, u32::MAX);
+    ctx.optimize_queue().force_process(ctx);
 }
 
 /// A reference to the root aggregated info of a node.
