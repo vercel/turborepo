@@ -744,8 +744,8 @@ fn many_children() {
     };
     let mut roots: Vec<Arc<Node>> = Vec::new();
     let mut children: Vec<Arc<Node>> = Vec::new();
-    const CHILDREN: u32 = 50000;
-    const ROOTS: u32 = 1000;
+    const CHILDREN: u32 = 100000;
+    const ROOTS: u32 = 10000;
     let inner_node = Node::new(0);
     let start = Instant::now();
     for i in 0..ROOTS {
