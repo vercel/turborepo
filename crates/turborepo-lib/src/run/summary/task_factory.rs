@@ -159,7 +159,7 @@ impl<'a> TaskSummaryFactory<'a> {
             ),
             cache: cache_summary,
             command,
-            cli_arguments: self.run_opts.pass_through_args.to_vec(),
+            cli_arguments: self.run_opts.args_for_task(&task_id).unwrap_or(vec![]),
             outputs: match task_definition.outputs.inclusions.is_empty() {
                 false => Some(task_definition.outputs.inclusions.clone()),
                 true => None,

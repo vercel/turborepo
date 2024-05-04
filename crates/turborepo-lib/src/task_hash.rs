@@ -396,7 +396,7 @@ impl<'a> TaskHasher<'a> {
             task: task_id.task(),
             outputs,
 
-            pass_through_args: &self.run_opts.pass_through_args,
+            pass_through_args: &self.run_opts.args_for_task(&task_id).unwrap_or_default(),
             env: &task_definition.env,
             resolved_env_vars: hashable_env_pairs,
             pass_through_env: task_definition
