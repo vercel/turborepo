@@ -236,6 +236,8 @@ pub struct TaskHashTracker {
 pub struct TaskHashTrackerState {
     #[serde(skip)]
     package_task_env_vars: HashMap<TaskId<'static>, DetailedMap>,
+    #[serde(skip)]
+    package_task_args: HashMap<TaskId<'static>, Vec<String>>,
     package_task_hashes: HashMap<TaskId<'static>, String>,
     #[serde(skip)]
     package_task_framework: HashMap<TaskId<'static>, String>,
@@ -282,6 +284,7 @@ impl<'a> TaskHasher<'a> {
         task_id: &TaskId<'static>,
         task_definition: &TaskDefinition,
         task_env_mode: ResolvedEnvMode,
+        task_args: &Vec<String>,
         workspace: &PackageInfo,
         dependency_set: HashSet<&TaskNode>,
         telemetry: PackageTaskEventBuilder,
@@ -396,7 +399,7 @@ impl<'a> TaskHasher<'a> {
             task: task_id.task(),
             outputs,
 
-            pass_through_args: &self.run_opts.args_for_task(&task_id).unwrap_or_default(),
+            pass_through_args: task_args,
             env: &task_definition.env,
             resolved_env_vars: hashable_env_pairs,
             pass_through_env: task_definition
@@ -412,6 +415,7 @@ impl<'a> TaskHasher<'a> {
         self.task_hash_tracker.insert_hash(
             task_id.clone(),
             env_vars,
+            task_args.clone(),
             task_hash.clone(),
             framework_slug,
         );
@@ -546,6 +550,7 @@ impl TaskHashTracker {
         &self,
         task_id: TaskId<'static>,
         env_vars: DetailedMap,
+        args: Vec<String>,
         hash: String,
         framework_slug: Option<String>,
     ) {
@@ -553,6 +558,7 @@ impl TaskHashTracker {
         state
             .package_task_env_vars
             .insert(task_id.clone(), env_vars);
+        state.package_task_args.insert(task_id.clone(), args);
         if let Some(framework) = framework_slug {
             state
                 .package_task_framework
@@ -564,6 +570,11 @@ impl TaskHashTracker {
     pub fn env_vars(&self, task_id: &TaskId) -> Option<DetailedMap> {
         let state = self.state.lock().expect("hash tracker mutex poisoned");
         state.package_task_env_vars.get(task_id).cloned()
+    }
+
+    pub fn cli_args(&self, task_id: &TaskId) -> Option<Vec<String>> {
+        let state = self.state.lock().expect("hash tracker mutex poisoned");
+        state.package_task_args.get(task_id).cloned()
     }
 
     pub fn framework(&self, task_id: &TaskId) -> Option<String> {

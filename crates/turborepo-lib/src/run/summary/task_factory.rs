@@ -141,6 +141,11 @@ impl<'a> TaskSummaryFactory<'a> {
             .env_vars(task_id)
             .expect("env var map is inserted at the same time as hash");
 
+        let cli_arguments = self
+            .hash_tracker
+            .cli_args(task_id)
+            .expect("cli args is inserted at the same time as hash");
+
         let cache_summary = self.hash_tracker.cache_status(task_id).into();
 
         let (dependencies, dependents) = self.dependencies_and_dependents(task_id, display_task);
@@ -159,7 +164,7 @@ impl<'a> TaskSummaryFactory<'a> {
             ),
             cache: cache_summary,
             command,
-            cli_arguments: self.run_opts.args_for_task(&task_id).unwrap_or(vec![]),
+            cli_arguments,
             outputs: match task_definition.outputs.inclusions.is_empty() {
                 false => Some(task_definition.outputs.inclusions.clone()),
                 true => None,

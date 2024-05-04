@@ -216,6 +216,12 @@ impl<'a> Visitor<'a> {
             };
             package_task_event.track_env_mode(&task_env_mode.to_string());
 
+            let is_root_task = engine.dependents(&info).map(|x| x.len()).unwrap_or(0) == 0;
+            let task_args = if is_root_task {
+                self.run_opts.pass_through_args.to_vec()
+            } else {
+                vec![]
+            };
             let dependency_set = engine.dependencies(&info).ok_or(Error::MissingDefinition)?;
 
             let task_hash_telemetry = package_task_event.child();
@@ -223,6 +229,7 @@ impl<'a> Visitor<'a> {
                 &info,
                 task_definition,
                 task_env_mode,
+                &task_args,
                 workspace_info,
                 dependency_set,
                 task_hash_telemetry,
