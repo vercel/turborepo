@@ -8,7 +8,6 @@ use crate::{
     cli::{
         Command, DryRunMode, EnvMode, ExecutionArgs, LogOrder, LogPrefix, OutputLogsMode, RunArgs,
     },
-    run::task_id::TaskId,
     Args,
 };
 
@@ -155,21 +154,6 @@ pub struct RunOpts {
     pub summarize: Option<Option<bool>>,
     pub(crate) experimental_space_id: Option<String>,
     pub is_github_actions: bool,
-}
-
-impl RunOpts {
-    pub fn args_for_task(&self, task_id: &TaskId) -> Option<Vec<String>> {
-        if !self.pass_through_args.is_empty()
-            && self
-                .tasks
-                .iter()
-                .any(|task| task.as_str() == task_id.task())
-        {
-            Some(self.pass_through_args.clone())
-        } else {
-            None
-        }
-    }
 }
 
 #[derive(Debug)]

@@ -218,9 +218,9 @@ impl<'a> Visitor<'a> {
 
             let is_root_task = engine.dependents(&info).map(|x| x.len()).unwrap_or(0) == 0;
             let task_args = if is_root_task {
-                self.run_opts.pass_through_args.to_vec()
+                Some(self.run_opts.pass_through_args.to_vec())
             } else {
-                vec![]
+                None
             };
             let dependency_set = engine.dependencies(&info).ok_or(Error::MissingDefinition)?;
 
@@ -229,7 +229,7 @@ impl<'a> Visitor<'a> {
                 &info,
                 task_definition,
                 task_env_mode,
-                &task_args,
+                task_args.as_ref().unwrap_or(&vec![]),
                 workspace_info,
                 dependency_set,
                 task_hash_telemetry,
@@ -282,6 +282,7 @@ impl<'a> Visitor<'a> {
                         task_cache,
                         workspace_directory,
                         execution_env,
+                        task_args,
                         takes_input,
                         self.task_access.clone(),
                     );
@@ -636,11 +637,11 @@ impl<'a> ExecContextFactory<'a> {
         task_cache: TaskCache,
         workspace_directory: AbsoluteSystemPathBuf,
         execution_env: EnvironmentVariableMap,
+        pass_through_args: Option<Vec<String>>,
         takes_input: bool,
         task_access: TaskAccess,
     ) -> ExecContext {
         let task_id_for_display = self.visitor.display_task_id(&task_id);
-        let pass_through_args = self.visitor.run_opts.args_for_task(&task_id);
         ExecContext {
             engine: self.engine.clone(),
             ui: self.visitor.ui,
