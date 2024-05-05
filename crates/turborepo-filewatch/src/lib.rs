@@ -35,6 +35,7 @@ use {
 };
 
 pub mod cookies;
+mod debouncer;
 #[cfg(target_os = "macos")]
 mod fsevent;
 pub mod globwatcher;

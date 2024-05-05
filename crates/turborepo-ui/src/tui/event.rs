@@ -9,6 +9,10 @@ pub enum Event {
     EndTask {
         task: String,
     },
+    Status {
+        task: String,
+        status: String,
+    },
     Stop,
     Tick,
     Log {

@@ -199,6 +199,9 @@ fn update<B: Backend>(
         Event::TaskOutput { task, output } => {
             app.pane.process_output(&task, &output)?;
         }
+        Event::Status { task, status } => {
+            app.pane.set_status(&task, status)?;
+        }
         Event::Stop => {
             app.done = true;
         }
