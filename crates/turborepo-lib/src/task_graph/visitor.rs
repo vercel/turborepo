@@ -216,11 +216,11 @@ impl<'a> Visitor<'a> {
             };
             package_task_event.track_env_mode(&task_env_mode.to_string());
 
-            let is_root_task = engine.dependents(&info).map(|x| x.len()).unwrap_or(0) == 0;
+            let is_root_task = engine.dependents(&info).map_or(0, |x| x.len()) == 0;
             let task_args = if is_root_task {
-                Some(self.run_opts.pass_through_args.to_vec())
+                self.run_opts.pass_through_args.to_vec()
             } else {
-                None
+                vec![]
             };
             let dependency_set = engine.dependencies(&info).ok_or(Error::MissingDefinition)?;
 
@@ -229,7 +229,7 @@ impl<'a> Visitor<'a> {
                 &info,
                 task_definition,
                 task_env_mode,
-                task_args.as_ref().unwrap_or(&vec![]),
+                &task_args,
                 workspace_info,
                 dependency_set,
                 task_hash_telemetry,
@@ -637,7 +637,7 @@ impl<'a> ExecContextFactory<'a> {
         task_cache: TaskCache,
         workspace_directory: AbsoluteSystemPathBuf,
         execution_env: EnvironmentVariableMap,
-        pass_through_args: Option<Vec<String>>,
+        pass_through_args: Vec<String>,
         takes_input: bool,
         task_access: TaskAccess,
     ) -> ExecContext {
@@ -697,7 +697,7 @@ struct ExecContext {
     task_hash: String,
     execution_env: EnvironmentVariableMap,
     continue_on_error: bool,
-    pass_through_args: Option<Vec<String>>,
+    pass_through_args: Vec<String>,
     errors: Arc<Mutex<Vec<TaskError>>>,
     takes_input: bool,
     task_access: TaskAccess,
@@ -869,13 +869,13 @@ impl ExecContext {
 
         let mut cmd = Command::new(package_manager_binary);
         let mut args = vec!["run".to_string(), self.task_id.task().to_string()];
-        if let Some(pass_through_args) = &self.pass_through_args {
+        if self.pass_through_args.len() > 0 {
             args.extend(
                 self.package_manager
-                    .arg_separator(pass_through_args.as_slice())
+                    .arg_separator(self.pass_through_args.as_slice())
                     .map(|s| s.to_string()),
             );
-            args.extend(pass_through_args.iter().cloned());
+            args.extend(self.pass_through_args.iter().cloned());
         }
         cmd.args(args);
         cmd.current_dir(self.workspace_directory.clone());

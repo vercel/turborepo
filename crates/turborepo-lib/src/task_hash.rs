@@ -559,6 +559,7 @@ impl TaskHashTracker {
             .package_task_env_vars
             .insert(task_id.clone(), env_vars);
         state.package_task_args.insert(task_id.clone(), args);
+
         if let Some(framework) = framework_slug {
             state
                 .package_task_framework
