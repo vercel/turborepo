@@ -17,6 +17,7 @@ mod lost_edge;
 mod new_edge;
 mod notify_lost_follower;
 mod notify_new_follower;
+mod optimize;
 mod root_query;
 #[cfg(test)]
 mod tests;
@@ -60,7 +61,7 @@ pub struct AggegatingNode<I, D> {
 }
 
 impl<I, A> AggregationNode<I, A> {
-    fn aggregation_number(&self) -> u32 {
+    pub fn aggregation_number(&self) -> u32 {
         match self {
             AggregationNode::Leaf {
                 aggregation_number, ..
@@ -83,7 +84,6 @@ impl<I, A> AggregationNode<I, A> {
         }
     }
 
-    #[cfg(test)]
     fn followers(&self) -> Option<&CountHashSet<I>> {
         match self {
             AggregationNode::Leaf { .. } => None,

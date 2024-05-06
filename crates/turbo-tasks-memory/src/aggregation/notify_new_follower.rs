@@ -18,6 +18,7 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
         balance_queue: &mut BalanceQueue<I>,
         upper_id: &C::NodeRef,
         follower_id: &C::NodeRef,
+        already_optimizing_for_upper: bool,
     ) -> Option<PreparedNotifyNewFollower<C>> {
         let AggregationNode::Aggegating(aggregating) = self else {
             unreachable!();
@@ -31,12 +32,14 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
                 Some(PreparedNotifyNewFollower::Inner {
                     upper_id: upper_id.clone(),
                     follower_id: follower_id.clone(),
+                    already_optimizing_for_upper,
                 })
             } else {
                 Some(PreparedNotifyNewFollower::FollowerOrInner {
                     upper_aggregation_number,
                     upper_id: upper_id.clone(),
                     follower_id: follower_id.clone(),
+                    already_optimizing_for_upper,
                 })
             }
         }
@@ -64,12 +67,14 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
                 Some(PreparedNotifyNewFollower::Inner {
                     upper_id: upper_id.clone(),
                     follower_id: follower_id.clone(),
+                    already_optimizing_for_upper: false,
                 })
             } else {
                 Some(PreparedNotifyNewFollower::FollowerOrInner {
                     upper_aggregation_number,
                     upper_id: upper_id.clone(),
                     follower_id: follower_id.clone(),
+                    already_optimizing_for_upper: false,
                 })
             }
         }
@@ -80,37 +85,56 @@ pub(super) enum PreparedNotifyNewFollower<C: AggregationContext> {
     Inner {
         upper_id: C::NodeRef,
         follower_id: C::NodeRef,
+        already_optimizing_for_upper: bool,
     },
     FollowerOrInner {
         upper_aggregation_number: u32,
         upper_id: C::NodeRef,
         follower_id: C::NodeRef,
+        already_optimizing_for_upper: bool,
     },
 }
 
 impl<C: AggregationContext> PreparedInternalOperation<C> for PreparedNotifyNewFollower<C> {
-    type Result = ();
-    fn apply(self, ctx: &C, balance_queue: &mut BalanceQueue<C::NodeRef>) {
+    type Result = usize;
+    fn apply(self, ctx: &C, balance_queue: &mut BalanceQueue<C::NodeRef>) -> Self::Result {
         match self {
             PreparedNotifyNewFollower::Inner {
                 upper_id,
                 follower_id,
+                already_optimizing_for_upper,
             } => {
                 let follower = ctx.node(&follower_id);
-                add_upper(ctx, balance_queue, follower, &follower_id, &upper_id);
+                let result = add_upper(
+                    ctx,
+                    balance_queue,
+                    follower,
+                    &follower_id,
+                    &upper_id,
+                    already_optimizing_for_upper,
+                );
                 finish_in_progress_without_node(ctx, balance_queue, &upper_id);
+                result
             }
             PreparedNotifyNewFollower::FollowerOrInner {
                 mut upper_aggregation_number,
                 upper_id,
                 follower_id,
+                already_optimizing_for_upper,
             } => loop {
                 let follower = ctx.node(&follower_id);
                 let follower_aggregation_number = follower.aggregation_number();
                 if follower_aggregation_number < upper_aggregation_number {
-                    add_upper(ctx, balance_queue, follower, &follower_id, &upper_id);
+                    let result = add_upper(
+                        ctx,
+                        balance_queue,
+                        follower,
+                        &follower_id,
+                        &upper_id,
+                        already_optimizing_for_upper,
+                    );
                     finish_in_progress_without_node(ctx, balance_queue, &upper_id);
-                    return;
+                    return result;
                 } else {
                     drop(follower);
                     let mut upper = ctx.node(&upper_id);
@@ -145,8 +169,14 @@ impl<C: AggregationContext> PreparedInternalOperation<C> for PreparedNotifyNewFo
                             }
                             Ordering::Greater => {
                                 upper.finish_in_progress(ctx, balance_queue, &upper_id);
-                                add_follower(ctx, balance_queue, upper, &follower_id);
-                                return;
+                                return add_follower(
+                                    ctx,
+                                    balance_queue,
+                                    upper,
+                                    &upper_id,
+                                    &follower_id,
+                                    already_optimizing_for_upper,
+                                );
                             }
                         }
                     }
@@ -162,8 +192,15 @@ pub fn notify_new_follower<C: AggregationContext>(
     mut upper: C::Guard<'_>,
     upper_id: &C::NodeRef,
     follower_id: &C::NodeRef,
-) {
-    let p = upper.notify_new_follower(ctx, balance_queue, upper_id, follower_id);
+    already_optimizing_for_upper: bool,
+) -> usize {
+    let p = upper.notify_new_follower(
+        ctx,
+        balance_queue,
+        upper_id,
+        follower_id,
+        already_optimizing_for_upper,
+    );
     drop(upper);
-    p.apply(ctx, balance_queue);
+    p.apply(ctx, balance_queue).unwrap_or_default()
 }

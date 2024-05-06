@@ -15,7 +15,9 @@ const BUFFER_SPACE: u32 = 1;
 #[cfg(not(test))]
 const BUFFER_SPACE: u32 = 3;
 
-const MAX_UPPERS_TIMES_CHILDREN: usize = 128;
+const MAX_UPPERS_TIMES_CHILDREN: usize = 512;
+
+const MAX_AFFECTED_NODES: usize = 4096;
 
 #[tracing::instrument(level = tracing::Level::TRACE, name = "handle_new_edge_preparation", skip_all)]
 pub fn handle_new_edge<'l, C: AggregationContext>(
@@ -31,7 +33,7 @@ pub fn handle_new_edge<'l, C: AggregationContext>(
             ref uppers,
         } => {
             if number_of_children.count_ones() == 1
-                && uppers.len() * number_of_children > MAX_UPPERS_TIMES_CHILDREN
+                && (uppers.len() + 1) * number_of_children >= MAX_UPPERS_TIMES_CHILDREN
             {
                 let uppers = uppers.iter().cloned().collect::<StackVec<_>>();
                 start_in_progress_all(ctx, &uppers);
@@ -63,7 +65,10 @@ pub fn handle_new_edge<'l, C: AggregationContext>(
         }
         AggregationNode::Aggegating(_) => origin
             .notify_new_follower_not_in_progress(ctx, origin_id, target_id)
-            .map(|notify| PreparedNewEdge::Aggegating { notify }),
+            .map(|notify| PreparedNewEdge::Aggegating {
+                target_id: target_id.clone(),
+                notify,
+            }),
     }
 }
 enum PreparedNewEdge<C: AggregationContext> {
@@ -80,6 +85,7 @@ enum PreparedNewEdge<C: AggregationContext> {
     },
     Aggegating {
         notify: PreparedNotifyNewFollower<C>,
+        target_id: C::NodeRef,
     },
 }
 
@@ -109,14 +115,19 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNewEdge<C> {
                         target_aggregation_number,
                     );
                 }
+                let mut affected_nodes = 0;
                 for upper_id in uppers {
-                    notify_new_follower(
+                    affected_nodes += notify_new_follower(
                         ctx,
                         &mut balance_queue,
                         ctx.node(&upper_id),
                         &upper_id,
                         &target_id,
+                        false,
                     );
+                    if affected_nodes > MAX_AFFECTED_NODES {
+                        handle_expensive_node(ctx, &mut balance_queue, &target_id);
+                    }
                 }
             }
             PreparedNewEdge::Upgraded {
@@ -132,14 +143,30 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNewEdge<C> {
                         ctx.node(&upper_id),
                         &upper_id,
                         &target_id,
+                        false,
                     );
                 }
                 // The balancing will attach it to the aggregated node later
                 increase.apply(ctx, &mut balance_queue);
             }
-            PreparedNewEdge::Aggegating { notify } => notify.apply(ctx, &mut balance_queue),
+            PreparedNewEdge::Aggegating { target_id, notify } => {
+                let affected_nodes = notify.apply(ctx, &mut balance_queue);
+                if affected_nodes > MAX_AFFECTED_NODES {
+                    handle_expensive_node(ctx, &mut balance_queue, &target_id);
+                }
+            }
         }
         let _span = tracing::trace_span!("balance_queue").entered();
         balance_queue.process(ctx);
     }
+}
+
+fn handle_expensive_node<C: AggregationContext>(
+    ctx: &C,
+    balance_queue: &mut BalanceQueue<C::NodeRef>,
+    node_id: &C::NodeRef,
+) {
+    let node = ctx.node(node_id);
+    let n = node.aggregation_number().saturating_add(2);
+    increase_aggregation_number_internal(ctx, balance_queue, node, node_id, n, n);
 }

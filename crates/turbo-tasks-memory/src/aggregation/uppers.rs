@@ -1,14 +1,11 @@
 use super::{
-    balance_queue::BalanceQueue, in_progress::start_in_progress_count, increase::LEAF_NUMBER,
-    increase_aggregation_number_internal, AggegatingNode, AggregationContext, AggregationNode,
-    AggregationNodeGuard, PreparedInternalOperation, PreparedOperation, StackVec,
+    balance_queue::BalanceQueue,
+    in_progress::start_in_progress_count,
+    optimize::{optimize_aggregation_number_for_uppers, MAX_UPPERS},
+    AggegatingNode, AggregationContext, AggregationNode, AggregationNodeGuard,
+    PreparedInternalOperation, PreparedOperation, StackVec,
 };
 use crate::count_hash_set::RemovePositiveCountResult;
-
-#[cfg(test)]
-const MAX_UPPERS: usize = 4;
-#[cfg(not(test))]
-const MAX_UPPERS: usize = 16;
 
 pub fn add_upper<C: AggregationContext>(
     ctx: &C,
@@ -16,8 +13,23 @@ pub fn add_upper<C: AggregationContext>(
     node: C::Guard<'_>,
     node_id: &C::NodeRef,
     upper_id: &C::NodeRef,
-) {
-    add_upper_count(ctx, balance_queue, node, node_id, upper_id, 1);
+    already_optimizing_for_upper: bool,
+) -> usize {
+    add_upper_count(
+        ctx,
+        balance_queue,
+        node,
+        node_id,
+        upper_id,
+        1,
+        already_optimizing_for_upper,
+    )
+    .affected_nodes
+}
+
+pub struct AddUpperCountResult {
+    pub new_count: isize,
+    pub affected_nodes: usize,
 }
 
 pub fn add_upper_count<C: AggregationContext>(
@@ -27,7 +39,8 @@ pub fn add_upper_count<C: AggregationContext>(
     node_id: &C::NodeRef,
     upper_id: &C::NodeRef,
     count: usize,
-) -> isize {
+    already_optimizing_for_upper: bool,
+) -> AddUpperCountResult {
     // TODO add_clonable_count could return the current count for better performance
     let (added, count) = match &mut *node {
         AggregationNode::Leaf { uppers, .. } => {
@@ -48,12 +61,23 @@ pub fn add_upper_count<C: AggregationContext>(
             }
         }
     };
+    let mut affected_nodes = 0;
     if added {
-        on_added(ctx, balance_queue, node, node_id, upper_id);
+        affected_nodes = on_added(
+            ctx,
+            balance_queue,
+            node,
+            node_id,
+            upper_id,
+            already_optimizing_for_upper,
+        );
     } else {
         drop(node);
     }
-    count
+    AddUpperCountResult {
+        new_count: count,
+        affected_nodes,
+    }
 }
 
 pub fn on_added<C: AggregationContext>(
@@ -62,10 +86,13 @@ pub fn on_added<C: AggregationContext>(
     mut node: C::Guard<'_>,
     node_id: &C::NodeRef,
     upper_id: &C::NodeRef,
-) {
+    already_optimizing_for_upper: bool,
+) -> usize {
     let uppers = node.uppers();
     let uppers_len = uppers.len();
-    let optimize = (uppers_len > MAX_UPPERS && (uppers_len - MAX_UPPERS).count_ones() == 1)
+    let optimize = (!already_optimizing_for_upper
+        && uppers_len > MAX_UPPERS
+        && (uppers_len - MAX_UPPERS).count_ones() == 1)
         .then(|| (true, uppers.iter().cloned().collect::<StackVec<_>>()));
     let (add_change, followers) = match &mut *node {
         AggregationNode::Leaf { .. } => {
@@ -86,63 +113,34 @@ pub fn on_added<C: AggregationContext>(
         }
     };
 
-    // Make sure to propagate the change to the upper node
-    let mut upper = ctx.node(upper_id);
-    let add_prepared = add_change.and_then(|add_change| upper.apply_change(ctx, add_change));
-    let prepared = followers
-        .into_iter()
-        .map(|child_id| upper.notify_new_follower(ctx, balance_queue, upper_id, &child_id))
-        .collect::<StackVec<_>>();
-    drop(upper);
-    add_prepared.apply(ctx);
-    prepared.apply(ctx, balance_queue);
+    let mut optimizing = false;
 
     // This heuristic ensures that we don’t have too many upper edges, which would
     // degrade update performance
     if let Some((leaf, uppers)) = optimize {
-        let count = uppers.len();
-        let mut root_count = 0;
-        let mut min = LEAF_NUMBER - 1;
-        let mut uppers_uppers = 0;
-        for upper_id in uppers.into_iter() {
-            let upper = ctx.node(&upper_id);
-            let aggregation_number = upper.aggregation_number();
-            if aggregation_number == u32::MAX {
-                root_count += 1;
-            } else {
-                let upper_uppers = upper.uppers().len();
-                uppers_uppers += upper_uppers;
-                if aggregation_number < min {
-                    min = aggregation_number;
-                }
-            }
-        }
-        if leaf {
-            increase_aggregation_number_internal(
-                ctx,
-                balance_queue,
-                ctx.node(node_id),
-                node_id,
-                min + 1,
-                min + 1,
-            );
-        } else {
-            let normal_count = count - root_count;
-            if normal_count > 0 {
-                let avg_uppers_uppers = uppers_uppers / normal_count;
-                if count > avg_uppers_uppers && root_count * 2 < count {
-                    increase_aggregation_number_internal(
-                        ctx,
-                        balance_queue,
-                        ctx.node(node_id),
-                        node_id,
-                        min + 1,
-                        min + 1,
-                    );
-                }
-            }
-        }
+        optimizing =
+            optimize_aggregation_number_for_uppers(ctx, balance_queue, node_id, leaf, uppers);
     }
+
+    let mut affected_nodes = 0;
+
+    // Make sure to propagate the change to the upper node
+    let mut upper = ctx.node(upper_id);
+    let add_prepared = add_change.and_then(|add_change| upper.apply_change(ctx, add_change));
+    affected_nodes += followers.len();
+    let prepared = followers
+        .into_iter()
+        .filter_map(|child_id| {
+            upper.notify_new_follower(ctx, balance_queue, upper_id, &child_id, optimizing)
+        })
+        .collect::<StackVec<_>>();
+    drop(upper);
+    add_prepared.apply(ctx);
+    for prepared in prepared {
+        affected_nodes += prepared.apply(ctx, balance_queue);
+    }
+
+    affected_nodes
 }
 
 pub fn remove_upper_count<C: AggregationContext>(

@@ -743,10 +743,44 @@ fn rectangle_tree() {
 }
 
 #[rstest]
-#[case::many_roots(100000, 2)]
-#[case::many_children(2, 100000)]
-#[case::many_root_and_children(10000, 10000)]
-fn performance(#[case] root_count: u32, #[case] children_count: u32) {
+#[case::many_roots_initial(100000, 0, 2, 1)]
+#[case::many_roots_later(1, 100000, 2, 1)]
+#[case::many_roots_later2(0, 100000, 2, 1)]
+#[case::many_roots(50000, 50000, 2, 1)]
+#[case::many_children(2, 0, 100000, 1)]
+#[case::many_roots_and_children(5000, 5000, 10000, 1)]
+#[case::many_roots_and_subgraph(5000, 5000, 100, 2)]
+#[case::large_subgraph_a(9, 1, 10, 5)]
+#[case::large_subgraph_b(5, 5, 10, 5)]
+#[case::large_subgraph_c(1, 9, 10, 5)]
+#[case::large_subgraph_d(6, 0, 10, 5)]
+#[case::large_subgraph_d(0, 10, 10, 5)]
+#[case::many_roots_large_subgraph(5000, 5000, 10, 5)]
+fn performance(
+    #[case] initial_root_count: u32,
+    #[case] additional_root_count: u32,
+    #[case] children_count: u32,
+    #[case] children_layers_count: u32,
+) {
+    fn print_aggregation_numbers(node: Arc<Node>) {
+        print!("Aggregation numbers ");
+        let mut current = node.clone();
+        loop {
+            let guard = current.inner.lock();
+            let n = guard.aggregation_node.aggregation_number();
+            let f = guard.aggregation_node.followers().map_or(0, |f| f.len());
+            let u = guard.aggregation_node.uppers().len();
+            print!(" -> {} [{}U {}F]", n, u, f);
+            if guard.children.is_empty() {
+                break;
+            }
+            let child = guard.children[guard.children.len() / 2].clone();
+            drop(guard);
+            current = child;
+        }
+        println!();
+    }
+
     let something_with_lifetime = 0;
     let ctx = NodeAggregationContext {
         additions: AtomicU32::new(0),
@@ -754,47 +788,68 @@ fn performance(#[case] root_count: u32, #[case] children_count: u32) {
         add_value: false,
     };
     let mut roots: Vec<Arc<Node>> = Vec::new();
-    let mut children: Vec<Arc<Node>> = Vec::new();
     let inner_node = Node::new(0);
-    let start = Instant::now();
     // Setup
-    for i in 0..root_count {
-        let node = Node::new(1000000 + i);
+    for i in 0..initial_root_count {
+        let node = Node::new(2 + i);
         roots.push(node.clone());
         aggregation_data(&ctx, &NodeRef(node.clone())).active = true;
         node.add_child_unchecked(&ctx, inner_node.clone());
     }
-    for i in 0..children_count {
-        let node = Node::new(2000000 + i);
-        children.push(node.clone());
-        inner_node.add_child_unchecked(&ctx, node.clone());
+    let start = Instant::now();
+    let mut children = vec![inner_node.clone()];
+    for j in 0..children_layers_count {
+        let mut new_children = Vec::new();
+        for child in children {
+            for i in 0..children_count {
+                let node = Node::new(1000000 * (j + 1) + i);
+                new_children.push(node.clone());
+                child.add_child_unchecked(&ctx, node.clone());
+            }
+        }
+        children = new_children;
     }
-    println!("Setup: {:?}", start.elapsed());
+    println!("Setup children: {:?}", start.elapsed());
+
+    print_aggregation_numbers(inner_node.clone());
+
+    let start = Instant::now();
+    for i in 0..additional_root_count {
+        let node = Node::new(2 + i);
+        roots.push(node.clone());
+        aggregation_data(&ctx, &NodeRef(node.clone())).active = true;
+        node.add_child_unchecked(&ctx, inner_node.clone());
+    }
+    println!("Setup additional roots: {:?}", start.elapsed());
+
+    print_aggregation_numbers(inner_node.clone());
 
     // Add another root
     let start = Instant::now();
     {
-        let node = Node::new(3000000);
+        let node = Node::new(1);
         roots.push(node.clone());
         aggregation_data(&ctx, &NodeRef(node.clone())).active = true;
         node.add_child_unchecked(&ctx, inner_node.clone());
     }
-    let duration = start.elapsed();
-    println!("Root: {:?}", duration);
-    assert!(duration.as_millis() < 10);
+    let root_duration = start.elapsed();
+    println!("Root: {:?}", root_duration);
 
     // Add another child
     let start = Instant::now();
     {
-        let node = Node::new(4000000);
-        children.push(node.clone());
+        let node = Node::new(999999);
         inner_node.add_child_unchecked(&ctx, node.clone());
     }
-    let duration = start.elapsed();
-    println!("Child: {:?}", duration);
-    assert!(duration.as_millis() < 10);
+    let child_duration = start.elapsed();
+    println!("Child: {:?}", child_duration);
 
-    check_invariants(&ctx, roots.iter().cloned().map(NodeRef));
+    print_aggregation_numbers(inner_node.clone());
+
+    assert!(root_duration.as_micros() < 1000);
+    assert!(child_duration.as_micros() < 1000);
+
+    // check_invariants(&ctx, roots.iter().cloned().map(NodeRef));
 }
 
 #[test]

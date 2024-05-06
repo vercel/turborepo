@@ -84,8 +84,10 @@ pub(super) fn balance_edge<C: AggregationContext>(
                             ctx,
                             balance_queue,
                             upper,
+                            &upper_id,
                             &target_id,
                             count,
+                            true,
                         ));
                     }
                 } else {
@@ -150,14 +152,18 @@ pub(super) fn balance_edge<C: AggregationContext>(
                             // add some extra uppers
                             let count = followers_count.unwrap_or(1) as usize;
                             extra_uppers += count;
-                            uppers_count = Some(add_upper_count(
-                                ctx,
-                                balance_queue,
-                                target,
-                                &target_id,
-                                &upper_id,
-                                count,
-                            ));
+                            uppers_count = Some(
+                                add_upper_count(
+                                    ctx,
+                                    balance_queue,
+                                    target,
+                                    &target_id,
+                                    &upper_id,
+                                    count,
+                                    true,
+                                )
+                                .new_count,
+                            );
                         }
                     }
                 } else {

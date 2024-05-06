@@ -1,6 +1,9 @@
 use super::{
-    balance_queue::BalanceQueue, in_progress::start_in_progress_all, notify_lost_follower,
-    notify_new_follower, AggregationContext, AggregationNode, StackVec,
+    balance_queue::BalanceQueue,
+    in_progress::start_in_progress_all,
+    notify_lost_follower, notify_new_follower,
+    optimize::{optimize_aggregation_number_for_followers, MAX_FOLLOWERS},
+    AggregationContext, AggregationNode, StackVec,
 };
 use crate::count_hash_set::RemovePositiveCountResult;
 
@@ -8,13 +11,24 @@ pub fn add_follower<C: AggregationContext>(
     ctx: &C,
     balance_queue: &mut BalanceQueue<C::NodeRef>,
     mut node: C::Guard<'_>,
+    node_id: &C::NodeRef,
     follower_id: &C::NodeRef,
-) {
+    already_optimizing_for_node: bool,
+) -> usize {
     let AggregationNode::Aggegating(aggregating) = &mut *node else {
         unreachable!();
     };
     if aggregating.followers.add_clonable(follower_id) {
-        on_added(ctx, balance_queue, node, follower_id);
+        on_added(
+            ctx,
+            balance_queue,
+            node,
+            node_id,
+            follower_id,
+            already_optimizing_for_node,
+        )
+    } else {
+        0
     }
 }
 
@@ -22,31 +36,57 @@ pub fn on_added<C: AggregationContext>(
     ctx: &C,
     balance_queue: &mut BalanceQueue<C::NodeRef>,
     mut node: C::Guard<'_>,
+    node_id: &C::NodeRef,
     follower_id: &C::NodeRef,
-) {
+    already_optimizing_for_node: bool,
+) -> usize {
     let AggregationNode::Aggegating(aggregating) = &mut *node else {
         unreachable!();
     };
+    let followers_len = aggregating.followers.len();
+    let optimize = (!already_optimizing_for_node
+        && followers_len > MAX_FOLLOWERS
+        && (followers_len - MAX_FOLLOWERS).count_ones() == 1)
+        .then(|| {
+            aggregating
+                .followers
+                .iter()
+                .cloned()
+                .collect::<StackVec<_>>()
+        });
     let uppers = aggregating.uppers.iter().cloned().collect::<StackVec<_>>();
     start_in_progress_all(ctx, &uppers);
     drop(node);
+
+    let mut optimizing = false;
+
+    if let Some(followers) = optimize {
+        optimizing =
+            optimize_aggregation_number_for_followers(ctx, balance_queue, node_id, followers);
+    }
+
+    let mut affected_nodes = uppers.len();
     for upper_id in uppers {
-        notify_new_follower(
+        affected_nodes += notify_new_follower(
             ctx,
             balance_queue,
             ctx.node(&upper_id),
             &upper_id,
             follower_id,
+            optimizing,
         );
     }
+    affected_nodes
 }
 
 pub fn add_follower_count<C: AggregationContext>(
     ctx: &C,
     balance_queue: &mut BalanceQueue<C::NodeRef>,
     mut node: C::Guard<'_>,
+    node_id: &C::NodeRef,
     follower_id: &C::NodeRef,
     follower_count: usize,
+    already_optimizing_for_node: bool,
 ) -> isize {
     let AggregationNode::Aggegating(aggregating) = &mut *node else {
         unreachable!();
@@ -56,18 +96,14 @@ pub fn add_follower_count<C: AggregationContext>(
         .add_clonable_count(follower_id, follower_count)
     {
         let count = aggregating.followers.get_count(follower_id);
-        let uppers = aggregating.uppers.iter().cloned().collect::<StackVec<_>>();
-        start_in_progress_all(ctx, &uppers);
-        drop(node);
-        for upper_id in uppers {
-            notify_new_follower(
-                ctx,
-                balance_queue,
-                ctx.node(&upper_id),
-                &upper_id,
-                follower_id,
-            );
-        }
+        on_added(
+            ctx,
+            balance_queue,
+            node,
+            node_id,
+            follower_id,
+            already_optimizing_for_node,
+        );
         count
     } else {
         aggregating.followers.get_count(follower_id)
