@@ -76,10 +76,12 @@ pub fn optimize_aggregation_number_for_followers<C: AggregationContext>(
     balance_queue: &mut BalanceQueue<C::NodeRef>,
     node_id: &C::NodeRef,
     followers: StackVec<C::NodeRef>,
+    force: bool,
 ) -> bool {
     let count = followers.len();
     let mut root_count = 0;
     let mut min = u32::MAX;
+    let mut max = 0;
     let mut followers_followers = 0;
     for follower_id in followers.into_iter() {
         let follower = ctx.node(&follower_id);
@@ -92,22 +94,30 @@ pub fn optimize_aggregation_number_for_followers<C: AggregationContext>(
             if aggregation_number < min {
                 min = aggregation_number;
             }
+            if aggregation_number > max {
+                max = aggregation_number;
+            }
         }
     }
     if min == u32::MAX {
         min = LEAF_NUMBER - 1;
     }
+    if max < min {
+        max = min;
+    }
     let normal_count = count - root_count;
     if normal_count > 0 {
         let avg_followers_followers = followers_followers / normal_count;
-        if count > avg_followers_followers && root_count * 2 < count {
+        let makes_sense = count > avg_followers_followers || force;
+        if makes_sense && root_count * 2 < count {
+            let aggregation_number = (min + max) / 2 + 1;
             increase_aggregation_number_internal(
                 ctx,
                 balance_queue,
                 ctx.node(node_id),
                 node_id,
-                min + 1,
-                min + 1,
+                aggregation_number,
+                aggregation_number,
             );
             return true;
         }

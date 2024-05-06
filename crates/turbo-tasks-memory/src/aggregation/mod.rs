@@ -1,4 +1,4 @@
-use std::{hash::Hash, ops::DerefMut, sync::atomic::AtomicU32};
+use std::{fmt::Debug, hash::Hash, ops::DerefMut, sync::atomic::AtomicU32};
 
 use smallvec::SmallVec;
 
@@ -163,7 +163,7 @@ impl<C: AggregationContext, T: PreparedInternalOperation<C>, const N: usize>
 }
 
 pub trait AggregationContext {
-    type NodeRef: Clone + Eq + Hash;
+    type NodeRef: Clone + Eq + Hash + Debug;
     type Guard<'l>: AggregationNodeGuard<
         NodeRef = Self::NodeRef,
         Data = Self::Data,

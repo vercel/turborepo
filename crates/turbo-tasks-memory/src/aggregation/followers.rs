@@ -61,8 +61,13 @@ pub fn on_added<C: AggregationContext>(
     let mut optimizing = false;
 
     if let Some(followers) = optimize {
-        optimizing =
-            optimize_aggregation_number_for_followers(ctx, balance_queue, node_id, followers);
+        optimizing = optimize_aggregation_number_for_followers(
+            ctx,
+            balance_queue,
+            node_id,
+            followers,
+            false,
+        );
     }
 
     let mut affected_nodes = uppers.len();

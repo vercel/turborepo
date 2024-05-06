@@ -1,4 +1,5 @@
 use std::{
+    fmt::Debug,
     hash::Hash,
     ops::{Deref, DerefMut},
     sync::{atomic::AtomicU32, Arc},
@@ -30,7 +31,7 @@ impl Node {
             inner: Mutex::new(NodeInner {
                 children: Vec::new(),
                 aggregation_node: AggregationNode::new(),
-                _value: value,
+                value,
             }),
         })
     }
@@ -58,7 +59,7 @@ struct Change {}
 struct NodeInner {
     children: Vec<Arc<Node>>,
     aggregation_node: AggregationNode<NodeRef, Aggregated>,
-    _value: u32,
+    value: u32,
 }
 
 struct NodeAggregationContext {}
@@ -66,6 +67,12 @@ struct NodeAggregationContext {}
 #[derive(Clone, RefCast)]
 #[repr(transparent)]
 struct NodeRef(Arc<Node>);
+
+impl Debug for NodeRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "NodeRef({})", self.0.inner.lock().unwrap().value)
+    }
+}
 
 impl Hash for NodeRef {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {

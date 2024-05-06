@@ -1,5 +1,6 @@
 use std::{
     collections::HashSet,
+    fmt::Debug,
     hash::Hash,
     iter::once,
     ops::{ControlFlow, Deref, DerefMut},
@@ -396,6 +397,12 @@ struct NodeAggregationContext<'a> {
 #[derive(Clone, RefCast)]
 #[repr(transparent)]
 struct NodeRef(Arc<Node>);
+
+impl Debug for NodeRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "NodeRef({})", self.0.inner.lock().value)
+    }
+}
 
 impl Hash for NodeRef {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
