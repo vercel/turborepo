@@ -14,7 +14,8 @@ use ref_cast::RefCast;
 use rstest::*;
 
 use super::{
-    aggregation_data, AggregationContext, AggregationNode, AggregationNodeGuard, PreparedOperation,
+    aggregation_data, handle_new_edge, AggregationContext, AggregationNode, AggregationNodeGuard,
+    PreparedOperation,
 };
 
 struct Node {
@@ -37,10 +38,14 @@ impl Node {
     fn add_child(self: &Arc<Node>, aggregation_context: &NodeAggregationContext, child: Arc<Node>) {
         let mut guard = self.inner.lock().unwrap();
         guard.children.push(child.clone());
-        let prepared = guard.aggregation_node.handle_new_edge(
+        let number_of_children = guard.children.len();
+        let mut guard = unsafe { NodeGuard::new(guard, self.clone()) };
+        let prepared = handle_new_edge(
             aggregation_context,
+            &mut guard,
             &NodeRef(self.clone()),
             &NodeRef(child),
+            number_of_children,
         );
         drop(guard);
         prepared.apply(aggregation_context);

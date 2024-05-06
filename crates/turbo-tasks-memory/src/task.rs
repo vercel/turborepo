@@ -30,8 +30,8 @@ use turbo_tasks::{
 
 use crate::{
     aggregation::{
-        aggregation_data, prepare_aggregation_data, query_root_info, AggregationDataGuard,
-        PreparedOperation,
+        aggregation_data, handle_new_edge, prepare_aggregation_data, query_root_info,
+        AggregationDataGuard, PreparedOperation,
     },
     cell::Cell,
     gc::{to_exp_u8, GcPriority, GcStats, GcTaskState},
@@ -1488,10 +1488,14 @@ impl Task {
                             return;
                         }
                     }
-                    add_job = Some(state.aggregation_node.handle_new_edge(
+                    let number_of_children = state.children.len();
+                    let mut guard = TaskGuard::from_full(self.id, state);
+                    add_job = Some(handle_new_edge(
                         &aggregation_context,
+                        &mut guard,
                         &self.id,
                         &child_id,
+                        number_of_children,
                     ));
                 }
             }

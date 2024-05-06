@@ -25,6 +25,7 @@ mod uppers;
 pub use aggregation_data::{aggregation_data, prepare_aggregation_data, AggregationDataGuard};
 use balance_edge::balance_edge;
 use increase::increase_aggregation_number_internal;
+pub use new_edge::handle_new_edge;
 use notify_lost_follower::notify_lost_follower;
 use notify_new_follower::notify_new_follower;
 pub use root_query::{query_root_info, RootQuery};

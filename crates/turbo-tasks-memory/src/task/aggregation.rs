@@ -11,7 +11,10 @@ use nohash_hasher::BuildNoHashHasher;
 use parking_lot::Mutex;
 use turbo_tasks::{event::Event, RawVc, TaskId, TaskIdSet, TraitTypeId, TurboTasksBackendApi};
 
-use super::{meta_state::TaskMetaStateWriteGuard, TaskStateType};
+use super::{
+    meta_state::{FullTaskWriteGuard, TaskMetaStateWriteGuard},
+    TaskStateType,
+};
 use crate::{
     aggregation::{
         aggregation_data, AggregationContext, AggregationDataGuard, AggregationNode,
@@ -406,6 +409,13 @@ impl<'l> TaskGuard<'l> {
     pub fn new(id: TaskId, mut guard: TaskMetaStateWriteGuard<'l>) -> Self {
         guard.ensure_at_least_partial();
         Self { id, guard }
+    }
+
+    pub fn from_full(id: TaskId, guard: FullTaskWriteGuard<'l>) -> Self {
+        Self {
+            id,
+            guard: TaskMetaStateWriteGuard::Full(guard),
+        }
     }
 
     pub fn into_inner(self) -> TaskMetaStateWriteGuard<'l> {

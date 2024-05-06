@@ -19,10 +19,10 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
         min_aggregation_number: u32,
         target_aggregation_number: u32,
     ) -> Option<PreparedInternalIncreaseAggregationNumber<C>> {
-        if self.aggregation_number() >= target_aggregation_number {
+        if self.aggregation_number() >= min_aggregation_number {
             return None;
         }
-        Some(PreparedInternalIncreaseAggregationNumber {
+        Some(PreparedInternalIncreaseAggregationNumber::Lazy {
             node_id: node_id.clone(),
             uppers: self.uppers_mut().iter().cloned().collect(),
             min_aggregation_number,
@@ -47,11 +47,83 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
     }
 }
 
-pub struct PreparedInternalIncreaseAggregationNumber<C: AggregationContext> {
+pub(super) fn increase_aggregation_number_immediately<'l, C: AggregationContext>(
+    _ctx: &C,
+    node: &mut C::Guard<'l>,
     node_id: C::NodeRef,
-    uppers: StackVec<C::NodeRef>,
     min_aggregation_number: u32,
     target_aggregation_number: u32,
+) -> Option<PreparedInternalIncreaseAggregationNumber<C>> {
+    if node.aggregation_number() >= min_aggregation_number {
+        return None;
+    }
+    let children = matches!(**node, AggregationNode::Leaf { .. })
+        .then(|| node.children().collect::<StackVec<_>>());
+    match &mut **node {
+        AggregationNode::Leaf {
+            aggregation_number,
+            uppers,
+        } => {
+            let children = children.unwrap();
+            if target_aggregation_number < LEAF_NUMBER {
+                *aggregation_number = target_aggregation_number as u8;
+                Some(PreparedInternalIncreaseAggregationNumber::Leaf {
+                    target_aggregation_number,
+                    children,
+                })
+            } else {
+                let uppers_copy = uppers.iter().cloned().collect::<StackVec<_>>();
+                // Convert to Aggregating
+                **node = AggregationNode::Aggegating(Box::new(AggegatingNode {
+                    aggregation_number: target_aggregation_number,
+                    uppers: take(uppers),
+                    followers: children.iter().cloned().collect(),
+                    data: node.get_initial_data(),
+                    enqueued_balancing: Vec::new(),
+                }));
+                let followers = children;
+                Some(PreparedInternalIncreaseAggregationNumber::Aggregating {
+                    node_id,
+                    uppers: uppers_copy,
+                    followers,
+                })
+            }
+        }
+        AggregationNode::Aggegating(aggegating) => {
+            let AggegatingNode {
+                followers,
+                uppers,
+                aggregation_number,
+                ..
+            } = &mut **aggegating;
+            let uppers = uppers.iter().cloned().collect::<StackVec<_>>();
+            let followers = followers.iter().cloned().collect();
+            *aggregation_number = target_aggregation_number;
+            Some(PreparedInternalIncreaseAggregationNumber::Aggregating {
+                node_id,
+                uppers,
+                followers,
+            })
+        }
+    }
+}
+
+pub enum PreparedInternalIncreaseAggregationNumber<C: AggregationContext> {
+    Lazy {
+        node_id: C::NodeRef,
+        uppers: StackVec<C::NodeRef>,
+        min_aggregation_number: u32,
+        target_aggregation_number: u32,
+    },
+    Leaf {
+        children: StackVec<C::NodeRef>,
+        target_aggregation_number: u32,
+    },
+    Aggregating {
+        node_id: C::NodeRef,
+        uppers: StackVec<C::NodeRef>,
+        followers: StackVec<C::NodeRef>,
+    },
 }
 
 impl<C: AggregationContext> PreparedInternalOperation<C>
@@ -59,93 +131,123 @@ impl<C: AggregationContext> PreparedInternalOperation<C>
 {
     type Result = ();
     fn apply(self, ctx: &C, balance_queue: &mut BalanceQueue<C::NodeRef>) {
-        let PreparedInternalIncreaseAggregationNumber {
-            min_aggregation_number,
-            mut target_aggregation_number,
-            node_id,
-            uppers,
-        } = self;
-        let mut need_to_run = true;
-        while need_to_run {
-            need_to_run = false;
-            let mut max = 0;
-            for upper_id in &uppers {
-                let upper = ctx.node(upper_id);
-                let aggregation_number = upper.aggregation_number();
-                if aggregation_number != u32::MAX {
-                    if aggregation_number > max {
-                        max = aggregation_number;
-                    }
-                    if aggregation_number == target_aggregation_number {
-                        target_aggregation_number += 1;
-                        if max >= target_aggregation_number {
-                            need_to_run = true;
+        match self {
+            PreparedInternalIncreaseAggregationNumber::Lazy {
+                min_aggregation_number,
+                mut target_aggregation_number,
+                node_id,
+                uppers,
+            } => {
+                let mut need_to_run = true;
+                while need_to_run {
+                    need_to_run = false;
+                    let mut max = 0;
+                    for upper_id in &uppers {
+                        let upper = ctx.node(upper_id);
+                        let aggregation_number = upper.aggregation_number();
+                        if aggregation_number != u32::MAX {
+                            if aggregation_number > max {
+                                max = aggregation_number;
+                            }
+                            if aggregation_number == target_aggregation_number {
+                                target_aggregation_number += 1;
+                                if max >= target_aggregation_number {
+                                    need_to_run = true;
+                                }
+                            }
                         }
                     }
                 }
-            }
-        }
-        drop(uppers);
-        let mut node = ctx.node(&node_id);
-        if node.aggregation_number() >= min_aggregation_number {
-            return;
-        }
-        let children = matches!(*node, AggregationNode::Leaf { .. })
-            .then(|| node.children().collect::<StackVec<_>>());
-        let (uppers, followers) = match &mut *node {
-            AggregationNode::Leaf {
-                aggregation_number,
-                uppers,
-            } => {
-                let children = children.unwrap();
-                if target_aggregation_number < LEAF_NUMBER {
-                    *aggregation_number = target_aggregation_number as u8;
-                    drop(node);
-                    for child_id in children {
-                        increase_aggregation_number_internal(
-                            ctx,
-                            balance_queue,
-                            ctx.node(&child_id),
-                            &child_id,
-                            target_aggregation_number + 1,
-                            target_aggregation_number + 1,
-                        );
-                    }
+                drop(uppers);
+                let mut node = ctx.node(&node_id);
+                if node.aggregation_number() >= min_aggregation_number {
                     return;
-                } else {
-                    let uppers_copy = uppers.iter().cloned().collect::<StackVec<_>>();
-                    // Convert to Aggregating
-                    *node = AggregationNode::Aggegating(Box::new(AggegatingNode {
-                        aggregation_number: target_aggregation_number,
-                        uppers: take(uppers),
-                        followers: children.iter().cloned().collect(),
-                        data: node.get_initial_data(),
-                        enqueued_balancing: Vec::new(),
-                    }));
-                    let followers = children;
-                    drop(node);
-                    (uppers_copy, followers)
+                }
+                let children = matches!(*node, AggregationNode::Leaf { .. })
+                    .then(|| node.children().collect::<StackVec<_>>());
+                let (uppers, followers) = match &mut *node {
+                    AggregationNode::Leaf {
+                        aggregation_number,
+                        uppers,
+                    } => {
+                        let children = children.unwrap();
+                        if target_aggregation_number < LEAF_NUMBER {
+                            *aggregation_number = target_aggregation_number as u8;
+                            drop(node);
+                            for child_id in children {
+                                increase_aggregation_number_internal(
+                                    ctx,
+                                    balance_queue,
+                                    ctx.node(&child_id),
+                                    &child_id,
+                                    target_aggregation_number + 1,
+                                    target_aggregation_number + 1,
+                                );
+                            }
+                            return;
+                        } else {
+                            let uppers_copy = uppers.iter().cloned().collect::<StackVec<_>>();
+                            // Convert to Aggregating
+                            *node = AggregationNode::Aggegating(Box::new(AggegatingNode {
+                                aggregation_number: target_aggregation_number,
+                                uppers: take(uppers),
+                                followers: children.iter().cloned().collect(),
+                                data: node.get_initial_data(),
+                                enqueued_balancing: Vec::new(),
+                            }));
+                            let followers = children;
+                            drop(node);
+                            (uppers_copy, followers)
+                        }
+                    }
+                    AggregationNode::Aggegating(aggegating) => {
+                        let AggegatingNode {
+                            followers,
+                            uppers,
+                            aggregation_number,
+                            ..
+                        } = &mut **aggegating;
+                        let uppers = uppers.iter().cloned().collect::<StackVec<_>>();
+                        let followers = followers.iter().cloned().collect();
+                        *aggregation_number = target_aggregation_number;
+                        drop(node);
+                        (uppers, followers)
+                    }
+                };
+                for follower_id in followers {
+                    balance_queue.balance(node_id.clone(), follower_id);
+                }
+                for upper_id in uppers {
+                    balance_queue.balance(upper_id, node_id.clone());
                 }
             }
-            AggregationNode::Aggegating(aggegating) => {
-                let AggegatingNode {
-                    followers,
-                    uppers,
-                    aggregation_number,
-                    ..
-                } = &mut **aggegating;
-                let uppers = uppers.iter().cloned().collect::<StackVec<_>>();
-                let followers = followers.iter().cloned().collect();
-                *aggregation_number = target_aggregation_number;
-                drop(node);
-                (uppers, followers)
+            PreparedInternalIncreaseAggregationNumber::Leaf {
+                children,
+                target_aggregation_number,
+            } => {
+                for child_id in children {
+                    increase_aggregation_number_internal(
+                        ctx,
+                        balance_queue,
+                        ctx.node(&child_id),
+                        &child_id,
+                        target_aggregation_number + 1,
+                        target_aggregation_number + 1,
+                    );
+                }
             }
-        };
-        for follower_id in followers {
-            balance_queue.balance(node_id.clone(), follower_id);
-        }
-        for upper_id in uppers {
-            balance_queue.balance(upper_id, node_id.clone());
+            PreparedInternalIncreaseAggregationNumber::Aggregating {
+                node_id,
+                uppers,
+                followers,
+            } => {
+                for follower_id in followers {
+                    balance_queue.balance(node_id.clone(), follower_id);
+                }
+                for upper_id in uppers {
+                    balance_queue.balance(upper_id, node_id.clone());
+                }
+            }
         }
     }
 }

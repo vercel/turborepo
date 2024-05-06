@@ -19,8 +19,8 @@ use rstest::*;
 
 use self::aggregation_data::prepare_aggregation_data;
 use super::{
-    aggregation_data, lost_edge::handle_lost_edges, AggregationContext, AggregationNode,
-    AggregationNodeGuard, RootQuery,
+    aggregation_data, handle_new_edge, lost_edge::handle_lost_edges, AggregationContext,
+    AggregationNode, AggregationNodeGuard, RootQuery,
 };
 use crate::aggregation::{query_root_info, PreparedOperation, StackVec};
 
@@ -283,10 +283,14 @@ impl Node {
     ) {
         let mut guard = self.inner.lock();
         guard.children.push(child.clone());
-        let prepared = guard.aggregation_node.handle_new_edge(
+        let number_of_children = guard.children.len();
+        let mut guard = unsafe { NodeGuard::new(guard, self.clone()) };
+        let prepared = handle_new_edge(
             aggregation_context,
+            &mut guard,
             &NodeRef(self.clone()),
             &NodeRef(child),
+            number_of_children,
         );
         drop(guard);
         prepared.apply(aggregation_context);
@@ -299,10 +303,14 @@ impl Node {
     ) -> impl PreparedOperation<NodeAggregationContext<'c>> {
         let mut guard = self.inner.lock();
         guard.children.push(child.clone());
-        guard.aggregation_node.handle_new_edge(
+        let number_of_children = guard.children.len();
+        let mut guard = unsafe { NodeGuard::new(guard, self.clone()) };
+        handle_new_edge(
             aggregation_context,
+            &mut guard,
             &NodeRef(self.clone()),
             &NodeRef(child),
+            number_of_children,
         )
     }
 
@@ -734,6 +742,61 @@ fn rectangle_tree() {
     print(&ctx, &root, false);
 }
 
+#[rstest]
+#[case::many_roots(100000, 2)]
+#[case::many_children(2, 100000)]
+#[case::many_root_and_children(10000, 10000)]
+fn performance(#[case] root_count: u32, #[case] children_count: u32) {
+    let something_with_lifetime = 0;
+    let ctx = NodeAggregationContext {
+        additions: AtomicU32::new(0),
+        something_with_lifetime: &something_with_lifetime,
+        add_value: false,
+    };
+    let mut roots: Vec<Arc<Node>> = Vec::new();
+    let mut children: Vec<Arc<Node>> = Vec::new();
+    let inner_node = Node::new(0);
+    let start = Instant::now();
+    // Setup
+    for i in 0..root_count {
+        let node = Node::new(1000000 + i);
+        roots.push(node.clone());
+        aggregation_data(&ctx, &NodeRef(node.clone())).active = true;
+        node.add_child_unchecked(&ctx, inner_node.clone());
+    }
+    for i in 0..children_count {
+        let node = Node::new(2000000 + i);
+        children.push(node.clone());
+        inner_node.add_child_unchecked(&ctx, node.clone());
+    }
+    println!("Setup: {:?}", start.elapsed());
+
+    // Add another root
+    let start = Instant::now();
+    {
+        let node = Node::new(3000000);
+        roots.push(node.clone());
+        aggregation_data(&ctx, &NodeRef(node.clone())).active = true;
+        node.add_child_unchecked(&ctx, inner_node.clone());
+    }
+    let duration = start.elapsed();
+    println!("Root: {:?}", duration);
+    assert!(duration.as_millis() < 10);
+
+    // Add another child
+    let start = Instant::now();
+    {
+        let node = Node::new(4000000);
+        children.push(node.clone());
+        inner_node.add_child_unchecked(&ctx, node.clone());
+    }
+    let duration = start.elapsed();
+    println!("Child: {:?}", duration);
+    assert!(duration.as_millis() < 10);
+
+    check_invariants(&ctx, roots.iter().cloned().map(NodeRef));
+}
+
 #[test]
 fn many_children() {
     let something_with_lifetime = 0;
@@ -745,7 +808,7 @@ fn many_children() {
     let mut roots: Vec<Arc<Node>> = Vec::new();
     let mut children: Vec<Arc<Node>> = Vec::new();
     const CHILDREN: u32 = 100000;
-    const ROOTS: u32 = 10000;
+    const ROOTS: u32 = 3;
     let inner_node = Node::new(0);
     let start = Instant::now();
     for i in 0..ROOTS {
@@ -762,14 +825,6 @@ fn many_children() {
         inner_node.add_child_unchecked(&ctx, node.clone());
     }
     println!("Children: {:?}", start.elapsed());
-    let start = Instant::now();
-    for i in 0..ROOTS {
-        let node = Node::new(30000 + i);
-        roots.push(node.clone());
-        aggregation_data(&ctx, &NodeRef(node.clone())).active = true;
-        node.add_child_unchecked(&ctx, inner_node.clone());
-    }
-    println!("Roots: {:?}", start.elapsed());
     let start = Instant::now();
     for i in 0..CHILDREN {
         let node = Node::new(40000 + i);
@@ -792,6 +847,15 @@ fn many_children() {
             number_of_slow_children += 1;
         }
     }
+
+    let start = Instant::now();
+    for i in 0..ROOTS {
+        let node = Node::new(30000 + i);
+        roots.push(node.clone());
+        aggregation_data(&ctx, &NodeRef(node.clone())).active = true;
+        node.add_child_unchecked(&ctx, inner_node.clone());
+    }
+    println!("Roots: {:?}", start.elapsed());
 
     // Technically it should always be 0, but the performance of the environment
     // might vary so we accept a few slow children
