@@ -25,11 +25,13 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
                 aggregation_number,
                 uppers,
             } => {
-                let child_aggregation_number = *aggregation_number as u32 + 1 + BUFFER_SPACE;
+                let min_aggregation_number = *aggregation_number as u32 + 1;
+                let target_aggregation_number = *aggregation_number as u32 + 1 + BUFFER_SPACE;
                 let uppers = uppers.iter().cloned().collect::<StackVec<_>>();
                 start_in_progress_all(ctx, &uppers);
                 Some(PreparedNewEdge::Leaf {
-                    child_aggregation_number,
+                    min_aggregation_number,
+                    target_aggregation_number,
                     uppers,
                     target_id: target_id.clone(),
                 })
@@ -43,7 +45,8 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
 
 enum PreparedNewEdge<C: AggregationContext> {
     Leaf {
-        child_aggregation_number: u32,
+        min_aggregation_number: u32,
+        target_aggregation_number: u32,
         uppers: StackVec<C::NodeRef>,
         target_id: C::NodeRef,
     },
@@ -59,7 +62,8 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNewEdge<C> {
         let mut balance_queue = BalanceQueue::new();
         match self {
             PreparedNewEdge::Leaf {
-                child_aggregation_number,
+                min_aggregation_number,
+                target_aggregation_number,
                 uppers,
                 target_id,
             } => {
@@ -70,7 +74,8 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNewEdge<C> {
                         &mut balance_queue,
                         ctx.node(&target_id),
                         &target_id,
-                        child_aggregation_number,
+                        min_aggregation_number,
+                        target_aggregation_number,
                     );
                 }
                 for upper_id in uppers {

@@ -16,15 +16,17 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
         &mut self,
         _ctx: &C,
         node_id: &C::NodeRef,
-        new_aggregation_number: u32,
+        min_aggregation_number: u32,
+        target_aggregation_number: u32,
     ) -> Option<PreparedInternalIncreaseAggregationNumber<C>> {
-        if self.aggregation_number() >= new_aggregation_number {
+        if self.aggregation_number() >= target_aggregation_number {
             return None;
         }
         Some(PreparedInternalIncreaseAggregationNumber {
             node_id: node_id.clone(),
             uppers: self.uppers_mut().iter().cloned().collect(),
-            new_aggregation_number,
+            min_aggregation_number,
+            target_aggregation_number,
         })
     }
 
@@ -43,7 +45,8 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
 pub struct PreparedInternalIncreaseAggregationNumber<C: AggregationContext> {
     node_id: C::NodeRef,
     uppers: StackVec<C::NodeRef>,
-    new_aggregation_number: u32,
+    min_aggregation_number: u32,
+    target_aggregation_number: u32,
 }
 
 impl<C: AggregationContext> PreparedInternalOperation<C>
@@ -52,7 +55,8 @@ impl<C: AggregationContext> PreparedInternalOperation<C>
     type Result = ();
     fn apply(self, ctx: &C, balance_queue: &mut BalanceQueue<C::NodeRef>) {
         let PreparedInternalIncreaseAggregationNumber {
-            mut new_aggregation_number,
+            min_aggregation_number,
+            mut target_aggregation_number,
             node_id,
             uppers,
         } = self;
@@ -67,9 +71,9 @@ impl<C: AggregationContext> PreparedInternalOperation<C>
                     if aggregation_number > max {
                         max = aggregation_number;
                     }
-                    if aggregation_number == new_aggregation_number {
-                        new_aggregation_number += 1;
-                        if max >= new_aggregation_number {
+                    if aggregation_number == target_aggregation_number {
+                        target_aggregation_number += 1;
+                        if max >= target_aggregation_number {
                             need_to_run = true;
                         }
                     }
@@ -78,7 +82,7 @@ impl<C: AggregationContext> PreparedInternalOperation<C>
         }
         drop(uppers);
         let mut node = ctx.node(&node_id);
-        if node.aggregation_number() >= new_aggregation_number {
+        if node.aggregation_number() >= min_aggregation_number {
             return;
         }
         let children = matches!(*node, AggregationNode::Leaf { .. })
@@ -89,8 +93,8 @@ impl<C: AggregationContext> PreparedInternalOperation<C>
                 uppers,
             } => {
                 let children = children.unwrap();
-                if new_aggregation_number < LEAF_NUMBER {
-                    *aggregation_number = new_aggregation_number as u8;
+                if target_aggregation_number < LEAF_NUMBER {
+                    *aggregation_number = target_aggregation_number as u8;
                     drop(node);
                     for child_id in children {
                         increase_aggregation_number_internal(
@@ -98,7 +102,8 @@ impl<C: AggregationContext> PreparedInternalOperation<C>
                             balance_queue,
                             ctx.node(&child_id),
                             &child_id,
-                            new_aggregation_number + 1,
+                            target_aggregation_number + 1,
+                            target_aggregation_number + 1,
                         );
                     }
                     return;
@@ -106,7 +111,7 @@ impl<C: AggregationContext> PreparedInternalOperation<C>
                     let uppers_copy = uppers.iter().cloned().collect::<StackVec<_>>();
                     // Convert to Aggregating
                     *node = AggregationNode::Aggegating(Box::new(AggegatingNode {
-                        aggregation_number: new_aggregation_number,
+                        aggregation_number: target_aggregation_number,
                         uppers: take(uppers),
                         followers: children.iter().cloned().collect(),
                         data: node.get_initial_data(),
@@ -126,7 +131,7 @@ impl<C: AggregationContext> PreparedInternalOperation<C>
                 } = &mut **aggegating;
                 let uppers = uppers.iter().cloned().collect::<StackVec<_>>();
                 let followers = followers.iter().cloned().collect();
-                *aggregation_number = new_aggregation_number;
+                *aggregation_number = target_aggregation_number;
                 drop(node);
                 (uppers, followers)
             }
@@ -145,9 +150,15 @@ pub fn increase_aggregation_number_internal<C: AggregationContext>(
     balance_queue: &mut BalanceQueue<C::NodeRef>,
     mut node: C::Guard<'_>,
     node_id: &C::NodeRef,
-    new_aggregation_number: u32,
+    min_aggregation_number: u32,
+    target_aggregation_number: u32,
 ) {
-    let prepared = node.increase_aggregation_number_internal(ctx, node_id, new_aggregation_number);
+    let prepared = node.increase_aggregation_number_internal(
+        ctx,
+        node_id,
+        min_aggregation_number,
+        target_aggregation_number,
+    );
     drop(node);
     prepared.apply(ctx, balance_queue);
 }

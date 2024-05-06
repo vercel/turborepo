@@ -62,6 +62,7 @@ pub(super) fn balance_edge<C: AggregationContext>(
                             target,
                             &target_id,
                             target_aggregation_number + 1,
+                            target_aggregation_number + 1,
                         );
                     }
                 }

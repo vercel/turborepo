@@ -18,7 +18,14 @@ where
         AggregationDataGuard { guard }
     } else {
         let mut balance_queue = BalanceQueue::new();
-        increase_aggregation_number_internal(ctx, &mut balance_queue, guard, node_id, u32::MAX);
+        increase_aggregation_number_internal(
+            ctx,
+            &mut balance_queue,
+            guard,
+            node_id,
+            u32::MAX,
+            u32::MAX,
+        );
         balance_queue.process(ctx);
         let guard = ctx.node(node_id);
         debug_assert!(guard.aggregation_number() == u32::MAX);
@@ -33,6 +40,7 @@ pub fn prepare_aggregation_data<C: AggregationContext>(ctx: &C, node_id: &C::Nod
         &mut balance_queue,
         ctx.node(node_id),
         node_id,
+        u32::MAX,
         u32::MAX,
     );
     balance_queue.process(ctx);

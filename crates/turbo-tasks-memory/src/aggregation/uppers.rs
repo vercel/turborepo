@@ -124,6 +124,7 @@ pub fn on_added<C: AggregationContext>(
                 ctx.node(node_id),
                 node_id,
                 min + 1,
+                min + 1,
             );
         } else {
             let normal_count = count - root_count;
@@ -135,6 +136,7 @@ pub fn on_added<C: AggregationContext>(
                         balance_queue,
                         ctx.node(node_id),
                         node_id,
+                        min + 1,
                         min + 1,
                     );
                 }

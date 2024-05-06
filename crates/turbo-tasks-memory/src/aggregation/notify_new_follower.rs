@@ -136,6 +136,7 @@ impl<C: AggregationContext> PreparedInternalOperation<C> for PreparedNotifyNewFo
                                         follower,
                                         &follower_id,
                                         upper_aggregation_number + 1,
+                                        upper_aggregation_number + 1,
                                     );
                                     // retry
                                 } else {
