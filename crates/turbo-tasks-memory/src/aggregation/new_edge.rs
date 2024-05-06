@@ -13,6 +13,7 @@ const BUFFER_SPACE: u32 = 1;
 const BUFFER_SPACE: u32 = 3;
 
 impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
+    #[tracing::instrument(level = tracing::Level::TRACE, name = "handle_new_edge_preparation", skip_all)]
     pub fn handle_new_edge<C: AggregationContext<NodeRef = I, Data = D>>(
         &mut self,
         ctx: &C,
@@ -53,6 +54,7 @@ enum PreparedNewEdge<C: AggregationContext> {
 
 impl<C: AggregationContext> PreparedOperation<C> for PreparedNewEdge<C> {
     type Result = ();
+    #[tracing::instrument(level = tracing::Level::TRACE, name = "handle_new_edge", skip_all)]
     fn apply(self, ctx: &C) {
         let mut balance_queue = BalanceQueue::new();
         match self {
