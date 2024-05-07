@@ -214,6 +214,8 @@ impl Subscriber {
             return false;
         }
 
+        tracing::warn!("hashes are the same, no need to rerun");
+
         true
     }
 
