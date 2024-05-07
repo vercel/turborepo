@@ -374,6 +374,11 @@ pub(super) async fn split(
             } = dep_graph.split_module(&format!("./{filename}").into(), &items);
 
             debug_assert_ne!(modules.len(), 0, "modules.len() == 0;\nModule: {module:?}",);
+            debug_assert_eq!(
+                entrypoints.get(&Key::ModuleEvaluation),
+                Some(&0),
+                "ModuleEvaluation is not the first module"
+            );
 
             let modules = modules
                 .into_iter()
