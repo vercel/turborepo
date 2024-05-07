@@ -237,13 +237,16 @@ impl Subscriber {
 
             loop {
                 interval.tick().await;
+                let changed_files = {
+                    let changed_files = self.changed_files.lock().await;
+                    if changed_files.borrow().is_empty() {
+                        continue;
+                    }
 
-                let changed_files = self.changed_files.lock().await;
-                if changed_files.borrow().is_empty() {
-                    continue;
-                }
+                    changed_files.take()
+                };
 
-                let ChangedFiles::Some(trie) = changed_files.take() else {
+                let ChangedFiles::Some(trie) = changed_files else {
                     let _ = self
                         .package_change_events_tx
                         .send(PackageChangeEvent::Rediscover);
