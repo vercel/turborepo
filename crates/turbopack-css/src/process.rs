@@ -959,6 +959,16 @@ impl lightningcss::visitor::Visitor<'_> for CssModuleValidator {
                 }
             }
 
+            lightningcss::properties::Property::GridTemplate(p) => {
+                if let lightningcss::properties::grid::GridTemplateAreas::Areas { areas, .. } =
+                    &mut p.areas
+                {
+                    for area in areas.iter().flatten() {
+                        self.used_grid_templates.insert(area.clone());
+                    }
+                }
+            }
+
             _ => {}
         }
 
