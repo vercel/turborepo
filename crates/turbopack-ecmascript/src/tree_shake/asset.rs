@@ -65,9 +65,10 @@ impl Module for EcmascriptModulePartAsset {
             SplitResult::Ok {
                 deps, entrypoints, ..
             } => (deps, entrypoints),
-            _ => {
-                bail!("failed to split module")
+            SplitResult::Unparseable { .. } => {
+                bail!("failed to split module: failed to parse")
             }
+            SplitResult::NotFound { .. } => bail!("failed to parse module: module not found"),
         };
 
         let analyze = analyze(self.full_module, self.part).await?;
