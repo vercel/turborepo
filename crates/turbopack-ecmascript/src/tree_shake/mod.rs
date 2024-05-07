@@ -380,6 +380,15 @@ pub(super) async fn split(
                 "ModuleEvaluation is not the first module"
             );
 
+            for &v in entrypoints.values() {
+                debug_assert!(
+                    v < modules.len() as u32,
+                    "Invalid entrypoint '{}' while there are only '{}' modules",
+                    v,
+                    modules.len()
+                );
+            }
+
             let modules = modules
                 .into_iter()
                 .map(|module| {
