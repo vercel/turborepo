@@ -5,7 +5,7 @@ use syn::{
     spanned::Spanned,
     AngleBracketedGenericArguments, Block, Expr, ExprPath, FnArg, GenericArgument, Pat, PatIdent,
     PatType, Path, PathArguments, PathSegment, Receiver, ReturnType, Signature, Token, Type,
-    TypeGroup, TypePath,
+    TypeGroup, TypePath, TypeTuple,
 };
 
 #[derive(Debug)]
@@ -332,22 +332,25 @@ fn return_type_to_type(return_type: &ReturnType) -> Type {
     }
 }
 
-fn expand_vc_return_type(orig_output: &Type) -> &Type {
+fn expand_vc_return_type(orig_output: &Type) -> Type {
     // HACK: Approximate the expansion that we'd otherwise get from
-    // `TaskOutput::Return`, so that the return type shown in the rustdocs
+    // `<T as TaskOutput>::Return`, so that the return type shown in the rustdocs
     // is as simple as possible. Break out as soon as we see something we don't
     // recognize.
-    let mut new_output = orig_output;
+    let mut new_output = orig_output.clone();
     let mut found_vc = false;
     loop {
         new_output = match new_output {
-            Type::Group(TypeGroup { elem, .. }) => elem,
+            Type::Group(TypeGroup { elem, .. }) => *elem,
+            Type::Tuple(TypeTuple { elems, .. }) if elems.is_empty() => {
+                Type::Path(parse_quote!(::turbo_tasks::Vc<()>))
+            }
             Type::Path(TypePath {
                 qself: None,
                 path:
                     Path {
-                        mut leading_colon,
-                        segments,
+                        leading_colon,
+                        ref segments,
                     },
             }) => {
                 let mut pairs = segments.pairs();
@@ -374,14 +377,13 @@ fn expand_vc_return_type(orig_output: &Type) -> &Type {
                 } else {
                     None
                 };
+
                 if prefix.is_some() {
-                    leading_colon = None;
-                    cur_pair = pairs.next();
+                    cur_pair = pairs.next(); // strip the matched prefix
+                } else if leading_colon.is_some() {
+                    break; // something like `::Vc` isn't valid
                 }
 
-                if leading_colon.is_some() {
-                    break;
-                }
                 // Look for a `Vc<...>` or `Result<...>` generic
                 let Some(Pair::End(PathSegment {
                     ident,
@@ -395,15 +397,16 @@ fn expand_vc_return_type(orig_output: &Type) -> &Type {
                     found_vc = true;
                     break; // Vc is the bottom-most level
                 }
-                if !(ident == "Result" && args.len() == 1) {
+                if ident == "Result" && args.len() == 1 {
+                    let GenericArgument::Type(ty) =
+                        args.first().expect("Result<...> type has an argument")
+                    else {
+                        break;
+                    };
+                    ty.clone()
+                } else {
                     break; // we only support expanding Result<...>
                 }
-                let GenericArgument::Type(ty) =
-                    args.first().expect("Result<...> type has an argument")
-                else {
-                    break;
-                };
-                ty
             }
             _ => break,
         }
