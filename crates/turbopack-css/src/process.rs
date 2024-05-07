@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::{bail, Context, Result};
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use lightningcss::{
     css_modules::{CssModuleExport, CssModuleExports, CssModuleReference, Pattern, Segment},
     dependencies::{Dependency, ImportDependency, Location, SourceRange},
