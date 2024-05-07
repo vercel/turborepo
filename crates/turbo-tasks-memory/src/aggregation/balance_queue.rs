@@ -1,21 +1,18 @@
-use std::{
-    cmp::max,
-    collections::{HashMap, HashSet},
-    hash::Hash,
-    mem::take,
-};
+use std::{cmp::max, collections::HashMap, hash::Hash, mem::take};
+
+use indexmap::IndexSet;
 
 use super::{balance_edge, AggregationContext};
 
 pub struct BalanceQueue<I> {
-    queue: HashSet<(I, I)>,
+    queue: IndexSet<(I, I)>,
     aggregation_numbers: HashMap<I, u32>,
 }
 
 impl<I: Hash + Eq + Clone> BalanceQueue<I> {
     pub fn new() -> Self {
         Self {
-            queue: HashSet::default(),
+            queue: IndexSet::default(),
             aggregation_numbers: HashMap::default(),
         }
     }
