@@ -7,7 +7,7 @@ use super::{
 #[cfg(test)]
 pub(super) const LEAF_NUMBER: u32 = 8;
 #[cfg(not(test))]
-pub(super) const LEAF_NUMBER: u32 = 32;
+pub(super) const LEAF_NUMBER: u32 = 64;
 
 impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
     pub(super) fn increase_aggregation_number_internal<

@@ -14,7 +14,7 @@ use super::{
 #[cfg(test)]
 const BUFFER_SPACE: u32 = 1;
 #[cfg(not(test))]
-const BUFFER_SPACE: u32 = 3;
+const BUFFER_SPACE: u32 = 2;
 
 const MAX_UPPERS_TIMES_CHILDREN: usize = 64;
 
