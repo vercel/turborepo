@@ -3681,7 +3681,7 @@ mod tests {
                         let start = Instant::now();
                         async fn handle_args(
                             args: Vec<EffectArg>,
-                            queue: &mut Vec<(usize, Box<Effect>)>,
+                            queue: &mut Vec<(usize, Effect)>,
                             var_graph: &VarGraph,
                             i: usize,
                         ) -> Vec<JsValue> {
@@ -3704,7 +3704,7 @@ mod tests {
                             }
                             new_args
                         }
-                        match *effect {
+                        match effect {
                             Effect::Conditional {
                                 condition, kind, ..
                             } => {
