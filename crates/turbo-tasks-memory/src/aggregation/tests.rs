@@ -987,6 +987,7 @@ fn fuzzy_new() {
 #[case::a(4059591975, 10)]
 #[case::b(603692396, 100)]
 #[case::c(3317876847, 10)]
+#[case::d(4012518846, 50)]
 fn fuzzy(#[case] seed: u32, #[case] count: u32) {
     let something_with_lifetime = 0;
     let ctx = NodeAggregationContext {
