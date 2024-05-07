@@ -290,6 +290,11 @@ async fn get_part_id(result: &SplitResult, part: Vc<ModulePart>) -> Result<u32> 
         _ => bail!("split failed"),
     };
 
+    // Common JS modules have only one part.
+    if entrypoints.len() == 1 {
+        return Ok(0);
+    }
+
     let part_id = match entrypoints.get(&key) {
         Some(id) => *id,
         None => {
