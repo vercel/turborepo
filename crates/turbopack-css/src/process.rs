@@ -735,7 +735,7 @@ async fn process_content(
 #[derive(Default)]
 struct CssModuleValidator {
     errors: Vec<CssError>,
-    used_grid_areas: HashSet<String>,
+    used_grid_areas: IndexSet<String>,
     used_grid_templates: HashSet<String>,
 }
 impl CssModuleValidator {
