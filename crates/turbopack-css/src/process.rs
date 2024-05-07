@@ -1432,7 +1432,7 @@ mod tests {
         assert_lint_failure_only_lightning_css(
             r#"
         .item1 {
-            grid-area-row-start: my;
+            grid-row-start: my;
         }
         .grid-container {
             display: grid;
@@ -1443,7 +1443,7 @@ mod tests {
         assert_lint_failure_only_lightning_css(
             r#"
         .item1 {
-            grid-area-row-end: my;
+            grid-row-end: my;
         }
         .grid-container {
             display: grid;
@@ -1454,7 +1454,7 @@ mod tests {
         assert_lint_failure_only_lightning_css(
             r#"
         .item1 {
-            grid-area-column-start: my;
+            grid-column-start: my;
         }
         .grid-container {
             display: grid;
@@ -1465,7 +1465,7 @@ mod tests {
         assert_lint_failure_only_lightning_css(
             r#"
         .item1 {
-            grid-area-column-end: my;
+            grid-column-end: my;
         }
         .grid-container {
             display: grid;
