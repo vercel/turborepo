@@ -80,6 +80,10 @@ impl Visit for IdentUsageCollector {
     }
 
     fn visit_ident(&mut self, n: &Ident) {
+        if n.span.ctxt != self.only {
+            return;
+        }
+
         match self.mode {
             Mode::Read => {
                 self.vars.read.insert(n.to_id());
@@ -183,6 +187,10 @@ impl Visit for CapturedIdCollector {
             return;
         }
 
+        if n.span.ctxt != self.only {
+            return;
+        }
+
         match self.mode {
             Mode::Read => {
                 self.vars.read.insert(n.to_id());
@@ -225,6 +233,7 @@ where
     N: VisitWith<CapturedIdCollector>,
 {
     let mut v = CapturedIdCollector {
+        only,
         is_nested: false,
         ..Default::default()
     };
@@ -238,6 +247,7 @@ where
     N: VisitWith<IdentUsageCollector>,
 {
     let mut v = IdentUsageCollector {
+        only,
         ignore_nested: false,
         ..Default::default()
     };
@@ -251,6 +261,7 @@ where
     N: VisitWith<IdentUsageCollector>,
 {
     let mut v = IdentUsageCollector {
+        only,
         ignore_nested: true,
         ..Default::default()
     };
