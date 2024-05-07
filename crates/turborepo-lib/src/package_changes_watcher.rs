@@ -278,7 +278,8 @@ impl Subscriber {
                 let changed_files: HashSet<_> = trie
                     .keys()
                     .filter_map(|p| {
-                        let p = AbsoluteSystemPathBuf::new(p).ok()?;
+                        let p = AbsoluteSystemPathBuf::new(p)
+                            .expect("file watching should return absolute paths");
                         self.repo_root.anchor(p).ok()
                     })
                     .filter(|p| {
