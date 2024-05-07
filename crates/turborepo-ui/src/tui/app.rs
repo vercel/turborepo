@@ -12,7 +12,6 @@ use ratatui::{
 use tracing::debug;
 use tui_term::widget::PseudoTerminal;
 
-const DEFAULT_APP_HEIGHT: u16 = 60;
 const PANE_SIZE_RATIO: f32 = 3.0 / 4.0;
 const FRAMERATE: Duration = Duration::from_millis(3);
 
@@ -100,11 +99,17 @@ impl<I: std::io::Write> App<I> {
 /// Handle the rendering of the `App` widget based on events received by
 /// `receiver`
 pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
-    let (mut terminal, app_height) = startup()?;
+    let mut terminal = startup()?;
     let size = terminal.size()?;
 
-    let pane_height = (f32::from(app_height) * PANE_SIZE_RATIO) as u16;
-    let mut app: App<Box<dyn io::Write + Send>> = App::new(pane_height, size.width, tasks);
+    // Figure out pane width?
+    let task_width_hint = TaskTable::width_hint(tasks.iter().map(|s| s.as_str()));
+    // Want to maximize pane width
+    let ratio_pane_width = (f32::from(size.width) * PANE_SIZE_RATIO) as u16;
+    let full_task_width = size.width.saturating_sub(task_width_hint);
+
+    let mut app: App<Box<dyn io::Write + Send>> =
+        App::new(size.height, full_task_width.max(ratio_pane_width), tasks);
 
     let result = run_app_inner(&mut terminal, &mut app, receiver);
 
@@ -152,7 +157,7 @@ fn poll(interact: bool, receiver: &AppReceiver, deadline: Instant) -> Option<Eve
 }
 
 /// Configures terminal for rendering App
-fn startup() -> io::Result<(Terminal<CrosstermBackend<Stdout>>, u16)> {
+fn startup() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
     crossterm::terminal::enable_raw_mode()?;
     let mut stdout = io::stdout();
     crossterm::execute!(
@@ -162,9 +167,6 @@ fn startup() -> io::Result<(Terminal<CrosstermBackend<Stdout>>, u16)> {
     )?;
     let backend = CrosstermBackend::new(stdout);
 
-    // We need to reserve at least 1 line for writing persistent lines.
-    let height = DEFAULT_APP_HEIGHT.min(backend.size()?.height.saturating_sub(1));
-
     let mut terminal = Terminal::with_options(
         backend,
         ratatui::TerminalOptions {
@@ -173,7 +175,7 @@ fn startup() -> io::Result<(Terminal<CrosstermBackend<Stdout>>, u16)> {
     )?;
     terminal.hide_cursor()?;
 
-    Ok((terminal, height))
+    Ok(terminal)
 }
 
 /// Restores terminal to expected state
@@ -249,8 +251,8 @@ fn update(
 }
 
 fn view<I>(app: &mut App<I>, f: &mut Frame) {
-    let (term_height, _) = app.term_size();
-    let vertical = Layout::vertical([Constraint::Min(5), Constraint::Length(term_height)]);
+    let (_, width) = app.term_size();
+    let vertical = Layout::horizontal([Constraint::Fill(1), Constraint::Length(width)]);
     let [table, pane] = vertical.areas(f.size());
     app.table.stateful_render(f, table);
     f.render_widget(&app.pane, pane);

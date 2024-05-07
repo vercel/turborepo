@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::time::Instant;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]

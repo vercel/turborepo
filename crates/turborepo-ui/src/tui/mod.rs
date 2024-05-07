@@ -3,9 +3,9 @@ mod event;
 mod handle;
 mod input;
 mod pane;
+mod spinner;
 mod table;
 mod task;
-mod task_duration;
 
 pub use app::run_app;
 use event::Event;
