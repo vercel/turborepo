@@ -1428,5 +1428,73 @@ mod tests {
         }
         "#,
         );
+
+        assert_lint_failure_only_lightning_css(
+            r#"
+        .item1 {
+            grid-area-row-start: my;
+        }
+        .grid-container {
+            display: grid;
+            grid-template-areas: "myArea myArea";
+        }
+        "#,
+        );
+        assert_lint_failure_only_lightning_css(
+            r#"
+        .item1 {
+            grid-area-row-end: my;
+        }
+        .grid-container {
+            display: grid;
+            grid-template-areas: "myArea myArea";
+        }
+        "#,
+        );
+        assert_lint_failure_only_lightning_css(
+            r#"
+        .item1 {
+            grid-area-column-start: my;
+        }
+        .grid-container {
+            display: grid;
+            grid-template-areas: "myArea myArea";
+        }
+        "#,
+        );
+        assert_lint_failure_only_lightning_css(
+            r#"
+        .item1 {
+            grid-area-column-end: my;
+        }
+        .grid-container {
+            display: grid;
+            grid-template-areas: "myArea myArea";
+        }
+        "#,
+        );
+
+        assert_lint_success(
+            r#"
+        .item1 {
+            grid-area: my;
+        }
+        .grid-container {
+            display: grid;
+            grid-template: "my" 100px / "my" 30% "my" 70%;
+        }
+        "#,
+        );
+        assert_lint_failure_only_lightning_css(
+            r#"
+        .item1 {
+            grid-area: my;
+        }
+        .grid-container {
+            display: grid;
+            grid-template: "myArea" 100px / "myArea" 30% "myArea" 70%;
+        }
+        "#,
+        );
     }
 }
