@@ -266,7 +266,6 @@ fn is_token_active(metadata: &ResponseTokenMetadata, current_time: u128) -> bool
 mod tests {
     use std::backtrace::Backtrace;
 
-    use async_trait::async_trait;
     use reqwest::{Method, Response};
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
@@ -396,7 +395,6 @@ mod tests {
         pub response: MockCachingResponse,
     }
 
-    #[async_trait]
     impl CacheClient for MockCacheClient {
         async fn get_artifact(
             &self,
