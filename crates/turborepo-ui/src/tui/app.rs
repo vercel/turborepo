@@ -6,11 +6,9 @@ use std::{
 use ratatui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Layout},
-    widgets::Widget,
     Frame, Terminal,
 };
 use tracing::debug;
-use tui_term::widget::PseudoTerminal;
 
 const PANE_SIZE_RATIO: f32 = 3.0 / 4.0;
 const FRAMERATE: Duration = Duration::from_millis(3);
@@ -130,9 +128,7 @@ fn run_app_inner<B: Backend + std::io::Write>(
     let mut last_render = Instant::now();
 
     while let Some(event) = poll(app.interact, &receiver, last_render + FRAMERATE) {
-        if let Some(message) = update(app, event)? {
-            persist_bytes(terminal, &message)?;
-        }
+        update(app, event)?;
         if app.done {
             break;
         }
@@ -216,9 +212,6 @@ fn update(
         Event::Tick => {
             app.table.tick();
         }
-        Event::Log { message } => {
-            return Ok(Some(message));
-        }
         Event::EndTask { task } => {
             app.table.finish_task(&task)?;
         }
@@ -256,45 +249,4 @@ fn view<I>(app: &mut App<I>, f: &mut Frame) {
     let [table, pane] = vertical.areas(f.size());
     app.table.stateful_render(f, table);
     f.render_widget(&app.pane, pane);
-}
-
-/// Write provided bytes to a section of the screen that won't get rewritten
-fn persist_bytes(terminal: &mut Terminal<impl Backend>, bytes: &[u8]) -> Result<(), Error> {
-    let size = terminal.size()?;
-    let mut parser = turborepo_vt100::Parser::new(size.height, size.width, 128);
-    parser.process(bytes);
-    let screen = parser.entire_screen();
-    let (height, _) = screen.size();
-    terminal.insert_before(height as u16, |buf| {
-        PseudoTerminal::new(&screen).render(buf.area, buf)
-    })?;
-    Ok(())
-}
-
-#[cfg(test)]
-mod test {
-    use ratatui::{backend::TestBackend, buffer::Buffer};
-
-    use super::*;
-
-    #[test]
-    fn test_persist_bytes() {
-        let mut term = Terminal::with_options(
-            TestBackend::new(10, 7),
-            ratatui::TerminalOptions {
-                viewport: ratatui::Viewport::Inline(3),
-            },
-        )
-        .unwrap();
-        persist_bytes(&mut term, b"two\r\nlines").unwrap();
-        term.backend().assert_buffer(&Buffer::with_lines(vec![
-            "two       ",
-            "lines     ",
-            "          ",
-            "          ",
-            "          ",
-            "          ",
-            "          ",
-        ]));
-    }
 }

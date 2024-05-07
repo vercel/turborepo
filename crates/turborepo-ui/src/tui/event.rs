@@ -15,9 +15,6 @@ pub enum Event {
     },
     Stop,
     Tick,
-    Log {
-        message: Vec<u8>,
-    },
     Up,
     Down,
     ScrollUp,
