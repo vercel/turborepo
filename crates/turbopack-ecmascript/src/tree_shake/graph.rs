@@ -1000,10 +1000,11 @@ impl DepGraph {
     where
         T: IntoIterator<Item = &'a ItemId>,
     {
-        let mut from_ix = None;
+        // This value cannot be lazily initialized because we need to ensure that
+        // ModuleEvaluation should exist even if there's no side effect.
+        let from = self.g.node(from);
 
         for to in to {
-            let from = *from_ix.get_or_insert_with(|| self.g.node(from));
             let to = self.g.node(to);
 
             self.g.idx_graph.add_edge(from, to, Dependency::Strong);
