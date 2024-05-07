@@ -375,9 +375,17 @@ pub(crate) async fn analyse_ecmascript_module(
         let module = module.ident().to_string().await?;
         tracing::info_span!("analyse ecmascript module", module = *module)
     };
-    analyse_ecmascript_module_internal(module, part)
+    let result = analyse_ecmascript_module_internal(module, part)
         .instrument(span)
-        .await
+        .await;
+
+    match result {
+        Ok(result) => Ok(result),
+        Err(err) => Err(err.context(format!(
+            "failed to analyse ecmascript module '{}'",
+            module.ident().to_string().await?
+        ))),
+    }
 }
 
 pub(crate) async fn analyse_ecmascript_module_internal(
