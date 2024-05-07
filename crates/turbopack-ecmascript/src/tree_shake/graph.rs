@@ -541,6 +541,7 @@ impl DepGraph {
         &mut self,
         module: &Module,
         unresolved_ctxt: SyntaxContext,
+        top_level_ctxt: SyntaxContext,
     ) -> (Vec<ItemId>, FxHashMap<ItemId, ItemData>) {
         let mut exports = vec![];
         let mut items = FxHashMap::default();
@@ -682,8 +683,9 @@ impl DepGraph {
                         });
 
                         {
-                            let used_ids = ids_used_by_ignoring_nested(&export.decl);
-                            let captured_ids = ids_captured_by(&export.decl);
+                            let used_ids =
+                                ids_used_by_ignoring_nested(&export.decl, top_level_ctxt);
+                            let captured_ids = ids_captured_by(&export.decl, top_level_ctxt);
                             let data = ItemData {
                                 read_vars: used_ids.read,
                                 eventual_read_vars: captured_ids.read,
@@ -713,8 +715,9 @@ impl DepGraph {
                             private_ident!(magic_identifier::mangle("default export"));
 
                         {
-                            let used_ids = ids_used_by_ignoring_nested(&export.expr);
-                            let captured_ids = ids_captured_by(&export.expr);
+                            let used_ids =
+                                ids_used_by_ignoring_nested(&export.expr, top_level_ctxt);
+                            let captured_ids = ids_captured_by(&export.expr, top_level_ctxt);
                             let data = ItemData {
                                 read_vars: used_ids.read,
                                 eventual_read_vars: captured_ids.read,
@@ -827,7 +830,7 @@ impl DepGraph {
                     };
                     ids.push(id.clone());
 
-                    let vars = ids_used_by(&f.function);
+                    let vars = ids_used_by(&f.function, top_level_ctxt);
                     items.insert(
                         id,
                         ItemData {
@@ -858,8 +861,8 @@ impl DepGraph {
                         ids.push(id.clone());
 
                         let decl_ids: Vec<Id> = find_pat_ids(&decl.name);
-                        let vars = ids_used_by_ignoring_nested(&decl.init);
-                        let eventual_vars = ids_captured_by(&decl.init);
+                        let vars = ids_used_by_ignoring_nested(&decl.init, top_level_ctxt);
+                        let eventual_vars = ids_captured_by(&decl.init, top_level_ctxt);
 
                         let var_decl = Box::new(VarDecl {
                             decls: vec![decl.clone()],
@@ -885,11 +888,11 @@ impl DepGraph {
                     expr: box Expr::Assign(assign),
                     ..
                 })) => {
-                    let mut used_ids = ids_used_by_ignoring_nested(item);
-                    let captured_ids = ids_captured_by(item);
+                    let mut used_ids = ids_used_by_ignoring_nested(item, top_level_ctxt);
+                    let captured_ids = ids_captured_by(item, top_level_ctxt);
 
                     if assign.op != op!("=") {
-                        let extra_ids = ids_used_by_ignoring_nested(&assign.left);
+                        let extra_ids = ids_used_by_ignoring_nested(&assign.left, top_level_ctxt);
                         used_ids.read.extend(extra_ids.read);
                         used_ids.write.extend(extra_ids.write);
                     }
@@ -927,8 +930,8 @@ impl DepGraph {
                 _ => {
                     // Default to normal
 
-                    let used_ids = ids_used_by_ignoring_nested(item);
-                    let captured_ids = ids_captured_by(item);
+                    let used_ids = ids_used_by_ignoring_nested(item, top_level_ctxt);
+                    let captured_ids = ids_captured_by(item, top_level_ctxt);
                     let data = ItemData {
                         read_vars: used_ids.read,
                         eventual_read_vars: captured_ids.read,

@@ -2,12 +2,15 @@ use std::hash::BuildHasherDefault;
 
 use indexmap::IndexSet;
 use rustc_hash::FxHasher;
-use swc_core::ecma::{
-    ast::{
-        AssignTarget, BlockStmtOrExpr, Constructor, ExportNamedSpecifier, Expr, Function, Id,
-        Ident, MemberProp, NamedExport, Pat, PropName,
+use swc_core::{
+    common::SyntaxContext,
+    ecma::{
+        ast::{
+            AssignTarget, BlockStmtOrExpr, Constructor, ExportNamedSpecifier, Expr, Function, Id,
+            Ident, MemberProp, NamedExport, Pat, PropName,
+        },
+        visit::{noop_visit_type, visit_obj_and_computed, Visit, VisitWith},
     },
-    visit::{noop_visit_type, visit_obj_and_computed, Visit, VisitWith},
 };
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -20,6 +23,7 @@ enum Mode {
 /// A visitor which collects variables which are read or written.
 #[derive(Default)]
 pub(crate) struct IdentUsageCollector {
+    only: SyntaxContext,
     vars: Vars,
     ignore_nested: bool,
     mode: Mode,
@@ -121,6 +125,7 @@ impl Visit for IdentUsageCollector {
 /// evaluation time.
 #[derive(Default)]
 pub(crate) struct CapturedIdCollector {
+    only: SyntaxContext,
     vars: Vars,
     is_nested: bool,
     mode: Mode,
@@ -215,7 +220,7 @@ pub(crate) struct Vars {
 }
 
 /// Returns `(read, write)`
-pub(crate) fn ids_captured_by<N>(n: &N) -> Vars
+pub(crate) fn ids_captured_by<N>(n: &N, only: SyntaxContext) -> Vars
 where
     N: VisitWith<CapturedIdCollector>,
 {
@@ -228,7 +233,7 @@ where
 }
 
 /// Returns `(read, write)`
-pub(crate) fn ids_used_by<N>(n: &N) -> Vars
+pub(crate) fn ids_used_by<N>(n: &N, only: SyntaxContext) -> Vars
 where
     N: VisitWith<IdentUsageCollector>,
 {
@@ -241,7 +246,7 @@ where
 }
 
 /// Returns `(read, write)`
-pub(crate) fn ids_used_by_ignoring_nested<N>(n: &N) -> Vars
+pub(crate) fn ids_used_by_ignoring_nested<N>(n: &N, only: SyntaxContext) -> Vars
 where
     N: VisitWith<IdentUsageCollector>,
 {

@@ -261,6 +261,7 @@ pub fn create_graph(m: &Program, eval_context: &EvalContext) -> VarGraph {
 
 pub struct EvalContext {
     pub(crate) unresolved_mark: Mark,
+    pub(crate) top_level_mark: Mark,
     pub(crate) imports: ImportMap,
 }
 
@@ -268,11 +269,13 @@ impl EvalContext {
     pub fn new(
         module: &Program,
         unresolved_mark: Mark,
+        top_level_mark: Mark,
         skip_namespace: bool,
         source: Option<Vc<Box<dyn Source>>>,
     ) -> Self {
         Self {
             unresolved_mark,
+            top_level_mark,
             imports: ImportMap::analyze(module, skip_namespace, source),
         }
     }

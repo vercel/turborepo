@@ -64,6 +64,7 @@ fn run(input: PathBuf) {
         let unresolved_mark = Mark::new();
         let top_level_mark = Mark::new();
         let unresolved_ctxt = SyntaxContext::empty().apply_mark(unresolved_mark);
+        let top_level_ctxt = SyntaxContext::empty().apply_mark(top_level_mark);
 
         module.visit_mut_with(&mut swc_core::ecma::transforms::base::resolver(
             unresolved_mark,
@@ -72,7 +73,7 @@ fn run(input: PathBuf) {
         ));
 
         let mut g = DepGraph::default();
-        let (item_ids, mut items) = g.init(&module, unresolved_ctxt);
+        let (item_ids, mut items) = g.init(&module, unresolved_ctxt, top_level_ctxt);
 
         let mut s = String::new();
 

@@ -64,9 +64,10 @@ impl Analyzer<'_> {
     pub(super) fn analyze(
         module: &Module,
         unresolved_ctxt: SyntaxContext,
+        top_level_ctxt: SyntaxContext,
     ) -> (DepGraph, FxHashMap<ItemId, ItemData>) {
         let mut g = DepGraph::default();
-        let (item_ids, mut items) = g.init(module, unresolved_ctxt);
+        let (item_ids, mut items) = g.init(module, unresolved_ctxt, top_level_ctxt);
 
         let mut analyzer = Analyzer {
             g: &mut g,
@@ -361,6 +362,7 @@ pub(super) async fn split(
                 Analyzer::analyze(
                     module,
                     SyntaxContext::empty().apply_mark(eval_context.unresolved_mark),
+                    SyntaxContext::empty().apply_mark(eval_context.top_level_mark),
                 )
             });
 
@@ -396,6 +398,7 @@ pub(super) async fn split(
                     let eval_context = EvalContext::new(
                         &program,
                         eval_context.unresolved_mark,
+                        eval_context.top_level_mark,
                         false,
                         Some(source),
                     );
@@ -487,8 +490,13 @@ pub(super) async fn part_of_module(
                         })));
 
                     let program = Program::Module(module);
-                    let eval_context =
-                        EvalContext::new(&program, eval_context.unresolved_mark, true, None);
+                    let eval_context = EvalContext::new(
+                        &program,
+                        eval_context.unresolved_mark,
+                        eval_context.top_level_mark,
+                        true,
+                        None,
+                    );
                     return Ok(ParseResult::Ok {
                         program,
                         comments: comments.clone(),
@@ -539,8 +547,13 @@ pub(super) async fn part_of_module(
                     }
 
                     let program = Program::Module(module);
-                    let eval_context =
-                        EvalContext::new(&program, eval_context.unresolved_mark, true, None);
+                    let eval_context = EvalContext::new(
+                        &program,
+                        eval_context.unresolved_mark,
+                        eval_context.top_level_mark,
+                        true,
+                        None,
+                    );
                     return Ok(ParseResult::Ok {
                         program,
                         comments: comments.clone(),
