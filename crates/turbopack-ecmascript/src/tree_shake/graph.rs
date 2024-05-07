@@ -1049,7 +1049,7 @@ fn create_turbopack_part_id_assert(dep: u32) -> ObjectLit {
     }
 }
 
-pub(crate) fn find_turbopack_chunk_id_in_asserts(asserts: &ObjectLit) -> Option<u32> {
+pub(crate) fn find_turbopack_part_id_in_asserts(asserts: &ObjectLit) -> Option<u32> {
     asserts.props.iter().find_map(|prop| match prop {
         PropOrSpread::Prop(box Prop::KeyValue(KeyValueProp {
             key: PropName::Ident(key),

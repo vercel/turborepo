@@ -5,7 +5,7 @@ use swc_core::ecma::{
     atoms::JsWord,
 };
 
-use super::graph::find_turbopack_chunk_id_in_asserts;
+use super::graph::find_turbopack_part_id_in_asserts;
 
 /// A loader used to merge module items after splitting.
 pub trait Load {
@@ -51,7 +51,7 @@ where
                     let part_id = import
                         .with
                         .as_deref()
-                        .and_then(find_turbopack_chunk_id_in_asserts);
+                        .and_then(find_turbopack_part_id_in_asserts);
 
                     if let Some(part_id) = part_id {
                         if self.done.insert((import.src.value.clone(), part_id)) {
