@@ -926,6 +926,31 @@ impl lightningcss::visitor::Visitor<'_> for CssModuleValidator {
                 }
             }
 
+            lightningcss::properties::Property::GridColumn(p) => {
+                for line in [&p.start, &p.end] {
+                    if let lightningcss::properties::grid::GridLine::Area { name } = line {
+                        self.used_grid_areas.insert(name.to_string());
+                    }
+                }
+            }
+
+            lightningcss::properties::Property::GridRow(p) => {
+                for line in [&p.start, &p.end] {
+                    if let lightningcss::properties::grid::GridLine::Area { name } = line {
+                        self.used_grid_areas.insert(name.to_string());
+                    }
+                }
+            }
+
+            lightningcss::properties::Property::GridRowStart(p)
+            | lightningcss::properties::Property::GridRowEnd(p)
+            | lightningcss::properties::Property::GridColumnStart(p)
+            | lightningcss::properties::Property::GridColumnEnd(p) => {
+                if let lightningcss::properties::grid::GridLine::Area { name } = p {
+                    self.used_grid_areas.insert(name.to_string());
+                }
+            }
+
             lightningcss::properties::Property::GridTemplateAreas(
                 lightningcss::properties::grid::GridTemplateAreas::Areas { areas, .. },
             ) => {
