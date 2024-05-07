@@ -47,9 +47,9 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
     }
 }
 
-pub(super) fn increase_aggregation_number_immediately<'l, C: AggregationContext>(
+pub(super) fn increase_aggregation_number_immediately<C: AggregationContext>(
     _ctx: &C,
-    node: &mut C::Guard<'l>,
+    node: &mut C::Guard<'_>,
     node_id: C::NodeRef,
     min_aggregation_number: u32,
     target_aggregation_number: u32,
