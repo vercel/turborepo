@@ -1001,7 +1001,7 @@ impl DepGraph {
         T: IntoIterator<Item = &'a ItemId>,
     {
         // This value cannot be lazily initialized because we need to ensure that
-        // ModuleEvaluation should exist even if there's no side effect.
+        // ModuleEvaluation exists even if there's no side effect.
         let from = self.g.node(from);
 
         for to in to {
