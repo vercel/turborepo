@@ -7,6 +7,7 @@ use ratatui::{
 use tracing::debug;
 
 use super::{
+    event::TaskResult,
     spinner::SpinnerState,
     task::{Finished, Planned, Running, Task},
     Error,
@@ -100,7 +101,7 @@ impl TaskTable {
 
     /// Mark the given running task as finished
     /// Errors if given task wasn't a running task
-    pub fn finish_task(&mut self, task: &str) -> Result<(), Error> {
+    pub fn finish_task(&mut self, task: &str, result: TaskResult) -> Result<(), Error> {
         let running_idx = self
             .running
             .iter()
@@ -112,7 +113,7 @@ impl TaskTable {
         let old_row_idx = self.finished.len() + running_idx;
         let new_row_idx = self.finished.len();
         let running = self.running.remove(running_idx);
-        self.finished.push(running.finish());
+        self.finished.push(running.finish(result));
 
         if let Some(selected_row) = self.scroll.selected() {
             // If task that was just started is selected, then update selection to follow
@@ -184,7 +185,10 @@ impl TaskTable {
         self.finished.iter().map(move |task| {
             Row::new(vec![
                 Cell::new(task.name()),
-                Cell::new(Text::raw("✔").style(Style::default().light_green())),
+                Cell::new(match task.result() {
+                    TaskResult::Success => Text::raw("✔").style(Style::default().light_green()),
+                    TaskResult::Failure => Text::raw("✘").style(Style::default().red()),
+                }),
             ])
         })
     }
@@ -275,7 +279,7 @@ mod test {
         table.start_task("a").unwrap();
         assert_eq!(table.scroll.selected(), Some(0), "b stays selected");
         assert_eq!(table.selected(), Some("b"), "selected b");
-        table.finish_task("a").unwrap();
+        table.finish_task("a", TaskResult::Success).unwrap();
         assert_eq!(table.scroll.selected(), Some(1), "b stays selected");
         assert_eq!(table.selected(), Some("b"), "selected b");
     }
@@ -301,11 +305,11 @@ mod test {
         table.previous();
         assert_eq!(table.scroll.selected(), Some(0), "selected c");
         assert_eq!(table.selected(), Some("c"), "selected c");
-        table.finish_task("a").unwrap();
+        table.finish_task("a", TaskResult::Success).unwrap();
         assert_eq!(table.scroll.selected(), Some(1), "c stays selected");
         assert_eq!(table.selected(), Some("c"), "selected c");
         table.previous();
-        table.finish_task("c").unwrap();
+        table.finish_task("c", TaskResult::Success).unwrap();
         assert_eq!(table.scroll.selected(), Some(0), "a stays selected");
         assert_eq!(table.selected(), Some("a"), "selected a");
     }

@@ -1,5 +1,5 @@
 mod app;
-mod event;
+pub mod event;
 mod handle;
 mod input;
 mod pane;
@@ -8,7 +8,7 @@ mod table;
 mod task;
 
 pub use app::run_app;
-use event::Event;
+use event::{Event, TaskResult};
 pub use handle::{AppReceiver, AppSender, TuiTask};
 use input::input;
 pub use pane::TerminalPane;

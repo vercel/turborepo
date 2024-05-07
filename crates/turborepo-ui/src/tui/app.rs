@@ -212,8 +212,8 @@ fn update(
         Event::Tick => {
             app.table.tick();
         }
-        Event::EndTask { task } => {
-            app.table.finish_task(&task)?;
+        Event::EndTask { task, result } => {
+            app.table.finish_task(&task, result)?;
         }
         Event::Up => {
             app.previous();
