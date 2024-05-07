@@ -11,7 +11,7 @@ use radix_trie::{Trie, TrieCommon};
 use tokio::sync::{broadcast, oneshot, Mutex};
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_filewatch::{
-    hash_watcher::{HashSpec, HashWatcher},
+    hash_watcher::{HashSpec, HashWatcher, InputGlobs},
     NotifyError, OptionalWatch,
 };
 use turborepo_repository::{
@@ -200,7 +200,7 @@ impl Subscriber {
             .get_file_hashes(HashSpec {
                 package_path: pkg.path.clone(),
                 // TODO: Support inputs
-                inputs: None,
+                inputs: InputGlobs::Default,
             })
             .await
         else {
