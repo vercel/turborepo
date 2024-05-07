@@ -228,6 +228,9 @@ pub(crate) struct Vars {
 }
 
 /// Returns `(read, write)`
+///
+/// Note: This functions accept `SyntaxContext` to filter out variables which
+/// are not interesting. We only need to analyze top-level variables.
 pub(crate) fn ids_captured_by<N>(n: &N, only: SyntaxContext) -> Vars
 where
     N: VisitWith<CapturedIdCollector>,
@@ -242,6 +245,9 @@ where
 }
 
 /// Returns `(read, write)`
+///
+/// Note: This functions accept `SyntaxContext` to filter out variables which
+/// are not interesting. We only need to analyze top-level variables.
 pub(crate) fn ids_used_by<N>(n: &N, only: SyntaxContext) -> Vars
 where
     N: VisitWith<IdentUsageCollector>,
@@ -256,6 +262,9 @@ where
 }
 
 /// Returns `(read, write)`
+///
+/// Note: This functions accept `SyntaxContext` to filter out variables which
+/// are not interesting. We only need to analyze top-level variables.
 pub(crate) fn ids_used_by_ignoring_nested<N>(n: &N, only: SyntaxContext) -> Vars
 where
     N: VisitWith<IdentUsageCollector>,
