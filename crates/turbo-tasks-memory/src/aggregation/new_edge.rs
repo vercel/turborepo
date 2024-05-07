@@ -16,7 +16,7 @@ const BUFFER_SPACE: u32 = 1;
 #[cfg(not(test))]
 const BUFFER_SPACE: u32 = 3;
 
-const MAX_UPPERS_TIMES_CHILDREN: usize = 512;
+const MAX_UPPERS_TIMES_CHILDREN: usize = 64;
 
 const MAX_AFFECTED_NODES: usize = 4096;
 
