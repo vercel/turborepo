@@ -84,6 +84,8 @@ impl ModuleOptions {
             ref enable_typeof_window_inlining,
             ..
         } = *module_options_context.await?;
+        let tree_shaking_mode = Some(turbopack_ecmascript::TreeShakingMode::ModuleFragments);
+
         if !rules.is_empty() {
             let path_value = path.await?;
 
