@@ -57,7 +57,7 @@ pub struct AggegatingNode<I, D> {
     uppers: CountHashSet<I>,
     followers: CountHashSet<I>,
     data: D,
-    enqueued_balancing: Vec<(I, I)>,
+    enqueued_balancing: Vec<(I, u32, I, u32)>,
 }
 
 impl<I, A> AggregationNode<I, A> {

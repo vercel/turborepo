@@ -73,6 +73,7 @@ pub(super) fn increase_aggregation_number_immediately<C: AggregationContext>(
                 })
             } else {
                 let uppers_copy = uppers.iter().cloned().collect::<StackVec<_>>();
+                let old_aggregation_number = *aggregation_number as u32;
                 // Convert to Aggregating
                 **node = AggregationNode::Aggegating(Box::new(AggegatingNode {
                     aggregation_number: target_aggregation_number,
@@ -86,6 +87,8 @@ pub(super) fn increase_aggregation_number_immediately<C: AggregationContext>(
                     node_id,
                     uppers: uppers_copy,
                     followers,
+                    old_aggregation_number,
+                    target_aggregation_number,
                 })
             }
         }
@@ -98,11 +101,14 @@ pub(super) fn increase_aggregation_number_immediately<C: AggregationContext>(
             } = &mut **aggegating;
             let uppers = uppers.iter().cloned().collect::<StackVec<_>>();
             let followers = followers.iter().cloned().collect();
+            let old_aggregation_number = *aggregation_number;
             *aggregation_number = target_aggregation_number;
             Some(PreparedInternalIncreaseAggregationNumber::Aggregating {
                 node_id,
                 uppers,
                 followers,
+                old_aggregation_number,
+                target_aggregation_number,
             })
         }
     }
@@ -123,6 +129,8 @@ pub enum PreparedInternalIncreaseAggregationNumber<C: AggregationContext> {
         node_id: C::NodeRef,
         uppers: StackVec<C::NodeRef>,
         followers: StackVec<C::NodeRef>,
+        old_aggregation_number: u32,
+        target_aggregation_number: u32,
     },
 }
 
@@ -165,7 +173,7 @@ impl<C: AggregationContext> PreparedInternalOperation<C>
                 }
                 let children = matches!(*node, AggregationNode::Leaf { .. })
                     .then(|| node.children().collect::<StackVec<_>>());
-                let (uppers, followers) = match &mut *node {
+                let (old_aggregation_number, uppers, followers) = match &mut *node {
                     AggregationNode::Leaf {
                         aggregation_number,
                         uppers,
@@ -186,6 +194,7 @@ impl<C: AggregationContext> PreparedInternalOperation<C>
                             }
                             return;
                         } else {
+                            let old_aggregation_number = *aggregation_number as u32;
                             let uppers_copy = uppers.iter().cloned().collect::<StackVec<_>>();
                             // Convert to Aggregating
                             *node = AggregationNode::Aggegating(Box::new(AggegatingNode {
@@ -197,7 +206,7 @@ impl<C: AggregationContext> PreparedInternalOperation<C>
                             }));
                             let followers = children;
                             drop(node);
-                            (uppers_copy, followers)
+                            (old_aggregation_number, uppers_copy, followers)
                         }
                     }
                     AggregationNode::Aggegating(aggegating) => {
@@ -209,16 +218,27 @@ impl<C: AggregationContext> PreparedInternalOperation<C>
                         } = &mut **aggegating;
                         let uppers = uppers.iter().cloned().collect::<StackVec<_>>();
                         let followers = followers.iter().cloned().collect();
+                        let old_aggregation_number = *aggregation_number;
                         *aggregation_number = target_aggregation_number;
                         drop(node);
-                        (uppers, followers)
+                        (old_aggregation_number, uppers, followers)
                     }
                 };
                 for follower_id in followers {
-                    balance_queue.balance(node_id.clone(), follower_id);
+                    balance_queue.balance(
+                        node_id.clone(),
+                        target_aggregation_number,
+                        follower_id,
+                        old_aggregation_number + 1,
+                    );
                 }
                 for upper_id in uppers {
-                    balance_queue.balance(upper_id, node_id.clone());
+                    balance_queue.balance(
+                        upper_id,
+                        old_aggregation_number + 1,
+                        node_id.clone(),
+                        target_aggregation_number,
+                    );
                 }
             }
             PreparedInternalIncreaseAggregationNumber::Leaf {
@@ -240,12 +260,24 @@ impl<C: AggregationContext> PreparedInternalOperation<C>
                 node_id,
                 uppers,
                 followers,
+                old_aggregation_number,
+                target_aggregation_number,
             } => {
                 for follower_id in followers {
-                    balance_queue.balance(node_id.clone(), follower_id);
+                    balance_queue.balance(
+                        node_id.clone(),
+                        target_aggregation_number,
+                        follower_id,
+                        old_aggregation_number + 1,
+                    );
                 }
                 for upper_id in uppers {
-                    balance_queue.balance(upper_id, node_id.clone());
+                    balance_queue.balance(
+                        upper_id,
+                        old_aggregation_number + 1,
+                        node_id.clone(),
+                        target_aggregation_number,
+                    );
                 }
             }
         }

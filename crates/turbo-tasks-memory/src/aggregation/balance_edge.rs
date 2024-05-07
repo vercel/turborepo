@@ -22,7 +22,9 @@ pub(super) fn balance_edge<C: AggregationContext>(
     ctx: &C,
     balance_queue: &mut BalanceQueue<C::NodeRef>,
     upper_id: C::NodeRef,
+    mut upper_aggregation_number: u32,
     target_id: C::NodeRef,
+    mut target_aggregation_number: u32,
 ) {
     // too many uppers on target
     let mut extra_uppers = 0;
@@ -32,9 +34,6 @@ pub(super) fn balance_edge<C: AggregationContext>(
     let mut uppers_count: Option<isize> = None;
     // The last info about followers
     let mut followers_count = None;
-
-    let mut upper_aggregation_number = 0;
-    let mut target_aggregation_number = 0;
 
     loop {
         let root = upper_aggregation_number == u32::MAX || target_aggregation_number == u32::MAX;
@@ -101,9 +100,12 @@ pub(super) fn balance_edge<C: AggregationContext>(
                             let AggregationNode::Aggegating(aggregating) = &mut *upper else {
                                 unreachable!();
                             };
-                            aggregating
-                                .enqueued_balancing
-                                .push((upper_id.clone(), target_id.clone()));
+                            aggregating.enqueued_balancing.push((
+                                upper_id.clone(),
+                                upper_aggregation_number,
+                                target_id.clone(),
+                                target_aggregation_number,
+                            ));
                             drop(upper);
                             // Somebody else will balance this edge
                             return;
@@ -141,9 +143,12 @@ pub(super) fn balance_edge<C: AggregationContext>(
                                 let AggregationNode::Aggegating(aggregating) = &mut *upper else {
                                     unreachable!();
                                 };
-                                aggregating
-                                    .enqueued_balancing
-                                    .push((upper_id.clone(), target_id.clone()));
+                                aggregating.enqueued_balancing.push((
+                                    upper_id.clone(),
+                                    upper_aggregation_number,
+                                    target_id.clone(),
+                                    target_aggregation_number,
+                                ));
                                 drop(upper);
                                 // Somebody else will balance this edge
                                 return;
