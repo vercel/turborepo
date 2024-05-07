@@ -310,7 +310,7 @@ impl DepGraph {
                         specifiers,
                         src: Box::new(uri_of_module.clone().into()),
                         type_only: false,
-                        with: Some(Box::new(create_turbopack_chunk_id_assert(dep))),
+                        with: Some(Box::new(create_turbopack_part_id_assert(dep))),
                         phase: Default::default(),
                     })));
             }
@@ -1039,7 +1039,7 @@ impl DepGraph {
 
 const ASSERT_CHUNK_KEY: &str = "__turbopack_part__";
 
-fn create_turbopack_chunk_id_assert(dep: u32) -> ObjectLit {
+fn create_turbopack_part_id_assert(dep: u32) -> ObjectLit {
     ObjectLit {
         span: DUMMY_SP,
         props: vec![PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
