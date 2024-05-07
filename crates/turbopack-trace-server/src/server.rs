@@ -1,9 +1,6 @@
 use std::{
     net::{TcpListener, TcpStream},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
-    },
+    sync::{Arc, Mutex},
     thread::spawn,
 };
 
@@ -71,6 +68,7 @@ pub enum ClientToServerMessage {
         id: SpanId,
     },
     Ack,
+    CheckForMoreData,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -135,20 +133,19 @@ fn handle_connection(
         },
         last_update_generation: 0,
     }));
-    let should_shutdown = Arc::new(AtomicBool::new(false));
-    let update_skipped = Arc::new(AtomicBool::new(false));
-    let ready_for_update = Arc::new(AtomicBool::new(true));
+    let mut update_skipped = false;
+    let mut ready_for_update = true;
 
     fn send_update(
         websocket: &mut tungstenite::WebSocket<TcpStream>,
         state: &mut ConnectionState,
         force_send: bool,
-        ready_for_update: &AtomicBool,
-        update_skipped: &AtomicBool,
+        ready_for_update: &mut bool,
+        update_skipped: &mut bool,
     ) -> Result<()> {
-        if !ready_for_update.load(Ordering::SeqCst) {
+        if !*ready_for_update {
             if force_send {
-                update_skipped.store(true, Ordering::SeqCst);
+                *update_skipped = true;
             }
             return Ok(());
         }
@@ -170,7 +167,7 @@ fn handle_connection(
         let message = ServerToClientMessage::ViewLinesCount { count, max };
         let message = serde_json::to_string(&message).unwrap();
         websocket.send(Message::Text(message))?;
-        ready_for_update.store(false, Ordering::SeqCst);
+        *ready_for_update = false;
         Ok(())
     }
     loop {
@@ -180,14 +177,23 @@ fn handle_connection(
                 let message: ClientToServerMessage = serde_json::from_str(&text)?;
                 let mut state = state.lock().unwrap();
                 match message {
+                    ClientToServerMessage::CheckForMoreData => {
+                        send_update(
+                            &mut websocket,
+                            &mut state,
+                            false,
+                            &mut ready_for_update,
+                            &mut update_skipped,
+                        )?;
+                    }
                     ClientToServerMessage::ViewRect { view_rect } => {
                         state.view_rect = view_rect;
                         send_update(
                             &mut websocket,
                             &mut state,
                             true,
-                            &ready_for_update,
-                            &update_skipped,
+                            &mut ready_for_update,
+                            &mut update_skipped,
                         )?;
                     }
                     ClientToServerMessage::ViewMode { id, mode, inherit } => {
@@ -229,8 +235,8 @@ fn handle_connection(
                             &mut websocket,
                             &mut state,
                             true,
-                            &ready_for_update,
-                            &update_skipped,
+                            &mut ready_for_update,
+                            &mut update_skipped,
                         )?;
                     }
                     ClientToServerMessage::ResetViewMode { id } => {
@@ -239,8 +245,8 @@ fn handle_connection(
                             &mut websocket,
                             &mut state,
                             true,
-                            &ready_for_update,
-                            &update_skipped,
+                            &mut ready_for_update,
+                            &mut update_skipped,
                         )?;
                     }
                     ClientToServerMessage::Query { id } => {
@@ -304,22 +310,22 @@ fn handle_connection(
                             &mut websocket,
                             &mut state,
                             true,
-                            &ready_for_update,
-                            &update_skipped,
+                            &mut ready_for_update,
+                            &mut update_skipped,
                         )?;
 
                         continue;
                     }
                     ClientToServerMessage::Ack => {
-                        ready_for_update.store(true, Ordering::SeqCst);
-                        if update_skipped.load(Ordering::SeqCst) {
-                            update_skipped.store(false, Ordering::SeqCst);
+                        ready_for_update = true;
+                        if update_skipped {
+                            update_skipped = false;
                             send_update(
                                 &mut websocket,
                                 &mut state,
                                 true,
-                                &ready_for_update,
-                                &update_skipped,
+                                &mut ready_for_update,
+                                &mut update_skipped,
                             )?;
                         }
                     }
@@ -329,8 +335,6 @@ fn handle_connection(
                 // This doesn't happen
             }
             Message::Close(_) => {
-                should_shutdown.store(true, Ordering::SeqCst);
-                // inner_thread.join().unwrap();
                 return Ok(());
             }
             Message::Ping(d) => {
