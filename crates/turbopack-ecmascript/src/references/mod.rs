@@ -797,8 +797,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
     // of an effect we might want to add more effects into the middle of the
     // processing. Using a stack where effects are appended in reverse
     // order allows us to do that. It's recursion implemented as Stack.
-    let mut queue_stack: parking_lot::lock_api::Mutex<parking_lot::RawMutex, Vec<Action>> =
-        Mutex::new(Vec::new());
+    let mut queue_stack = Mutex::new(Vec::new());
     queue_stack
         .get_mut()
         .extend(effects.into_iter().map(Action::Effect).rev());

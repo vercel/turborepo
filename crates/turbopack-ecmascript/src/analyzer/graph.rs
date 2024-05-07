@@ -711,7 +711,6 @@ impl Analyzer<'_> {
         self.add_value(id, value);
     }
 
-    #[inline]
     fn add_effect(&mut self, effect: Effect) {
         self.effects.push(effect);
     }
