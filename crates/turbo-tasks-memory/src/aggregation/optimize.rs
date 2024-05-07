@@ -7,7 +7,7 @@ use super::{
 #[cfg(test)]
 pub const MAX_UPPERS: usize = 4;
 #[cfg(not(test))]
-pub const MAX_UPPERS: usize = 32;
+pub const MAX_UPPERS: usize = 512;
 
 #[cfg(test)]
 pub const MAX_FOLLOWERS: usize = 128;
