@@ -1481,7 +1481,7 @@ mod tests {
         }
         .grid-container {
             display: grid;
-            grid-template: "my" 100px / "my" 30% "my" 70%;
+            grid-template: "my" "my";
         }
         "#,
         );
@@ -1492,7 +1492,7 @@ mod tests {
         }
         .grid-container {
             display: grid;
-            grid-template: "myArea" 100px / "myArea" 30% "myArea" 70%;
+            grid-template: "myArea" "myArea"
         }
         "#,
         );
