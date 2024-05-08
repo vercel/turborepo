@@ -3,7 +3,7 @@ use std::{hash::Hash, mem::take};
 use super::{balance_queue::BalanceQueue, AggregationContext, AggregationNode, StackVec};
 
 impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
-    /// Finishes an in progress operation. This might enqueues balancing
+    /// Finishes an in progress operation. This might enqueue balancing
     /// operations when they weren't possible due to the in progress operation.
     pub(super) fn finish_in_progress<C: AggregationContext<NodeRef = I, Data = D>>(
         &mut self,
@@ -23,7 +23,7 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
     }
 }
 
-/// Finishes an in progress operation. This might enqueues balancing
+/// Finishes an in progress operation. This might enqueue balancing
 /// operations when they weren't possible due to the in progress operation.
 /// This version doesn't require a node guard.
 pub fn finish_in_progress_without_node<C: AggregationContext>(
