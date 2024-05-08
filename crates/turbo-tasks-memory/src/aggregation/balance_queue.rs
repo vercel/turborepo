@@ -62,14 +62,20 @@ impl<I: Hash + Eq + Clone> BalanceQueue<I> {
                     .copied()
                     .unwrap_or_default();
 
-                balance_edge(
+                let (u, t) = balance_edge(
                     ctx,
                     &mut self,
-                    upper_id,
+                    &upper_id,
                     upper_aggregation_number,
-                    target_id,
+                    &target_id,
                     target_aggregation_number,
                 );
+                if u != upper_aggregation_number {
+                    self.add_number(upper_id, u);
+                }
+                if t != target_aggregation_number {
+                    self.add_number(target_id, t);
+                }
             }
         }
     }
