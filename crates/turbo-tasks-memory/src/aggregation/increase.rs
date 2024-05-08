@@ -10,6 +10,12 @@ pub(super) const LEAF_NUMBER: u32 = 8;
 pub(super) const LEAF_NUMBER: u32 = 64;
 
 impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
+    /// Increase the aggregation number of a node. This might temporarily
+    /// violate the graph invariants between uppers and followers of that node.
+    /// Therefore a balancing operation is enqueued to restore the invariants.
+    /// The actual change to the aggregation number is applied in the prepared
+    /// operation after checking all upper nodes aggregation numbers.
+    #[must_use]
     pub(super) fn increase_aggregation_number_internal<
         C: AggregationContext<NodeRef = I, Data = D>,
     >(
@@ -30,6 +36,8 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
         })
     }
 
+    /// Increase the aggregation number of a node. This is only for testing
+    /// proposes.
     #[cfg(test)]
     pub fn increase_aggregation_number<C: AggregationContext<NodeRef = I, Data = D>>(
         &mut self,
@@ -47,6 +55,12 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
     }
 }
 
+/// Increase the aggregation number of a node directly. This might temporarily
+/// violate the graph invariants between uppers and followers of that node.
+/// Therefore a balancing operation is enqueued to restore the invariants.
+/// The actual change to the aggregation number is applied directly without
+/// checking the upper nodes.
+#[must_use]
 pub(super) fn increase_aggregation_number_immediately<C: AggregationContext>(
     _ctx: &C,
     node: &mut C::Guard<'_>,
@@ -110,6 +124,7 @@ pub(super) fn increase_aggregation_number_immediately<C: AggregationContext>(
     }
 }
 
+/// A prepared `increase_aggregation_number` operation.
 pub enum PreparedInternalIncreaseAggregationNumber<C: AggregationContext> {
     Lazy {
         node_id: C::NodeRef,
@@ -284,6 +299,7 @@ pub fn increase_aggregation_number_internal<C: AggregationContext>(
     prepared.apply(ctx, balance_queue);
 }
 
+/// A prepared `increase_aggregation_number` operation.
 pub struct PreparedIncreaseAggregationNumber<C: AggregationContext>(
     PreparedInternalIncreaseAggregationNumber<C>,
 );

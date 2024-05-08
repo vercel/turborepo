@@ -7,6 +7,8 @@ use super::{
 };
 
 impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
+    /// Handles the loss of edges to a node. This will notify all upper nodes
+    /// about the new follower or add the new node as inner node.
     #[must_use]
     pub fn handle_lost_edges<C: AggregationContext<NodeRef = I, Data = D>>(
         &mut self,
@@ -36,6 +38,7 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
     }
 }
 
+/// A prepared `handle_lost_edges` operation.
 pub struct PreparedLostEdges<C: AggregationContext> {
     inner: PreparedLostEdgesInner<C>,
 }
@@ -97,6 +100,8 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedLostEdges<C> {
     }
 }
 
+/// Handles the loss of edges to a node. This will notify all upper nodes
+/// about the new follower or add the new node as inner node.
 #[cfg(test)]
 pub fn handle_lost_edges<C: AggregationContext>(
     ctx: &C,

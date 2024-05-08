@@ -5,7 +5,8 @@ use super::{
 };
 use crate::aggregation::balance_queue::BalanceQueue;
 
-/// Gives an reference to the root aggregated info for a given item.
+/// Gives an reference to the aggregated data for a given item. This will
+/// convert the item to a fully aggregated node.
 pub fn aggregation_data<'l, C>(
     ctx: &'l C,
     node_id: &C::NodeRef,
@@ -33,6 +34,8 @@ where
     }
 }
 
+/// Converted the given node to a fully aggregated node. To make the next call
+/// to `aggregation_data` instant.
 pub fn prepare_aggregation_data<C: AggregationContext>(ctx: &C, node_id: &C::NodeRef) {
     let mut balance_queue = BalanceQueue::new();
     increase_aggregation_number_internal(
@@ -46,7 +49,7 @@ pub fn prepare_aggregation_data<C: AggregationContext>(ctx: &C, node_id: &C::Nod
     balance_queue.process(ctx);
 }
 
-/// A reference to the root aggregated info of a node.
+/// A reference to the aggregated data of a node. This holds a lock to the node.
 pub struct AggregationDataGuard<G> {
     guard: G,
 }

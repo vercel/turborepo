@@ -3,6 +3,8 @@ use std::hash::Hash;
 use super::{AggegatingNode, AggregationContext, AggregationNode, PreparedOperation, StackVec};
 
 impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
+    /// Prepares to apply a change to a node. Changes will be propagated to all
+    /// upper nodes.
     #[must_use]
     pub fn apply_change<C: AggregationContext<NodeRef = I, Data = D>>(
         &mut self,
@@ -29,6 +31,9 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
         }
     }
 
+    /// Prepares to apply a change to a node. Changes will be propagated to all
+    /// upper nodes.
+    #[must_use]
     pub fn apply_change_ref<'l, C: AggregationContext<NodeRef = I, Data = D>>(
         &mut self,
         ctx: &C,
@@ -57,6 +62,7 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
     }
 }
 
+/// A prepared `apply_change` operation.
 pub struct PreparedChange<C: AggregationContext> {
     uppers: StackVec<C::NodeRef>,
     change: C::DataChange,
@@ -74,6 +80,7 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedChange<C> {
     }
 }
 
+/// A prepared `apply_change_ref` operation.
 pub enum PreparedChangeRef<'l, C: AggregationContext> {
     Borrowed {
         uppers: StackVec<C::NodeRef>,

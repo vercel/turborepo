@@ -11,7 +11,7 @@ use crate::count_hash_set::RemoveIfEntryResult;
 
 impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
     /// Called when a inner node of the upper node has lost a follower
-    /// It's expected that the upper node is flagged as "in progress"
+    /// It's expected that the upper node is flagged as "in progress".
     pub(super) fn notify_lost_follower<C: AggregationContext<NodeRef = I, Data = D>>(
         &mut self,
         ctx: &C,
@@ -43,8 +43,8 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
         }
     }
 
-    /// Called when a inner node of the upper node has lost a follower
-    /// It's expected that the upper node is NOT flagged as "in progress"
+    /// Called when a inner node of the upper node has lost a follower.
+    /// It's expected that the upper node is NOT flagged as "in progress".
     pub(super) fn notify_lost_follower_not_in_progress<
         C: AggregationContext<NodeRef = I, Data = D>,
     >(
@@ -77,6 +77,7 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
     }
 }
 
+/// A prepared `notify_lost_follower` operation.
 pub(super) enum PreparedNotifyLostFollower<C: AggregationContext> {
     RemovedFollower {
         uppers: StackVec<C::NodeRef>,
@@ -203,6 +204,8 @@ impl<C: AggregationContext> PreparedInternalOperation<C> for PreparedNotifyLostF
     }
 }
 
+/// Notifies the upper node that a follower has been lost.
+/// It's expected that the upper node is flagged as "in progress".
 pub fn notify_lost_follower<C: AggregationContext>(
     ctx: &C,
     balance_queue: &mut BalanceQueue<C::NodeRef>,

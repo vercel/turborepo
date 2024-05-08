@@ -20,6 +20,8 @@ const MAX_UPPERS_TIMES_CHILDREN: usize = 32;
 
 const MAX_AFFECTED_NODES: usize = 4096;
 
+/// Handle the addition of a new edge to a node. The the edge is propagated to
+/// the uppers of that node or added a inner node.
 #[tracing::instrument(level = tracing::Level::TRACE, name = "handle_new_edge_preparation", skip_all)]
 pub fn handle_new_edge<'l, C: AggregationContext>(
     ctx: &C,
@@ -72,6 +74,8 @@ pub fn handle_new_edge<'l, C: AggregationContext>(
             }),
     }
 }
+
+/// A prepared `handle_new_edge` operation.
 enum PreparedNewEdge<C: AggregationContext> {
     Leaf {
         min_aggregation_number: u32,
@@ -162,6 +166,9 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNewEdge<C> {
     }
 }
 
+/// Called in the case when we detect that adding this node was expensive. It
+/// optimizes the aggregation number of the node so it can be cheaper on the
+/// next call.
 fn handle_expensive_node<C: AggregationContext>(
     ctx: &C,
     balance_queue: &mut BalanceQueue<C::NodeRef>,

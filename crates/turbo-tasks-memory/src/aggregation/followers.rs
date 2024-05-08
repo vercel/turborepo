@@ -7,6 +7,8 @@ use super::{
 };
 use crate::count_hash_set::RemovePositiveCountResult;
 
+/// Add a follower to a node. Followers will be propagated to the uppers of the
+/// node.
 pub fn add_follower<C: AggregationContext>(
     ctx: &C,
     balance_queue: &mut BalanceQueue<C::NodeRef>,
@@ -32,6 +34,8 @@ pub fn add_follower<C: AggregationContext>(
     }
 }
 
+/// Handle the addition of a follower to a node. This function is called after
+/// the follower has been added to the node.
 pub fn on_added<C: AggregationContext>(
     ctx: &C,
     balance_queue: &mut BalanceQueue<C::NodeRef>,
@@ -84,6 +88,8 @@ pub fn on_added<C: AggregationContext>(
     affected_nodes
 }
 
+/// Add a follower to a node with a count. Followers will be propagated to the
+/// uppers of the node.
 pub fn add_follower_count<C: AggregationContext>(
     ctx: &C,
     balance_queue: &mut BalanceQueue<C::NodeRef>,
@@ -115,6 +121,8 @@ pub fn add_follower_count<C: AggregationContext>(
     }
 }
 
+/// Remove a follower from a node. Followers will be propagated to the uppers of
+/// the node.
 pub fn remove_follower_count<C: AggregationContext>(
     ctx: &C,
     balance_queue: &mut BalanceQueue<C::NodeRef>,
@@ -145,10 +153,15 @@ pub fn remove_follower_count<C: AggregationContext>(
 }
 
 pub struct RemovePositveFollowerCountResult {
+    /// The amount of followers that have been removed.
     pub removed_count: usize,
+    /// The amount of followers that are remaining. Might be negative.
     pub remaining_count: isize,
 }
 
+/// Remove a positive count of a follower from a node. Negative counts will not
+/// be increased. The function returns how much of the count has been removed
+/// and whats remaining. Followers will be propagated to the uppers of the node.
 pub fn remove_positive_follower_count<C: AggregationContext>(
     ctx: &C,
     balance_queue: &mut BalanceQueue<C::NodeRef>,

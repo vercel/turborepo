@@ -14,6 +14,10 @@ pub const MAX_FOLLOWERS: usize = 4;
 #[cfg(not(test))]
 pub const MAX_FOLLOWERS: usize = 128;
 
+/// Optimize the aggregation number for a node based on a list of upper nodes.
+/// The goal is to reduce the number of upper nodes, so we try to find a
+/// aggregation number that is higher than some of the upper nodes.
+/// Returns true if the aggregation number was increased.
 pub fn optimize_aggregation_number_for_uppers<C: AggregationContext>(
     ctx: &C,
     balance_queue: &mut BalanceQueue<C::NodeRef>,
@@ -71,6 +75,10 @@ pub fn optimize_aggregation_number_for_uppers<C: AggregationContext>(
     false
 }
 
+/// Optimize the aggregation number for a node based on a list of followers.
+/// The goal is to reduce the number of followers, so we try to find a
+/// aggregation number that is higher than some of the followers.
+/// Returns true if the aggregation number was increased.
 pub fn optimize_aggregation_number_for_followers<C: AggregationContext>(
     ctx: &C,
     balance_queue: &mut BalanceQueue<C::NodeRef>,

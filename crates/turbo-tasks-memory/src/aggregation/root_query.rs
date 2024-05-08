@@ -4,11 +4,15 @@ use auto_hash_map::AutoSet;
 
 use super::{AggregationContext, AggregationNode, StackVec};
 
+/// A query about aggregation data in a root node.
 pub trait RootQuery {
     type Data;
     type Result;
 
+    /// Processes the aggregated data of a root node. Can decide to stop the
+    /// query.
     fn query(&mut self, data: &Self::Data) -> ControlFlow<()>;
+    /// Returns the result of the query.
     fn result(self) -> Self::Result;
 }
 

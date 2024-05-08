@@ -10,8 +10,8 @@ use super::{
 };
 
 impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
-    // Called when a inner node of the upper node has a new follower
-    // It's expected that the upper node is flagged as "in progress"
+    // Called when a inner node of the upper node has a new follower.
+    // It's expected that the upper node is flagged as "in progress".
     pub(super) fn notify_new_follower<C: AggregationContext<NodeRef = I, Data = D>>(
         &mut self,
         ctx: &C,
@@ -45,8 +45,8 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
         }
     }
 
-    // Called when a inner node of the upper node has a new follower
-    // It's expected that the upper node is NOT flagged as "in progress"
+    // Called when a inner node of the upper node has a new follower.
+    // It's expected that the upper node is NOT flagged as "in progress".
     pub(super) fn notify_new_follower_not_in_progress<
         C: AggregationContext<NodeRef = I, Data = D>,
     >(
@@ -81,6 +81,7 @@ impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
     }
 }
 
+/// A prepared `notify_new_follower` operation.
 pub(super) enum PreparedNotifyNewFollower<C: AggregationContext> {
     Inner {
         upper_id: C::NodeRef,
@@ -186,6 +187,9 @@ impl<C: AggregationContext> PreparedInternalOperation<C> for PreparedNotifyNewFo
     }
 }
 
+/// Notifies the upper node that it has a new follower.
+/// Returns the number of affected nodes.
+/// The upper node is expected to be flagged as "in progress".
 pub fn notify_new_follower<C: AggregationContext>(
     ctx: &C,
     balance_queue: &mut BalanceQueue<C::NodeRef>,

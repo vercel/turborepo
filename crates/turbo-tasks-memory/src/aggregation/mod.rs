@@ -35,6 +35,8 @@ use self::balance_queue::BalanceQueue;
 
 type StackVec<I> = SmallVec<[I; 16]>;
 
+/// The aggregation node structure. This stores the aggregation number, the
+/// aggregation edges to uppers and followers and the aggregated data.
 pub enum AggregationNode<I, D> {
     Leaf {
         aggregation_number: u8,
@@ -52,6 +54,7 @@ impl<I, D> AggregationNode<I, D> {
     }
 }
 
+/// The aggregation node structure for aggregating nodes.
 pub struct AggegatingNode<I, D> {
     aggregation_number: u32,
     uppers: CountHashSet<I>,
@@ -61,6 +64,7 @@ pub struct AggegatingNode<I, D> {
 }
 
 impl<I, A> AggregationNode<I, A> {
+    /// Returns the aggregation number of the node.
     pub fn aggregation_number(&self) -> u32 {
         match self {
             AggregationNode::Leaf {
@@ -92,6 +96,7 @@ impl<I, A> AggregationNode<I, A> {
     }
 }
 
+/// A prepared operation. Must be applied outside of node locks.
 #[must_use]
 pub trait PreparedOperation<C: AggregationContext> {
     type Result;
@@ -125,8 +130,10 @@ impl<C: AggregationContext, T: PreparedOperation<C>, const N: usize> PreparedOpe
     }
 }
 
+/// A prepared internal operation. Must be applied inside of node locks and with
+/// a balance queue.
 #[must_use]
-pub trait PreparedInternalOperation<C: AggregationContext> {
+trait PreparedInternalOperation<C: AggregationContext> {
     type Result;
     fn apply(self, ctx: &C, balance_queue: &mut BalanceQueue<C::NodeRef>) -> Self::Result;
 }
@@ -162,6 +169,7 @@ impl<C: AggregationContext, T: PreparedInternalOperation<C>, const N: usize>
     }
 }
 
+/// Context for aggregation operations.
 pub trait AggregationContext {
     type NodeRef: Clone + Eq + Hash + Debug;
     type Guard<'l>: AggregationNodeGuard<
@@ -199,6 +207,8 @@ pub trait AggregationContext {
     fn data_to_remove_change(&self, data: &Self::Data) -> Option<Self::DataChange>;
 }
 
+/// A guard for a node that allows to access the aggregation node, children and
+/// data.
 pub trait AggregationNodeGuard:
     DerefMut<Target = AggregationNode<Self::NodeRef, Self::Data>>
 {
