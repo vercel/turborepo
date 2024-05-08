@@ -200,7 +200,7 @@ fn fuzzy_loom(#[case] seed: u32, #[case] count: u32) {
     let mut builder = loom::model::Builder::new();
     builder.max_branches = 1000000;
     builder.check(move || {
-        loom::skip_branch();
+        loom::stop_exploring();
         thread::Builder::new()
             .stack_size(80000)
             .spawn(move || {
