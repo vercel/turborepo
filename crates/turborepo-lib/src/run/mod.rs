@@ -14,7 +14,7 @@ pub mod watch;
 
 use std::{collections::HashSet, io::Write, sync::Arc};
 
-pub use cache::{CacheOutput, ConfigCache, RunCache, TaskCache};
+pub use cache::{CacheOutput, ConfigCache, Error as CacheError, RunCache, TaskCache};
 use chrono::{DateTime, Local};
 use rayon::iter::ParallelBridge;
 use tracing::debug;
