@@ -598,7 +598,7 @@ impl DepGraph {
                                         ModuleExportName::Ident(i) => i.clone(),
                                         ModuleExportName::Str(..) => quote_ident!("_tmp"),
                                     },
-                                    s.exported.clone(),
+                                    Some(s.exported.clone().unwrap_or_else(|| s.orig.clone())),
                                 ),
                                 ExportSpecifier::Default(s) => (
                                     Some(ModuleExportName::Ident(Ident::new(
