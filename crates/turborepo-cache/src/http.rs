@@ -75,7 +75,10 @@ impl HTTPCache {
             .map(|signer| signer.generate_tag(hash.as_bytes(), &artifact_body))
             .transpose()?;
 
-        self.client
+        tracing::debug!("uploading {}", hash);
+
+        match self
+            .client
             .put_artifact(
                 hash,
                 &artifact_body,
@@ -85,9 +88,20 @@ impl HTTPCache {
                 self.api_auth.team_id.as_deref(),
                 self.api_auth.team_slug.as_deref(),
             )
-            .await?;
-
-        Ok(())
+            .await
+        {
+            Ok(_) => {
+                tracing::debug!("uploaded {}", hash);
+                Ok(())
+            }
+            Err(turborepo_api_client::Error::ReqwestError(e)) if e.is_timeout() => {
+                Err(CacheError::TimeoutError(hash.to_string()))
+            }
+            Err(turborepo_api_client::Error::ReqwestError(e)) if e.is_connect() => {
+                Err(CacheError::ConnectError)
+            }
+            Err(e) => Err(e.into()),
+        }
     }
 
     #[tracing::instrument(skip_all)]
