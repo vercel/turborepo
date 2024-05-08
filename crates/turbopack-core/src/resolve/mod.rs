@@ -25,12 +25,13 @@ use self::{
     origin::{ResolveOrigin, ResolveOriginExt},
     parse::Request,
     pattern::Pattern,
+    plugin::BeforeResolvePlugin,
     remap::{ExportsField, ImportsField},
 };
 use crate::{
     context::AssetContext,
     file_source::FileSource,
-    issue::{resolve::ResolvingIssue, IssueExt, IssueSource},
+    issue::{resolve::ResolvingIssue, Issue, IssueExt, IssueSource, IssueStage, StyledString},
     module::{Module, Modules, OptionModule},
     output::{OutputAsset, OutputAssets},
     package_json::{read_package_json, PackageJsonIssue},
@@ -66,6 +67,7 @@ pub enum ModuleResolveResultItem {
     OutputAsset(Vc<Box<dyn OutputAsset>>),
     External(String, ExternalType),
     Ignore,
+    Error(Vc<StyledString>),
     Empty,
     Custom(u8),
     Unresolveable,
@@ -165,6 +167,13 @@ impl ModuleResolveResult {
     pub fn primary_modules_iter(&self) -> impl Iterator<Item = Vc<Box<dyn Module>>> + '_ {
         self.primary.iter().filter_map(|(_, item)| match item {
             &ModuleResolveResultItem::Module(a) => Some(a),
+            _ => None,
+        })
+    }
+
+    pub fn get_first_error(&self) -> Option<Vc<StyledString>> {
+        self.primary.iter().find_map(|(_, item)| match item {
+            ModuleResolveResultItem::Error(s) => Some(*s),
             _ => None,
         })
     }
@@ -404,6 +413,7 @@ pub enum ResolveResultItem {
     Source(Vc<Box<dyn Source>>),
     External(String, ExternalType),
     Ignore,
+    Error(Vc<StyledString>),
     Empty,
     Custom(u8),
     Unresolveable,
@@ -487,6 +497,9 @@ impl ValueToString for ResolveResult {
                 }
                 ResolveResultItem::Empty => {
                     result.push_str("empty");
+                }
+                ResolveResultItem::Error(_) => {
+                    result.push_str("error");
                 }
                 ResolveResultItem::Custom(_) => {
                     result.push_str("custom");
@@ -674,6 +687,7 @@ impl ResolveResult {
                                 }
                                 ResolveResultItem::Ignore => ModuleResolveResultItem::Ignore,
                                 ResolveResultItem::Empty => ModuleResolveResultItem::Empty,
+                                ResolveResultItem::Error(e) => ModuleResolveResultItem::Error(e),
                                 ResolveResultItem::Custom(u8) => {
                                     ModuleResolveResultItem::Custom(u8)
                                 }
@@ -1326,17 +1340,23 @@ pub async fn resolve_inline(
         )
     };
     async {
-        let raw_result = resolve_internal(lookup_path, request, options)
-            .resolve()
-            .await?;
-        let result = handle_resolve_plugins(
-            lookup_path,
-            Value::new(reference_type),
-            request,
-            options,
-            raw_result,
-        )
-        .await?;
+        let reference_type = Value::new(reference_type);
+        let before_plugins_result =
+            handle_before_resolve_plugins(lookup_path, reference_type.clone(), request, options)
+                .await?;
+
+        let raw_result = match before_plugins_result {
+            Some(result) => result,
+            None => {
+                resolve_internal(lookup_path, request, options)
+                    .resolve()
+                    .await?
+            }
+        };
+
+        let result =
+            handle_after_resolve_plugins(lookup_path, reference_type, request, options, raw_result)
+                .await?;
         Ok(result)
     }
     .instrument(span)
@@ -1386,7 +1406,24 @@ pub async fn url_resolve(
     .await
 }
 
-async fn handle_resolve_plugins(
+async fn handle_before_resolve_plugins(
+    lookup_path: Vc<FileSystemPath>,
+    reference_type: Value<ReferenceType>,
+    request: Vc<Request>,
+    options: Vc<ResolveOptions>,
+) -> Result<Option<Vc<ResolveResult>>> {
+    for plugin in &options.await?.before_resolve_plugins {
+        if let Some(result) = *plugin
+            .before_resolve(lookup_path, reference_type.clone(), request)
+            .await?
+        {
+            return Ok(Some(result));
+        }
+    }
+    Ok(None)
+}
+
+async fn handle_after_resolve_plugins(
     lookup_path: Vc<FileSystemPath>,
     reference_type: Value<ReferenceType>,
     request: Vc<Request>,
@@ -2529,6 +2566,35 @@ async fn resolve_package_internal_with_imports_field(
     .await
 }
 
+#[turbo_tasks::value(shared)]
+struct CustomResolvingIssue {
+    title: Vc<StyledString>,
+    origin_path: Vc<FileSystemPath>,
+}
+
+#[turbo_tasks::value_impl]
+impl Issue for CustomResolvingIssue {
+    #[turbo_tasks::function]
+    fn severity(&self) -> Vc<IssueSeverity> {
+        IssueSeverity::Error.cell()
+    }
+
+    #[turbo_tasks::function]
+    async fn file_path(self: Vc<Self>) -> Result<Vc<FileSystemPath>> {
+        Ok(self.await?.origin_path)
+    }
+
+    #[turbo_tasks::function]
+    fn stage(self: Vc<Self>) -> Vc<IssueStage> {
+        IssueStage::Resolve.cell()
+    }
+
+    #[turbo_tasks::function]
+    async fn title(self: Vc<Self>) -> Result<Vc<StyledString>> {
+        Ok(self.await?.title)
+    }
+}
+
 pub async fn handle_resolve_error(
     result: Vc<ModuleResolveResult>,
     reference_type: Value<ReferenceType>,
@@ -2553,7 +2619,18 @@ pub async fn handle_resolve_error(
                 .cell()
                 .emit();
             }
-            result
+
+            if let Some(res) = result.await?.get_first_error() {
+                CustomResolvingIssue {
+                    title: res,
+                    origin_path,
+                }
+                .cell()
+                .emit();
+                ModuleResolveResult::unresolveable().cell()
+            } else {
+                result
+            }
         }
         Err(err) => {
             ResolvingIssue {

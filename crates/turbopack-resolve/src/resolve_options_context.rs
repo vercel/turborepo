@@ -6,7 +6,7 @@ use turbopack_core::{
     environment::Environment,
     resolve::{
         options::{ImportMap, ResolvedMap},
-        plugin::ResolvePlugin,
+        plugin::{BeforeResolvePlugin, ResolvePlugin},
     },
 };
 
@@ -72,6 +72,7 @@ pub struct ResolveOptionsContext {
     /// A list of plugins which get applied before (in the future) and after
     /// resolving.
     pub plugins: Vec<Vc<Box<dyn ResolvePlugin>>>,
+    pub before_plugins: Vec<Vc<Box<dyn BeforeResolvePlugin>>>,
     #[serde(default)]
     pub placeholder_for_future_extensions: (),
 }

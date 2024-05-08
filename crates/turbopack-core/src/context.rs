@@ -14,7 +14,6 @@ use crate::{
 pub enum ProcessResult {
     /// A module was created.
     Module(Vc<Box<dyn Module>>),
-
     /// Reference is ignored. This should lead to no module being included by
     /// the reference.
     Ignore,
