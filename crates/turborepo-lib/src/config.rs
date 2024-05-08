@@ -135,6 +135,8 @@ pub enum Error {
     InvalidRemoteCacheEnabled,
     #[error("TURBO_REMOTE_CACHE_TIMEOUT: error parsing timeout.")]
     InvalidRemoteCacheTimeout(#[source] std::num::ParseIntError),
+    #[error("TURBO_REMOTE_CACHE_UPLOAD_TIMEOUT: error parsing timeout.")]
+    InvalidUploadTimeout(#[source] std::num::ParseIntError),
     #[error("TURBO_PREFLIGHT should be either 1 or 0.")]
     InvalidPreflight,
     #[error(transparent)]
@@ -154,6 +156,7 @@ macro_rules! create_builder {
 const DEFAULT_API_URL: &str = "https://vercel.com/api";
 const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
 const DEFAULT_TIMEOUT: u64 = 30;
+const DEFAULT_UPLOAD_TIMEOUT: u64 = 60;
 
 // We intentionally don't derive Serialize so that different parts
 // of the code that want to display the config can tune how they
@@ -181,6 +184,7 @@ pub struct ConfigurationOptions {
     pub(crate) signature: Option<bool>,
     pub(crate) preflight: Option<bool>,
     pub(crate) timeout: Option<u64>,
+    pub(crate) upload_timeout: Option<u64>,
     pub(crate) enabled: Option<bool>,
     pub(crate) spaces_id: Option<String>,
     #[serde(rename = "experimentalUI")]
@@ -234,8 +238,14 @@ impl ConfigurationOptions {
         self.preflight.unwrap_or_default()
     }
 
+    /// Note: 0 implies no timeout
     pub fn timeout(&self) -> u64 {
         self.timeout.unwrap_or(DEFAULT_TIMEOUT)
+    }
+
+    /// Note: 0 implies no timeout
+    pub fn upload_timeout(&self) -> u64 {
+        self.upload_timeout.unwrap_or(DEFAULT_UPLOAD_TIMEOUT)
     }
 
     pub fn spaces_id(&self) -> Option<&str> {
@@ -312,6 +322,7 @@ fn get_env_var_config(
     turbo_mapping.insert(OsString::from("turbo_teamid"), "team_id");
     turbo_mapping.insert(OsString::from("turbo_token"), "token");
     turbo_mapping.insert(OsString::from("turbo_remote_cache_timeout"), "timeout");
+    turbo_mapping.insert(OsString::from("turbo_api_timeout"), "api_timeout");
     turbo_mapping.insert(OsString::from("turbo_experimental_ui"), "experimental_ui");
     turbo_mapping.insert(OsString::from("turbo_preflight"), "preflight");
 
@@ -383,6 +394,16 @@ fn get_env_var_config(
         None
     };
 
+    let upload_timeout = if let Some(upload_timeout) = output_map.get("upload_timeout") {
+        Some(
+            upload_timeout
+                .parse::<u64>()
+                .map_err(Error::InvalidUploadTimeout)?,
+        )
+    } else {
+        None
+    };
+
     // Process experimentalUI
     let experimental_ui = output_map
         .get("experimental_ui")
@@ -412,6 +433,7 @@ fn get_env_var_config(
 
         // Processed numbers
         timeout,
+        upload_timeout,
         spaces_id,
     };
 
@@ -457,6 +479,7 @@ fn get_override_env_var_config(
         enabled: None,
         experimental_ui: None,
         timeout: None,
+        upload_timeout: None,
         spaces_id: None,
     };
 
