@@ -138,7 +138,7 @@ impl TraceReader {
                 Ok(bytes_read) => {
                     if bytes_read == 0 {
                         if let Some(value) =
-                            self.wait_for_more_data(&mut file, &mut initial_read, format.as_ref())
+                            self.wait_for_more_data(&mut file, &mut initial_read, format.as_deref())
                         {
                             return value;
                         }
@@ -215,7 +215,7 @@ impl TraceReader {
                 Err(err) => {
                     if err.kind() == io::ErrorKind::UnexpectedEof {
                         if let Some(value) =
-                            self.wait_for_more_data(&mut file, &mut initial_read, format.as_ref())
+                            self.wait_for_more_data(&mut file, &mut initial_read, format.as_deref())
                         {
                             return value;
                         }
@@ -233,7 +233,7 @@ impl TraceReader {
         &mut self,
         file: &mut TraceFile,
         initial_read: &mut Option<u64>,
-        format: Option<&Box<dyn TraceFormat>>,
+        format: Option<&dyn TraceFormat>,
     ) -> Option<bool> {
         let Ok(pos) = file.stream_position() else {
             return Some(true);
