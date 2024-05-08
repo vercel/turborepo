@@ -573,6 +573,15 @@ pub(super) async fn part_of_module(
 
             let part_id = get_part_id(&split_data, part).await?;
 
+            if part_id as usize >= modules.len() {
+                bail!(
+                    "part_id is out of range: {} >= {}; entrypoints = {:?}",
+                    part_id,
+                    modules.len(),
+                    entrypoints
+                );
+            }
+
             Ok(modules[part_id as usize])
         }
         SplitResult::Unparseable => Ok(ParseResult::Unparseable { messages: None }.cell()),
