@@ -284,10 +284,10 @@ impl DepGraph {
             {
                 let mut specifiers = vec![];
 
-                let deps = groups.graph_ix.get_index(dep as usize).unwrap();
+                let deps_of_dep = groups.graph_ix.get_index(dep as usize).unwrap();
 
-                for dep in deps {
-                    let data = data.get(dep).unwrap();
+                for dep_of_dep in deps_of_dep {
+                    let data = data.get(dep_of_dep).unwrap();
 
                     for var in data.var_decls.iter().chain(data.write_vars.iter()) {
                         if required_vars.remove(var) {
@@ -303,6 +303,7 @@ impl DepGraph {
 
                 part_deps.entry(ix as u32).or_default().push(dep);
 
+                dbg!(&uri_of_module, dep);
                 chunk
                     .body
                     .push(ModuleItem::ModuleDecl(ModuleDecl::Import(ImportDecl {
