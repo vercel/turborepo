@@ -445,6 +445,7 @@ pub(super) async fn part_of_module(
             modules,
             uri_of_module,
             entrypoints,
+            deps,
             ..
         } => {
             debug_assert_ne!(modules.len(), 0, "modules.len() == 0");
@@ -558,12 +559,10 @@ pub(super) async fn part_of_module(
             let part_id = get_part_id(&split_data, part).await?;
 
             if part_id as usize >= modules.len() {
-                vdbg!(part);
                 bail!(
-                    "part_id is out of range: {} >= {}; entrypoints = {:?}",
-                    part_id,
+                    "part_id is out of range: {part_id} >= {}; uri = {uri_of_module}; entrypoints \
+                     = {entrypoints:?}: part_deps = {deps:?}",
                     modules.len(),
-                    entrypoints
                 );
             }
 
