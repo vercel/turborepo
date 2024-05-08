@@ -420,6 +420,12 @@ pub(super) async fn split(
                 })
                 .collect();
 
+            vdbg!(
+                "Creating split result for ",
+                &uri_of_module,
+                &entrypoints,
+                &part_deps
+            );
             Ok(SplitResult::Ok {
                 entrypoints,
                 deps: part_deps,

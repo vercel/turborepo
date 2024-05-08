@@ -303,7 +303,6 @@ impl DepGraph {
 
                 part_deps.entry(ix as u32).or_default().push(dep);
 
-                dbg!(&uri_of_module, dep);
                 chunk
                     .body
                     .push(ModuleItem::ModuleDecl(ModuleDecl::Import(ImportDecl {
