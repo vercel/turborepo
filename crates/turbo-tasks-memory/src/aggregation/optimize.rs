@@ -110,6 +110,9 @@ pub fn optimize_aggregation_number_for_followers<C: AggregationContext>(
     if min == u32::MAX {
         min = LEAF_NUMBER - 1;
     }
+    if min < LEAF_NUMBER {
+        min = LEAF_NUMBER - 1;
+    }
     if max < min {
         max = min;
     }

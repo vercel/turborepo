@@ -8,7 +8,8 @@ use super::{
     increase_aggregation_number_internal, notify_new_follower,
     notify_new_follower::PreparedNotifyNewFollower,
     optimize::optimize_aggregation_number_for_followers,
-    AggregationContext, AggregationNode, PreparedInternalOperation, PreparedOperation, StackVec,
+    AggregationContext, AggregationNode, AggregationNodeGuard, PreparedInternalOperation,
+    PreparedOperation, StackVec,
 };
 
 #[cfg(test)]
@@ -175,11 +176,10 @@ fn handle_expensive_node<C: AggregationContext>(
     node_id: &C::NodeRef,
 ) {
     let node = ctx.node(node_id);
-    let Some(followers) = node
-        .followers()
-        .map(|f| f.iter().cloned().collect::<StackVec<_>>())
-    else {
-        return;
+    let followers = if let Some(followers) = node.followers() {
+        followers.iter().cloned().collect::<StackVec<_>>()
+    } else {
+        node.children().collect::<StackVec<_>>()
     };
     drop(node);
     optimize_aggregation_number_for_followers(ctx, balance_queue, node_id, followers, true);
