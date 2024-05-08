@@ -22,6 +22,7 @@ pub fn optimize_aggregation_number_for_uppers<C: AggregationContext>(
     let count = uppers.len();
     let mut root_count = 0;
     let mut min = u32::MAX;
+    let mut max = 0;
     let mut uppers_uppers = 0;
     for upper_id in uppers.into_iter() {
         let upper = ctx.node(&upper_id);
@@ -34,19 +35,26 @@ pub fn optimize_aggregation_number_for_uppers<C: AggregationContext>(
             if aggregation_number < min {
                 min = aggregation_number;
             }
+            if aggregation_number > max {
+                max = aggregation_number;
+            }
         }
     }
     if min == u32::MAX {
         min = LEAF_NUMBER - 1;
     }
+    if max < LEAF_NUMBER {
+        max = LEAF_NUMBER - 1;
+    }
+    let aggregation_number = (min + max) / 2 + 1;
     if leaf {
         increase_aggregation_number_internal(
             ctx,
             balance_queue,
             ctx.node(node_id),
             node_id,
-            min + 1,
-            min + 1,
+            aggregation_number,
+            aggregation_number,
         );
         return true;
     } else {
@@ -59,8 +67,8 @@ pub fn optimize_aggregation_number_for_uppers<C: AggregationContext>(
                     balance_queue,
                     ctx.node(node_id),
                     node_id,
-                    min + 1,
-                    min + 1,
+                    aggregation_number,
+                    aggregation_number,
                 );
                 return true;
             }
