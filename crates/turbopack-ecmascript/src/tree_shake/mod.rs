@@ -314,16 +314,16 @@ async fn get_part_id(result: &SplitResult, part: Vc<ModulePart>) -> Result<u32> 
 pub(crate) enum SplitResult {
     Ok {
         /// `u32` is a index to `modules`.
-        #[turbo_tasks(debug_ignore, trace_ignore)]
+        #[turbo_tasks(trace_ignore)]
         entrypoints: FxHashMap<Key, u32>,
 
         #[turbo_tasks(debug_ignore, trace_ignore)]
         modules: Vec<Vc<ParseResult>>,
 
-        #[turbo_tasks(debug_ignore, trace_ignore)]
+        #[turbo_tasks(trace_ignore)]
         deps: FxHashMap<u32, Vec<u32>>,
 
-        #[turbo_tasks(debug_ignore, trace_ignore)]
+        #[turbo_tasks(trace_ignore)]
         uri_of_module: Atom,
     },
     Unparseable,
