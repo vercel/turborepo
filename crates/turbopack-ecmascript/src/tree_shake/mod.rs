@@ -299,7 +299,11 @@ async fn get_part_id(result: &SplitResult, part: Vc<ModulePart>) -> Result<u32> 
     let part_id = match entrypoints.get(&key) {
         Some(id) => *id,
         None => {
-            bail!("could not find part id for module part {:?}", key)
+            bail!(
+                "could not find part id for module part {:?} in {:?}",
+                key,
+                entrypoints
+            )
         }
     };
 
