@@ -1077,12 +1077,14 @@ impl Task {
             return;
         }
 
+        let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
+        let active = query_root_info(&aggregation_context, ActiveQuery::default(), self.id);
+
         let state = if force_schedule {
             TaskMetaStateWriteGuard::Full(self.full_state_mut())
         } else {
             self.state_mut()
         };
-        let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
         if let TaskMetaStateWriteGuard::Full(mut state) = state {
             match state.state_type {
                 Scheduled { .. } | InProgressDirty { .. } => {
@@ -1122,12 +1124,7 @@ impl Task {
                     let outdated_dependencies = take(dependencies);
                     // add to dirty lists and potentially schedule
                     let description = self.get_event_description();
-                    let should_schedule = force_schedule
-                        || state.aggregation_node.query_root_info(
-                            &aggregation_context,
-                            ActiveQuery::default(),
-                            self.id,
-                        );
+                    let should_schedule = force_schedule || active;
                     if should_schedule {
                         let change_job = state.aggregation_node.apply_change(
                             &aggregation_context,
@@ -1700,6 +1697,9 @@ impl Task {
                 })
             }
 
+            let aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
+            let active = query_root_info(&aggregation_context, ActiveQuery::default(), self.id);
+
             if let TaskMetaStateWriteGuard::Full(mut state) = self.state_mut() {
                 if state.stateful {
                     stats.no_gc_possible += 1;
@@ -1719,21 +1719,9 @@ impl Task {
                 }
 
                 // Check if the task need to be activated again
-                let active = if state.gc.inactive {
-                    let active = state.aggregation_node.query_root_info(
-                        &TaskAggregationContext::new(turbo_tasks, backend),
-                        ActiveQuery::default(),
-                        self.id,
-                    );
-                    if active {
-                        state.gc.inactive = false;
-                        true
-                    } else {
-                        false
-                    }
-                } else {
-                    true
-                };
+                if state.gc.inactive && active {
+                    state.gc.inactive = false;
+                }
 
                 let last_duration = state.stats.last_duration();
                 let compute_duration = last_duration.into();
