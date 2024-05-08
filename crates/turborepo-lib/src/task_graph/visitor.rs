@@ -560,6 +560,8 @@ enum TaskErrorCause {
     Spawn { msg: String },
     #[error("command {command} exited ({exit_code})")]
     Exit { command: String, exit_code: i32 },
+    #[error("turbo has internal error processing task")]
+    Internal,
 }
 
 impl TaskError {
@@ -767,6 +769,15 @@ impl ExecContext {
             ExecOutcome::Internal => {
                 tracker.cancel();
                 callback.send(Err(StopExecution)).ok();
+                {
+                    self.errors
+                        .lock()
+                        .expect("error lock poisoned")
+                        .push(TaskError {
+                            task_id: self.task_id.to_string(),
+                            cause: TaskErrorCause::Internal,
+                        });
+                }
                 self.manager.stop().await;
             }
             ExecOutcome::Task { exit_code, message } => {
@@ -855,8 +866,12 @@ impl ExecContext {
             }
         }
 
-        let Ok(package_manager_binary) = which(self.package_manager.command()) else {
-            return ExecOutcome::Internal;
+        let package_manager_binary = match which(self.package_manager.command()) {
+            Ok(path) => path,
+            Err(e) => {
+                error!("failed to find package manager binary: {e}");
+                return ExecOutcome::Internal;
+            }
         };
 
         let mut cmd = Command::new(package_manager_binary);
@@ -906,6 +921,7 @@ impl ExecContext {
             }
             // Turbo is shutting down
             None => {
+                error!("process manager is shutting down");
                 return ExecOutcome::Internal;
             }
         };
