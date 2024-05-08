@@ -110,7 +110,6 @@ impl<C: AggregationContext> PreparedInternalOperation<C> for PreparedNotifyLostF
                 upper_id,
                 follower_id,
             } => {
-                let mut try_start: Option<Instant> = None;
                 loop {
                     let mut follower = ctx.node(&follower_id);
                     match follower.uppers_mut().remove_if_entry(&upper_id) {
@@ -181,16 +180,6 @@ impl<C: AggregationContext> PreparedInternalOperation<C> for PreparedNotifyLostF
                                 }
                                 RemoveIfEntryResult::NotPresent => {
                                     drop(upper);
-                                    if let Some(try_start) = &try_start {
-                                        if try_start.elapsed().as_millis() > 10000 {
-                                            panic!(
-                                                "The graph is malformed, we need to remove either \
-                                                 follower or upper but neither exists."
-                                            );
-                                        }
-                                    } else {
-                                        try_start = Some(Instant::now());
-                                    }
                                     yield_now()
                                     // Retry, concurrency
                                 }
