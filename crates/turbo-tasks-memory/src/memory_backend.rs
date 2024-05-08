@@ -213,13 +213,15 @@ impl MemoryBackend {
         K: Borrow<Q> + Hash + Eq,
         Q: Hash + Eq + ?Sized,
     {
-        task_cache.get(key).map(|task_ref| {
-            let task_id = *task_ref;
-            drop(task_ref);
-            self.connect_task_child(parent_task, task_id, turbo_tasks);
+        task_cache
+            .get(key)
+            // Avoid holding the lock for too long
+            .map(|task_ref| *task_ref)
+            .map(|task_id| {
+                self.connect_task_child(parent_task, task_id, turbo_tasks);
 
-            task_id
-        })
+                task_id
+            })
     }
 
     pub(crate) fn schedule_when_dirty_from_aggregation(
