@@ -306,9 +306,9 @@ graph TD
 ```mermaid
 graph TD
     N0["Items: [ItemId(ModuleEvaluation), ItemId(9, Normal), ItemId(10, Normal)]"];
-    N1["Items: [ItemId(Export((&quot;c1_1&quot;, #0), &quot;c1_1&quot;))]"];
-    N2["Items: [ItemId(Export((&quot;c1_3&quot;, #0), &quot;c1_3&quot;))]"];
-    N3["Items: [ItemId(Export((&quot;c2_2&quot;, #0), &quot;c2_2&quot;))]"];
+    N1["Items: [ItemId(Export((&quot;c1_1&quot;, #2), &quot;c1_1&quot;))]"];
+    N2["Items: [ItemId(Export((&quot;c1_3&quot;, #2), &quot;c1_3&quot;))]"];
+    N3["Items: [ItemId(Export((&quot;c2_2&quot;, #2), &quot;c2_2&quot;))]"];
     N4["Items: [ItemId(3, Normal), ItemId(4, Normal), ItemId(5, Normal)]"];
     N5["Items: [ItemId(6, Normal), ItemId(7, Normal), ItemId(8, Normal)]"];
     N6["Items: [ItemId(0, Normal)]"];
@@ -326,6 +326,24 @@ graph TD
     N4 --> N7;
     N5 --> N8;
 ```
+# Entrypoints
+
+```
+{
+    ModuleEvaluation: 0,
+    Export(
+        "c1_1",
+    ): 1,
+    Export(
+        "c1_3",
+    ): 2,
+    Export(
+        "c2_2",
+    ): 3,
+}
+```
+
+
 # Modules (dev)
 ## Part 0
 ```js
@@ -451,6 +469,24 @@ c1_3();
 c2_2();
 
 ```
+# Entrypoints
+
+```
+{
+    ModuleEvaluation: 0,
+    Export(
+        "c1_1",
+    ): 1,
+    Export(
+        "c1_3",
+    ): 2,
+    Export(
+        "c2_2",
+    ): 3,
+}
+```
+
+
 # Modules (prod)
 ## Part 0
 ```js
@@ -567,6 +603,24 @@ c1_3();
 c2_2();
 
 ```
+# Entrypoints
+
+```
+{
+    ModuleEvaluation: 0,
+    Export(
+        "c1_1",
+    ): 1,
+    Export(
+        "c1_3",
+    ): 2,
+    Export(
+        "c2_2",
+    ): 3,
+}
+```
+
+
 ## Merged (c1_3)
 ```js
 function d1() {}
@@ -583,6 +637,24 @@ function c1_3() {
 export { c1_3 };
 
 ```
+# Entrypoints
+
+```
+{
+    ModuleEvaluation: 0,
+    Export(
+        "c1_1",
+    ): 1,
+    Export(
+        "c1_3",
+    ): 2,
+    Export(
+        "c2_2",
+    ): 3,
+}
+```
+
+
 ## Merged (c1_3,c2_2)
 ```js
 function d1() {}

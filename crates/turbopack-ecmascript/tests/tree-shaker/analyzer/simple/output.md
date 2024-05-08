@@ -115,12 +115,27 @@ graph TD
 ```mermaid
 graph TD
     N0["Items: [ItemId(ModuleEvaluation)]"];
-    N1["Items: [ItemId(Export((&quot;DOG&quot;, #0), &quot;DOG&quot;)), ItemId(2, VarDeclarator(0))]"];
-    N2["Items: [ItemId(Export((&quot;CHIMERA&quot;, #0), &quot;CHIMERA&quot;)), ItemId(1, VarDeclarator(0)), ItemId(3, VarDeclarator(0))]"];
+    N1["Items: [ItemId(Export((&quot;DOG&quot;, #2), &quot;DOG&quot;)), ItemId(2, VarDeclarator(0))]"];
+    N2["Items: [ItemId(Export((&quot;CHIMERA&quot;, #2), &quot;CHIMERA&quot;)), ItemId(1, VarDeclarator(0)), ItemId(3, VarDeclarator(0))]"];
     N3["Items: [ItemId(0, VarDeclarator(0))]"];
     N1 --> N3;
     N2 --> N3;
 ```
+# Entrypoints
+
+```
+{
+    ModuleEvaluation: 0,
+    Export(
+        "DOG",
+    ): 1,
+    Export(
+        "CHIMERA",
+    ): 2,
+}
+```
+
+
 # Modules (dev)
 ## Part 0
 ```js
@@ -160,6 +175,21 @@ export { dog };
 "module evaluation";
 
 ```
+# Entrypoints
+
+```
+{
+    ModuleEvaluation: 0,
+    Export(
+        "DOG",
+    ): 1,
+    Export(
+        "CHIMERA",
+    ): 2,
+}
+```
+
+
 # Modules (prod)
 ## Part 0
 ```js

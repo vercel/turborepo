@@ -29,7 +29,7 @@ console.log(dog);
 ```
 
 - Side effects
-- Reads: `console`, `dog`
+- Reads: `dog`
 
 ## Item 4: Stmt 3, `Normal`
 
@@ -61,7 +61,7 @@ console.log(dog);
 ```
 
 - Side effects
-- Reads: `console`, `dog`
+- Reads: `dog`
 
 ## Item 7: Stmt 6, `Normal`
 
@@ -74,8 +74,7 @@ function setDog(newDog) {
 
 - Hoisted
 - Declares: `setDog`
-- Reads (eventual): `newDog`
-- Write (eventual): `newDog`, `dog`
+- Write (eventual): `dog`
 
 ## Item 8: Stmt 7, `Normal`
 
@@ -94,7 +93,7 @@ console.log(dog);
 ```
 
 - Side effects
-- Reads: `console`, `dog`
+- Reads: `dog`
 
 ## Item 10: Stmt 9, `VarDeclarator(0)`
 
@@ -349,10 +348,10 @@ graph TD
 ```mermaid
 graph TD
     N0["Items: [ItemId(ModuleEvaluation)]"];
-    N1["Items: [ItemId(Export((&quot;dogRef&quot;, #0), &quot;dogRef&quot;))]"];
-    N2["Items: [ItemId(Export((&quot;cat&quot;, #0), &quot;cat&quot;))]"];
-    N3["Items: [ItemId(Export((&quot;initialCat&quot;, #0), &quot;initialCat&quot;)), ItemId(11, VarDeclarator(0))]"];
-    N4["Items: [ItemId(Export((&quot;getChimera&quot;, #0), &quot;getChimera&quot;)), ItemId(12, Normal)]"];
+    N1["Items: [ItemId(Export((&quot;dogRef&quot;, #2), &quot;dogRef&quot;))]"];
+    N2["Items: [ItemId(Export((&quot;cat&quot;, #2), &quot;cat&quot;))]"];
+    N3["Items: [ItemId(Export((&quot;initialCat&quot;, #2), &quot;initialCat&quot;)), ItemId(11, VarDeclarator(0))]"];
+    N4["Items: [ItemId(Export((&quot;getChimera&quot;, #2), &quot;getChimera&quot;)), ItemId(12, Normal)]"];
     N5["Items: [ItemId(6, Normal), ItemId(9, VarDeclarator(0))]"];
     N6["Items: [ItemId(0, VarDeclarator(0))]"];
     N7["Items: [ItemId(1, Normal)]"];
@@ -399,6 +398,27 @@ graph TD
     N13 --> N8;
     N13 --> N11;
 ```
+# Entrypoints
+
+```
+{
+    ModuleEvaluation: 0,
+    Export(
+        "getChimera",
+    ): 4,
+    Export(
+        "initialCat",
+    ): 3,
+    Export(
+        "cat",
+    ): 2,
+    Export(
+        "dogRef",
+    ): 1,
+}
+```
+
+
 # Modules (dev)
 ## Part 0
 ```js
@@ -616,6 +636,27 @@ console.log(dog);
 "module evaluation";
 
 ```
+# Entrypoints
+
+```
+{
+    ModuleEvaluation: 0,
+    Export(
+        "getChimera",
+    ): 4,
+    Export(
+        "initialCat",
+    ): 3,
+    Export(
+        "cat",
+    ): 2,
+    Export(
+        "dogRef",
+    ): 1,
+}
+```
+
+
 # Modules (prod)
 ## Part 0
 ```js

@@ -68,8 +68,20 @@ graph TD
 ```mermaid
 graph TD
     N0["Items: [ItemId(ModuleEvaluation), ItemId(0, ImportOfModule)]"];
-    N1["Items: [ItemId(Export((&quot;__TURBOPACK__reexport__fakeCat__&quot;, #1), &quot;fakeCat&quot;)), ItemId(0, ImportBinding(0))]"];
+    N1["Items: [ItemId(Export((&quot;__TURBOPACK__reexport__fakeCat__&quot;, #3), &quot;fakeCat&quot;)), ItemId(0, ImportBinding(0))]"];
 ```
+# Entrypoints
+
+```
+{
+    ModuleEvaluation: 0,
+    Export(
+        "fakeCat",
+    ): 1,
+}
+```
+
+
 # Modules (dev)
 ## Part 0
 ```js
@@ -89,6 +101,18 @@ import "./lib";
 "module evaluation";
 
 ```
+# Entrypoints
+
+```
+{
+    ModuleEvaluation: 0,
+    Export(
+        "fakeCat",
+    ): 1,
+}
+```
+
+
 # Modules (prod)
 ## Part 0
 ```js

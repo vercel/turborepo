@@ -91,7 +91,7 @@ console.log(foobarCopy);
 ```
 
 - Side effects
-- Reads: `console`, `foobarCopy`
+- Reads: `foobarCopy`
 
 ## Item 10: Stmt 8, `Normal`
 
@@ -329,10 +329,10 @@ graph TD
 ```mermaid
 graph TD
     N0["Items: [ItemId(ModuleEvaluation), ItemId(0, ImportOfModule), ItemId(0, ImportBinding(0)), ItemId(7, Normal)]"];
-    N1["Items: [ItemId(Export((&quot;foobar&quot;, #0), &quot;foobar&quot;))]"];
-    N2["Items: [ItemId(Export((&quot;foo&quot;, #0), &quot;foo&quot;))]"];
-    N3["Items: [ItemId(Export((&quot;external1&quot;, #0), &quot;external1&quot;)), ItemId(10, Normal)]"];
-    N4["Items: [ItemId(Export((&quot;external2&quot;, #0), &quot;external2&quot;)), ItemId(11, Normal)]"];
+    N1["Items: [ItemId(Export((&quot;foobar&quot;, #2), &quot;foobar&quot;))]"];
+    N2["Items: [ItemId(Export((&quot;foo&quot;, #2), &quot;foo&quot;))]"];
+    N3["Items: [ItemId(Export((&quot;external1&quot;, #2), &quot;external1&quot;)), ItemId(10, Normal)]"];
+    N4["Items: [ItemId(Export((&quot;external2&quot;, #2), &quot;external2&quot;)), ItemId(11, Normal)]"];
     N5["Items: [ItemId(1, VarDeclarator(0))]"];
     N6["Items: [ItemId(2, VarDeclarator(0))]"];
     N7["Items: [ItemId(3, VarDeclarator(0))]"];
@@ -367,6 +367,27 @@ graph TD
     N11 --> N8;
     N11 --> N10;
 ```
+# Entrypoints
+
+```
+{
+    ModuleEvaluation: 0,
+    Export(
+        "external1",
+    ): 3,
+    Export(
+        "foo",
+    ): 2,
+    Export(
+        "foobar",
+    ): 1,
+    Export(
+        "external2",
+    ): 4,
+}
+```
+
+
 # Modules (dev)
 ## Part 0
 ```js
@@ -548,6 +569,27 @@ function internal() {
 console.log(foobarCopy);
 
 ```
+# Entrypoints
+
+```
+{
+    ModuleEvaluation: 0,
+    Export(
+        "external1",
+    ): 3,
+    Export(
+        "foo",
+    ): 2,
+    Export(
+        "foobar",
+    ): 1,
+    Export(
+        "external2",
+    ): 4,
+}
+```
+
+
 # Modules (prod)
 ## Part 0
 ```js
@@ -659,6 +701,27 @@ console.log(foobarCopy);
 export { foobarCopy };
 
 ```
+# Entrypoints
+
+```
+{
+    ModuleEvaluation: 0,
+    Export(
+        "external1",
+    ): 3,
+    Export(
+        "foo",
+    ): 2,
+    Export(
+        "foobar",
+    ): 1,
+    Export(
+        "external2",
+    ): 4,
+}
+```
+
+
 ## Merged (external1)
 ```js
 import { upper } from "module";
@@ -679,6 +742,27 @@ function external1() {
 }
 
 ```
+# Entrypoints
+
+```
+{
+    ModuleEvaluation: 0,
+    Export(
+        "external1",
+    ): 3,
+    Export(
+        "foo",
+    ): 2,
+    Export(
+        "foobar",
+    ): 1,
+    Export(
+        "external2",
+    ): 4,
+}
+```
+
+
 ## Merged (external1,external2)
 ```js
 import { upper } from "module";

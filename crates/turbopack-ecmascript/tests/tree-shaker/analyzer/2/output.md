@@ -104,7 +104,7 @@ console.log(foobarCopy);
 ```
 
 - Side effects
-- Reads: `console`, `foobarCopy`
+- Reads: `foobarCopy`
 
 ## Item 11: Stmt 9, `Normal`
 
@@ -155,7 +155,7 @@ import "other";
 ```mermaid
 graph TD
     Item3;
-    Item2;
+    Item1;
     Item4;
     Item5;
     Item6;
@@ -167,7 +167,7 @@ graph TD
     Item12;
     Item13;
     Item14;
-    Item1;
+    Item2;
     Item15;
     Item15["ModuleEvaluation"];
     Item16;
@@ -178,13 +178,13 @@ graph TD
     Item18["export foo"];
     Item19;
     Item19["export external2"];
-    Item1 --> Item2;
+    Item2 --> Item1;
 ```
 # Phase 2
 ```mermaid
 graph TD
     Item3;
-    Item2;
+    Item1;
     Item4;
     Item5;
     Item6;
@@ -196,7 +196,7 @@ graph TD
     Item12;
     Item13;
     Item14;
-    Item1;
+    Item2;
     Item15;
     Item15["ModuleEvaluation"];
     Item16;
@@ -207,7 +207,7 @@ graph TD
     Item18["export foo"];
     Item19;
     Item19["export external2"];
-    Item1 --> Item2;
+    Item2 --> Item1;
     Item6 --> Item5;
     Item8 --> Item7;
     Item8 -.-> Item6;
@@ -216,8 +216,8 @@ graph TD
     Item10 -.-> Item6;
     Item10 -.-> Item9;
     Item11 --> Item9;
-    Item11 --> Item2;
     Item11 --> Item1;
+    Item11 --> Item2;
     Item11 -.-> Item13;
     Item11 -.-> Item5;
     Item11 -.-> Item8;
@@ -230,7 +230,7 @@ graph TD
 ```mermaid
 graph TD
     Item3;
-    Item2;
+    Item1;
     Item4;
     Item5;
     Item6;
@@ -242,7 +242,7 @@ graph TD
     Item12;
     Item13;
     Item14;
-    Item1;
+    Item2;
     Item15;
     Item15["ModuleEvaluation"];
     Item16;
@@ -253,7 +253,7 @@ graph TD
     Item18["export foo"];
     Item19;
     Item19["export external2"];
-    Item1 --> Item2;
+    Item2 --> Item1;
     Item6 --> Item5;
     Item8 --> Item7;
     Item8 -.-> Item6;
@@ -262,8 +262,8 @@ graph TD
     Item10 -.-> Item6;
     Item10 -.-> Item9;
     Item11 --> Item9;
-    Item11 --> Item2;
     Item11 --> Item1;
+    Item11 --> Item2;
     Item11 -.-> Item13;
     Item11 -.-> Item5;
     Item11 -.-> Item8;
@@ -286,7 +286,7 @@ graph TD
 ```mermaid
 graph TD
     Item3;
-    Item2;
+    Item1;
     Item4;
     Item5;
     Item6;
@@ -298,7 +298,7 @@ graph TD
     Item12;
     Item13;
     Item14;
-    Item1;
+    Item2;
     Item15;
     Item15["ModuleEvaluation"];
     Item16;
@@ -309,7 +309,7 @@ graph TD
     Item18["export foo"];
     Item19;
     Item19["export external2"];
-    Item1 --> Item2;
+    Item2 --> Item1;
     Item6 --> Item5;
     Item8 --> Item7;
     Item8 -.-> Item6;
@@ -318,8 +318,8 @@ graph TD
     Item10 -.-> Item6;
     Item10 -.-> Item9;
     Item11 --> Item9;
-    Item11 --> Item2;
     Item11 --> Item1;
+    Item11 --> Item2;
     Item11 -.-> Item13;
     Item11 -.-> Item5;
     Item11 -.-> Item8;
@@ -337,8 +337,8 @@ graph TD
     Item13 --> Item10;
     Item14 -.-> Item6;
     Item14 -.-> Item9;
-    Item15 --> Item2;
     Item15 --> Item1;
+    Item15 --> Item2;
     Item15 --> Item11;
     Item16 --> Item3;
     Item17 --> Item5;
@@ -351,10 +351,10 @@ graph TD
 ```mermaid
 graph TD
     N0["Items: [ItemId(ModuleEvaluation), ItemId(1, ImportOfModule), ItemId(1, ImportBinding(0)), ItemId(8, Normal), ItemId(12, ImportOfModule)]"];
-    N1["Items: [ItemId(Export((&quot;external1&quot;, #0), &quot;external1&quot;)), ItemId(0, Normal)]"];
-    N2["Items: [ItemId(Export((&quot;foobar&quot;, #0), &quot;foobar&quot;))]"];
-    N3["Items: [ItemId(Export((&quot;foo&quot;, #0), &quot;foo&quot;))]"];
-    N4["Items: [ItemId(Export((&quot;external2&quot;, #0), &quot;external2&quot;)), ItemId(11, Normal)]"];
+    N1["Items: [ItemId(Export((&quot;external1&quot;, #2), &quot;external1&quot;)), ItemId(0, Normal)]"];
+    N2["Items: [ItemId(Export((&quot;foobar&quot;, #2), &quot;foobar&quot;))]"];
+    N3["Items: [ItemId(Export((&quot;foo&quot;, #2), &quot;foo&quot;))]"];
+    N4["Items: [ItemId(Export((&quot;external2&quot;, #2), &quot;external2&quot;)), ItemId(11, Normal)]"];
     N5["Items: [ItemId(2, VarDeclarator(0))]"];
     N6["Items: [ItemId(3, VarDeclarator(0))]"];
     N7["Items: [ItemId(4, VarDeclarator(0))]"];
@@ -389,6 +389,27 @@ graph TD
     N11 --> N8;
     N11 --> N10;
 ```
+# Entrypoints
+
+```
+{
+    ModuleEvaluation: 0,
+    Export(
+        "external1",
+    ): 1,
+    Export(
+        "foo",
+    ): 3,
+    Export(
+        "foobar",
+    ): 2,
+    Export(
+        "external2",
+    ): 4,
+}
+```
+
+
 # Modules (dev)
 ## Part 0
 ```js
@@ -572,6 +593,27 @@ function internal() {
 console.log(foobarCopy);
 
 ```
+# Entrypoints
+
+```
+{
+    ModuleEvaluation: 0,
+    Export(
+        "external1",
+    ): 1,
+    Export(
+        "foo",
+    ): 3,
+    Export(
+        "foobar",
+    ): 2,
+    Export(
+        "external2",
+    ): 4,
+}
+```
+
+
 # Modules (prod)
 ## Part 0
 ```js
