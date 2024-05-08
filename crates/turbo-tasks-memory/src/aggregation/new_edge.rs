@@ -7,9 +7,8 @@ use super::{
     },
     increase_aggregation_number_internal, notify_new_follower,
     notify_new_follower::PreparedNotifyNewFollower,
-    optimize::optimize_aggregation_number_for_followers,
-    AggregationContext, AggregationNode, AggregationNodeGuard, PreparedInternalOperation,
-    PreparedOperation, StackVec,
+    optimize::optimize_aggregation_number_for_uppers,
+    AggregationContext, AggregationNode, PreparedInternalOperation, PreparedOperation, StackVec,
 };
 
 const BUFFER_SPACE: u32 = 2;
@@ -173,11 +172,8 @@ fn handle_expensive_node<C: AggregationContext>(
     node_id: &C::NodeRef,
 ) {
     let node = ctx.node(node_id);
-    let followers = if let Some(followers) = node.followers() {
-        followers.iter().cloned().collect::<StackVec<_>>()
-    } else {
-        node.children().collect::<StackVec<_>>()
-    };
+    let uppers = node.uppers().iter().cloned().collect::<StackVec<_>>();
+    let leaf = matches!(*node, AggregationNode::Leaf { .. });
     drop(node);
-    optimize_aggregation_number_for_followers(ctx, balance_queue, node_id, followers, true);
+    optimize_aggregation_number_for_uppers(ctx, balance_queue, node_id, leaf, uppers);
 }
