@@ -14,6 +14,10 @@ use turbo_tasks::Vc;
 use turbopack_core::{issue::IssueSource, source::Source};
 
 use super::{JsValue, ModuleValue};
+use crate::{
+    tree_shake::{find_turbopack_part_id_in_asserts, PartId},
+    utils::unparen,
+};
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(Default, Debug, Clone, Hash, PartialOrd, Ord)]
@@ -400,33 +404,11 @@ pub(crate) fn orig_name(n: &ModuleExportName) -> JsWord {
 }
 
 fn parse_with(with: Option<&ObjectLit>) -> Option<ImportedSymbol> {
-    let with = with?;
-
-    for prop in &with.props {
-        if let PropOrSpread::Prop(prop) = prop {
-            if let Prop::KeyValue(KeyValueProp {
-                key: PropName::Ident(key),
-                value,
-            }) = &**prop
-            {
-                if key.sym == "__turbopack_part__" {
-                    if let Expr::Lit(Lit::Num(Number { value, .. })) = &**value {
-                        return Some(ImportedSymbol::Part(*value as _));
-                    }
-
-                    if let Expr::Lit(Lit::Str(Str { value, .. })) = &**value {
-                        if value == "module evaluation" {
-                            return Some(ImportedSymbol::ModuleEvaluation);
-                        } else if value == "expors" {
-                            return Some(ImportedSymbol::Namespace);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    None
+    find_turbopack_part_id_in_asserts(with?).map(|v| match v {
+        PartId::Internal(index) => ImportedSymbol::Part(index),
+        PartId::ModuleEvaluation => ImportedSymbol::ModuleEvaluation,
+        PartId::Exports => ImportedSymbol::Namespace,
+    })
 }
 
 fn get_import_symbol_from_import(

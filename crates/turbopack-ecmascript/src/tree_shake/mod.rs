@@ -14,13 +14,14 @@ use swc_core::{
         utils::quote_ident,
     },
 };
-use turbo_tasks::Vc;
+use turbo_tasks::{vdbg, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     resolve::{origin::ResolveOrigin, ModulePart},
     source::Source,
 };
 
+pub(crate) use self::graph::{find_turbopack_part_id_in_asserts, PartId};
 use self::graph::{DepGraph, ItemData, ItemId, ItemIdGroupKind, Mode, SplitModuleResult};
 use crate::{analyzer::graph::EvalContext, parse::ParseResult, EcmascriptModuleAsset};
 
@@ -574,6 +575,7 @@ pub(super) async fn part_of_module(
             let part_id = get_part_id(&split_data, part).await?;
 
             if part_id as usize >= modules.len() {
+                vdbg!(part);
                 bail!(
                     "part_id is out of range: {} >= {}; entrypoints = {:?}",
                     part_id,

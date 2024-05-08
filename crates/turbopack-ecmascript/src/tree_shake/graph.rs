@@ -1042,6 +1042,13 @@ impl DepGraph {
 
 const ASSERT_CHUNK_KEY: &str = "__turbopack_part__";
 
+#[derive(Debug, Clone)]
+pub(crate) enum PartId {
+    ModuleEvaluation,
+    Exports,
+    Internal(u32),
+}
+
 fn create_turbopack_part_id_assert(dep: u32) -> ObjectLit {
     ObjectLit {
         span: DUMMY_SP,
@@ -1052,12 +1059,21 @@ fn create_turbopack_part_id_assert(dep: u32) -> ObjectLit {
     }
 }
 
-pub(crate) fn find_turbopack_part_id_in_asserts(asserts: &ObjectLit) -> Option<u32> {
+pub(crate) fn find_turbopack_part_id_in_asserts(asserts: &ObjectLit) -> Option<PartId> {
     asserts.props.iter().find_map(|prop| match prop {
         PropOrSpread::Prop(box Prop::KeyValue(KeyValueProp {
             key: PropName::Ident(key),
             value: box Expr::Lit(Lit::Num(chunk_id)),
-        })) if &*key.sym == ASSERT_CHUNK_KEY => Some(chunk_id.value as u32),
+        })) if &*key.sym == ASSERT_CHUNK_KEY => Some(PartId::Internal(chunk_id.value as u32)),
+
+        PropOrSpread::Prop(box Prop::KeyValue(KeyValueProp {
+            key: PropName::Ident(key),
+            value: box Expr::Lit(Lit::Str(s)),
+        })) if &*key.sym == ASSERT_CHUNK_KEY => match &*s.value {
+            "module evaluation" => Some(PartId::ModuleEvaluation),
+            "exports" => Some(PartId::Exports),
+            _ => None,
+        },
         _ => None,
     })
 }
