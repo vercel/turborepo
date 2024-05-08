@@ -192,6 +192,8 @@ fn run(input: PathBuf) {
                     ..
                 } = g.split_module(&uri_of_module, analyzer.items);
 
+                writeln!(s, "# Entrypoints\n\n```\n{:#?}\n```\n\n", entrypoints).unwrap();
+
                 if !skip_parts {
                     writeln!(s, "# Modules ({})", if is_debug { "dev" } else { "prod" }).unwrap();
                     for (i, module) in modules.iter().enumerate() {
