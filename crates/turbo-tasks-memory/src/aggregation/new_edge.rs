@@ -145,7 +145,7 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNewEdge<C> {
                         ctx.node(&upper_id),
                         &upper_id,
                         &target_id,
-                        false,
+                        true,
                     );
                 }
                 // The balancing will attach it to the aggregated node later
