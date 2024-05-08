@@ -1,4 +1,4 @@
-use std::{hash::Hash, thread::yield_now, time::Instant};
+use std::{hash::Hash, thread::yield_now};
 
 use super::{
     balance_queue::BalanceQueue,

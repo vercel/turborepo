@@ -1,4 +1,4 @@
-use std::{hash::Hash, ops::ControlFlow};
+use std::ops::ControlFlow;
 
 use auto_hash_map::AutoSet;
 
