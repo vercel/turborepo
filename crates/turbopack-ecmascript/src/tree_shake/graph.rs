@@ -310,7 +310,9 @@ impl DepGraph {
                         specifiers,
                         src: Box::new(uri_of_module.clone().into()),
                         type_only: false,
-                        with: Some(Box::new(create_turbopack_part_id_assert(dep))),
+                        with: Some(Box::new(create_turbopack_part_id_assert(PartId::Internal(
+                            dep,
+                        )))),
                         phase: Default::default(),
                     })));
             }
@@ -1049,12 +1051,16 @@ pub(crate) enum PartId {
     Internal(u32),
 }
 
-fn create_turbopack_part_id_assert(dep: u32) -> ObjectLit {
+pub(crate) fn create_turbopack_part_id_assert(dep: PartId) -> ObjectLit {
     ObjectLit {
         span: DUMMY_SP,
         props: vec![PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
             key: PropName::Ident(Ident::new(ASSERT_CHUNK_KEY.into(), DUMMY_SP)),
-            value: (dep as f64).into(),
+            value: match dep {
+                PartId::ModuleEvaluation => "module evaluation".into(),
+                PartId::Exports => "exports".into(),
+                PartId::Internal(dep) => (dep as f64).into(),
+            },
         })))],
     }
 }

@@ -21,7 +21,9 @@ use turbopack_core::{
     source::Source,
 };
 
-pub(crate) use self::graph::{find_turbopack_part_id_in_asserts, PartId};
+pub(crate) use self::graph::{
+    create_turbopack_part_id_assert, find_turbopack_part_id_in_asserts, PartId,
+};
 use self::graph::{DepGraph, ItemData, ItemId, ItemIdGroupKind, Mode, SplitModuleResult};
 use crate::{analyzer::graph::EvalContext, parse::ParseResult, EcmascriptModuleAsset};
 
@@ -459,13 +461,7 @@ pub(super) async fn part_of_module(
                     let mut module = Module::dummy();
 
                     // We can't use quote! as `with` is not standard yet
-                    let chunk_prop = ObjectLit {
-                        span: DUMMY_SP,
-                        props: vec![PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
-                            key: quote_ident!("__turbopack_part__").into(),
-                            value: "module evaluation".into(),
-                        })))],
-                    };
+                    let chunk_prop = create_turbopack_part_id_assert(PartId::ModuleEvaluation);
 
                     module
                         .body
@@ -477,13 +473,7 @@ pub(super) async fn part_of_module(
                         })));
 
                     // We can't use quote! as `with` is not standard yet
-                    let chunk_prop = ObjectLit {
-                        span: DUMMY_SP,
-                        props: vec![PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
-                            key: quote_ident!("__turbopack_part__").into(),
-                            value: "exports".into(),
-                        })))],
-                    };
+                    let chunk_prop = create_turbopack_part_id_assert(PartId::Exports);
 
                     module
                         .body
@@ -531,15 +521,8 @@ pub(super) async fn part_of_module(
 
                     for export_part_id in export_part_ids {
                         // We can't use quote! as `with` is not standard yet
-                        let chunk_prop = ObjectLit {
-                            span: DUMMY_SP,
-                            props: vec![PropOrSpread::Prop(Box::new(Prop::KeyValue(
-                                KeyValueProp {
-                                    key: quote_ident!("__turbopack_part__").into(),
-                                    value: (export_part_id as usize).into(),
-                                },
-                            )))],
-                        };
+                        let chunk_prop =
+                            create_turbopack_part_id_assert(PartId::Internal(export_part_id));
 
                         module
                             .body
