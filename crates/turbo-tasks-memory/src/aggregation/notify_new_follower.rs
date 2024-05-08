@@ -5,9 +5,12 @@ use super::{
     followers::add_follower,
     in_progress::{finish_in_progress_without_node, start_in_progress},
     increase_aggregation_number_internal,
+    optimize::optimize_aggregation_number_for_uppers,
     uppers::add_upper,
-    AggregationContext, AggregationNode, PreparedInternalOperation,
+    AggregationContext, AggregationNode, PreparedInternalOperation, StackVec,
 };
+
+const MAX_AFFECTED_NODES: usize = 4096;
 
 impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {
     // Called when a inner node of the upper node has a new follower.
@@ -106,7 +109,7 @@ impl<C: AggregationContext> PreparedInternalOperation<C> for PreparedNotifyNewFo
                 already_optimizing_for_upper,
             } => {
                 let follower = ctx.node(&follower_id);
-                let result = add_upper(
+                let affected_nodes = add_upper(
                     ctx,
                     balance_queue,
                     follower,
@@ -115,7 +118,22 @@ impl<C: AggregationContext> PreparedInternalOperation<C> for PreparedNotifyNewFo
                     already_optimizing_for_upper,
                 );
                 finish_in_progress_without_node(ctx, balance_queue, &upper_id);
-                result
+                if !already_optimizing_for_upper && affected_nodes > MAX_AFFECTED_NODES {
+                    let follower = ctx.node(&follower_id);
+                    let uppers = follower.uppers().iter().cloned().collect::<StackVec<_>>();
+                    let leaf: bool = follower.is_leaf();
+                    drop(follower);
+                    if optimize_aggregation_number_for_uppers(
+                        ctx,
+                        balance_queue,
+                        &follower_id,
+                        leaf,
+                        uppers,
+                    ) {
+                        return 1;
+                    }
+                }
+                affected_nodes
             }
             PreparedNotifyNewFollower::FollowerOrInner {
                 mut upper_aggregation_number,
@@ -126,7 +144,7 @@ impl<C: AggregationContext> PreparedInternalOperation<C> for PreparedNotifyNewFo
                 let follower = ctx.node(&follower_id);
                 let follower_aggregation_number = follower.aggregation_number();
                 if follower_aggregation_number < upper_aggregation_number {
-                    let result = add_upper(
+                    let affected_nodes = add_upper(
                         ctx,
                         balance_queue,
                         follower,
@@ -135,7 +153,22 @@ impl<C: AggregationContext> PreparedInternalOperation<C> for PreparedNotifyNewFo
                         already_optimizing_for_upper,
                     );
                     finish_in_progress_without_node(ctx, balance_queue, &upper_id);
-                    return result;
+                    if !already_optimizing_for_upper && affected_nodes > MAX_AFFECTED_NODES {
+                        let follower = ctx.node(&follower_id);
+                        let uppers = follower.uppers().iter().cloned().collect::<StackVec<_>>();
+                        let leaf = follower.is_leaf();
+                        drop(follower);
+                        if optimize_aggregation_number_for_uppers(
+                            ctx,
+                            balance_queue,
+                            &follower_id,
+                            leaf,
+                            uppers,
+                        ) {
+                            return 1;
+                        }
+                    }
+                    return affected_nodes;
                 } else {
                     drop(follower);
                     let mut upper = ctx.node(&upper_id);

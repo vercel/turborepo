@@ -74,6 +74,10 @@ impl<I, A> AggregationNode<I, A> {
         }
     }
 
+    fn is_leaf(&self) -> bool {
+        matches!(self, AggregationNode::Leaf { .. })
+    }
+
     fn uppers(&self) -> &CountHashSet<I> {
         match self {
             AggregationNode::Leaf { uppers, .. } => uppers,
