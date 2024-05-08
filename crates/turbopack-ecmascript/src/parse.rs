@@ -46,7 +46,7 @@ use crate::{
 #[allow(clippy::large_enum_variant)]
 pub enum ParseResult {
     Ok {
-        #[turbo_tasks(trace_ignore)]
+        #[turbo_tasks(debug_ignore, trace_ignore)]
         program: Program,
         #[turbo_tasks(debug_ignore, trace_ignore)]
         comments: Arc<ImmutableComments>,
