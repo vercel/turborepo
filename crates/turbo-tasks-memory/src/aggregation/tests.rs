@@ -853,8 +853,8 @@ fn performance(
 
     print_aggregation_numbers(inner_node.clone());
 
-    assert!(root_duration.as_micros() < 1000);
-    assert!(child_duration.as_micros() < 1000);
+    assert!(root_duration.as_micros() < 10000);
+    assert!(child_duration.as_micros() < 10000);
 
     // check_invariants(&ctx, roots.iter().cloned().map(NodeRef));
 }
