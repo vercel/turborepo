@@ -16,23 +16,15 @@ pub trait RootQuery {
     fn result(self) -> Self::Result;
 }
 
+/// Queries the root node of an aggregation tree.
 pub fn query_root_info<C: AggregationContext, Q: RootQuery<Data = C::Data>>(
     ctx: &C,
-    query: Q,
+    mut query: Q,
     node_id: C::NodeRef,
 ) -> Q::Result {
     let mut queue = StackVec::new();
     queue.push(node_id);
-    let visited = AutoSet::new();
-    process_queue(ctx, query, queue, visited)
-}
-
-fn process_queue<C: AggregationContext, Q: RootQuery<Data = C::Data>>(
-    ctx: &C,
-    mut query: Q,
-    mut queue: StackVec<C::NodeRef>,
-    mut visited: AutoSet<C::NodeRef>,
-) -> Q::Result {
+    let mut visited = AutoSet::new();
     while let Some(node_id) = queue.pop() {
         let node = ctx.node(&node_id);
         match &*node {

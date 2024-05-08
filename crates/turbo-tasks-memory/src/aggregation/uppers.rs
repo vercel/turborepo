@@ -7,6 +7,8 @@ use super::{
 };
 use crate::count_hash_set::RemovePositiveCountResult;
 
+/// Adds an upper node to a node. Returns the number of affected nodes by this
+/// operation. This will also propagate the followers to the new upper node.
 pub fn add_upper<C: AggregationContext>(
     ctx: &C,
     balance_queue: &mut BalanceQueue<C::NodeRef>,
@@ -32,6 +34,9 @@ pub struct AddUpperCountResult {
     pub affected_nodes: usize,
 }
 
+/// Adds an upper node to a node with a given count. Returns the new count of
+/// the upper node and the number of affected nodes by this operation. This will
+/// also propagate the followers to the new upper node.
 pub fn add_upper_count<C: AggregationContext>(
     ctx: &C,
     balance_queue: &mut BalanceQueue<C::NodeRef>,
@@ -80,6 +85,8 @@ pub fn add_upper_count<C: AggregationContext>(
     }
 }
 
+/// Called when an upper node was added to a node. This will propagate the
+/// followers to the new upper node.
 pub fn on_added<C: AggregationContext>(
     ctx: &C,
     balance_queue: &mut BalanceQueue<C::NodeRef>,
@@ -143,6 +150,7 @@ pub fn on_added<C: AggregationContext>(
     affected_nodes
 }
 
+/// Removes an upper node from a node with a count.
 pub fn remove_upper_count<C: AggregationContext>(
     ctx: &C,
     balance_queue: &mut BalanceQueue<C::NodeRef>,
@@ -167,6 +175,9 @@ pub struct RemovePositiveUpperCountResult {
     pub remaining_count: isize,
 }
 
+/// Removes a positive count of an upper node from a node.
+/// Returns the removed count and the remaining count of the upper node.
+/// This will also propagate the followers to the removed upper node.
 pub fn remove_positive_upper_count<C: AggregationContext>(
     ctx: &C,
     balance_queue: &mut BalanceQueue<C::NodeRef>,
@@ -196,6 +207,8 @@ pub fn remove_positive_upper_count<C: AggregationContext>(
     }
 }
 
+/// Called when an upper node was removed from a node. This will propagate the
+/// followers to the removed upper node.
 pub fn on_removed<C: AggregationContext>(
     ctx: &C,
     balance_queue: &mut BalanceQueue<C::NodeRef>,
@@ -239,15 +252,5 @@ pub fn on_removed<C: AggregationContext>(
             remove_prepared.apply(ctx);
             prepared.apply(ctx, balance_queue);
         }
-    }
-}
-
-pub(super) fn get_aggregated_remove_change<C: AggregationContext>(
-    ctx: &C,
-    guard: &C::Guard<'_>,
-) -> Option<C::DataChange> {
-    match &**guard {
-        AggregationNode::Leaf { .. } => guard.get_remove_change(),
-        AggregationNode::Aggegating(aggegating) => ctx.data_to_remove_change(&aggegating.data),
     }
 }
