@@ -4,9 +4,6 @@ use super::{
     balance_queue::BalanceQueue, AggegatingNode, AggregationContext, AggregationNode,
     AggregationNodeGuard, PreparedInternalOperation, PreparedOperation, StackVec,
 };
-#[cfg(test)]
-pub(super) const LEAF_NUMBER: u32 = 8;
-#[cfg(not(test))]
 pub(super) const LEAF_NUMBER: u32 = 64;
 
 impl<I: Clone + Eq + Hash, D> AggregationNode<I, D> {

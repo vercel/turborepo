@@ -600,7 +600,7 @@ fn chain() {
         let aggregated = aggregation_data(&ctx, &current);
         assert_eq!(aggregated.value, 15050);
     }
-    assert_eq!(ctx.additions.load(Ordering::SeqCst), 192);
+    assert_eq!(ctx.additions.load(Ordering::SeqCst), 122);
     ctx.additions.store(0, Ordering::SeqCst);
     check_invariants(&ctx, once(current.clone()));
 
@@ -611,8 +611,8 @@ fn chain() {
     check_invariants(&ctx, once(current.clone()));
 
     leaf.incr(&ctx);
-    // The change need to propagate through 3 aggregated nodes
-    assert_eq!(ctx.additions.load(Ordering::SeqCst), 3);
+    // The change need to propagate through 2 aggregated nodes
+    assert_eq!(ctx.additions.load(Ordering::SeqCst), 2);
     ctx.additions.store(0, Ordering::SeqCst);
 
     {
@@ -642,7 +642,7 @@ fn chain() {
 
     leaf.incr(&ctx);
     // This should be less the 20 to prove that we are reusing trees
-    assert_eq!(ctx.additions.load(Ordering::SeqCst), 4);
+    assert_eq!(ctx.additions.load(Ordering::SeqCst), 3);
     ctx.additions.store(0, Ordering::SeqCst);
 
     {
@@ -680,10 +680,10 @@ fn chain_double_connected() {
 
     {
         let aggregated = aggregation_data(&ctx, &current);
-        assert_eq!(aggregated.value, 26049);
+        assert_eq!(aggregated.value, 13188);
     }
     check_invariants(&ctx, once(current.clone()));
-    assert_eq!(ctx.additions.load(Ordering::SeqCst), 967);
+    assert_eq!(ctx.additions.load(Ordering::SeqCst), 285);
     ctx.additions.store(0, Ordering::SeqCst);
 
     print(&ctx, &current, true);
@@ -761,7 +761,7 @@ fn rectangle_tree() {
 #[case::large_subgraph_b(5, 5, 10, 5)]
 #[case::large_subgraph_c(1, 9, 10, 5)]
 #[case::large_subgraph_d(6, 0, 10, 5)]
-#[case::large_subgraph_d(0, 10, 10, 5)]
+#[case::large_subgraph_e(0, 10, 10, 5)]
 #[case::many_roots_large_subgraph(5000, 5000, 10, 5)]
 fn performance(
     #[case] initial_root_count: u32,

@@ -12,9 +12,6 @@ use super::{
     PreparedOperation, StackVec,
 };
 
-#[cfg(test)]
-const BUFFER_SPACE: u32 = 1;
-#[cfg(not(test))]
 const BUFFER_SPACE: u32 = 2;
 
 const MAX_UPPERS_TIMES_CHILDREN: usize = 32;

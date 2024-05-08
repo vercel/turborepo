@@ -4,14 +4,8 @@ use super::{
     AggregationContext, StackVec,
 };
 
-#[cfg(test)]
-pub const MAX_UPPERS: usize = 4;
-#[cfg(not(test))]
 pub const MAX_UPPERS: usize = 512;
 
-#[cfg(test)]
-pub const MAX_FOLLOWERS: usize = 4;
-#[cfg(not(test))]
 pub const MAX_FOLLOWERS: usize = 128;
 
 /// Optimize the aggregation number for a node based on a list of upper nodes.
