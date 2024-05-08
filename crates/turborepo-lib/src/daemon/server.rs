@@ -29,7 +29,7 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf
 use turborepo_filewatch::{
     cookies::CookieWriter,
     globwatcher::{Error as GlobWatcherError, GlobError, GlobSet, GlobWatcher},
-    hash_watcher::{Error as HashWatcherError, HashSpec, HashWatcher},
+    hash_watcher::{Error as HashWatcherError, HashSpec, HashWatcher, InputGlobs},
     package_watcher::{PackageWatchError, PackageWatcher},
     FileSystemWatcher, WatchError,
 };
@@ -136,7 +136,11 @@ impl FileWatching {
             scm,
         ));
 
-        let package_changes_watcher = Arc::new(PackageChangesWatcher::new(repo_root, recv.clone()));
+        let package_changes_watcher = Arc::new(PackageChangesWatcher::new(
+            repo_root,
+            recv.clone(),
+            hash_watcher.clone(),
+        ));
 
         Ok(FileWatching {
             watcher,
@@ -359,16 +363,12 @@ impl TurboGrpcServiceInner {
         package_path: String,
         inputs: Vec<String>,
     ) -> Result<HashMap<String, String>, RpcError> {
-        let glob_set = if inputs.is_empty() {
-            None
-        } else {
-            Some(GlobSet::from_raw_unfiltered(inputs)?)
-        };
+        let inputs = InputGlobs::from_raw(inputs)?;
         let package_path = AnchoredSystemPathBuf::try_from(package_path.as_str())
             .map_err(|e| RpcError::InvalidAnchoredPath(package_path, e))?;
         let hash_spec = HashSpec {
             package_path,
-            inputs: glob_set,
+            inputs,
         };
         self.file_watching
             .hash_watcher

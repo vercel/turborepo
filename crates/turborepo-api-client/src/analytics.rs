@@ -1,19 +1,18 @@
-use async_trait::async_trait;
+use std::future::Future;
+
 use reqwest::Method;
 pub use turborepo_vercel_api::{AnalyticsEvent, CacheEvent, CacheSource};
 
 use crate::{retry, APIAuth, APIClient, Error};
 
-#[async_trait]
 pub trait AnalyticsClient {
-    async fn record_analytics(
+    fn record_analytics(
         &self,
         api_auth: &APIAuth,
         events: Vec<AnalyticsEvent>,
-    ) -> Result<(), Error>;
+    ) -> impl Future<Output = Result<(), Error>> + Send;
 }
 
-#[async_trait]
 impl AnalyticsClient for APIClient {
     #[tracing::instrument(skip_all)]
     async fn record_analytics(

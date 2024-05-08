@@ -10859,6 +10859,7 @@ dependencies = [
  "turbopack-static",
  "turbopack-swc-utils",
  "turbopack-test-utils",
+ "turbopack-trace-server",
  "turbopack-trace-utils",
 ]
 
@@ -10920,6 +10921,7 @@ dependencies = [
  "turbopack-node",
  "turbopack-nodejs",
  "turbopack-resolve",
+ "turbopack-trace-server",
  "turbopack-trace-utils",
  "webbrowser",
 ]
@@ -11406,7 +11408,6 @@ dependencies = [
 name = "turborepo-analytics"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "futures 0.3.30",
  "thiserror",
  "tokio",
@@ -11421,7 +11422,6 @@ name = "turborepo-api-client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-trait",
  "chrono",
  "http",
  "lazy_static",
@@ -11648,6 +11648,7 @@ dependencies = [
  "pprof",
  "pretty_assertions",
  "prost 0.12.3",
+ "radix_trie",
  "rand 0.8.5",
  "rayon",
  "regex",
@@ -11814,7 +11815,6 @@ dependencies = [
 name = "turborepo-telemetry"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "chrono",
  "config",
  "futures 0.3.30",
