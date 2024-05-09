@@ -676,6 +676,46 @@ mod tests {
     }
 
     #[test]
+    fn test_get_package_jsons_behind_symlink() {
+        let tmpdir = tempdir().unwrap();
+        let top_dir = AbsoluteSystemPathBuf::try_from(tmpdir.path()).unwrap();
+        let repo = top_dir.join_component("my-repo");
+        let root_json = repo.join_component("package.json");
+        let pkg_foo_json = repo.join_components(&["packages", "foo", "package.json"]);
+        let bar_symlink = repo.join_components(&["packages", "bar"]);
+        let pkg_bar_json = top_dir.join_components(&["bar", "package.json"]);
+
+        pkg_foo_json.ensure_dir().unwrap();
+        pkg_bar_json.ensure_dir().unwrap();
+
+        root_json.create_with_contents(r#"{"name": "my-repo", "packageManager": "npm@10.0.0", "workspaces": ["packages/*"]}"#).unwrap();
+        pkg_foo_json
+            .create_with_contents(r#"{"name": "foo"}"#)
+            .unwrap();
+        pkg_bar_json
+            .create_with_contents(r#"{"name": "bar"}"#)
+            .unwrap();
+        bar_symlink
+            .symlink_to_dir(["..", "..", "bar"].join(std::path::MAIN_SEPARATOR_STR))
+            .unwrap();
+
+        let mut packages = PackageManager::Npm
+            .get_package_jsons(&repo)
+            .unwrap()
+            .collect::<Vec<_>>();
+
+        packages.sort();
+
+        assert_eq!(
+            packages,
+            vec![
+                top_dir.join_components(&["bar", "package.json"]),
+                top_dir.join_components(&["my-repo", "packages", "foo", "package.json"]),
+            ]
+        );
+    }
+
+    #[test]
     fn test_get_workspace_ignores() {
         let root = repo_root();
         let fixtures = root.join_components(&[
