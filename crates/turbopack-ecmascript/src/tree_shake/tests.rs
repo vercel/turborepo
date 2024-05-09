@@ -190,7 +190,7 @@ fn run(input: PathBuf) {
                     modules,
                     entrypoints,
                     ..
-                } = g.split_module(&uri_of_module, analyzer.items);
+                } = g.split_module(analyzer.items);
 
                 writeln!(s, "# Entrypoints\n\n```\n{:#?}\n```\n\n", entrypoints).unwrap();
 

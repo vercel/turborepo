@@ -25,7 +25,7 @@ use swc_core::{
 
 use super::{
     util::{ids_captured_by, ids_used_by, ids_used_by_ignoring_nested},
-    Key,
+    Key, TURBOPACK_PART_IMPORT_SOURCE,
 };
 use crate::magic_identifier;
 
@@ -186,8 +186,6 @@ pub(super) enum Mode {
 pub(super) struct SplitModuleResult {
     pub entrypoints: FxHashMap<Key, u32>,
 
-    pub uri_of_module: JsWord,
-
     /// Dependency between parts.
     pub part_deps: FxHashMap<u32, Vec<u32>>,
     pub modules: Vec<Module>,
@@ -221,11 +219,7 @@ impl DepGraph {
     /// a usage side, `import` and `export` will be added.
     ///
     /// Note: ESM imports are immutable, but we do not handle it.
-    pub(super) fn split_module(
-        &self,
-        uri_of_module: &JsWord,
-        data: &FxHashMap<ItemId, ItemData>,
-    ) -> SplitModuleResult {
+    pub(super) fn split_module(&self, data: &FxHashMap<ItemId, ItemData>) -> SplitModuleResult {
         let groups = self.finalize(data);
         let mut exports = FxHashMap::default();
         let mut part_deps = FxHashMap::<_, Vec<_>>::default();
@@ -308,7 +302,7 @@ impl DepGraph {
                     .push(ModuleItem::ModuleDecl(ModuleDecl::Import(ImportDecl {
                         span: DUMMY_SP,
                         specifiers,
-                        src: Box::new(uri_of_module.clone().into()),
+                        src: Box::new(TURBOPACK_PART_IMPORT_SOURCE.into()),
                         type_only: false,
                         with: Some(Box::new(create_turbopack_part_id_assert(PartId::Internal(
                             dep,
@@ -364,7 +358,6 @@ impl DepGraph {
         SplitModuleResult {
             entrypoints: exports,
             part_deps,
-            uri_of_module: uri_of_module.clone(),
             modules,
         }
     }

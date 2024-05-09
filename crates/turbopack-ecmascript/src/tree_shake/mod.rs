@@ -6,17 +6,16 @@ use rustc_hash::FxHashMap;
 use swc_core::{
     atoms::Atom,
     common::{util::take::Take, SyntaxContext, DUMMY_SP, GLOBALS},
-    ecma::{
-        ast::{
-            ExportAll, Id, KeyValueProp, Module, ModuleDecl, ModuleItem, ObjectLit, Program, Prop,
-            PropOrSpread,
-        },
-        utils::quote_ident,
+    ecma::ast::{
+        ExportAll, Id, KeyValueProp, Module, ModuleDecl, ModuleItem, ObjectLit, Program, Prop,
+        PropOrSpread,
     },
 };
-use turbo_tasks::{vdbg, Vc};
+use turbo_tasks::{vdbg, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
+    ident::AssetIdent,
+    module::Module as _,
     resolve::{origin::ResolveOrigin, ModulePart},
     source::Source,
 };
@@ -34,6 +33,8 @@ pub mod merge;
 #[cfg(test)]
 mod tests;
 mod util;
+
+const TURBOPACK_PART_IMPORT_SOURCE: &str = "__TURBOPACK_PART__";
 
 pub struct Analyzer<'a> {
     g: &'a mut DepGraph,
@@ -316,6 +317,8 @@ async fn get_part_id(result: &SplitResult, part: Vc<ModulePart>) -> Result<u32> 
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
 pub(crate) enum SplitResult {
     Ok {
+        asset_ident: Vc<AssetIdent>,
+
         /// `u32` is a index to `modules`.
         #[turbo_tasks(trace_ignore)]
         entrypoints: FxHashMap<Key, u32>,
@@ -325,9 +328,6 @@ pub(crate) enum SplitResult {
 
         #[turbo_tasks(trace_ignore)]
         deps: FxHashMap<u32, Vec<u32>>,
-
-        #[turbo_tasks(trace_ignore)]
-        uri_of_module: Atom,
     },
     Unparseable,
     NotFound,
@@ -343,17 +343,16 @@ impl PartialEq for SplitResult {
 }
 
 #[turbo_tasks::function]
-pub(super) fn split_module(asset: Vc<EcmascriptModuleAsset>) -> Vc<SplitResult> {
-    split(asset.origin_path(), asset.source(), asset.parse())
+pub(super) async fn split_module(asset: Vc<EcmascriptModuleAsset>) -> Result<Vc<SplitResult>> {
+    Ok(split(asset.source().ident(), asset.source(), asset.parse()))
 }
 
 #[turbo_tasks::function]
 pub(super) async fn split(
-    path: Vc<FileSystemPath>,
+    ident: Vc<AssetIdent>,
     source: Vc<Box<dyn Source>>,
     parsed: Vc<ParseResult>,
 ) -> Result<Vc<SplitResult>> {
-    let filename = path.await?.file_name().to_string();
     let parse_result = parsed.await?;
 
     match &*parse_result {
@@ -379,8 +378,7 @@ pub(super) async fn split(
                 entrypoints,
                 part_deps,
                 modules,
-                uri_of_module,
-            } = dep_graph.split_module(&format!("./{filename}").into(), &items);
+            } = dep_graph.split_module(&items);
 
             assert_ne!(modules.len(), 0, "modules.len() == 0;\nModule: {module:?}",);
             assert_eq!(
@@ -420,17 +418,11 @@ pub(super) async fn split(
                 })
                 .collect();
 
-            vdbg!(
-                "Creating split result for ",
-                &uri_of_module,
-                &entrypoints,
-                &part_deps
-            );
             Ok(SplitResult::Ok {
+                asset_ident: ident,
                 entrypoints,
                 deps: part_deps,
                 modules,
-                uri_of_module,
             }
             .cell())
         }
@@ -448,8 +440,8 @@ pub(super) async fn part_of_module(
 
     match &*split_data {
         SplitResult::Ok {
+            asset_ident,
             modules,
-            uri_of_module,
             entrypoints,
             deps,
             ..
@@ -474,7 +466,7 @@ pub(super) async fn part_of_module(
                         .body
                         .push(ModuleItem::ModuleDecl(ModuleDecl::ExportAll(ExportAll {
                             span: DUMMY_SP,
-                            src: Box::new(uri_of_module.clone().into()),
+                            src: Box::new(TURBOPACK_PART_IMPORT_SOURCE.into()),
                             type_only: false,
                             with: Some(Box::new(chunk_prop)),
                         })));
@@ -486,7 +478,7 @@ pub(super) async fn part_of_module(
                         .body
                         .push(ModuleItem::ModuleDecl(ModuleDecl::ExportAll(ExportAll {
                             span: DUMMY_SP,
-                            src: Box::new(uri_of_module.clone().into()),
+                            src: Box::new(TURBOPACK_PART_IMPORT_SOURCE.into()),
                             type_only: false,
                             with: Some(Box::new(chunk_prop)),
                         })));
@@ -535,7 +527,7 @@ pub(super) async fn part_of_module(
                             .body
                             .push(ModuleItem::ModuleDecl(ModuleDecl::ExportAll(ExportAll {
                                 span: DUMMY_SP,
-                                src: Box::new(uri_of_module.clone().into()),
+                                src: Box::new(TURBOPACK_PART_IMPORT_SOURCE.into()),
                                 type_only: false,
                                 with: Some(Box::new(chunk_prop)),
                             })));
@@ -566,8 +558,9 @@ pub(super) async fn part_of_module(
 
             if part_id as usize >= modules.len() {
                 bail!(
-                    "part_id is out of range: {part_id} >= {}; uri = {uri_of_module}; entrypoints \
-                     = {entrypoints:?}: part_deps = {deps:?}",
+                    "part_id is out of range: {part_id} >= {}; asset = {}; entrypoints = \
+                     {entrypoints:?}: part_deps = {deps:?}",
+                    asset_ident.to_string().await?,
                     modules.len(),
                 );
             }
