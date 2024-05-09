@@ -4,21 +4,11 @@ use anyhow::{bail, Result};
 use indexmap::IndexSet;
 use rustc_hash::FxHashMap;
 use swc_core::{
-    atoms::Atom,
     common::{util::take::Take, SyntaxContext, DUMMY_SP, GLOBALS},
-    ecma::ast::{
-        ExportAll, Id, KeyValueProp, Module, ModuleDecl, ModuleItem, ObjectLit, Program, Prop,
-        PropOrSpread,
-    },
+    ecma::ast::{ExportAll, Id, Module, ModuleDecl, ModuleItem, Program},
 };
-use turbo_tasks::{vdbg, ValueToString, Vc};
-use turbo_tasks_fs::FileSystemPath;
-use turbopack_core::{
-    ident::AssetIdent,
-    module::Module as _,
-    resolve::{origin::ResolveOrigin, ModulePart},
-    source::Source,
-};
+use turbo_tasks::{ValueToString, Vc};
+use turbopack_core::{ident::AssetIdent, module::Module as _, resolve::ModulePart, source::Source};
 
 pub(crate) use self::graph::{
     create_turbopack_part_id_assert, find_turbopack_part_id_in_asserts, PartId,

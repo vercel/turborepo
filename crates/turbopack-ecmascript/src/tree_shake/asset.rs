@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use turbo_tasks::Vc;
 use turbopack_core::{
     asset::{Asset, AssetContent},
