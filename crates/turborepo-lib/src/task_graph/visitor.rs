@@ -1134,7 +1134,8 @@ impl<W: Write> TaskOutput<W> {
     pub fn finish(self, use_error: bool) -> std::io::Result<Option<Vec<u8>>> {
         match self {
             TaskOutput::Direct(client) => client.finish(use_error),
-            TaskOutput::UI(client) => Ok(Some(client.finish())),
+            TaskOutput::UI(client) if use_error => Ok(Some(client.failed())),
+            TaskOutput::UI(client) => Ok(Some(client.succeeded())),
         }
     }
 
