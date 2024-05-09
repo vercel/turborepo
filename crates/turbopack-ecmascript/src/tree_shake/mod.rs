@@ -24,7 +24,7 @@ pub mod merge;
 mod tests;
 mod util;
 
-const TURBOPACK_PART_IMPORT_SOURCE: &str = "__TURBOPACK_PART__";
+pub(crate) const TURBOPACK_PART_IMPORT_SOURCE: &str = "__TURBOPACK_PART__";
 
 pub struct Analyzer<'a> {
     g: &'a mut DepGraph,
