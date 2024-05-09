@@ -23,7 +23,7 @@ enum Mode {
 /// A visitor which collects variables which are read or written.
 #[derive(Default)]
 pub(crate) struct IdentUsageCollector {
-    only: SyntaxContext,
+    only: [SyntaxContext; 2],
     vars: Vars,
     ignore_nested: bool,
     mode: Mode,
@@ -80,7 +80,7 @@ impl Visit for IdentUsageCollector {
     }
 
     fn visit_ident(&mut self, n: &Ident) {
-        if n.span.ctxt != self.only {
+        if !self.only.contains(&n.span.ctxt) {
             return;
         }
 
@@ -129,7 +129,7 @@ impl Visit for IdentUsageCollector {
 /// evaluation time.
 #[derive(Default)]
 pub(crate) struct CapturedIdCollector {
-    only: SyntaxContext,
+    only: [SyntaxContext; 2],
     vars: Vars,
     is_nested: bool,
     mode: Mode,
@@ -187,7 +187,7 @@ impl Visit for CapturedIdCollector {
             return;
         }
 
-        if n.span.ctxt != self.only {
+        if !self.only.contains(&n.span.ctxt) {
             return;
         }
 
@@ -231,7 +231,7 @@ pub(crate) struct Vars {
 ///
 /// Note: This functions accept `SyntaxContext` to filter out variables which
 /// are not interesting. We only need to analyze top-level variables.
-pub(crate) fn ids_captured_by<N>(n: &N, only: SyntaxContext) -> Vars
+pub(crate) fn ids_captured_by<N>(n: &N, only: [SyntaxContext; 2]) -> Vars
 where
     N: VisitWith<CapturedIdCollector>,
 {
@@ -248,7 +248,7 @@ where
 ///
 /// Note: This functions accept `SyntaxContext` to filter out variables which
 /// are not interesting. We only need to analyze top-level variables.
-pub(crate) fn ids_used_by<N>(n: &N, only: SyntaxContext) -> Vars
+pub(crate) fn ids_used_by<N>(n: &N, only: [SyntaxContext; 2]) -> Vars
 where
     N: VisitWith<IdentUsageCollector>,
 {
@@ -265,7 +265,7 @@ where
 ///
 /// Note: This functions accept `SyntaxContext` to filter out variables which
 /// are not interesting. We only need to analyze top-level variables.
-pub(crate) fn ids_used_by_ignoring_nested<N>(n: &N, only: SyntaxContext) -> Vars
+pub(crate) fn ids_used_by_ignoring_nested<N>(n: &N, only: [SyntaxContext; 2]) -> Vars
 where
     N: VisitWith<IdentUsageCollector>,
 {
