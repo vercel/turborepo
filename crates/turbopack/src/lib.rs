@@ -654,6 +654,14 @@ impl AssetContext for ModuleAssetContext {
     ) -> Result<Vc<ModuleResolveResult>> {
         let context_path = origin_path.parent().resolve().await?;
 
+        // Handle __TURBOPACK_PART__. This is a special request that is used to resolve
+        // to the resolve origin.
+        if let Request::Module { module, .. } = &*request.await? {
+            if module == "__TURBOPACK_PART__" {
+                return Ok(ModuleResolveResult::module());
+            }
+        }
+
         let result = resolve(
             context_path,
             reference_type.clone(),
