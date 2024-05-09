@@ -29,6 +29,7 @@ use crate::{
     code_gen::{CodeGenerateable, CodeGeneration},
     create_visitor, magic_identifier,
     references::util::{request_to_string, throw_module_not_found_expr},
+    tree_shake::{asset::EcmascriptModulePartAsset, TURBOPACK_PART_IMPORT_SOURCE},
 };
 
 #[turbo_tasks::value]
@@ -149,6 +150,21 @@ impl ModuleReference for EsmAssetReference {
         } else {
             EcmaScriptModulesReferenceSubType::Import
         };
+
+        if let Some(part) = self.export_name {
+            if let Request::Module { module, .. } = &*self.request.await? {
+                if module == TURBOPACK_PART_IMPORT_SOURCE {
+                    let full_module = Vc::try_resolve_downcast_type(self.origin)
+                        .await?
+                        .expect("EsmAssetReference origin should be a EcmascriptModuleAsset");
+
+                    let module =
+                        EcmascriptModulePartAsset::new(full_module, part, self.import_externals);
+
+                    return Ok(ModuleResolveResult::module(Vc::upcast(module)).into());
+                }
+            }
+        }
 
         Ok(esm_resolve(
             self.get_origin().resolve().await?,
