@@ -114,6 +114,7 @@ function internal() {
 - Hoisted
 - Declares: `internal`
 - Reads (eventual): `upper`, `foobar`
+- Write: `internal`
 
 ## Item 12: Stmt 10, `Normal`
 
@@ -127,6 +128,7 @@ export function external1() {
 - Hoisted
 - Declares: `external1`
 - Reads (eventual): `internal`, `foobar`
+- Write: `external1`
 
 ## Item 13: Stmt 11, `Normal`
 
@@ -139,6 +141,7 @@ export function external2() {
 
 - Hoisted
 - Declares: `external2`
+- Write: `external2`
 - Write (eventual): `foobar`
 
 # Phase 1
@@ -455,6 +458,7 @@ export { external1 };
 function external1() {
     return internal() + foobar;
 }
+export { external1 };
 
 ```
 ## Part 4
@@ -469,6 +473,7 @@ export { external2 };
 function external2() {
     foobar += ".";
 }
+export { external2 };
 
 ```
 ## Part 5
@@ -543,6 +548,7 @@ import { upper } from "module";
 function internal() {
     return upper(foobar);
 }
+export { internal };
 
 ```
 ## Merged (module eval)
@@ -651,6 +657,8 @@ function internal() {
 function external1() {
     return internal() + foobar;
 }
+export { internal };
+export { external1 };
 
 ```
 ## Part 4
@@ -659,6 +667,7 @@ export { external2 };
 function external2() {
     foobar += ".";
 }
+export { external2 };
 
 ```
 ## Part 5
@@ -743,6 +752,8 @@ function internal() {
 function external1() {
     return internal() + foobar;
 }
+export { internal };
+export { external1 };
 
 ```
 # Entrypoints
@@ -785,9 +796,12 @@ function internal() {
 function external1() {
     return internal() + foobar;
 }
+export { internal };
+export { external1 };
 export { external2 };
 function external2() {
     foobar += ".";
 }
+export { external2 };
 
 ```

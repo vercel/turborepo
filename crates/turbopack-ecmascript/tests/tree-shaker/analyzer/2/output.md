@@ -14,6 +14,7 @@ export function external1() {
 - Hoisted
 - Declares: `external1`
 - Reads (eventual): `internal`, `foobar`
+- Write: `external1`
 
 ## Item 2: Stmt 1, `ImportOfModule`
 
@@ -127,6 +128,7 @@ function internal() {
 - Hoisted
 - Declares: `internal`
 - Reads (eventual): `upper`, `foobar`
+- Write: `internal`
 
 ## Item 13: Stmt 11, `Normal`
 
@@ -139,6 +141,7 @@ export function external2() {
 
 - Hoisted
 - Declares: `external2`
+- Write: `external2`
 - Write (eventual): `foobar`
 
 ## Item 14: Stmt 12, `ImportOfModule`
@@ -456,6 +459,7 @@ export { external1 };
 function external1() {
     return internal() + foobar;
 }
+export { external1 };
 
 ```
 ## Part 2
@@ -492,6 +496,7 @@ export { external2 };
 function external2() {
     foobar += ".";
 }
+export { external2 };
 
 ```
 ## Part 5
@@ -566,6 +571,7 @@ import { upper } from "module";
 function internal() {
     return upper(foobar);
 }
+export { internal };
 
 ```
 ## Merged (module eval)
@@ -652,6 +658,8 @@ import { upper } from "module";
 function internal() {
     return upper(foobar);
 }
+export { external1 };
+export { internal };
 
 ```
 ## Part 2
@@ -684,6 +692,7 @@ export { external2 };
 function external2() {
     foobar += ".";
 }
+export { external2 };
 
 ```
 ## Part 5

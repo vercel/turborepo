@@ -11,6 +11,7 @@ function d1() {}
 
 - Hoisted
 - Declares: `d1`
+- Write: `d1`
 
 ## Item 2: Stmt 1, `Normal`
 
@@ -21,6 +22,7 @@ function d2() {}
 
 - Hoisted
 - Declares: `d2`
+- Write: `d2`
 
 ## Item 3: Stmt 2, `Normal`
 
@@ -31,6 +33,7 @@ function d3() {}
 
 - Hoisted
 - Declares: `d3`
+- Write: `d3`
 
 ## Item 4: Stmt 3, `Normal`
 
@@ -44,6 +47,7 @@ export function c1_1() {
 - Hoisted
 - Declares: `c1_1`
 - Reads (eventual): `c1_2`
+- Write: `c1_1`
 
 ## Item 5: Stmt 4, `Normal`
 
@@ -57,6 +61,7 @@ function c1_2() {
 - Hoisted
 - Declares: `c1_2`
 - Reads (eventual): `c1_3`, `d1`
+- Write: `c1_2`
 
 ## Item 6: Stmt 5, `Normal`
 
@@ -70,6 +75,7 @@ export function c1_3() {
 - Hoisted
 - Declares: `c1_3`
 - Reads (eventual): `c1_1`, `d2`
+- Write: `c1_3`
 
 ## Item 7: Stmt 6, `Normal`
 
@@ -83,6 +89,7 @@ function c2_1() {
 - Hoisted
 - Declares: `c2_1`
 - Reads (eventual): `c2_2`, `d3`
+- Write: `c2_1`
 
 ## Item 8: Stmt 7, `Normal`
 
@@ -96,6 +103,7 @@ export function c2_2() {
 - Hoisted
 - Declares: `c2_2`
 - Reads (eventual): `c2_3`
+- Write: `c2_2`
 
 ## Item 9: Stmt 8, `Normal`
 
@@ -109,6 +117,7 @@ function c2_3() {
 - Hoisted
 - Declares: `c2_3`
 - Reads (eventual): `c2_1`
+- Write: `c2_3`
 
 ## Item 10: Stmt 9, `Normal`
 
@@ -408,6 +417,9 @@ function c1_2() {
 function c1_3() {
     return c1_1(d2);
 }
+export { c1_1 };
+export { c1_2 };
+export { c1_3 };
 
 ```
 ## Part 5
@@ -424,21 +436,27 @@ function c2_2() {
 function c2_3() {
     return c2_1();
 }
+export { c2_1 };
+export { c2_2 };
+export { c2_3 };
 
 ```
 ## Part 6
 ```js
 function d1() {}
+export { d1 };
 
 ```
 ## Part 7
 ```js
 function d2() {}
+export { d2 };
 
 ```
 ## Part 8
 ```js
 function d3() {}
+export { d3 };
 
 ```
 ## Merged (module eval)
@@ -536,6 +554,9 @@ function c1_2() {
 function c1_3() {
     return c1_1(d2);
 }
+export { c1_1 };
+export { c1_2 };
+export { c1_3 };
 
 ```
 ## Part 5
@@ -552,21 +573,27 @@ function c2_2() {
 function c2_3() {
     return c2_1();
 }
+export { c2_1 };
+export { c2_2 };
+export { c2_3 };
 
 ```
 ## Part 6
 ```js
 function d1() {}
+export { d1 };
 
 ```
 ## Part 7
 ```js
 function d2() {}
+export { d2 };
 
 ```
 ## Part 8
 ```js
 function d3() {}
+export { d3 };
 
 ```
 ## Merged (module eval)

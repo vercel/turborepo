@@ -140,6 +140,7 @@ function patchFetch() {
 - Hoisted
 - Declares: `patchFetch`
 - Reads (eventual): `_patchFetch`, `serverHooks`, `staticGenerationAsyncStorage`
+- Write: `patchFetch`
 
 ## Item 13: Stmt 8, `Normal`
 

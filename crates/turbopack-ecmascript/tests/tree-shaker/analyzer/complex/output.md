@@ -43,6 +43,7 @@ function getDog() {
 - Hoisted
 - Declares: `getDog`
 - Reads (eventual): `dog`
+- Write: `getDog`
 
 ## Item 5: Stmt 4, `Normal`
 
@@ -74,6 +75,7 @@ function setDog(newDog) {
 
 - Hoisted
 - Declares: `setDog`
+- Write: `setDog`
 - Write (eventual): `dog`
 
 ## Item 8: Stmt 7, `Normal`
@@ -143,6 +145,7 @@ export function getChimera() {
 - Hoisted
 - Declares: `getChimera`
 - Reads (eventual): `cat`, `dog`
+- Write: `getChimera`
 
 # Phase 1
 ```mermaid
@@ -481,6 +484,7 @@ export { getChimera };
 function getChimera() {
     return cat + dog;
 }
+export { getChimera };
 
 ```
 ## Part 5
@@ -511,6 +515,7 @@ const dogRef = {
     get: getDog,
     set: setDog
 };
+export { setDog };
 export { dogRef };
 
 ```
@@ -554,6 +559,7 @@ import "__TURBOPACK_PART__" assert {
 function getDog() {
     return dog;
 }
+export { getDog };
 
 ```
 ## Part 10
@@ -702,6 +708,8 @@ const dogRef = {
     get: getDog,
     set: setDog
 };
+export { getDog };
+export { setDog };
 export { dogRef };
 
 ```
@@ -744,6 +752,7 @@ export { getChimera };
 function getChimera() {
     return cat + dog;
 }
+export { getChimera };
 
 ```
 ## Part 5

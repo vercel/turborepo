@@ -38,6 +38,7 @@ function getSocketProtocol(assetPrefix) {
 - Hoisted
 - Declares: `getSocketProtocol`
 - Reads (eventual): `location`, `URL`
+- Write: `getSocketProtocol`
 
 ## Item 4: Stmt 3, `Normal`
 
@@ -51,6 +52,7 @@ export function addMessageListener(cb) {
 - Hoisted
 - Declares: `addMessageListener`
 - Reads (eventual): `eventCallbacks`
+- Write: `addMessageListener`
 
 ## Item 5: Stmt 4, `Normal`
 
@@ -65,6 +67,7 @@ export function sendMessage(data) {
 - Hoisted
 - Declares: `sendMessage`
 - Reads (eventual): `source`
+- Write: `sendMessage`
 
 ## Item 6: Stmt 5, `Normal`
 
@@ -116,6 +119,7 @@ export function connectHMR(options) {
 - Hoisted
 - Declares: `connectHMR`
 - Reads (eventual): `source`, `console`, `eventCallbacks`, `JSON`, `setTimeout`, `location`, `getSocketProtocol`, `window`
+- Write: `connectHMR`
 - Write (eventual): `source`
 
 # Phase 1
@@ -250,6 +254,7 @@ export { addMessageListener };
 function addMessageListener(cb) {
     eventCallbacks.push(cb);
 }
+export { addMessageListener };
 
 ```
 ## Part 2
@@ -262,6 +267,7 @@ function sendMessage(data) {
     if (!source || source.readyState !== source.OPEN) return;
     return source.send(data);
 }
+export { sendMessage };
 
 ```
 ## Part 3
@@ -321,6 +327,8 @@ function connectHMR(options) {
     }
     init();
 }
+export { getSocketProtocol };
+export { connectHMR };
 
 ```
 ## Part 4
@@ -373,6 +381,7 @@ export { addMessageListener };
 function addMessageListener(cb) {
     eventCallbacks.push(cb);
 }
+export { addMessageListener };
 
 ```
 ## Part 2
@@ -385,6 +394,7 @@ function sendMessage(data) {
     if (!source || source.readyState !== source.OPEN) return;
     return source.send(data);
 }
+export { sendMessage };
 
 ```
 ## Part 3
@@ -444,6 +454,8 @@ function connectHMR(options) {
     }
     init();
 }
+export { getSocketProtocol };
+export { connectHMR };
 
 ```
 ## Part 4

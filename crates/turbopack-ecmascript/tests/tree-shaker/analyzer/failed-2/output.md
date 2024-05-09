@@ -107,6 +107,7 @@ export function createPrerenderState(isDebugSkeleton) {
 
 - Hoisted
 - Declares: `createPrerenderState`
+- Write: `createPrerenderState`
 
 ## Item 11: Stmt 6, `Normal`
 
@@ -135,6 +136,7 @@ export function markCurrentScopeAsDynamic(store, expression) {
 - Hoisted
 - Declares: `markCurrentScopeAsDynamic`
 - Reads (eventual): `getPathname`, `StaticGenBailoutError`, `postponeWithTracking`, `DynamicServerError`
+- Write: `markCurrentScopeAsDynamic`
 
 ## Item 12: Stmt 7, `Normal`
 
@@ -163,6 +165,7 @@ export function trackDynamicDataAccessed(store, expression) {
 - Hoisted
 - Declares: `trackDynamicDataAccessed`
 - Reads (eventual): `getPathname`, `Error`, `StaticGenBailoutError`, `postponeWithTracking`, `DynamicServerError`
+- Write: `trackDynamicDataAccessed`
 
 ## Item 13: Stmt 8, `Normal`
 
@@ -176,6 +179,7 @@ export function Postpone({ reason, prerenderState, pathname }) {
 - Hoisted
 - Declares: `Postpone`
 - Reads (eventual): `postponeWithTracking`
+- Write: `Postpone`
 
 ## Item 14: Stmt 9, `Normal`
 
@@ -190,6 +194,7 @@ export function trackDynamicFetch(store, expression) {
 - Hoisted
 - Declares: `trackDynamicFetch`
 - Reads (eventual): `postponeWithTracking`
+- Write: `trackDynamicFetch`
 
 ## Item 15: Stmt 10, `Normal`
 
@@ -209,6 +214,7 @@ function postponeWithTracking(prerenderState, expression, pathname) {
 - Hoisted
 - Declares: `postponeWithTracking`
 - Reads (eventual): `assertPostpone`, `Error`, `undefined`, `React`
+- Write: `postponeWithTracking`
 
 ## Item 16: Stmt 11, `Normal`
 
@@ -221,6 +227,7 @@ export function usedDynamicAPIs(prerenderState) {
 
 - Hoisted
 - Declares: `usedDynamicAPIs`
+- Write: `usedDynamicAPIs`
 
 ## Item 17: Stmt 12, `Normal`
 
@@ -247,6 +254,7 @@ export function formatDynamicAPIAccesses(prerenderState) {
 
 - Hoisted
 - Declares: `formatDynamicAPIAccesses`
+- Write: `formatDynamicAPIAccesses`
 
 ## Item 18: Stmt 13, `Normal`
 
@@ -262,6 +270,7 @@ function assertPostpone() {
 - Hoisted
 - Declares: `assertPostpone`
 - Reads (eventual): `hasPostpone`, `Error`
+- Write: `assertPostpone`
 
 ## Item 19: Stmt 14, `Normal`
 
@@ -282,6 +291,7 @@ export function createPostponedAbortSignal(reason) {
 - Hoisted
 - Declares: `createPostponedAbortSignal`
 - Reads (eventual): `assertPostpone`, `AbortController`, `React`
+- Write: `createPostponedAbortSignal`
 
 # Phase 1
 ```mermaid
@@ -594,6 +604,7 @@ function createPrerenderState(isDebugSkeleton) {
         dynamicAccesses: []
     };
 }
+export { createPrerenderState };
 
 ```
 ## Part 2
@@ -626,6 +637,7 @@ function markCurrentScopeAsDynamic(store, expression) {
         }
     }
 }
+export { markCurrentScopeAsDynamic };
 
 ```
 ## Part 3
@@ -655,6 +667,7 @@ function trackDynamicDataAccessed(store, expression) {
         }
     }
 }
+export { trackDynamicDataAccessed };
 
 ```
 ## Part 4
@@ -666,6 +679,7 @@ export { Postpone };
 function Postpone({ reason, prerenderState, pathname }) {
     postponeWithTracking(prerenderState, reason, pathname);
 }
+export { Postpone };
 
 ```
 ## Part 5
@@ -678,6 +692,7 @@ function trackDynamicFetch(store, expression) {
     if (!store.prerenderState || store.isUnstableCacheCallback) return;
     postponeWithTracking(store.prerenderState, expression, store.urlPathname);
 }
+export { trackDynamicFetch };
 
 ```
 ## Part 6
@@ -686,6 +701,7 @@ export { usedDynamicAPIs };
 function usedDynamicAPIs(prerenderState) {
     return prerenderState.dynamicAccesses.length > 0;
 }
+export { usedDynamicAPIs };
 
 ```
 ## Part 7
@@ -708,6 +724,7 @@ function formatDynamicAPIAccesses(prerenderState) {
         return `Dynamic API Usage Debug - ${expression}:\n${stack}`;
     });
 }
+export { formatDynamicAPIAccesses };
 
 ```
 ## Part 8
@@ -730,6 +747,7 @@ function createPostponedAbortSignal(reason) {
     }
     return controller.signal;
 }
+export { createPostponedAbortSignal };
 
 ```
 ## Part 9
@@ -757,6 +775,7 @@ function postponeWithTracking(prerenderState, expression, pathname) {
     });
     React.unstable_postpone(reason);
 }
+export { postponeWithTracking };
 
 ```
 ## Part 11
@@ -769,6 +788,7 @@ function assertPostpone() {
         throw new Error(`Invariant: React.unstable_postpone is not defined. This suggests the wrong version of React was loaded. This is a bug in Next.js`);
     }
 }
+export { assertPostpone };
 
 ```
 ## Merged (module eval)
@@ -832,6 +852,7 @@ function createPrerenderState(isDebugSkeleton) {
         dynamicAccesses: []
     };
 }
+export { createPrerenderState };
 
 ```
 ## Part 2
@@ -864,6 +885,7 @@ function markCurrentScopeAsDynamic(store, expression) {
         }
     }
 }
+export { markCurrentScopeAsDynamic };
 
 ```
 ## Part 3
@@ -893,6 +915,7 @@ function trackDynamicDataAccessed(store, expression) {
         }
     }
 }
+export { trackDynamicDataAccessed };
 
 ```
 ## Part 4
@@ -904,6 +927,7 @@ export { Postpone };
 function Postpone({ reason, prerenderState, pathname }) {
     postponeWithTracking(prerenderState, reason, pathname);
 }
+export { Postpone };
 
 ```
 ## Part 5
@@ -916,6 +940,7 @@ function trackDynamicFetch(store, expression) {
     if (!store.prerenderState || store.isUnstableCacheCallback) return;
     postponeWithTracking(store.prerenderState, expression, store.urlPathname);
 }
+export { trackDynamicFetch };
 
 ```
 ## Part 6
@@ -924,6 +949,7 @@ export { usedDynamicAPIs };
 function usedDynamicAPIs(prerenderState) {
     return prerenderState.dynamicAccesses.length > 0;
 }
+export { usedDynamicAPIs };
 
 ```
 ## Part 7
@@ -946,6 +972,7 @@ function formatDynamicAPIAccesses(prerenderState) {
         return `Dynamic API Usage Debug - ${expression}:\n${stack}`;
     });
 }
+export { formatDynamicAPIAccesses };
 
 ```
 ## Part 8
@@ -968,6 +995,7 @@ function createPostponedAbortSignal(reason) {
     }
     return controller.signal;
 }
+export { createPostponedAbortSignal };
 
 ```
 ## Part 9
@@ -995,6 +1023,7 @@ function postponeWithTracking(prerenderState, expression, pathname) {
     });
     React.unstable_postpone(reason);
 }
+export { postponeWithTracking };
 
 ```
 ## Part 11
@@ -1007,6 +1036,7 @@ function assertPostpone() {
         throw new Error(`Invariant: React.unstable_postpone is not defined. This suggests the wrong version of React was loaded. This is a bug in Next.js`);
     }
 }
+export { assertPostpone };
 
 ```
 ## Merged (module eval)
