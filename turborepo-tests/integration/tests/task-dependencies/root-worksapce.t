@@ -11,7 +11,7 @@ This tests asserts that root tasks can depend on workspace#task
   lib-a:build: > echo build-lib-a
   lib-a:build: 
   lib-a:build: build-lib-a
-  //:mytask: cache miss, executing 3ae433af4902b1a0
+  //:mytask: cache miss, executing 8546b6a2ce1f1d1f
   //:mytask: 
   //:mytask: > mytask
   //:mytask: > echo root-mytask
