@@ -319,7 +319,9 @@ pub(crate) enum SplitResult {
         #[turbo_tasks(trace_ignore)]
         deps: FxHashMap<u32, Vec<u32>>,
     },
-    Unparseable,
+    Unparseable {
+        messages: Option<Vec<String>>,
+    },
     NotFound,
 }
 
@@ -417,7 +419,14 @@ pub(super) async fn split(
             .cell())
         }
         ParseResult::NotFound => Ok(SplitResult::NotFound.cell()),
-        _ => Ok(SplitResult::Unparseable.cell()),
+        ParseResult::Ok { .. } => Ok(SplitResult::Unparseable {
+            messages: Some(vec!["The file is a script".to_string()]),
+        }
+        .cell()),
+        ParseResult::Unparseable { messages } => Ok(SplitResult::Unparseable {
+            messages: messages.clone(),
+        }
+        .cell()),
     }
 }
 
@@ -557,7 +566,10 @@ pub(super) async fn part_of_module(
 
             Ok(modules[part_id as usize])
         }
-        SplitResult::Unparseable => Ok(ParseResult::Unparseable { messages: None }.cell()),
+        SplitResult::Unparseable { messages } => Ok(ParseResult::Unparseable {
+            messages: messages.clone(),
+        }
+        .cell()),
         SplitResult::NotFound => Ok(ParseResult::NotFound.cell()),
     }
 }
