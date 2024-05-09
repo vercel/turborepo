@@ -24,6 +24,7 @@ type Hash = String;
 pub struct GlobSet {
     include: HashMap<String, wax::Glob<'static>>,
     exclude: Any<'static>,
+    // Note that these globs do not include the leading '!' character
     exclude_raw: BTreeSet<String>,
 }
 
