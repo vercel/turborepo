@@ -37,6 +37,7 @@ function getSocketProtocol(assetPrefix) {
 
 - Hoisted
 - Declares: `getSocketProtocol`
+- Reads (eventual): `location`, `URL`
 
 ## Item 4: Stmt 3, `Normal`
 
@@ -114,7 +115,7 @@ export function connectHMR(options) {
 
 - Hoisted
 - Declares: `connectHMR`
-- Reads (eventual): `source`, `eventCallbacks`, `getSocketProtocol`
+- Reads (eventual): `source`, `console`, `eventCallbacks`, `JSON`, `setTimeout`, `location`, `getSocketProtocol`, `window`
 - Write (eventual): `source`
 
 # Phase 1
@@ -242,7 +243,7 @@ graph TD
 ```
 ## Part 1
 ```js
-import { eventCallbacks } from "entry.js" assert {
+import { eventCallbacks } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
 export { addMessageListener };
@@ -253,7 +254,7 @@ function addMessageListener(cb) {
 ```
 ## Part 2
 ```js
-import { source } from "entry.js" assert {
+import { source } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
 export { sendMessage };
@@ -265,10 +266,10 @@ function sendMessage(data) {
 ```
 ## Part 3
 ```js
-import { source } from "entry.js" assert {
+import { source } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
-import { eventCallbacks } from "entry.js" assert {
+import { eventCallbacks } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
 export { connectHMR };
@@ -365,7 +366,7 @@ export { eventCallbacks };
 ```
 ## Part 1
 ```js
-import { eventCallbacks } from "entry.js" assert {
+import { eventCallbacks } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
 export { addMessageListener };
@@ -376,7 +377,7 @@ function addMessageListener(cb) {
 ```
 ## Part 2
 ```js
-import { source } from "entry.js" assert {
+import { source } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
 export { sendMessage };
@@ -388,10 +389,10 @@ function sendMessage(data) {
 ```
 ## Part 3
 ```js
-import { source } from "entry.js" assert {
+import { source } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
-import { eventCallbacks } from "entry.js" assert {
+import { eventCallbacks } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
 export { connectHMR };

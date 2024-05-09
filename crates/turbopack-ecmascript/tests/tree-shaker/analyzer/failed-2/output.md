@@ -162,7 +162,7 @@ export function trackDynamicDataAccessed(store, expression) {
 
 - Hoisted
 - Declares: `trackDynamicDataAccessed`
-- Reads (eventual): `getPathname`, `StaticGenBailoutError`, `postponeWithTracking`, `DynamicServerError`
+- Reads (eventual): `getPathname`, `Error`, `StaticGenBailoutError`, `postponeWithTracking`, `DynamicServerError`
 
 ## Item 13: Stmt 8, `Normal`
 
@@ -208,7 +208,7 @@ function postponeWithTracking(prerenderState, expression, pathname) {
 
 - Hoisted
 - Declares: `postponeWithTracking`
-- Reads (eventual): `assertPostpone`, `React`
+- Reads (eventual): `assertPostpone`, `Error`, `undefined`, `React`
 
 ## Item 16: Stmt 11, `Normal`
 
@@ -261,7 +261,7 @@ function assertPostpone() {
 
 - Hoisted
 - Declares: `assertPostpone`
-- Reads (eventual): `hasPostpone`
+- Reads (eventual): `hasPostpone`, `Error`
 
 ## Item 19: Stmt 14, `Normal`
 
@@ -281,7 +281,7 @@ export function createPostponedAbortSignal(reason) {
 
 - Hoisted
 - Declares: `createPostponedAbortSignal`
-- Reads (eventual): `assertPostpone`, `React`
+- Reads (eventual): `assertPostpone`, `AbortController`, `React`
 
 # Phase 1
 ```mermaid
@@ -598,10 +598,10 @@ function createPrerenderState(isDebugSkeleton) {
 ```
 ## Part 2
 ```js
-import { DynamicServerError, StaticGenBailoutError, getPathname } from "entry.js" assert {
+import { DynamicServerError, StaticGenBailoutError, getPathname } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
-import { postponeWithTracking } from "entry.js" assert {
+import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
 };
 export { markCurrentScopeAsDynamic };
@@ -630,7 +630,7 @@ function markCurrentScopeAsDynamic(store, expression) {
 ```
 ## Part 3
 ```js
-import { postponeWithTracking } from "entry.js" assert {
+import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
 };
 export { trackDynamicDataAccessed };
@@ -659,7 +659,7 @@ function trackDynamicDataAccessed(store, expression) {
 ```
 ## Part 4
 ```js
-import { postponeWithTracking } from "entry.js" assert {
+import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
 };
 export { Postpone };
@@ -670,7 +670,7 @@ function Postpone({ reason, prerenderState, pathname }) {
 ```
 ## Part 5
 ```js
-import { postponeWithTracking } from "entry.js" assert {
+import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
 };
 export { trackDynamicFetch };
@@ -712,10 +712,10 @@ function formatDynamicAPIAccesses(prerenderState) {
 ```
 ## Part 8
 ```js
-import { assertPostpone } from "entry.js" assert {
+import { assertPostpone } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
-import { React } from "entry.js" assert {
+import { React } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
 };
 export { createPostponedAbortSignal };
@@ -734,7 +734,7 @@ function createPostponedAbortSignal(reason) {
 ```
 ## Part 9
 ```js
-import { React } from "entry.js" assert {
+import { React } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
 };
 import React from 'react';
@@ -744,7 +744,7 @@ export { hasPostpone };
 ```
 ## Part 10
 ```js
-import { assertPostpone } from "entry.js" assert {
+import { assertPostpone } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
 import React from 'react';
@@ -761,7 +761,7 @@ function postponeWithTracking(prerenderState, expression, pathname) {
 ```
 ## Part 11
 ```js
-import { hasPostpone } from "entry.js" assert {
+import { hasPostpone } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
 };
 function assertPostpone() {
@@ -836,10 +836,10 @@ function createPrerenderState(isDebugSkeleton) {
 ```
 ## Part 2
 ```js
-import { DynamicServerError, StaticGenBailoutError, getPathname } from "entry.js" assert {
+import { DynamicServerError, StaticGenBailoutError, getPathname } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
-import { postponeWithTracking } from "entry.js" assert {
+import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
 };
 export { markCurrentScopeAsDynamic };
@@ -868,7 +868,7 @@ function markCurrentScopeAsDynamic(store, expression) {
 ```
 ## Part 3
 ```js
-import { postponeWithTracking } from "entry.js" assert {
+import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
 };
 export { trackDynamicDataAccessed };
@@ -897,7 +897,7 @@ function trackDynamicDataAccessed(store, expression) {
 ```
 ## Part 4
 ```js
-import { postponeWithTracking } from "entry.js" assert {
+import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
 };
 export { Postpone };
@@ -908,7 +908,7 @@ function Postpone({ reason, prerenderState, pathname }) {
 ```
 ## Part 5
 ```js
-import { postponeWithTracking } from "entry.js" assert {
+import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
 };
 export { trackDynamicFetch };
@@ -950,10 +950,10 @@ function formatDynamicAPIAccesses(prerenderState) {
 ```
 ## Part 8
 ```js
-import { assertPostpone } from "entry.js" assert {
+import { assertPostpone } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
-import { React } from "entry.js" assert {
+import { React } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
 };
 export { createPostponedAbortSignal };
@@ -972,7 +972,7 @@ function createPostponedAbortSignal(reason) {
 ```
 ## Part 9
 ```js
-import { React } from "entry.js" assert {
+import { React } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
 };
 import React from 'react';
@@ -982,7 +982,7 @@ export { hasPostpone };
 ```
 ## Part 10
 ```js
-import { assertPostpone } from "entry.js" assert {
+import { assertPostpone } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
 import React from 'react';
@@ -999,7 +999,7 @@ function postponeWithTracking(prerenderState, expression, pathname) {
 ```
 ## Part 11
 ```js
-import { hasPostpone } from "entry.js" assert {
+import { hasPostpone } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
 };
 function assertPostpone() {

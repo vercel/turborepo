@@ -29,7 +29,7 @@ console.log(dog);
 ```
 
 - Side effects
-- Reads: `dog`
+- Reads: `console`, `dog`
 
 ## Item 4: Stmt 3, `Normal`
 
@@ -61,7 +61,7 @@ console.log(dog);
 ```
 
 - Side effects
-- Reads: `dog`
+- Reads: `console`, `dog`
 
 ## Item 7: Stmt 6, `Normal`
 
@@ -93,7 +93,7 @@ console.log(dog);
 ```
 
 - Side effects
-- Reads: `dog`
+- Reads: `console`, `dog`
 
 ## Item 10: Stmt 9, `VarDeclarator(0)`
 
@@ -422,13 +422,13 @@ graph TD
 # Modules (dev)
 ## Part 0
 ```js
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 13
 };
 "module evaluation";
@@ -436,7 +436,7 @@ import "entry.js" assert {
 ```
 ## Part 1
 ```js
-import { dogRef } from "entry.js" assert {
+import { dogRef } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
 export { dogRef };
@@ -444,7 +444,7 @@ export { dogRef };
 ```
 ## Part 2
 ```js
-import { cat } from "entry.js" assert {
+import { cat } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 14
 };
 export { cat };
@@ -452,7 +452,7 @@ export { cat };
 ```
 ## Part 3
 ```js
-import { cat } from "entry.js" assert {
+import { cat } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 14
 };
 export { initialCat };
@@ -462,19 +462,19 @@ export { initialCat };
 ```
 ## Part 4
 ```js
-import { cat } from "entry.js" assert {
+import { cat } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 14
 };
-import { dog } from "entry.js" assert {
+import { dog } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 12
 };
 export { getChimera };
@@ -485,22 +485,22 @@ function getChimera() {
 ```
 ## Part 5
 ```js
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 13
 };
-import { dog } from "entry.js" assert {
+import { dog } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 12
 };
-import { getDog } from "entry.js" assert {
+import { getDog } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
 };
 function setDog(newDog) {
@@ -528,10 +528,10 @@ export { dog };
 ```
 ## Part 8
 ```js
-import { dog } from "entry.js" assert {
+import { dog } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
 };
 console.log(dog);
@@ -539,16 +539,16 @@ console.log(dog);
 ```
 ## Part 9
 ```js
-import { dog } from "entry.js" assert {
+import { dog } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 12
 };
 function getDog() {
@@ -558,7 +558,7 @@ function getDog() {
 ```
 ## Part 10
 ```js
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
 };
 dog += "!";
@@ -567,16 +567,16 @@ export { dog };
 ```
 ## Part 11
 ```js
-import { dog } from "entry.js" assert {
+import { dog } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
 };
 console.log(dog);
@@ -584,7 +584,7 @@ console.log(dog);
 ```
 ## Part 12
 ```js
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
 dog += "!";
@@ -593,22 +593,22 @@ export { dog };
 ```
 ## Part 13
 ```js
-import { dog } from "entry.js" assert {
+import { dog } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 12
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
 console.log(dog);
@@ -622,17 +622,15 @@ export { cat };
 ```
 ## Merged (module eval)
 ```js
-let dog = "dog";
-export { dog };
-dog += "!";
-export { dog };
-console.log(dog);
-dog += "!";
-export { dog };
-console.log(dog);
-dog += "!";
-export { dog };
-console.log(dog);
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 8
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 11
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 13
+};
 "module evaluation";
 
 ```
@@ -660,16 +658,16 @@ console.log(dog);
 # Modules (prod)
 ## Part 0
 ```js
-import { dog } from "entry.js" assert {
+import { dog } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
 };
 "module evaluation";
@@ -680,16 +678,16 @@ console.log(dog);
 ```
 ## Part 1
 ```js
-import { dog } from "entry.js" assert {
+import { dog } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
 };
 export { dogRef };
@@ -709,7 +707,7 @@ export { dogRef };
 ```
 ## Part 2
 ```js
-import { cat } from "entry.js" assert {
+import { cat } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
 };
 export { cat };
@@ -717,7 +715,7 @@ export { cat };
 ```
 ## Part 3
 ```js
-import { cat } from "entry.js" assert {
+import { cat } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
 };
 export { initialCat };
@@ -727,19 +725,19 @@ export { initialCat };
 ```
 ## Part 4
 ```js
-import { cat } from "entry.js" assert {
+import { cat } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
 };
-import { dog } from "entry.js" assert {
+import { dog } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
 };
 export { getChimera };
@@ -780,14 +778,18 @@ export { cat };
 ```
 ## Merged (module eval)
 ```js
-let dog = "dog";
-export { dog };
-dog += "!";
-export { dog };
-dog += "!";
-export { dog };
-dog += "!";
-export { dog };
+import { dog } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 6
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 8
+};
 "module evaluation";
 console.log(dog);
 console.log(dog);

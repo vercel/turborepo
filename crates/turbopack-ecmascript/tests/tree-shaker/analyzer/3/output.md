@@ -347,19 +347,19 @@ graph TD
 # Modules (dev)
 ## Part 0
 ```js
-import { c1_3 } from "entry.js" assert {
+import { c1_3 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
 };
-import { c2_2 } from "entry.js" assert {
+import { c2_2 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
-import "entry.js" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
 };
 "module evaluation";
@@ -369,7 +369,7 @@ c2_2();
 ```
 ## Part 1
 ```js
-import { c1_1 } from "entry.js" assert {
+import { c1_1 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
 export { c1_1 };
@@ -377,7 +377,7 @@ export { c1_1 };
 ```
 ## Part 2
 ```js
-import { c1_3 } from "entry.js" assert {
+import { c1_3 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
 export { c1_3 };
@@ -385,7 +385,7 @@ export { c1_3 };
 ```
 ## Part 3
 ```js
-import { c2_2 } from "entry.js" assert {
+import { c2_2 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
 export { c2_2 };
@@ -393,10 +393,10 @@ export { c2_2 };
 ```
 ## Part 4
 ```js
-import { d1 } from "entry.js" assert {
+import { d1 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
-import { d2 } from "entry.js" assert {
+import { d2 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
 };
 function c1_1() {
@@ -412,7 +412,7 @@ function c1_3() {
 ```
 ## Part 5
 ```js
-import { d3 } from "entry.js" assert {
+import { d3 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
 };
 function c2_1() {
@@ -443,27 +443,21 @@ function d3() {}
 ```
 ## Merged (module eval)
 ```js
-function d1() {}
-function d2() {}
-function c1_1() {
-    return c1_2();
-}
-function c1_2() {
-    return c1_3(d1);
-}
-function c1_3() {
-    return c1_1(d2);
-}
-function d3() {}
-function c2_1() {
-    return c2_2(d3);
-}
-function c2_2() {
-    return c2_3();
-}
-function c2_3() {
-    return c2_1();
-}
+import { c1_3 } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 6
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
+};
+import { c2_2 } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 8
+};
 "module evaluation";
 c1_3();
 c2_2();
@@ -490,10 +484,10 @@ c2_2();
 # Modules (prod)
 ## Part 0
 ```js
-import { c1_3 } from "entry.js" assert {
+import { c1_3 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
-import { c2_2 } from "entry.js" assert {
+import { c2_2 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
 "module evaluation";
@@ -503,7 +497,7 @@ c2_2();
 ```
 ## Part 1
 ```js
-import { c1_1 } from "entry.js" assert {
+import { c1_1 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
 export { c1_1 };
@@ -511,7 +505,7 @@ export { c1_1 };
 ```
 ## Part 2
 ```js
-import { c1_3 } from "entry.js" assert {
+import { c1_3 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
 export { c1_3 };
@@ -519,7 +513,7 @@ export { c1_3 };
 ```
 ## Part 3
 ```js
-import { c2_2 } from "entry.js" assert {
+import { c2_2 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
 export { c2_2 };
@@ -527,10 +521,10 @@ export { c2_2 };
 ```
 ## Part 4
 ```js
-import { d1 } from "entry.js" assert {
+import { d1 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
-import { d2 } from "entry.js" assert {
+import { d2 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
 };
 function c1_1() {
@@ -546,7 +540,7 @@ function c1_3() {
 ```
 ## Part 5
 ```js
-import { d3 } from "entry.js" assert {
+import { d3 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
 };
 function c2_1() {
@@ -577,27 +571,12 @@ function d3() {}
 ```
 ## Merged (module eval)
 ```js
-function d1() {}
-function d2() {}
-function c1_1() {
-    return c1_2();
-}
-function c1_2() {
-    return c1_3(d1);
-}
-function c1_3() {
-    return c1_1(d2);
-}
-function d3() {}
-function c2_1() {
-    return c2_2(d3);
-}
-function c2_2() {
-    return c2_3();
-}
-function c2_3() {
-    return c2_1();
-}
+import { c1_3 } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
+import { c2_2 } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
 "module evaluation";
 c1_3();
 c2_2();
@@ -623,17 +602,9 @@ c2_2();
 
 ## Merged (c1_3)
 ```js
-function d1() {}
-function d2() {}
-function c1_1() {
-    return c1_2();
-}
-function c1_2() {
-    return c1_3(d1);
-}
-function c1_3() {
-    return c1_1(d2);
-}
+import { c1_3 } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
 export { c1_3 };
 
 ```
@@ -657,28 +628,13 @@ export { c1_3 };
 
 ## Merged (c1_3,c2_2)
 ```js
-function d1() {}
-function d2() {}
-function c1_1() {
-    return c1_2();
-}
-function c1_2() {
-    return c1_3(d1);
-}
-function c1_3() {
-    return c1_1(d2);
-}
+import { c1_3 } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
+import { c2_2 } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
 export { c1_3 };
-function d3() {}
-function c2_1() {
-    return c2_2(d3);
-}
-function c2_2() {
-    return c2_3();
-}
-function c2_3() {
-    return c2_1();
-}
 export { c2_2 };
 
 ```

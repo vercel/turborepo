@@ -144,7 +144,7 @@ graph TD
 ```
 ## Part 1
 ```js
-import { dog } from "entry.js" assert {
+import { dog } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
 export { DOG };
@@ -154,7 +154,7 @@ export { DOG };
 ```
 ## Part 2
 ```js
-import { dog } from "entry.js" assert {
+import { dog } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
 export { CHIMERA };
@@ -198,7 +198,7 @@ export { dog };
 ```
 ## Part 1
 ```js
-import { dog } from "entry.js" assert {
+import { dog } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
 export { DOG };
@@ -208,7 +208,7 @@ export { DOG };
 ```
 ## Part 2
 ```js
-import { dog } from "entry.js" assert {
+import { dog } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
 export { CHIMERA };
