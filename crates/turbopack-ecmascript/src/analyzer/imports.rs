@@ -274,7 +274,6 @@ impl Visit for Analyzer<'_> {
 
         for s in &import.specifiers {
             let symbol = get_import_symbol_from_import(s, import.with.as_deref());
-            dbg!(&import.src, &symbol);
             let i = self.ensure_reference(
                 import.span,
                 import.src.value.clone(),
