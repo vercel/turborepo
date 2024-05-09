@@ -832,19 +832,50 @@ impl DepGraph {
                     ids.push(id.clone());
 
                     let vars = ids_used_by(&f.function, [unresolved_ctxt, top_level_ctxt]);
+                    let var_decls = {
+                        let mut v = IndexSet::with_capacity_and_hasher(1, Default::default());
+                        v.insert(f.ident.to_id());
+                        v
+                    };
                     items.insert(
                         id,
                         ItemData {
                             is_hoisted: true,
                             eventual_read_vars: vars.read,
                             eventual_write_vars: vars.write,
-                            var_decls: {
-                                let mut v =
-                                    IndexSet::with_capacity_and_hasher(1, Default::default());
-                                v.insert(f.ident.to_id());
-                                v
-                            },
+                            write_vars: var_decls.clone(),
+                            var_decls,
                             content: ModuleItem::Stmt(Stmt::Decl(Decl::Fn(f.clone()))),
+                            ..Default::default()
+                        },
+                    );
+                }
+                ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
+                    decl: Decl::Class(c),
+                    ..
+                }))
+                | ModuleItem::Stmt(Stmt::Decl(Decl::Class(c))) => {
+                    let id = ItemId::Item {
+                        index,
+                        kind: ItemIdItemKind::Normal,
+                    };
+                    ids.push(id.clone());
+
+                    let vars = ids_used_by(&c.class, [unresolved_ctxt, top_level_ctxt]);
+                    let var_decls = {
+                        let mut v = IndexSet::with_capacity_and_hasher(1, Default::default());
+                        v.insert(c.ident.to_id());
+                        v
+                    };
+                    items.insert(
+                        id,
+                        ItemData {
+                            is_hoisted: true,
+                            eventual_read_vars: vars.read,
+                            eventual_write_vars: vars.write,
+                            write_vars: var_decls.clone(),
+                            var_decls,
+                            content: ModuleItem::Stmt(Stmt::Decl(Decl::Class(c.clone()))),
                             ..Default::default()
                         },
                     );
