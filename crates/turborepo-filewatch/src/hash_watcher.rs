@@ -1285,4 +1285,78 @@ mod tests {
         )
         .await;
     }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn test_negative_inputs() {
+        let (_tmp, _repo, repo_root) = setup_fixture();
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+
+        let recv = watcher.watch();
+        let cookie_writer = CookieWriter::new(
+            watcher.cookie_dir(),
+            Duration::from_millis(100),
+            recv.clone(),
+        );
+
+        let scm = SCM::new(&repo_root);
+        assert!(!scm.is_manual());
+        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer).unwrap();
+        let package_discovery = package_watcher.watch_discovery();
+        let hash_watcher =
+            HashWatcher::new(repo_root.clone(), package_discovery, watcher.watch(), scm);
+
+        let foo_path = repo_root.join_components(&["packages", "foo"]);
+        let dist_path = foo_path.join_component("dist");
+        dist_path
+            .join_component("some-dist-file")
+            .create_with_contents("dist file")
+            .unwrap();
+        dist_path
+            .join_component("extra")
+            .create_with_contents("extra file")
+            .unwrap();
+        let foo_inputs =
+            GlobSet::from_raw_unfiltered(vec!["!dist/extra".to_string(), "**/*-file".to_string()])
+                .unwrap();
+        let foo_spec = HashSpec {
+            package_path: repo_root.anchor(&foo_path).unwrap(),
+            inputs: InputGlobs::Specific(foo_inputs),
+        };
+
+        retry_get_hash(
+            &hash_watcher,
+            foo_spec.clone(),
+            Duration::from_secs(2),
+            make_expected(vec![
+                ("foo-file", "9317666a2e7b729b740c706ab79724952c97bde4"),
+                ("package.json", "395351bdd7167f351af3396d3225ebe97a7a4d13"),
+                (
+                    "dist/some-dist-file",
+                    "21aa527e5ea52d11bf53f493df0dbe6d659b6a30",
+                ),
+            ]),
+        )
+        .await;
+
+        dist_path
+            .join_component("some-dist-file")
+            .create_with_contents("new dist file contents")
+            .unwrap();
+        retry_get_hash(
+            &hash_watcher,
+            foo_spec.clone(),
+            Duration::from_secs(2),
+            make_expected(vec![
+                ("foo-file", "9317666a2e7b729b740c706ab79724952c97bde4"),
+                ("package.json", "395351bdd7167f351af3396d3225ebe97a7a4d13"),
+                (
+                    "dist/some-dist-file",
+                    "03d4fc427f0bccc1ca7053fc889fa73e54a402fa",
+                ),
+            ]),
+        )
+        .await;
+    }
 }
