@@ -349,16 +349,25 @@ pub(super) async fn split(
 
     match &*parse_result {
         ParseResult::Ok {
-            program: Program::Module(module),
+            program,
             comments,
             eval_context,
             source_map,
             globals,
             ..
         } => {
+            let module = match program {
+                Program::Module(module) => Cow::Borrowed(module),
+                Program::Script(s) => Cow::Owned(Module {
+                    span: s.span,
+                    body: s.body.iter().cloned().map(ModuleItem::Stmt).collect(),
+                    shebang: None,
+                }),
+            };
+
             let (mut dep_graph, items) = GLOBALS.set(globals, || {
                 Analyzer::analyze(
-                    module,
+                    &module,
                     SyntaxContext::empty().apply_mark(eval_context.unresolved_mark),
                     SyntaxContext::empty().apply_mark(eval_context.top_level_mark),
                 )
@@ -419,10 +428,7 @@ pub(super) async fn split(
             .cell())
         }
         ParseResult::NotFound => Ok(SplitResult::NotFound.cell()),
-        ParseResult::Ok { .. } => Ok(SplitResult::Unparseable {
-            messages: Some(vec!["The file is a script".to_string()]),
-        }
-        .cell()),
+
         ParseResult::Unparseable { messages } => Ok(SplitResult::Unparseable {
             messages: messages.clone(),
         }
