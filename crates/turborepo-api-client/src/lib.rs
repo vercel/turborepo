@@ -2,7 +2,7 @@
 #![feature(error_generic_member_access)]
 #![deny(clippy::all)]
 
-use std::{backtrace::Backtrace, env, future::Future};
+use std::{backtrace::Backtrace, env, future::Future, time::Duration};
 
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -106,6 +106,7 @@ pub trait TokenClient {
 #[derive(Clone)]
 pub struct APIClient {
     client: reqwest::Client,
+    cache_client: reqwest::Client,
     base_url: String,
     user_agent: String,
     use_preflight: bool,
@@ -371,7 +372,7 @@ impl CacheClient for APIClient {
         }
 
         let mut request_builder = self
-            .client
+            .cache_client
             .put(request_url)
             .header("Content-Type", "application/octet-stream")
             .header("x-artifact-duration", duration.to_string())
@@ -534,25 +535,50 @@ impl TokenClient for APIClient {
 }
 
 impl APIClient {
+    /// Create a new APIClient.
+    ///
+    /// # Arguments
+    /// `base_url` - The base URL for the API.
+    /// `timeout` - The timeout for requests.
+    /// `upload_timeout` - If specified, uploading files will use `timeout` for
+    ///                    the connection, and `upload_timeout` for the total.
+    ///                    Otherwise, `timeout` will be used for the total.
+    /// `version` - The version of the client.
+    /// `use_preflight` - If true, use the preflight API for all requests.
     pub fn new(
         base_url: impl AsRef<str>,
-        timeout: u64,
+        timeout: Option<Duration>,
+        upload_timeout: Option<Duration>,
         version: &str,
         use_preflight: bool,
     ) -> Result<Self> {
-        let client_build = if timeout != 0 {
-            reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(timeout))
-                .build()
+        // for the api client, the timeout applies for the entire duration
+        // of the request, including the connection phase
+        let client = reqwest::Client::builder();
+        let client = if let Some(dur) = timeout {
+            client.timeout(dur)
         } else {
-            reqwest::Client::builder().build()
-        };
+            client
+        }
+        .build()
+        .map_err(Error::TlsError)?;
 
-        let client = client_build.map_err(Error::TlsError)?;
+        // for the cache client, the timeout applies only to the request
+        // connection time, while the upload timeout applies to the entire
+        // request
+        let cache_client = reqwest::Client::builder();
+        let cache_client = match (timeout, upload_timeout) {
+            (Some(dur), Some(upload_dur)) => cache_client.connect_timeout(dur).timeout(upload_dur),
+            (Some(dur), None) | (None, Some(dur)) => cache_client.timeout(dur),
+            (None, None) => cache_client,
+        }
+        .build()
+        .map_err(Error::TlsError)?;
 
         let user_agent = build_user_agent(version);
         Ok(APIClient {
             client,
+            cache_client,
             base_url: base_url.as_ref().to_string(),
             user_agent,
             use_preflight,
@@ -708,7 +734,7 @@ impl AnonAPIClient {
     pub fn new(base_url: impl AsRef<str>, timeout: u64, version: &str) -> Result<Self> {
         let client_build = if timeout != 0 {
             reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(timeout))
+                .timeout(Duration::from_secs(timeout))
                 .build()
         } else {
             reqwest::Client::builder().build()
@@ -737,6 +763,8 @@ fn build_user_agent(version: &str) -> String {
 
 #[cfg(test)]
 mod test {
+    use std::time::Duration;
+
     use anyhow::Result;
     use turborepo_vercel_api_mock::start_test_server;
     use url::Url;
@@ -749,7 +777,13 @@ mod test {
         let handle = tokio::spawn(start_test_server(port));
         let base_url = format!("http://localhost:{}", port);
 
-        let client = APIClient::new(&base_url, 200, "2.0.0", true)?;
+        let client = APIClient::new(
+            &base_url,
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            true,
+        )?;
 
         let response = client
             .do_preflight(
