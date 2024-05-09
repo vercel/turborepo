@@ -5,6 +5,7 @@ use std::{
 
 use ratatui::{
     style::Style,
+    text::Line,
     widgets::{Block, Borders, Widget},
 };
 use tracing::debug;
@@ -12,6 +13,9 @@ use tui_term::widget::PseudoTerminal;
 use turborepo_vt100 as vt100;
 
 use super::{app::Direction, Error};
+
+const FOOTER_TEXT: &str = "Use arrow keys to navigate. Press `Enter` to interact with a task and \
+                           `Ctrl-Z` to stop interacting";
 
 pub struct TerminalPane<W> {
     tasks: BTreeMap<String, TerminalOutput<W>>,
@@ -216,7 +220,8 @@ impl<W> Widget for &TerminalPane<W> {
         let screen = task.parser.screen();
         let mut block = Block::default()
             .borders(Borders::ALL)
-            .title(task.title(task_name));
+            .title(task.title(task_name))
+            .title_bottom(Line::from(FOOTER_TEXT).centered());
         if self.highlight {
             block = block.border_style(Style::new().fg(ratatui::style::Color::Yellow));
         }
@@ -254,7 +259,7 @@ mod test {
                 "│4     │",
                 "│5     │",
                 "│█     │",
-                "└──────┘",
+                "└Use ar┘",
             ])
         );
     }

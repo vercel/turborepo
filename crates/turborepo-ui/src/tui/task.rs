@@ -1,4 +1,7 @@
+#![allow(dead_code)]
 use std::time::Instant;
+
+use super::event::TaskResult;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Planned;
@@ -12,6 +15,7 @@ pub struct Running {
 pub struct Finished {
     start: Instant,
     end: Instant,
+    result: TaskResult,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
@@ -45,7 +49,7 @@ impl Task<Planned> {
 }
 
 impl Task<Running> {
-    pub fn finish(self) -> Task<Finished> {
+    pub fn finish(self, result: TaskResult) -> Task<Finished> {
         let Task {
             name,
             state: Running { start },
@@ -54,6 +58,7 @@ impl Task<Running> {
             name,
             state: Finished {
                 start,
+                result,
                 end: Instant::now(),
             },
         }
@@ -71,5 +76,9 @@ impl Task<Finished> {
 
     pub fn end(&self) -> Instant {
         self.state.end
+    }
+
+    pub fn result(&self) -> TaskResult {
+        self.state.result
     }
 }
