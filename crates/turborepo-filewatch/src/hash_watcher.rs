@@ -1314,12 +1314,14 @@ mod tests {
             .create_with_contents("dist file")
             .unwrap();
         dist_path
-            .join_component("extra")
+            .join_component("extra-file")
             .create_with_contents("extra file")
             .unwrap();
-        let foo_inputs =
-            GlobSet::from_raw_unfiltered(vec!["!dist/extra".to_string(), "**/*-file".to_string()])
-                .unwrap();
+        let foo_inputs = GlobSet::from_raw_unfiltered(vec![
+            "!dist/extra-file".to_string(),
+            "**/*-file".to_string(),
+        ])
+        .unwrap();
         let foo_spec = HashSpec {
             package_path: repo_root.anchor(&foo_path).unwrap(),
             inputs: InputGlobs::Specific(foo_inputs),
