@@ -16,7 +16,10 @@ use path_slash::PathExt;
 use rayon::prelude::*;
 use regex::Regex;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
-use wax::{walk::FileIterator, BuildError, Glob};
+use wax::{
+    walk::{FileIterator, LinkBehavior},
+    BuildError, Glob,
+};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum WalkType {
@@ -296,15 +299,39 @@ pub fn globwalk(
 ) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
     let include = include.iter().map(|i| i.inner.clone()).collect::<Vec<_>>();
     let exclude = exclude.iter().map(|e| e.inner.clone()).collect::<Vec<_>>();
-    globwalk_internal(base_path, &include, &exclude, walk_type)
+    globwalk_internal(
+        base_path,
+        &include,
+        &exclude,
+        walk_type,
+        LinkBehavior::ReadFile,
+    )
+}
+
+pub fn globwalk_follow_symlink(
+    base_path: &AbsoluteSystemPath,
+    include: &[ValidatedGlob],
+    exclude: &[ValidatedGlob],
+    walk_type: WalkType,
+) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
+    let include = include.iter().map(|i| i.inner.clone()).collect::<Vec<_>>();
+    let exclude = exclude.iter().map(|e| e.inner.clone()).collect::<Vec<_>>();
+    globwalk_internal(
+        base_path,
+        &include,
+        &exclude,
+        walk_type,
+        LinkBehavior::ReadTarget,
+    )
 }
 
 #[tracing::instrument]
-pub fn globwalk_internal(
+fn globwalk_internal(
     base_path: &AbsoluteSystemPath,
     include: &[String],
     exclude: &[String],
     walk_type: WalkType,
+    link_behavior: LinkBehavior,
 ) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
     let (base_path_new, include_paths, exclude_paths) =
         preprocess_paths_and_globs(base_path, include, exclude)?;
@@ -324,18 +351,27 @@ pub fn globwalk_internal(
         // Use flat_map_iter as we only want parallelism for walking the globs and not iterating
         // over the results.
         // See https://docs.rs/rayon/latest/rayon/iter/trait.ParallelIterator.html#method.flat_map_iter
-        .flat_map_iter(|glob| walk_glob(walk_type, &base_path_new, ex_patterns.clone(), glob))
+        .flat_map_iter(|glob| {
+            walk_glob(
+                walk_type,
+                link_behavior,
+                &base_path_new,
+                ex_patterns.clone(),
+                glob,
+            )
+        })
         .collect()
 }
 
 #[tracing::instrument(skip(ex_patterns), fields(glob=glob.to_string().as_str()))]
 fn walk_glob(
     walk_type: WalkType,
+    link_behavior: LinkBehavior,
     base_path_new: &Path,
     ex_patterns: Vec<Glob>,
     glob: Glob,
 ) -> Vec<Result<AbsoluteSystemPathBuf, WalkError>> {
-    glob.walk(base_path_new)
+    glob.walk_with_behavior(base_path_new, link_behavior)
         .not(ex_patterns)
         .unwrap_or_else(|e| {
             // Per docs, only fails if exclusion list is too large, since we're using

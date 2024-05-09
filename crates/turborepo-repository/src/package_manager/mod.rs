@@ -487,7 +487,7 @@ impl PackageManager {
     ) -> Result<impl Iterator<Item = AbsoluteSystemPathBuf>, Error> {
         let globs = self.get_workspace_globs(repo_root)?;
 
-        let files = globwalk::globwalk(
+        let files = globwalk::globwalk_follow_symlink(
             repo_root,
             &globs.package_json_inclusions,
             &globs.validated_exclusions,
@@ -709,7 +709,7 @@ mod tests {
         assert_eq!(
             packages,
             vec![
-                top_dir.join_components(&["bar", "package.json"]),
+                top_dir.join_components(&["my-repo", "packages", "bar", "package.json"]),
                 top_dir.join_components(&["my-repo", "packages", "foo", "package.json"]),
             ]
         );
