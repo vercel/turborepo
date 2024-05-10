@@ -92,7 +92,7 @@ pub enum Error {
     #[error("package change error")]
     PackageChange(#[from] tonic::Status),
     #[error("could not connect to UI thread")]
-    UISendError(String),
+    UISend(String),
 }
 
 impl WatchClient {
@@ -301,7 +301,7 @@ impl WatchClient {
                     let task_names = self.run.engine.tasks_with_command(&self.run.pkg_dep_graph);
                     sender
                         .update_tasks(task_names)
-                        .map_err(|err| Error::UISendError(err.to_string()))?;
+                        .map_err(|err| Error::UISend(err.to_string()))?;
                 }
 
                 if self.run.has_persistent_tasks() {
