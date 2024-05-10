@@ -61,14 +61,14 @@ impl Module for EcmascriptModulePartAsset {
     async fn references(&self) -> Result<Vc<ModuleReferences>> {
         let split_data = split_module(self.full_module).await?;
 
+        let analyze = analyze(self.full_module, self.part).await?;
+
         let (deps, entrypoints) = match &*split_data {
             SplitResult::Ok {
                 deps, entrypoints, ..
             } => (deps, entrypoints),
-            SplitResult::Failed { .. } => return Ok(Vc::cell(vec![])),
+            SplitResult::Failed { .. } => return Ok(analyze.references),
         };
-
-        let analyze = analyze(self.full_module, self.part).await?;
 
         // Facade depends on evaluation and re-exports
         if matches!(&*self.part.await?, ModulePart::Facade) {
