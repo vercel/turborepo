@@ -1,6 +1,6 @@
 use anyhow::Result;
 use swc_core::{
-    common::{Span, SyntaxContext},
+    common::{Span, SyntaxContext, DUMMY_SP},
     ecma::{
         ast::{
             ComputedPropName, Expr, Ident, KeyValueProp, Lit, MemberExpr, MemberProp, Number, Prop,
@@ -96,6 +96,30 @@ impl CodeGenerateable for EsmBinding {
 
         let mut ast_path = this.ast_path.await?.clone_value();
         let imported_module = imported_module.await?.get_ident().await?;
+
+        let stmt = match imported_module {
+            Some(ident) => Some(swc_core::ecma::ast::ModuleItem::Stmt(
+                swc_core::ecma::ast::Stmt::Decl(swc_core::ecma::ast::Decl::Var(Box::new(
+                    swc_core::ecma::ast::VarDecl {
+                        span: DUMMY_SP,
+                        declare: false,
+                        kind: swc_core::ecma::ast::VarDeclKind::Const,
+                        decls: vec![swc_core::ecma::ast::VarDeclarator {
+                            span: DUMMY_SP,
+                            name: this.id.await?.clone_value().into(),
+                            init: Some(Box::new(make_expr(
+                                &ident,
+                                this.export.as_deref(),
+                                DUMMY_SP,
+                                false,
+                            ))),
+                            definite: false,
+                        }],
+                    },
+                ))),
+            )),
+            _ => None,
+        };
 
         loop {
             match ast_path.last() {
