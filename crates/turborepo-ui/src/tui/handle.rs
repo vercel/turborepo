@@ -71,7 +71,7 @@ impl AppReceiver {
             Ok(event) => Ok(event),
             Err(mpsc::RecvTimeoutError::Timeout) => Ok(Event::Tick),
             Err(mpsc::RecvTimeoutError::Disconnected) => {
-                println!("disconnected!!");
+                error!("disconnected!");
                 Err(mpsc::RecvError)
             }
         }
