@@ -91,6 +91,8 @@ pub enum Error {
     SignalInterrupt,
     #[error("package change error")]
     PackageChange(#[from] tonic::Status),
+    #[error("could not connect to UI thread")]
+    UISendError(String),
 }
 
 impl WatchClient {
@@ -112,10 +114,7 @@ impl WatchClient {
             .build(&handler, telemetry.clone())
             .await?;
 
-        let (sender, handle) = run
-            .has_experimental_ui()
-            .then(|| run.start_experimental_ui())
-            .unzip();
+        let (sender, handle) = run.start_experimental_ui().unzip();
 
         let connector = DaemonConnector {
             can_start_server: true,
@@ -298,18 +297,11 @@ impl WatchClient {
                     .build(&self.handler, self.telemetry.clone())
                     .await?;
 
-                if self.run.has_experimental_ui() {
-                    if let Some(handle) = &self.ui_handle {
-                        handle.abort();
-                    }
-
-                    let (sender, handle) = self
-                        .run
-                        .has_experimental_ui()
-                        .then(|| self.run.start_experimental_ui())
-                        .unzip();
-                    self.ui_sender = sender;
-                    self.ui_handle = handle;
+                if let Some(sender) = &self.ui_sender {
+                    let task_names = self.run.engine.tasks_with_command(&self.run.pkg_dep_graph);
+                    sender
+                        .update_tasks(task_names)
+                        .map_err(|err| Error::UISendError(err.to_string()))?;
                 }
 
                 if self.run.has_persistent_tasks() {

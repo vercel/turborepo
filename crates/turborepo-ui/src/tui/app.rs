@@ -77,6 +77,10 @@ impl<I> App<I> {
     pub fn term_size(&self) -> (u16, u16) {
         self.pane.term_size()
     }
+
+    pub fn update_tasks(&mut self, tasks: Vec<String>) {
+        self.table = TaskTable::new(tasks.clone());
+    }
 }
 
 impl<I: std::io::Write> App<I> {
@@ -237,6 +241,10 @@ fn update(
         }
         Event::SetStdin { task, stdin } => {
             app.pane.insert_stdin(&task, Some(stdin))?;
+        }
+        Event::UpdateTasks { tasks } => {
+            app.update_tasks(tasks);
+            app.table.tick();
         }
     }
     Ok(None)

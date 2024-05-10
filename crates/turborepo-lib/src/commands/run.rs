@@ -44,10 +44,7 @@ pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i3
             .build(&handler, telemetry)
             .await?;
 
-        let (sender, handle) = run
-            .has_experimental_ui()
-            .then(|| run.start_experimental_ui())
-            .unzip();
+        let (sender, handle) = run.start_experimental_ui().unzip();
 
         let result = run.run(sender.clone()).await;
 

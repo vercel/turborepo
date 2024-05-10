@@ -122,12 +122,16 @@ impl Run {
         self.experimental_ui
     }
 
-    pub fn start_experimental_ui(&self) -> (AppSender, JoinHandle<Result<(), tui::Error>>) {
+    pub fn start_experimental_ui(&self) -> Option<(AppSender, JoinHandle<Result<(), tui::Error>>)> {
+        if !self.experimental_ui {
+            return None;
+        }
+
         let task_names = self.engine.tasks_with_command(&self.pkg_dep_graph);
         let (sender, receiver) = AppSender::new();
         let handle = tokio::task::spawn_blocking(move || tui::run_app(task_names, receiver));
 
-        (sender, handle)
+        Some((sender, handle))
     }
 
     pub async fn run(&mut self, experimental_ui_sender: Option<AppSender>) -> Result<i32, Error> {
