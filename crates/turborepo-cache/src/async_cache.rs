@@ -447,7 +447,7 @@ mod tests {
         async_cache.wait().await.unwrap();
 
         let fs_cache_path =
-            repo_root_path.join_components(&[".turbo", "cache" & format!("{}.tar.zst", hash)]);
+            repo_root_path.join_components(&[".turbo", "cache", &format!("{}.tar.zst", hash)]);
 
         // Confirm that fs cache file exists
         assert!(fs_cache_path.exists());
