@@ -17,7 +17,7 @@ use super::EsmAssetReference;
 use crate::{
     code_gen::{CodeGenerateable, CodeGeneration},
     create_visitor,
-    references::AstPath,
+    references::{esm::base::insert_hoisted_stmt, AstPath},
 };
 
 #[turbo_tasks::value(shared)]
@@ -108,8 +108,8 @@ impl CodeGenerateable for EsmBinding {
                     DUMMY_SP,
                 );
                 // We use `var` instead of `const` to avoid duplicate variable errors.
-                let stmt = swc_core::ecma::ast::ModuleItem::Stmt(swc_core::ecma::ast::Stmt::Decl(
-                    swc_core::ecma::ast::Decl::Var(Box::new(swc_core::ecma::ast::VarDecl {
+                let stmt = swc_core::ecma::ast::Stmt::Decl(swc_core::ecma::ast::Decl::Var(
+                    Box::new(swc_core::ecma::ast::VarDecl {
                         span: DUMMY_SP,
                         declare: false,
                         kind: swc_core::ecma::ast::VarDeclKind::Var,
@@ -124,13 +124,11 @@ impl CodeGenerateable for EsmBinding {
                             ))),
                             definite: false,
                         }],
-                    })),
+                    }),
                 ));
 
                 visitors.push(create_visitor!(visit_mut_program(p: &mut Program) {
-                    if let swc_core::ecma::ast::Program::Module(m) = p {
-                        m.body.insert(0, stmt.clone());
-                    }
+                    insert_hoisted_stmt(p, stmt.clone());
                 }));
 
                 Some(id)
@@ -189,9 +187,11 @@ impl CodeGenerateable for EsmBinding {
                         ast_path.pop();
 
                         dbg!(&ast_path);
+                        dbg!(&binding);
 
                         visitors.push(
                             create_visitor!(exact ast_path, visit_mut_simple_assign_target(l: &mut SimpleAssignTarget) {
+                                dbg!(&l);
                                 if let Some(ident) = binding.as_ref() {
                                     *l = SimpleAssignTarget::Ident(ident.clone().into());
                                 }
