@@ -100,12 +100,19 @@ impl CodeGenerateable for EsmBinding {
 
         let binding = match imported_module {
             Some(ident) => {
-                let id = private_ident!(&*ident);
+                let id = Ident::new(
+                    match this.export.as_ref() {
+                        Some(export) => format!("{ident}__{export}").into(),
+                        None => ident.clone().into(),
+                    },
+                    DUMMY_SP,
+                );
+                // We use `var` instead of `const` to avoid duplicate variable errors.
                 let stmt = swc_core::ecma::ast::ModuleItem::Stmt(swc_core::ecma::ast::Stmt::Decl(
                     swc_core::ecma::ast::Decl::Var(Box::new(swc_core::ecma::ast::VarDecl {
                         span: DUMMY_SP,
                         declare: false,
-                        kind: swc_core::ecma::ast::VarDeclKind::Const,
+                        kind: swc_core::ecma::ast::VarDeclKind::Var,
                         decls: vec![swc_core::ecma::ast::VarDeclarator {
                             span: DUMMY_SP,
                             name: id.clone().into(),
