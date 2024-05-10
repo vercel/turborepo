@@ -140,6 +140,24 @@ impl CodeGenerateable for EsmBinding {
                     );
                     break;
                 }
+                // We need to handle LHS because of code like
+                // (function (RouteKind1){})(RouteKind || RouteKind = {})
+                Some(swc_core::ecma::visit::AstParentKind::SimpleAssignTarget(_)) => {
+                    ast_path.pop();
+                    visitors.push(
+                        create_visitor!(exact ast_path, visit_mut_simple_assign_target(l: &mut SimpleAssignTarget) {
+                            if let Some(ident) = imported_module.as_deref() {
+                                use swc_core::common::Spanned;
+                                *l = match make_expr(ident, this.export.as_deref(), l.span(), false) {
+                                    Expr::Ident(i) => swc_core::ecma::ast::SimpleAssignTarget::Ident(i.into()),
+                                    Expr::Member(m) => swc_core::ecma::ast::SimpleAssignTarget::Member(m),
+                                    _ => unreachable!(),
+                                };
+                            }
+                        }),
+                    );
+                    break;
+                }
                 Some(_) => {
                     ast_path.pop();
                 }
