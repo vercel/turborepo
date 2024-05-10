@@ -348,13 +348,22 @@ pub(super) async fn split(
 
     match &*parse_result {
         ParseResult::Ok {
-            program: Program::Module(module),
+            program,
             comments,
             eval_context,
             source_map,
             globals,
             ..
         } => {
+            let module = match program {
+                Program::Module(module) => Cow::Borrowed(module),
+                Program::Script(s) => Cow::Owned(Module {
+                    span: s.span,
+                    body: s.body.iter().cloned().map(ModuleItem::Stmt).collect(),
+                    shebang: None,
+                }),
+            };
+
             let (mut dep_graph, items) = GLOBALS.set(globals, || {
                 Analyzer::analyze(
                     &module,
