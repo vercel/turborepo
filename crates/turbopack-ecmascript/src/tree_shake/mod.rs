@@ -18,6 +18,7 @@ use crate::{analyzer::graph::EvalContext, parse::ParseResult, EcmascriptModuleAs
 
 pub mod asset;
 pub mod chunk_item;
+mod cjs_finder;
 mod graph;
 pub mod merge;
 #[cfg(test)]
@@ -355,6 +356,14 @@ pub(super) async fn split(
             globals,
             ..
         } => {
+            // If the script file is a common js file, we cannot split the module
+            if cjs_finder::contains_cjs(program) {
+                return Ok(SplitResult::Failed {
+                    parse_result: parsed,
+                }
+                .cell());
+            }
+
             let module = match program {
                 Program::Module(module) => Cow::Borrowed(module),
                 Program::Script(s) => Cow::Owned(Module {
