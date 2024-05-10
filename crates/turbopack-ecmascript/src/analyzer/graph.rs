@@ -1464,6 +1464,15 @@ impl VisitAstPath for Analyzer<'_> {
     ) {
         let value = self.current_value.take();
         if let SimpleAssignTarget::Ident(i) = n {
+            {
+                // Skip BindingIdent
+                let mut ast_path = ast_path.with_guard(AstParentNodeRef::SimpleAssignTarget(
+                    n,
+                    SimpleAssignTargetField::Ident,
+                ));
+                self.visit_ident(i, &mut ast_path);
+            }
+
             self.add_value(
                 i.to_id(),
                 value.unwrap_or_else(|| {
@@ -1580,6 +1589,10 @@ impl VisitAstPath for Analyzer<'_> {
             ast_path.last(),
             Some(AstParentNodeRef::Expr(_, ExprField::Ident))
                 | Some(AstParentNodeRef::Prop(_, PropField::Shorthand))
+                | Some(AstParentNodeRef::SimpleAssignTarget(
+                    _,
+                    SimpleAssignTargetField::Ident
+                ))
         ) {
             return;
         }
