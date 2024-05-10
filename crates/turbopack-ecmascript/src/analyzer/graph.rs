@@ -1464,14 +1464,7 @@ impl VisitAstPath for Analyzer<'_> {
     ) {
         let value = self.current_value.take();
         if let SimpleAssignTarget::Ident(i) = n {
-            {
-                // Skip BindingIdent
-                let mut ast_path = ast_path.with_guard(AstParentNodeRef::SimpleAssignTarget(
-                    n,
-                    SimpleAssignTargetField::Ident,
-                ));
-                self.visit_ident(i, &mut ast_path);
-            }
+            n.visit_children_with_path(self, ast_path);
 
             self.add_value(
                 i.to_id(),
@@ -1585,17 +1578,20 @@ impl VisitAstPath for Analyzer<'_> {
         ident: &'ast Ident,
         ast_path: &mut AstNodePath<AstParentNodeRef<'r>>,
     ) {
-        if !matches!(
+        if !(matches!(
             ast_path.last(),
             Some(AstParentNodeRef::Expr(_, ExprField::Ident))
                 | Some(AstParentNodeRef::Prop(_, PropField::Shorthand))
-                | Some(AstParentNodeRef::SimpleAssignTarget(
-                    _,
-                    SimpleAssignTargetField::Ident
-                ))
-        ) {
+        ) || matches!(
+            ast_path.get(ast_path.len() - 2),
+            Some(AstParentNodeRef::SimpleAssignTarget(
+                _,
+                SimpleAssignTargetField::Ident,
+            ))
+        )) {
             return;
         }
+
         if let Some((esm_reference_index, export)) =
             self.eval_context.imports.get_binding(&ident.to_id())
         {
