@@ -7,7 +7,7 @@ Add new package with an external dependency
   $ echo '{"name":"c", "dependencies": {"has-symbols": "^1.0.3"}}' > apps/c/package.json
 
 Update lockfile
-  $ pnpm i > /dev/null
+  $ pnpm i --frozen-lockfile=false > /dev/null
 
 Now build and verify that only the new package is in scope
 Note that we need --skip-infer because we've now installed a local
