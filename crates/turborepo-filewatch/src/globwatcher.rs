@@ -24,13 +24,14 @@ type Hash = String;
 pub struct GlobSet {
     include: HashMap<String, wax::Glob<'static>>,
     exclude: Any<'static>,
+    // Note that these globs do not include the leading '!' character
     exclude_raw: BTreeSet<String>,
 }
 
 impl GlobSet {
     pub fn as_inputs(&self) -> Vec<String> {
         let mut inputs: Vec<String> = self.include.keys().cloned().collect();
-        inputs.extend(self.exclude_raw.iter().cloned());
+        inputs.extend(self.exclude_raw.iter().map(|s| format!("!{}", s)));
         inputs
     }
 

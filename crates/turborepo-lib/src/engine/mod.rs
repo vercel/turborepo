@@ -297,7 +297,7 @@ impl Engine<Built> {
                 continue;
             }
 
-            new_graph.add_edge(root_index, index, ());
+            new_graph.add_edge(index, root_index, ());
         }
 
         let task_lookup: HashMap<_, _> = new_graph
