@@ -4,8 +4,9 @@ use swc_core::{
     ecma::{
         ast::{
             ComputedPropName, Expr, Ident, KeyValueProp, Lit, MemberExpr, MemberProp, Number, Prop,
-            PropName, SeqExpr, Str,
+            PropName, SeqExpr, SimpleAssignTarget, Str,
         },
+        utils::private_ident,
         visit::fields::{CalleeField, PropField},
     },
 };
@@ -97,16 +98,17 @@ impl CodeGenerateable for EsmBinding {
         let mut ast_path = this.ast_path.await?.clone_value();
         let imported_module = imported_module.await?.get_ident().await?;
 
-        let stmt = match imported_module {
-            Some(ident) => Some(swc_core::ecma::ast::ModuleItem::Stmt(
-                swc_core::ecma::ast::Stmt::Decl(swc_core::ecma::ast::Decl::Var(Box::new(
-                    swc_core::ecma::ast::VarDecl {
+        let binding = match imported_module {
+            Some(ident) => {
+                let id = private_ident!(&*ident);
+                let stmt = swc_core::ecma::ast::ModuleItem::Stmt(swc_core::ecma::ast::Stmt::Decl(
+                    swc_core::ecma::ast::Decl::Var(Box::new(swc_core::ecma::ast::VarDecl {
                         span: DUMMY_SP,
                         declare: false,
                         kind: swc_core::ecma::ast::VarDeclKind::Const,
                         decls: vec![swc_core::ecma::ast::VarDeclarator {
                             span: DUMMY_SP,
-                            name: this.id.await?.clone_value().into(),
+                            name: id.clone().into(),
                             init: Some(Box::new(make_expr(
                                 &ident,
                                 this.export.as_deref(),
@@ -115,9 +117,17 @@ impl CodeGenerateable for EsmBinding {
                             ))),
                             definite: false,
                         }],
-                    },
-                ))),
-            )),
+                    })),
+                ));
+
+                visitors.push(create_visitor!(visit_mut_program(p: &mut Program) {
+                    if let swc_core::ecma::ast::Program::Module(m) = p {
+                        m.body.insert(0, stmt.clone());
+                    }
+                }));
+
+                Some(id)
+            }
             _ => None,
         };
 
@@ -131,10 +141,10 @@ impl CodeGenerateable for EsmBinding {
                         create_visitor!(exact ast_path, visit_mut_prop(prop: &mut Prop) {
                             if let Prop::Shorthand(ident) = prop {
                                 // TODO: Merge with the above condition when https://rust-lang.github.io/rfcs/2497-if-let-chains.html lands.
-                                if let Some(imported_ident) = imported_module.as_deref() {
+                                if let Some(binding) = binding.as_ref() {
                                     *prop = Prop::KeyValue(KeyValueProp {
                                         key: PropName::Ident(ident.clone()),
-                                        value: Box::new(make_expr(imported_ident, this.export.as_deref(), ident.span, false))
+                                        value: binding.clone().into(),
                                     });
                                 }
                             }
@@ -145,18 +155,11 @@ impl CodeGenerateable for EsmBinding {
                 // Any other expression can be replaced with the import accessor.
                 Some(swc_core::ecma::visit::AstParentKind::Expr(_)) => {
                     ast_path.pop();
-                    let in_call = matches!(
-                        ast_path.last(),
-                        Some(swc_core::ecma::visit::AstParentKind::Callee(
-                            CalleeField::Expr
-                        ))
-                    );
+
                     visitors.push(
                         create_visitor!(exact ast_path, visit_mut_expr(expr: &mut Expr) {
-                            dbg!(&expr);
-                            if let Some(ident) = imported_module.as_deref() {
-                                use swc_core::common::Spanned;
-                                *expr = make_expr(ident, this.export.as_deref(), expr.span(), in_call);
+                            if let Some(ident) = binding.as_ref() {
+                                *expr = Expr::Ident(ident.clone());
                             }
                             // If there's no identifier for the imported module,
                             // resolution failed and will insert code that throws
@@ -168,7 +171,6 @@ impl CodeGenerateable for EsmBinding {
                 Some(swc_core::ecma::visit::AstParentKind::BindingIdent(
                     swc_core::ecma::visit::fields::BindingIdentField::Id,
                 )) => {
-                    dbg!(&ast_path);
                     ast_path.pop();
 
                     // We need to handle LHS because of code like
@@ -183,14 +185,8 @@ impl CodeGenerateable for EsmBinding {
 
                         visitors.push(
                             create_visitor!(exact ast_path, visit_mut_simple_assign_target(l: &mut SimpleAssignTarget) {
-                                dbg!(&l);
-                                if let Some(ident) = imported_module.as_deref() {
-                                    use swc_core::common::Spanned;
-                                    *l = match make_expr(ident, this.export.as_deref(), l.span(), false) {
-                                        Expr::Ident(i) => swc_core::ecma::ast::SimpleAssignTarget::Ident(i.into()),
-                                        Expr::Member(m) => swc_core::ecma::ast::SimpleAssignTarget::Member(m),
-                                        _ => unreachable!(),
-                                    };
+                                if let Some(ident) = binding.as_ref() {
+                                    *l = SimpleAssignTarget::Ident(ident.clone().into());
                                 }
                             }),
                         );
