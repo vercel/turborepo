@@ -11,7 +11,7 @@ use anyhow::{bail, Result};
 use indexmap::{indexmap, IndexMap, IndexSet};
 use serde::{Deserialize, Serialize};
 use tracing::{Instrument, Level};
-use turbo_tasks::{trace::TraceRawVcs, vdbg, TryJoinIterExt, Value, ValueToString, Vc};
+use turbo_tasks::{trace::TraceRawVcs, TryJoinIterExt, Value, ValueToString, Vc};
 use turbo_tasks_fs::{
     util::{normalize_path, normalize_request},
     FileSystemEntryType, FileSystemPath, RealPathResult,
