@@ -129,6 +129,7 @@ impl CodeGenerateable for EsmBinding {
                     );
                     visitors.push(
                         create_visitor!(exact ast_path, visit_mut_expr(expr: &mut Expr) {
+                            dbg!(&expr);
                             if let Some(ident) = imported_module.as_deref() {
                                 use swc_core::common::Spanned;
                                 *expr = make_expr(ident, this.export.as_deref(), expr.span(), in_call);
@@ -140,17 +141,25 @@ impl CodeGenerateable for EsmBinding {
                     );
                     break;
                 }
-                Some(_) => {
+                Some(swc_core::ecma::visit::AstParentKind::BindingIdent(
+                    swc_core::ecma::visit::fields::BindingIdentField::Id,
+                )) => {
+                    dbg!(&ast_path);
+                    ast_path.pop();
+
                     // We need to handle LHS because of code like
                     // (function (RouteKind1){})(RouteKind || RouteKind = {})
-                    if let Some(swc_core::ecma::visit::AstParentKind::SimpleAssignTarget(_)) =
-                        ast_path.get(ast_path.len() - 2)
+                    if let Some(swc_core::ecma::visit::AstParentKind::SimpleAssignTarget(
+                        swc_core::ecma::visit::fields::SimpleAssignTargetField::Ident,
+                    )) = ast_path.last()
                     {
                         ast_path.pop();
-                        ast_path.pop();
+
+                        dbg!(&ast_path);
 
                         visitors.push(
                             create_visitor!(exact ast_path, visit_mut_simple_assign_target(l: &mut SimpleAssignTarget) {
+                                dbg!(&l);
                                 if let Some(ident) = imported_module.as_deref() {
                                     use swc_core::common::Spanned;
                                     *l = match make_expr(ident, this.export.as_deref(), l.span(), false) {
@@ -163,7 +172,8 @@ impl CodeGenerateable for EsmBinding {
                         );
                         break;
                     }
-
+                }
+                Some(_) => {
                     ast_path.pop();
                 }
                 None => break,

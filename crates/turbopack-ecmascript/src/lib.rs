@@ -777,6 +777,7 @@ impl EcmascriptModuleContent {
         let mut root_visitors = Vec::new();
         for code_gen in code_gens {
             for (path, visitor) in code_gen.visitors.iter() {
+                dbg!(&path);
                 if path.is_empty() {
                     root_visitors.push(&**visitor);
                 } else {

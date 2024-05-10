@@ -1592,6 +1592,9 @@ impl VisitAstPath for Analyzer<'_> {
             return;
         }
 
+        if ident.sym == "RouteKind" {
+            dbg!(ast_path.iter().map(|v| v.kind()).collect::<Vec<_>>());
+        }
         if let Some((esm_reference_index, export)) =
             self.eval_context.imports.get_binding(&ident.to_id())
         {
