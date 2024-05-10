@@ -85,8 +85,12 @@ impl<'a, 'b> ApplyVisitors<'a, 'b> {
         let mut index = self.index;
         let mut current_visitors = self.visitors.as_ref();
         while index < ast_path.len() {
+            dbg!(index, ast_path.len());
+
             let current = index == ast_path.len() - 1;
+            dbg!(current);
             let kind = ast_path[index];
+            dbg!(kind);
             if let Some(visitors) = find_range(current_visitors, &kind, index) {
                 // visitors contains all items that match kind at index. Some of them terminate
                 // here, some need furth visiting. The terminating items are at the start due to
@@ -96,6 +100,7 @@ impl<'a, 'b> ApplyVisitors<'a, 'b> {
                 // skip items that terminate here
                 let nested_visitors_start =
                     visitors.partition_point(|(path, _)| path.len() == index);
+                dbg!(nested_visitors_start, visitors.len());
                 if current {
                     // Potentially skip visiting this sub tree
                     if nested_visitors_start < visitors.len() {
@@ -109,6 +114,7 @@ impl<'a, 'b> ApplyVisitors<'a, 'b> {
                             ast_path,
                         );
                     }
+                    dbg!(visitors[..nested_visitors_start].len());
                     for (_, visitor) in visitors[..nested_visitors_start].iter() {
                         n.visit_mut_with(&mut visitor.create());
                     }
@@ -117,6 +123,7 @@ impl<'a, 'b> ApplyVisitors<'a, 'b> {
                     // `current_visitors` has the invariant that is must not be empty.
                     // When it becomes empty, we must early exit
                     current_visitors = &visitors[nested_visitors_start..];
+                    dbg!(current_visitors.is_empty());
                     if current_visitors.is_empty() {
                         // Nothing to do in this subtree, skip it
                         return;
