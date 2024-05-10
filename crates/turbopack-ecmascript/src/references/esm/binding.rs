@@ -102,8 +102,8 @@ impl CodeGenerateable for EsmBinding {
             Some(ident) => {
                 let id = Ident::new(
                     match this.export.as_ref() {
-                        Some(export) => format!("{ident}__{export}").into(),
-                        None => ident.clone().into(),
+                        Some(export) => format!("{ident}__{export}__binding").into(),
+                        None => format!("{ident}__binding").into(),
                     },
                     DUMMY_SP,
                 );
