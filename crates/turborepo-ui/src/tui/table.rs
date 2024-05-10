@@ -219,6 +219,8 @@ impl<'a> StatefulWidget for &'a TaskTable {
     type State = TableState;
 
     fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer, state: &mut Self::State) {
+        let width = area.width;
+        let bar = "─".repeat(usize::from(width));
         let table = Table::new(
             self.finished_rows()
                 .chain(self.running_rows())
@@ -232,9 +234,8 @@ impl<'a> StatefulWidget for &'a TaskTable {
         .highlight_style(Style::default().fg(Color::Yellow))
         .column_spacing(0)
         .header(
-            ["Task\n────", "\n─"]
-                .iter()
-                .copied()
+            vec![format!("Task\n{bar}"), "\n─".to_owned()]
+                .into_iter()
                 .map(Cell::from)
                 .collect::<Row>()
                 .height(2),
