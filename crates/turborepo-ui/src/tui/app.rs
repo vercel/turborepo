@@ -80,6 +80,7 @@ impl<I> App<I> {
 
     pub fn update_tasks(&mut self, tasks: Vec<String>) {
         self.table = TaskTable::new(tasks.clone());
+        self.next();
     }
 }
 

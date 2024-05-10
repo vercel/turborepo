@@ -100,7 +100,7 @@ impl TaskTable {
             let finished = self.finished.remove(finished_idx);
             let old_row_idx = finished_idx;
             let new_row_idx = self.finished.len() + self.running.len();
-            let running = finished.start();
+            let running = Task::new(finished.name().to_string()).start();
             self.running.push(running);
 
             if let Some(selected_idx) = self.scroll.selected() {
