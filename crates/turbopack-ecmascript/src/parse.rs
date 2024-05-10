@@ -278,7 +278,7 @@ async fn parse_content(
     let mut result = WrapFuture::new(
         async {
             let file_name = FileName::Custom(ident.to_string());
-            let fm = source_map.new_source_file(file_name.clone(), string);
+            let fm = source_map.new_source_file(file_name.clone(), string.clone());
 
             let comments = SwcComments::default();
 
@@ -405,6 +405,7 @@ async fn parse_content(
                 } else {
                     None
                 };
+                let messages = Some(messages.unwrap_or_else(|| vec![string.to_string()]));
                 return Ok(ParseResult::Unparseable { messages });
             }
 

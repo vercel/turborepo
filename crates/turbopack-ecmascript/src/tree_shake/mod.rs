@@ -319,10 +319,9 @@ pub(crate) enum SplitResult {
         #[turbo_tasks(trace_ignore)]
         deps: FxHashMap<u32, Vec<u32>>,
     },
-    Unparseable {
-        messages: Option<Vec<String>>,
+    Failed {
+        parse_result: Vc<ParseResult>,
     },
-    NotFound,
 }
 
 impl PartialEq for SplitResult {
@@ -349,22 +348,13 @@ pub(super) async fn split(
 
     match &*parse_result {
         ParseResult::Ok {
-            program,
+            program: Program::Module(module),
             comments,
             eval_context,
             source_map,
             globals,
             ..
         } => {
-            let module = match program {
-                Program::Module(module) => Cow::Borrowed(module),
-                Program::Script(s) => Cow::Owned(Module {
-                    span: s.span,
-                    body: s.body.iter().cloned().map(ModuleItem::Stmt).collect(),
-                    shebang: None,
-                }),
-            };
-
             let (mut dep_graph, items) = GLOBALS.set(globals, || {
                 Analyzer::analyze(
                     &module,
@@ -427,10 +417,9 @@ pub(super) async fn split(
             }
             .cell())
         }
-        ParseResult::NotFound => Ok(SplitResult::NotFound.cell()),
 
-        ParseResult::Unparseable { messages } => Ok(SplitResult::Unparseable {
-            messages: messages.clone(),
+        _ => Ok(SplitResult::Failed {
+            parse_result: parsed,
         }
         .cell()),
     }
@@ -572,10 +561,6 @@ pub(super) async fn part_of_module(
 
             Ok(modules[part_id as usize])
         }
-        SplitResult::Unparseable { messages } => Ok(ParseResult::Unparseable {
-            messages: messages.clone(),
-        }
-        .cell()),
-        SplitResult::NotFound => Ok(ParseResult::NotFound.cell()),
+        SplitResult::Failed { parse_result } => Ok(*parse_result),
     }
 }

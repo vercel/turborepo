@@ -11,7 +11,7 @@ use anyhow::{bail, Result};
 use indexmap::{indexmap, IndexMap, IndexSet};
 use serde::{Deserialize, Serialize};
 use tracing::{Instrument, Level};
-use turbo_tasks::{trace::TraceRawVcs, TryJoinIterExt, Value, ValueToString, Vc};
+use turbo_tasks::{trace::TraceRawVcs, vdbg, TryJoinIterExt, Value, ValueToString, Vc};
 use turbo_tasks_fs::{
     util::{normalize_path, normalize_request},
     FileSystemEntryType, FileSystemPath, RealPathResult,
@@ -1029,7 +1029,7 @@ async fn exports_field(package_json_path: Vc<FileSystemPath>) -> Result<Vc<Expor
         return Ok(ExportsFieldResult::None.cell());
     };
     match exports.try_into() {
-        Ok(exports) => Ok(ExportsFieldResult::Some(exports).cell()),
+        Ok(exports) => Ok(ExportsFieldResult::Some(dbg!(exports)).cell()),
         Err(err) => {
             PackageJsonIssue {
                 path: package_json_path,
@@ -2294,7 +2294,7 @@ async fn resolve_into_package(
                     format!(".{path}")
                 };
 
-                results.push(
+                results.push(vdbg!(
                     handle_exports_imports_field(
                         package_path,
                         package_json_path,
@@ -2305,8 +2305,8 @@ async fn resolve_into_package(
                         unspecified_conditions,
                         query,
                     )
-                    .await?,
-                );
+                    .await?
+                ));
 
                 // other options do not apply anymore when an exports
                 // field exist

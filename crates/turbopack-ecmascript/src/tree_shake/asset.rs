@@ -65,8 +65,7 @@ impl Module for EcmascriptModulePartAsset {
             SplitResult::Ok {
                 deps, entrypoints, ..
             } => (deps, entrypoints),
-            SplitResult::Unparseable { .. } => return Ok(Vc::cell(vec![])),
-            SplitResult::NotFound { .. } => return Ok(Vc::cell(vec![])),
+            SplitResult::Failed { .. } => return Ok(Vc::cell(vec![])),
         };
 
         let analyze = analyze(self.full_module, self.part).await?;

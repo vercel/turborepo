@@ -228,7 +228,7 @@ impl<'a> Iterator for ResultsIterMut<'a> {
 }
 
 /// Content of an "exports" field in a package.json
-#[derive(PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExportsField(AliasMap<SubpathValue>);
 
 impl TryFrom<&Value> for ExportsField {
