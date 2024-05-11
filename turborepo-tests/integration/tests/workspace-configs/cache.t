@@ -51,7 +51,7 @@ This test covers:
   $ HASH=$(cat tmp.log | grep -E "cached:cached-task-2.* executing .*" | awk '{print $6}')
   $ echo $HASH
   [a-z0-9]{16} (re)
-  $ test -f $TARGET_DIR/.cache/turbo/$HASH.tar.zst;
+  $ test -f $TARGET_DIR/.turbo/cache/$HASH.tar.zst;
   [1]
 
 no `cache` config in root, cache:false in workspace
