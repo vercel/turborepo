@@ -574,12 +574,6 @@ impl ChunkableModule for EcmascriptModuleAsset {
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
     ) -> Result<Vc<Box<dyn ChunkItem>>> {
-        let chunking_context =
-            Vc::try_resolve_downcast::<Box<dyn ChunkingContext>>(chunking_context)
-                .await?
-                .context(
-                    "chunking context must impl ChunkingContext to use EcmascriptModuleAsset",
-                )?;
         Ok(Vc::upcast(ModuleChunkItem::cell(ModuleChunkItem {
             module: self,
             chunking_context,
