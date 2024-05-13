@@ -130,6 +130,7 @@ import { RouteKind } from "__TURBOPACK_PART__" assert {
     RouteKind["APP_PAGE"] = "APP_PAGE";
     RouteKind["APP_ROUTE"] = "APP_ROUTE";
 })(RouteKind || (RouteKind = {}));
+export { RouteKind };
 
 ```
 ## Merged (module eval)
@@ -186,6 +187,7 @@ import { RouteKind } from "__TURBOPACK_PART__" assert {
     RouteKind["APP_PAGE"] = "APP_PAGE";
     RouteKind["APP_ROUTE"] = "APP_ROUTE";
 })(RouteKind || (RouteKind = {}));
+export { RouteKind };
 
 ```
 ## Merged (module eval)
