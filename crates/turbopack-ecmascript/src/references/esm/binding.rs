@@ -186,21 +186,8 @@ impl CodeGenerateable for EsmBinding {
                     {
                         ast_path.pop();
 
-                        dbg!(&ast_path);
-                        dbg!(&binding);
-
-                        if let Some(binding) = &binding {
-                            if binding.sym.contains("RouteKind") {
-                                visitors.push(
-                                    create_visitor!([], visit_mut_simple_assign_target(l: &mut SimpleAssignTarget) {
-                                        dbg!(&l);
-                                    }),
-                                );
-                            }
-                        }
                         visitors.push(
                             create_visitor!(exact ast_path, visit_mut_simple_assign_target(l: &mut SimpleAssignTarget) {
-                                dbg!(&l);
                                 if let Some(ident) = binding.as_ref() {
                                     *l = SimpleAssignTarget::Ident(ident.clone().into());
                                 }
