@@ -85,7 +85,7 @@ impl<'a, 'b> ApplyVisitors<'a, 'b> {
         let mut index = self.index;
         let mut current_visitors = self.visitors.as_ref();
         while index < ast_path.len() {
-            dbg!(index, ast_path.len());
+            dbg!(index, &ast_path);
 
             let current = index == ast_path.len() - 1;
             dbg!(current);
