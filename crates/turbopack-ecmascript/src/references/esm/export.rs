@@ -432,7 +432,6 @@ impl CodeGenerateable for EsmExports {
 
         let mut props = Vec::new();
         for (exported, local) in &expanded.exports {
-            dbg!(exported, local);
             let expr = match local {
                 EsmExport::Error => Some(quote!(
                     "(() => { throw new Error(\"Failed binding. See build errors!\"); })" as Expr,
