@@ -32,7 +32,7 @@ pub mod webpack;
 
 use std::fmt::{Display, Formatter};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use chunk::EcmascriptChunkItem;
 use code_gen::CodeGenerateable;
 pub use parse::ParseResultSourceMap;

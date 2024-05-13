@@ -17,7 +17,6 @@ use turbopack_core::{
 use turbopack_css::CssModuleAssetType;
 use turbopack_ecmascript::{EcmascriptInputTransform, EcmascriptOptions, SpecifiedModuleType};
 use turbopack_node::transforms::{postcss::PostCssTransform, webpack::WebpackLoaders};
-use turbopack_resolve::ecmascript;
 use turbopack_wasm::source::WebAssemblySourceType;
 
 use crate::{
