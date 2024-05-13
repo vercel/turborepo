@@ -1,14 +1,4 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", {
-    value: true
-});
-Object.defineProperty(exports, "RouteKind", {
-    enumerable: true,
-    get: function() {
-        return RouteKind;
-    }
-});
-var RouteKind;
+export var RouteKind;
 (function(RouteKind) {
     /**
    * `PAGES` represents all the React pages that are under `pages/`.
