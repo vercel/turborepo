@@ -68,8 +68,9 @@ impl TaskTable {
         self.len() == 0
     }
 
-    /// Mark the given planned task as started
-    /// Errors if given task wasn't a planned task
+    /// Mark the given task as started.
+    /// If planned, pulls it from planned tasks and starts it.
+    /// If finished, removes from finished and starts again as new task.
     pub fn start_task(&mut self, task: &str) -> Result<(), Error> {
         if let Ok(planned_idx) = self
             .planned
@@ -180,8 +181,7 @@ impl TaskTable {
         self.scroll.select(Some(i));
     }
 
-    pub fn selected(&self) -> Option<&str> {
-        let i = self.scroll.selected()?;
+    pub fn get(&self, i: usize) -> Option<&str> {
         if i < self.finished.len() {
             let task = self.finished.get(i)?;
             Some(task.name())
@@ -196,6 +196,11 @@ impl TaskTable {
         } else {
             None
         }
+    }
+
+    pub fn selected(&self) -> Option<&str> {
+        let i = self.scroll.selected()?;
+        self.get(i)
     }
 
     pub fn tasks_started(&self) -> impl Iterator<Item = &str> + '_ {
@@ -306,6 +311,47 @@ mod test {
         table.finish_task("a", TaskResult::Success).unwrap();
         assert_eq!(table.scroll.selected(), Some(1), "b stays selected");
         assert_eq!(table.selected(), Some("b"), "selected b");
+    }
+
+    #[test]
+    fn test_restart_task() {
+        let mut table = TaskTable::new(vec!["a".to_string(), "b".to_string(), "c".to_string()]);
+        table.next();
+        table.next();
+        // Start all tasks
+        table.start_task("b").unwrap();
+        table.start_task("a").unwrap();
+        table.start_task("c").unwrap();
+        assert_eq!(table.get(0), Some("b"), "b is on top (running)");
+        table.finish_task("a", TaskResult::Success).unwrap();
+        assert_eq!(
+            (table.get(0), table.get(1)),
+            (Some("a"), Some("b")),
+            "a is on top (done), b is second (running)"
+        );
+
+        table.finish_task("b", TaskResult::Success).unwrap();
+        assert_eq!(
+            (table.get(0), table.get(1)),
+            (Some("a"), Some("b")),
+            "a is on top (done), b is second (done)"
+        );
+
+        // Restart b
+        table.start_task("b").unwrap();
+        assert_eq!(
+            (table.get(1), table.get(2)),
+            (Some("c"), Some("b")),
+            "b is third (running)"
+        );
+
+        // Restart a
+        table.start_task("a").unwrap();
+        assert_eq!(
+            (table.get(0), table.get(1), table.get(2)),
+            (Some("c"), Some("b"), Some("a")),
+            "c is on top (running), b is second (running), a is third (running)"
+        );
     }
 
     #[test]
