@@ -14,7 +14,7 @@ use turbopack_core::{
 
 use super::chunk_item::EcmascriptModuleFacadeChunkItem;
 use crate::{
-    chunk::{EcmascriptChunkPlaceable, EcmascriptChunkingContext, EcmascriptExports},
+    chunk::{EcmascriptChunkPlaceable, EcmascriptExports},
     references::{
         async_module::{AsyncModule, OptionAsyncModule},
         esm::{EsmExport, EsmExports},
@@ -279,10 +279,10 @@ impl ChunkableModule for EcmascriptModuleFacadeModule {
         chunking_context: Vc<Box<dyn ChunkingContext>>,
     ) -> Result<Vc<Box<dyn turbopack_core::chunk::ChunkItem>>> {
         let chunking_context =
-            Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
+            Vc::try_resolve_downcast::<Box<dyn ChunkingContext>>(chunking_context)
                 .await?
                 .context(
-                    "chunking context must impl EcmascriptChunkingContext to use \
+                    "chunking context must impl ChunkingContext to use \
                      EcmascriptModuleFacadeModule",
                 )?;
         Ok(Vc::upcast(

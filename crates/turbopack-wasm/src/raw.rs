@@ -13,7 +13,7 @@ use turbopack_core::{
 use turbopack_ecmascript::{
     chunk::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkPlaceable,
-        EcmascriptChunkType, EcmascriptChunkingContext, EcmascriptExports,
+        EcmascriptChunkType, EcmascriptExports,
     },
     utils::StringifyJs,
 };
@@ -79,11 +79,10 @@ impl ChunkableModule for RawWebAssemblyModuleAsset {
         chunking_context: Vc<Box<dyn ChunkingContext>>,
     ) -> Result<Vc<Box<dyn turbopack_core::chunk::ChunkItem>>> {
         let chunking_context =
-            Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
+            Vc::try_resolve_downcast::<Box<dyn ChunkingContext>>(chunking_context)
                 .await?
                 .context(
-                    "chunking context must impl EcmascriptChunkingContext to use \
-                     RawWebAssemblyModuleAsset",
+                    "chunking context must impl ChunkingContext to use RawWebAssemblyModuleAsset",
                 )?;
         Ok(Vc::upcast(
             RawModuleChunkItem {
@@ -107,7 +106,7 @@ impl EcmascriptChunkPlaceable for RawWebAssemblyModuleAsset {
 #[turbo_tasks::value]
 struct RawModuleChunkItem {
     module: Vc<RawWebAssemblyModuleAsset>,
-    chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
+    chunking_context: Vc<Box<dyn ChunkingContext>>,
     wasm_asset: Vc<WebAssemblyAsset>,
 }
 
@@ -150,7 +149,7 @@ impl ChunkItem for RawModuleChunkItem {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for RawModuleChunkItem {
     #[turbo_tasks::function]
-    fn chunking_context(&self) -> Vc<Box<dyn EcmascriptChunkingContext>> {
+    fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {
         self.chunking_context
     }
 

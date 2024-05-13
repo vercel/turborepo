@@ -30,7 +30,7 @@ use turbopack_css::embed::CssEmbed;
 use turbopack_ecmascript::{
     chunk::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkPlaceable,
-        EcmascriptChunkType, EcmascriptChunkingContext, EcmascriptExports,
+        EcmascriptChunkType, EcmascriptExports,
     },
     utils::StringifyJs,
 };
@@ -95,11 +95,9 @@ impl ChunkableModule for StaticModuleAsset {
         chunking_context: Vc<Box<dyn ChunkingContext>>,
     ) -> Result<Vc<Box<dyn turbopack_core::chunk::ChunkItem>>> {
         let chunking_context =
-            Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
+            Vc::try_resolve_downcast::<Box<dyn ChunkingContext>>(chunking_context)
                 .await?
-                .context(
-                    "chunking context must impl EcmascriptChunkingContext to use StaticModuleAsset",
-                )?;
+                .context("chunking context must impl ChunkingContext to use StaticModuleAsset")?;
         Ok(Vc::upcast(ModuleChunkItem::cell(ModuleChunkItem {
             module: self,
             chunking_context,
@@ -119,7 +117,7 @@ impl EcmascriptChunkPlaceable for StaticModuleAsset {
 #[turbo_tasks::value]
 struct ModuleChunkItem {
     module: Vc<StaticModuleAsset>,
-    chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
+    chunking_context: Vc<Box<dyn ChunkingContext>>,
     static_asset: Vc<StaticAsset>,
 }
 
@@ -162,7 +160,7 @@ impl ChunkItem for ModuleChunkItem {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for ModuleChunkItem {
     #[turbo_tasks::function]
-    fn chunking_context(&self) -> Vc<Box<dyn EcmascriptChunkingContext>> {
+    fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {
         self.chunking_context
     }
 
