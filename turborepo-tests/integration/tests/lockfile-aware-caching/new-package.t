@@ -12,7 +12,9 @@ Update lockfile
 Now build and verify that only the new package is in scope
 Note that we need --skip-infer because we've now installed a local
 turbo in this repo
-  $ ${TURBO} --skip-infer build -F '[HEAD]' -F '!//' --dry=json | jq '.packages' 
+Note that we need to disable path conversion because on windows, git bash considers
+'//' to be an escape sequence translating to '/'.
+  $ MSYS_NO_PATHCONV=1 ${TURBO} --skip-infer build -F '[HEAD]' -F '!//' --dry=json | jq '.packages' 
   [
     "c"
   ]
