@@ -507,9 +507,12 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedLockfile, T> {
             return Ok(());
         };
 
+        // We cannot ignore missing packages in this context, it would indicate a
+        // malformed or stale lockfile.
         let mut closures = turborepo_lockfiles::all_transitive_closures(
             lockfile,
             self.all_external_dependencies()?,
+            false,
         )?;
         for (_, entry) in self.workspaces.iter_mut() {
             entry.transitive_dependencies = closures.remove(&entry.unix_dir_str()?);

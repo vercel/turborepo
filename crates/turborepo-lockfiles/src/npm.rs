@@ -440,6 +440,7 @@ mod test {
             ]
             .into_iter()
             .collect(),
+            false,
         )?;
         assert!(closures.get("packages/a").unwrap().contains(&Package {
             key: "node_modules/eslint-plugin-turbo".into(),
