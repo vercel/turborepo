@@ -403,7 +403,6 @@ impl Display for ExternalType {
 pub enum ResolveResultItem {
     Source(Vc<Box<dyn Source>>),
     External(String, ExternalType),
-    // Error(Vc<String>)
     Ignore,
     Empty,
     Custom(u8),
