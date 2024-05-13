@@ -640,11 +640,11 @@ pub(crate) async fn analyse_ecmascript_module_internal(
 
     for export in esm_exports.values() {
         match *export {
-            EsmExport::LocalBinding(_) => {}
+            EsmExport::LocalBinding(..) => {}
             EsmExport::ImportedNamespace(reference) => {
                 analysis.add_reexport_reference(reference);
             }
-            EsmExport::ImportedBinding(reference, _) => {
+            EsmExport::ImportedBinding(reference, ..) => {
                 analysis.add_reexport_reference(reference);
             }
             EsmExport::Error => {}
