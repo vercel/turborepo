@@ -80,7 +80,9 @@ impl Visit for IdentUsageCollector {
     }
 
     fn visit_ident(&mut self, n: &Ident) {
-        if !self.only.contains(&n.span.ctxt) {
+        // We allow SyntaxContext::empty() because Some built-in files do not go into
+        // resolver()
+        if !self.only.contains(&n.span.ctxt) && n.span.ctxt != SyntaxContext::empty() {
             return;
         }
 
@@ -187,7 +189,9 @@ impl Visit for CapturedIdCollector {
             return;
         }
 
-        if !self.only.contains(&n.span.ctxt) {
+        // We allow SyntaxContext::empty() because Some built-in files do not go into
+        // resolver()
+        if !self.only.contains(&n.span.ctxt) && n.span.ctxt != SyntaxContext::empty() {
             return;
         }
 
