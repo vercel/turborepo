@@ -437,29 +437,46 @@ impl CodeGenerateable for EsmExports {
                 EsmExport::Error => Some(quote!(
                     "(() => { throw new Error(\"Failed binding. See build errors!\"); })" as Expr,
                 )),
-                EsmExport::LocalBinding(name, mutable) => Some(quote!(
-                    "(() => $local)" as Expr,
-                    local = Ident::new((name as &str).into(), DUMMY_SP)
-                )),
+                EsmExport::LocalBinding(name, mutable) => {
+                    if *mutable {
+                        Some(quote!(
+                            "([() => $local, (v) => $local = v])" as Expr,
+                            local = Ident::new((name as &str).into(), DUMMY_SP)
+                        ))
+                    } else {
+                        Some(quote!(
+                            "(() => $local)" as Expr,
+                            local = Ident::new((name as &str).into(), DUMMY_SP)
+                        ))
+                    }
+                }
                 EsmExport::ImportedBinding(esm_ref, name, mutable) => {
                     let referenced_asset =
                         ReferencedAsset::from_resolve_result(esm_ref.resolve_reference()).await?;
                     referenced_asset.get_ident().await?.map(|ident| {
-                        quote!(
-                            "(() => $expr)" as Expr,
-                            expr: Expr = Expr::Member(MemberExpr {
+                        let expr = Expr::Member(MemberExpr {
+                            span: DUMMY_SP,
+                            obj: Box::new(Expr::Ident(Ident::new(ident.into(), DUMMY_SP))),
+                            prop: MemberProp::Computed(ComputedPropName {
                                 span: DUMMY_SP,
-                                obj: Box::new(Expr::Ident(Ident::new(ident.into(), DUMMY_SP))),
-                                prop: MemberProp::Computed(ComputedPropName {
+                                expr: Box::new(Expr::Lit(Lit::Str(Str {
                                     span: DUMMY_SP,
-                                    expr: Box::new(Expr::Lit(Lit::Str(Str {
-                                        span: DUMMY_SP,
-                                        value: (name as &str).into(),
-                                        raw: None,
-                                    })))
-                                })
-                            })
-                        )
+                                    value: (name as &str).into(),
+                                    raw: None,
+                                }))),
+                            }),
+                        });
+                        if *mutable {
+                            quote!(
+                                "([() => $expr, (v) => $expr = v])" as Expr,
+                                expr: Expr = expr,
+                            )
+                        } else {
+                            quote!(
+                                "(() => $expr)" as Expr,
+                                expr: Expr = expr,
+                            )
+                        }
                     })
                 }
                 EsmExport::ImportedNamespace(esm_ref) => {

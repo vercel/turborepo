@@ -621,7 +621,11 @@ pub(crate) async fn analyse_ecmascript_module_internal(
                     } => {
                         visitor.esm_exports.insert(
                             e.to_string(),
-                            EsmExport::ImportedBinding(Vc::upcast(import_ref), i.to_string()),
+                            EsmExport::ImportedBinding(
+                                Vc::upcast(import_ref),
+                                i.to_string(),
+                                false,
+                            ),
                         );
                     }
                 }

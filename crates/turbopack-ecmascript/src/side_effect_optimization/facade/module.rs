@@ -159,7 +159,7 @@ impl EcmascriptChunkPlaceable for EcmascriptModuleFacadeModule {
                 for (name, export) in &esm_exports.exports {
                     let name = name.clone();
                     match export {
-                        EsmExport::LocalBinding(_) => {
+                        EsmExport::LocalBinding(_, mutable) => {
                             exports.insert(
                                 name.clone(),
                                 EsmExport::ImportedBinding(
@@ -168,16 +168,21 @@ impl EcmascriptChunkPlaceable for EcmascriptModuleFacadeModule {
                                         ModulePart::locals(),
                                     )),
                                     name,
+                                    *mutable,
                                 ),
                             );
                         }
                         EsmExport::ImportedNamespace(reference) => {
                             exports.insert(name, EsmExport::ImportedNamespace(*reference));
                         }
-                        EsmExport::ImportedBinding(reference, imported_name) => {
+                        EsmExport::ImportedBinding(reference, imported_name, mutable) => {
                             exports.insert(
                                 name,
-                                EsmExport::ImportedBinding(*reference, imported_name.clone()),
+                                EsmExport::ImportedBinding(
+                                    *reference,
+                                    imported_name.clone(),
+                                    *mutable,
+                                ),
                             );
                         }
                         EsmExport::Error => {
@@ -206,6 +211,7 @@ impl EcmascriptChunkPlaceable for EcmascriptModuleFacadeModule {
                                 ModulePart::exports(),
                             )),
                             "default".to_string(),
+                            false,
                         ),
                     );
                 }
@@ -224,6 +230,7 @@ impl EcmascriptChunkPlaceable for EcmascriptModuleFacadeModule {
                     EsmExport::ImportedBinding(
                         Vc::upcast(EcmascriptModulePartReference::new(self.module)),
                         original_export.clone_value(),
+                        false,
                     ),
                 );
             }
