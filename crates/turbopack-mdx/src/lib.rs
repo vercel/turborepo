@@ -230,10 +230,6 @@ impl ChunkableModule for MdxModuleAsset {
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
     ) -> Result<Vc<Box<dyn turbopack_core::chunk::ChunkItem>>> {
-        let chunking_context =
-            Vc::try_resolve_downcast::<Box<dyn ChunkingContext>>(chunking_context)
-                .await?
-                .context("chunking context must impl ChunkingContext to use MdxModuleAsset")?;
         Ok(Vc::upcast(MdxChunkItem::cell(MdxChunkItem {
             module: self,
             chunking_context,

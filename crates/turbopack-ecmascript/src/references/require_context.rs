@@ -1,6 +1,6 @@
 use std::{borrow::Cow, collections::VecDeque, sync::Arc};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use indexmap::IndexMap;
 use swc_core::{
     common::DUMMY_SP,
@@ -378,10 +378,6 @@ impl ChunkableModule for RequireContextAsset {
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
     ) -> Result<Vc<Box<dyn turbopack_core::chunk::ChunkItem>>> {
-        let chunking_context =
-            Vc::try_resolve_downcast::<Box<dyn ChunkingContext>>(chunking_context)
-                .await?
-                .context("chunking context must impl ChunkingContext to use RequireContextAsset")?;
         let this = self.await?;
         Ok(Vc::upcast(
             RequireContextChunkItem {

@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use indexmap::IndexSet;
 use turbo_tasks::{TryJoinIterExt, Value, ValueToString, Vc};
 use turbo_tasks_fs::{File, FileSystemPath};
@@ -96,12 +96,6 @@ impl ChunkableModule for ChunkGroupFilesAsset {
         chunking_context: Vc<Box<dyn ChunkingContext>>,
     ) -> Result<Vc<Box<dyn turbopack_core::chunk::ChunkItem>>> {
         let this = self.await?;
-        let chunking_context =
-            Vc::try_resolve_downcast::<Box<dyn ChunkingContext>>(chunking_context)
-                .await?
-                .context(
-                    "chunking context must impl ChunkingContext to use ChunkGroupFilesAsset",
-                )?;
         Ok(Vc::upcast(
             ChunkGroupFilesChunkItem {
                 chunking_context,

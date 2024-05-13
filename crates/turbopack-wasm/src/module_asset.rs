@@ -119,12 +119,6 @@ impl ChunkableModule for WebAssemblyModuleAsset {
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
     ) -> Result<Vc<Box<dyn turbopack_core::chunk::ChunkItem>>> {
-        let chunking_context =
-            Vc::try_resolve_downcast::<Box<dyn ChunkingContext>>(chunking_context)
-                .await?
-                .context(
-                    "chunking context must impl ChunkingContext to use WebAssemblyModuleAsset",
-                )?;
         Ok(Vc::upcast(
             ModuleChunkItem {
                 module: self,

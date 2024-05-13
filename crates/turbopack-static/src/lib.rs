@@ -14,7 +14,7 @@
 pub mod fixed;
 pub mod output_asset;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use turbo_tasks::{ValueToString, Vc};
 use turbopack_core::{
     asset::{Asset, AssetContent},
@@ -94,10 +94,6 @@ impl ChunkableModule for StaticModuleAsset {
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
     ) -> Result<Vc<Box<dyn turbopack_core::chunk::ChunkItem>>> {
-        let chunking_context =
-            Vc::try_resolve_downcast::<Box<dyn ChunkingContext>>(chunking_context)
-                .await?
-                .context("chunking context must impl ChunkingContext to use StaticModuleAsset")?;
         Ok(Vc::upcast(ModuleChunkItem::cell(ModuleChunkItem {
             module: self,
             chunking_context,

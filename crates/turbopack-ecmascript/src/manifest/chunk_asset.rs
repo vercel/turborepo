@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use turbo_tasks::{Value, Vc};
 use turbopack_core::{
     asset::{Asset, AssetContent},
@@ -143,10 +143,6 @@ impl ChunkableModule for ManifestAsyncModule {
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
     ) -> Result<Vc<Box<dyn turbopack_core::chunk::ChunkItem>>> {
-        let chunking_context =
-            Vc::try_resolve_downcast::<Box<dyn ChunkingContext>>(chunking_context)
-                .await?
-                .context("chunking context must impl ChunkingContext to use ManifestChunkAsset")?;
         Ok(Vc::upcast(
             ManifestChunkItem {
                 chunking_context,
