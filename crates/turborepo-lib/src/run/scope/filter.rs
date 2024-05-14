@@ -542,32 +542,7 @@ fn match_package_names(
         .extract_if(|e| matcher.is_match(e.as_ref()))
         .collect::<HashSet<_>>();
 
-    // if we got no matches and the pattern is not scoped
-    // check if we have exactly one scoped package that does match
-    if matched_packages.is_empty()
-        && !name_pattern.starts_with('@')
-        && !name_pattern.starts_with('/')
-    {
-        let scoped_pattern = format!("@*/{}", name_pattern);
-        let scoped_matcher = SimpleGlob::new(&scoped_pattern)?;
-
-        let (first_item, multiple_matches) = {
-            let mut scoped_matched_packages =
-                entry_packages.extract_if(|e| scoped_matcher.is_match(e.as_ref())); // we can extract again since the original set is untouched
-            let first_item = scoped_matched_packages.next();
-            (first_item, scoped_matched_packages.count() > 0)
-        };
-
-        if multiple_matches {
-            // if we have more than one, we can't disambiguate
-            Ok(Default::default())
-        } else {
-            // otherwise we either have a match or no match
-            Ok(first_item.into_iter().collect())
-        }
-    } else {
-        Ok(matched_packages)
-    }
+    Ok(matched_packages)
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -1031,11 +1006,21 @@ mod test {
             }])
             .unwrap();
 
+        assert!(
+            packages.is_empty(),
+            "expected empty set, got {:?}",
+            packages
+        );
+
+        let packages = resolver
+            .get_filtered_packages(vec![TargetSelector {
+                name_pattern: "@foo/bar".to_string(),
+                ..Default::default()
+            }])
+            .unwrap();
         assert_eq!(
             packages,
-            vec![PackageName::Other("@foo/bar".to_string())]
-                .into_iter()
-                .collect()
+            vec![PackageName::from("@foo/bar")].into_iter().collect()
         );
     }
 
