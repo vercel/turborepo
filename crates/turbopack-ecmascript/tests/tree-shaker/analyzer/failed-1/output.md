@@ -331,9 +331,6 @@ function connectHMR(options) {
     }
     init();
 }
-export { getSocketProtocol } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 export { connectHMR } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -342,17 +339,11 @@ export { connectHMR } from "__TURBOPACK_VAR__" assert {
 ## Part 4
 ```js
 let source;
-export { source } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 5
 ```js
 const eventCallbacks = [];
-export { eventCallbacks } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Merged (module eval)
@@ -470,9 +461,6 @@ function connectHMR(options) {
     }
     init();
 }
-export { getSocketProtocol } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 export { connectHMR } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -481,17 +469,11 @@ export { connectHMR } from "__TURBOPACK_VAR__" assert {
 ## Part 4
 ```js
 let source;
-export { source } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 5
 ```js
 const eventCallbacks = [];
-export { eventCallbacks } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Merged (module eval)

@@ -611,7 +611,7 @@ export { createPrerenderState } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 2
 ```js
-import { DynamicServerError, StaticGenBailoutError, getPathname } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
 import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
@@ -746,7 +746,7 @@ export { formatDynamicAPIAccesses } from "__TURBOPACK_VAR__" assert {
 import { assertPostpone } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
-import { React } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
 };
 export { createPostponedAbortSignal };
@@ -768,14 +768,11 @@ export { createPostponedAbortSignal } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 9
 ```js
-import { React } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
 };
 import React from 'react';
 const hasPostpone = typeof React.unstable_postpone === 'function';
-export { hasPostpone } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 10
@@ -793,9 +790,6 @@ function postponeWithTracking(prerenderState, expression, pathname) {
     });
     React.unstable_postpone(reason);
 }
-export { postponeWithTracking } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 11
@@ -808,9 +802,6 @@ function assertPostpone() {
         throw new Error(`Invariant: React.unstable_postpone is not defined. This suggests the wrong version of React was loaded. This is a bug in Next.js`);
     }
 }
-export { assertPostpone } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Merged (module eval)
@@ -881,7 +872,7 @@ export { createPrerenderState } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 2
 ```js
-import { DynamicServerError, StaticGenBailoutError, getPathname } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
 import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
@@ -1016,7 +1007,7 @@ export { formatDynamicAPIAccesses } from "__TURBOPACK_VAR__" assert {
 import { assertPostpone } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
-import { React } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
 };
 export { createPostponedAbortSignal };
@@ -1038,14 +1029,11 @@ export { createPostponedAbortSignal } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 9
 ```js
-import { React } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
 };
 import React from 'react';
 const hasPostpone = typeof React.unstable_postpone === 'function';
-export { hasPostpone } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 10
@@ -1063,9 +1051,6 @@ function postponeWithTracking(prerenderState, expression, pathname) {
     });
     React.unstable_postpone(reason);
 }
-export { postponeWithTracking } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 11
@@ -1078,9 +1063,6 @@ function assertPostpone() {
         throw new Error(`Invariant: React.unstable_postpone is not defined. This suggests the wrong version of React was loaded. This is a bug in Next.js`);
     }
 }
-export { assertPostpone } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Merged (module eval)

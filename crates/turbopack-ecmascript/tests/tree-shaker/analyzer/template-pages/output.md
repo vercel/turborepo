@@ -746,7 +746,7 @@ graph TD
 # Modules (dev)
 ## Part 0
 ```js
-import { hoist, userland } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
 import "__TURBOPACK_PART__" assert {
@@ -771,7 +771,7 @@ export { __TURBOPACK__default__export__ as default };
 ```
 ## Part 2
 ```js
-import { hoist, userland } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
 import "__TURBOPACK_PART__" assert {
@@ -788,7 +788,7 @@ export { getStaticProps } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
-import { hoist, userland } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
 import "__TURBOPACK_PART__" assert {
@@ -805,7 +805,7 @@ export { getStaticPaths } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 4
 ```js
-import { hoist, userland } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
 import "__TURBOPACK_PART__" assert {
@@ -822,7 +822,7 @@ export { getServerSideProps } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 5
 ```js
-import { hoist, userland } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
 import "__TURBOPACK_PART__" assert {
@@ -839,7 +839,7 @@ export { config } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 6
 ```js
-import { hoist, userland } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
 import "__TURBOPACK_PART__" assert {
@@ -856,7 +856,7 @@ export { reportWebVitals } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 7
 ```js
-import { hoist, userland } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
 import "__TURBOPACK_PART__" assert {
@@ -873,7 +873,7 @@ export { unstable_getStaticProps } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 8
 ```js
-import { hoist, userland } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
 import "__TURBOPACK_PART__" assert {
@@ -890,7 +890,7 @@ export { unstable_getStaticPaths } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 9
 ```js
-import { hoist, userland } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
 import "__TURBOPACK_PART__" assert {
@@ -907,7 +907,7 @@ export { unstable_getStaticParams } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 10
 ```js
-import { hoist, userland } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
 import "__TURBOPACK_PART__" assert {
@@ -924,7 +924,7 @@ export { unstable_getServerProps } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 11
 ```js
-import { userland } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 12
 };
 export { unstable_getServerSideProps };
@@ -965,7 +965,7 @@ export { routeModule } from "__TURBOPACK_VAR__" assert {
 ```
 ## Merged (module eval)
 ```js
-import { hoist, userland } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
 import "__TURBOPACK_PART__" assert {
@@ -1031,7 +1031,7 @@ export default hoist(userland, 'default');
 # Modules (prod)
 ## Part 0
 ```js
-import { hoist, userland } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
 import "__TURBOPACK_PART__" assert {
@@ -1056,7 +1056,7 @@ export { __TURBOPACK__default__export__ as default };
 ```
 ## Part 2
 ```js
-import { hoist, userland } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
 import "__TURBOPACK_PART__" assert {
@@ -1073,7 +1073,7 @@ export { getStaticProps } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
-import { hoist, userland } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
 import "__TURBOPACK_PART__" assert {
@@ -1090,7 +1090,7 @@ export { getStaticPaths } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 4
 ```js
-import { hoist, userland } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
 import "__TURBOPACK_PART__" assert {
@@ -1107,7 +1107,7 @@ export { getServerSideProps } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 5
 ```js
-import { hoist, userland } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
 import "__TURBOPACK_PART__" assert {
@@ -1124,7 +1124,7 @@ export { config } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 6
 ```js
-import { hoist, userland } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
 import "__TURBOPACK_PART__" assert {
@@ -1141,7 +1141,7 @@ export { reportWebVitals } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 7
 ```js
-import { hoist, userland } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
 import "__TURBOPACK_PART__" assert {
@@ -1158,7 +1158,7 @@ export { unstable_getStaticProps } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 8
 ```js
-import { hoist, userland } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
 import "__TURBOPACK_PART__" assert {
@@ -1175,7 +1175,7 @@ export { unstable_getStaticPaths } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 9
 ```js
-import { hoist, userland } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
 import "__TURBOPACK_PART__" assert {
@@ -1192,7 +1192,7 @@ export { unstable_getStaticParams } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 10
 ```js
-import { hoist, userland } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
 import "__TURBOPACK_PART__" assert {
@@ -1209,7 +1209,7 @@ export { unstable_getServerProps } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 11
 ```js
-import { userland } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 12
 };
 export { unstable_getServerSideProps };
@@ -1250,7 +1250,7 @@ export { routeModule } from "__TURBOPACK_VAR__" assert {
 ```
 ## Merged (module eval)
 ```js
-import { hoist, userland } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
 import "__TURBOPACK_PART__" assert {

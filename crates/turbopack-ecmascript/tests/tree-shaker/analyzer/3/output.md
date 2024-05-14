@@ -417,15 +417,6 @@ function c1_2() {
 function c1_3() {
     return c1_1(d2);
 }
-export { c1_1 } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { c1_2 } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { c1_3 } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 5
@@ -442,39 +433,21 @@ function c2_2() {
 function c2_3() {
     return c2_1();
 }
-export { c2_1 } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { c2_2 } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { c2_3 } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 6
 ```js
 function d1() {}
-export { d1 } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 7
 ```js
 function d2() {}
-export { d2 } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 8
 ```js
 function d3() {}
-export { d3 } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Merged (module eval)
@@ -572,15 +545,6 @@ function c1_2() {
 function c1_3() {
     return c1_1(d2);
 }
-export { c1_1 } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { c1_2 } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { c1_3 } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 5
@@ -597,39 +561,21 @@ function c2_2() {
 function c2_3() {
     return c2_1();
 }
-export { c2_1 } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { c2_2 } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { c2_3 } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 6
 ```js
 function d1() {}
-export { d1 } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 7
 ```js
 function d2() {}
-export { d2 } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 8
 ```js
 function d3() {}
-export { d3 } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Merged (module eval)

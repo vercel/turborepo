@@ -162,9 +162,6 @@ import { dog } from "__TURBOPACK_PART__" assert {
 export { CHIMERA };
 const cat = "cat";
 const CHIMERA = cat + dog;
-export { cat } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 export { CHIMERA } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -173,9 +170,6 @@ export { CHIMERA } from "__TURBOPACK_VAR__" assert {
 ## Part 3
 ```js
 const dog = "dog";
-export { dog } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Merged (module eval)
@@ -224,9 +218,6 @@ import { dog } from "__TURBOPACK_PART__" assert {
 export { CHIMERA };
 const cat = "cat";
 const CHIMERA = cat + dog;
-export { cat } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 export { CHIMERA } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -235,9 +226,6 @@ export { CHIMERA } from "__TURBOPACK_VAR__" assert {
 ## Part 3
 ```js
 const dog = "dog";
-export { dog } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Merged (module eval)

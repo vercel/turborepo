@@ -327,12 +327,6 @@ const run = async (moduleFactory)=>{
         }
     }
 };
-export { ipc } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { queue } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 export { run } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -459,12 +453,6 @@ const run = async (moduleFactory)=>{
                 }
         }
     }
-};
-export { ipc } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { queue } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
 };
 export { run } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
