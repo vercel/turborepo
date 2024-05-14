@@ -941,6 +941,8 @@ impl DepGraph {
                     let captured_ids = ids_captured_by(item, [unresolved_ctxt, top_level_ctxt]);
 
                     if assign.op != op!("=") {
+                        used_ids.read.extend(used_ids.write.iter().cloned());
+
                         let extra_ids = ids_used_by_ignoring_nested(
                             &assign.left,
                             [unresolved_ctxt, top_level_ctxt],
