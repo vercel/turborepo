@@ -10,6 +10,7 @@ use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{ChunkItem, ChunkItemExt, ChunkType, ChunkableModule, ChunkingContext},
+    code_builder::CodeBuilder,
     context::{AssetContext, ProcessResult},
     ident::AssetIdent,
     issue::{Issue, IssueExt, IssueSeverity, IssueStage, OptionStyledString, StyledString},
@@ -395,17 +396,22 @@ impl EcmascriptChunkItem for ModuleChunkItem {
             )?;
         }
         code += "});\n";
-        Ok(EcmascriptChunkItemContent {
-            inner_code: code.clone().into(),
-            // We generate a minimal map for runtime code so that the filename is
-            // displayed in dev tools.
-            source_map: Some(Vc::upcast(generate_minimal_source_map(
-                self.module.ident().to_string().await?.to_string(),
-                code,
-            ))),
-            ..Default::default()
-        }
-        .cell())
+
+        let mut builder = CodeBuilder::default();
+
+        // We generate a minimal map for runtime code so that the filename is
+        // displayed in dev tools.
+        let source_map = Vc::upcast(generate_minimal_source_map(
+            self.module.ident().to_string().await?.to_string(),
+            code.clone(),
+        ));
+
+        builder.push_source(&code.into(), Some(source_map));
+
+        Ok(EcmascriptChunkItemContent::new(
+            self.module.ident(),
+            builder.build().cell(),
+        ))
     }
 }
 

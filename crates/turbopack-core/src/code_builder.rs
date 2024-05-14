@@ -26,6 +26,15 @@ pub struct Code {
     mappings: Vec<Mapping>,
 }
 
+impl<T: Into<Rope>> From<T> for Code {
+    fn from(rope: T) -> Self {
+        Code {
+            code: rope.into(),
+            mappings: Default::default(),
+        }
+    }
+}
+
 /// CodeBuilder provides a mutable container to append source code.
 #[derive(Default)]
 pub struct CodeBuilder {

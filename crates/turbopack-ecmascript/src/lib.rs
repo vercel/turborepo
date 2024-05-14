@@ -45,7 +45,10 @@ pub use static_code::StaticEcmascriptCode;
 use swc_core::{
     common::GLOBALS,
     ecma::{
-        codegen::{text_writer::JsWriter, Emitter},
+        codegen::{
+            text_writer::{JsWriter, WriteJs},
+            Emitter,
+        },
         visit::{VisitMutWith, VisitMutWithPath},
     },
 };
@@ -702,7 +705,8 @@ impl EcmascriptChunkItem for ModuleChunkItem {
             .module
             .module_content(this.chunking_context, async_module_info);
 
-        Ok(EcmascriptChunkItemContent::new(
+        Ok(EcmascriptChunkItemContent::new_from_content(
+            self.asset_ident(),
             content,
             this.chunking_context,
             async_module_options,
@@ -790,6 +794,7 @@ impl EcmascriptModuleContent {
             visitors,
             root_visitors,
             source_map,
+            true,
         )
         .await
     }
@@ -808,6 +813,7 @@ impl EcmascriptModuleContent {
             Vec::new(),
             Vec::new(),
             OptionSourceMap::none(),
+            false,
         )
         .await
     }
@@ -823,6 +829,7 @@ async fn gen_content_with_visitors(
     )>,
     root_visitors: Vec<&dyn VisitorFactory>,
     original_src_map: Vc<OptionSourceMap>,
+    indent: bool,
 ) -> Result<Vc<EcmascriptModuleContent>> {
     let parsed = parsed.await?;
 
@@ -863,11 +870,18 @@ async fn gen_content_with_visitors(
 
             let comments = comments.consumable();
 
+            let mut writer =
+                JsWriter::new(source_map.clone(), "\n", &mut bytes, Some(&mut mappings));
+
+            if indent {
+                writer.increase_indent()?;
+            }
+
             let mut emitter = Emitter {
                 cfg: swc_core::ecma::codegen::Config::default(),
                 cm: source_map.clone(),
                 comments: Some(&comments),
-                wr: JsWriter::new(source_map.clone(), "\n", &mut bytes, Some(&mut mappings)),
+                wr: writer,
             };
 
             emitter.emit_program(&program)?;

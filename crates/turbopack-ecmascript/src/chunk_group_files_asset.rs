@@ -8,6 +8,7 @@ use turbopack_core::{
         availability_info::AvailabilityInfo, ChunkItem, ChunkType, ChunkableModule,
         ChunkingContext, ChunkingContextExt, EvaluatableAssets,
     },
+    code_builder::Code,
     ident::AssetIdent,
     introspect::{
         module::IntrospectableModule, utils::content_to_details, Introspectable,
@@ -178,15 +179,15 @@ impl EcmascriptChunkItem for ChunkGroupFilesChunkItem {
             .iter()
             .filter_map(|path| client_root.get_path_to(path))
             .collect();
-        Ok(EcmascriptChunkItemContent {
-            inner_code: format!(
+
+        Ok(EcmascriptChunkItemContent::new(
+            self.asset_ident(),
+            Code::from(format!(
                 "__turbopack_export_value__({:#});\n",
                 StringifyJs(&chunks_paths)
-            )
-            .into(),
-            ..Default::default()
-        }
-        .cell())
+            ))
+            .cell(),
+        ))
     }
 }
 

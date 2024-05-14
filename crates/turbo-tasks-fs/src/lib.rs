@@ -1255,7 +1255,7 @@ impl ValueToString for FileSystemPath {
     async fn to_string(&self) -> Result<Vc<String>> {
         Ok(Vc::cell(format!(
             "[{}]/{}",
-            self.fs.to_string().await?,
+            self.fs.to_string().await?.replace(' ', "_"),
             self.path
         )))
     }

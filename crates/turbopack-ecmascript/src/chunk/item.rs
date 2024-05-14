@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{collections::HashMap, fmt::Write as _, io::Write as _};
 
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
@@ -8,6 +8,7 @@ use turbopack_core::{
     chunk::{AsyncModuleInfo, ChunkItem, ChunkItemExt, ChunkingContext},
     code_builder::{Code, CodeBuilder},
     error::PrettyPrintError,
+    ident::AssetIdent,
     issue::{code_gen::CodeGenerationIssue, IssueExt, IssueSeverity, StyledString},
     source_map::GenerateSourceMap,
 };
@@ -20,8 +21,9 @@ use crate::{
 };
 
 #[turbo_tasks::value(shared)]
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct EcmascriptChunkItemContent {
+    pub source_url: SourceUrl,
     pub inner_code: Rope,
     pub source_map: Option<Vc<Box<dyn GenerateSourceMap>>>,
     pub options: EcmascriptChunkItemOptions,
@@ -31,7 +33,36 @@ pub struct EcmascriptChunkItemContent {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItemContent {
     #[turbo_tasks::function]
-    pub async fn new(
+    pub async fn new(ident: Vc<AssetIdent>, code: Vc<Code>) -> Result<Vc<Self>> {
+        Ok(EcmascriptChunkItemContent {
+            source_url: SourceUrl::from_asset_ident(ident).await?,
+            inner_code: code.await?.source_code().clone(),
+            source_map: Some(Vc::upcast(code)),
+            options: Default::default(),
+            placeholder_for_future_extensions: (),
+        }
+        .cell())
+    }
+
+    #[turbo_tasks::function]
+    pub async fn new_with_options(
+        ident: Vc<AssetIdent>,
+        code: Vc<Code>,
+        options: Vc<EcmascriptChunkItemOptions>,
+    ) -> Result<Vc<Self>> {
+        Ok(EcmascriptChunkItemContent {
+            source_url: SourceUrl::from_asset_ident(ident).await?,
+            inner_code: code.await?.source_code().clone(),
+            source_map: Some(Vc::upcast(code)),
+            options: options.await?.clone_value(),
+            placeholder_for_future_extensions: (),
+        }
+        .cell())
+    }
+
+    #[turbo_tasks::function]
+    pub async fn new_from_content(
+        ident: Vc<AssetIdent>,
         content: Vc<EcmascriptModuleContent>,
         chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
         async_module_options: Vc<OptionAsyncModuleOptions>,
@@ -46,6 +77,7 @@ impl EcmascriptChunkItemContent {
         let async_module = async_module_options.await?.clone_value();
 
         Ok(EcmascriptChunkItemContent {
+            source_url: SourceUrl::from_asset_ident(ident).await?,
             inner_code: content.inner_code.clone(),
             source_map: content.source_map,
             options: if content.is_esm {
@@ -72,14 +104,15 @@ impl EcmascriptChunkItemContent {
                     ..Default::default()
                 }
             },
-            ..Default::default()
+            placeholder_for_future_extensions: (),
         }
         .cell())
     }
 
     #[turbo_tasks::function]
-    pub async fn module_factory(self: Vc<Self>) -> Result<Vc<Code>> {
-        let this = self.await?;
+    pub fn module_factory(&self) -> Result<Vc<Code>> {
+        let indent = "    ";
+
         let mut args = vec![
             "r: __turbopack_require__",
             "f: __turbopack_module_context__",
@@ -98,68 +131,182 @@ impl EcmascriptChunkItemContent {
             // HACK
             "__dirname",
         ];
-        if this.options.async_module.is_some() {
+        if self.options.async_module.is_some() {
             args.push("a: __turbopack_async_module__");
         }
-        if this.options.externals {
+        if self.options.externals {
             args.push("x: __turbopack_external_require__");
             args.push("y: __turbopack_external_import__");
         }
-        if this.options.refresh {
+        if self.options.refresh {
             args.push("k: __turbopack_refresh__");
         }
-        if this.options.module {
+        if self.options.module {
             args.push("m: module");
         }
-        if this.options.exports {
+        if self.options.exports {
             args.push("e: exports");
         }
-        if this.options.require {
+        if self.options.require {
             args.push("t: require");
         }
-        if this.options.wasm {
+        if self.options.wasm {
             args.push("w: __turbopack_wasm__");
             args.push("u: __turbopack_wasm_module__");
         }
         let mut code = CodeBuilder::default();
         let args = FormatIter(|| args.iter().copied().intersperse(", "));
-        if this.options.this {
+        if self.options.this {
             writeln!(code, "(function({{ {} }}) {{ !function() {{", args,)?;
         } else {
             writeln!(code, "(({{ {} }}) => (() => {{", args,)?;
         }
-        if this.options.strict {
-            code += "\"use strict\";\n\n";
+        if self.options.strict {
+            writeln!(code, "{indent}\"use strict\";")?;
+            writeln!(code)?;
         } else {
-            code += "\n";
+            writeln!(code)?;
         }
 
-        if this.options.async_module.is_some() {
+        if self.options.async_module.is_some() {
+            code += indent;
             code += "__turbopack_async_module__(async (__turbopack_handle_async_dependencies__, \
                      __turbopack_async_result__) => { try {\n";
         }
 
-        code.push_source(&this.inner_code, this.source_map);
+        code.push_source(&self.inner_code, self.source_map);
 
-        if let Some(opts) = &this.options.async_module {
-            write!(
+        if let Some(opts) = &self.options.async_module {
+            writeln!(code, "{indent}__turbopack_async_result__();")?;
+            writeln!(
                 code,
-                "__turbopack_async_result__();\n}} catch(e) {{ __turbopack_async_result__(e); }} \
-                 }}, {});",
+                "{indent}}} catch(e) {{ __turbopack_async_result__(e); }} }}, {});",
                 opts.has_top_level_await
             )?;
         }
 
-        if this.options.this {
-            code += "\n}.call(this) })";
+        writeln!(code)?;
+        writeln!(
+            code,
+            "{indent}//# sourceURL={}",
+            self.source_url.to_string()?
+        )?;
+
+        if self.options.this {
+            code += "}.call(this) })";
         } else {
-            code += "\n})())";
+            code += "})())";
         }
+
         Ok(code.build().cell())
     }
 }
 
-#[derive(PartialEq, Eq, Default, Debug, Clone, Serialize, Deserialize, TraceRawVcs)]
+#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, TraceRawVcs)]
+pub struct SourceUrlQuery {
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub query: HashMap<String, String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fragment: Option<String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub assets: HashMap<String, String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub modifiers: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub part: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub layer: Option<String>,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, TraceRawVcs)]
+pub struct SourceUrl {
+    pub path: String,
+    pub query: SourceUrlQuery,
+}
+
+impl SourceUrl {
+    pub async fn from_asset_ident(ident: Vc<AssetIdent>) -> Result<Self> {
+        let ident = &*ident.await?;
+
+        let path = ident.path.to_string().await?.clone_value();
+
+        let query = &*ident.query.await?;
+        let query = if !query.is_empty() {
+            serde_qs::from_str(query)?
+        } else {
+            Default::default()
+        };
+
+        let fragment = if let Some(fragment) = &ident.fragment {
+            Some(fragment.await?.clone_value())
+        } else {
+            None
+        };
+
+        let mut assets = HashMap::with_capacity(ident.assets.len());
+        for (key, asset) in &ident.assets {
+            assets.insert(
+                key.await?.clone_value(),
+                asset.to_string().await?.clone_value(),
+            );
+        }
+
+        let layer = if let Some(layer) = &ident.layer {
+            Some(layer.await?.clone_value())
+        } else {
+            None
+        };
+
+        let modifiers = if !ident.modifiers.is_empty() {
+            let mut s = String::new();
+
+            for (i, modifier) in ident.modifiers.iter().enumerate() {
+                if i > 0 {
+                    s.push(',');
+                }
+                s.push_str(&modifier.await?);
+            }
+
+            Some(s)
+        } else {
+            None
+        };
+
+        let part = if let Some(part) = &ident.part {
+            Some(part.to_string().await?.clone_value())
+        } else {
+            None
+        };
+
+        Ok(Self {
+            path,
+            query: SourceUrlQuery {
+                query,
+                fragment,
+                assets,
+                modifiers,
+                part,
+                layer,
+            },
+        })
+    }
+
+    pub fn to_string(&self) -> Result<String> {
+        let query = serde_qs::to_string(&self.query)?;
+
+        let mut url = "turbopack://".to_string();
+        url += &self.path.replace(' ', "+");
+
+        if !query.is_empty() {
+            write!(url, "?{}", &*query)?;
+        }
+
+        Ok(url)
+    }
+}
+
+#[turbo_tasks::value(shared)]
+#[derive(Default, Debug, Clone)]
 pub struct EcmascriptChunkItemOptions {
     /// Whether this chunk item should be in "use strict" mode.
     pub strict: bool,

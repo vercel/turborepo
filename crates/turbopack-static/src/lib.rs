@@ -19,6 +19,7 @@ use turbo_tasks::{ValueToString, Vc};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{ChunkItem, ChunkType, ChunkableModule, ChunkingContext},
+    code_builder::Code,
     context::AssetContext,
     ident::AssetIdent,
     module::Module,
@@ -168,8 +169,9 @@ impl EcmascriptChunkItem for ModuleChunkItem {
 
     #[turbo_tasks::function]
     async fn content(&self) -> Result<Vc<EcmascriptChunkItemContent>> {
-        Ok(EcmascriptChunkItemContent {
-            inner_code: format!(
+        Ok(EcmascriptChunkItemContent::new(
+            self.module.ident(),
+            Code::from(format!(
                 "__turbopack_export_value__({path});",
                 path = StringifyJs(
                     &self
@@ -177,11 +179,9 @@ impl EcmascriptChunkItem for ModuleChunkItem {
                         .asset_url(self.static_asset.ident())
                         .await?
                 )
-            )
-            .into(),
-            ..Default::default()
-        }
-        .into())
+            ))
+            .cell(),
+        ))
     }
 }
 

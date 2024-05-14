@@ -3,6 +3,7 @@ use turbo_tasks::{ValueToString, Vc};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{ChunkItem, ChunkType, ChunkableModule, ChunkingContext},
+    code_builder::Code,
     context::AssetContext,
     ident::AssetIdent,
     module::Module,
@@ -163,14 +164,13 @@ impl EcmascriptChunkItem for RawModuleChunkItem {
             bail!("WASM asset ident is not relative to output root");
         };
 
-        Ok(EcmascriptChunkItemContent {
-            inner_code: format!(
+        Ok(EcmascriptChunkItemContent::new(
+            self.module.ident(),
+            Code::from(format!(
                 "__turbopack_export_value__({path});",
                 path = StringifyJs(path)
-            )
-            .into(),
-            ..Default::default()
-        }
-        .into())
+            ))
+            .cell(),
+        ))
     }
 }

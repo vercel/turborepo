@@ -16,6 +16,7 @@ use turbo_tasks_fs::{FileContent, FileJsonContent};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{ChunkItem, ChunkType, ChunkableModule, ChunkingContext},
+    code_builder::Code,
     ident::AssetIdent,
     module::Module,
     reference::ModuleReferences,
@@ -143,11 +144,10 @@ impl EcmascriptChunkItem for JsonChunkItem {
                 let inner_code =
                     format!("__turbopack_export_value__(JSON.parse({js_str_content}));");
 
-                Ok(EcmascriptChunkItemContent {
-                    inner_code: inner_code.into(),
-                    ..Default::default()
-                }
-                .into())
+                Ok(EcmascriptChunkItemContent::new(
+                    self.module.ident(),
+                    Code::from(inner_code).cell(),
+                ))
             }
             FileJsonContent::Unparseable(e) => {
                 let mut message = "Unable to make a module from invalid JSON: ".to_string();

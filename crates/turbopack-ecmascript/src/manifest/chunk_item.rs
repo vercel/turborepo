@@ -3,6 +3,7 @@ use indoc::formatdoc;
 use turbo_tasks::{TryJoinIterExt, Vc};
 use turbopack_core::{
     chunk::{ChunkData, ChunkItem, ChunkType, ChunkingContext, ChunksData},
+    code_builder::Code,
     ident::AssetIdent,
     module::Module,
     reference::{ModuleReferences, SingleOutputAssetReference},
@@ -61,11 +62,10 @@ impl EcmascriptChunkItem for ManifestChunkItem {
             StringifyJs(&chunks_data)
         };
 
-        Ok(EcmascriptChunkItemContent {
-            inner_code: code.into(),
-            ..Default::default()
-        }
-        .into())
+        Ok(EcmascriptChunkItemContent::new(
+            self.asset_ident(),
+            Code::from(code).cell(),
+        ))
     }
 }
 

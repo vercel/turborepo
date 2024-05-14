@@ -60,7 +60,8 @@ impl EcmascriptChunkItem for EcmascriptModuleLocalsChunkItem {
             exports,
             async_module_info,
         );
-        Ok(EcmascriptChunkItemContent::new(
+        Ok(EcmascriptChunkItemContent::new_from_content(
+            self.module.ident(),
             content,
             self.chunking_context,
             async_module_options,

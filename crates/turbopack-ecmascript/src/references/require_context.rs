@@ -21,6 +21,7 @@ use turbopack_core::{
         ChunkItem, ChunkItemExt, ChunkType, ChunkableModule, ChunkableModuleReference,
         ChunkingContext,
     },
+    code_builder::Code,
     ident::AssetIdent,
     issue::{IssueSeverity, IssueSource},
     module::Module,
@@ -490,11 +491,10 @@ impl EcmascriptChunkItem for RequireContextChunkItem {
 
         emitter.emit_module(&module)?;
 
-        Ok(EcmascriptChunkItemContent {
-            inner_code: bytes.into(),
-            ..Default::default()
-        }
-        .cell())
+        Ok(EcmascriptChunkItemContent::new(
+            self.inner.ident(),
+            Code::from(bytes).cell(),
+        ))
     }
 }
 

@@ -2,10 +2,10 @@
   "version": 3,
   "sources": [],
   "sections": [
-    {"offset": {"line": 4, "column": 0}, "map": {"version":3,"sources":["turbopack://[project]/crates/turbopack-tests/tests/snapshot/export-alls/cjs-script/input/exported.cjs"],"sourcesContent":["module.exports = { foo: 1, bar: 2 }"],"names":[],"mappings":"AAAA,OAAO,OAAO,GAAG;IAAE,KAAK;IAAG,KAAK;AAAE"}},
-    {"offset": {"line": 8, "column": 0}, "map": {"version":3,"sources":[],"names":[],"mappings":"A"}},
-    {"offset": {"line": 13, "column": 0}, "map": {"version":3,"sources":["turbopack://[project]/crates/turbopack-tests/tests/snapshot/export-alls/cjs-script/input/mod.js"],"sourcesContent":["\nexport * from './exported.cjs'\n\nconsole.log('Hoist test')"],"names":[],"mappings":";;;;;AAGA,QAAQ,GAAG,CAAC"}},
-    {"offset": {"line": 19, "column": 0}, "map": {"version":3,"sources":[],"names":[],"mappings":"A"}},
-    {"offset": {"line": 24, "column": 0}, "map": {"version":3,"sources":["turbopack://[project]/crates/turbopack-tests/tests/snapshot/export-alls/cjs-script/input/index.js"],"sourcesContent":["import * as foo from './mod.js';\n\nconsole.log(foo)"],"names":[],"mappings":";;;;AAEA,QAAQ,GAAG,CAAC"}},
-    {"offset": {"line": 29, "column": 0}, "map": {"version":3,"sources":[],"names":[],"mappings":"A"}}]
+    {"offset": {"line": 7, "column": 0}, "map": {"version":3,"sources":["turbopack://[project]/crates/turbopack-tests/tests/snapshot/export-alls/cjs-script/input/exported.cjs"],"sourcesContent":["module.exports = { foo: 1, bar: 2 }"],"names":[],"mappings":"IAAA,OAAO,OAAO,GAAG;QAAE,KAAK;QAAG,KAAK;IAAE"}},
+    {"offset": {"line": 11, "column": 0}, "map": {"version":3,"sources":[],"names":[],"mappings":"A"}},
+    {"offset": {"line": 21, "column": 0}, "map": {"version":3,"sources":["turbopack://[project]/crates/turbopack-tests/tests/snapshot/export-alls/cjs-script/input/mod.js"],"sourcesContent":["\nexport * from './exported.cjs'\n\nconsole.log('Hoist test')"],"names":[],"mappings":";;;;;IAGA,QAAQ,GAAG,CAAC"}},
+    {"offset": {"line": 27, "column": 0}, "map": {"version":3,"sources":[],"names":[],"mappings":"A"}},
+    {"offset": {"line": 37, "column": 0}, "map": {"version":3,"sources":["turbopack://[project]/crates/turbopack-tests/tests/snapshot/export-alls/cjs-script/input/index.js"],"sourcesContent":["import * as foo from './mod.js';\n\nconsole.log(foo)"],"names":[],"mappings":";;;;IAEA,QAAQ,GAAG,CAAC"}},
+    {"offset": {"line": 42, "column": 0}, "map": {"version":3,"sources":[],"names":[],"mappings":"A"}}]
 }

@@ -6,6 +6,7 @@ use turbopack_core::{
         ChunkData, ChunkItem, ChunkItemExt, ChunkType, ChunkableModule, ChunkingContext,
         ChunkingContextExt, ChunksData,
     },
+    code_builder::Code,
     ident::AssetIdent,
     module::Module,
     output::OutputAssets,
@@ -144,11 +145,10 @@ impl EcmascriptChunkItem for AsyncLoaderChunkItem {
             }
         };
 
-        Ok(EcmascriptChunkItemContent {
-            inner_code: code.into(),
-            ..Default::default()
-        }
-        .into())
+        Ok(EcmascriptChunkItemContent::new(
+            self.asset_ident(),
+            Code::from(code).cell(),
+        ))
     }
 }
 

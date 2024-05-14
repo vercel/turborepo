@@ -30,7 +30,7 @@ pub use self::{
     data::EcmascriptChunkData,
     item::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemExt,
-        EcmascriptChunkItemOptions,
+        EcmascriptChunkItemOptions, SourceUrl, SourceUrlQuery,
     },
     placeable::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceables, EcmascriptExports},
 };
@@ -227,4 +227,20 @@ impl Introspectable for EcmascriptChunk {
         }
         Ok(Vc::cell(children))
     }
+}
+
+/// Creates a fancy module id comment.
+///
+/// ```js
+/// /*----------------*\
+/// |> module id here <|
+/// \*----------------*/
+/// ```
+pub fn module_id_comment(id: &str) -> String {
+    format!(
+        "{}\n{}\n{}",
+        format_args!("/*-{:-^1$}-*\\", "-", id.len()),
+        format_args!("|> {} <|", id),
+        format_args!("\\*-{:-^1$}-*/", "-", id.len()),
+    )
 }

@@ -17,7 +17,7 @@ use turbopack_ecmascript::{
     chunk::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemOptions,
         EcmascriptChunkPlaceable, EcmascriptChunkType, EcmascriptChunkingContext,
-        EcmascriptExports,
+        EcmascriptExports, SourceUrl,
     },
     references::async_module::OptionAsyncModule,
     EcmascriptModuleAsset,
@@ -243,6 +243,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
             .await?;
 
         Ok(EcmascriptChunkItemContent {
+            source_url: SourceUrl::from_asset_ident(self.module.ident()).await?,
             options: EcmascriptChunkItemOptions {
                 wasm: true,
                 ..chunk_item_content.options.clone()

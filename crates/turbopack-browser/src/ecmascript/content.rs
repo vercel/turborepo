@@ -12,7 +12,11 @@ use turbopack_core::{
     source_map::{GenerateSourceMap, OptionSourceMap},
     version::{MergeableVersionedContent, Version, VersionedContent, VersionedContentMerger},
 };
-use turbopack_ecmascript::{chunk::EcmascriptChunkContent, minify::minify, utils::StringifyJs};
+use turbopack_ecmascript::{
+    chunk::{module_id_comment, EcmascriptChunkContent},
+    minify::minify,
+    utils::StringifyJs,
+};
 
 use super::{
     chunk::EcmascriptDevChunk, content_entry::EcmascriptDevChunkContentEntries,
@@ -81,6 +85,9 @@ impl EcmascriptDevChunkContent {
                 output_root.to_string()
             );
         };
+
+        let minify_type = this.chunking_context.await?.minify_type();
+
         let mut code = CodeBuilder::default();
 
         // When a chunk is executed, it will either register itself with the current
@@ -94,32 +101,35 @@ impl EcmascriptDevChunkContent {
             code,
             r#"
                 (globalThis.TURBOPACK = globalThis.TURBOPACK || []).push([{chunk_path}, {{
+
             "#,
             chunk_path = StringifyJs(chunk_server_path)
         )?;
 
         for (id, entry) in this.entries.await?.iter() {
-            write!(code, "\n{}: ", StringifyJs(&id))?;
+            if matches!(minify_type, MinifyType::NoMinify) {
+                writeln!(code, "{}", module_id_comment(&id.to_string()))?;
+            }
+
+            write!(code, "{}: ", StringifyJs(&id))?;
             code.push_code(&*entry.code.await?);
-            write!(code, ",")?;
+            writeln!(code, ",")?;
+            writeln!(code)?;
         }
 
-        write!(code, "\n}}]);")?;
+        writeln!(code, "}}]);")?;
 
         if code.has_source_map() {
             let filename = chunk_path.file_name();
-            write!(
+            writeln!(
                 code,
-                "\n\n//# sourceMappingURL={}.map",
+                "\n//# sourceMappingURL={}.map",
                 urlencoding::encode(filename)
             )?;
         }
 
         let code = code.build().cell();
-        if matches!(
-            this.chunking_context.await?.minify_type(),
-            MinifyType::Minify
-        ) {
+        if matches!(minify_type, MinifyType::Minify) {
             return Ok(minify(chunk_path_vc, code));
         }
 

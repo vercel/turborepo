@@ -13,6 +13,7 @@ use turbo_tasks::{TryJoinIterExt, Vc};
 use turbo_tasks_fs::rope::RopeBuilder;
 use turbopack_core::{
     chunk::{AsyncModuleInfo, ChunkItem, ChunkType, ChunkingContext},
+    code_builder::Code,
     ident::AssetIdent,
     module::Module,
     reference::ModuleReferences,
@@ -135,18 +136,17 @@ impl EcmascriptChunkItem for EcmascriptModuleFacadeChunkItem {
 
         code.push_bytes(&bytes);
 
-        Ok(EcmascriptChunkItemContent {
-            inner_code: code.build(),
-            source_map: None,
-            options: EcmascriptChunkItemOptions {
+        Ok(EcmascriptChunkItemContent::new_with_options(
+            self.module.ident(),
+            Code::from(bytes).cell(),
+            EcmascriptChunkItemOptions {
                 strict: true,
                 externals,
                 async_module,
                 ..Default::default()
-            },
-            ..Default::default()
-        }
-        .cell())
+            }
+            .cell(),
+        ))
     }
 
     #[turbo_tasks::function]

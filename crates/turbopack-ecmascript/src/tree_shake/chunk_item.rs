@@ -62,7 +62,8 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
             async_module_info,
         );
 
-        Ok(EcmascriptChunkItemContent::new(
+        Ok(EcmascriptChunkItemContent::new_from_content(
+            self.asset_ident(),
             content,
             this.chunking_context,
             async_module_options,

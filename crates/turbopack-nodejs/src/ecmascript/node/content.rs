@@ -13,7 +13,7 @@ use turbopack_core::{
     version::{Version, VersionedContent},
 };
 use turbopack_ecmascript::{
-    chunk::{EcmascriptChunkContent, EcmascriptChunkItemExt},
+    chunk::{module_id_comment, EcmascriptChunkContent, EcmascriptChunkItemExt},
     minify::minify,
     utils::StringifyJs,
 };
@@ -70,6 +70,8 @@ impl EcmascriptBuildNodeChunkContent {
         let chunk_path_vc = this.chunk.ident().path();
         let chunk_path = chunk_path_vc.await?;
 
+        let minify_type = this.chunking_context.await?.minify_type();
+
         let mut code = CodeBuilder::default();
 
         writedoc!(
@@ -81,27 +83,29 @@ impl EcmascriptBuildNodeChunkContent {
         )?;
 
         for (id, item_code) in chunk_items(this.content).await? {
+            if matches!(minify_type, MinifyType::NoMinify) {
+                writeln!(code, "{}", module_id_comment(&id.to_string()))?;
+            }
+
             write!(code, "{}: ", StringifyJs(&id))?;
             code.push_code(&item_code);
             writeln!(code, ",")?;
+            writeln!(code)?;
         }
 
-        write!(code, "\n}};")?;
+        writeln!(code, "}};")?;
 
         if code.has_source_map() {
             let filename = chunk_path.file_name();
-            write!(
+            writeln!(
                 code,
-                "\n\n//# sourceMappingURL={}.map",
+                "\n//# sourceMappingURL={}.map",
                 urlencoding::encode(filename)
             )?;
         }
 
         let code = code.build().cell();
-        if matches!(
-            this.chunking_context.await?.minify_type(),
-            MinifyType::Minify
-        ) {
+        if matches!(minify_type, MinifyType::Minify) {
             return Ok(minify(chunk_path_vc, code));
         }
 

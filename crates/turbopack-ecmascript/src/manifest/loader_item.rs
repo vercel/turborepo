@@ -7,6 +7,7 @@ use turbopack_core::{
     chunk::{
         ChunkData, ChunkItem, ChunkItemExt, ChunkType, ChunkableModule, ChunkingContext, ChunksData,
     },
+    code_builder::Code,
     ident::AssetIdent,
     module::Module,
     reference::{ModuleReference, ModuleReferences, SingleOutputAssetReference},
@@ -210,10 +211,9 @@ impl EcmascriptChunkItem for ManifestLoaderChunkItem {
             dynamic_id = StringifyJs(dynamic_id),
         )?;
 
-        Ok(EcmascriptChunkItemContent {
-            inner_code: code.into(),
-            ..Default::default()
-        }
-        .into())
+        Ok(EcmascriptChunkItemContent::new(
+            self.asset_ident(),
+            Code::from(code).cell(),
+        ))
     }
 }
