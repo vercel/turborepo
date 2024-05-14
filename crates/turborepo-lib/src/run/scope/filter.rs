@@ -5,7 +5,7 @@ use std::{
 };
 
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_repository::{
     change_mapper::ChangeMapError,
     package_graph::{self, PackageGraph, PackageName},
@@ -442,6 +442,23 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             })
             .transpose()?;
 
+        if let Some(globber) = parent_dir_globber.clone() {
+            let (base, _) = globber.partition();
+            // wax takes a unix-like glob, but partition will return a system path
+            // TODO: it would be more proper to use
+            // `AnchoredSystemPathBuf::from_system_path` but that function
+            // doesn't allow leading `.` or `..`.
+            let base = AnchoredSystemPathBuf::from_raw(
+                base.to_str().expect("glob base should be valid utf8"),
+            )
+            .expect("partitioned glob gave absolute path");
+            // need to join this with globbing's current dir :)
+            let path = self.turbo_root.resolve(&base);
+            if !path.exists() {
+                return Err(ResolutionError::DirectoryDoesNotExist(path));
+            }
+        }
+
         if let Some(git_range) = selector.git_range.as_ref() {
             selector_valid = true;
             let changed_packages = self.packages_changed_in_range(git_range)?;
@@ -587,6 +604,8 @@ pub enum ResolutionError {
         glob: String,
         err: Box<wax::BuildError>,
     },
+    #[error("Directory '{0}' specified in filter does not exist")]
+    DirectoryDoesNotExist(AbsoluteSystemPathBuf),
     #[error("failed to construct glob for globalDependencies")]
     GlobalDependenciesGlob(#[from] global_deps_package_change_mapper::Error),
 }
@@ -595,6 +614,7 @@ pub enum ResolutionError {
 mod test {
     use std::collections::{HashMap, HashSet};
 
+    use tempfile::TempDir;
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
     use turborepo_repository::{
@@ -658,7 +678,7 @@ mod test {
         extras: &[&str],
         package_inference: Option<PackageInference>,
         change_detector: T,
-    ) -> super::FilterResolver<'static, T> {
+    ) -> (TempDir, super::FilterResolver<'static, T>) {
         let temp_folder = tempfile::tempdir().unwrap();
         let turbo_root = Box::leak(Box::new(
             AbsoluteSystemPathBuf::new(temp_folder.path().as_os_str().to_str().unwrap()).unwrap(),
@@ -699,7 +719,11 @@ mod test {
                     },
                 )
             })
-            .collect();
+            .collect::<HashMap<_, _>>();
+
+        for package_dir in package_jsons.keys() {
+            package_dir.ensure_dir().unwrap();
+        }
 
         let graph = {
             let rt = tokio::runtime::Builder::new_current_thread()
@@ -727,7 +751,7 @@ mod test {
             change_detector,
         );
 
-        resolver
+        (temp_folder, resolver)
     }
 
     #[test_case(
@@ -965,7 +989,7 @@ mod test {
         package_inference: Option<PackageInference>,
         expected: &[&str],
     ) {
-        let resolver = make_project(
+        let (_tempdir, resolver) = make_project(
             &[
                 ("packages/project-0", "packages/project-1"),
                 ("packages/project-0", "project-5"),
@@ -987,7 +1011,7 @@ mod test {
 
     #[test]
     fn match_exact() {
-        let resolver = make_project(
+        let (_tempdir, resolver) = make_project(
             &[],
             &["packages/@foo/bar", "packages/bar"],
             None,
@@ -1010,7 +1034,7 @@ mod test {
 
     #[test]
     fn match_scoped_package() {
-        let resolver = make_project(
+        let (_tempdir, resolver) = make_project(
             &[],
             &["packages/bar/@foo/bar"],
             None,
@@ -1037,7 +1061,7 @@ mod test {
 
     #[test]
     fn test_no_matching_name() {
-        let resolver = make_project(
+        let (_tempdir, resolver) = make_project(
             &[],
             &["packages/bar/@foo/bar"],
             None,
@@ -1061,6 +1085,22 @@ mod test {
             "expected no matches, got {:?}",
             packages
         );
+    }
+
+    #[test]
+    fn test_no_directory() {
+        let (_tempdir, resolver) = make_project(
+            &[("packages/foo", "packages/bar")],
+            &[],
+            None,
+            TestChangeDetector::new(&[]),
+        );
+        let packages = resolver.get_filtered_packages(vec![TargetSelector {
+            parent_dir: Some(AnchoredSystemPathBuf::try_from("pakcages/*").unwrap()),
+            ..Default::default()
+        }]);
+
+        assert!(packages.is_err(), "non existing dir should error",);
     }
 
     #[test_case(
@@ -1160,7 +1200,7 @@ mod test {
             ),
         ]);
 
-        let resolver = make_project(
+        let (_tempdir, resolver) = make_project(
             &[("package-3", "package-20")],
             &["package-1", "package-2"],
             None,
