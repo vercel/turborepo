@@ -284,14 +284,14 @@ impl DepGraph {
                     let data = data.get(dep_item).unwrap();
 
                     for var in data.var_decls.iter().chain(data.write_vars.iter()) {
-                        if required_vars.remove(var) {
-                            specifiers.push(ImportSpecifier::Named(ImportNamedSpecifier {
-                                span: DUMMY_SP,
-                                local: var.clone().into(),
-                                imported: None,
-                                is_type_only: false,
-                            }));
-                        }
+                        if required_vars.remove(var) {}
+
+                        specifiers.push(ImportSpecifier::Named(ImportNamedSpecifier {
+                            span: DUMMY_SP,
+                            local: var.clone().into(),
+                            imported: None,
+                            is_type_only: false,
+                        }));
                     }
                 }
 
@@ -941,12 +941,11 @@ impl DepGraph {
                         used_ids.write.extend(extra_ids.write);
                     }
 
-                    let side_effects = assign.op != op!("=")
-                        || used_ids
-                            .read
-                            .iter()
-                            .chain(used_ids.write.iter())
-                            .any(|id| id.1 == unresolved_ctxt);
+                    let side_effects = used_ids
+                        .read
+                        .iter()
+                        .chain(used_ids.write.iter())
+                        .any(|id| id.1 == unresolved_ctxt);
 
                     let data = ItemData {
                         read_vars: used_ids.read,
