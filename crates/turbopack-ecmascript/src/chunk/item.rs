@@ -159,7 +159,7 @@ impl EcmascriptChunkItemContent {
         if self.options.this {
             writeln!(code, "(function({{ {} }}) {{ !function() {{", args,)?;
         } else {
-            writeln!(code, "(({{ {} }}) => (() => {{", args,)?;
+            writeln!(code, "(({{ {} }}) => {{ !function() {{", args,)?;
         }
         if self.options.strict {
             writeln!(code, "{indent}\"use strict\";")?;
@@ -195,7 +195,7 @@ impl EcmascriptChunkItemContent {
         if self.options.this {
             code += "}.call(this) })";
         } else {
-            code += "})())";
+            code += "}() })";
         }
 
         Ok(code.build().cell())

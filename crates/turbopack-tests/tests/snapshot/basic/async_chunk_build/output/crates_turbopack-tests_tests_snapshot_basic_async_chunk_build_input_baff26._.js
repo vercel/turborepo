@@ -13,7 +13,7 @@ module.exports = {
 /*------------------------------------------------------------------------------------------------------------*\
 |> [project]/crates/turbopack-tests/tests/snapshot/basic/async_chunk_build/input/index.js [test] (ecmascript) <|
 \*------------------------------------------------------------------------------------------------------------*/
-"[project]/crates/turbopack-tests/tests/snapshot/basic/async_chunk_build/input/index.js [test] (ecmascript)": (({ r: __turbopack_require__, f: __turbopack_module_context__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, n: __turbopack_export_namespace__, c: __turbopack_cache__, M: __turbopack_modules__, l: __turbopack_load__, j: __turbopack_dynamic__, P: __turbopack_resolve_absolute_path__, U: __turbopack_relative_url__, R: __turbopack_resolve_module_id_path__, g: global, __dirname }) => (() => {
+"[project]/crates/turbopack-tests/tests/snapshot/basic/async_chunk_build/input/index.js [test] (ecmascript)": (({ r: __turbopack_require__, f: __turbopack_module_context__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, n: __turbopack_export_namespace__, c: __turbopack_cache__, M: __turbopack_modules__, l: __turbopack_load__, j: __turbopack_dynamic__, P: __turbopack_resolve_absolute_path__, U: __turbopack_relative_url__, R: __turbopack_resolve_module_id_path__, g: global, __dirname }) => { !function() {
     "use strict";
 
     __turbopack_esm__({});
@@ -28,12 +28,12 @@ module.exports = {
     });
 
     //# sourceURL=turbopack://[project]/crates/turbopack-tests/tests/snapshot/basic/async_chunk_build/input/index.js?modifiers=ecmascript&layer=test
-})()),
+}() }),
 
 /*-----------------------------------------------------------------------------------------------------------------------------*\
 |> [project]/crates/turbopack-tests/tests/snapshot/basic/async_chunk_build/input/node_modules/bar/index.js [test] (ecmascript) <|
 \*-----------------------------------------------------------------------------------------------------------------------------*/
-"[project]/crates/turbopack-tests/tests/snapshot/basic/async_chunk_build/input/node_modules/bar/index.js [test] (ecmascript)": (({ r: __turbopack_require__, f: __turbopack_module_context__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, n: __turbopack_export_namespace__, c: __turbopack_cache__, M: __turbopack_modules__, l: __turbopack_load__, j: __turbopack_dynamic__, P: __turbopack_resolve_absolute_path__, U: __turbopack_relative_url__, R: __turbopack_resolve_module_id_path__, g: global, __dirname }) => (() => {
+"[project]/crates/turbopack-tests/tests/snapshot/basic/async_chunk_build/input/node_modules/bar/index.js [test] (ecmascript)": (({ r: __turbopack_require__, f: __turbopack_module_context__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, n: __turbopack_export_namespace__, c: __turbopack_cache__, M: __turbopack_modules__, l: __turbopack_load__, j: __turbopack_dynamic__, P: __turbopack_resolve_absolute_path__, U: __turbopack_relative_url__, R: __turbopack_resolve_module_id_path__, g: global, __dirname }) => { !function() {
     "use strict";
 
     __turbopack_esm__({
@@ -44,7 +44,7 @@ module.exports = {
     }
 
     //# sourceURL=turbopack://[project]/crates/turbopack-tests/tests/snapshot/basic/async_chunk_build/input/node_modules/bar/index.js?modifiers=ecmascript&layer=test
-})()),
+}() }),
 
 };
 

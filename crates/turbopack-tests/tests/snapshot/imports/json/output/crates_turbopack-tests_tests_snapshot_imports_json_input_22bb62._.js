@@ -3,11 +3,11 @@
 /*----------------------------------------------------------------------------------------*\
 |> [project]/crates/turbopack-tests/tests/snapshot/imports/json/input/package.json (json) <|
 \*----------------------------------------------------------------------------------------*/
-"[project]/crates/turbopack-tests/tests/snapshot/imports/json/input/package.json (json)": (({ r: __turbopack_require__, f: __turbopack_module_context__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, n: __turbopack_export_namespace__, c: __turbopack_cache__, M: __turbopack_modules__, l: __turbopack_load__, j: __turbopack_dynamic__, P: __turbopack_resolve_absolute_path__, U: __turbopack_relative_url__, R: __turbopack_resolve_module_id_path__, g: global, __dirname }) => (() => {
+"[project]/crates/turbopack-tests/tests/snapshot/imports/json/input/package.json (json)": (({ r: __turbopack_require__, f: __turbopack_module_context__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, n: __turbopack_export_namespace__, c: __turbopack_cache__, M: __turbopack_modules__, l: __turbopack_load__, j: __turbopack_dynamic__, P: __turbopack_resolve_absolute_path__, U: __turbopack_relative_url__, R: __turbopack_resolve_module_id_path__, g: global, __dirname }) => { !function() {
 
 __turbopack_export_value__(JSON.parse("{\"name\":\"json-snapshot\"}"));
     //# sourceURL=turbopack://[project]/crates/turbopack-tests/tests/snapshot/imports/json/input/package.json?modifiers=json
-})()),
+}() }),
 
 /*----------------------------------------------------------------------------------------*\
 |> [project]/crates/turbopack-tests/tests/snapshot/imports/json/input/invalid.json (json) <|
@@ -21,7 +21,7 @@ throw new Error("An error occurred while generating the chunk item [project]/cra
 /*-------------------------------------------------------------------------------------------------*\
 |> [project]/crates/turbopack-tests/tests/snapshot/imports/json/input/index.js [test] (ecmascript) <|
 \*-------------------------------------------------------------------------------------------------*/
-"[project]/crates/turbopack-tests/tests/snapshot/imports/json/input/index.js [test] (ecmascript)": (({ r: __turbopack_require__, f: __turbopack_module_context__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, n: __turbopack_export_namespace__, c: __turbopack_cache__, M: __turbopack_modules__, l: __turbopack_load__, j: __turbopack_dynamic__, P: __turbopack_resolve_absolute_path__, U: __turbopack_relative_url__, R: __turbopack_resolve_module_id_path__, g: global, __dirname, k: __turbopack_refresh__ }) => (() => {
+"[project]/crates/turbopack-tests/tests/snapshot/imports/json/input/index.js [test] (ecmascript)": (({ r: __turbopack_require__, f: __turbopack_module_context__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, n: __turbopack_export_namespace__, c: __turbopack_cache__, M: __turbopack_modules__, l: __turbopack_load__, j: __turbopack_dynamic__, P: __turbopack_resolve_absolute_path__, U: __turbopack_relative_url__, R: __turbopack_resolve_module_id_path__, g: global, __dirname, k: __turbopack_refresh__ }) => { !function() {
     "use strict";
 
     __turbopack_esm__({});
@@ -34,7 +34,7 @@ throw new Error("An error occurred while generating the chunk item [project]/cra
     console.log(__TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$imports$2f$json$2f$input$2f$invalid$2e$json__$28$json$29$__["default"]["this-is"]);
 
     //# sourceURL=turbopack://[project]/crates/turbopack-tests/tests/snapshot/imports/json/input/index.js?modifiers=ecmascript&layer=test
-})()),
+}() }),
 
 }]);
 
