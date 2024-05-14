@@ -81,20 +81,22 @@ impl PackageInference {
             selector.name_pattern.clone_from(name);
         }
 
-        if selector.parent_dir != AnchoredSystemPathBuf::default() {
-            let repo_relative_parent_dir = self.directory_root.join(&selector.parent_dir);
+        if let Some(parent_dir) = selector.parent_dir.as_deref() {
+            let repo_relative_parent_dir = self.directory_root.join(parent_dir);
             let clean_parent_dir = path_clean::clean(Path::new(repo_relative_parent_dir.as_path()))
                 .into_os_string()
                 .into_string()
                 .expect("path was valid utf8 before cleaning");
-            selector.parent_dir = AnchoredSystemPathBuf::try_from(clean_parent_dir.as_str())
-                .expect("path wasn't absolute before cleaning");
+            selector.parent_dir = Some(
+                AnchoredSystemPathBuf::try_from(clean_parent_dir.as_str())
+                    .expect("path wasn't absolute before cleaning"),
+            );
         } else if self.package_name.is_none() {
             // fallback: the user didn't set a parent directory and we didn't find a single
             // package, so use the directory we inferred and select all subdirectories
             let mut parent_dir = self.directory_root.clone();
             parent_dir.push("**");
-            selector.parent_dir = parent_dir;
+            selector.parent_dir = Some(parent_dir);
         }
     }
 }
@@ -365,16 +367,16 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         let mut entry_packages = HashSet::new();
 
         for (name, info) in self.pkg_graph.packages() {
-            if selector.parent_dir == AnchoredSystemPathBuf::default() {
-                entry_packages.insert(name.to_owned());
-            } else {
-                let path = selector.parent_dir.to_unix();
+            if let Some(parent_dir) = selector.parent_dir.as_deref() {
+                let path = parent_dir.to_unix();
                 let parent_dir_matcher = wax::Glob::new(path.as_str())?;
                 let matches = parent_dir_matcher.is_match(info.package_path().as_path());
 
                 if matches {
                     entry_packages.insert(name.to_owned());
                 }
+            } else {
+                entry_packages.insert(name.to_owned());
             }
         }
 
@@ -429,12 +431,16 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         let mut entry_packages = HashSet::new();
         let mut selector_valid = false;
 
-        let path = selector.parent_dir.to_unix();
-        let parent_dir_globber =
-            wax::Glob::new(path.as_str()).map_err(|err| ResolutionError::InvalidDirectoryGlob {
-                glob: path.as_str().to_string(),
-                err: Box::new(err),
-            })?;
+        let parent_dir_unix = selector.parent_dir.as_deref().map(|path| path.to_unix());
+        let parent_dir_globber = parent_dir_unix
+            .as_deref()
+            .map(|path| {
+                wax::Glob::new(path.as_str()).map_err(|err| ResolutionError::InvalidDirectoryGlob {
+                    glob: path.as_str().to_string(),
+                    err: Box::new(err),
+                })
+            })
+            .transpose()?;
 
         if let Some(git_range) = selector.git_range.as_ref() {
             selector_valid = true;
@@ -446,31 +452,33 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 .collect::<HashMap<_, _>>();
 
             for package in changed_packages {
-                if selector.parent_dir == AnchoredSystemPathBuf::default() {
-                    entry_packages.insert(package);
-                    continue;
-                };
+                if let Some(parent_dir_globber) = parent_dir_globber.as_ref() {
+                    if package == PackageName::Root {
+                        // The root package changed, only add it if
+                        // the parentDir is equivalent to the root
+                        if parent_dir_globber.matched(&Path::new(".").into()).is_some() {
+                            entry_packages.insert(package);
+                        }
+                    } else {
+                        let path = package_path_lookup
+                            .get(&package)
+                            .ok_or(ResolutionError::MissingPackageInfo(package.to_string()))?;
 
-                if package == PackageName::Root {
-                    // The root package changed, only add it if
-                    // the parentDir is equivalent to the root
-                    if parent_dir_globber.matched(&Path::new(".").into()).is_some() {
-                        entry_packages.insert(package);
+                        if parent_dir_globber.is_match(path.as_path()) {
+                            entry_packages.insert(package);
+                        }
                     }
                 } else {
-                    let path = package_path_lookup
-                        .get(&package)
-                        .ok_or(ResolutionError::MissingPackageInfo(package.to_string()))?;
-
-                    if parent_dir_globber.is_match(path.as_path()) {
-                        entry_packages.insert(package);
-                    }
+                    entry_packages.insert(package);
                 }
             }
-        } else if selector.parent_dir != AnchoredSystemPathBuf::default() {
+        } else if let Some((parent_dir, parent_dir_globber)) = selector
+            .parent_dir
+            .as_deref()
+            .zip(parent_dir_globber.as_ref())
+        {
             selector_valid = true;
-            if selector.parent_dir == AnchoredSystemPathBuf::from_raw(".").expect("valid anchored")
-            {
+            if parent_dir == &*AnchoredSystemPathBuf::from_raw(".").expect("valid anchored") {
                 entry_packages.insert(PackageName::Root);
             } else {
                 let packages = self.pkg_graph.packages();
@@ -845,7 +853,7 @@ mod test {
         vec![
             TargetSelector {
                 parent_dir:
-    AnchoredSystemPathBuf::try_from("packages/*").unwrap(),
+    Some(AnchoredSystemPathBuf::try_from("packages/*").unwrap()),
     ..Default::default()         }
         ],
         None,
@@ -854,7 +862,7 @@ mod test {
     )]
     #[test_case(
         vec![TargetSelector {
-            parent_dir: AnchoredSystemPathBuf::try_from(if cfg!(windows) { "..\\packages\\*" } else { "../packages/*" }).unwrap(),
+            parent_dir: Some(AnchoredSystemPathBuf::try_from(if cfg!(windows) { "..\\packages\\*" } else { "../packages/*" }).unwrap()),
             ..Default::default()
         }],
         Some(PackageInference{
@@ -868,7 +876,7 @@ mod test {
         vec![
             TargetSelector {
                 parent_dir:
-    AnchoredSystemPathBuf::try_from("project-5/**").unwrap(),
+    Some(AnchoredSystemPathBuf::try_from("project-5/**").unwrap()),
     ..Default::default()         }
         ],
         None,
@@ -879,7 +887,7 @@ mod test {
         vec![
             TargetSelector {
                 parent_dir:
-    AnchoredSystemPathBuf::try_from("project-5").unwrap(),
+    Some(AnchoredSystemPathBuf::try_from("project-5").unwrap()),
     ..Default::default()         }
         ],
         None,
@@ -901,7 +909,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                parent_dir: AnchoredSystemPathBuf::try_from("packages/*").unwrap(),
+                parent_dir: Some(AnchoredSystemPathBuf::try_from("packages/*").unwrap()),
                 ..Default::default()
             },
             TargetSelector {
@@ -917,7 +925,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                parent_dir: AnchoredSystemPathBuf::try_from(".").unwrap(),
+                parent_dir: Some(AnchoredSystemPathBuf::try_from(".").unwrap()),
                 ..Default::default()
             }
         ],
@@ -1027,6 +1035,34 @@ mod test {
         );
     }
 
+    #[test]
+    fn test_no_matching_name() {
+        let resolver = make_project(
+            &[],
+            &["packages/bar/@foo/bar"],
+            None,
+            TestChangeDetector::new(&[]),
+        );
+        let packages = resolver.get_filtered_packages(vec![TargetSelector {
+            name_pattern: "bar".to_string(),
+            ..Default::default()
+        }]);
+
+        assert!(packages.is_err(), "non existing package name should error",);
+
+        let packages = resolver
+            .get_filtered_packages(vec![TargetSelector {
+                name_pattern: "baz*".to_string(),
+                ..Default::default()
+            }])
+            .unwrap();
+        assert!(
+            packages.is_empty(),
+            "expected no matches, got {:?}",
+            packages
+        );
+    }
+
     #[test_case(
         vec![
             TargetSelector {
@@ -1041,7 +1077,7 @@ mod test {
         vec![
             TargetSelector {
                 git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
-                parent_dir: AnchoredSystemPathBuf::try_from(".").unwrap(),
+                parent_dir: Some(AnchoredSystemPathBuf::try_from(".").unwrap()),
                 ..Default::default()
             }
         ],
@@ -1052,7 +1088,7 @@ mod test {
         vec![
             TargetSelector {
                 git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
-                parent_dir: AnchoredSystemPathBuf::try_from("package-2").unwrap(),
+                parent_dir: Some(AnchoredSystemPathBuf::try_from("package-2").unwrap()),
                 ..Default::default()
             }
         ],
@@ -1106,9 +1142,8 @@ mod test {
         vec![
             TargetSelector {
                 git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
-                parent_dir:
-    AnchoredSystemPathBuf::try_from("package-*").unwrap(),
-    match_dependencies: true,             ..Default::default()
+                parent_dir: Some(AnchoredSystemPathBuf::try_from("package-*").unwrap()),
+                match_dependencies: true,             ..Default::default()
             }
         ],
         &["package-1", "package-2"] ;
