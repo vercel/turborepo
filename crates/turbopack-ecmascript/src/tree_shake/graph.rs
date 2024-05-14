@@ -278,10 +278,10 @@ impl DepGraph {
             {
                 let mut specifiers = vec![];
 
-                let deps_of_dep = groups.graph_ix.get_index(dep as usize).unwrap();
+                let dep_items = groups.graph_ix.get_index(dep as usize).unwrap();
 
-                for dep_of_dep in deps_of_dep {
-                    let data = data.get(dep_of_dep).unwrap();
+                for dep_item in dep_items {
+                    let data = data.get(dep_item).unwrap();
 
                     for var in data.var_decls.iter().chain(data.write_vars.iter()) {
                         if required_vars.remove(var) {
