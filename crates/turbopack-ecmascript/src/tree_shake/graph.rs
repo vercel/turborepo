@@ -256,6 +256,14 @@ impl DepGraph {
                 })
                 .collect::<FxHashSet<_>>();
 
+            for id in group {
+                let data = data.get(id).unwrap();
+
+                for var in data.var_decls.iter() {
+                    required_vars.remove(var);
+                }
+            }
+
             for item in group {
                 match item {
                     ItemId::Group(ItemIdGroupKind::Export(id, _)) => {
@@ -284,14 +292,14 @@ impl DepGraph {
                     let data = data.get(dep_item).unwrap();
 
                     for var in data.var_decls.iter().chain(data.write_vars.iter()) {
-                        if required_vars.remove(var) {}
-
-                        specifiers.push(ImportSpecifier::Named(ImportNamedSpecifier {
-                            span: DUMMY_SP,
-                            local: var.clone().into(),
-                            imported: None,
-                            is_type_only: false,
-                        }));
+                        if required_vars.remove(var) {
+                            specifiers.push(ImportSpecifier::Named(ImportNamedSpecifier {
+                                span: DUMMY_SP,
+                                local: var.clone().into(),
+                                imported: None,
+                                is_type_only: false,
+                            }));
+                        }
                     }
                 }
 
