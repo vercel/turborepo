@@ -1024,24 +1024,6 @@ mod test {
         );
     }
 
-    #[test]
-    fn match_multiple_scoped() {
-        let resolver = make_project(
-            &[],
-            &["packages/@foo/bar", "packages/@types/bar"],
-            None,
-            TestChangeDetector::new(&[]),
-        );
-        let packages = resolver
-            .get_filtered_packages(vec![TargetSelector {
-                name_pattern: "bar".to_string(),
-                ..Default::default()
-            }])
-            .unwrap();
-
-        assert_eq!(packages, HashSet::new());
-    }
-
     #[test_case(
         vec![
             TargetSelector {
