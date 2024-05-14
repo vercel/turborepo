@@ -46,6 +46,13 @@ impl EcmascriptModulePartAsset {
         }
         .cell()
     }
+
+    #[turbo_tasks::function]
+    pub async fn is_async_module(&self) -> Result<Vc<bool>> {
+        let result = self.full_module.failsafe_analyze();
+
+        Ok(Vc::cell(result.await?.async_module.await?.is_some()))
+    }
 }
 
 #[turbo_tasks::value_impl]
