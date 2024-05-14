@@ -371,7 +371,7 @@ pub(super) async fn split(
 
             let (mut dep_graph, items) = GLOBALS.set(globals, || {
                 Analyzer::analyze(
-                    &module,
+                    module,
                     SyntaxContext::empty().apply_mark(eval_context.unresolved_mark),
                     SyntaxContext::empty().apply_mark(eval_context.top_level_mark),
                 )
