@@ -340,7 +340,11 @@ impl DepGraph {
                                             is_type_only: false,
                                         },
                                     )],
-                                    src: Some(Box::new("__TURBOPACK_VAR__".into())),
+                                    src: if cfg!(test) {
+                                        Some(Box::new("__TURBOPACK_VAR__".into()))
+                                    } else {
+                                        None
+                                    },
                                     type_only: false,
                                     with: Some(Box::new(ObjectLit {
                                         span: DUMMY_SP,
