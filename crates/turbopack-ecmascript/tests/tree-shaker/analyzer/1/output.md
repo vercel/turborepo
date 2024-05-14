@@ -667,7 +667,6 @@ export { external2 };
 function external2() {
     foobar += ".";
 }
-export { external2 };
 
 ```
 ## Part 5
