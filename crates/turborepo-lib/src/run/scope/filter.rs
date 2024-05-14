@@ -525,7 +525,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         // add the root package to the entry packages
         entry_packages.insert(PackageName::Root);
 
-        Ok(match_package_names(name_pattern, entry_packages)?)
+        match_package_names(name_pattern, entry_packages)
     }
 }
 
@@ -536,13 +536,20 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
 fn match_package_names(
     name_pattern: &str,
     mut entry_packages: HashSet<PackageName>,
-) -> Result<HashSet<PackageName>, regex::Error> {
+) -> Result<HashSet<PackageName>, ResolutionError> {
     let matcher = SimpleGlob::new(name_pattern)?;
     let matched_packages = entry_packages
         .extract_if(|e| matcher.is_match(e.as_ref()))
         .collect::<HashSet<_>>();
 
-    Ok(matched_packages)
+    // If the pattern was an exact name and it matched no packages, then error
+    if matcher.is_exact() && matched_packages.is_empty() {
+        Err(ResolutionError::NoPackagesMatchedWithName(
+            name_pattern.to_owned(),
+        ))
+    } else {
+        Ok(matched_packages)
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -555,6 +562,8 @@ pub enum ResolutionError {
     MultiplePackagesMatched,
     #[error("The provided filter matched a package that is not in the workspace")]
     PackageNotInWorkspace,
+    #[error("No package found with name '{0}' in workspace")]
+    NoPackagesMatchedWithName(String),
     #[error("selector not used: {0}")]
     InvalidSelector(#[from] InvalidSelectorError),
     #[error("Invalid regex pattern")]
@@ -999,18 +1008,12 @@ mod test {
             None,
             TestChangeDetector::new(&[]),
         );
-        let packages = resolver
-            .get_filtered_packages(vec![TargetSelector {
-                name_pattern: "bar".to_string(),
-                ..Default::default()
-            }])
-            .unwrap();
+        let packages = resolver.get_filtered_packages(vec![TargetSelector {
+            name_pattern: "bar".to_string(),
+            ..Default::default()
+        }]);
 
-        assert!(
-            packages.is_empty(),
-            "expected empty set, got {:?}",
-            packages
-        );
+        assert!(packages.is_err(), "non existing package name should error",);
 
         let packages = resolver
             .get_filtered_packages(vec![TargetSelector {
