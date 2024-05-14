@@ -10,6 +10,7 @@ use tokio::{
 };
 use turborepo_repository::package_graph::PackageName;
 use turborepo_telemetry::events::command::CommandEventBuilder;
+use turborepo_ui::{tui, tui::AppSender};
 
 use crate::{
     cli::{Command, RunArgs},
@@ -49,6 +50,8 @@ pub struct WatchClient {
     base: CommandBase,
     telemetry: CommandEventBuilder,
     handler: SignalHandler,
+    ui_sender: Option<AppSender>,
+    ui_handle: Option<JoinHandle<Result<(), tui::Error>>>,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -88,6 +91,8 @@ pub enum Error {
     SignalInterrupt,
     #[error("package change error")]
     PackageChange(#[from] tonic::Status),
+    #[error("could not connect to UI thread")]
+    UISend(String),
 }
 
 impl WatchClient {
@@ -109,6 +114,8 @@ impl WatchClient {
             .build(&handler, telemetry.clone())
             .await?;
 
+        let (sender, handle) = run.start_experimental_ui().unzip();
+
         let connector = DaemonConnector {
             can_start_server: true,
             can_kill_server: true,
@@ -122,6 +129,8 @@ impl WatchClient {
             handler,
             telemetry,
             persistent_tasks_handle: None,
+            ui_sender: sender,
+            ui_handle: handle,
         })
     }
 
@@ -131,7 +140,9 @@ impl WatchClient {
 
         let mut events = client.package_changes().await?;
 
-        self.run.print_run_prelude();
+        if !self.run.has_experimental_ui() {
+            self.run.print_run_prelude();
+        }
 
         let signal_subscriber = self.handler.subscribe().ok_or(Error::NoSignalHandler)?;
 
@@ -254,7 +265,7 @@ impl WatchClient {
                     .build(&signal_handler, telemetry)
                     .await?;
 
-                Ok(run.run().await?)
+                Ok(run.run(self.ui_sender.clone()).await?)
             }
             ChangedPackages::All => {
                 let mut args = self.base.args().clone();
@@ -286,6 +297,13 @@ impl WatchClient {
                     .build(&self.handler, self.telemetry.clone())
                     .await?;
 
+                if let Some(sender) = &self.ui_sender {
+                    let task_names = self.run.engine.tasks_with_command(&self.run.pkg_dep_graph);
+                    sender
+                        .update_tasks(task_names)
+                        .map_err(|err| Error::UISend(err.to_string()))?;
+                }
+
                 if self.run.has_persistent_tasks() {
                     // Abort old run
                     if let Some(run) = self.persistent_tasks_handle.take() {
@@ -293,16 +311,19 @@ impl WatchClient {
                     }
 
                     let mut persistent_run = self.run.create_run_for_persistent_tasks();
+                    let ui_sender = self.ui_sender.clone();
                     // If we have persistent tasks, we run them on a separate thread
                     // since persistent tasks don't finish
                     self.persistent_tasks_handle =
-                        Some(tokio::spawn(async move { persistent_run.run().await }));
+                        Some(tokio::spawn(
+                            async move { persistent_run.run(ui_sender).await },
+                        ));
 
                     // But we still run the regular tasks blocking
                     let mut non_persistent_run = self.run.create_run_without_persistent_tasks();
-                    Ok(non_persistent_run.run().await?)
+                    Ok(non_persistent_run.run(self.ui_sender.clone()).await?)
                 } else {
-                    Ok(self.run.run().await?)
+                    Ok(self.run.run(self.ui_sender.clone()).await?)
                 }
             }
         }
