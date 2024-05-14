@@ -8,7 +8,7 @@ use swc_core::{
     ecma::ast::{ExportAll, Id, Module, ModuleDecl, ModuleItem, Program},
 };
 use turbo_tasks::{ValueToString, Vc};
-use turbopack_core::{ident::AssetIdent, module::Module as _, resolve::ModulePart, source::Source};
+use turbopack_core::{ident::AssetIdent, resolve::ModulePart, source::Source};
 
 pub(crate) use self::graph::{
     create_turbopack_part_id_assert, find_turbopack_part_id_in_asserts, PartId,
@@ -365,12 +365,8 @@ pub(super) async fn split(
             }
 
             let module = match program {
-                Program::Module(module) => Cow::Borrowed(module),
-                Program::Script(s) => Cow::Owned(Module {
-                    span: s.span,
-                    body: s.body.iter().cloned().map(ModuleItem::Stmt).collect(),
-                    shebang: None,
-                }),
+                Program::Module(module) => module,
+                Program::Script(..) => unreachable!("CJS is already handled"),
             };
 
             let (mut dep_graph, items) = GLOBALS.set(globals, || {

@@ -4,9 +4,13 @@ use swc_core::ecma::{
 };
 
 pub fn contains_cjs(m: &Program) -> bool {
-    let mut v = CjsFinder::default();
-    m.visit_with(&mut v);
-    v.found && !v.is_esm
+    if let Program::Module(m) = m {
+        if m.body.iter().any(|s| s.is_module_decl()) {
+            return true;
+        }
+    }
+
+    true
 }
 
 #[derive(Copy, Clone, Default)]
