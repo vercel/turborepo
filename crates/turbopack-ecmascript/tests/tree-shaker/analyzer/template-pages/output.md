@@ -781,7 +781,9 @@ export { getStaticProps };
 import { hoist } from './helpers';
 import * as userland from 'VAR_USERLAND';
 const getStaticProps = hoist(userland, 'getStaticProps');
-export { getStaticProps };
+export { getStaticProps } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 3
@@ -796,7 +798,9 @@ export { getStaticPaths };
 import { hoist } from './helpers';
 import * as userland from 'VAR_USERLAND';
 const getStaticPaths = hoist(userland, 'getStaticPaths');
-export { getStaticPaths };
+export { getStaticPaths } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 4
@@ -811,7 +815,9 @@ export { getServerSideProps };
 import { hoist } from './helpers';
 import * as userland from 'VAR_USERLAND';
 const getServerSideProps = hoist(userland, 'getServerSideProps');
-export { getServerSideProps };
+export { getServerSideProps } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 5
@@ -826,7 +832,9 @@ export { config };
 import { hoist } from './helpers';
 import * as userland from 'VAR_USERLAND';
 const config = hoist(userland, 'config');
-export { config };
+export { config } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 6
@@ -841,7 +849,9 @@ export { reportWebVitals };
 import { hoist } from './helpers';
 import * as userland from 'VAR_USERLAND';
 const reportWebVitals = hoist(userland, 'reportWebVitals');
-export { reportWebVitals };
+export { reportWebVitals } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 7
@@ -856,7 +866,9 @@ export { unstable_getStaticProps };
 import { hoist } from './helpers';
 import * as userland from 'VAR_USERLAND';
 const unstable_getStaticProps = hoist(userland, 'unstable_getStaticProps');
-export { unstable_getStaticProps };
+export { unstable_getStaticProps } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 8
@@ -871,7 +883,9 @@ export { unstable_getStaticPaths };
 import { hoist } from './helpers';
 import * as userland from 'VAR_USERLAND';
 const unstable_getStaticPaths = hoist(userland, 'unstable_getStaticPaths');
-export { unstable_getStaticPaths };
+export { unstable_getStaticPaths } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 9
@@ -886,7 +900,9 @@ export { unstable_getStaticParams };
 import { hoist } from './helpers';
 import * as userland from 'VAR_USERLAND';
 const unstable_getStaticParams = hoist(userland, 'unstable_getStaticParams');
-export { unstable_getStaticParams };
+export { unstable_getStaticParams } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 10
@@ -901,7 +917,9 @@ export { unstable_getServerProps };
 import { hoist } from './helpers';
 import * as userland from 'VAR_USERLAND';
 const unstable_getServerProps = hoist(userland, 'unstable_getServerProps');
-export { unstable_getServerProps };
+export { unstable_getServerProps } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 11
@@ -913,7 +931,9 @@ export { unstable_getServerSideProps };
 import { hoist } from './helpers';
 import * as userland from 'VAR_USERLAND';
 const unstable_getServerSideProps = hoist(userland, 'unstable_getServerSideProps');
-export { unstable_getServerSideProps };
+export { unstable_getServerSideProps } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 12
@@ -938,7 +958,9 @@ const routeModule = new PagesRouteModule({
     },
     userland
 });
-export { routeModule };
+export { routeModule } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Merged (module eval)
@@ -1044,7 +1066,9 @@ export { getStaticProps };
 import { hoist } from './helpers';
 import * as userland from 'VAR_USERLAND';
 const getStaticProps = hoist(userland, 'getStaticProps');
-export { getStaticProps };
+export { getStaticProps } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 3
@@ -1059,7 +1083,9 @@ export { getStaticPaths };
 import { hoist } from './helpers';
 import * as userland from 'VAR_USERLAND';
 const getStaticPaths = hoist(userland, 'getStaticPaths');
-export { getStaticPaths };
+export { getStaticPaths } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 4
@@ -1074,7 +1100,9 @@ export { getServerSideProps };
 import { hoist } from './helpers';
 import * as userland from 'VAR_USERLAND';
 const getServerSideProps = hoist(userland, 'getServerSideProps');
-export { getServerSideProps };
+export { getServerSideProps } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 5
@@ -1089,7 +1117,9 @@ export { config };
 import { hoist } from './helpers';
 import * as userland from 'VAR_USERLAND';
 const config = hoist(userland, 'config');
-export { config };
+export { config } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 6
@@ -1104,7 +1134,9 @@ export { reportWebVitals };
 import { hoist } from './helpers';
 import * as userland from 'VAR_USERLAND';
 const reportWebVitals = hoist(userland, 'reportWebVitals');
-export { reportWebVitals };
+export { reportWebVitals } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 7
@@ -1119,7 +1151,9 @@ export { unstable_getStaticProps };
 import { hoist } from './helpers';
 import * as userland from 'VAR_USERLAND';
 const unstable_getStaticProps = hoist(userland, 'unstable_getStaticProps');
-export { unstable_getStaticProps };
+export { unstable_getStaticProps } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 8
@@ -1134,7 +1168,9 @@ export { unstable_getStaticPaths };
 import { hoist } from './helpers';
 import * as userland from 'VAR_USERLAND';
 const unstable_getStaticPaths = hoist(userland, 'unstable_getStaticPaths');
-export { unstable_getStaticPaths };
+export { unstable_getStaticPaths } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 9
@@ -1149,7 +1185,9 @@ export { unstable_getStaticParams };
 import { hoist } from './helpers';
 import * as userland from 'VAR_USERLAND';
 const unstable_getStaticParams = hoist(userland, 'unstable_getStaticParams');
-export { unstable_getStaticParams };
+export { unstable_getStaticParams } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 10
@@ -1164,7 +1202,9 @@ export { unstable_getServerProps };
 import { hoist } from './helpers';
 import * as userland from 'VAR_USERLAND';
 const unstable_getServerProps = hoist(userland, 'unstable_getServerProps');
-export { unstable_getServerProps };
+export { unstable_getServerProps } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 11
@@ -1176,7 +1216,9 @@ export { unstable_getServerSideProps };
 import { hoist } from './helpers';
 import * as userland from 'VAR_USERLAND';
 const unstable_getServerSideProps = hoist(userland, 'unstable_getServerSideProps');
-export { unstable_getServerSideProps };
+export { unstable_getServerSideProps } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 12
@@ -1201,7 +1243,9 @@ const routeModule = new PagesRouteModule({
     },
     userland
 });
-export { routeModule };
+export { routeModule } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Merged (module eval)

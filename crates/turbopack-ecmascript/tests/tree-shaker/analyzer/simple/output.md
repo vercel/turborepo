@@ -149,7 +149,9 @@ import { dog } from "__TURBOPACK_PART__" assert {
 };
 export { DOG };
 const DOG = dog;
-export { DOG };
+export { DOG } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 2
@@ -160,14 +162,20 @@ import { dog } from "__TURBOPACK_PART__" assert {
 export { CHIMERA };
 const cat = "cat";
 const CHIMERA = cat + dog;
-export { cat };
-export { CHIMERA };
+export { cat } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { CHIMERA } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 3
 ```js
 const dog = "dog";
-export { dog };
+export { dog } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Merged (module eval)
@@ -203,7 +211,9 @@ import { dog } from "__TURBOPACK_PART__" assert {
 };
 export { DOG };
 const DOG = dog;
-export { DOG };
+export { DOG } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 2
@@ -214,14 +224,20 @@ import { dog } from "__TURBOPACK_PART__" assert {
 export { CHIMERA };
 const cat = "cat";
 const CHIMERA = cat + dog;
-export { cat };
-export { CHIMERA };
+export { cat } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { CHIMERA } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 3
 ```js
 const dog = "dog";
-export { dog };
+export { dog } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Merged (module eval)

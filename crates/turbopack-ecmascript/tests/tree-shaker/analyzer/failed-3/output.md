@@ -215,7 +215,7 @@ function createIpc(port) {
 
 - Hoisted
 - Declares: `createIpc`
-- Reads (eventual): `createConnection`, `JSON`, `Buffer`, `process`, `Promise`, `structuredError`, `console`
+- Reads (eventual): `createConnection`, `JSON`, `Buffer`, `loop`, `process`, `Promise`, `structuredError`, `console`
 - Write: `createIpc`
 
 ## Item 9: Stmt 5, `VarDeclarator(0)`
@@ -1642,7 +1642,9 @@ improveConsole("timeEnd", "stdout", true);
 improveConsole("timeLog", "stdout", true);
 improveConsole("timeStamp", "stdout", true);
 improveConsole("assert", "stderr", true);
-export { improveConsole };
+export { improveConsole } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 1
@@ -1673,7 +1675,9 @@ function structuredError(e) {
         stack: typeof e.stack === "string" ? parseStackTrace(e.stack) : []
     };
 }
-export { structuredError };
+export { structuredError } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 4
@@ -1808,13 +1812,17 @@ function createIpc(port) {
         }
     };
 }
-export { createIpc };
+export { createIpc } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 5
 ```js
 const PORT = process.argv[2];
-export { PORT };
+export { PORT } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 6
@@ -1826,7 +1834,9 @@ import { PORT } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
 const IPC = createIpc(parseInt(PORT, 10));
-export { IPC };
+export { IPC } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Merged (module eval)
@@ -1883,7 +1893,9 @@ improveConsole("timeEnd", "stdout", true);
 improveConsole("timeLog", "stdout", true);
 improveConsole("timeStamp", "stdout", true);
 improveConsole("assert", "stderr", true);
-export { improveConsole };
+export { improveConsole } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 # Entrypoints
@@ -1944,7 +1956,9 @@ improveConsole("timeEnd", "stdout", true);
 improveConsole("timeLog", "stdout", true);
 improveConsole("timeStamp", "stdout", true);
 improveConsole("assert", "stderr", true);
-export { improveConsole };
+export { improveConsole } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 1
@@ -1975,7 +1989,9 @@ function structuredError(e) {
         stack: typeof e.stack === "string" ? parseStackTrace(e.stack) : []
     };
 }
-export { structuredError };
+export { structuredError } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 4
@@ -2110,13 +2126,17 @@ function createIpc(port) {
         }
     };
 }
-export { createIpc };
+export { createIpc } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 5
 ```js
 const PORT = process.argv[2];
-export { PORT };
+export { PORT } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 6
@@ -2128,7 +2148,9 @@ import { PORT } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
 const IPC = createIpc(parseInt(PORT, 10));
-export { IPC };
+export { IPC } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Merged (module eval)
@@ -2173,6 +2195,8 @@ improveConsole("timeEnd", "stdout", true);
 improveConsole("timeLog", "stdout", true);
 improveConsole("timeStamp", "stdout", true);
 improveConsole("assert", "stderr", true);
-export { improveConsole };
+export { improveConsole } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```

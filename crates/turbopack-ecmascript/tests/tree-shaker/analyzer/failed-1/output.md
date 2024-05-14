@@ -254,7 +254,9 @@ export { addMessageListener };
 function addMessageListener(cb) {
     eventCallbacks.push(cb);
 }
-export { addMessageListener };
+export { addMessageListener } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 2
@@ -267,7 +269,9 @@ function sendMessage(data) {
     if (!source || source.readyState !== source.OPEN) return;
     return source.send(data);
 }
-export { sendMessage };
+export { sendMessage } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 3
@@ -327,20 +331,28 @@ function connectHMR(options) {
     }
     init();
 }
-export { getSocketProtocol };
-export { connectHMR };
+export { getSocketProtocol } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { connectHMR } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 4
 ```js
 let source;
-export { source };
+export { source } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 5
 ```js
 const eventCallbacks = [];
-export { eventCallbacks };
+export { eventCallbacks } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Merged (module eval)
@@ -381,7 +393,9 @@ export { addMessageListener };
 function addMessageListener(cb) {
     eventCallbacks.push(cb);
 }
-export { addMessageListener };
+export { addMessageListener } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 2
@@ -394,7 +408,9 @@ function sendMessage(data) {
     if (!source || source.readyState !== source.OPEN) return;
     return source.send(data);
 }
-export { sendMessage };
+export { sendMessage } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 3
@@ -454,20 +470,28 @@ function connectHMR(options) {
     }
     init();
 }
-export { getSocketProtocol };
-export { connectHMR };
+export { getSocketProtocol } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { connectHMR } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 4
 ```js
 let source;
-export { source };
+export { source } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 5
 ```js
 const eventCallbacks = [];
-export { eventCallbacks };
+export { eventCallbacks } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Merged (module eval)
