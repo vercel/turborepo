@@ -315,42 +315,42 @@ impl DepGraph {
                 chunk.body.push(data[g].content.clone());
             }
 
-            // for g in group {
-            //     let data = data.get(g).unwrap();
+            for g in group {
+                let data = data.get(g).unwrap();
 
-            //     // Emit `export { foo }`
-            //     for var in data.write_vars.iter() {
-            //         if required_vars.remove(var) || data.read_vars.contains(var) {
-            //             let assertion_prop =
-            //                 PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
-            //                     key: quote_ident!("__turbopack_var__").into(),
-            //                     value: Box::new(true.into()),
-            //                 })));
+                // Emit `export { foo }`
+                for var in data.write_vars.iter() {
+                    if required_vars.remove(var) || data.read_vars.contains(var) {
+                        let assertion_prop =
+                            PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
+                                key: quote_ident!("__turbopack_var__").into(),
+                                value: Box::new(true.into()),
+                            })));
 
-            //             chunk
-            //                 .body
-            //                 .push(ModuleItem::ModuleDecl(ModuleDecl::ExportNamed(
-            //                     NamedExport {
-            //                         span: DUMMY_SP,
-            //                         specifiers: vec![ExportSpecifier::Named(
-            //                             ExportNamedSpecifier {
-            //                                 span: DUMMY_SP,
-            //                                 orig:
-            // ModuleExportName::Ident(var.clone().into()),
-            // exported: None,                                 is_type_only:
-            // false,                             },
-            //                         )],
-            //                         src: None,
-            //                         type_only: false,
-            //                         with: Some(Box::new(ObjectLit {
-            //                             span: DUMMY_SP,
-            //                             props: vec![assertion_prop],
-            //                         })),
-            //                     },
-            //                 )));
-            //         }
-            //     }
-            // }
+                        chunk
+                            .body
+                            .push(ModuleItem::ModuleDecl(ModuleDecl::ExportNamed(
+                                NamedExport {
+                                    span: DUMMY_SP,
+                                    specifiers: vec![ExportSpecifier::Named(
+                                        ExportNamedSpecifier {
+                                            span: DUMMY_SP,
+                                            orig: ModuleExportName::Ident(var.clone().into()),
+                                            exported: None,
+                                            is_type_only: false,
+                                        },
+                                    )],
+                                    src: Some(Box::new("__TURBOPACK_VAR__".into())),
+                                    type_only: false,
+                                    with: Some(Box::new(ObjectLit {
+                                        span: DUMMY_SP,
+                                        props: vec![assertion_prop],
+                                    })),
+                                },
+                            )));
+                    }
+                }
+            }
 
             modules.push(chunk);
         }
