@@ -31,6 +31,9 @@ static ANNOTATION_TRANSITION: Lazy<JsWord> =
 static ANNOTATION_CHUNKING_TYPE: Lazy<JsWord> =
     Lazy::new(|| crate::annotations::ANNOTATION_CHUNKING_TYPE.into());
 
+/// Changes the type of the resolved module (only "json" is supported currently)
+static ATTRIBUTE_MODULE_TYPE: Lazy<JsWord> = Lazy::new(|| "type".into());
+
 impl ImportAnnotations {
     pub fn parse(with: Option<&ObjectLit>) -> ImportAnnotations {
         let Some(with) = with else {
@@ -72,6 +75,11 @@ impl ImportAnnotations {
     /// Returns the content on the chunking-type annotation
     pub fn chunking_type(&self) -> Option<&str> {
         self.get(&ANNOTATION_CHUNKING_TYPE)
+    }
+
+    /// Returns the content on the type attribute
+    pub fn module_type(&self) -> Option<&str> {
+        self.get(&ATTRIBUTE_MODULE_TYPE)
     }
 
     pub fn get(&self, key: &JsWord) -> Option<&str> {
