@@ -77,8 +77,13 @@ turbopack-wasi = [
 [workspace.lints.clippy]
 too_many_arguments = "allow"
 
-[profile.dev.package.turbo-tasks-macros]
-opt-level = 3
+# This crate is particularly sensitive to compiler optimizations
+[profile.dev.package.turbo-tasks-memory]
+opt-level = 1
+
+# Set the options for dependencies (not crates in the workspace), this mostly impacts cold builds
+[profile.dev.package."*"]
+opt-level = 1
 
 # Set the settings for build scripts and proc-macros.
 [profile.dev.build-override]
