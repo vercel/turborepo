@@ -1286,7 +1286,8 @@ pub async fn run(
             event.track_call();
             let base = CommandBase::new(cli_args, repo_root, version, ui);
 
-            WatchClient::start(base, event).await?;
+            let mut client = WatchClient::new(base, event).await?;
+            client.start().await?;
             // We only exit if we get a signal, so we return a non-zero exit code
             return Ok(1);
         }

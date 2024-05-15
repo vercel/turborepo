@@ -9,7 +9,7 @@ use crate::{hash_object::hash_objects, Error, Git, SCM};
 
 pub type GitHashes = HashMap<RelativeUnixPathBuf, String>;
 
-const INPUT_INCLUDE_DEFAULT_FILES: &str = "$TURBO_DEFAULT$";
+pub const INPUT_INCLUDE_DEFAULT_FILES: &str = "$TURBO_DEFAULT$";
 
 impl SCM {
     pub fn get_hashes_for_files(

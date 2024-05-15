@@ -1,11 +1,16 @@
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashSet, sync::Arc};
 
 use futures::StreamExt;
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
-use tokio::{select, task::JoinHandle};
+use tokio::{
+    select,
+    sync::{Mutex, Notify},
+    task::JoinHandle,
+};
 use turborepo_repository::package_graph::PackageName;
 use turborepo_telemetry::events::command::CommandEventBuilder;
+use turborepo_ui::{tui, tui::AppSender};
 
 use crate::{
     cli::{Command, RunArgs},
@@ -18,7 +23,36 @@ use crate::{
     DaemonConnector, DaemonPaths,
 };
 
-pub struct WatchClient {}
+enum ChangedPackages {
+    All,
+    Some(HashSet<PackageName>),
+}
+
+impl Default for ChangedPackages {
+    fn default() -> Self {
+        ChangedPackages::Some(HashSet::new())
+    }
+}
+
+impl ChangedPackages {
+    pub fn is_empty(&self) -> bool {
+        match self {
+            ChangedPackages::All => false,
+            ChangedPackages::Some(pkgs) => pkgs.is_empty(),
+        }
+    }
+}
+
+pub struct WatchClient {
+    run: Run,
+    persistent_tasks_handle: Option<JoinHandle<Result<i32, run::Error>>>,
+    connector: DaemonConnector,
+    base: CommandBase,
+    telemetry: CommandEventBuilder,
+    handler: SignalHandler,
+    ui_sender: Option<AppSender>,
+    ui_handle: Option<JoinHandle<Result<(), tui::Error>>>,
+}
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
@@ -51,20 +85,20 @@ pub enum Error {
     },
     #[error("daemon connection closed")]
     ConnectionClosed,
+    #[error("failed to subscribe to signal handler, shutting down")]
+    NoSignalHandler,
     #[error("watch interrupted due to signal")]
     SignalInterrupt,
     #[error("package change error")]
     PackageChange(#[from] tonic::Status),
+    #[error("could not connect to UI thread")]
+    UISend(String),
 }
 
 impl WatchClient {
-    pub async fn start(base: CommandBase, telemetry: CommandEventBuilder) -> Result<(), Error> {
+    pub async fn new(base: CommandBase, telemetry: CommandEventBuilder) -> Result<Self, Error> {
         let signal = commands::run::get_signal()?;
         let handler = SignalHandler::new(signal);
-        let Some(signal_subscriber) = handler.subscribe() else {
-            tracing::warn!("failed to subscribe to signal handler, shutting down");
-            return Ok(());
-        };
 
         let Some(Command::Watch(execution_args)) = &base.args().command else {
             unreachable!()
@@ -76,11 +110,11 @@ impl WatchClient {
             execution_args: execution_args.clone(),
         });
 
-        let mut run = RunBuilder::new(new_base)?
+        let run = RunBuilder::new(new_base)?
             .build(&handler, telemetry.clone())
             .await?;
 
-        run.print_run_prelude();
+        let (sender, handle) = run.start_experimental_ui().unzip();
 
         let connector = DaemonConnector {
             can_start_server: true,
@@ -88,29 +122,56 @@ impl WatchClient {
             paths: DaemonPaths::from_repo_root(&base.repo_root),
         };
 
+        Ok(Self {
+            base,
+            run,
+            connector,
+            handler,
+            telemetry,
+            persistent_tasks_handle: None,
+            ui_sender: sender,
+            ui_handle: handle,
+        })
+    }
+
+    pub async fn start(&mut self) -> Result<(), Error> {
+        let connector = self.connector.clone();
         let mut client = connector.connect().await?;
 
         let mut events = client.package_changes().await?;
-        let mut current_runs: HashMap<PackageName, JoinHandle<Result<i32, run::Error>>> =
-            HashMap::new();
-        let mut persistent_tasks_handle = None;
+
+        if !self.run.has_experimental_ui() {
+            self.run.print_run_prelude();
+        }
+
+        let signal_subscriber = self.handler.subscribe().ok_or(Error::NoSignalHandler)?;
+
+        // We explicitly use a tokio::sync::Mutex here to avoid deadlocks.
+        // If we used a std::sync::Mutex, we could deadlock by spinning the lock
+        // and not yielding back to the tokio runtime.
+        let changed_packages = Mutex::new(RefCell::new(ChangedPackages::default()));
+        let notify_run = Arc::new(Notify::new());
+        let notify_event = notify_run.clone();
 
         let event_fut = async {
             while let Some(event) = events.next().await {
                 let event = event?;
-                Self::handle_change_event(
-                    &mut run,
-                    event.event.unwrap(),
-                    &mut current_runs,
-                    &base,
-                    &telemetry,
-                    &handler,
-                    &mut persistent_tasks_handle,
-                )
-                .await?;
+                Self::handle_change_event(&changed_packages, event.event.unwrap()).await?;
+                notify_event.notify_one();
             }
 
             Err(Error::ConnectionClosed)
+        };
+
+        let run_fut = async {
+            loop {
+                notify_run.notified().await;
+                let changed_packages_guard = changed_packages.lock().await;
+                if !changed_packages_guard.borrow().is_empty() {
+                    let changed_packages = changed_packages_guard.take();
+                    self.execute_run(changed_packages).await?;
+                }
+            }
         };
 
         select! {
@@ -123,17 +184,15 @@ impl WatchClient {
             result = event_fut => {
                 result
             }
+            run_result = run_fut => {
+                run_result
+            }
         }
     }
 
     async fn handle_change_event(
-        run: &mut Run,
+        changed_packages: &Mutex<RefCell<ChangedPackages>>,
         event: proto::package_change_event::Event,
-        current_runs: &mut HashMap<PackageName, JoinHandle<Result<i32, run::Error>>>,
-        base: &CommandBase,
-        telemetry: &CommandEventBuilder,
-        handler: &SignalHandler,
-        persistent_tasks_handle: &mut Option<JoinHandle<Result<i32, run::Error>>>,
     ) -> Result<(), Error> {
         // Should we recover here?
         match event {
@@ -141,99 +200,18 @@ impl WatchClient {
                 package_name,
             }) => {
                 let package_name = PackageName::from(package_name);
-                // If not in the filtered pkgs, ignore
-                if !run.filtered_pkgs.contains(&package_name) {
-                    return Ok(());
-                }
 
-                let mut args = base.args().clone();
-                args.command = args.command.map(|c| {
-                    if let Command::Watch(execution_args) = c {
-                        Command::Run {
-                            execution_args,
-                            run_args: Box::new(RunArgs {
-                                no_cache: true,
-                                daemon: true,
-                                ..Default::default()
-                            }),
-                        }
-                    } else {
-                        unreachable!()
+                match changed_packages.lock().await.get_mut() {
+                    ChangedPackages::All => {
+                        // If we've already changed all packages, ignore
                     }
-                });
-
-                let new_base =
-                    CommandBase::new(args, base.repo_root.clone(), get_version(), base.ui);
-
-                // TODO: Add logic on when to abort vs wait
-                if let Some(run) = current_runs.remove(&package_name) {
-                    run.abort();
+                    ChangedPackages::Some(ref mut pkgs) => {
+                        pkgs.insert(package_name);
+                    }
                 }
-
-                let signal_handler = handler.clone();
-                let telemetry = telemetry.clone();
-
-                current_runs.insert(
-                    package_name.clone(),
-                    tokio::spawn(async move {
-                        let mut run = RunBuilder::new(new_base)?
-                            .with_entrypoint_package(package_name)
-                            .hide_prelude()
-                            .build(&signal_handler, telemetry)
-                            .await?;
-
-                        run.run().await
-                    }),
-                );
             }
             proto::package_change_event::Event::RediscoverPackages(_) => {
-                let mut args = base.args().clone();
-                args.command = args.command.map(|c| {
-                    if let Command::Watch(execution_args) = c {
-                        Command::Run {
-                            run_args: Box::new(RunArgs {
-                                no_cache: true,
-                                daemon: true,
-                                ..Default::default()
-                            }),
-                            execution_args,
-                        }
-                    } else {
-                        unreachable!()
-                    }
-                });
-
-                let base = CommandBase::new(args, base.repo_root.clone(), get_version(), base.ui);
-
-                // When we rediscover, stop all current runs
-                for (_, run) in current_runs.drain() {
-                    run.abort();
-                }
-
-                // rebuild run struct
-                *run = RunBuilder::new(base.clone())?
-                    .hide_prelude()
-                    .build(handler, telemetry.clone())
-                    .await?;
-
-                if run.has_persistent_tasks() {
-                    // Abort old run
-                    if let Some(run) = persistent_tasks_handle.take() {
-                        run.abort();
-                    }
-
-                    let mut persistent_run = run.create_run_for_persistent_tasks();
-                    // If we have persistent tasks, we run them on a separate thread
-                    // since persistent tasks don't finish
-                    *persistent_tasks_handle =
-                        Some(tokio::spawn(async move { persistent_run.run().await }));
-
-                    // But we still run the regular tasks blocking
-                    let mut non_persistent_run = run.create_run_without_persistent_tasks();
-                    non_persistent_run.run().await?;
-                } else {
-                    run.run().await?;
-                }
+                *changed_packages.lock().await.get_mut() = ChangedPackages::All;
             }
             proto::package_change_event::Event::Error(proto::PackageChangeError { message }) => {
                 return Err(DaemonError::Unavailable(message).into());
@@ -241,5 +219,113 @@ impl WatchClient {
         }
 
         Ok(())
+    }
+
+    async fn execute_run(&mut self, changed_packages: ChangedPackages) -> Result<i32, Error> {
+        // Should we recover here?
+        match changed_packages {
+            ChangedPackages::Some(packages) => {
+                let packages = packages
+                    .into_iter()
+                    .filter(|pkg| {
+                        // If not in the filtered pkgs, ignore
+                        self.run.filtered_pkgs.contains(pkg)
+                    })
+                    .collect();
+
+                let mut args = self.base.args().clone();
+                args.command = args.command.map(|c| {
+                    if let Command::Watch(execution_args) = c {
+                        Command::Run {
+                            execution_args,
+                            run_args: Box::new(RunArgs {
+                                no_cache: true,
+                                daemon: true,
+                                ..Default::default()
+                            }),
+                        }
+                    } else {
+                        unreachable!()
+                    }
+                });
+
+                let new_base = CommandBase::new(
+                    args,
+                    self.base.repo_root.clone(),
+                    get_version(),
+                    self.base.ui,
+                );
+
+                let signal_handler = self.handler.clone();
+                let telemetry = self.telemetry.clone();
+
+                let mut run = RunBuilder::new(new_base)?
+                    .with_entrypoint_packages(packages)
+                    .hide_prelude()
+                    .build(&signal_handler, telemetry)
+                    .await?;
+
+                Ok(run.run(self.ui_sender.clone()).await?)
+            }
+            ChangedPackages::All => {
+                let mut args = self.base.args().clone();
+                args.command = args.command.map(|c| {
+                    if let Command::Watch(execution_args) = c {
+                        Command::Run {
+                            run_args: Box::new(RunArgs {
+                                no_cache: true,
+                                daemon: true,
+                                ..Default::default()
+                            }),
+                            execution_args,
+                        }
+                    } else {
+                        unreachable!()
+                    }
+                });
+
+                let base = CommandBase::new(
+                    args,
+                    self.base.repo_root.clone(),
+                    get_version(),
+                    self.base.ui,
+                );
+
+                // rebuild run struct
+                self.run = RunBuilder::new(base.clone())?
+                    .hide_prelude()
+                    .build(&self.handler, self.telemetry.clone())
+                    .await?;
+
+                if let Some(sender) = &self.ui_sender {
+                    let task_names = self.run.engine.tasks_with_command(&self.run.pkg_dep_graph);
+                    sender
+                        .update_tasks(task_names)
+                        .map_err(|err| Error::UISend(err.to_string()))?;
+                }
+
+                if self.run.has_persistent_tasks() {
+                    // Abort old run
+                    if let Some(run) = self.persistent_tasks_handle.take() {
+                        run.abort();
+                    }
+
+                    let mut persistent_run = self.run.create_run_for_persistent_tasks();
+                    let ui_sender = self.ui_sender.clone();
+                    // If we have persistent tasks, we run them on a separate thread
+                    // since persistent tasks don't finish
+                    self.persistent_tasks_handle =
+                        Some(tokio::spawn(
+                            async move { persistent_run.run(ui_sender).await },
+                        ));
+
+                    // But we still run the regular tasks blocking
+                    let mut non_persistent_run = self.run.create_run_without_persistent_tasks();
+                    Ok(non_persistent_run.run(self.ui_sender.clone()).await?)
+                } else {
+                    Ok(self.run.run(self.ui_sender.clone()).await?)
+                }
+            }
+        }
     }
 }

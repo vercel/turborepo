@@ -142,11 +142,15 @@ impl Engine<Built> {
     /// Creates an instance of `Engine` that only contains tasks that depend on
     /// tasks from a given package. This is useful for watch mode, where we
     /// need to re-run only a portion of the task graph.
-    pub fn create_engine_for_subgraph(&self, changed_package: &PackageName) -> Engine<Built> {
-        let entrypoint_indices: &[petgraph::graph::NodeIndex] = self
-            .package_tasks
-            .get(changed_package)
-            .map_or(&[], |v| &v[..]);
+    pub fn create_engine_for_subgraph(
+        &self,
+        changed_packages: &HashSet<PackageName>,
+    ) -> Engine<Built> {
+        let entrypoint_indices: Vec<_> = changed_packages
+            .iter()
+            .flat_map(|pkg| self.package_tasks.get(pkg))
+            .flatten()
+            .collect();
 
         // We reverse the graph because we want the *dependents* of entrypoint tasks
         let mut reversed_graph = self.task_graph.clone();
@@ -175,7 +179,7 @@ impl Engine<Built> {
                     .iter()
                     .any(|idx| {
                         node_distances
-                            .get(&(*idx, node_idx))
+                            .get(&(**idx, node_idx))
                             .map_or(false, |dist| *dist != i32::MAX)
                     })
                     .then_some(node.clone())
@@ -293,7 +297,7 @@ impl Engine<Built> {
                 continue;
             }
 
-            new_graph.add_edge(root_index, index, ());
+            new_graph.add_edge(index, root_index, ());
         }
 
         let task_lookup: HashMap<_, _> = new_graph
@@ -764,7 +768,8 @@ mod test {
         engine.task_graph.add_edge(b_build_idx, a_build_idx, ());
 
         let engine = engine.seal();
-        let subgraph = engine.create_engine_for_subgraph(&PackageName::from("a"));
+        let subgraph =
+            engine.create_engine_for_subgraph(&[PackageName::from("a")].into_iter().collect());
 
         // Verify that the subgraph only contains tasks from package `a` and the `build`
         // task from package `b`
