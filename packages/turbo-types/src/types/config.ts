@@ -246,25 +246,6 @@ export interface Pipeline {
    *
    * @defaultValue full
    */
-  outputMode?: OutputMode;
-
-  /**
-   * Output mode for the task.
-   *
-   * "full": Displays all output
-   *
-   * "hash-only": Show only the hashes of the tasks
-   *
-   * "new-only": Only show output from cache misses
-   *
-   * "errors-only": Only show output from task failures
-   *
-   * "none": Hides all task output
-   *
-   * Documentation: https://turbo.build/repo/docs/reference/command-line-reference#--output-logs
-   *
-   * @defaultValue full
-   */
   outputLogs?: OutputMode;
 
   /**
