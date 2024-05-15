@@ -222,7 +222,7 @@ mod tests {
             &env_var_map,
             &[],
             None,
-            EnvMode::Infer,
+            EnvMode::Strict,
             false,
             &SCM::new(&root),
         );
