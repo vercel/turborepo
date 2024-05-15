@@ -65,7 +65,7 @@ Setup
           "cache": true,
           "dependsOn": [],
           "inputs": [],
-          "outputMode": "full",
+          "outputLogs": "full",
           "persistent": false,
           "env": [],
           "passThroughEnv": null,
@@ -120,7 +120,7 @@ Setup
             "build"
           ],
           "inputs": [],
-          "outputMode": "full",
+          "outputLogs": "full",
           "persistent": false,
           "env": [],
           "passThroughEnv": null,

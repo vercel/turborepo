@@ -1,7 +1,7 @@
 import path from "node:path";
 import { readJsonSync, existsSync } from "fs-extra";
 import { type PackageJson, getTurboConfigs } from "@turbo/utils";
-import type { Schema as TurboJsonSchema } from "@turbo/types";
+import type { Schema as TurboJsonSchema, OutputMode } from "@turbo/types";
 import type { TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
@@ -15,7 +15,9 @@ const INTRODUCED_IN = "2.0.0";
 function migrateConfig(config: TurboJsonSchema) {
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
     if (Object.prototype.hasOwnProperty.call(taskDef, "outputMode")) {
-      taskDef.outputLogs = taskDef.outputMode;
+      //@ts-expect-error - outputMode is no longer in the schema
+      taskDef.outputLogs = taskDef.outputMode as OutputMode;
+      //@ts-expect-error - outputMode is no longer in the schema
       delete taskDef.outputMode;
     }
   }
