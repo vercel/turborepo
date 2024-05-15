@@ -37,11 +37,11 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> RawTraceLayer<S> {
     }
 
     fn report_allocations(&self, ts: u64, thread_id: u64) {
-        let allocation_info = turbo_tasks_malloc::TurboMalloc::pop_allocations();
+        let allocation_info = turbo_tasks_malloc::TurboMalloc::allocations();
         if allocation_info.is_empty() {
             return;
         }
-        self.write(TraceRow::Allocation {
+        self.write(TraceRow::AllocationCounters {
             ts,
             thread_id,
             allocations: allocation_info.allocations as u64,

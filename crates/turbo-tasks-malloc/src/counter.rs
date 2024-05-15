@@ -4,6 +4,8 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
+use crate::AllocationInfo;
+
 static ALLOCATED: AtomicUsize = AtomicUsize::new(0);
 const KB: usize = 1024;
 /// When global counter is updates we will keep a thread-local buffer of this
@@ -12,23 +14,6 @@ const TARGET_BUFFER: usize = 100 * KB;
 /// When the thread-local buffer would exceed this size, we will update the
 /// global counter.
 const MAX_BUFFER: usize = 200 * KB;
-
-#[derive(Default)]
-pub struct AllocationInfo {
-    pub allocations: usize,
-    pub deallocations: usize,
-    pub allocation_count: usize,
-    pub deallocation_count: usize,
-}
-
-impl AllocationInfo {
-    pub fn is_empty(&self) -> bool {
-        self.allocations == 0
-            && self.deallocations == 0
-            && self.allocation_count == 0
-            && self.deallocation_count == 0
-    }
-}
 
 #[derive(Default)]
 struct ThreadLocalCounter {
@@ -69,6 +54,7 @@ impl ThreadLocalCounter {
             ALLOCATED.fetch_sub(self.buffer, Ordering::Relaxed);
             self.buffer = 0;
         }
+        self.allocation_info = AllocationInfo::default();
     }
 }
 
@@ -80,8 +66,8 @@ pub fn get() -> usize {
     ALLOCATED.load(Ordering::Relaxed)
 }
 
-pub fn pop_allocations() -> AllocationInfo {
-    with_local_counter(|local| std::mem::take(&mut local.allocation_info))
+pub fn allocations() -> AllocationInfo {
+    with_local_counter(|local| local.allocation_info.clone())
 }
 
 fn with_local_counter<T>(f: impl FnOnce(&mut ThreadLocalCounter) -> T) -> T {

@@ -4,6 +4,33 @@ use std::alloc::{GlobalAlloc, Layout};
 
 use self::counter::{add, flush, get, remove};
 
+#[derive(Default, Clone)]
+pub struct AllocationInfo {
+    pub allocations: usize,
+    pub deallocations: usize,
+    pub allocation_count: usize,
+    pub deallocation_count: usize,
+}
+
+impl AllocationInfo {
+    pub fn is_empty(&self) -> bool {
+        self.allocations == 0
+            && self.deallocations == 0
+            && self.allocation_count == 0
+            && self.deallocation_count == 0
+    }
+
+    pub fn until_now(&self) -> Self {
+        let new = TurboMalloc::allocations();
+        Self {
+            allocations: new.allocations - self.allocations,
+            deallocations: new.deallocations - self.deallocations,
+            allocation_count: new.allocation_count - self.allocation_count,
+            deallocation_count: new.deallocation_count - self.deallocation_count,
+        }
+    }
+}
+
 /// Turbo's preferred global allocator. This is a new type instead of a type
 /// alias because you can't use type aliases to instantiate unit types (E0423).
 pub struct TurboMalloc;
@@ -17,8 +44,8 @@ impl TurboMalloc {
         flush();
     }
 
-    pub fn pop_allocations() -> self::counter::AllocationInfo {
-        self::counter::pop_allocations()
+    pub fn allocations() -> AllocationInfo {
+        self::counter::allocations()
     }
 }
 
