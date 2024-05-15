@@ -182,7 +182,7 @@ pub struct RawTaskDefinition {
     #[serde(skip_serializing_if = "Option::is_none")]
     outputs: Option<Vec<Spanned<UnescapedString>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    output_mode: Option<Spanned<OutputLogsMode>>,
+    output_logs: Option<Spanned<OutputLogsMode>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     interactive: Option<Spanned<bool>>,
 }
@@ -212,7 +212,7 @@ impl RawTaskDefinition {
         }
         set_field!(self, other, depends_on);
         set_field!(self, other, inputs);
-        set_field!(self, other, output_mode);
+        set_field!(self, other, output_logs);
         set_field!(self, other, persistent);
         set_field!(self, other, env);
         set_field!(self, other, pass_through_env);
@@ -379,7 +379,7 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
             inputs,
             pass_through_env,
             dot_env,
-            output_mode: *raw_task.output_mode.unwrap_or_default(),
+            output_mode: *raw_task.output_logs.unwrap_or_default(),
             persistent: *raw_task.persistent.unwrap_or_default(),
             interactive,
         })
@@ -1110,7 +1110,7 @@ mod tests {
             .ok()
             .and_then(|j| j.pipeline.as_ref())
             .and_then(|pipeline| pipeline.0.get(&TaskName::from("build")))
-            .and_then(|build| build.value.output_mode.clone())
+            .and_then(|build| build.value.output_logs.clone())
             .map(|mode| mode.into_inner());
         assert_eq!(actual, expected);
     }

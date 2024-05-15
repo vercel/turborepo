@@ -249,6 +249,25 @@ export interface Pipeline {
   outputMode?: OutputMode;
 
   /**
+   * Output mode for the task.
+   *
+   * "full": Displays all output
+   *
+   * "hash-only": Show only the hashes of the tasks
+   *
+   * "new-only": Only show output from cache misses
+   *
+   * "errors-only": Only show output from task failures
+   *
+   * "none": Hides all task output
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/command-line-reference#--output-logs
+   *
+   * @defaultValue full
+   */
+  outputLogs?: OutputMode;
+
+  /**
    * Indicates whether the task exits or not. Setting `persistent` to `true` tells
    * turbo that this is a long-running task and will ensure that other tasks
    * cannot depend on it.
