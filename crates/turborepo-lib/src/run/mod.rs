@@ -201,15 +201,13 @@ impl Run {
             is_monorepo.then(|| get_external_deps_hash(&root_workspace.transitive_dependencies));
 
         let global_hash_inputs = {
-            let (env_mode, pass_through_env) = match self.opts.run_opts.env_mode {
+            let env_mode = self.opts.run_opts.env_mode;
+            let pass_through_env = match env_mode {
                 EnvMode::Loose => {
                     // Remove the passthroughs from hash consideration if we're explicitly loose.
-                    (EnvMode::Loose, None)
+                    None
                 }
-                env_mode => (
-                    env_mode,
-                    self.root_turbo_json.global_pass_through_env.as_deref(),
-                ),
+                EnvMode::Strict => self.root_turbo_json.global_pass_through_env.as_deref(),
             };
 
             get_global_hash_inputs(

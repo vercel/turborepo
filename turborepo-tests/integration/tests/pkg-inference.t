@@ -6,7 +6,11 @@ Setup
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
+<<<<<<< HEAD
   util:build: cache miss, executing d30fc4474534c30e
+=======
+  util:build: cache miss, executing e09943c27ed0a75d
+>>>>>>> 2eae5cbd82 (Update tests)
   util:build: 
   util:build: > build
   util:build: > echo building

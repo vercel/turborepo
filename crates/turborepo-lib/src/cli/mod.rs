@@ -676,7 +676,7 @@ pub struct ExecutionArgs {
     /// Environment variable mode.
     /// Use "loose" to pass the entire existing environment.
     /// Use "strict" to use an allowlist specified in turbo.json.
-    #[clap(long = "env-mode", default_value = "strict", num_args = 0..=1, default_missing_value = "infer")]
+    #[clap(long = "env-mode", default_value = "strict", num_args = 0..=1, default_missing_value = "strict")]
     pub env_mode: EnvMode,
     /// Use the given selector to specify package(s) to act as
     /// entry points. The syntax mirrors pnpm's syntax, and
@@ -1445,6 +1445,21 @@ mod test {
 		} ;
         "framework_inference: flag set to false"
 	)]
+    #[test_case::test_case(
+        &["turbo", "run", "build", "--env-mode"],
+        Args {
+            command: Some(Command::Run {
+                execution_args: Box::new(ExecutionArgs {
+                    tasks: vec!["build".to_string()],
+                    env_mode: EnvMode::Strict,
+                    ..get_default_execution_args()
+                }),
+                run_args: Box::new(get_default_run_args())
+            }),
+            ..Args::default()
+        } ;
+        "env_mode: not fully-specified"
+    )]
     #[test_case::test_case(
 		&["turbo", "run", "build"],
         Args {

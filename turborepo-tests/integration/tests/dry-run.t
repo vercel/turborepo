@@ -18,7 +18,12 @@ Setup
   Global Hash Inputs
     Global Files                          = 1
     External Dependencies Hash            = 459c029558afe716
+<<<<<<< HEAD
     Global Cache Key                      = HEY STELLLLLLLAAAAAAAAAAAAA
+=======
+    Global Cache Key                      = I can\xe2\x80\x99t see ya, but I know you\xe2\x80\x99re here (esc)
+    Global .env Files Considered          = 0
+>>>>>>> 2eae5cbd82 (Update tests)
     Global Env Vars                       = SOME_ENV_VAR
     Global Env Vars Values                = 
     Inferred Global Env Vars Values       = 
@@ -30,7 +35,11 @@ Setup
   my-app#build
     Task                           = build\s* (re)
     Package                        = my-app\s* (re)
+<<<<<<< HEAD
     Hash                           = 61394a550211cbe8\s* (re)
+=======
+    Hash                           = dea27cc2fbbcfe2c
+>>>>>>> 2eae5cbd82 (Update tests)
     Cached \(Local\)                 = false\s* (re)
     Cached \(Remote\)                = false\s* (re)
     Directory                      = apps(\/|\\)my-app\s* (re)
@@ -50,7 +59,11 @@ Setup
   util#build
     Task                           = build\s* (re)
     Package                        = util\s* (re)
+<<<<<<< HEAD
     Hash                           = d30fc4474534c30e\s* (re)
+=======
+    Hash                           = e09943c27ed0a75d
+>>>>>>> 2eae5cbd82 (Update tests)
     Cached \(Local\)                 = false\s* (re)
     Cached \(Remote\)                = false\s* (re)
     Directory                      = packages(\/|\\)util\s* (re)

@@ -280,7 +280,7 @@ impl RunTracker {
                 run_opts,
                 packages,
                 global_hash_summary,
-                global_env_mode.into(),
+                global_env_mode,
                 task_factory,
             )
             .await?;
