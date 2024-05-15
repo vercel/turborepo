@@ -1,5 +1,3 @@
-use tracing::field::Empty;
-
 use super::{
     balance_queue::BalanceQueue,
     in_progress::start_in_progress_all,
@@ -97,7 +95,6 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNewEdge<C> {
     type Result = ();
     fn apply(self, ctx: &C) {
         let mut balance_queue = BalanceQueue::new();
-        let span;
         match self {
             PreparedNewEdge::Leaf {
                 min_aggregation_number,
@@ -105,20 +102,15 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNewEdge<C> {
                 uppers,
                 target_id,
             } => {
-                span =
-                    tracing::trace_span!("handle_new_edge_leaf", affected_nodes = Empty).entered();
-                {
-                    // TODO add to prepared
-                    increase_aggregation_number_internal(
-                        ctx,
-                        &mut balance_queue,
-                        ctx.node(&target_id),
-                        &target_id,
-                        min_aggregation_number,
-                        target_aggregation_number,
-                        IncreaseReason::LeafEdge,
-                    );
-                }
+                increase_aggregation_number_internal(
+                    ctx,
+                    &mut balance_queue,
+                    ctx.node(&target_id),
+                    &target_id,
+                    min_aggregation_number,
+                    target_aggregation_number,
+                    IncreaseReason::LeafEdge,
+                );
                 let mut affected_nodes = 0;
                 for upper_id in uppers {
                     affected_nodes += notify_new_follower(
@@ -133,19 +125,15 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNewEdge<C> {
                         handle_expensive_node(ctx, &mut balance_queue, &target_id);
                     }
                 }
-                span.record("affected_nodes", affected_nodes);
             }
             PreparedNewEdge::Upgraded {
                 uppers,
                 target_id,
                 increase,
             } => {
-                span = tracing::trace_span!("handle_new_edge_upgraded", affected_nodes = Empty)
-                    .entered();
                 // Since it was added to a leaf node, we would add it to the uppers
-                let mut affected_nodes = 0;
                 for upper_id in uppers {
-                    affected_nodes += notify_new_follower(
+                    notify_new_follower(
                         ctx,
                         &mut balance_queue,
                         ctx.node(&upper_id),
@@ -156,16 +144,12 @@ impl<C: AggregationContext> PreparedOperation<C> for PreparedNewEdge<C> {
                 }
                 // The balancing will attach it to the aggregated node later
                 increase.apply(ctx, &mut balance_queue);
-                span.record("affected_nodes", affected_nodes);
             }
             PreparedNewEdge::Aggegating { target_id, notify } => {
-                span = tracing::trace_span!("handle_new_edge_aggregated", affected_nodes = Empty)
-                    .entered();
                 let affected_nodes = notify.apply(ctx, &mut balance_queue);
                 if affected_nodes > MAX_AFFECTED_NODES {
                     handle_expensive_node(ctx, &mut balance_queue, &target_id);
                 }
-                span.record("affected_nodes", affected_nodes);
             }
         }
         balance_queue.process(ctx);
