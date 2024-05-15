@@ -37,7 +37,7 @@ use {
 };
 
 use crate::{
-    cli::{DryRunMode, EnvMode},
+    cli::DryRunMode,
     commands::CommandBase,
     engine::{Engine, EngineBuilder},
     opts::Opts,
@@ -388,12 +388,6 @@ impl RunBuilder {
             self.ui,
             self.opts.run_opts.dry_run.is_some(),
         ));
-
-        if matches!(self.opts.run_opts.env_mode, EnvMode::Infer)
-            && root_turbo_json.global_pass_through_env.is_some()
-        {
-            self.opts.run_opts.env_mode = EnvMode::Strict;
-        }
 
         let should_print_prelude = self.should_print_prelude_override.unwrap_or_else(|| {
             self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none()

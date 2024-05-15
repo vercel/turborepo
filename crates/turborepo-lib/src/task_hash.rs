@@ -12,7 +12,7 @@ use turbopath::{
     AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf,
 };
 use turborepo_cache::CacheHitMetadata;
-use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap, ResolvedEnvMode};
+use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap};
 use turborepo_repository::package_graph::{PackageInfo, PackageName};
 use turborepo_scm::SCM;
 use turborepo_telemetry::events::{
@@ -20,6 +20,7 @@ use turborepo_telemetry::events::{
 };
 
 use crate::{
+    cli::EnvMode,
     engine::TaskNode,
     framework::infer_framework,
     hash::{FileHashes, LockFilePackages, TaskHashable, TurboHash},
@@ -55,7 +56,7 @@ pub enum Error {
 
 impl TaskHashable<'_> {
     fn calculate_task_hash(mut self) -> String {
-        if matches!(self.env_mode, ResolvedEnvMode::Loose) {
+        if matches!(self.env_mode, EnvMode::Loose) {
             self.pass_through_env = &[];
         }
 
@@ -281,7 +282,7 @@ impl<'a> TaskHasher<'a> {
         &self,
         task_id: &TaskId<'static>,
         task_definition: &TaskDefinition,
-        task_env_mode: ResolvedEnvMode,
+        task_env_mode: EnvMode,
         workspace: &PackageInfo,
         dependency_set: HashSet<&TaskNode>,
         telemetry: PackageTaskEventBuilder,
@@ -465,12 +466,12 @@ impl<'a> TaskHasher<'a> {
     pub fn env(
         &self,
         task_id: &TaskId,
-        task_env_mode: ResolvedEnvMode,
+        task_env_mode: EnvMode,
         task_definition: &TaskDefinition,
         global_env: &EnvironmentVariableMap,
     ) -> Result<EnvironmentVariableMap, Error> {
         match task_env_mode {
-            ResolvedEnvMode::Strict => {
+            EnvMode::Strict => {
                 let mut pass_through_env = EnvironmentVariableMap::default();
                 let default_env_var_pass_through_map =
                     self.env_at_execution_start.from_wildcards(&[
@@ -501,7 +502,7 @@ impl<'a> TaskHasher<'a> {
 
                 Ok(pass_through_env)
             }
-            ResolvedEnvMode::Loose => Ok(self.env_at_execution_start.clone()),
+            EnvMode::Loose => Ok(self.env_at_execution_start.clone()),
         }
     }
 }

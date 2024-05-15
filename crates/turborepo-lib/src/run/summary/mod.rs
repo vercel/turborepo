@@ -37,7 +37,7 @@ use self::{
 use super::task_id::TaskId;
 use crate::{
     cli,
-    cli::DryRunMode,
+    cli::{DryRunMode, EnvMode},
     engine::Engine,
     opts::RunOpts,
     run::summary::{
@@ -81,26 +81,6 @@ enum RunType {
     Real,
     DryText,
     DryJson,
-}
-
-// Can't reuse `cli::EnvMode` because the serialization
-// is different (lowercase vs uppercase)
-#[derive(Clone, Copy, Debug, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum EnvMode {
-    Infer,
-    Loose,
-    Strict,
-}
-
-impl From<cli::EnvMode> for EnvMode {
-    fn from(env_mode: cli::EnvMode) -> Self {
-        match env_mode {
-            cli::EnvMode::Infer => EnvMode::Infer,
-            cli::EnvMode::Loose => EnvMode::Loose,
-            cli::EnvMode::Strict => EnvMode::Strict,
-        }
-    }
 }
 
 #[derive(Debug, Serialize)]

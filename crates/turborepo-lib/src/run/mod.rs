@@ -202,13 +202,6 @@ impl Run {
 
         let global_hash_inputs = {
             let (env_mode, pass_through_env) = match self.opts.run_opts.env_mode {
-                // In infer mode, if there is any pass_through config (even if it is an empty array)
-                // we'll hash the whole object, so we can detect changes to that config
-                // Further, resolve the envMode to the concrete value.
-                EnvMode::Infer if self.root_turbo_json.global_pass_through_env.is_some() => (
-                    EnvMode::Strict,
-                    self.root_turbo_json.global_pass_through_env.as_deref(),
-                ),
                 EnvMode::Loose => {
                     // Remove the passthroughs from hash consideration if we're explicitly loose.
                     (EnvMode::Loose, None)

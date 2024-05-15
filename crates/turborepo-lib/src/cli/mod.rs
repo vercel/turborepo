@@ -121,17 +121,16 @@ impl Display for DryRunMode {
 }
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Serialize, ValueEnum)]
+#[serde(rename_all = "lowercase")]
 pub enum EnvMode {
-    #[default]
-    Infer,
     Loose,
+    #[default]
     Strict,
 }
 
 impl fmt::Display for EnvMode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            EnvMode::Infer => "infer",
             EnvMode::Loose => "loose",
             EnvMode::Strict => "strict",
         })
@@ -677,9 +676,7 @@ pub struct ExecutionArgs {
     /// Environment variable mode.
     /// Use "loose" to pass the entire existing environment.
     /// Use "strict" to use an allowlist specified in turbo.json.
-    /// Use "infer" to defer to existence of "passThroughEnv" or
-    /// "globalPassThroughEnv" in turbo.json. (default infer)
-    #[clap(long = "env-mode", default_value = "infer", num_args = 0..=1, default_missing_value = "infer")]
+    #[clap(long = "env-mode", default_value = "strict", num_args = 0..=1, default_missing_value = "infer")]
     pub env_mode: EnvMode,
     /// Use the given selector to specify package(s) to act as
     /// entry points. The syntax mirrors pnpm's syntax, and
@@ -1454,44 +1451,14 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    env_mode: EnvMode::Infer,
+                    env_mode: EnvMode::Strict,
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
             }),
             ..Args::default()
 		} ;
-        "env_mode: default infer"
-	)]
-    #[test_case::test_case(
-		&["turbo", "run", "build", "--env-mode"],
-        Args {
-            command: Some(Command::Run {
-                execution_args: Box::new(ExecutionArgs {
-                    tasks: vec!["build".to_string()],
-                    env_mode: EnvMode::Infer,
-                    ..get_default_execution_args()
-                }),
-                run_args: Box::new(get_default_run_args())
-            }),
-            ..Args::default()
-		} ;
-        "env_mode: not fully-specified"
-	)]
-    #[test_case::test_case(
-		&["turbo", "run", "build", "--env-mode", "infer"],
-        Args {
-            command: Some(Command::Run {
-                execution_args: Box::new(ExecutionArgs {
-                    tasks: vec!["build".to_string()],
-                    env_mode: EnvMode::Infer,
-                    ..get_default_execution_args()
-                }),
-                run_args: Box::new(get_default_run_args())
-            }),
-            ..Args::default()
-		} ;
-        "env_mode: specified infer"
+        "env_mode: default strict"
 	)]
     #[test_case::test_case(
 		&["turbo", "run", "build", "--env-mode", "loose"],

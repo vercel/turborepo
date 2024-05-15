@@ -178,16 +178,6 @@ impl<'a> TaskSummaryFactory<'a> {
             // TODO: this is some very messy code that appears in a few places
             // we should attempt to calculate this once and reuse it
             env_mode: match self.global_env_mode {
-                cli::EnvMode::Infer => {
-                    if task_definition.pass_through_env.is_some() {
-                        EnvMode::Strict
-                    } else {
-                        // If we're in infer mode we have just detected non-usage of strict env
-                        // vars. But our behavior's actual meaning of this
-                        // state is `loose`.
-                        EnvMode::Loose
-                    }
-                }
                 cli::EnvMode::Strict => EnvMode::Strict,
                 cli::EnvMode::Loose => EnvMode::Loose,
             },

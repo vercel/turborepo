@@ -45,7 +45,6 @@ struct GlobalHashable {
 
 
   enum EnvMode {
-    infer @0;
     loose @1;
     strict @2;
   }
