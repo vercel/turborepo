@@ -295,6 +295,7 @@ impl Store {
             span.total_deallocations.take();
             span.total_persistent_allocations.take();
             span.total_allocation_count.take();
+            span.total_span_count.take();
             span.extra.take();
         }
 
