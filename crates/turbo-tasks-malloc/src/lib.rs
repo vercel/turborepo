@@ -4,7 +4,7 @@ use std::alloc::{GlobalAlloc, Layout};
 
 use self::counter::{add, flush, get, remove};
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct AllocationInfo {
     pub allocations: usize,
     pub deallocations: usize,

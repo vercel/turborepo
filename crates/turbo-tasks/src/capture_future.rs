@@ -66,12 +66,9 @@ impl<T, F: Future<Output = T>> Future for CaptureFuture<T, F> {
         match result {
             Poll::Ready(r) => {
                 let (duration, allocations, deallocations) = *this.cell.lock().unwrap();
-                Poll::Ready((
-                    r,
-                    *this.duration + duration,
-                    start + elapsed,
-                    allocations.saturating_sub(deallocations),
-                ))
+                let memory_usage = (*this.allocations + allocations)
+                    .saturating_sub(*this.deallocations + deallocations);
+                Poll::Ready((r, *this.duration + duration, start + elapsed, memory_usage))
             }
             Poll::Pending => Poll::Pending,
         }
