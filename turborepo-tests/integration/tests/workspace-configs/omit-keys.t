@@ -14,7 +14,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache miss, executing c2b676fcb84b4e03
+  omit-keys:omit-keys-task: cache miss, executing 1c8d38233fc2703b
   omit-keys:omit-keys-task: 
   omit-keys:omit-keys-task: > omit-keys-task
   omit-keys:omit-keys-task: > echo running-omit-keys-task > out/foo.min.txt
@@ -36,19 +36,20 @@ Setup
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache hit, suppressing logs c2b676fcb84b4e03
+  omit-keys:omit-keys-task: cache hit, suppressing logs 1c8d38233fc2703b
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
+
 3. Change input file and assert cache miss, and not FULL TURBO
   $ echo "more text" >> $TARGET_DIR/apps/omit-keys/src/foo.txt
   $ ${TURBO} run omit-keys-task --filter=omit-keys
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache miss, executing 8b89b146ef1ffbf0
+  omit-keys:omit-keys-task: cache miss, executing a5ff2108b938bd03
   omit-keys:omit-keys-task: 
   omit-keys:omit-keys-task: > omit-keys-task
   omit-keys:omit-keys-task: > echo running-omit-keys-task > out/foo.min.txt
@@ -65,18 +66,19 @@ Setup
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache hit, suppressing logs 8b89b146ef1ffbf0
+  omit-keys:omit-keys-task: cache hit, suppressing logs a5ff2108b938bd03
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
+
 4. Set env var and assert cache miss, and that hash is different from above
   $ SOME_VAR=somevalue ${TURBO} run omit-keys-task --filter=omit-keys
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache miss, executing 4dfc7e5dc9674f95
+  omit-keys:omit-keys-task: cache miss, executing 374731403415182f
   omit-keys:omit-keys-task: 
   omit-keys:omit-keys-task: > omit-keys-task
   omit-keys:omit-keys-task: > echo running-omit-keys-task > out/foo.min.txt

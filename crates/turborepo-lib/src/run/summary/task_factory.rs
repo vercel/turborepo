@@ -175,12 +175,7 @@ impl<'a> TaskSummaryFactory<'a> {
             framework,
             dependencies,
             dependents,
-            // TODO: this is some very messy code that appears in a few places
-            // we should attempt to calculate this once and reuse it
-            env_mode: match self.global_env_mode {
-                cli::EnvMode::Strict => EnvMode::Strict,
-                cli::EnvMode::Loose => EnvMode::Loose,
-            },
+            env_mode: self.global_env_mode.into(),
             environment_variables: TaskEnvVarSummary::new(
                 task_definition,
                 env_vars,

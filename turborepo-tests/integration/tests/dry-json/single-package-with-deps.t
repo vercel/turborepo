@@ -8,7 +8,7 @@ Setup
     "turboVersion": "[a-z0-9\.-]+", (re)
     "monorepo": false,
     "globalCacheInputs": {
-      "rootKey": "HEY STELLLLLLLAAAAAAAAAAAAA",
+      "rootKey": "I can\xe2\x80\x99t see ya, but I know you\xe2\x80\x99re here", (esc)
       "files": {
         "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
         "package.json": "8606ff4b95a5330740d8d9d0948faeada64f1f32",
@@ -26,13 +26,13 @@ Setup
         "passthrough": null
       }
     },
-    "envMode": "infer",
+    "envMode": "strict",
     "frameworkInference": true,
     "tasks": [
       {
         "taskId": "build",
         "task": "build",
-        "hash": "e48ea8d453fe3216",
+        "hash": "d352dc255e1c134a",
         "inputs": {
           ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
@@ -74,7 +74,7 @@ Setup
         },
         "expandedOutputs": [],
         "framework": "",
-        "envMode": "loose",
+        "envMode": "strict",
         "environmentVariables": {
           "specified": {
             "env": [],
@@ -89,7 +89,7 @@ Setup
       {
         "taskId": "test",
         "task": "test",
-        "hash": "92fa9e0daec0e1ec",
+        "hash": "b68d995fde0dcb13",
         "inputs": {
           ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
@@ -129,7 +129,7 @@ Setup
         },
         "expandedOutputs": [],
         "framework": "",
-        "envMode": "loose",
+        "envMode": "strict",
         "environmentVariables": {
           "specified": {
             "env": [],

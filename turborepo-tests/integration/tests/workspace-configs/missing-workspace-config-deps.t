@@ -15,14 +15,14 @@ Setup
   \xe2\x80\xa2 Remote caching disabled (esc)
 
   $ cat tmp.log | grep "missing-workspace-config:missing-workspace-config-task-with-deps"
-  missing-workspace-config:missing-workspace-config-task-with-deps: cache miss, executing c151f24ca66771e5
+  missing-workspace-config:missing-workspace-config-task-with-deps: cache miss, executing b0f31ba9ff84e0d7
   missing-workspace-config:missing-workspace-config-task-with-deps: 
   missing-workspace-config:missing-workspace-config-task-with-deps: > missing-workspace-config-task-with-deps
   missing-workspace-config:missing-workspace-config-task-with-deps: > echo running-missing-workspace-config-task-with-deps > out/foo.min.txt
   missing-workspace-config:missing-workspace-config-task-with-deps: 
 
   $ cat tmp.log | grep "missing-workspace-config:missing-workspace-config-underlying-task"
-  missing-workspace-config:missing-workspace-config-underlying-task: cache miss, executing 26878c99d9f1f2ad
+  missing-workspace-config:missing-workspace-config-underlying-task: cache miss, executing 2078a4d3acfb180f
   missing-workspace-config:missing-workspace-config-underlying-task: 
   missing-workspace-config:missing-workspace-config-underlying-task: > missing-workspace-config-underlying-task
   missing-workspace-config:missing-workspace-config-underlying-task: > echo running-missing-workspace-config-underlying-task
@@ -30,7 +30,7 @@ Setup
   missing-workspace-config:missing-workspace-config-underlying-task: running-missing-workspace-config-underlying-task
 
   $ cat tmp.log | grep "blank-pkg:missing-workspace-config-underlying-topo-task"
-  blank-pkg:missing-workspace-config-underlying-topo-task: cache miss, executing 360fb5a29b92db26
+  blank-pkg:missing-workspace-config-underlying-topo-task: cache miss, executing 4383fc07325caa59
   blank-pkg:missing-workspace-config-underlying-topo-task: 
   blank-pkg:missing-workspace-config-underlying-topo-task: > missing-workspace-config-underlying-topo-task
   blank-pkg:missing-workspace-config-underlying-topo-task: > echo missing-workspace-config-underlying-topo-task from blank-pkg
