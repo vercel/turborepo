@@ -67,6 +67,30 @@ export async function POST(req: Request) {
 
 ```
 
+## Configuring the Database
+
+For managing the database settings such as the database type, username, password, and other configurations, refer to the orm-config.ts file located in the packages/typeorm-service/src directory. This file centralizes all database connection settings to ensure secure and efficient database management. Make sure to review and adjust these settings according to your environment to ensure optimal performance and security.
+
+```typescript 
+// packages/typeorm-service/src/orm-config.ts
+import { DataSource } from "typeorm";
+
+export const AppDataSource = new DataSource({
+    type: "mysql", // or your database type
+    host: "localhost",
+    port: 3306,
+    username: "your_username",
+    password: "your_password",
+    database: "your_database_name",
+    synchronize: true,
+    logging: false,
+    entities: [...],
+    migrations: [...],
+});
+
+```
+
+
 ### Utilities
 
 This Turborepo has some additional tools already setup for you:
