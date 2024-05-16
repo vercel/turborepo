@@ -239,8 +239,8 @@ impl<'a> QueueItem<'a> {
 #[derive(Debug, PartialEq, Eq)]
 enum FilterMode {
     SelectedItem,
-    ParentOfSelectedItem,
-    ChildOfSelectedItem,
+    Parent,
+    Child,
 }
 
 #[derive(Debug)]
@@ -389,7 +389,7 @@ impl Viewer {
                 value_mode,
                 QueueItem::Span(span),
                 Some(if search_mode {
-                    FilterMode::ParentOfSelectedItem
+                    FilterMode::Parent
                 } else {
                     FilterMode::SelectedItem
                 }),
@@ -431,21 +431,18 @@ impl Viewer {
             let secondary = span.value(value_mode.secondary());
 
             let skipped_by_focus =
-                focus_mode && matches!(filtered, Some(FilterMode::ParentOfSelectedItem) | None);
+                focus_mode && matches!(filtered, Some(FilterMode::Parent) | None);
 
             let get_filter_mode = |span: SpanId| {
                 if focus_mode
-                    && matches!(
-                        filtered,
-                        Some(FilterMode::SelectedItem | FilterMode::ChildOfSelectedItem)
-                    )
+                    && matches!(filtered, Some(FilterMode::SelectedItem | FilterMode::Child))
                 {
-                    Some(FilterMode::ChildOfSelectedItem)
+                    Some(FilterMode::Child)
                 } else if search_mode {
                     if highlighted_spans.contains(&span) {
                         Some(FilterMode::SelectedItem)
                     } else if highlighted_span_parents.contains(&span) {
-                        Some(FilterMode::ParentOfSelectedItem)
+                        Some(FilterMode::Parent)
                     } else {
                         None
                     }
