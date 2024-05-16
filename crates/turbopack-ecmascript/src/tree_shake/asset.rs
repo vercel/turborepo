@@ -48,13 +48,14 @@ impl EcmascriptModulePartAsset {
     }
 
     #[turbo_tasks::function]
-    pub async fn is_async_module(&self) -> Result<Vc<bool>> {
-        let result = self.full_module.failsafe_analyze();
+    pub async fn is_async_module(self: Vc<Self>) -> Result<Vc<bool>> {
+        let this = self.await?;
+        let result = this.full_module.failsafe_analyze();
 
-        let v = result.await?.async_module.await?;
-        match &*v {
-            Some(v) => Ok(Vc::cell(v.await?.has_top_level_await)),
-            None => Ok(Vc::cell(false)),
+        if let Some(async_module) = *result.await?.async_module.await? {
+            Ok(async_module.is_self_async(self.references()))
+        } else {
+            Ok(Vc::cell(false))
         }
     }
 }
