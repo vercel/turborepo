@@ -56,7 +56,7 @@ impl<T, F: Future<Output = T>> Future for CaptureFuture<T, F> {
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
         let start = Instant::now();
-        let start_allocations = TurboMalloc::allocations();
+        let start_allocations = TurboMalloc::allocation_counters();
         let result = this.future.poll(cx);
         let elapsed = start.elapsed();
         let allocations = start_allocations.until_now();

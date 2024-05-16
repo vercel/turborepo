@@ -1,6 +1,9 @@
 mod counter;
 
-use std::alloc::{GlobalAlloc, Layout};
+use std::{
+    alloc::{GlobalAlloc, Layout},
+    marker::PhantomData,
+};
 
 use self::counter::{add, flush, get, remove};
 
@@ -19,10 +22,21 @@ impl AllocationInfo {
             && self.allocation_count == 0
             && self.deallocation_count == 0
     }
+}
 
-    pub fn until_now(&self) -> Self {
-        let new = TurboMalloc::allocations();
-        Self {
+#[derive(Default, Clone, Debug)]
+pub struct AllocationCounters {
+    pub allocations: usize,
+    pub deallocations: usize,
+    pub allocation_count: usize,
+    pub deallocation_count: usize,
+    _not_send: PhantomData<*mut ()>,
+}
+
+impl AllocationCounters {
+    pub fn until_now(&self) -> AllocationInfo {
+        let new = TurboMalloc::allocation_counters();
+        AllocationInfo {
             allocations: new.allocations - self.allocations,
             deallocations: new.deallocations - self.deallocations,
             allocation_count: new.allocation_count - self.allocation_count,
@@ -44,8 +58,8 @@ impl TurboMalloc {
         flush();
     }
 
-    pub fn allocations() -> AllocationInfo {
-        self::counter::allocations()
+    pub fn allocation_counters() -> AllocationCounters {
+        self::counter::allocation_counters()
     }
 }
 

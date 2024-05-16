@@ -1423,7 +1423,7 @@ pub async fn spawn_blocking<T: Send + 'static>(func: impl FnOnce() -> T + Send +
     let (result, duration, alloc_info) = tokio::task::spawn_blocking(|| {
         let _guard = span.entered();
         let start = Instant::now();
-        let start_allocations = TurboMalloc::allocations();
+        let start_allocations = TurboMalloc::allocation_counters();
         let r = func();
         (r, start.elapsed(), start_allocations.until_now())
     })

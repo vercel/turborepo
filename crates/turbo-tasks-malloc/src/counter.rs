@@ -4,7 +4,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use crate::AllocationInfo;
+use crate::AllocationCounters;
 
 static ALLOCATED: AtomicUsize = AtomicUsize::new(0);
 const KB: usize = 1024;
@@ -22,13 +22,13 @@ struct ThreadLocalCounter {
     /// means the global counter is always equal or greater than the real
     /// value.
     buffer: usize,
-    allocation_info: AllocationInfo,
+    allocation_counters: AllocationCounters,
 }
 
 impl ThreadLocalCounter {
     fn add(&mut self, size: usize) {
-        self.allocation_info.allocations += size;
-        self.allocation_info.allocation_count += 1;
+        self.allocation_counters.allocations += size;
+        self.allocation_counters.allocation_count += 1;
         if self.buffer >= size {
             self.buffer -= size;
         } else {
@@ -39,8 +39,8 @@ impl ThreadLocalCounter {
     }
 
     fn remove(&mut self, size: usize) {
-        self.allocation_info.deallocations += size;
-        self.allocation_info.deallocation_count += 1;
+        self.allocation_counters.deallocations += size;
+        self.allocation_counters.deallocation_count += 1;
         self.buffer += size;
         if self.buffer > MAX_BUFFER {
             let offset = self.buffer - TARGET_BUFFER;
@@ -54,7 +54,7 @@ impl ThreadLocalCounter {
             ALLOCATED.fetch_sub(self.buffer, Ordering::Relaxed);
             self.buffer = 0;
         }
-        self.allocation_info = AllocationInfo::default();
+        self.allocation_counters = AllocationCounters::default();
     }
 }
 
@@ -66,8 +66,8 @@ pub fn get() -> usize {
     ALLOCATED.load(Ordering::Relaxed)
 }
 
-pub fn allocations() -> AllocationInfo {
-    with_local_counter(|local| local.allocation_info.clone())
+pub fn allocation_counters() -> AllocationCounters {
+    with_local_counter(|local| local.allocation_counters.clone())
 }
 
 fn with_local_counter<T>(f: impl FnOnce(&mut ThreadLocalCounter) -> T) -> T {
