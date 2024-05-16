@@ -68,7 +68,7 @@ impl Debug for ExpSecondsDuration {
 /// transparent way.
 #[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Copy, Clone)]
 pub struct GcPriority {
-    // Memory usage devided by compute duration. Specifies how efficient garbage collection would
+    // Memory usage divided by compute duration. Specifies how efficient garbage collection would
     // be with this task. Higher memory usage and lower compute duration makes it more likely to be
     // garbage collected.
     memory_per_time: u16,
@@ -77,21 +77,12 @@ pub struct GcPriority {
 /// State about garbage collection for a task.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct GcTaskState {
-    /// Memory usage divided by compute duration. Specifies how efficient
-    /// garbage collection would be with this task. Higher memory usage and
-    /// lower compute duration makes it more likely to be garbage collected.
-    pub memory_per_time: u16,
+    pub priority: GcPriority,
     /// The generation where the task was last accessed.
     pub generation: u32,
 }
 
 impl GcTaskState {
-    pub fn priority(&self) -> GcPriority {
-        GcPriority {
-            memory_per_time: self.memory_per_time,
-        }
-    }
-
     pub(crate) fn execution_completed(
         &mut self,
         duration: Duration,
@@ -99,10 +90,12 @@ impl GcTaskState {
         generation: u32,
     ) {
         self.generation = generation;
-        self.memory_per_time = ((memory_usage + TASK_BASE_MEMORY_USAGE) as u64
-            / (duration.as_micros() as u64 + TASK_BASE_COMPUTE_DURATION_IN_MICROS))
-            .try_into()
-            .unwrap_or(u16::MAX);
+        self.priority = GcPriority {
+            memory_per_time: ((memory_usage + TASK_BASE_MEMORY_USAGE) as u64
+                / (duration.as_micros() as u64 + TASK_BASE_COMPUTE_DURATION_IN_MICROS))
+                .try_into()
+                .unwrap_or(u16::MAX),
+        };
     }
 
     pub(crate) fn on_read(&mut self, generation: u32) -> bool {
@@ -150,7 +143,7 @@ impl GcQueue {
             generation: AtomicU32::new(0),
             incoming_tasks: ConcurrentQueue::unbounded(),
             incoming_tasks_count: AtomicUsize::new(0),
-            generations: Mutex::new(VecDeque::new()),
+            generations: Mutex::new(VecDeque::with_capacity(128)),
         }
     }
 
@@ -220,12 +213,11 @@ impl GcQueue {
         // Check all tasks for the correct generation
         let mut indices = Vec::with_capacity(tasks.len());
         assert!(tasks.len() <= MAX_TASKS_PER_OLD_GENERATION);
-        for i in 0..tasks.len() {
-            let task = tasks[i];
-            backend.with_task(task, |task| {
+        for (i, task) in tasks.iter().enumerate() {
+            backend.with_task(*task, |task| {
                 if let Some(state) = task.gc_state() {
                     if state.generation <= generation {
-                        indices.push((Reverse(state.priority()), i as u32));
+                        indices.push((Reverse(state.priority), i as u32));
                     }
                 }
             });
@@ -323,7 +315,7 @@ impl GcQueue {
         if let Some(priority) = &priority {
             span.record("priority", debug(priority));
         } else {
-            span.record("priority", &"");
+            span.record("priority", "");
         }
 
         priority.map(|p| (p, count))

@@ -1687,9 +1687,7 @@ impl Task {
         if unset {
             *state = TaskMetaState::Unloaded(UnloadedTaskState {});
         } else {
-            *state = TaskMetaState::Partial(Box::new(PartialTaskState {
-                aggregation_node: aggregation_node,
-            }));
+            *state = TaskMetaState::Partial(Box::new(PartialTaskState { aggregation_node }));
         }
         drop(state);
 

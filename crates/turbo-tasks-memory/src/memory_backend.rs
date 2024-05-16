@@ -121,6 +121,9 @@ impl MemoryBackend {
         self.memory_tasks.get(*id as usize).unwrap()
     }
 
+    /// Runs the garbage collection until reaching the target memory. An `idle`
+    /// garbage collection has a lower target memory. Returns true, when
+    /// memory was collected.
     pub fn run_gc(
         &self,
         idle: bool,
