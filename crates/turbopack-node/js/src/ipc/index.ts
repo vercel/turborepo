@@ -120,6 +120,7 @@ function createIpc<TIncoming, TOutgoing>(
           reject(err);
         } else {
           resolve();
+          console.trace(`sendReady callback done`);
         }
       });
     });

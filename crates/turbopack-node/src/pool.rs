@@ -217,6 +217,7 @@ impl<R: AsyncRead + Unpin, W: AsyncWrite + Unpin> OutputStreamHandler<R, W> {
             {
                 bail!("stream closed unexpectedly")
             }
+            dbg!(String::from_utf8_lossy(&buffer));
             if buffer.len() - start == MARKER.len() + 2
                 && &buffer[start..buffer.len() - 2] == MARKER
             {
@@ -225,6 +226,7 @@ impl<R: AsyncRead + Unpin, W: AsyncWrite + Unpin> OutputStreamHandler<R, W> {
                 // This is the type
                 match buffer.pop() {
                     Some(b'B') => {
+                        dbg!();
                         stack_trace_buffer.clear();
                         buffer.truncate(start);
                         nesting += 1;
@@ -232,6 +234,7 @@ impl<R: AsyncRead + Unpin, W: AsyncWrite + Unpin> OutputStreamHandler<R, W> {
                         continue;
                     }
                     Some(b'E') => {
+                        dbg!();
                         buffer.truncate(start);
                         if let Some(in_stack) = in_stack {
                             if nesting != 0 {
@@ -276,21 +279,28 @@ impl<R: AsyncRead + Unpin, W: AsyncWrite + Unpin> OutputStreamHandler<R, W> {
                         }
                     }
                     Some(b'S') => {
+                        dbg!();
                         buffer.truncate(start);
                         in_stack = Some(start);
                         continue;
                     }
                     Some(b'D') => {
+                        dbg!();
                         // operation done
                         break;
                     }
-                    _ => {}
+                    _ => {
+                        dbg!();
+                    }
                 }
             }
             if nesting != 0 {
                 // When inside of a marked output we want to aggregate until the end marker
+                dbg!("nesting");
                 continue;
             }
+
+            dbg!("write()");
 
             write_source_mapped_final(
                 &buffer,
@@ -300,6 +310,7 @@ impl<R: AsyncRead + Unpin, W: AsyncWrite + Unpin> OutputStreamHandler<R, W> {
                 final_stream,
             )
             .await?;
+            dbg!("clear()");
             buffer.clear();
         }
         Ok(())
@@ -475,7 +486,7 @@ impl NodeJsPoolProcess {
         }
         let debug = self.debug;
         let recv_future = async move {
-            let packet_len = with_timeout(debug, false, connection.read_u32())
+            let packet_len = with_timeout(true, false, connection.read_u32())
                 .await
                 .context("reading packet length")?
                 .try_into()
