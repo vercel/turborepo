@@ -1,0 +1,63 @@
+{
+  "name": "@repo/api",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "dev": "pnpm build --watch",
+    "build": "tsup src/* --format esm,cjs --dts --external react",
+    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\""
+  },
+  "publishConfig": {
+    "access": "public",
+    "typesVersions": {
+      "*": {
+        "*": [
+          "dist/*.d.ts",
+          "dist/*/index.d.ts"
+        ]
+      }
+    }
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./*": {
+      "import": [
+        "./dist/*.js",
+        "./dist/*/index.js"
+      ],
+      "require": [
+        "./dist/*.cjs",
+        "./dist/*/index.cjs"
+      ]
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "src/*",
+        "src/*/index"
+      ]
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@nestjs/mapped-types": "*"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@swc/core": "^1.5.7",
+    "@types/node": "^20.3.1",
+    "ts-loader": "^9.4.3",
+    "ts-node": "^10.9.1",
+    "tsup": "^8.0.2",
+    "typescript": "^5.1.3"
+  }
+}

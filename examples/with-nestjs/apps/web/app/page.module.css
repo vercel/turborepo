@@ -40,7 +40,8 @@
 
 .code {
   font-weight: 700;
-  font-family: var(--font-mono);
+  font-family: var(--font-mono), Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', monospace;
 }
 
 .hero {
@@ -53,24 +54,24 @@
   display: flex;
   position: relative;
   z-index: 0;
-  padding-bottom: 4rem;
+  padding-bottom: 3rem;
   flex-direction: column;
   gap: 2rem;
   justify-content: space-between;
   align-items: center;
   width: auto;
-  font-family: system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial,
-    "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
-    "Segoe UI Symbol", "Noto Color Emoji";
+  font-family: system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+    'Segoe UI Symbol', 'Noto Color Emoji';
   padding-top: 48px;
 
   @media (min-width: 768px) {
     padding-top: 4rem;
-    padding-bottom: 6rem;
+    padding-bottom: 4rem;
   }
   @media (min-width: 1024px) {
-    padding-top: 5rem;
-    padding-bottom: 8rem;
+    padding-top: 4.5rem;
+    padding-bottom: 4.5rem;
   }
 }
 
@@ -94,7 +95,9 @@
   border-radius: var(--border-radius);
   background: rgba(var(--card-rgb), 0);
   border: 1px solid rgba(var(--card-border-rgb), 0);
-  transition: background 200ms, border 200ms;
+  transition:
+    background 200ms,
+    border 200ms;
 }
 
 .card span {
@@ -258,12 +261,6 @@
   }
 }
 
-.code {
-  font-family: Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
-    monospace;
-  font-weight: 700;
-}
-
 /* Tablet and Smaller Desktop */
 @media (min-width: 701px) and (max-width: 1120px) {
   .grid {
@@ -304,25 +301,31 @@
   opacity: 0.15;
 }
 
-.button {
+.buttonWrapper {
+  margin-bottom: 20px;
+}
+
+.button,
+.buttonDestruct {
   background-color: #ffffff;
   border-radius: 8px;
   border-style: none;
   box-sizing: border-box;
   color: #000000;
+  opacity: 0.9;
   cursor: pointer;
   display: inline-block;
   font-size: 16px;
   height: 40px;
   line-height: 20px;
   list-style: none;
-  margin: 0;
+  margin: 0 4px;
   outline: none;
   padding: 10px 16px;
   position: relative;
   text-align: center;
   text-decoration: none;
-  transition: color 100ms;
+  transition: opacity 100ms;
   vertical-align: baseline;
   user-select: none;
   -webkit-user-select: none;
@@ -330,6 +333,8 @@
 }
 
 .button:hover,
-.button:focus {
-  background-color: #e5e4e2;
+.button:focus,
+.buttonDestruct:hover,
+.buttonDestruct:focus {
+  opacity: 1;
 }

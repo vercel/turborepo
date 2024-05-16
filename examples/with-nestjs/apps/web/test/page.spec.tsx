@@ -1,9 +1,18 @@
 import { render } from '@testing-library/react';
 
-import Page from '../app/page';
+import RootPage from '../app/page';
+
+window.fetch = jest.fn().mockImplementation(() =>
+  Promise.resolve({
+    ok: true,
+    json: () => [],
+  }),
+);
 
 describe('Root page', () => {
-  const { container, unmount } = render(<Page />);
+  const { container, unmount } = render(
+    <RootPage params={{ forTest: true }} />,
+  );
 
   it('should match the snapshot', () => {
     expect(container).toMatchSnapshot();

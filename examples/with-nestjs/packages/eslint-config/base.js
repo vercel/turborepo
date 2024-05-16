@@ -8,5 +8,13 @@ module.exports = {
   ],
   plugins: ['@typescript-eslint/eslint-plugin'],
   parser: '@typescript-eslint/parser',
-  ignorePatterns: ['.*.js', '*.config.js', 'node_modules/'],
+  ignorePatterns: [
+    '.*.js',
+    '*.setup.js',
+    '*.config.js',
+    '.turbo/',
+    'dist/',
+    'coverage/',
+    'node_modules/',
+  ],
 };

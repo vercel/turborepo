@@ -1,4 +1,7 @@
+import { Suspense } from 'react';
 import Image from 'next/image';
+
+import { Link } from '@repo/api/links/entities/link.entity';
 
 import { Card } from '@repo/ui/card';
 import { Code } from '@repo/ui/code';
@@ -6,7 +9,7 @@ import { Button } from '@repo/ui/button';
 
 import styles from './page.module.css';
 
-function Gradient({
+const Gradient = ({
   conic,
   className,
   small,
@@ -14,7 +17,7 @@ function Gradient({
   small?: boolean;
   conic?: boolean;
   className?: string;
-}>): JSX.Element {
+}>) => {
   return (
     <span
       className={[
@@ -27,39 +30,40 @@ function Gradient({
         .join(' ')}
     />
   );
-}
+};
 
-const LINKS = [
-  {
-    title: 'Docs',
-    href: 'https://turbo.build/repo/docs',
-    description: 'Find in-depth information about Turborepo features and API.',
-  },
-  {
-    title: 'Learn',
-    href: 'https://turbo.build/repo/docs/handbook',
-    description: 'Learn more about monorepos with our handbook.',
-  },
-  {
-    title: 'Templates',
-    href: 'https://turbo.build/repo/docs/getting-started/from-example',
-    description: 'Choose from over 15 examples and deploy with a single click.',
-  },
-  {
-    title: 'Deploy',
-    href: 'https://vercel.com/new',
-    description:
-      'Instantly deploy your Turborepo to a shareable URL with Vercel.',
-  },
-];
+const LinksSection = async () => {
+  const links: Link[] = await (
+    await fetch('http://localhost:3000/links')
+  ).json();
 
-export default function Page(): JSX.Element {
+  return (
+    <div className={styles.grid}>
+      {links.map(({ title, url, description }) => (
+        <Card className={styles.card} href={url} key={title} title={title}>
+          {description}
+        </Card>
+      ))}
+    </div>
+  );
+};
+
+const LinksSectionForTest = () => {
+  return (
+    <div className={styles.grid}>
+      <Card className={styles.card} href={'url'} title={'title'}>
+        description
+      </Card>
+    </div>
+  );
+};
+
+const RootPage = ({ params }: { params: { forTest?: boolean } }) => {
   return (
     <main className={styles.main}>
       <div className={styles.description}>
         <p>
-          examples/basic&nbsp;
-          <Code className={styles.code}>web</Code>
+          examples/<Code className={styles.code}>with-nestjs</Code>
         </p>
         <div>
           <a
@@ -80,7 +84,7 @@ export default function Page(): JSX.Element {
         </div>
       </div>
 
-      <Button appName="web" className={styles.button}>
+      <Button appName="web (with-nestjs)" className={styles.button}>
         Click me!
       </Button>
 
@@ -111,7 +115,9 @@ export default function Page(): JSX.Element {
               />
             </div>
           </div>
+
           <Gradient className={styles.backgroundGradient} conic />
+
           <div className={styles.turborepoWordmarkContainer}>
             <svg
               className={styles.turborepoWordmark}
@@ -134,13 +140,19 @@ export default function Page(): JSX.Element {
         </div>
       </div>
 
-      <div className={styles.grid}>
-        {LINKS.map(({ title, href, description }) => (
-          <Card className={styles.card} href={href} key={title} title={title}>
-            {description}
-          </Card>
-        ))}
-      </div>
+      {/**
+       * @note Unsupported async component testing.
+       * Should limit the following constrain for a specific environment (dev or testing).
+       *
+       * @see https://nextjs.org/docs/app/building-your-application/testing/jest
+       */}
+      {params.forTest ? (
+        <LinksSectionForTest />
+      ) : (
+        <Suspense fallback={'Loading links...'}>{<LinksSection />}</Suspense>
+      )}
     </main>
   );
-}
+};
+
+export default RootPage;
