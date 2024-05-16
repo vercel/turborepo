@@ -849,7 +849,7 @@ mod tests {
     )]
     #[test_case(
         Some(r#"{
-            "pipeline": {
+            "tasks": {
                 "build": {
                     "cache": true
                 }
@@ -1078,7 +1078,7 @@ mod tests {
     #[test]
     fn test_turbo_task_pruning() {
         let json = RawTurboJson::parse_from_serde(json!({
-            "pipeline": {
+            "tasks": {
                 "//#top": {},
                 "build": {},
                 "a#build": {},
@@ -1088,7 +1088,7 @@ mod tests {
         .unwrap();
         let pruned_json = json.prune_tasks(&["a"]);
         let expected: RawTurboJson = RawTurboJson::parse_from_serde(json!({
-            "pipeline": {
+            "tasks": {
                 "//#top": {},
                 "build": {},
                 "a#build": {},
@@ -1119,7 +1119,7 @@ mod tests {
     #[test_case("junk", None ; "invalid value")]
     fn test_parsing_output_mode(output_mode: &str, expected: Option<OutputLogsMode>) {
         let json: Result<RawTurboJson, _> = RawTurboJson::parse_from_serde(json!({
-            "pipeline": {
+            "tasks": {
                 "build": {
                     "outputMode": output_mode,
                 }

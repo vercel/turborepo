@@ -636,7 +636,7 @@ mod test {
         );
 
         a_turbo_json
-            .create_with_contents(r#"{"pipeline": {"build": {}}}"#)
+            .create_with_contents(r#"{"tasks": {"build": {}}}"#)
             .unwrap();
 
         let turbo_json = engine_builder
@@ -677,7 +677,7 @@ mod test {
             (
                 PackageName::Root,
                 turbo_json(json!({
-                    "pipeline": {
+                    "tasks": {
                         "test": { "inputs": ["testing"] },
                         "build": { "inputs": ["primary"] },
                         "a#build": { "inputs": ["special"] },
@@ -687,7 +687,7 @@ mod test {
             (
                 PackageName::from("b"),
                 turbo_json(json!({
-                    "pipeline": {
+                    "tasks": {
                         "build": { "inputs": ["outer"]},
                     }
                 })),
@@ -755,7 +755,7 @@ mod test {
         let turbo_jsons = vec![(
             PackageName::Root,
             turbo_json(json!({
-                "pipeline": {
+                "tasks": {
                     "test": { "dependsOn": ["^build", "prepare"] },
                     "build": { "dependsOn": ["^build", "prepare"] },
                     "prepare": {},
@@ -814,7 +814,7 @@ mod test {
         let turbo_jsons = vec![(
             PackageName::Root,
             turbo_json(json!({
-                "pipeline": {
+                "tasks": {
                     "test": { "dependsOn": ["^build"] },
                     "build": { "dependsOn": ["^build"] },
                 }
@@ -853,7 +853,7 @@ mod test {
         let turbo_jsons = vec![(
             PackageName::Root,
             turbo_json(json!({
-                "pipeline": {
+                "tasks": {
                     "build": { "dependsOn": ["^build"] },
                     "app1#special": { "dependsOn": ["^build"] },
                 }
@@ -890,7 +890,7 @@ mod test {
         let turbo_jsons = vec![(
             PackageName::Root,
             turbo_json(json!({
-                "pipeline": {
+                "tasks": {
                     "build": { "dependsOn": ["^build"] },
                     "test": { "dependsOn": ["^build"] },
                     "//#test": {},
@@ -943,7 +943,7 @@ mod test {
         let turbo_jsons = vec![(
             PackageName::Root,
             turbo_json(json!({
-                "pipeline": {
+                "tasks": {
                     "build": { "dependsOn": ["^build"] },
                     "libA#build": { "dependsOn": ["//#root-task"] },
                     "//#root-task": {},
@@ -987,7 +987,7 @@ mod test {
         let turbo_jsons = vec![(
             PackageName::Root,
             turbo_json(json!({
-                "pipeline": {
+                "tasks": {
                     "build": { "dependsOn": ["^build"] },
                     "libA#build": { "dependsOn": ["//#root-task"] },
                 }
@@ -1020,7 +1020,7 @@ mod test {
         let turbo_jsons = vec![(
             PackageName::Root,
             turbo_json(json!({
-                "pipeline": {
+                "tasks": {
                     "libA#build": { "dependsOn": ["app1#compile", "app1#test"] },
                     "build": { "dependsOn": ["^build"] },
                     "compile": {},
@@ -1066,7 +1066,7 @@ mod test {
         let turbo_jsons = vec![(
             PackageName::Root,
             turbo_json(json!({
-                "pipeline": {
+                "tasks": {
                     "build": { "dependsOn": ["^build"] },
                     "foo": {},
                     "libA#build": { "dependsOn": ["//#foo"] }
@@ -1105,7 +1105,7 @@ mod test {
         let turbo_jsons = vec![(
             PackageName::Root,
             turbo_json(json!({
-                "pipeline": {
+                "tasks": {
                     "build": { "dependsOn": ["^build", "prepare"] },
                     "test": { "dependsOn": ["^build", "prepare"] },
                     "prepare": {},
