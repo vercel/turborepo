@@ -1,51 +1,19 @@
 # With-NestJs | API
 
-## Getting Started
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Installation
+First, run the development server:
 
 ```bash
-$ pnpm install
+pnpm run dev
 ```
 
-## Running the app
+By default, your server will run at [http://localhost:3000](http://localhost:3000). You can use your favorite API platform like [Insomnia](https://insomnia.rest/) or [Postman](https://www.postman.com/) to test your APIs
 
-```bash
-# development
-$ pnpm run start
+You can start editing the demo **APIs** by modifying [linksService](./src/links/links.service.ts) provider.
 
-# watch mode
-$ pnpm run start:dev
+## Learn More
 
-# production mode
-$ pnpm run start:prod
-```
+To learn more about NestJs, take a look at the following resources:
 
-## Test
-
-```bash
-# unit tests
-$ pnpm run test
-
-# e2e tests
-$ pnpm run test:e2e
-
-# test coverage
-$ pnpm run test:cov
-```
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://kamilmysliwiec.com)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](LICENSE).
+- [Official Documentation](https://docs.nestjs.com) - A progressive Node.js framework for building efficient, reliable and scalable server-side applications.
+- [Official NestJS Courses](https://courses.nestjs.com) - Learn everything you need to master NestJS and tackle modern backend applications at any scale.
+- [GitHub Repo](https://github.com/nestjs/nest)

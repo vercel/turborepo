@@ -2,13 +2,15 @@
 
 ## Getting Started
 
-First, run the development server:
+> 🏁 This app depends on the [apps/api](../api/README.md) server. make sure your server is running at the port `3000`
+
+Run the development server:
 
 ```bash
-yarn dev
+pnpm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [localhost:3001](http://localhost:3001) with your browser to see the result.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
