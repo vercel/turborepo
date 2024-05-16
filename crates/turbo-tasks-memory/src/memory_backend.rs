@@ -29,7 +29,7 @@ use turbo_tasks::{
 
 use crate::{
     cell::RecomputingCell,
-    gc::GcQueue,
+    gc::{GcQueue, PERCENTAGE_IDLE_TARGET_MEMORY, PERCENTAGE_TARGET_MEMORY},
     output::Output,
     task::{Task, TaskDependency, TaskDependencySet, DEPENDENCIES_TO_TRACK},
 };
@@ -136,9 +136,9 @@ impl MemoryBackend {
 
                 let usage = turbo_tasks_malloc::TurboMalloc::memory_usage();
                 let target = if idle {
-                    mem_limit * 3 / 4
+                    mem_limit * PERCENTAGE_IDLE_TARGET_MEMORY / 100
                 } else {
-                    mem_limit * 7 / 8
+                    mem_limit * PERCENTAGE_TARGET_MEMORY / 100
                 };
                 if usage < target {
                     return did_something;
