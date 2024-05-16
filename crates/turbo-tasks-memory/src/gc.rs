@@ -14,55 +14,6 @@ use turbo_tasks::TaskId;
 
 use crate::MemoryBackend;
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Copy, Clone)]
-pub struct ExpMillisDuration(u8);
-
-impl From<Duration> for ExpMillisDuration {
-    fn from(duration: Duration) -> Self {
-        Self(
-            (duration.as_millis() as u64)
-                .checked_next_power_of_two()
-                .unwrap_or(0x7000_0000_0000_0000)
-                .trailing_zeros() as u8,
-        )
-    }
-}
-
-impl Debug for ExpMillisDuration {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.0 == 0 {
-            write!(f, "0-1ms")
-        } else {
-            write!(f, "{}-{}ms", 1 << (self.0 as u64 - 1), 1 << (self.0 as u64))
-        }
-    }
-}
-
-#[derive(PartialEq, Eq, PartialOrd, Ord, Copy, Clone)]
-pub struct ExpSecondsDuration(u8);
-
-impl From<Duration> for ExpSecondsDuration {
-    fn from(duration: Duration) -> Self {
-        Self(
-            duration
-                .as_secs()
-                .checked_next_power_of_two()
-                .unwrap_or(0x7000_0000_0000_0000)
-                .trailing_zeros() as u8,
-        )
-    }
-}
-
-impl Debug for ExpSecondsDuration {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.0 == 0 {
-            write!(f, "0-1s")
-        } else {
-            write!(f, "{}-{}s", 1 << (self.0 as u64 - 1), 1 << (self.0 as u64))
-        }
-    }
-}
-
 /// The priority of a task for garbage collection.
 /// Any action will shrink the internal memory structures of the task in a
 /// transparent way.
