@@ -325,6 +325,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
             node_lookup,
             lockfile,
             package_discovery,
+            repo_root,
             ..
         } = self;
 
@@ -337,6 +338,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
             packages: workspaces,
             lockfile,
             package_manager,
+            repo_root: repo_root.to_owned(),
         })
     }
 }
@@ -536,6 +538,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedLockfile, T> {
             workspace_graph,
             node_lookup,
             lockfile,
+            repo_root,
             ..
         } = self;
         Ok(PackageGraph {
@@ -544,6 +547,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedLockfile, T> {
             packages: workspaces,
             package_manager,
             lockfile,
+            repo_root: repo_root.to_owned(),
         })
     }
 }
