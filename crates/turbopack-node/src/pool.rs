@@ -286,6 +286,17 @@ impl<R: AsyncRead + Unpin, W: AsyncWrite + Unpin> OutputStreamHandler<R, W> {
                     }
                     Some(b'D') => {
                         dbg!();
+
+                        while stream
+                            .read_until(b'\n', &mut buffer)
+                            .await
+                            .context("error reading from stream")?
+                            != 0
+                        {
+                            dbg!(String::from_utf8_lossy(&buffer));
+                            buffer.clear();
+                        }
+
                         // operation done
                         break;
                     }
@@ -486,8 +497,7 @@ impl NodeJsPoolProcess {
         }
         let debug = self.debug;
         let recv_future = async move {
-            let packet_len = with_timeout(true, false, connection.read_u32())
-                .await
+            let packet_len = dbg!(with_timeout(true, false, connection.read_u32()).await)
                 .context("reading packet length")?
                 .try_into()
                 .context("storing packet length")?;

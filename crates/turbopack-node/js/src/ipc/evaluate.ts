@@ -79,7 +79,6 @@ export const run = async (
     getValue = module.default;
     await ipc.sendReady();
   } catch (err) {
-    console.log("[error]", err);
     await ipc.sendReady();
     await ipc.sendError(err as Error);
   }

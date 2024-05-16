@@ -119,10 +119,8 @@ function createIpc<TIncoming, TOutgoing>(
 
         if (err != null) {
           reject(err);
-          console.trace(`sendReady callback 1 ${err}`);
         } else {
           resolve();
-          console.trace(`sendReady callback done`);
         }
       });
     });
