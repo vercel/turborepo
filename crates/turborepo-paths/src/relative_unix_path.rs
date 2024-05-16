@@ -52,6 +52,10 @@ impl RelativeUnixPath {
         self.0.is_empty()
     }
 
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
     pub fn to_owned(&self) -> RelativeUnixPathBuf {
         RelativeUnixPathBuf(self.0.to_owned())
     }
