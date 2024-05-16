@@ -116,8 +116,10 @@ function createIpc<TIncoming, TOutgoing>(
       socket.write(length, (err) => {
         process.stderr.write(`TURBOPACK_OUTPUT_D\n`);
         process.stdout.write(`TURBOPACK_OUTPUT_D\n`);
+
         if (err != null) {
           reject(err);
+          console.trace(`sendReady callback 1 ${err}`);
         } else {
           resolve();
           console.trace(`sendReady callback done`);
