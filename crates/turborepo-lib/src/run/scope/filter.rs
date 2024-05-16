@@ -751,6 +751,9 @@ mod test {
             change_detector,
         );
 
+        // TempDir's drop implementation will mark the folder as ready for cleanup
+        // which can lead to non-deterministic test results if the folder is removed
+        // before the test finishes.
         (temp_folder, resolver)
     }
 
