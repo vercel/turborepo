@@ -5,7 +5,7 @@ use std::{
 };
 
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_repository::{
     change_mapper::ChangeMapError,
     package_graph::{self, PackageGraph, PackageName},
@@ -81,20 +81,22 @@ impl PackageInference {
             selector.name_pattern.clone_from(name);
         }
 
-        if selector.parent_dir != AnchoredSystemPathBuf::default() {
-            let repo_relative_parent_dir = self.directory_root.join(&selector.parent_dir);
+        if let Some(parent_dir) = selector.parent_dir.as_deref() {
+            let repo_relative_parent_dir = self.directory_root.join(parent_dir);
             let clean_parent_dir = path_clean::clean(Path::new(repo_relative_parent_dir.as_path()))
                 .into_os_string()
                 .into_string()
                 .expect("path was valid utf8 before cleaning");
-            selector.parent_dir = AnchoredSystemPathBuf::try_from(clean_parent_dir.as_str())
-                .expect("path wasn't absolute before cleaning");
+            selector.parent_dir = Some(
+                AnchoredSystemPathBuf::try_from(clean_parent_dir.as_str())
+                    .expect("path wasn't absolute before cleaning"),
+            );
         } else if self.package_name.is_none() {
             // fallback: the user didn't set a parent directory and we didn't find a single
             // package, so use the directory we inferred and select all subdirectories
             let mut parent_dir = self.directory_root.clone();
             parent_dir.push("**");
-            selector.parent_dir = parent_dir;
+            selector.parent_dir = Some(parent_dir);
         }
     }
 }
@@ -365,16 +367,16 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         let mut entry_packages = HashSet::new();
 
         for (name, info) in self.pkg_graph.packages() {
-            if selector.parent_dir == AnchoredSystemPathBuf::default() {
-                entry_packages.insert(name.to_owned());
-            } else {
-                let path = selector.parent_dir.to_unix();
+            if let Some(parent_dir) = selector.parent_dir.as_deref() {
+                let path = parent_dir.to_unix();
                 let parent_dir_matcher = wax::Glob::new(path.as_str())?;
                 let matches = parent_dir_matcher.is_match(info.package_path().as_path());
 
                 if matches {
                     entry_packages.insert(name.to_owned());
                 }
+            } else {
+                entry_packages.insert(name.to_owned());
             }
         }
 
@@ -429,12 +431,33 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         let mut entry_packages = HashSet::new();
         let mut selector_valid = false;
 
-        let path = selector.parent_dir.to_unix();
-        let parent_dir_globber =
-            wax::Glob::new(path.as_str()).map_err(|err| ResolutionError::InvalidDirectoryGlob {
-                glob: path.as_str().to_string(),
-                err: Box::new(err),
-            })?;
+        let parent_dir_unix = selector.parent_dir.as_deref().map(|path| path.to_unix());
+        let parent_dir_globber = parent_dir_unix
+            .as_deref()
+            .map(|path| {
+                wax::Glob::new(path.as_str()).map_err(|err| ResolutionError::InvalidDirectoryGlob {
+                    glob: path.as_str().to_string(),
+                    err: Box::new(err),
+                })
+            })
+            .transpose()?;
+
+        if let Some(globber) = parent_dir_globber.clone() {
+            let (base, _) = globber.partition();
+            // wax takes a unix-like glob, but partition will return a system path
+            // TODO: it would be more proper to use
+            // `AnchoredSystemPathBuf::from_system_path` but that function
+            // doesn't allow leading `.` or `..`.
+            let base = AnchoredSystemPathBuf::from_raw(
+                base.to_str().expect("glob base should be valid utf8"),
+            )
+            .expect("partitioned glob gave absolute path");
+            // need to join this with globbing's current dir :)
+            let path = self.turbo_root.resolve(&base);
+            if !path.exists() {
+                return Err(ResolutionError::DirectoryDoesNotExist(path));
+            }
+        }
 
         if let Some(git_range) = selector.git_range.as_ref() {
             selector_valid = true;
@@ -446,31 +469,33 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 .collect::<HashMap<_, _>>();
 
             for package in changed_packages {
-                if selector.parent_dir == AnchoredSystemPathBuf::default() {
-                    entry_packages.insert(package);
-                    continue;
-                };
+                if let Some(parent_dir_globber) = parent_dir_globber.as_ref() {
+                    if package == PackageName::Root {
+                        // The root package changed, only add it if
+                        // the parentDir is equivalent to the root
+                        if parent_dir_globber.matched(&Path::new(".").into()).is_some() {
+                            entry_packages.insert(package);
+                        }
+                    } else {
+                        let path = package_path_lookup
+                            .get(&package)
+                            .ok_or(ResolutionError::MissingPackageInfo(package.to_string()))?;
 
-                if package == PackageName::Root {
-                    // The root package changed, only add it if
-                    // the parentDir is equivalent to the root
-                    if parent_dir_globber.matched(&Path::new(".").into()).is_some() {
-                        entry_packages.insert(package);
+                        if parent_dir_globber.is_match(path.as_path()) {
+                            entry_packages.insert(package);
+                        }
                     }
                 } else {
-                    let path = package_path_lookup
-                        .get(&package)
-                        .ok_or(ResolutionError::MissingPackageInfo(package.to_string()))?;
-
-                    if parent_dir_globber.is_match(path.as_path()) {
-                        entry_packages.insert(package);
-                    }
+                    entry_packages.insert(package);
                 }
             }
-        } else if selector.parent_dir != AnchoredSystemPathBuf::default() {
+        } else if let Some((parent_dir, parent_dir_globber)) = selector
+            .parent_dir
+            .as_deref()
+            .zip(parent_dir_globber.as_ref())
+        {
             selector_valid = true;
-            if selector.parent_dir == AnchoredSystemPathBuf::from_raw(".").expect("valid anchored")
-            {
+            if parent_dir == &*AnchoredSystemPathBuf::from_raw(".").expect("valid anchored") {
                 entry_packages.insert(PackageName::Root);
             } else {
                 let packages = self.pkg_graph.packages();
@@ -525,7 +550,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         // add the root package to the entry packages
         entry_packages.insert(PackageName::Root);
 
-        Ok(match_package_names(name_pattern, entry_packages)?)
+        match_package_names(name_pattern, entry_packages)
     }
 }
 
@@ -536,13 +561,20 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
 fn match_package_names(
     name_pattern: &str,
     mut entry_packages: HashSet<PackageName>,
-) -> Result<HashSet<PackageName>, regex::Error> {
+) -> Result<HashSet<PackageName>, ResolutionError> {
     let matcher = SimpleGlob::new(name_pattern)?;
     let matched_packages = entry_packages
         .extract_if(|e| matcher.is_match(e.as_ref()))
         .collect::<HashSet<_>>();
 
-    Ok(matched_packages)
+    // If the pattern was an exact name and it matched no packages, then error
+    if matcher.is_exact() && matched_packages.is_empty() {
+        Err(ResolutionError::NoPackagesMatchedWithName(
+            name_pattern.to_owned(),
+        ))
+    } else {
+        Ok(matched_packages)
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -555,6 +587,8 @@ pub enum ResolutionError {
     MultiplePackagesMatched,
     #[error("The provided filter matched a package that is not in the workspace")]
     PackageNotInWorkspace,
+    #[error("No package found with name '{0}' in workspace")]
+    NoPackagesMatchedWithName(String),
     #[error("selector not used: {0}")]
     InvalidSelector(#[from] InvalidSelectorError),
     #[error("Invalid regex pattern")]
@@ -570,6 +604,8 @@ pub enum ResolutionError {
         glob: String,
         err: Box<wax::BuildError>,
     },
+    #[error("Directory '{0}' specified in filter does not exist")]
+    DirectoryDoesNotExist(AbsoluteSystemPathBuf),
     #[error("failed to construct glob for globalDependencies")]
     GlobalDependenciesGlob(#[from] global_deps_package_change_mapper::Error),
 }
@@ -578,6 +614,7 @@ pub enum ResolutionError {
 mod test {
     use std::collections::{HashMap, HashSet};
 
+    use tempfile::TempDir;
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
     use turborepo_repository::{
@@ -641,7 +678,7 @@ mod test {
         extras: &[&str],
         package_inference: Option<PackageInference>,
         change_detector: T,
-    ) -> super::FilterResolver<'static, T> {
+    ) -> (TempDir, super::FilterResolver<'static, T>) {
         let temp_folder = tempfile::tempdir().unwrap();
         let turbo_root = Box::leak(Box::new(
             AbsoluteSystemPathBuf::new(temp_folder.path().as_os_str().to_str().unwrap()).unwrap(),
@@ -682,7 +719,11 @@ mod test {
                     },
                 )
             })
-            .collect();
+            .collect::<HashMap<_, _>>();
+
+        for package_dir in package_jsons.keys() {
+            package_dir.ensure_dir().unwrap();
+        }
 
         let graph = {
             let rt = tokio::runtime::Builder::new_current_thread()
@@ -710,7 +751,10 @@ mod test {
             change_detector,
         );
 
-        resolver
+        // TempDir's drop implementation will mark the folder as ready for cleanup
+        // which can lead to non-deterministic test results if the folder is removed
+        // before the test finishes.
+        (temp_folder, resolver)
     }
 
     #[test_case(
@@ -836,7 +880,7 @@ mod test {
         vec![
             TargetSelector {
                 parent_dir:
-    AnchoredSystemPathBuf::try_from("packages/*").unwrap(),
+    Some(AnchoredSystemPathBuf::try_from("packages/*").unwrap()),
     ..Default::default()         }
         ],
         None,
@@ -845,7 +889,7 @@ mod test {
     )]
     #[test_case(
         vec![TargetSelector {
-            parent_dir: AnchoredSystemPathBuf::try_from(if cfg!(windows) { "..\\packages\\*" } else { "../packages/*" }).unwrap(),
+            parent_dir: Some(AnchoredSystemPathBuf::try_from(if cfg!(windows) { "..\\packages\\*" } else { "../packages/*" }).unwrap()),
             ..Default::default()
         }],
         Some(PackageInference{
@@ -859,7 +903,7 @@ mod test {
         vec![
             TargetSelector {
                 parent_dir:
-    AnchoredSystemPathBuf::try_from("project-5/**").unwrap(),
+    Some(AnchoredSystemPathBuf::try_from("project-5/**").unwrap()),
     ..Default::default()         }
         ],
         None,
@@ -870,7 +914,7 @@ mod test {
         vec![
             TargetSelector {
                 parent_dir:
-    AnchoredSystemPathBuf::try_from("project-5").unwrap(),
+    Some(AnchoredSystemPathBuf::try_from("project-5").unwrap()),
     ..Default::default()         }
         ],
         None,
@@ -892,7 +936,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                parent_dir: AnchoredSystemPathBuf::try_from("packages/*").unwrap(),
+                parent_dir: Some(AnchoredSystemPathBuf::try_from("packages/*").unwrap()),
                 ..Default::default()
             },
             TargetSelector {
@@ -908,7 +952,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                parent_dir: AnchoredSystemPathBuf::try_from(".").unwrap(),
+                parent_dir: Some(AnchoredSystemPathBuf::try_from(".").unwrap()),
                 ..Default::default()
             }
         ],
@@ -948,7 +992,7 @@ mod test {
         package_inference: Option<PackageInference>,
         expected: &[&str],
     ) {
-        let resolver = make_project(
+        let (_tempdir, resolver) = make_project(
             &[
                 ("packages/project-0", "packages/project-1"),
                 ("packages/project-0", "project-5"),
@@ -970,7 +1014,7 @@ mod test {
 
     #[test]
     fn match_exact() {
-        let resolver = make_project(
+        let (_tempdir, resolver) = make_project(
             &[],
             &["packages/@foo/bar", "packages/bar"],
             None,
@@ -993,24 +1037,18 @@ mod test {
 
     #[test]
     fn match_scoped_package() {
-        let resolver = make_project(
+        let (_tempdir, resolver) = make_project(
             &[],
             &["packages/bar/@foo/bar"],
             None,
             TestChangeDetector::new(&[]),
         );
-        let packages = resolver
-            .get_filtered_packages(vec![TargetSelector {
-                name_pattern: "bar".to_string(),
-                ..Default::default()
-            }])
-            .unwrap();
+        let packages = resolver.get_filtered_packages(vec![TargetSelector {
+            name_pattern: "bar".to_string(),
+            ..Default::default()
+        }]);
 
-        assert!(
-            packages.is_empty(),
-            "expected empty set, got {:?}",
-            packages
-        );
+        assert!(packages.is_err(), "non existing package name should error",);
 
         let packages = resolver
             .get_filtered_packages(vec![TargetSelector {
@@ -1022,6 +1060,50 @@ mod test {
             packages,
             vec![PackageName::from("@foo/bar")].into_iter().collect()
         );
+    }
+
+    #[test]
+    fn test_no_matching_name() {
+        let (_tempdir, resolver) = make_project(
+            &[],
+            &["packages/bar/@foo/bar"],
+            None,
+            TestChangeDetector::new(&[]),
+        );
+        let packages = resolver.get_filtered_packages(vec![TargetSelector {
+            name_pattern: "bar".to_string(),
+            ..Default::default()
+        }]);
+
+        assert!(packages.is_err(), "non existing package name should error",);
+
+        let packages = resolver
+            .get_filtered_packages(vec![TargetSelector {
+                name_pattern: "baz*".to_string(),
+                ..Default::default()
+            }])
+            .unwrap();
+        assert!(
+            packages.is_empty(),
+            "expected no matches, got {:?}",
+            packages
+        );
+    }
+
+    #[test]
+    fn test_no_directory() {
+        let (_tempdir, resolver) = make_project(
+            &[("packages/foo", "packages/bar")],
+            &[],
+            None,
+            TestChangeDetector::new(&[]),
+        );
+        let packages = resolver.get_filtered_packages(vec![TargetSelector {
+            parent_dir: Some(AnchoredSystemPathBuf::try_from("pakcages/*").unwrap()),
+            ..Default::default()
+        }]);
+
+        assert!(packages.is_err(), "non existing dir should error",);
     }
 
     #[test_case(
@@ -1038,7 +1120,7 @@ mod test {
         vec![
             TargetSelector {
                 git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
-                parent_dir: AnchoredSystemPathBuf::try_from(".").unwrap(),
+                parent_dir: Some(AnchoredSystemPathBuf::try_from(".").unwrap()),
                 ..Default::default()
             }
         ],
@@ -1049,7 +1131,7 @@ mod test {
         vec![
             TargetSelector {
                 git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
-                parent_dir: AnchoredSystemPathBuf::try_from("package-2").unwrap(),
+                parent_dir: Some(AnchoredSystemPathBuf::try_from("package-2").unwrap()),
                 ..Default::default()
             }
         ],
@@ -1103,9 +1185,8 @@ mod test {
         vec![
             TargetSelector {
                 git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
-                parent_dir:
-    AnchoredSystemPathBuf::try_from("package-*").unwrap(),
-    match_dependencies: true,             ..Default::default()
+                parent_dir: Some(AnchoredSystemPathBuf::try_from("package-*").unwrap()),
+                match_dependencies: true,             ..Default::default()
             }
         ],
         &["package-1", "package-2"] ;
@@ -1122,7 +1203,7 @@ mod test {
             ),
         ]);
 
-        let resolver = make_project(
+        let (_tempdir, resolver) = make_project(
             &[("package-3", "package-20")],
             &["package-1", "package-2"],
             None,
