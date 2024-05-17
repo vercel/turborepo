@@ -188,7 +188,7 @@ impl WithMetadata for RawTaskDefinition {
         self.pass_through_env.add_text(text.clone());
         self.persistent.add_text(text.clone());
         self.outputs.add_text(text.clone());
-        self.output_mode.add_text(text.clone());
+        self.output_logs.add_text(text.clone());
         self.interactive.add_text(text);
     }
 
@@ -203,7 +203,7 @@ impl WithMetadata for RawTaskDefinition {
         self.pass_through_env.add_path(path.clone());
         self.persistent.add_path(path.clone());
         self.outputs.add_path(path.clone());
-        self.output_mode.add_path(path.clone());
+        self.output_logs.add_path(path.clone());
         self.interactive.add_path(path);
     }
 }
