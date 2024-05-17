@@ -92,6 +92,7 @@ function esm(
       defineProp(exports, key, { get: item, enumerable: true });
     }
   }
+  Object.seal(exports);
 }
 
 /**
