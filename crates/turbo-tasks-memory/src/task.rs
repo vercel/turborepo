@@ -1547,8 +1547,8 @@ impl Task {
 
         let mut cells_to_drop = Vec::new();
 
-        if let TaskMetaStateWriteGuard::Full(mut state) = self.state_mut() {
-            if state.gc.generation > generation {
+        let result = if let TaskMetaStateWriteGuard::Full(mut state) = self.state_mut() {
+            if state.gc.generation > generation || state.stateful {
                 return false;
             }
 
@@ -1579,7 +1579,11 @@ impl Task {
             true
         } else {
             false
-        }
+        };
+
+        drop(cells_to_drop);
+
+        result
     }
 
     pub(crate) fn gc_state(&self) -> Option<GcTaskState> {
