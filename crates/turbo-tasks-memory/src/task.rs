@@ -944,6 +944,7 @@ impl Task {
         duration: Duration,
         memory_usage: usize,
         generation: NonZeroU32,
+        cell_counters: AutoMap<ValueTypeId, u32, BuildHasherDefault<FxHasher>, 8>,
         stateful: bool,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
@@ -953,6 +954,7 @@ impl Task {
         {
             let mut change_job = None;
             let mut remove_job = None;
+            let mut drained_cells = SmallVec::<[Cell; 8]>::new();
             let dependencies = DEPENDENCIES_TO_TRACK.with(|deps| deps.take());
             {
                 let mut state = self.full_state_mut();
@@ -960,6 +962,13 @@ impl Task {
                 state
                     .gc
                     .execution_completed(duration, memory_usage, generation);
+
+                for (value_type, cells) in state.cells.iter_mut() {
+                    let counter = cell_counters.get(value_type).copied().unwrap_or_default();
+                    if counter != cells.len() as u32 {
+                        drained_cells.extend(cells.drain(counter as usize..));
+                    }
+                }
 
                 let InProgress(box InProgressState {
                     ref mut done_event,
@@ -1063,6 +1072,9 @@ impl Task {
                     drop(state);
                     self.clear_dependencies(outdated_edges, backend, turbo_tasks);
                 }
+            }
+            for cell in drained_cells {
+                cell.gc_drop(turbo_tasks);
             }
             change_job.apply(&aggregation_context);
             remove_job.apply(&aggregation_context);
