@@ -65,8 +65,12 @@ impl Module for EcmascriptModulePartAsset {
     #[turbo_tasks::function]
     async fn ident(&self) -> Result<Vc<AssetIdent>> {
         let inner = self.full_module.ident();
+        let result = split_module(self.full_module);
 
-        Ok(inner.with_part(self.part))
+        match &*result.await? {
+            SplitResult::Ok { .. } => Ok(inner.with_part(self.part)),
+            SplitResult::Failed { .. } => Ok(inner),
+        }
     }
 
     #[turbo_tasks::function]
