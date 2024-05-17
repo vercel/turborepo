@@ -30,14 +30,14 @@ key:
       // custom configuration for the build task in this workspace
     },
     // new tasks only available in this workspace
-    "special-task": {}
+    "special-task": {},
   }
 }
 ```
 
 <Callout>
-  For now, the only valid value for the `extends` key is `["//"]`. `//` is a
-  special name used to identify the root directory of the monorepo.
+  For now, the only valid value for the `extends` key is `["//"]`.
+`//` is a special name used to identify the root directory of the monorepo.
 </Callout>
 
 Configuration in a workspace can override any of [the configurations for a
@@ -59,7 +59,7 @@ with a single `turbo.json` at the root like this:
 {
   "pipeline": {
     "build": {
-      "outputs": [".next/**", "!.next/cache/**", ".svelte-kit/**"]
+      "outputs": [".next/**", "!.next/cache/**", ".svelte-kit/**"],
     }
   }
 }
@@ -151,8 +151,8 @@ but continue to inherit any other tasks defined at the root.
 
 At first glance, Workspace Configurations may sound a lot like the
 [`workspace#task` syntax][3] in the root `turbo.json`. The features are
-similar, but have one significant difference: when you declare a Workspace-specific
-task configuration in the root `turbo.json`, it _completely_ overwrites the baseline
+similar, but have one significant difference: when you declare a Workspace-specific 
+task configuration in the root `turbo.json`, it _completely_ overwrites the baseline 
 task configuration. With a Workspace Configuration, the task configuration is merged
 instead.
 
@@ -166,7 +166,7 @@ app again. Without a Workspace-specific task, you might configure your root
     "build": {
       "outputMode": "hash-only",
       "inputs": ["src/**"],
-      "outputs": [".next/**", "!.next/cache/**"]
+      "outputs": [".next/**", "!.next/cache/**"],
     },
     "my-sveltekit-app#build": {
       "outputMode": "hash-only", // must duplicate this
@@ -186,8 +186,7 @@ you don't need to duplicate them. You only need to override `outputs`
 
 <Callout type="info">
   Although there are no plans to remove Workspace-specific task configurations,
-  we expect that Workspace Configurations can be used for most use cases
-  instead.
+  we expect that Workspace Configurations can be used for most use cases instead.
 </Callout>
 
 ## Limitations
@@ -219,7 +218,7 @@ they are intentional, rather than accidental:
       },
       "build": {
         // ✅ just use the task name!
-      }
+      },
     }
   }
   ```
@@ -232,7 +231,7 @@ they are intentional, rather than accidental:
       "build": {
         // ✅ It's still ok to have workspace#task in dependsOn!
         "dependsOn": ["some-pkg#compile"]
-      }
+      },
     }
   }
   ```
