@@ -14,12 +14,12 @@ This test covers:
   
   Error:   x "persistent#persistent-task-1" is a persistent task,
     | "persistent#persistent-task-1-parent" cannot depend on it
-      ,-[turbo.json:69:1]
-   69 |     "persistent-task-1-parent": {
-   70 |       "dependsOn": ["persistent-task-1"]
-      :                     ^^^^^^^^^|^^^^^^^^^
-      :                              `-- persistent task
-   71 |     },
+      ,-[turbo.json:88:1]
+   88 |       "dependsOn": [
+   89 |         "persistent-task-1"
+      :         ^^^^^^^^^|^^^^^^^^^
+      :                  `-- persistent task
+   90 |       ]
       `----
   
   [1]
@@ -55,13 +55,13 @@ This test covers:
   
   Error:   x "persistent#persistent-task-3" is a persistent task,
     | "persistent#persistent-task-3-parent" cannot depend on it
-      ,-[turbo.json:75:1]
-   75 |     "persistent-task-3-parent": {
-   76 |       "dependsOn": ["persistent-task-3"]
-      :                     ^^^^^^^^^|^^^^^^^^^
-      :                              `-- persistent task
-   77 |     },
-      `----
+       ,-[turbo.json:98:1]
+    98 |       "dependsOn": [
+    99 |         "persistent-task-3"
+       :         ^^^^^^^^^|^^^^^^^^^
+       :                  `-- persistent task
+   100 |       ]
+       `----
   
   [1]
 
@@ -72,12 +72,12 @@ This test covers:
   
   Error:   x "persistent#persistent-task-4" is a persistent task,
     | "persistent#persistent-task-4-parent" cannot depend on it
-      ,-[turbo.json:78:1]
-   78 |     "persistent-task-4-parent": {
-   79 |       "dependsOn": ["persistent-task-4"]
-      :                     ^^^^^^^^^|^^^^^^^^^
-      :                              `-- persistent task
-   80 |     },
-      `----
+       ,-[turbo.json:103:1]
+   103 |       "dependsOn": [
+   104 |         "persistent-task-4"
+       :         ^^^^^^^^^|^^^^^^^^^
+       :                  `-- persistent task
+   105 |       ]
+       `----
   
   [1]

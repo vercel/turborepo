@@ -182,7 +182,7 @@ pub struct RawTaskDefinition {
     #[serde(skip_serializing_if = "Option::is_none")]
     outputs: Option<Vec<Spanned<UnescapedString>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    output_mode: Option<Spanned<OutputLogsMode>>,
+    output_logs: Option<Spanned<OutputLogsMode>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     interactive: Option<Spanned<bool>>,
 }
@@ -212,7 +212,7 @@ impl RawTaskDefinition {
         }
         set_field!(self, other, depends_on);
         set_field!(self, other, inputs);
-        set_field!(self, other, output_mode);
+        set_field!(self, other, output_logs);
         set_field!(self, other, persistent);
         set_field!(self, other, env);
         set_field!(self, other, pass_through_env);
@@ -379,7 +379,7 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
             inputs,
             pass_through_env,
             dot_env,
-            output_mode: *raw_task.output_mode.unwrap_or_default(),
+            output_logs: *raw_task.output_logs.unwrap_or_default(),
             persistent: *raw_task.persistent.unwrap_or_default(),
             interactive,
         })
@@ -925,7 +925,7 @@ mod tests {
           "outputs": ["package/a/dist"],
           "cache": false,
           "inputs": ["package/a/src/**"],
-          "outputMode": "full",
+          "outputLogs": "full",
           "persistent": true,
           "interactive": true
         }"#,
@@ -937,7 +937,7 @@ mod tests {
             outputs: Some(vec![Spanned::<UnescapedString>::new("package/a/dist".into()).with_range(175..191)]),
             cache: Some(Spanned::new(false).with_range(213..218)),
             inputs: Some(vec![Spanned::<UnescapedString>::new("package/a/src/**".into()).with_range(241..259)]),
-            output_mode: Some(Spanned::new(OutputLogsMode::Full).with_range(286..292)),
+            output_logs: Some(Spanned::new(OutputLogsMode::Full).with_range(286..292)),
             persistent: Some(Spanned::new(true).with_range(318..322)),
             interactive: Some(Spanned::new(true).with_range(349..353)),
         },
@@ -950,7 +950,7 @@ mod tests {
           },
           cache: false,
           inputs: vec!["package/a/src/**".to_string()],
-          output_mode: OutputLogsMode::Full,
+          output_logs: OutputLogsMode::Full,
           pass_through_env: Some(vec!["AWS_SECRET_KEY".to_string()]),
           task_dependencies: vec![Spanned::<TaskName<'_>>::new("cli#build".into()).with_range(26..37)],
           topological_dependencies: vec![],
@@ -968,7 +968,7 @@ mod tests {
               "outputs": ["package\\a\\dist"],
               "cache": false,
               "inputs": ["package\\a\\src\\**"],
-              "outputMode": "full",
+              "outputLogs": "full",
               "persistent": true
             }"#,
         RawTaskDefinition {
@@ -979,7 +979,7 @@ mod tests {
             outputs: Some(vec![Spanned::<UnescapedString>::new("package\\a\\dist".into()).with_range(197..215)]),
             cache: Some(Spanned::new(false).with_range(241..246)),
             inputs: Some(vec![Spanned::<UnescapedString>::new("package\\a\\src\\**".into()).with_range(273..294)]),
-            output_mode: Some(Spanned::new(OutputLogsMode::Full).with_range(325..331)),
+            output_logs: Some(Spanned::new(OutputLogsMode::Full).with_range(325..331)),
             persistent: Some(Spanned::new(true).with_range(361..365)),
             interactive: None,
         },
@@ -992,7 +992,7 @@ mod tests {
             },
             cache: false,
             inputs: vec!["package\\a\\src\\**".to_string()],
-            output_mode: OutputLogsMode::Full,
+            output_logs: OutputLogsMode::Full,
             pass_through_env: Some(vec!["AWS_SECRET_KEY".to_string()]),
             task_dependencies: vec![Spanned::<TaskName<'_>>::new("cli#build".into()).with_range(30..41)],
             topological_dependencies: vec![],
@@ -1096,11 +1096,11 @@ mod tests {
     #[test_case("errors-only", Some(OutputLogsMode::ErrorsOnly) ; "errors-only")]
     #[test_case("none", Some(OutputLogsMode::None) ; "none")]
     #[test_case("junk", None ; "invalid value")]
-    fn test_parsing_output_mode(output_mode: &str, expected: Option<OutputLogsMode>) {
+    fn test_parsing_output_logs_mode(output_logs: &str, expected: Option<OutputLogsMode>) {
         let json: Result<RawTurboJson, _> = RawTurboJson::parse_from_serde(json!({
             "pipeline": {
                 "build": {
-                    "outputMode": output_mode,
+                    "outputLogs": output_logs,
                 }
             }
         }));
@@ -1110,7 +1110,7 @@ mod tests {
             .ok()
             .and_then(|j| j.pipeline.as_ref())
             .and_then(|pipeline| pipeline.0.get(&TaskName::from("build")))
-            .and_then(|build| build.value.output_mode.clone())
+            .and_then(|build| build.value.output_logs.clone())
             .map(|mode| mode.into_inner());
         assert_eq!(actual, expected);
     }
