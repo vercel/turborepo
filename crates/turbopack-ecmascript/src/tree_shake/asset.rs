@@ -171,7 +171,7 @@ impl Module for EcmascriptModulePartAsset {
 impl Asset for EcmascriptModulePartAsset {
     #[turbo_tasks::function]
     fn content(&self) -> Vc<AssetContent> {
-        self.full_module.content()
+        todo!()
     }
 }
 
