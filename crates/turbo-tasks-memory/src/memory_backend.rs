@@ -350,9 +350,9 @@ impl Backend for MemoryBackend {
             )
         });
         if !reexecute {
-            // self.run_gc(false, turbo_tasks);
             if let Some(gc_queue) = &self.gc_queue {
                 gc_queue.task_executed(task_id);
+                self.run_gc(false, turbo_tasks);
             }
         }
         reexecute
