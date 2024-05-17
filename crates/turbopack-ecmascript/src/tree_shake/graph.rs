@@ -773,25 +773,7 @@ impl DepGraph {
                         }
 
                         {
-                            // For export default __TURBOPACK_default_export__
-
-                            let data = ItemData {
-                                read_vars: once(default_var.clone().to_id()).collect(),
-                                content: ModuleItem::ModuleDecl(ModuleDecl::ExportDefaultExpr(
-                                    ExportDefaultExpr {
-                                        span: DUMMY_SP,
-                                        expr: default_var.clone().into(),
-                                    },
-                                )),
-                                ..Default::default()
-                            };
-
-                            let id = ItemId::Item {
-                                index,
-                                kind: ItemIdItemKind::Normal,
-                            };
-                            ids.push(id.clone());
-                            items.insert(id, data);
+                            // For export default __TURBOPACK__default__export__
 
                             exports.push((
                                 default_var.to_id(),
