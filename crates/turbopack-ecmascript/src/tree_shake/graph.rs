@@ -734,12 +734,14 @@ impl DepGraph {
                             // For
                             // let __TURBOPACK_default_export__ = expr;
 
-                            let used_ids = ids_used_by_ignoring_nested(
+                            let mut used_ids = ids_used_by_ignoring_nested(
                                 &export.expr,
                                 [unresolved_ctxt, top_level_ctxt],
                             );
                             let captured_ids =
                                 ids_captured_by(&export.expr, [unresolved_ctxt, top_level_ctxt]);
+
+                            used_ids.write.insert(default_var.to_id());
 
                             let data = ItemData {
                                 read_vars: used_ids.read,
