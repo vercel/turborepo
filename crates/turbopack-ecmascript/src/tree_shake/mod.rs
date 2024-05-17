@@ -465,6 +465,15 @@ pub(super) async fn part_of_module(
                 {
                     let mut module = Module::dummy();
 
+                    let mut export_names = entrypoints
+                        .keys()
+                        .filter_map(|key| match key {
+                            Key::ModuleEvaluation => None,
+                            Key::Export(v) => Some(v.clone()),
+                        })
+                        .collect::<Vec<_>>();
+                    export_names.sort();
+
                     // We can't use quote! as `with` is not standard yet
                     let chunk_prop = create_turbopack_part_id_assert(PartId::ModuleEvaluation);
 
@@ -478,16 +487,35 @@ pub(super) async fn part_of_module(
                         })));
 
                     // We can't use quote! as `with` is not standard yet
-                    let chunk_prop = create_turbopack_part_id_assert(PartId::Exports);
+
+                    let specifiers = export_names
+                        .into_iter()
+                        .map(|export_name| {
+                            swc_core::ecma::ast::ExportSpecifier::Named(ExportNamedSpecifier {
+                                span: DUMMY_SP,
+                                orig: ModuleExportName::Ident(Ident::new(
+                                    export_name.into(),
+                                    DUMMY_SP,
+                                )),
+                                exported: None,
+                                is_type_only: false,
+                            })
+                        })
+                        .collect::<Vec<_>>();
 
                     module
                         .body
-                        .push(ModuleItem::ModuleDecl(ModuleDecl::ExportAll(ExportAll {
-                            span: DUMMY_SP,
-                            src: Box::new(TURBOPACK_PART_IMPORT_SOURCE.into()),
-                            type_only: false,
-                            with: Some(Box::new(chunk_prop)),
-                        })));
+                        .push(ModuleItem::ModuleDecl(ModuleDecl::ExportNamed(
+                            NamedExport {
+                                span: DUMMY_SP,
+                                specifiers,
+                                src: Some(Box::new(TURBOPACK_PART_IMPORT_SOURCE.into())),
+                                type_only: false,
+                                with: Some(Box::new(create_turbopack_part_id_assert(
+                                    PartId::Exports,
+                                ))),
+                            },
+                        )));
 
                     let program = Program::Module(module);
                     let eval_context = EvalContext::new(
