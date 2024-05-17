@@ -146,27 +146,6 @@ impl MemoryBackend {
 
                 let collected = gc_queue.run_gc(self);
 
-                let new_usage = turbo_tasks_malloc::TurboMalloc::memory_usage();
-
-                if new_usage > usage {
-                    println!(
-                        "GC allocated {} more MB {collected:?}",
-                        (new_usage - usage) / 1024 / 1024
-                    );
-                } else if new_usage < target {
-                    println!(
-                        "GC collected {} MB ({} MB below target) {collected:?}",
-                        (usage - new_usage) / 1024 / 1024,
-                        (target - new_usage) / 1024 / 1024
-                    );
-                } else {
-                    println!(
-                        "GC collected {} MB ({} MB above target) {collected:?}",
-                        (usage - new_usage) / 1024 / 1024,
-                        (new_usage - target) / 1024 / 1024
-                    );
-                }
-
                 // Collecting less than 100 tasks is not worth it
                 if !collected.map_or(false, |(_, count)| count > 100) {
                     return true;
