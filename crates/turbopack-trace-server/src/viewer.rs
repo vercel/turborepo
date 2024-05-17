@@ -898,7 +898,7 @@ impl Viewer {
             .collect();
         Update {
             lines,
-            max: current,
+            max: max(1, current),
         }
     }
 }
