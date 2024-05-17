@@ -116,6 +116,9 @@ export { RouteKind };
 ## Part 2
 ```js
 var RouteKind;
+export { RouteKind } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 3
@@ -174,6 +177,9 @@ export { RouteKind };
 ## Part 2
 ```js
 var RouteKind;
+export { RouteKind } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 3

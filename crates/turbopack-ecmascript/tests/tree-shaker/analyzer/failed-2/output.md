@@ -773,6 +773,9 @@ import "__TURBOPACK_PART__" assert {
 };
 import React from 'react';
 const hasPostpone = typeof React.unstable_postpone === 'function';
+export { hasPostpone } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 10
@@ -790,6 +793,9 @@ function postponeWithTracking(prerenderState, expression, pathname) {
     });
     React.unstable_postpone(reason);
 }
+export { postponeWithTracking } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 11
@@ -802,6 +808,9 @@ function assertPostpone() {
         throw new Error(`Invariant: React.unstable_postpone is not defined. This suggests the wrong version of React was loaded. This is a bug in Next.js`);
     }
 }
+export { assertPostpone } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Merged (module eval)
@@ -1034,6 +1043,9 @@ import "__TURBOPACK_PART__" assert {
 };
 import React from 'react';
 const hasPostpone = typeof React.unstable_postpone === 'function';
+export { hasPostpone } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 10
@@ -1051,6 +1063,9 @@ function postponeWithTracking(prerenderState, expression, pathname) {
     });
     React.unstable_postpone(reason);
 }
+export { postponeWithTracking } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 11
@@ -1063,6 +1078,9 @@ function assertPostpone() {
         throw new Error(`Invariant: React.unstable_postpone is not defined. This suggests the wrong version of React was loaded. This is a bug in Next.js`);
     }
 }
+export { assertPostpone } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Merged (module eval)
