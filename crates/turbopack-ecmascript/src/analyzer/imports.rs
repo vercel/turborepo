@@ -14,10 +14,7 @@ use turbo_tasks::Vc;
 use turbopack_core::{issue::IssueSource, source::Source};
 
 use super::{JsValue, ModuleValue};
-use crate::{
-    tree_shake::{find_turbopack_part_id_in_asserts, PartId},
-    utils::unparen,
-};
+use crate::tree_shake::{find_turbopack_part_id_in_asserts, PartId};
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(Default, Debug, Clone, Hash, PartialOrd, Ord)]
@@ -208,7 +205,6 @@ impl ImportMap {
         m.visit_with(&mut Analyzer {
             data: &mut data,
             skip_namespace,
-            current_annotations: ImportAnnotations::default(),
             source,
         });
 
@@ -218,7 +214,6 @@ impl ImportMap {
 
 struct Analyzer<'a> {
     data: &'a mut ImportMap,
-    current_annotations: ImportAnnotations,
     skip_namespace: bool,
     source: Option<Vc<Box<dyn Source>>>,
 }
