@@ -1,7 +1,7 @@
-import path from "path";
+import path from "node:path";
+import { execSync } from "node:child_process";
 import JSON5 from "json5";
-import { execSync } from "child_process";
-import { Schema } from "@turbo/types";
+import type { VersionOneSchema } from "@turbo/types";
 import { setupTestFixtures } from "@turbo/test-utils";
 
 describe("eslint settings check", () => {
@@ -159,7 +159,7 @@ describe("eslint cache is busted", () => {
     }
 
     // change the configuration
-    const turboJson = readJson<Schema>("turbo.json");
+    const turboJson = readJson<VersionOneSchema>("turbo.json");
     if (turboJson && "globalEnv" in turboJson) {
       turboJson.globalEnv = ["CI", "NONEXISTENT"];
       write("turbo.json", JSON5.stringify(turboJson, null, 2));

@@ -1,7 +1,10 @@
 import path from "node:path";
 import { readJsonSync, existsSync } from "fs-extra";
 import { type PackageJson, getTurboConfigs } from "@turbo/utils";
-import type { Schema as TurboJsonSchema, Pipeline } from "@turbo/types";
+import type {
+  DeprecatedPipeline,
+  VersionOneSchema as TurboJsonSchema,
+} from "@turbo/types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
 import type { TransformerArgs } from "../types";
@@ -48,7 +51,7 @@ export function migrateDependencies({
   return { env, deps };
 }
 
-export function migratePipeline(pipeline: Pipeline) {
+export function migratePipeline(pipeline: DeprecatedPipeline) {
   const { deps: dependsOn, env } = migrateDependencies({
     env: pipeline.env,
     deps: pipeline.dependsOn,

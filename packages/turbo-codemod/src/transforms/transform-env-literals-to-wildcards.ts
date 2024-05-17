@@ -1,8 +1,11 @@
 import path from "node:path";
 import { readJsonSync, existsSync } from "fs-extra";
 import { type PackageJson, getTurboConfigs } from "@turbo/utils";
-import type { EnvWildcard, Schema as TurboJsonSchema } from "@turbo/types";
-import type { RootSchema } from "@turbo/types/src/types/config";
+import type {
+  EnvWildcard,
+  VersionOneRootSchema,
+  VersionOneSchema as TurboJsonSchema,
+} from "@turbo/types";
 import type { TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
@@ -27,7 +30,7 @@ function transformEnvVarName(envVarName: string): EnvWildcard {
   return output;
 }
 
-function migrateRootConfig(config: RootSchema) {
+function migrateRootConfig(config: VersionOneRootSchema) {
   const { globalEnv, globalPassThroughEnv } = config;
 
   if (Array.isArray(globalEnv)) {

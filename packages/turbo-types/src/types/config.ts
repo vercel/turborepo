@@ -1,128 +1,8 @@
 /* This file generates the `schema.json` file. */
+export type VersionOneSchema = VersionOneRootSchema | VersionOneWorkspaceSchema;
 export type Schema = RootSchema | WorkspaceSchema;
 
-export interface BaseSchema {
-  /** @defaultValue https://turbo.build/schema.json */
-  $schema?: string;
-  /**
-   * An object representing the task dependency graph of your project. turbo interprets
-   * these conventions to schedule, execute, and cache the outputs of tasks in
-   * your project.
-   *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#tasks
-   *
-   * @defaultValue `{}`
-   */
-  // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style -- it's more readable to specify a name for the key
-  pipeline: {
-    /**
-     * The name of a task that can be executed by turbo. If turbo finds a workspace
-     * package with a package.json scripts object with a matching key, it will apply the
-     * task configuration to that npm script during execution.
-     */
-    [script: string]: Pipeline;
-  };
-}
-
-export interface WorkspaceSchema extends BaseSchema {
-  /**
-   * This key is only available in Workspace Configs
-   * and cannot be used in your root turbo.json.
-   *
-   * Tells turbo to extend your root `turbo.json`
-   * and overrides with the keys provided
-   * in your Workspace Configs.
-   *
-   * Currently, only the "//" value is allowed.
-   *
-   * @defaultValue ["//"]
-   */
-  extends: Array<string>;
-}
-
-export interface RootSchema extends BaseSchema {
-  /**
-   * A list of globs to include in the set of implicit global hash dependencies.
-   *
-   * The contents of these files will be included in the global hashing
-   * algorithm and affect the hashes of all tasks.
-   *
-   * This is useful for busting the cache based on:
-   *
-   * - .env files (not in Git)
-   *
-   * - any root level file that impacts package tasks
-   * that are not represented in the traditional dependency graph
-   * (e.g. a root tsconfig.json, jest.config.js, .eslintrc, etc.)
-   *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#globaldependencies
-   *
-   * @defaultValue []
-   */
-  globalDependencies?: Array<string>;
-
-  /**
-   * A list of environment variables for implicit global hash dependencies.
-   *
-   * The variables included in this list will affect all task hashes.
-   *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalenv
-   *
-   * @defaultValue []
-   */
-  globalEnv?: Array<EnvWildcard>;
-
-  /**
-   * An allowlist of environment variables that should be made to all tasks, but
-   * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
-   *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalPassThroughEnv
-   *
-   * @defaultValue null
-   * @deprecated use `globalPassThroughEnv` instead
-   */
-  experimentalGlobalPassThroughEnv?: null | Array<string>;
-
-  /**
-   * An allowlist of environment variables that should be made to all tasks, but
-   * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
-   *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalPassThroughEnv
-   *
-   * @defaultValue null
-   */
-  globalPassThroughEnv?: null | Array<EnvWildcard>;
-
-  /**
-   * A priority-ordered (most-significant to least-significant) array of project-anchored
-   * Unix-style paths to `.env` files to include in the global hash.
-   *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalDotEnv
-   *
-   * @defaultValue null
-   */
-  globalDotEnv?: null | Array<AnchoredUnixPath>;
-
-  /**
-   * Configuration options that control how turbo interfaces with the remote cache.
-   *
-   * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching
-   *
-   * @defaultValue `{}`
-   */
-  remoteCache?: RemoteCache;
-
-  /**
-   * Enable use of the new UI for `turbo`.
-   *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#experimentalui
-   *
-   * @defaultValue `{}`
-   */
-  experimentalUI?: boolean;
-}
-
-export interface Pipeline {
+export interface DeprecatedPipeline {
   /**
    * The list of tasks that this task depends on.
    *
@@ -268,6 +148,253 @@ export interface Pipeline {
    */
   interactive?: boolean;
 }
+
+export interface VersionOneBaseSchema {
+  /** @defaultValue https://turbo.build/schema.json */
+  $schema?: string;
+  /**
+   * An object representing the task dependency graph of your project. turbo interprets
+   * these conventions to schedule, execute, and cache the outputs of tasks in
+   * your project.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#tasks
+   *
+   * @defaultValue `{}`
+   */
+  // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style -- it's more readable to specify a name for the key
+  pipeline: {
+    /**
+     * The name of a task that can be executed by turbo. If turbo finds a workspace
+     * package with a package.json scripts object with a matching key, it will apply the
+     * task configuration to that npm script during execution.
+     */
+    [script: string]: DeprecatedPipeline;
+  };
+}
+
+export interface VersionOneWorkspaceSchema extends VersionOneBaseSchema {
+  /**
+   * This key is only available in Workspace Configs
+   * and cannot be used in your root turbo.json.
+   *
+   * Tells turbo to extend your root `turbo.json`
+   * and overrides with the keys provided
+   * in your Workspace Configs.
+   *
+   * Currently, only the "//" value is allowed.
+   *
+   * @defaultValue ["//"]
+   */
+  extends: Array<string>;
+}
+
+export interface VersionOneRootSchema extends VersionOneBaseSchema {
+  /**
+   * A list of globs to include in the set of implicit global hash dependencies.
+   *
+   * The contents of these files will be included in the global hashing
+   * algorithm and affect the hashes of all tasks.
+   *
+   * This is useful for busting the cache based on:
+   *
+   * - .env files (not in Git)
+   *
+   * - any root level file that impacts package tasks
+   * that are not represented in the traditional dependency graph
+   * (e.g. a root tsconfig.json, jest.config.js, .eslintrc, etc.)
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#globaldependencies
+   *
+   * @defaultValue []
+   */
+  globalDependencies?: Array<string>;
+
+  /**
+   * A list of environment variables for implicit global hash dependencies.
+   *
+   * The variables included in this list will affect all task hashes.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalenv
+   *
+   * @defaultValue []
+   */
+  globalEnv?: Array<EnvWildcard>;
+
+  /**
+   * An allowlist of environment variables that should be made to all tasks, but
+   * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalPassThroughEnv
+   *
+   * @defaultValue null
+   * @deprecated use `globalPassThroughEnv` instead
+   */
+  experimentalGlobalPassThroughEnv?: null | Array<string>;
+
+  /**
+   * An allowlist of environment variables that should be made to all tasks, but
+   * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalPassThroughEnv
+   *
+   * @defaultValue null
+   */
+  globalPassThroughEnv?: null | Array<EnvWildcard>;
+
+  /**
+   * A priority-ordered (most-significant to least-significant) array of project-anchored
+   * Unix-style paths to `.env` files to include in the global hash.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalDotEnv
+   *
+   * @defaultValue null
+   */
+  globalDotEnv?: null | Array<AnchoredUnixPath>;
+
+  /**
+   * Configuration options that control how turbo interfaces with the remote cache.
+   *
+   * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching
+   *
+   * @defaultValue `{}`
+   */
+  remoteCache?: RemoteCache;
+
+  /**
+   * Enable use of the new UI for `turbo`.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#experimentalui
+   *
+   * @defaultValue `{}`
+   */
+  experimentalUI?: boolean;
+}
+
+export interface BaseSchema {
+  /** @defaultValue https://turbo.build/schema.json */
+  $schema?: string;
+  /**
+   * An object representing the task dependency graph of your project. turbo interprets
+   * these conventions to schedule, execute, and cache the outputs of tasks in
+   * your project.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#tasks
+   *
+   * @defaultValue `{}`
+   */
+  // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style -- it's more readable to specify a name for the key
+  tasks: {
+    /**
+     * The name of a task that can be executed by turbo. If turbo finds a workspace
+     * package with a package.json scripts object with a matching key, it will apply the
+     * task configuration to that npm script during execution.
+     */
+    [script: string]: Tasks;
+  };
+}
+
+export interface WorkspaceSchema extends BaseSchema {
+  /**
+   * This key is only available in Workspace Configs
+   * and cannot be used in your root turbo.json.
+   *
+   * Tells turbo to extend your root `turbo.json`
+   * and overrides with the keys provided
+   * in your Workspace Configs.
+   *
+   * Currently, only the "//" value is allowed.
+   *
+   * @defaultValue ["//"]
+   */
+  extends: Array<string>;
+}
+
+export interface RootSchema extends BaseSchema {
+  /**
+   * A list of globs to include in the set of implicit global hash dependencies.
+   *
+   * The contents of these files will be included in the global hashing
+   * algorithm and affect the hashes of all tasks.
+   *
+   * This is useful for busting the cache based on:
+   *
+   * - .env files (not in Git)
+   *
+   * - any root level file that impacts package tasks
+   * that are not represented in the traditional dependency graph
+   * (e.g. a root tsconfig.json, jest.config.js, .eslintrc, etc.)
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#globaldependencies
+   *
+   * @defaultValue []
+   */
+  globalDependencies?: Array<string>;
+
+  /**
+   * A list of environment variables for implicit global hash dependencies.
+   *
+   * The variables included in this list will affect all task hashes.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalenv
+   *
+   * @defaultValue []
+   */
+  globalEnv?: Array<EnvWildcard>;
+
+  /**
+   * An allowlist of environment variables that should be made to all tasks, but
+   * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalPassThroughEnv
+   *
+   * @defaultValue null
+   * @deprecated use `globalPassThroughEnv` instead
+   */
+  experimentalGlobalPassThroughEnv?: null | Array<string>;
+
+  /**
+   * An allowlist of environment variables that should be made to all tasks, but
+   * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalPassThroughEnv
+   *
+   * @defaultValue null
+   */
+  globalPassThroughEnv?: null | Array<EnvWildcard>;
+
+  /**
+   * A priority-ordered (most-significant to least-significant) array of project-anchored
+   * Unix-style paths to `.env` files to include in the global hash.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalDotEnv
+   *
+   * @defaultValue null
+   */
+  globalDotEnv?: null | Array<AnchoredUnixPath>;
+
+  /**
+   * Configuration options that control how turbo interfaces with the remote cache.
+   *
+   * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching
+   *
+   * @defaultValue `{}`
+   */
+  remoteCache?: RemoteCache;
+
+  /**
+   * Enable use of the new UI for `turbo`.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#experimentalui
+   *
+   * @defaultValue `{}`
+   */
+  experimentalUI?: boolean;
+}
+
+/** The `pipeline` key is deprecated in 2.0 but we need to keep it around for the 1.x codemods. **/
+
+/** `tasks` key introduced in 2.0 **/
+export type Tasks = DeprecatedPipeline;
 
 export interface RemoteCache {
   /**

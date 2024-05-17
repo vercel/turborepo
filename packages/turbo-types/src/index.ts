@@ -1,7 +1,9 @@
 export type {
   EnvWildcard,
+  VersionOneSchema,
+  DeprecatedPipeline,
+  Tasks,
   Schema,
-  Pipeline,
   RemoteCache,
 } from "./types/config";
 

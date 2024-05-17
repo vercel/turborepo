@@ -1,6 +1,7 @@
 import merge from "deepmerge";
 import type { Schema } from "@turbo/types";
 import { setupTestFixtures } from "@turbo/test-utils";
+import type { VersionOneRootSchema } from "@turbo/types/src/types/config";
 import {
   hasLegacyEnvVarDependencies,
   migratePipeline,
@@ -8,7 +9,9 @@ import {
   transformer,
 } from "../src/transforms/migrate-env-var-dependencies";
 
-const getTestTurboConfig = (override: Schema = { pipeline: {} }): Schema => {
+const getTestTurboConfig = (
+  override: VersionOneRootSchema = { pipeline: {} }
+): VersionOneRootSchema => {
   const config = {
     $schema: "./docs/public/schema.json",
     globalDependencies: ["$GLOBAL_ENV_KEY"],
