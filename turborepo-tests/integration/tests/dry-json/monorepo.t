@@ -81,7 +81,7 @@ Setup
       "cache": true,
       "dependsOn": [],
       "inputs": [],
-      "outputMode": "full",
+      "outputLogs": "full",
       "persistent": false,
       "env": [],
       "passThroughEnv": null,
@@ -137,7 +137,7 @@ Setup
       "cache": true,
       "dependsOn": [],
       "inputs": [],
-      "outputMode": "full",
+      "outputLogs": "full",
       "persistent": false,
       "env": [
         "NODE_ENV"
