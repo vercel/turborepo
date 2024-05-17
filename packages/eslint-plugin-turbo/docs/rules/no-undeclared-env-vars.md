@@ -16,7 +16,7 @@ Examples of **incorrect** code for this rule:
 
 ```json
 {
-  "pipeline": {
+  "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
@@ -34,7 +34,7 @@ Examples of **correct** code for this rule:
 ```json
 {
   "globalEnv": ["MY_API_TOKEN"],
-  "pipeline": {
+  "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
@@ -49,7 +49,7 @@ Examples of **correct** code for this rule:
 
 ```json
 {
-  "pipeline": {
+  "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "env": ["MY_API_TOKEN"],

@@ -1,7 +1,7 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "extends": ["//"],
-  "pipeline": {
+  "tasks": {
     "build": {
       "dotEnv": ["missing1.env", "missing2.env"],
       "env": ["ENV_3"]
