@@ -133,7 +133,7 @@ export function turboIgnore(
         error(`Failed to parse JSON output from \`${command}\`.`);
         return continueBuild();
       }
-      const { packages } = parsed;
+      const { packages = [] } = parsed;
       if (packages.length > 0) {
         if (packages.length === 1) {
           info(`This commit affects "${workspace}"`);
