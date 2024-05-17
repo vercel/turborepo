@@ -1413,6 +1413,11 @@ async fn handle_before_resolve_plugins(
     options: Vc<ResolveOptions>,
 ) -> Result<Option<Vc<ResolveResult>>> {
     for plugin in &options.await?.before_resolve_plugins {
+        let condition = plugin.before_resolve_condition().resolve().await?;
+        if !*condition.matches(request).await? {
+            continue;
+        }
+
         if let Some(result) = *plugin
             .before_resolve(lookup_path, reference_type.clone(), request)
             .await?
