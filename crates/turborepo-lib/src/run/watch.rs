@@ -23,6 +23,7 @@ use crate::{
     DaemonConnector, DaemonPaths,
 };
 
+#[derive(Debug)]
 enum ChangedPackages {
     All,
     Some(HashSet<PackageName>),
@@ -45,6 +46,7 @@ impl ChangedPackages {
 
 pub struct WatchClient {
     run: Run,
+    watched_packages: HashSet<PackageName>,
     persistent_tasks_handle: Option<JoinHandle<Result<i32, run::Error>>>,
     connector: DaemonConnector,
     base: CommandBase,
@@ -114,6 +116,8 @@ impl WatchClient {
             .build(&handler, telemetry.clone())
             .await?;
 
+        let watched_packages = run.get_relevant_packages();
+
         let (sender, handle) = run.start_experimental_ui().unzip();
 
         let connector = DaemonConnector {
@@ -125,6 +129,7 @@ impl WatchClient {
         Ok(Self {
             base,
             run,
+            watched_packages,
             connector,
             handler,
             telemetry,
@@ -228,8 +233,8 @@ impl WatchClient {
                 let packages = packages
                     .into_iter()
                     .filter(|pkg| {
-                        // If not in the filtered pkgs, ignore
-                        self.run.filtered_pkgs.contains(pkg)
+                        // If not in the watched packages set, ignore
+                        self.watched_packages.contains(pkg)
                     })
                     .collect();
 
@@ -296,6 +301,8 @@ impl WatchClient {
                     .hide_prelude()
                     .build(&self.handler, self.telemetry.clone())
                     .await?;
+
+                self.watched_packages = self.run.get_relevant_packages();
 
                 if let Some(sender) = &self.ui_sender {
                     let task_names = self.run.engine.tasks_with_command(&self.run.pkg_dep_graph);
