@@ -6,7 +6,7 @@ use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName
 use super::{
     execution::TaskExecutionSummary,
     task::{SharedTaskSummary, TaskEnvVarSummary},
-    EnvMode, SinglePackageTaskSummary, TaskSummary,
+    SinglePackageTaskSummary, TaskSummary,
 };
 use crate::{
     cli,

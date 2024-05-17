@@ -408,7 +408,7 @@ mod test {
             framework_inference: true,
         };
 
-        assert_eq!(global_hash.hash(), "64556c46ff3c4289");
+        assert_eq!(global_hash.hash(), "c8f1724ea37eb6cd");
     }
 
     #[test_case(vec![], "459c029558afe716" ; "empty")]
