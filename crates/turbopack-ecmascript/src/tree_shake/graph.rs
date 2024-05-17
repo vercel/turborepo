@@ -1104,6 +1104,7 @@ const ASSERT_CHUNK_KEY: &str = "__turbopack_part__";
 pub(crate) enum PartId {
     ModuleEvaluation,
     Exports,
+    Export(String),
     Internal(u32),
 }
 
@@ -1115,6 +1116,7 @@ pub(crate) fn create_turbopack_part_id_assert(dep: PartId) -> ObjectLit {
             value: match dep {
                 PartId::ModuleEvaluation => "module evaluation".into(),
                 PartId::Exports => "exports".into(),
+                PartId::Export(e) => format!("export {e}").into(),
                 PartId::Internal(dep) => (dep as f64).into(),
             },
         })))],

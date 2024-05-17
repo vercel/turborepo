@@ -7,7 +7,7 @@ use swc_core::{
     common::{util::take::Take, SyntaxContext, DUMMY_SP, GLOBALS},
     ecma::ast::{ExportAll, Id, Module, ModuleDecl, ModuleItem, Program},
 };
-use turbo_tasks::{ValueToString, Vc};
+use turbo_tasks::{vdbg, ValueToString, Vc};
 use turbopack_core::{ident::AssetIdent, resolve::ModulePart, source::Source};
 
 pub(crate) use self::graph::{
@@ -516,15 +516,21 @@ pub(super) async fn part_of_module(
                     ..
                 } = &*modules[0].await?
                 {
-                    let mut export_part_ids = entrypoints.values().copied().collect::<Vec<_>>();
-                    export_part_ids.sort();
+                    let mut export_names = entrypoints
+                        .keys()
+                        .filter_map(|key| match key {
+                            Key::ModuleEvaluation => None,
+                            Key::Export(v) => Some(v.clone()),
+                        })
+                        .collect::<Vec<_>>();
+                    export_names.sort();
 
                     let mut module = Module::dummy();
 
-                    for export_part_id in export_part_ids {
+                    for export_name in export_names {
                         // We can't use quote! as `with` is not standard yet
                         let chunk_prop =
-                            create_turbopack_part_id_assert(PartId::Internal(export_part_id));
+                            create_turbopack_part_id_assert(PartId::Export(export_name));
 
                         module
                             .body
