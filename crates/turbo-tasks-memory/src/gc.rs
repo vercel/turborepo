@@ -205,21 +205,21 @@ impl GcQueue {
         {
             let mut guard = self.generations.lock();
             if !remaining_tasks.is_empty() {
-                if let Some(last) = guard.front_mut() {
-                    last.tasks.extend(remaining_tasks);
-                    if last.tasks.len() > MAX_TASKS_PER_OLD_GENERATION {
+                if let Some(first) = guard.front_mut() {
+                    first.tasks.extend(remaining_tasks);
+                    if first.tasks.len() > MAX_TASKS_PER_OLD_GENERATION {
                         // Need to split the tasks into two generations
-                        let mut gen_b = Vec::with_capacity(last.tasks.len() / 2);
-                        let mut gen_a = Vec::with_capacity(last.tasks.len() - gen_b.capacity());
-                        for (i, task) in take(&mut last.tasks).into_iter().enumerate() {
+                        let mut gen_b = Vec::with_capacity(first.tasks.len() / 2);
+                        let mut gen_a = Vec::with_capacity(first.tasks.len() - gen_b.capacity());
+                        for (i, task) in take(&mut first.tasks).into_iter().enumerate() {
                             if i % 2 == 0 {
                                 gen_a.push(task);
                             } else {
                                 gen_b.push(task);
                             }
                         }
-                        let generation = last.generation;
-                        last.tasks = gen_a;
+                        let generation = first.generation;
+                        first.tasks = gen_a;
                         guard.push_front(OldGeneration {
                             tasks: gen_b,
                             generation,
