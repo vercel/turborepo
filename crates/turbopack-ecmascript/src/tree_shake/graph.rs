@@ -328,7 +328,10 @@ impl DepGraph {
 
                 // Emit `export { foo }`
                 for var in data.write_vars.iter() {
-                    if required_vars.remove(var) || data.read_vars.contains(var) {
+                    if required_vars.remove(var)
+                        || data.read_vars.contains(var)
+                        || data.var_decls.contains(var)
+                    {
                         let assertion_prop =
                             PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
                                 key: quote_ident!("__turbopack_var__").into(),
