@@ -9,7 +9,6 @@
 
 mod aggregation;
 mod cell;
-// mod concurrent_priority_queue;
 mod count_hash_set;
 mod gc;
 mod map_guard;
