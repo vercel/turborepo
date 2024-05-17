@@ -1,6 +1,7 @@
 use std::{
     fmt,
     hash::{BuildHasherDefault, Hash},
+    iter::once,
 };
 
 use indexmap::IndexSet;
@@ -9,14 +10,16 @@ use petgraph::{
     prelude::DiGraphMap,
 };
 use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
+use serde::de;
 use swc_core::{
     common::{util::take::Take, SyntaxContext, DUMMY_SP},
     ecma::{
         ast::{
-            op, ClassDecl, Decl, DefaultDecl, ExportDecl, ExportNamedSpecifier, ExportSpecifier,
-            Expr, ExprStmt, FnDecl, Id, Ident, ImportDecl, ImportNamedSpecifier, ImportSpecifier,
-            ImportStarAsSpecifier, KeyValueProp, Lit, Module, ModuleDecl, ModuleExportName,
-            ModuleItem, NamedExport, ObjectLit, Prop, PropName, PropOrSpread, Stmt, VarDecl,
+            op, ClassDecl, Decl, DefaultDecl, ExportDecl, ExportDefaultExpr, ExportNamedSpecifier,
+            ExportSpecifier, Expr, ExprStmt, FnDecl, Id, Ident, ImportDecl, ImportNamedSpecifier,
+            ImportSpecifier, ImportStarAsSpecifier, KeyValueProp, Lit, Module, ModuleDecl,
+            ModuleExportName, ModuleItem, NamedExport, ObjectLit, Prop, PropName, PropOrSpread,
+            Stmt, VarDecl, VarDeclKind, VarDeclarator,
         },
         atoms::JsWord,
         utils::{find_pat_ids, private_ident, quote_ident, IdentExt},
@@ -728,12 +731,16 @@ impl DepGraph {
                             private_ident!(magic_identifier::mangle("default export"));
 
                         {
+                            // For
+                            // let __TURBOPACK_default_export__ = expr;
+
                             let used_ids = ids_used_by_ignoring_nested(
                                 &export.expr,
                                 [unresolved_ctxt, top_level_ctxt],
                             );
                             let captured_ids =
                                 ids_captured_by(&export.expr, [unresolved_ctxt, top_level_ctxt]);
+
                             let data = ItemData {
                                 read_vars: used_ids.read,
                                 eventual_read_vars: captured_ids.read,
@@ -741,7 +748,19 @@ impl DepGraph {
                                 eventual_write_vars: captured_ids.write,
                                 var_decls: [default_var.to_id()].into_iter().collect(),
                                 side_effects: true,
-                                content: ModuleItem::ModuleDecl(item.clone()),
+                                content: ModuleItem::Stmt(Stmt::Decl(Decl::Var(Box::new(
+                                    VarDecl {
+                                        span: DUMMY_SP,
+                                        kind: VarDeclKind::Const,
+                                        declare: false,
+                                        decls: vec![VarDeclarator {
+                                            span: DUMMY_SP,
+                                            name: default_var.clone().into(),
+                                            init: Some(export.expr.clone()),
+                                            definite: false,
+                                        }],
+                                    },
+                                )))),
                                 ..Default::default()
                             };
 
@@ -753,10 +772,33 @@ impl DepGraph {
                             items.insert(id, data);
                         }
 
-                        exports.push((
-                            default_var.to_id(),
-                            Some(ModuleExportName::Ident(quote_ident!("default"))),
-                        ));
+                        {
+                            // For export default __TURBOPACK_default_export__
+
+                            let data = ItemData {
+                                read_vars: once(default_var.clone().to_id()).collect(),
+                                side_effects: true,
+                                content: ModuleItem::ModuleDecl(ModuleDecl::ExportDefaultExpr(
+                                    ExportDefaultExpr {
+                                        span: DUMMY_SP,
+                                        expr: default_var.clone().into(),
+                                    },
+                                )),
+                                ..Default::default()
+                            };
+
+                            let id = ItemId::Item {
+                                index,
+                                kind: ItemIdItemKind::Normal,
+                            };
+                            ids.push(id.clone());
+                            items.insert(id, data);
+
+                            exports.push((
+                                default_var.to_id(),
+                                Some(ModuleExportName::Ident(quote_ident!("default"))),
+                            ));
+                        }
                     }
 
                     ModuleDecl::ExportAll(item) => {
