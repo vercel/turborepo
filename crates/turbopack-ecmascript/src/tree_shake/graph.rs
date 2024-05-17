@@ -777,7 +777,6 @@ impl DepGraph {
 
                             let data = ItemData {
                                 read_vars: once(default_var.clone().to_id()).collect(),
-                                side_effects: true,
                                 content: ModuleItem::ModuleDecl(ModuleDecl::ExportDefaultExpr(
                                     ExportDefaultExpr {
                                         span: DUMMY_SP,
