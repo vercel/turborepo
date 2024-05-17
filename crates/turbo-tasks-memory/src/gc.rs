@@ -157,7 +157,7 @@ impl GcQueue {
             generation,
         }) = old_generation
         else {
-            println!("No old generation to process");
+            // No old generation to process
             return ProcessGenerationResult {
                 priority: None,
                 count: 0,
@@ -177,7 +177,7 @@ impl GcQueue {
         }
 
         if indices.is_empty() {
-            println!("No valid tasks in old generation to process");
+            // No valid tasks in old generation to process
             return ProcessGenerationResult {
                 priority: None,
                 count: 0,
@@ -197,7 +197,7 @@ impl GcQueue {
         tasks.truncate(indices.len());
 
         let tasks_to_collect = max(1, tasks.len() * PERCENTAGE_TO_COLLECT / 100);
-        let max_priority = indices[0].0 .0;
+        let (Reverse(max_priority), _) = indices[0];
         drop(indices);
 
         // Put back remaining tasks into the queue
@@ -243,13 +243,6 @@ impl GcQueue {
                 }
             });
         }
-
-        println!(
-            "Processed old generation: {} with {} tasks, {} tasks collected",
-            generation,
-            tasks.len(),
-            count
-        );
 
         ProcessGenerationResult {
             priority: Some(max_priority),
