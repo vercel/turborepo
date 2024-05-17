@@ -6,8 +6,8 @@ use swc_core::{
     common::SyntaxContext,
     ecma::{
         ast::{
-            AssignTarget, BlockStmtOrExpr, Constructor, ExportNamedSpecifier, Expr, Function, Id,
-            Ident, MemberProp, NamedExport, Pat, PropName,
+            AssignTarget, BlockStmtOrExpr, Constructor, ExportNamedSpecifier, ExportSpecifier,
+            Expr, Function, Id, Ident, MemberProp, NamedExport, Pat, PropName,
         },
         visit::{noop_visit_type, visit_obj_and_computed, Visit, VisitWith},
     },
@@ -63,6 +63,12 @@ impl Visit for IdentUsageCollector {
 
     fn visit_export_named_specifier(&mut self, n: &ExportNamedSpecifier) {
         n.orig.visit_with(self);
+    }
+
+    fn visit_export_specifier(&mut self, n: &ExportSpecifier) {
+        self.with_mode(Mode::Read, |this| {
+            n.visit_children_with(this);
+        })
     }
 
     fn visit_expr(&mut self, e: &Expr) {
@@ -168,6 +174,12 @@ impl Visit for CapturedIdCollector {
 
     fn visit_constructor(&mut self, n: &Constructor) {
         self.with_nested(|this| {
+            n.visit_children_with(this);
+        })
+    }
+
+    fn visit_export_specifier(&mut self, n: &ExportSpecifier) {
+        self.with_mode(Mode::Read, |this| {
             n.visit_children_with(this);
         })
     }
