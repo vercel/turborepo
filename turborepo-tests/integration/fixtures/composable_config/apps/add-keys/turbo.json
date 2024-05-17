@@ -1,7 +1,7 @@
 {
   "extends": ["//"],
 
-  "pipeline": {
+  "tasks": {
     "add-keys-task": {
       "dependsOn": ["add-keys-underlying-task"],
       "inputs": ["src/foo.txt"],
