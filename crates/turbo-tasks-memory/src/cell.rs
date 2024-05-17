@@ -200,6 +200,9 @@ impl Cell {
             } => {
                 // Assigning to a cell will invalidate all dependent tasks as the content might
                 // have changed.
+                // TODO this leads to flagging task unnecessarily dirty when a GC'ed task is
+                // recomputed. We need to use the notification of changed cells for the current
+                // task to check if it's valid to skip the invalidation here
                 if !dependent_tasks.is_empty() {
                     turbo_tasks.schedule_notify_tasks_set(dependent_tasks);
                 }
