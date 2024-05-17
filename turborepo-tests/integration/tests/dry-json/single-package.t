@@ -63,7 +63,7 @@ Setup
           "cache": true,
           "dependsOn": [],
           "inputs": [],
-          "outputMode": "full",
+          "outputLogs": "full",
           "persistent": false,
           "env": [],
           "passThroughEnv": null,
