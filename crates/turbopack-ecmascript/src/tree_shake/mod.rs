@@ -5,9 +5,12 @@ use indexmap::IndexSet;
 use rustc_hash::FxHashMap;
 use swc_core::{
     common::{util::take::Take, SyntaxContext, DUMMY_SP, GLOBALS},
-    ecma::ast::{ExportAll, Id, Module, ModuleDecl, ModuleItem, Program},
+    ecma::ast::{
+        ExportAll, ExportNamedSpecifier, Id, Ident, Module, ModuleDecl, ModuleExportName,
+        ModuleItem, NamedExport, Program,
+    },
 };
-use turbo_tasks::{vdbg, ValueToString, Vc};
+use turbo_tasks::{ValueToString, Vc};
 use turbopack_core::{ident::AssetIdent, resolve::ModulePart, source::Source};
 
 pub(crate) use self::graph::{
@@ -530,16 +533,29 @@ pub(super) async fn part_of_module(
                     for export_name in export_names {
                         // We can't use quote! as `with` is not standard yet
                         let chunk_prop =
-                            create_turbopack_part_id_assert(PartId::Export(export_name));
+                            create_turbopack_part_id_assert(PartId::Export(export_name.clone()));
 
+                        let specifier =
+                            swc_core::ecma::ast::ExportSpecifier::Named(ExportNamedSpecifier {
+                                span: DUMMY_SP,
+                                orig: ModuleExportName::Ident(Ident::new(
+                                    export_name.into(),
+                                    DUMMY_SP,
+                                )),
+                                exported: None,
+                                is_type_only: false,
+                            });
                         module
                             .body
-                            .push(ModuleItem::ModuleDecl(ModuleDecl::ExportAll(ExportAll {
-                                span: DUMMY_SP,
-                                src: Box::new(TURBOPACK_PART_IMPORT_SOURCE.into()),
-                                type_only: false,
-                                with: Some(Box::new(chunk_prop)),
-                            })));
+                            .push(ModuleItem::ModuleDecl(ModuleDecl::ExportNamed(
+                                NamedExport {
+                                    span: DUMMY_SP,
+                                    specifiers: vec![specifier],
+                                    src: Some(Box::new(TURBOPACK_PART_IMPORT_SOURCE.into())),
+                                    type_only: false,
+                                    with: Some(Box::new(chunk_prop)),
+                                },
+                            )));
                     }
 
                     let program = Program::Module(module);
