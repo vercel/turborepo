@@ -315,10 +315,12 @@ impl Visit for Analyzer<'_> {
             ImportedSymbol::ModuleEvaluation,
             annotations.clone(),
         );
+        let symbol = parse_with(export.with.as_deref());
+
         let i = self.ensure_reference(
             export.span,
             export.src.value.clone(),
-            ImportedSymbol::Exports,
+            symbol.unwrap_or(ImportedSymbol::Namespace),
             annotations,
         );
         if let Some(i) = i {
