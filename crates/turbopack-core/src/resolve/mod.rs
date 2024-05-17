@@ -31,7 +31,7 @@ use self::{
 use crate::{
     context::AssetContext,
     file_source::FileSource,
-    issue::{resolve::ResolvingIssue, Issue, IssueExt, IssueSource, IssueStage, StyledString},
+    issue::{resolve::ResolvingIssue, IssueExt, IssueSource},
     module::{Module, Modules, OptionModule},
     output::{OutputAsset, OutputAssets},
     package_json::{read_package_json, PackageJsonIssue},
@@ -67,7 +67,7 @@ pub enum ModuleResolveResultItem {
     OutputAsset(Vc<Box<dyn OutputAsset>>),
     External(String, ExternalType),
     Ignore,
-    Error(Vc<StyledString>),
+    Error(Vc<String>),
     Empty,
     Custom(u8),
     Unresolveable,
@@ -167,13 +167,6 @@ impl ModuleResolveResult {
     pub fn primary_modules_iter(&self) -> impl Iterator<Item = Vc<Box<dyn Module>>> + '_ {
         self.primary.iter().filter_map(|(_, item)| match item {
             &ModuleResolveResultItem::Module(a) => Some(a),
-            _ => None,
-        })
-    }
-
-    pub fn get_first_error(&self) -> Option<Vc<StyledString>> {
-        self.primary.iter().find_map(|(_, item)| match item {
-            ModuleResolveResultItem::Error(s) => Some(*s),
             _ => None,
         })
     }
@@ -413,7 +406,7 @@ pub enum ResolveResultItem {
     Source(Vc<Box<dyn Source>>),
     External(String, ExternalType),
     Ignore,
-    Error(Vc<StyledString>),
+    Error(Vc<String>),
     Empty,
     Custom(u8),
     Unresolveable,
@@ -2571,35 +2564,6 @@ async fn resolve_package_internal_with_imports_field(
     .await
 }
 
-#[turbo_tasks::value(shared)]
-struct CustomResolvingIssue {
-    title: Vc<StyledString>,
-    origin_path: Vc<FileSystemPath>,
-}
-
-#[turbo_tasks::value_impl]
-impl Issue for CustomResolvingIssue {
-    #[turbo_tasks::function]
-    fn severity(&self) -> Vc<IssueSeverity> {
-        IssueSeverity::Error.cell()
-    }
-
-    #[turbo_tasks::function]
-    async fn file_path(self: Vc<Self>) -> Result<Vc<FileSystemPath>> {
-        Ok(self.await?.origin_path)
-    }
-
-    #[turbo_tasks::function]
-    fn stage(self: Vc<Self>) -> Vc<IssueStage> {
-        IssueStage::Resolve.cell()
-    }
-
-    #[turbo_tasks::function]
-    async fn title(self: Vc<Self>) -> Result<Vc<StyledString>> {
-        Ok(self.await?.title)
-    }
-}
-
 pub async fn handle_resolve_error(
     result: Vc<ModuleResolveResult>,
     reference_type: Value<ReferenceType>,
@@ -2625,17 +2589,7 @@ pub async fn handle_resolve_error(
                 .emit();
             }
 
-            if let Some(error_string) = result.await?.get_first_error() {
-                CustomResolvingIssue {
-                    title: error_string,
-                    origin_path,
-                }
-                .cell()
-                .emit();
-                ModuleResolveResult::unresolveable().cell()
-            } else {
-                result
-            }
+            result
         }
         Err(err) => {
             ResolvingIssue {
