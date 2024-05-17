@@ -102,24 +102,9 @@ fn preprocess_paths_and_globs(
         .map(|s| join_unix_like_paths(&base_path_slash, &s))
         .filter_map(|g| collapse_path(&g).map(|(s, _)| s.to_string()))
     {
-        let split = split.to_string();
         // if the glob ends with a slash, then we need to add a double star,
         // unless it already ends with a double star
-        if split.ends_with('/') {
-            if split.ends_with("**/") {
-                exclude_paths.push(split[..split.len() - 1].to_string());
-            } else {
-                exclude_paths.push(format!("{}**", split));
-            }
-        } else if split.ends_with("/**") {
-            exclude_paths.push(split);
-        } else {
-            // Match Go globby behavior. If the glob doesn't already end in /**, add it
-            // TODO: The Go version uses system separator. Are we forcing all globs to unix
-            // paths?
-            exclude_paths.push(format!("{}/**", split));
-            exclude_paths.push(split);
-        }
+        add_trailing_double_star(&mut exclude_paths, &split);
     }
 
     Ok((base_path, include_paths, exclude_paths))
@@ -212,6 +197,24 @@ fn collapse_path(path: &str) -> Option<(Cow<str>, usize)> {
         };
 
         Some((Cow::Owned(string), lowest_index))
+    }
+}
+
+fn add_trailing_double_star(exclude_paths: &mut Vec<String>, glob: &str) {
+    if let Some(stripped) = glob.strip_suffix('/') {
+        if stripped.ends_with("**") {
+            exclude_paths.push(stripped.to_string());
+        } else {
+            exclude_paths.push(format!("{}**", glob));
+        }
+    } else if glob.ends_with("/**") {
+        exclude_paths.push(glob.to_string());
+    } else {
+        // Match Go globby behavior. If the glob doesn't already end in /**, add it
+        // TODO: The Go version uses system separator. Are we forcing all globs to unix
+        // paths?
+        exclude_paths.push(format!("{}/**", glob));
+        exclude_paths.push(glob.to_string());
     }
 }
 
