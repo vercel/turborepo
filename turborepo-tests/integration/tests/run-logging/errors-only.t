@@ -2,7 +2,7 @@ Setup
   $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh run_logging
 
 # [ ] error exit
-# [ ] outputMode: errors-only
+# [ ] outputLogs: errors-only
 # [x] --ouptut-logs=errors-only
   $ ${TURBO} run build --output-logs=errors-only
   \xe2\x80\xa2 Packages in scope: app-a (esc)
@@ -17,7 +17,7 @@ Setup
 
 
 # [ ] error exit
-# [x] outputMode: errors-only
+# [x] outputLogs: errors-only
 # [ ] --ouptut-logs=errors-only
   $ ${TURBO} run buildsuccess
   \xe2\x80\xa2 Packages in scope: app-a (esc)
@@ -31,7 +31,7 @@ Setup
 
 
 # [x] error exit
-# [ ] outputMode: errors-only
+# [ ] outputLogs: errors-only
 # [x] --ouptut-logs=errors-only
   $ ${TURBO} run builderror --output-logs=errors-only
   \xe2\x80\xa2 Packages in scope: app-a (esc)
@@ -61,7 +61,7 @@ Setup
 
 
 # [x] error exit
-# [x] outputMode: errors-only
+# [x] outputLogs: errors-only
 # [ ] --ouptut-logs=errors-only
   $ ${TURBO} run builderror2
   \xe2\x80\xa2 Packages in scope: app-a (esc)

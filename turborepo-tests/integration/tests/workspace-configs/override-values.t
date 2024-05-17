@@ -3,7 +3,7 @@ Setup
 
 # The override-values-task task in the root turbo.json has ALL the config. The workspace config
 # defines the task and overrides all the keys. The tests below use `override-values-task` to assert that:
-# - `outputs`, `inputs`, `env`, and `outputMode` are overriden from the root config.
+# - `outputs`, `inputs`, `env`, and `outputLogs` are overriden from the root config.
 
 # 1. First run, assert that the right `outputs` are cached.
   $ ${TURBO} run override-values-task --filter=override-values > tmp.log
@@ -11,7 +11,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: override-values (esc)
   \xe2\x80\xa2 Running override-values-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  override-values:override-values-task: cache miss, executing 24dfa2ce8f15d263
+  override-values:override-values-task: cache miss, executing 87924bee003e84fe
   override-values:override-values-task: 
   override-values:override-values-task: > override-values-task
   override-values:override-values-task: > echo running-override-values-task > lib/bar.min.txt
@@ -33,7 +33,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: override-values (esc)
   \xe2\x80\xa2 Running override-values-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  override-values:override-values-task: cache hit, replaying logs 24dfa2ce8f15d263
+  override-values:override-values-task: cache hit, replaying logs 87924bee003e84fe
   override-values:override-values-task: 
   override-values:override-values-task: > override-values-task
   override-values:override-values-task: > echo running-override-values-task > lib/bar.min.txt
@@ -49,7 +49,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: override-values (esc)
   \xe2\x80\xa2 Running override-values-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  override-values:override-values-task: cache miss, executing 558b071339618227
+  override-values:override-values-task: cache miss, executing f4a52702cd7910e3
   override-values:override-values-task: 
   override-values:override-values-task: > override-values-task
   override-values:override-values-task: > echo running-override-values-task > lib/bar.min.txt
@@ -65,7 +65,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: override-values (esc)
   \xe2\x80\xa2 Running override-values-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  override-values:override-values-task: cache hit, replaying logs 558b071339618227
+  override-values:override-values-task: cache hit, replaying logs f4a52702cd7910e3
   override-values:override-values-task: 
   override-values:override-values-task: > override-values-task
   override-values:override-values-task: > echo running-override-values-task > lib/bar.min.txt
@@ -80,7 +80,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: override-values (esc)
   \xe2\x80\xa2 Running override-values-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  override-values:override-values-task: cache miss, executing c13b940a3427bd1c
+  override-values:override-values-task: cache miss, executing d0863c55324d2752
   override-values:override-values-task: 
   override-values:override-values-task: > override-values-task
   override-values:override-values-task: > echo running-override-values-task > lib/bar.min.txt
@@ -95,7 +95,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: override-values (esc)
   \xe2\x80\xa2 Running override-values-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  override-values:override-values-task: cache hit, replaying logs c13b940a3427bd1c
+  override-values:override-values-task: cache hit, replaying logs d0863c55324d2752
   override-values:override-values-task: 
   override-values:override-values-task: > override-values-task
   override-values:override-values-task: > echo running-override-values-task > lib/bar.min.txt

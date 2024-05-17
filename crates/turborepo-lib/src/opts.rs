@@ -116,7 +116,7 @@ struct RunAndExecutionArgs<'a> {
 pub struct RunCacheOpts {
     pub(crate) skip_reads: bool,
     pub(crate) skip_writes: bool,
-    pub(crate) task_output_mode_override: Option<OutputLogsMode>,
+    pub(crate) task_output_logs_override: Option<OutputLogsMode>,
 }
 
 impl<'a> From<RunAndExecutionArgs<'a>> for RunCacheOpts {
@@ -124,7 +124,7 @@ impl<'a> From<RunAndExecutionArgs<'a>> for RunCacheOpts {
         RunCacheOpts {
             skip_reads: args.execution_args.force.flatten().is_some_and(|f| f),
             skip_writes: args.run_args.no_cache,
-            task_output_mode_override: args.execution_args.output_logs,
+            task_output_logs_override: args.execution_args.output_logs,
         }
     }
 }
