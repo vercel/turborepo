@@ -39,19 +39,6 @@ impl ResolvePluginCondition {
     }
 }
 
-#[turbo_tasks::value]
-pub struct BeforeResolvePluginCondition {
-    request_filter: Vc<String>,
-}
-
-#[turbo_tasks::value_impl]
-impl BeforeResolvePluginCondition {
-    #[turbo_tasks::function]
-    pub fn new(request_filter: Vc<String>) -> Vc<Self> {
-        BeforeResolvePluginCondition { request_filter }.cell()
-    }
-}
-
 #[turbo_tasks::value_trait]
 pub trait BeforeResolvePlugin {
     fn before_resolve(
@@ -63,7 +50,7 @@ pub trait BeforeResolvePlugin {
 }
 
 #[turbo_tasks::value_trait]
-pub trait ResolvePlugin {
+pub trait AfterResolvePlugin {
     /// A condition which determines if the hooks gets called.
     fn after_resolve_condition(self: Vc<Self>) -> Vc<ResolvePluginCondition>;
 

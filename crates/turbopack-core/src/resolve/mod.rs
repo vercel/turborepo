@@ -39,7 +39,7 @@ use crate::{
     reference_type::ReferenceType,
     resolve::{
         pattern::{read_matches, PatternMatch},
-        plugin::ResolvePlugin,
+        plugin::AfterResolvePlugin,
     },
     source::{OptionSource, Source, Sources},
 };
@@ -2620,9 +2620,9 @@ pub async fn handle_resolve_error(
                 .emit();
             }
 
-            if let Some(res) = result.await?.get_first_error() {
+            if let Some(error_string) = result.await?.get_first_error() {
                 CustomResolvingIssue {
-                    title: res,
+                    title: error_string,
                     origin_path,
                 }
                 .cell()

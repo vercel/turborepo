@@ -12,7 +12,7 @@ use super::{
     plugin::BeforeResolvePlugin,
     AliasPattern, ExternalType, ResolveResult, ResolveResultItem,
 };
-use crate::resolve::{parse::Request, plugin::ResolvePlugin};
+use crate::resolve::{parse::Request, plugin::AfterResolvePlugin};
 
 #[turbo_tasks::value(shared)]
 #[derive(Hash, Debug)]
@@ -435,7 +435,7 @@ pub struct ResolveOptions {
     pub fallback_import_map: Option<Vc<ImportMap>>,
     pub resolved_map: Option<Vc<ResolvedMap>>,
     pub before_resolve_plugins: Vec<Vc<Box<dyn BeforeResolvePlugin>>>,
-    pub plugins: Vec<Vc<Box<dyn ResolvePlugin>>>,
+    pub plugins: Vec<Vc<Box<dyn AfterResolvePlugin>>>,
     pub placeholder_for_future_extensions: (),
 }
 
