@@ -140,6 +140,7 @@ pub(crate) enum ImportedSymbol {
     ModuleEvaluation,
     Symbol(JsWord),
     Namespace,
+    Exports,
     Part(u32),
 }
 
@@ -230,6 +231,10 @@ impl<'a> Analyzer<'a> {
         imported_symbol: ImportedSymbol,
         annotations: ImportAnnotations,
     ) -> Option<usize> {
+        if self.skip_namespace && matches!(imported_symbol, ImportedSymbol::Namespace) {
+            return None;
+        }
+
         let issue_source = self
             .source
             .map(|s| IssueSource::from_swc_offsets(s, span.lo.to_usize(), span.hi.to_usize()));
@@ -404,7 +409,7 @@ fn parse_with(with: Option<&ObjectLit>) -> Option<ImportedSymbol> {
         PartId::Internal(index) => ImportedSymbol::Part(index),
         PartId::ModuleEvaluation => ImportedSymbol::ModuleEvaluation,
         PartId::Export(e) => ImportedSymbol::Symbol(e.into()),
-        PartId::Exports => ImportedSymbol::Namespace,
+        PartId::Exports => ImportedSymbol::Exports,
     })
 }
 
