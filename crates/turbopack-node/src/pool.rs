@@ -328,7 +328,6 @@ impl NodeJsPoolProcess {
         if debug {
             cmd.arg("--inspect-brk");
         }
-        dbg!(&entrypoint);
         cmd.arg(entrypoint);
         cmd.arg(port.to_string());
         cmd.env_clear();

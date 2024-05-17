@@ -109,80 +109,49 @@ pub struct JsxTransformOptions {
 }
 
 #[turbo_tasks::value(shared)]
-#[derive(Clone)]
+#[derive(Clone, Default)]
+#[serde(default)]
 pub struct ModuleOptionsContext {
-    #[serde(default)]
     pub enable_typeof_window_inlining: Option<TypeofWindow>,
-    #[serde(default)]
     pub enable_jsx: Option<Vc<JsxTransformOptions>>,
-    #[serde(default)]
     pub enable_postcss_transform: Option<Vc<PostCssTransformOptions>>,
-    #[serde(default)]
     pub enable_webpack_loaders: Option<Vc<WebpackLoadersOptions>>,
     /// Follow type references and resolve declaration files in additional to
     /// normal resolution.
-    #[serde(default)]
     pub enable_types: bool,
-    #[serde(default)]
     pub enable_typescript_transform: Option<Vc<TypescriptTransformOptions>>,
-    #[serde(default)]
     pub decorators: Option<Vc<DecoratorsOptions>>,
-    #[serde(default)]
     pub enable_mdx: bool,
     /// This skips `GlobalCss` and `ModuleCss` module assets from being
     /// generated in the module graph, generating only `Css` module assets.
     ///
     /// This is useful for node-file-trace, which tries to emit all assets in
     /// the module graph, but neither asset types can be emitted directly.
-    #[serde(default)]
     pub enable_raw_css: bool,
     // [Note]: currently mdx, and mdx_rs have different configuration entrypoint from next.config.js,
     // however we might want to unify them in the future.
-    #[serde(default)]
     pub enable_mdx_rs: Option<Vc<MdxTransformOptions>>,
-    #[serde(default)]
     pub preset_env_versions: Option<Vc<Environment>>,
     /// Custom rules to be applied after all default rules.
-    #[serde(default)]
     pub custom_rules: Vec<ModuleRule>,
-    #[serde(default)]
     pub execution_context: Option<Vc<ExecutionContext>>,
     /// A list of rules to use a different module option context for certain
     /// context paths. The first matching is used.
-    #[serde(default)]
     pub rules: Vec<(ContextCondition, Vc<ModuleOptionsContext>)>,
-    #[serde(default)]
     pub placeholder_for_future_extensions: (),
-    #[serde(default = "default_tree_shaking_mode")]
     pub tree_shaking_mode: Option<TreeShakingMode>,
-    #[serde(default)]
     pub esm_url_rewrite_behavior: Option<UrlRewriteBehavior>,
     /// References to externals from ESM imports should use `import()` and make
     /// async modules.
-    #[serde(default)]
     pub import_externals: bool,
     /// Ignore very dynamic requests which doesn't have any static known part.
     /// If false, they will reference the whole directory. If true, they won't
     /// reference anything and lead to an runtime error instead.
-    #[serde(default)]
     pub ignore_dynamic_requests: bool,
 
-    #[serde(default)]
     pub use_swc_css: bool,
 
-    #[serde(default)]
     pub side_effect_free_packages: Vec<String>,
-}
-
-fn default_tree_shaking_mode() -> Option<TreeShakingMode> {
-    dbg!("Default tree shaking mode is ModuleFragments.");
-    Some(TreeShakingMode::ModuleFragments)
-}
-
-impl Default for ModuleOptionsContext {
-    fn default() -> Self {
-        serde_json::from_value(serde_json::Value::Object(Default::default())).unwrap()
-    }
 }
 
 #[turbo_tasks::value_impl]
