@@ -1,7 +1,8 @@
+use crate::term::BufWrite;
+use std::io::Write;
+
 pub struct EntireScreen<'a> {
     screen: &'a crate::Screen,
-    // If present, screen will be truncated to only display lines that fit in those cells
-    max_lines: Option<usize>,
     size: (usize, u16),
 }
 
@@ -11,30 +12,12 @@ impl<'a> EntireScreen<'a> {
         Self {
             size: screen.grid().size_with_contents(),
             screen,
-            max_lines: None,
         }
-    }
-
-    pub fn with_max_lines(&mut self, max_lines: Option<usize>) {
-        self.max_lines = max_lines;
     }
 
     #[must_use]
     pub fn cell(&self, row: u16, col: u16) -> Option<&crate::Cell> {
-        match self.max_lines {
-            // We need to do some trimming
-            Some(max_lines) if self.size().0 > max_lines => {
-                // in this case we fuck ourselves :) HARD
-                let (height, _) = self.size();
-                // Skip over these
-                let lines_to_cut = (height - max_lines) as u16;
-                self.screen
-                    .grid()
-                    .all_row(lines_to_cut + row)
-                    .and_then(|r| r.get(col))
-            }
-            _ => self.screen.grid().all_row(row).and_then(|r| r.get(col)),
-        }
+        self.screen.grid().all_row(row).and_then(|r| r.get(col))
     }
 
     #[must_use]
@@ -42,6 +25,53 @@ impl<'a> EntireScreen<'a> {
         let mut s = String::new();
         self.screen.grid().write_full_contents(&mut s);
         s
+    }
+
+    /// Returns the formatted contents of the terminal by row,
+    /// restricted to the given subset of columns.
+    ///
+    /// Formatting information will be included inline as terminal escape
+    /// codes. The result will be suitable for feeding directly to a raw
+    /// terminal parser, and will result in the same visual output.
+    ///
+    /// You are responsible for positioning the cursor before printing each
+    /// row, and the final cursor position after displaying each row is
+    /// unspecified.
+    // the unwraps in this method shouldn't be reachable
+    #[allow(clippy::missing_panics_doc)]
+    pub fn rows_formatted(
+        &self,
+        start: u16,
+        width: u16,
+    ) -> impl Iterator<Item = Vec<u8>> + '_ {
+        let mut wrapping = false;
+        let grid = self.screen.grid();
+        let (rows, _) = self.size();
+        let default = crate::attrs::Attrs::default();
+        grid.all_rows().take(rows).enumerate().map(move |(i, row)| {
+            // number of rows in a grid is stored in a u16 (see Size), so
+            // visible_rows can never return enough rows to overflow here
+            let i = i.try_into().unwrap();
+            let mut contents = vec![];
+            // We don't need final cursor position as long as CRLF is used and not just LF
+            let (_pos, attrs) = row.write_contents_formatted(
+                &mut contents,
+                start,
+                width,
+                i,
+                wrapping,
+                None,
+                None,
+            );
+            if start == 0 && width == grid.size().cols {
+                wrapping = row.wrapped();
+            }
+            // If the row ended in non-default attributes, then clear them
+            if attrs != default {
+                crate::term::ClearAttrs.write_buf(&mut contents);
+            }
+            contents
+        })
     }
 
     /// Size required to render all contents

@@ -345,7 +345,12 @@ impl PackageGraph {
             })
             .collect::<HashMap<_, HashMap<_, _>>>();
 
-        let closures = turborepo_lockfiles::all_transitive_closures(previous, external_deps)?;
+        // We're comparing to a previous lockfile, it's possible that a package was
+        // added and thus won't exist in the previous lockfile. In that case,
+        // we're fine to ignore it. Assuming there is not a commit with a stale
+        // lockfile, the same commit should add the package, so it will get
+        // picked up as changed.
+        let closures = turborepo_lockfiles::all_transitive_closures(previous, external_deps, true)?;
 
         let global_change = current.global_change(previous);
 

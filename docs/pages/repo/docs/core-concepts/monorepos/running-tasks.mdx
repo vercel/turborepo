@@ -5,7 +5,7 @@ description: Turborepo can run all your tasks.
 
 import { Callout } from "../../../../../components/Callout";
 import HeartIcon from "@heroicons/react/solid/HeartIcon";
-import { Tabs, Tab } from '../../../../../components/Tabs'
+import { Tabs, Tab } from "../../../../../components/Tabs";
 
 # Running Tasks in a Monorepo
 
@@ -94,10 +94,10 @@ monorepo. Here's a kitchen sink example:
       "outputs": [".next/**", "!.next/cache/**", ".svelte-kit/**"]
     },
     "deploy": {
-        // A workspace's `deploy` task depends on the `build`,
-        // `test`, and `lint` tasks of the same workspace
-        // being completed.
-        "dependsOn": ["build", "test", "lint"]
+      // A workspace's `deploy` task depends on the `build`,
+      // `test`, and `lint` tasks of the same workspace
+      // being completed.
+      "dependsOn": ["build", "test", "lint"]
     },
     "test": {
       // A workspace's `test` task depends on that workspace's
@@ -140,12 +140,12 @@ A sample pipeline that defines the root task `format` and opts the root into `te
       "outputs": [".next/**", "!.next/cache/**", ".svelte-kit/**"]
     },
     "test": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build"]
     },
     // This will cause the "test" script to be included when
     // "turbo run test" is run
     "//#test": {
-      "dependsOn": [],
+      "dependsOn": []
     },
     // This will cause the "format" script in the root package.json
     // to be run when "turbo run format" is run. Since the general
@@ -171,7 +171,7 @@ opt in those tasks which don't themselves trigger a `turbo` run that would recur
 
 After you've declared a task in `turbo.json`, it's up to you to implement it in
 your `package.json` manifests. You can add scripts all at once, or one workspace
-at at a time. Turborepo will gracefully skip workspaces that don't include the
+at a time. Turborepo will gracefully skip workspaces that don't include the
 task in their respective package.json manifest.
 
 For example, if your repository has the three workspaces (similar to the ones mentioned above):
@@ -247,6 +247,6 @@ A turbo build will only execute the `build` script for the `web` and `docs` work
   Turborepo's Pipeline API design and this page of documentation was inspired by
   [Microsoft's Lage
   project](https://microsoft.github.io/lage/docs/Tutorial/pipeline#defining-a-pipeline).
-  Shoutout to [Kenneth Chau](https://x.com/kenneth_chau) for the idea of
-  fanning out tasks in such a concise and elegant way.
+  Shoutout to [Kenneth Chau](https://x.com/kenneth_chau) for the idea of fanning
+  out tasks in such a concise and elegant way.
 </Callout>

@@ -16,7 +16,7 @@ use turbopack_core::{
 };
 use turbopack_ecmascript::{
     async_chunk::module::AsyncLoaderModule,
-    chunk::{EcmascriptChunk, EcmascriptChunkingContext},
+    chunk::EcmascriptChunk,
     manifest::{chunk_asset::ManifestAsyncModule, loader_item::ManifestLoaderChunkItem},
 };
 use turbopack_ecmascript_runtime::RuntimeType;
@@ -311,24 +311,6 @@ impl ChunkingContext for BrowserChunkingContext {
     }
 
     #[turbo_tasks::function]
-    async fn can_be_in_same_chunk(
-        &self,
-        asset_a: Vc<Box<dyn Module>>,
-        asset_b: Vc<Box<dyn Module>>,
-    ) -> Result<Vc<bool>> {
-        let parent_dir = asset_a.ident().path().parent().await?;
-
-        let path = asset_b.ident().path().await?;
-        if let Some(rel_path) = parent_dir.get_path_to(&path) {
-            if !rel_path.starts_with("node_modules/") && !rel_path.contains("/node_modules/") {
-                return Ok(Vc::cell(true));
-            }
-        }
-
-        Ok(Vc::cell(false))
-    }
-
-    #[turbo_tasks::function]
     async fn asset_path(
         &self,
         content_hash: String,
@@ -509,13 +491,5 @@ impl ChunkingContext for BrowserChunkingContext {
         } else {
             self.chunk_item_id_from_ident(AsyncLoaderModule::asset_ident_for(module))
         })
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl EcmascriptChunkingContext for BrowserChunkingContext {
-    #[turbo_tasks::function]
-    fn has_react_refresh(&self) -> Vc<bool> {
-        Vc::cell(true)
     }
 }

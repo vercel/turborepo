@@ -29,6 +29,10 @@ Thanks for your interest in contributing to Turbo!
 - [Rust](https://www.rust-lang.org/tools/install)
 - [cargo-groups](https://github.com/nicholaslyang/cargo-groups) (used to group crates into Turborepo-specific ones and Turbopack-specific ones)
 
+### Linux Dependencies
+
+- LLD (LLVM Linker), as it's not installed by default on many Linux distributions (e.g. `apt install lld`).
+
 ## Contributing to Turborepo
 
 ### Building Turborepo

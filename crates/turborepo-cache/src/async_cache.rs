@@ -186,7 +186,7 @@ impl AsyncCache {
 
 #[cfg(test)]
 mod tests {
-    use std::assert_matches::assert_matches;
+    use std::{assert_matches::assert_matches, time::Duration};
 
     use anyhow::Result;
     use futures::future::try_join_all;
@@ -235,7 +235,13 @@ mod tests {
             }),
         };
 
-        let api_client = APIClient::new(format!("http://localhost:{}", port), 200, "2.0.0", true)?;
+        let api_client = APIClient::new(
+            format!("http://localhost:{}", port),
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            true,
+        )?;
         let api_auth = Some(APIAuth {
             team_id: Some("my-team-id".to_string()),
             token: "my-token".to_string(),
@@ -317,7 +323,13 @@ mod tests {
 
         // Initialize client with invalid API url to ensure that we don't hit the
         // network
-        let api_client = APIClient::new("http://example.com", 200, "2.0.0", true)?;
+        let api_client = APIClient::new(
+            "http://example.com",
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            true,
+        )?;
         let api_auth = Some(APIAuth {
             team_id: Some("my-team-id".to_string()),
             token: "my-token".to_string(),
@@ -405,7 +417,13 @@ mod tests {
             }),
         };
 
-        let api_client = APIClient::new(format!("http://localhost:{}", port), 200, "2.0.0", true)?;
+        let api_client = APIClient::new(
+            format!("http://localhost:{}", port),
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            true,
+        )?;
         let api_auth = Some(APIAuth {
             team_id: Some("my-team-id".to_string()),
             token: "my-token".to_string(),

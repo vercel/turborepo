@@ -194,6 +194,7 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           targets: wasm32-unknown-unknown,wasm32-wasip1-threads
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Run cargo check release
         run: |
