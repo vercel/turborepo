@@ -360,8 +360,8 @@ impl<'a> EngineBuilder<'a> {
         };
 
         let task_id_as_name = task_id.as_task_name();
-        if turbo_json.pipeline.contains_key(&task_id_as_name)
-            || turbo_json.pipeline.contains_key(task_name)
+        if turbo_json.tasks.contains_key(&task_id_as_name)
+            || turbo_json.tasks.contains_key(task_name)
         {
             Ok(true)
         } else if !matches!(workspace, PackageName::Root) {
@@ -412,7 +412,7 @@ impl<'a> EngineBuilder<'a> {
                         });
                     }
 
-                    if let Some(workspace_def) = workspace_json.pipeline.get(task_name) {
+                    if let Some(workspace_def) = workspace_json.tasks.get(task_name) {
                         task_definitions.push(workspace_def.value.clone());
                     }
                 }
@@ -642,7 +642,7 @@ mod test {
         let turbo_json = engine_builder
             .load_turbo_json(&PackageName::from("a"))
             .unwrap();
-        assert_eq!(turbo_json.pipeline.len(), 1);
+        assert_eq!(turbo_json.tasks.len(), 1);
     }
 
     fn turbo_json(value: serde_json::Value) -> TurboJson {

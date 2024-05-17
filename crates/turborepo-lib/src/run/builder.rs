@@ -358,7 +358,7 @@ impl RunBuilder {
                         task_name = task_name.into_root_task()
                     }
 
-                    if root_turbo_json.pipeline.contains_key(&task_name) {
+                    if root_turbo_json.tasks.contains_key(&task_name) {
                         filtered_pkgs.insert(PackageName::Root);
                         break;
                     }
@@ -435,7 +435,7 @@ impl RunBuilder {
             pkg_dep_graph,
             self.opts.run_opts.single_package,
         )
-        .with_root_tasks(root_turbo_json.pipeline.keys().cloned())
+        .with_root_tasks(root_turbo_json.tasks.keys().cloned())
         .with_turbo_jsons(Some(
             Some((PackageName::Root, root_turbo_json.clone()))
                 .into_iter()

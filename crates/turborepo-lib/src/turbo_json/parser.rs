@@ -147,7 +147,7 @@ impl WithMetadata for RawTurboJson {
         self.global_dependencies.add_text(text.clone());
         self.global_env.add_text(text.clone());
         self.global_pass_through_env.add_text(text.clone());
-        self.pipeline.add_text(text);
+        self.tasks.add_text(text);
     }
 
     fn add_path(&mut self, path: Arc<str>) {
@@ -156,7 +156,7 @@ impl WithMetadata for RawTurboJson {
         self.global_dependencies.add_path(path.clone());
         self.global_env.add_path(path.clone());
         self.global_pass_through_env.add_path(path.clone());
-        self.pipeline.add_path(path);
+        self.tasks.add_path(path);
     }
 }
 
