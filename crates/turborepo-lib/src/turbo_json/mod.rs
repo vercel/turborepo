@@ -118,7 +118,7 @@ pub struct RawTurboJson {
     // .env files to consider, in order.
     #[serde(skip_serializing_if = "Option::is_none")]
     global_dot_env: Option<Vec<UnescapedString>>,
-    // Pipeline is a map of Turbo pipeline entries which define the task graph
+    // Tasks is a map of task entries which define the task graph
     // and cache behavior on a per task or per package-task basis.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tasks: Option<Pipeline>,
