@@ -37,7 +37,7 @@ use crate::{
     run::{global_hash::get_global_hash_inputs, summary::RunTracker, task_access::TaskAccess},
     signal::SignalHandler,
     task_graph::Visitor,
-    task_hash::{get_external_deps_hash, get_internal_deps_hash, PackageInputsHashes},
+    task_hash::PackageInputsHashes,
     turbo_json::TurboJson,
     DaemonClient, DaemonConnector,
 };
