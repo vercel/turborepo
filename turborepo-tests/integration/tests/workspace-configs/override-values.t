@@ -22,7 +22,7 @@ Setup
     Time:\s*[\.0-9]+m?s  (re)
   
   $ HASH=$(cat tmp.log | grep -E "override-values:override-values-task.* executing .*" | awk '{print $5}')
-  $ tar -tf $TARGET_DIR/node_modules/.cache/turbo/$HASH.tar.zst;
+  $ tar -tf $TARGET_DIR/.turbo/cache/$HASH.tar.zst;
   apps/override-values/.turbo/turbo-override-values-task.log
   apps/override-values/lib/
   apps/override-values/lib/.keep

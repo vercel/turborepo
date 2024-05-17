@@ -31,7 +31,7 @@ Setup
     Time:\s*[\.0-9]+m?s  (re)
   
   $ HASH=$(cat tmp.log | grep -E "add-keys:add-keys-task.* executing .*" | awk '{print $5}')
-  $ tar -tf $TARGET_DIR/node_modules/.cache/turbo/$HASH.tar.zst;
+  $ tar -tf $TARGET_DIR/.turbo/cache/$HASH.tar.zst;
   apps/add-keys/.turbo/turbo-add-keys-task.log
   apps/add-keys/out/
   apps/add-keys/out/.keep
