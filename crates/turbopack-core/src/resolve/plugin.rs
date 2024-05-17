@@ -54,17 +54,12 @@ impl BeforeResolvePluginCondition {
 
     #[turbo_tasks::function]
     pub async fn matches(self: Vc<Self>, request: Vc<Request>) -> Result<Vc<bool>> {
-        let this = self.await?;
-        let glob = this.glob.await?;
-
-        println!(
-            "testing request: {:?} glob {:?}",
-            request.await?.request(),
-            *glob
-        );
-
         Ok(Vc::cell(match request.await?.request() {
-            Some(request) => glob.execute(&request),
+            Some(request) => {
+                let this = self.await?;
+                let glob = this.glob.await?;
+                glob.execute(&request)
+            }
             None => false,
         }))
     }
