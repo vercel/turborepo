@@ -169,7 +169,7 @@ async fn apply_module_type(
                         if let Some(part) = part {
                             builder.build_part(part)
                         } else {
-                            builder.build_part(ModulePart::exports())
+                            builder.build_part(ModulePart::facade())
                         }
                         .await?,
                     ),
