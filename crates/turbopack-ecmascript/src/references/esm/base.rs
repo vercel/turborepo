@@ -14,7 +14,7 @@ use turbopack_core::{
     issue::{IssueSeverity, IssueSource},
     module::Module,
     reference::ModuleReference,
-    reference_type::EcmaScriptModulesReferenceSubType,
+    reference_type::{EcmaScriptModulesReferenceSubType, ImportWithType},
     resolve::{
         origin::{ResolveOrigin, ResolveOriginExt},
         parse::Request,
@@ -25,7 +25,7 @@ use turbopack_resolve::ecmascript::esm_resolve;
 
 use crate::{
     analyzer::imports::ImportAnnotations,
-    chunk::{EcmascriptChunkPlaceable, EcmascriptChunkingContext},
+    chunk::EcmascriptChunkPlaceable,
     code_gen::{CodeGenerateable, CodeGeneration},
     create_visitor, magic_identifier,
     references::util::{request_to_string, throw_module_not_found_expr},
@@ -142,15 +142,18 @@ impl EsmAssetReference {
 impl ModuleReference for EsmAssetReference {
     #[turbo_tasks::function]
     async fn resolve_reference(&self) -> Result<Vc<ModuleResolveResult>> {
-        let ty = Value::new(match &self.export_name {
-            Some(part) => EcmaScriptModulesReferenceSubType::ImportPart(*part),
-            None => EcmaScriptModulesReferenceSubType::Import,
-        });
+        let ty = if matches!(self.annotations.module_type(), Some("json")) {
+            EcmaScriptModulesReferenceSubType::ImportWithType(ImportWithType::Json)
+        } else if let Some(part) = &self.export_name {
+            EcmaScriptModulesReferenceSubType::ImportPart(*part)
+        } else {
+            EcmaScriptModulesReferenceSubType::Import
+        };
 
         Ok(esm_resolve(
             self.get_origin().resolve().await?,
             self.request,
-            ty,
+            Value::new(ty),
             IssueSeverity::Error.cell(),
             self.issue_source,
         ))
@@ -162,7 +165,7 @@ impl ValueToString for EsmAssetReference {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<Vc<String>> {
         Ok(Vc::cell(format!(
-            "import {} {}",
+            "import {} with {}",
             self.request.to_string().await?,
             self.annotations
         )))
@@ -192,7 +195,7 @@ impl CodeGenerateable for EsmAssetReference {
     #[turbo_tasks::function]
     async fn code_generation(
         self: Vc<Self>,
-        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
     ) -> Result<Vc<CodeGeneration>> {
         let mut visitors = Vec::new();
 
