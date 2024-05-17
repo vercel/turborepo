@@ -230,10 +230,6 @@ impl<'a> Analyzer<'a> {
         imported_symbol: ImportedSymbol,
         annotations: ImportAnnotations,
     ) -> Option<usize> {
-        if self.skip_namespace && matches!(imported_symbol, ImportedSymbol::Namespace) {
-            return None;
-        }
-
         let issue_source = self
             .source
             .map(|s| IssueSource::from_swc_offsets(s, span.lo.to_usize(), span.hi.to_usize()));
