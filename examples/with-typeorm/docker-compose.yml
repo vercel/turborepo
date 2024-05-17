@@ -14,6 +14,6 @@ services:
       - 3306:3306
     environment:
       MYSQL_DATABASE: root
-      MYSQL_ALLOW_EMPTY_PASSWORD: 1234
+      MYSQL_ALLOW_EMPTY_PASSWORD: 1
     volumes:
       - database:/var/lib/mysql
