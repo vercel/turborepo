@@ -37,7 +37,7 @@ impl FSCache {
         if let Some(override_dir) = override_dir {
             AbsoluteSystemPathBuf::from_unknown(repo_root, override_dir)
         } else {
-            repo_root.join_components(&["node_modules", ".cache", "turbo"])
+            repo_root.join_components(&[".turbo", "cache"])
         }
     }
 
