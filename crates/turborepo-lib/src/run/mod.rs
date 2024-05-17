@@ -23,7 +23,7 @@ use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
-use turborepo_repository::package_graph::{PackageGraph, PackageName};
+use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
 use turborepo_scm::SCM;
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_ui::{cprint, cprintln, tui, tui::AppSender, BOLD_GREY, GREY, UI};
@@ -116,6 +116,24 @@ impl Run {
         new_run.engine = Arc::new(new_engine);
 
         new_run
+    }
+
+    // Produces the transitive closure of the filtered packages,
+    // i.e. the packages relevant for this run.
+    pub fn get_relevant_packages(&self) -> HashSet<PackageName> {
+        let packages: Vec<_> = self
+            .filtered_pkgs
+            .iter()
+            .map(|pkg| PackageNode::Workspace(pkg.clone()))
+            .collect();
+        self.pkg_dep_graph
+            .transitive_closure(&packages)
+            .into_iter()
+            .filter_map(|node| match node {
+                PackageNode::Root => None,
+                PackageNode::Workspace(pkg) => Some(pkg.clone()),
+            })
+            .collect()
     }
 
     pub fn has_experimental_ui(&self) -> bool {
