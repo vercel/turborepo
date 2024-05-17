@@ -1,7 +1,6 @@
 use std::{
     fmt,
     hash::{BuildHasherDefault, Hash},
-    iter::once,
 };
 
 use indexmap::IndexSet;
@@ -10,16 +9,15 @@ use petgraph::{
     prelude::DiGraphMap,
 };
 use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
-use serde::de;
 use swc_core::{
     common::{util::take::Take, SyntaxContext, DUMMY_SP},
     ecma::{
         ast::{
-            op, ClassDecl, Decl, DefaultDecl, ExportDecl, ExportDefaultExpr, ExportNamedSpecifier,
-            ExportSpecifier, Expr, ExprStmt, FnDecl, Id, Ident, ImportDecl, ImportNamedSpecifier,
-            ImportSpecifier, ImportStarAsSpecifier, KeyValueProp, Lit, Module, ModuleDecl,
-            ModuleExportName, ModuleItem, NamedExport, ObjectLit, Prop, PropName, PropOrSpread,
-            Stmt, VarDecl, VarDeclKind, VarDeclarator,
+            op, ClassDecl, Decl, DefaultDecl, ExportDecl, ExportNamedSpecifier, ExportSpecifier,
+            Expr, ExprStmt, FnDecl, Id, Ident, ImportDecl, ImportNamedSpecifier, ImportSpecifier,
+            ImportStarAsSpecifier, KeyValueProp, Lit, Module, ModuleDecl, ModuleExportName,
+            ModuleItem, NamedExport, ObjectLit, Prop, PropName, PropOrSpread, Stmt, VarDecl,
+            VarDeclKind, VarDeclarator,
         },
         atoms::JsWord,
         utils::{find_pat_ids, private_ident, quote_ident, IdentExt},
