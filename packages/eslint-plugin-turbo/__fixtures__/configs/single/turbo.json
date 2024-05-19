@@ -3,7 +3,7 @@
   "globalEnv": ["NEW_STYLE_GLOBAL_ENV_KEY", "$NEW_STYLE_GLOBAL_ENV_KEY"],
   // old style, global env dependency (deprecated)
   "globalDependencies": ["$GLOBAL_ENV_KEY"],
-  "tasks": {
+  "pipeline": {
     "test": {
       "outputs": ["coverage/**"],
       "dependsOn": ["^build"]

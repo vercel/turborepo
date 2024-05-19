@@ -20,7 +20,7 @@ describe("getTurboConfigs", () => {
           "UNORDERED",
           "CI",
         ],
-        "tasks": Object {
+        "pipeline": Object {
           "build": Object {
             "dependsOn": Array [
               "^build",
@@ -66,7 +66,7 @@ describe("getTurboConfigs", () => {
         "globalEnv": Array [
           "CI",
         ],
-        "tasks": Object {
+        "pipeline": Object {
           "build": Object {
             "env": Array [
               "ENV_1",
@@ -82,7 +82,7 @@ describe("getTurboConfigs", () => {
         "extends": Array [
           "//",
         ],
-        "tasks": Object {
+        "pipeline": Object {
           "build": Object {
             "env": Array [
               "ENV_2",
@@ -99,7 +99,7 @@ describe("getTurboConfigs", () => {
         "extends": Array [
           "//",
         ],
-        "tasks": Object {
+        "pipeline": Object {
           "build": Object {
             "env": Array [
               "IS_SERVER",
@@ -122,7 +122,7 @@ describe("getTurboConfigs", () => {
         "globalDependencies": Array [
           "**/.env.*local",
         ],
-        "tasks": Object {
+        "pipeline": Object {
           "build": Object {
             "outputs": Array [
               ".next/**",

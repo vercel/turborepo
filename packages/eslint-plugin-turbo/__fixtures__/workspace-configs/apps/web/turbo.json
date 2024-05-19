@@ -1,7 +1,7 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "extends": ["//"],
-  "tasks": {
+  "pipeline": {
     "build": {
       "dotEnv": [".env"],
       "env": ["ENV_2", "NEXT_PUBLIC_*", "!NEXT_PUBLIC_EXCLUDE*"]

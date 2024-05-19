@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { VersionOneSchema as TurboJsonSchema } from "@turbo/types";
+import type { Schema as TurboJsonSchema } from "@turbo/types";
 import { readJsonSync } from "fs-extra";
 import { getTurboConfigs } from "@turbo/utils";
 import type { TransformerArgs } from "../types";
