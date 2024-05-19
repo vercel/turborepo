@@ -2,6 +2,7 @@
 export type VersionOneSchema = VersionOneRootSchema | VersionOneWorkspaceSchema;
 export type Schema = RootSchema | WorkspaceSchema;
 
+/** The `pipeline` key is deprecated in 2.0 but we need to keep it around for the 1.x codemods. **/
 export interface DeprecatedPipeline {
   /**
    * The list of tasks that this task depends on.
@@ -390,8 +391,6 @@ export interface RootSchema extends BaseSchema {
    */
   experimentalUI?: boolean;
 }
-
-/** The `pipeline` key is deprecated in 2.0 but we need to keep it around for the 1.x codemods. **/
 
 /** `tasks` key introduced in 2.0 **/
 export type Tasks = DeprecatedPipeline;
