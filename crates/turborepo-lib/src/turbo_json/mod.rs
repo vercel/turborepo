@@ -182,7 +182,7 @@ pub struct RawTaskDefinition {
     #[serde(skip_serializing_if = "Option::is_none")]
     outputs: Option<Vec<Spanned<UnescapedString>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    output_mode: Option<Spanned<OutputLogsMode>>,
+    output_logs: Option<Spanned<OutputLogsMode>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     interactive: Option<Spanned<bool>>,
 }
@@ -212,7 +212,7 @@ impl RawTaskDefinition {
         }
         set_field!(self, other, depends_on);
         set_field!(self, other, inputs);
-        set_field!(self, other, output_mode);
+        set_field!(self, other, output_logs);
         set_field!(self, other, persistent);
         set_field!(self, other, env);
         set_field!(self, other, pass_through_env);
@@ -292,22 +292,21 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
         let mut task_dependencies: Vec<Spanned<TaskName>> = Vec::new();
         if let Some(depends_on) = raw_task.depends_on {
             for dependency in depends_on.into_inner() {
-                let (dependency, span) = dependency.split();
+                let (span, text) = dependency.span_and_text("turbo.json");
+                let (dependency, depspan) = dependency.split();
                 let dependency: String = dependency.into();
-                if let Some(dependency) = dependency.strip_prefix(ENV_PIPELINE_DELIMITER) {
-                    println!(
-                        "[DEPRECATED] Declaring an environment variable in \"dependsOn\" is \
-                         deprecated, found {}. Use the \"env\" key or use `npx @turbo/codemod \
-                         migrate-env-var-dependencies`.\n",
-                        dependency
-                    );
-                    env_var_dependencies.insert(dependency.to_string());
+                if dependency.strip_prefix(ENV_PIPELINE_DELIMITER).is_some() {
+                    return Err(Error::InvalidDependsOnValue {
+                        field: "dependsOn",
+                        span,
+                        text,
+                    });
                 } else if let Some(topo_dependency) =
                     dependency.strip_prefix(TOPOLOGICAL_PIPELINE_DELIMITER)
                 {
-                    topological_dependencies.push(span.to(topo_dependency.to_string().into()));
+                    topological_dependencies.push(depspan.to(topo_dependency.to_string().into()));
                 } else {
-                    task_dependencies.push(span.to(dependency.into()));
+                    task_dependencies.push(depspan.to(dependency.into()));
                 }
             }
         }
@@ -380,7 +379,7 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
             inputs,
             pass_through_env,
             dot_env,
-            output_mode: *raw_task.output_mode.unwrap_or_default(),
+            output_logs: *raw_task.output_logs.unwrap_or_default(),
             persistent: *raw_task.persistent.unwrap_or_default(),
             interactive,
         })
@@ -465,25 +464,21 @@ impl TryFrom<RawTurboJson> for TurboJson {
         }
 
         for global_dep in raw_turbo.global_dependencies.into_iter().flatten() {
-            if let Some(env_var) = global_dep.strip_prefix(ENV_PIPELINE_DELIMITER) {
-                println!(
-                    "[DEPRECATED] Declaring an environment variable in \"dependsOn\" is \
-                     deprecated, found {}. Use the \"env\" key or use `npx @turbo/codemod \
-                     migrate-env-var-dependencies`.\n",
-                    env_var
-                );
-
-                global_env.insert(env_var.to_string());
+            if global_dep.strip_prefix(ENV_PIPELINE_DELIMITER).is_some() {
+                let (span, text) = global_dep.span_and_text("turbo.json");
+                return Err(Error::InvalidDependsOnValue {
+                    field: "globalDependencies",
+                    span,
+                    text,
+                });
+            } else if Utf8Path::new(&global_dep.value).is_absolute() {
+                let (span, text) = global_dep.span_and_text("turbo.json");
+                return Err(Error::AbsolutePathInConfig {
+                    field: "globalDependencies",
+                    span,
+                    text,
+                });
             } else {
-                if Utf8Path::new(&global_dep.value).is_absolute() {
-                    let (span, text) = global_dep.span_and_text("turbo.json");
-                    return Err(Error::AbsolutePathInConfig {
-                        field: "globalDependencies",
-                        span,
-                        text,
-                    });
-                }
-
                 global_file_dependencies.insert(global_dep.into_inner().into());
             }
         }
@@ -546,14 +541,6 @@ impl TurboJson {
         root_package_json: &PackageJson,
         include_synthesized_from_root_package_json: bool,
     ) -> Result<TurboJson, Error> {
-        if root_package_json.legacy_turbo_config.is_some() {
-            println!(
-                "[WARNING] \"turbo\" in package.json is no longer supported. Migrate to {} by \
-                 running \"npx @turbo/codemod create-turbo-config\"\n",
-                CONFIG_FILE
-            );
-        }
-
         let turbo_from_files = Self::read(repo_root, &dir.join_component(CONFIG_FILE));
         let turbo_from_trace =
             Self::read(repo_root, &dir.join_components(&TASK_ACCESS_CONFIG_PATH));
@@ -837,14 +824,6 @@ mod tests {
         }
     )]
     #[test_case(
-        Some("{}"),
-        PackageJson {
-            legacy_turbo_config: Some(serde_json::Value::String("build".to_string())),
-            ..PackageJson::default()
-        },
-        TurboJson::default()
-    )]
-    #[test_case(
         Some(r#"{
             "tasks": {
                 "build": {
@@ -943,7 +922,7 @@ mod tests {
           "outputs": ["package/a/dist"],
           "cache": false,
           "inputs": ["package/a/src/**"],
-          "outputMode": "full",
+          "outputLogs": "full",
           "persistent": true,
           "interactive": true
         }"#,
@@ -955,7 +934,7 @@ mod tests {
             outputs: Some(vec![Spanned::<UnescapedString>::new("package/a/dist".into()).with_range(175..191)]),
             cache: Some(Spanned::new(false).with_range(213..218)),
             inputs: Some(vec![Spanned::<UnescapedString>::new("package/a/src/**".into()).with_range(241..259)]),
-            output_mode: Some(Spanned::new(OutputLogsMode::Full).with_range(286..292)),
+            output_logs: Some(Spanned::new(OutputLogsMode::Full).with_range(286..292)),
             persistent: Some(Spanned::new(true).with_range(318..322)),
             interactive: Some(Spanned::new(true).with_range(349..353)),
         },
@@ -968,7 +947,7 @@ mod tests {
           },
           cache: false,
           inputs: vec!["package/a/src/**".to_string()],
-          output_mode: OutputLogsMode::Full,
+          output_logs: OutputLogsMode::Full,
           pass_through_env: Some(vec!["AWS_SECRET_KEY".to_string()]),
           task_dependencies: vec![Spanned::<TaskName<'_>>::new("cli#build".into()).with_range(26..37)],
           topological_dependencies: vec![],
@@ -986,7 +965,7 @@ mod tests {
               "outputs": ["package\\a\\dist"],
               "cache": false,
               "inputs": ["package\\a\\src\\**"],
-              "outputMode": "full",
+              "outputLogs": "full",
               "persistent": true
             }"#,
         RawTaskDefinition {
@@ -997,7 +976,7 @@ mod tests {
             outputs: Some(vec![Spanned::<UnescapedString>::new("package\\a\\dist".into()).with_range(197..215)]),
             cache: Some(Spanned::new(false).with_range(241..246)),
             inputs: Some(vec![Spanned::<UnescapedString>::new("package\\a\\src\\**".into()).with_range(273..294)]),
-            output_mode: Some(Spanned::new(OutputLogsMode::Full).with_range(325..331)),
+            output_logs: Some(Spanned::new(OutputLogsMode::Full).with_range(325..331)),
             persistent: Some(Spanned::new(true).with_range(361..365)),
             interactive: None,
         },
@@ -1010,7 +989,7 @@ mod tests {
             },
             cache: false,
             inputs: vec!["package\\a\\src\\**".to_string()],
-            output_mode: OutputLogsMode::Full,
+            output_logs: OutputLogsMode::Full,
             pass_through_env: Some(vec!["AWS_SECRET_KEY".to_string()]),
             task_dependencies: vec![Spanned::<TaskName<'_>>::new("cli#build".into()).with_range(30..41)],
             topological_dependencies: vec![],
@@ -1114,11 +1093,11 @@ mod tests {
     #[test_case("errors-only", Some(OutputLogsMode::ErrorsOnly) ; "errors-only")]
     #[test_case("none", Some(OutputLogsMode::None) ; "none")]
     #[test_case("junk", None ; "invalid value")]
-    fn test_parsing_output_mode(output_mode: &str, expected: Option<OutputLogsMode>) {
+    fn test_parsing_output_logs_mode(output_logs: &str, expected: Option<OutputLogsMode>) {
         let json: Result<RawTurboJson, _> = RawTurboJson::parse_from_serde(json!({
             "tasks": {
                 "build": {
-                    "outputMode": output_mode,
+                    "outputLogs": output_logs,
                 }
             }
         }));
@@ -1128,7 +1107,7 @@ mod tests {
             .ok()
             .and_then(|j| j.tasks.as_ref())
             .and_then(|pipeline| pipeline.0.get(&TaskName::from("build")))
-            .and_then(|build| build.value.output_mode.clone())
+            .and_then(|build| build.value.output_logs.clone())
             .map(|mode| mode.into_inner());
         assert_eq!(actual, expected);
     }

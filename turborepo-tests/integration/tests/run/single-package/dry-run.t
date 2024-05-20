@@ -18,7 +18,7 @@ Check
   Tasks to Run
   build
     Task                           = build\s* (re)
-    Hash                           = e9daff5a0fd1d187\s* (re)
+    Hash                           = e9daff5a0fd1d187/s * (re)
     Cached \(Local\)                 = false\s* (re)
     Cached \(Remote\)                = false\s* (re)
     Command                        = echo building > foo.txt\s* (re)
@@ -33,5 +33,5 @@ Check
     Inferred Env Vars Values       =\s* (re)
     Passed Through Env Vars        =\s* (re)
     Passed Through Env Vars Values =\s* (re)
-    Resolved Task Definition       = {"outputs":["foo.txt"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","persistent":false,"env":[],"passThroughEnv":null,"dotEnv":null,"interactive":false}
+    Resolved Task Definition       = {"outputs":["foo.txt"],"cache":true,"dependsOn":[],"inputs":[],"outputLogs":"full","persistent":false,"env":[],"passThroughEnv":null,"dotEnv":null,"interactive":false}
     Framework                      =\s* (re)

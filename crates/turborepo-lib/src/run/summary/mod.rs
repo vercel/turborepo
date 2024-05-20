@@ -278,6 +278,7 @@ impl RunTracker {
         engine: &'a Engine,
         hash_tracker: TaskHashTracker,
         env_at_execution_start: &'a EnvironmentVariableMap,
+        has_experimental_ui: bool,
     ) -> Result<(), Error> {
         let end_time = Local::now();
 
@@ -305,7 +306,7 @@ impl RunTracker {
             .await?;
 
         run_summary
-            .finish(end_time, exit_code, pkg_dep_graph, ui)
+            .finish(end_time, exit_code, pkg_dep_graph, ui, has_experimental_ui)
             .await
     }
 
@@ -380,6 +381,7 @@ impl<'a> RunSummary<'a> {
         exit_code: i32,
         pkg_dep_graph: &PackageGraph,
         ui: UI,
+        has_experimental_ui: bool,
     ) -> Result<(), Error> {
         if matches!(self.run_type, RunType::DryJson | RunType::DryText) {
             return self.close_dry_run(pkg_dep_graph, ui);
@@ -391,10 +393,12 @@ impl<'a> RunSummary<'a> {
             }
         }
 
-        if let Some(execution) = &self.execution {
-            let path = self.get_path();
-            let failed_tasks = self.get_failed_tasks();
-            execution.print(ui, path, failed_tasks);
+        if !has_experimental_ui {
+            if let Some(execution) = &self.execution {
+                let path = self.get_path();
+                let failed_tasks = self.get_failed_tasks();
+                execution.print(ui, path, failed_tasks);
+            }
         }
 
         if let Some(spaces_client_handle) = self.spaces_client_handle.take() {

@@ -17,15 +17,16 @@ use std::{collections::HashSet, io::Write, sync::Arc};
 pub use cache::{CacheOutput, ConfigCache, Error as CacheError, RunCache, TaskCache};
 use chrono::{DateTime, Local};
 use rayon::iter::ParallelBridge;
+use tokio::task::JoinHandle;
 use tracing::debug;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
-use turborepo_repository::package_graph::{PackageGraph, PackageName};
+use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
 use turborepo_scm::SCM;
 use turborepo_telemetry::events::generic::GenericEventBuilder;
-use turborepo_ui::{cprint, cprintln, BOLD_GREY, GREY, UI};
+use turborepo_ui::{cprint, cprintln, tui, tui::AppSender, BOLD_GREY, GREY, UI};
 
 pub use crate::run::error::Error;
 use crate::{
@@ -45,7 +46,6 @@ use crate::{
 pub struct Run {
     version: &'static str,
     ui: UI,
-    experimental_ui: bool,
     start_at: DateTime<Local>,
     processes: ProcessManager,
     run_telemetry: GenericEventBuilder,
@@ -64,6 +64,7 @@ pub struct Run {
     task_access: TaskAccess,
     daemon: Option<DaemonClient<DaemonConnector>>,
     should_print_prelude: bool,
+    experimental_ui: bool,
 }
 
 impl Run {
@@ -117,7 +118,41 @@ impl Run {
         new_run
     }
 
-    pub async fn run(&mut self) -> Result<i32, Error> {
+    // Produces the transitive closure of the filtered packages,
+    // i.e. the packages relevant for this run.
+    pub fn get_relevant_packages(&self) -> HashSet<PackageName> {
+        let packages: Vec<_> = self
+            .filtered_pkgs
+            .iter()
+            .map(|pkg| PackageNode::Workspace(pkg.clone()))
+            .collect();
+        self.pkg_dep_graph
+            .transitive_closure(&packages)
+            .into_iter()
+            .filter_map(|node| match node {
+                PackageNode::Root => None,
+                PackageNode::Workspace(pkg) => Some(pkg.clone()),
+            })
+            .collect()
+    }
+
+    pub fn has_experimental_ui(&self) -> bool {
+        self.experimental_ui
+    }
+
+    pub fn start_experimental_ui(&self) -> Option<(AppSender, JoinHandle<Result<(), tui::Error>>)> {
+        if !self.experimental_ui {
+            return None;
+        }
+
+        let task_names = self.engine.tasks_with_command(&self.pkg_dep_graph);
+        let (sender, receiver) = AppSender::new();
+        let handle = tokio::task::spawn_blocking(move || tui::run_app(task_names, receiver));
+
+        Some((sender, handle))
+    }
+
+    pub async fn run(&mut self, experimental_ui_sender: Option<AppSender>) -> Result<i32, Error> {
         if self.should_print_prelude {
             self.print_run_prelude();
         }
@@ -240,7 +275,7 @@ impl Run {
             self.processes.clone(),
             &self.repo_root,
             global_env,
-            self.experimental_ui,
+            experimental_ui_sender,
         );
 
         if self.opts.run_opts.dry_run.is_some() {
@@ -279,6 +314,7 @@ impl Run {
                 &self.engine,
                 &self.env_at_execution_start,
                 self.opts.scope_opts.pkg_inference_root.as_deref(),
+                self.experimental_ui,
             )
             .await?;
 

@@ -43,7 +43,8 @@ use turbopack_core::{
     output::OutputAsset,
     raw_module::RawModule,
     reference_type::{
-        CssReferenceSubType, EcmaScriptModulesReferenceSubType, InnerAssets, ReferenceType,
+        CssReferenceSubType, EcmaScriptModulesReferenceSubType, ImportWithType, InnerAssets,
+        ReferenceType,
     },
     resolve::{
         options::ResolveOptions, origin::PlainResolveOrigin, parse::Request, resolve, ModulePart,
@@ -162,14 +163,16 @@ async fn apply_module_type(
             if runtime_code {
                 Vc::upcast(builder.build())
             } else {
+                let options = options.await?;
                 match options.tree_shaking_mode {
-                    Some(TreeShakingMode::ModuleFragments) => {
+                    Some(TreeShakingMode::ModuleFragments) => Vc::upcast(
                         if let Some(part) = part {
-                            Vc::upcast(builder.build_part(part))
+                            builder.build_part(part)
                         } else {
-                            Vc::upcast(builder.build_part(ModulePart::exports()))
+                            builder.build_part(ModulePart::exports())
                         }
-                    }
+                        .await?,
+                    ),
                     Some(TreeShakingMode::ReexportsOnly) => {
                         let side_effect_free_packages =
                             module_asset_context.side_effect_free_packages();
@@ -471,9 +474,25 @@ async fn process_default_internal(
         ReferenceType::Internal(inner_assets) => Some(*inner_assets),
         _ => None,
     };
+
+    let mut has_type_attribute = false;
+
     let mut current_source = source;
-    let mut current_module_type = None;
+    let mut current_module_type = match &reference_type {
+        ReferenceType::EcmaScriptModules(EcmaScriptModulesReferenceSubType::ImportWithType(ty)) => {
+            has_type_attribute = true;
+
+            match ty {
+                ImportWithType::Json => Some(ModuleType::Json),
+            }
+        }
+        _ => None,
+    };
+
     for (i, rule) in options.await?.rules.iter().enumerate() {
+        if has_type_attribute && current_module_type.is_some() {
+            continue;
+        }
         if processed_rules.contains(&i) {
             continue;
         }

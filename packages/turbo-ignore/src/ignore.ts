@@ -134,6 +134,11 @@ export function turboIgnore(
         return continueBuild();
       }
       const { packages } = parsed;
+      if (!packages) {
+        info(`Detected single package repo`);
+        return continueBuild();
+      }
+
       if (packages.length > 0) {
         if (packages.length === 1) {
           info(`This commit affects "${workspace}"`);
