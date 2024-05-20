@@ -212,6 +212,7 @@ fn run(input: PathBuf) {
                     let key = match e {
                         ItemIdGroupKind::ModuleEvaluation => Key::ModuleEvaluation,
                         ItemIdGroupKind::Export(_, name) => Key::Export(name.to_string()),
+                        ItemIdGroupKind::StarReexports => Key::StarReexports,
                     };
 
                     let index = entrypoints[&key];

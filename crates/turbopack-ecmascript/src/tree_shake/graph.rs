@@ -42,6 +42,7 @@ pub(crate) enum ItemIdGroupKind {
     ModuleEvaluation,
     /// `(local, export_name)``
     Export(Id, JsWord),
+    StarReexports,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -277,6 +278,10 @@ impl DepGraph {
                     ItemId::Group(ItemIdGroupKind::ModuleEvaluation) => {
                         exports.insert(Key::ModuleEvaluation, ix as u32);
                     }
+                    ItemId::Group(ItemIdGroupKind::StarReexports) => {
+                        exports.insert(Key::StarReexports, ix as u32);
+                    }
+
                     _ => {}
                 }
             }
@@ -557,6 +562,7 @@ impl DepGraph {
         let mut exports = vec![];
         let mut items = FxHashMap::default();
         let mut ids = vec![];
+        let mut has_star_reexport = false;
 
         for (index, item) in module.body.iter().enumerate() {
             // Fill exports
@@ -783,6 +789,8 @@ impl DepGraph {
                     }
 
                     ModuleDecl::ExportAll(item) => {
+                        has_star_reexport = true;
+
                         // One item for the import for re-export
                         let id = ItemId::Item {
                             index,
@@ -1043,6 +1051,21 @@ impl DepGraph {
                     content: ModuleItem::Stmt(Stmt::Expr(ExprStmt {
                         span: DUMMY_SP,
                         expr: "module evaluation".into(),
+                    })),
+                    ..Default::default()
+                },
+            );
+        }
+
+        if has_star_reexport {
+            let id = ItemId::Group(ItemIdGroupKind::StarReexports);
+            ids.push(id.clone());
+            items.insert(
+                id,
+                ItemData {
+                    content: ModuleItem::Stmt(Stmt::Expr(ExprStmt {
+                        span: DUMMY_SP,
+                        expr: "star reexports".into(),
                     })),
                     ..Default::default()
                 },

@@ -254,6 +254,8 @@ impl Analyzer<'_> {
 
                         self.g.add_strong_deps(item_id, state.last_writes.iter());
                     }
+
+                    ItemIdGroupKind::StarReexports => {}
                 }
             }
         }
@@ -263,6 +265,7 @@ impl Analyzer<'_> {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum Key {
     ModuleEvaluation,
+    StarReexports,
     Export(String),
 }
 
@@ -292,6 +295,13 @@ async fn get_part_id(result: &SplitResult, part: Vc<ModulePart>) -> Result<u32> 
     let part_id = match entrypoints.get(&key) {
         Some(id) => *id,
         None => {
+            // We need to handle `*` reexports specially.
+            if let ModulePart::Export(..) = &*part {
+                if let Some(&part_id) = entrypoints.get(&Key::StarReexports) {
+                    return Ok(part_id);
+                }
+            }
+
             bail!(
                 "could not find part id for module part {:?} in {:?}",
                 key,
@@ -467,9 +477,12 @@ pub(super) async fn part_of_module(
 
                     let mut export_names = entrypoints
                         .keys()
-                        .filter_map(|key| match key {
-                            Key::ModuleEvaluation => None,
-                            Key::Export(v) => Some(v.clone()),
+                        .filter_map(|key| {
+                            if let Key::Export(v) = key {
+                                Some(v.clone())
+                            } else {
+                                None
+                            }
                         })
                         .collect::<Vec<_>>();
                     export_names.sort();
@@ -549,9 +562,12 @@ pub(super) async fn part_of_module(
                 {
                     let mut export_names = entrypoints
                         .keys()
-                        .filter_map(|key| match key {
-                            Key::ModuleEvaluation => None,
-                            Key::Export(v) => Some(v.clone()),
+                        .filter_map(|key| {
+                            if let Key::Export(v) = key {
+                                Some(v.clone())
+                            } else {
+                                None
+                            }
                         })
                         .collect::<Vec<_>>();
                     export_names.sort();
