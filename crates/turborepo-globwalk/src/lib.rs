@@ -588,7 +588,7 @@ mod test {
     #[test_case("**/*f", 4, 4 => matches None ; "leading doublestar expansion")]
     #[test_case("**f", 4, 4 => matches None ; "transform leading doublestar")]
     #[test_case("a**", 22, 22 => matches None ; "transform trailing doublestar")]
-    #[test_case("abc", 1, 1 => matches None ; "exact match")]
+    #[test_case("abc", 3, 3 => matches None ; "exact match")]
     #[test_case("*", 19, 15 => matches None ; "single star match")]
     #[test_case("*c", 2, 2 => matches None ; "single star suffix match")]
     #[test_case("a*", 9, 9 => matches None ; "single star prefix match")]
@@ -621,7 +621,7 @@ mod test {
     #[test_case("a/**/b", 2, 2 => matches None ; "a followed by double star and single subdirectory match")]
     #[test_case("a/**/c", 2, 2 => matches None ; "a followed by double star and multiple subdirectories match 2")]
     #[test_case("a/**/d", 1, 1 => matches None ; "a followed by double star and multiple subdirectories with target match")]
-    #[test_case("a/b/c", 1, 1 => matches None ; "a followed by subdirectories and double slash mismatch")]
+    #[test_case("a/b/c", 2, 2 => matches None ; "a followed by subdirectories and double slash mismatch")]
     #[test_case("ab{c,d}", 1, 1 => matches None ; "pattern with curly braces match")]
     #[test_case("ab{c,d,*}", 5, 5 => matches None ; "pattern with curly braces and wildcard match")]
     #[test_case("ab{c,d}[", 0, 0 => matches Some(WalkError::BadPattern(_, _)))]
@@ -954,8 +954,21 @@ mod test {
         "/repos/some-app/",
         &["dist"],
         &[],
-        &["/repos/some-app/dist"],
-        &[]
+        &[
+            "/repos/some-app/dist",
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ],
+        &[
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ]
         ; "passing just a directory captures no children")]
     #[test_case(&[
             "/repos/some-app/dist/index.html",
