@@ -10,7 +10,7 @@ Check
   build: > build
   build: > echo building > foo.txt
   build: 
-  test: cache miss, executing 8ff1b93a9c9c2551
+  test: cache miss, executing 92fa9e0daec0e1ec
   test: 
   test: > test
   test: > cat foo.txt
@@ -30,7 +30,7 @@ Run a second time, verify caching works because there is a config
   build: > build
   build: > echo building > foo.txt
   build: 
-  test: cache hit, replaying logs 8ff1b93a9c9c2551
+  test: cache hit, replaying logs 92fa9e0daec0e1ec
   test: 
   test: > test
   test: > cat foo.txt
@@ -46,7 +46,7 @@ Run with --output-logs=hash-only
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache hit, suppressing logs e48ea8d453fe3216
-  test: cache hit, suppressing logs 8ff1b93a9c9c2551
+  test: cache hit, suppressing logs 92fa9e0daec0e1ec
   
    Tasks:    2 successful, 2 total
   Cached:    2 cached, 2 total

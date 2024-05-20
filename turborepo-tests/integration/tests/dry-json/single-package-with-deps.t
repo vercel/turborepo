@@ -32,7 +32,7 @@ Setup
       {
         "taskId": "build",
         "task": "build",
-        "hash": "e9daff5a0fd1d187",
+        "hash": "e48ea8d453fe3216",
         "inputs": {
           ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
@@ -89,7 +89,7 @@ Setup
       {
         "taskId": "test",
         "task": "test",
-        "hash": "8ff1b93a9c9c2551",
+        "hash": "92fa9e0daec0e1ec",
         "inputs": {
           ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
