@@ -50,7 +50,7 @@ Setup
     "taskId": "my-app#build",
     "task": "build",
     "package": "my-app",
-    "hash": "f5b905676d8a275c",
+    "hash": "61394a550211cbe8",
     "inputs": {
       ".env.local": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
       "package.json": "1746e0db2361085b5953a6a3beab08c24af5bc08"
@@ -80,14 +80,14 @@ Setup
       ],
       "cache": true,
       "dependsOn": [],
-      "inputs": [],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        ".env.local"
+      ],
       "outputLogs": "full",
       "persistent": false,
       "env": [],
       "passThroughEnv": null,
-      "dotEnv": [
-        ".env.local"
-      ],
       "interactive": false
     },
     "expandedOutputs": [],
@@ -101,10 +101,7 @@ Setup
       "configured": [],
       "inferred": [],
       "passthrough": null
-    },
-    "dotEnv": [
-      ".env.local"
-    ]
+    }
   }
 
 # Validate output of util#build task
@@ -113,7 +110,7 @@ Setup
     "taskId": "util#build",
     "task": "build",
     "package": "util",
-    "hash": "1ce33e04f265f95c",
+    "hash": "d30fc4474534c30e",
     "inputs": {
       "package.json": "e755064fd7893809d10fc067bb409c7ae516327f"
     },
@@ -143,7 +140,6 @@ Setup
         "NODE_ENV"
       ],
       "passThroughEnv": null,
-      "dotEnv": null,
       "interactive": false
     },
     "expandedOutputs": [],
@@ -159,8 +155,7 @@ Setup
       "configured": [],
       "inferred": [],
       "passthrough": null
-    },
-    "dotEnv": null
+    }
   }
 
 Run again with NODE_ENV set and see the value in the summary. --filter=util workspace so the output is smaller

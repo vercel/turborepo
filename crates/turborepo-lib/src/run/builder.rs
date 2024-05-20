@@ -375,7 +375,6 @@ impl RunBuilder {
             pkg_dep_graph.remove_package_dependencies();
             engine = self.build_engine(&pkg_dep_graph, &root_turbo_json, &filtered_pkgs)?;
         }
-        engine.track_usage(&run_telemetry);
 
         let color_selector = ColorSelector::default();
 

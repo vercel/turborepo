@@ -60,7 +60,6 @@ pub struct TaskHashable<'a> {
     pub(crate) resolved_env_vars: EnvVarPairs,
     pub(crate) pass_through_env: &'a [String],
     pub(crate) env_mode: ResolvedEnvMode,
-    pub(crate) dot_env: &'a [turbopath::RelativeUnixPathBuf],
 }
 
 #[derive(Debug, Clone)]
@@ -254,15 +253,6 @@ impl From<TaskHashable<'_>> for Builder<HeapAllocator> {
         }
 
         {
-            let mut dotenv_builder = builder
-                .reborrow()
-                .init_dot_env(task_hashable.dot_env.len() as u32);
-            for (i, env) in task_hashable.dot_env.iter().enumerate() {
-                dotenv_builder.set(i as u32, env.as_str());
-            }
-        }
-
-        {
             let mut resolved_env_vars_builder = builder
                 .reborrow()
                 .init_resolved_env_vars(task_hashable.resolved_env_vars.len() as u32);
@@ -352,15 +342,6 @@ impl From<GlobalHashable<'_>> for Builder<HeapAllocator> {
 
         builder.set_framework_inference(hashable.framework_inference);
 
-        {
-            let mut dot_env = builder
-                .reborrow()
-                .init_dot_env(hashable.dot_env.len() as u32);
-            for (i, env) in hashable.dot_env.iter().enumerate() {
-                dot_env.set(i as u32, env.as_str());
-            }
-        }
-
         // We're okay to unwrap here because we haven't hit the nesting
         // limit and the message will not have cycles.
         let size = builder
@@ -407,10 +388,9 @@ mod test {
             resolved_env_vars: vec![],
             pass_through_env: &["pass_thru_env".to_string()],
             env_mode: ResolvedEnvMode::Loose,
-            dot_env: &[turbopath::RelativeUnixPathBuf::new("dotenv".to_string()).unwrap()],
         };
 
-        assert_eq!(task_hashable.hash(), "ff765ee2f83bc034");
+        assert_eq!(task_hashable.hash(), "1f8b13161f57fca1");
     }
 
     #[test]
@@ -435,7 +415,7 @@ mod test {
             dot_env: &[turbopath::RelativeUnixPathBuf::new("dotenv".to_string()).unwrap()],
         };
 
-        assert_eq!(global_hash.hash(), "c0ddf8138bd686e8");
+        assert_eq!(global_hash.hash(), "2144612ff08bddb9");
     }
 
     #[test_case(vec![], "459c029558afe716" ; "empty")]

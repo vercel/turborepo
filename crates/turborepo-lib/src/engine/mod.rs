@@ -16,7 +16,6 @@ use petgraph::Graph;
 use thiserror::Error;
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
-use turborepo_telemetry::events::generic::GenericEventBuilder;
 
 use crate::{run::task_id::TaskId, task_graph::TaskDefinition};
 
@@ -378,12 +377,6 @@ impl Engine<Built> {
 
     pub fn task_definitions(&self) -> &HashMap<TaskId<'static>, TaskDefinition> {
         &self.task_definitions
-    }
-
-    pub fn track_usage(&self, telemetry: &GenericEventBuilder) {
-        for task in self.task_definitions.values() {
-            telemetry.track_dot_env(task.dot_env.as_deref());
-        }
     }
 
     pub fn validate(

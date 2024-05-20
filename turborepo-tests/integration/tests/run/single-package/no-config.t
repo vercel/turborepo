@@ -20,7 +20,7 @@ Check
   Tasks to Run
   build
     Task                           = build\s* (re)
-    Hash                           = bfac661137d88079
+    Hash                           = 10229b8c4ed48f95
     Cached \(Local\)                 = false\s* (re)
     Cached \(Remote\)                = false\s* (re)
     Command                        = echo building > foo.txt\s* (re)
@@ -29,14 +29,13 @@ Check
     Dependencies                   =\s* (re)
     Dependents                     =\s* (re)
     Inputs Files Considered        = 4\s* (re)
-    .env Files Considered          = 0\s* (re)
-    Env Vars                       =\s* (re)
-    Env Vars Values                =\s* (re)
-    Inferred Env Vars Values       =\s* (re)
-    Passed Through Env Vars        =\s* (re)
-    Passed Through Env Vars Values =\s* (re)
-    Resolved Task Definition       = {"outputs":[],"cache":false,"dependsOn":[],"inputs":[],"outputLogs":"full","persistent":false,"env":[],"passThroughEnv":null,"dotEnv":null,"interactive":false}
-    Framework                      =\s* (re)
+    Env Vars                       = 
+    Env Vars Values                = 
+    Inferred Env Vars Values       = 
+    Passed Through Env Vars        = 
+    Passed Through Env Vars Values = 
+    Resolved Task Definition       = {"outputs":[],"cache":false,"dependsOn":[],"inputs":[],"outputLogs":"full","persistent":false,"env":[],"passThroughEnv":null,"interactive":false}
+    Framework                      = 
 
   $ ${TURBO} run build --graph
   
@@ -52,7 +51,7 @@ Run real once
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache bypass, force executing bfac661137d88079
+  build: cache bypass, force executing 10229b8c4ed48f95
   build: 
   build: > build
   build: > echo building > foo.txt
@@ -66,7 +65,7 @@ Run a second time, verify no caching because there is no config
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache bypass, force executing bfac661137d88079
+  build: cache bypass, force executing 10229b8c4ed48f95
   build: 
   build: > build
   build: > echo building > foo.txt
