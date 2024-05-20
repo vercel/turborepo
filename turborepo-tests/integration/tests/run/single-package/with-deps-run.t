@@ -5,7 +5,7 @@ Check
   $ ${TURBO} run test
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache miss, executing e9daff5a0fd1d187
+  build: cache miss, executing e48ea8d453fe3216
   build: 
   build: > build
   build: > echo building > foo.txt
@@ -25,7 +25,7 @@ Run a second time, verify caching works because there is a config
   $ ${TURBO} run test
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache hit, replaying logs e9daff5a0fd1d187
+  build: cache hit, replaying logs e48ea8d453fe3216
   build: 
   build: > build
   build: > echo building > foo.txt
@@ -45,7 +45,7 @@ Run with --output-logs=hash-only
   $ ${TURBO} run test --output-logs=hash-only
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache hit, suppressing logs e9daff5a0fd1d187
+  build: cache hit, suppressing logs e48ea8d453fe3216
   test: cache hit, suppressing logs 8ff1b93a9c9c2551
   
    Tasks:    2 successful, 2 total
