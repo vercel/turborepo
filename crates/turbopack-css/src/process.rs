@@ -547,6 +547,8 @@ async fn process_content(
                     ],
                 },
                 dashed_idents: false,
+                grid: false,
+                ..Default::default()
             }),
 
             _ => None,
