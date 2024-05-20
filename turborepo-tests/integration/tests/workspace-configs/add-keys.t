@@ -66,7 +66,7 @@ Setup
   add-keys:add-keys-underlying-task: > echo running-add-keys-underlying-task
   add-keys:add-keys-underlying-task: 
   add-keys:add-keys-underlying-task: running-add-keys-underlying-task
-  add-keys:add-keys-task: cache miss, executing b795d055df35b872
+  add-keys:add-keys-task: cache miss, executing f6215c2d01b0a3d6
   add-keys:add-keys-task: 
   add-keys:add-keys-task: > add-keys-task
   add-keys:add-keys-task: > echo running-add-keys-task > out/foo.min.txt
