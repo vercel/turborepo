@@ -1183,7 +1183,7 @@ mod test {
         let turbo_jsons = vec![(
             PackageName::Root,
             turbo_json(json!({
-                "pipeline": {
+                "tasks": {
                     "build": { "dependsOn": ["^build"] },
                 }
             })),
@@ -1221,7 +1221,7 @@ mod test {
         let turbo_jsons = vec![(
             PackageName::Root,
             turbo_json(json!({
-                "pipeline": {
+                "tasks": {
                     "a#build": { },
                     "b#build": { "dependsOn": ["a#build"] }
                 }
