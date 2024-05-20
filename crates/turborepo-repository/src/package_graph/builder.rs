@@ -325,6 +325,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
             node_lookup,
             lockfile,
             package_discovery,
+            repo_root,
             ..
         } = self;
 
@@ -337,6 +338,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
             packages: workspaces,
             lockfile,
             package_manager,
+            repo_root: repo_root.to_owned(),
         })
     }
 }
@@ -507,9 +509,12 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedLockfile, T> {
             return Ok(());
         };
 
+        // We cannot ignore missing packages in this context, it would indicate a
+        // malformed or stale lockfile.
         let mut closures = turborepo_lockfiles::all_transitive_closures(
             lockfile,
             self.all_external_dependencies()?,
+            false,
         )?;
         for (_, entry) in self.workspaces.iter_mut() {
             entry.transitive_dependencies = closures.remove(&entry.unix_dir_str()?);
@@ -533,6 +538,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedLockfile, T> {
             workspace_graph,
             node_lookup,
             lockfile,
+            repo_root,
             ..
         } = self;
         Ok(PackageGraph {
@@ -541,6 +547,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedLockfile, T> {
             packages: workspaces,
             package_manager,
             lockfile,
+            repo_root: repo_root.to_owned(),
         })
     }
 }

@@ -22,7 +22,7 @@ Setup
     Time:\s*[\.0-9]+m?s  (re)
   
   $ HASH=$(cat tmp.log | grep -E "missing-workspace-config:missing-workspace-config-task.* executing .*" | awk '{print $5}')
-  $ tar -tf $TARGET_DIR/node_modules/.cache/turbo/$HASH.tar.zst;
+  $ tar -tf $TARGET_DIR/.turbo/cache/$HASH.tar.zst;
   apps/missing-workspace-config/.turbo/turbo-missing-workspace-config-task.log
   apps/missing-workspace-config/out/
   apps/missing-workspace-config/out/.keep
@@ -102,5 +102,5 @@ Setup
   $ HASH=$(cat tmp.log | grep -E "missing-workspace-config:cached-task-4.* executing .*" | awk '{print $6}')
   $ echo $HASH
   [a-z0-9]{16} (re)
-  $ test -f $TARGET_DIR/node_modules/.cache/turbo/$HASH.tar.zst;
+  $ test -f $TARGET_DIR/.turbo/cache/$HASH.tar.zst;
   [1]

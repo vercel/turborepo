@@ -48,11 +48,6 @@ impl Opts {
             cmd.push_str(pattern);
         }
 
-        for pattern in &self.scope_opts.legacy_filter.as_filter_pattern() {
-            cmd.push_str(" --filter=");
-            cmd.push_str(pattern);
-        }
-
         if self.run_opts.parallel {
             cmd.push_str(" --parallel");
         }
@@ -121,7 +116,7 @@ struct RunAndExecutionArgs<'a> {
 pub struct RunCacheOpts {
     pub(crate) skip_reads: bool,
     pub(crate) skip_writes: bool,
-    pub(crate) task_output_mode_override: Option<OutputLogsMode>,
+    pub(crate) task_output_logs_override: Option<OutputLogsMode>,
 }
 
 impl<'a> From<RunAndExecutionArgs<'a>> for RunCacheOpts {
@@ -129,7 +124,7 @@ impl<'a> From<RunAndExecutionArgs<'a>> for RunCacheOpts {
         RunCacheOpts {
             skip_reads: args.execution_args.force.flatten().is_some_and(|f| f),
             skip_writes: args.run_args.no_cache,
-            task_output_mode_override: args.execution_args.output_logs,
+            task_output_logs_override: args.execution_args.output_logs,
         }
     }
 }
@@ -286,54 +281,9 @@ impl From<LogPrefix> for ResolvedLogPrefix {
     }
 }
 
-// LegacyFilter holds the options in use before the filter syntax. They have
-// their own rules for how they are compiled into filter expressions.
-#[derive(Debug, Default)]
-pub struct LegacyFilter {
-    // include_dependencies is whether to include pkg.dependencies in execution (defaults to false)
-    include_dependencies: bool,
-    // skip_dependents is whether to skip dependent impacted consumers in execution (defaults to
-    // false)
-    skip_dependents: bool,
-    // entrypoints is a list of package entrypoints
-    entrypoints: Vec<String>,
-    // since is the git ref used to calculate changed packages
-    pub since: Option<String>,
-}
-
-impl LegacyFilter {
-    pub fn as_filter_pattern(&self) -> Vec<String> {
-        let prefix = if self.skip_dependents { "" } else { "..." };
-        let suffix = if self.include_dependencies { "..." } else { "" };
-        if self.entrypoints.is_empty() {
-            if let Some(since) = self.since.as_ref() {
-                vec![format!("{}[{}]{}", prefix, since, suffix)]
-            } else {
-                Vec::new()
-            }
-        } else {
-            let since = self
-                .since
-                .as_ref()
-                .map_or_else(String::new, |s| format!("...[{}]", s));
-            self.entrypoints
-                .iter()
-                .map(|pattern| {
-                    if pattern.starts_with('!') {
-                        pattern.to_owned()
-                    } else {
-                        format!("{}{}{}{}", prefix, pattern, since, suffix)
-                    }
-                })
-                .collect()
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct ScopeOpts {
     pub pkg_inference_root: Option<AnchoredSystemPathBuf>,
-    pub legacy_filter: LegacyFilter,
     pub global_deps: Vec<String>,
     pub filter_patterns: Vec<String>,
     pub ignore_patterns: Vec<String>,
@@ -350,16 +300,9 @@ impl<'a> TryFrom<RunAndExecutionArgs<'a>> for ScopeOpts {
             .map(AnchoredSystemPathBuf::from_raw)
             .transpose()?;
 
-        let legacy_filter = LegacyFilter {
-            include_dependencies: args.execution_args.include_dependencies,
-            skip_dependents: args.execution_args.no_deps,
-            entrypoints: args.execution_args.scope.clone(),
-            since: args.execution_args.since.clone(),
-        };
         Ok(Self {
             global_deps: args.execution_args.global_deps.clone(),
             pkg_inference_root,
-            legacy_filter,
             filter_patterns: args.execution_args.filter.clone(),
             ignore_patterns: args.execution_args.ignore.clone(),
         })
@@ -388,11 +331,7 @@ impl RunOpts {
 
 impl ScopeOpts {
     pub fn get_filters(&self) -> Vec<String> {
-        [
-            self.filter_patterns.clone(),
-            self.legacy_filter.as_filter_pattern(),
-        ]
-        .concat()
+        self.filter_patterns.clone()
     }
 }
 
@@ -401,36 +340,12 @@ mod test {
     use test_case::test_case;
     use turborepo_cache::CacheOpts;
 
-    use super::{LegacyFilter, RunOpts};
+    use super::RunOpts;
     use crate::{
         cli::DryRunMode,
         opts::{Opts, RunCacheOpts, ScopeOpts},
     };
 
-    #[test_case(LegacyFilter {
-            include_dependencies: true,
-            skip_dependents: false,
-            entrypoints: vec![],
-            since: Some("since".to_string()),
-        }, &["...[since]..."])]
-    #[test_case(LegacyFilter {
-            include_dependencies: false,
-            skip_dependents: true,
-            entrypoints: vec![],
-            since: Some("since".to_string()),
-        }, &["[since]"])]
-    #[test_case(LegacyFilter {
-            include_dependencies: false,
-            skip_dependents: true,
-            entrypoints: vec!["entry".to_string()],
-            since: Some("since".to_string()),
-        }, &["entry...[since]"])]
-    fn basic_legacy_filter_pattern(filter: LegacyFilter, expected: &[&str]) {
-        assert_eq!(
-            filter.as_filter_pattern(),
-            expected.iter().map(|s| s.to_string()).collect::<Vec<_>>()
-        )
-    }
     #[derive(Default)]
     struct TestCaseOpts {
         filter_patterns: Vec<String>,
@@ -440,7 +355,6 @@ mod test {
         parallel: bool,
         continue_on_error: bool,
         dry_run: Option<DryRunMode>,
-        legacy_filter: Option<LegacyFilter>,
     }
 
     #[test_case(TestCaseOpts {
@@ -468,46 +382,12 @@ mod test {
     )]
     #[test_case(
         TestCaseOpts {
-            legacy_filter: Some(LegacyFilter {
-                include_dependencies: false,
-                skip_dependents: true,
-                entrypoints: vec!["my-app".to_string()],
-                since: None,
-            }),
-            tasks: vec!["build".to_string()],
-            pass_through_args: vec!["-v".to_string(), "--foo=bar".to_string()],
-            ..Default::default()
-        },
-        "turbo run build --filter=my-app -- -v --foo=bar"
-    )]
-    #[test_case(
-        TestCaseOpts {
-            legacy_filter: Some(LegacyFilter {
-                include_dependencies: false,
-                skip_dependents: true,
-                entrypoints: vec!["my-app".to_string()],
-                since: None,
-            }),
-            filter_patterns: vec!["other-app".to_string()],
+            filter_patterns: vec!["other-app".to_string(), "my-app".to_string()],
             tasks: vec!["build".to_string()],
             pass_through_args: vec!["-v".to_string(), "--foo=bar".to_string()],
             ..Default::default()
         },
         "turbo run build --filter=other-app --filter=my-app -- -v --foo=bar"
-    )]
-    #[test_case    (
-        TestCaseOpts {
-            legacy_filter: Some(LegacyFilter {
-                include_dependencies: true,
-                skip_dependents: false,
-                entrypoints: vec!["my-app".to_string()],
-                since: Some("some-ref".to_string()),
-            }),
-            filter_patterns: vec!["other-app".to_string()],
-            tasks: vec!["build".to_string()],
-            ..Default::default()
-        },
-        "turbo run build --filter=other-app --filter=...my-app...[some-ref]..."
     )]
     #[test_case    (
         TestCaseOpts {
@@ -560,10 +440,8 @@ mod test {
         };
         let cache_opts = CacheOpts::default();
         let runcache_opts = RunCacheOpts::default();
-        let legacy_filter = opts_input.legacy_filter.unwrap_or_default();
         let scope_opts = ScopeOpts {
             pkg_inference_root: None,
-            legacy_filter,
             global_deps: vec![],
             filter_patterns: opts_input.filter_patterns,
             ignore_patterns: vec![],

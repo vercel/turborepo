@@ -153,6 +153,28 @@ impl<'a> EngineBuilder<'a> {
         self
     }
 
+    // Returns the set of allowed tasks that can be run if --only is used
+    // The set is exactly the product of the packages in filter and tasks specified
+    // by CLI
+    fn allowed_tasks(&self) -> Option<HashSet<TaskId<'static>>> {
+        if self.tasks_only {
+            Some(
+                self.workspaces
+                    .iter()
+                    .cartesian_product(self.tasks.iter())
+                    .map(|(package, task_name)| {
+                        task_name
+                            .task_id()
+                            .unwrap_or(TaskId::new(package.as_ref(), task_name.task()))
+                            .into_owned()
+                    })
+                    .collect(),
+            )
+        } else {
+            None
+        }
+    }
+
     pub fn build(mut self) -> Result<super::Engine, Error> {
         // If there are no affected packages, we don't need to go through all this work
         // we can just exit early.
@@ -204,6 +226,8 @@ impl<'a> EngineBuilder<'a> {
 
             return Err(Error::MissingTasks(errors));
         }
+
+        let allowed_tasks = self.allowed_tasks();
 
         let mut visited = HashSet::new();
         let mut engine = Engine::default();
@@ -265,21 +289,16 @@ impl<'a> EngineBuilder<'a> {
             // Note that the Go code has a whole if/else statement for putting stuff into
             // deps or calling e.AddDep the bool is cannot be true so we skip to
             // just doing deps
-            let mut deps = task_definition
+            let deps = task_definition
                 .task_dependencies
                 .iter()
                 .map(|spanned| spanned.as_ref().split())
                 .collect::<HashMap<_, _>>();
-            let mut topo_deps = task_definition
+            let topo_deps = task_definition
                 .topological_dependencies
                 .iter()
                 .map(|spanned| spanned.as_ref().split())
                 .collect::<HashMap<_, _>>();
-
-            if self.tasks_only {
-                deps.retain(|task_name, _| self.tasks.iter().any(|t| &t.value == *task_name));
-                topo_deps.retain(|task_name, _| self.tasks.iter().any(|t| &t.value == *task_name));
-            }
 
             // Don't ask why, but for some reason we refer to the source as "to"
             // and the target node as "from"
@@ -299,9 +318,14 @@ impl<'a> EngineBuilder<'a> {
                 .for_each(|((from, span), dependency_workspace)| {
                     // We don't need to add an edge from the root node if we're in this branch
                     if let PackageNode::Workspace(dependency_workspace) = dependency_workspace {
-                        has_topo_deps = true;
                         let from_task_id = TaskId::from_graph(dependency_workspace, from);
+                        if let Some(allowed_tasks) = &allowed_tasks {
+                            if !allowed_tasks.contains(&from_task_id) {
+                                return;
+                            }
+                        }
                         let from_task_index = engine.get_index(&from_task_id);
+                        has_topo_deps = true;
                         engine
                             .task_graph
                             .add_edge(to_task_index, from_task_index, ());
@@ -311,11 +335,16 @@ impl<'a> EngineBuilder<'a> {
                 });
 
             for (dep, span) in deps {
-                has_deps = true;
                 let from_task_id = dep
                     .task_id()
                     .unwrap_or_else(|| TaskId::new(to_task_id.package(), dep.task()))
                     .into_owned();
+                if let Some(allowed_tasks) = &allowed_tasks {
+                    if !allowed_tasks.contains(&from_task_id) {
+                        continue;
+                    }
+                }
+                has_deps = true;
                 let from_task_index = engine.get_index(&from_task_id);
                 engine
                     .task_graph
@@ -1135,6 +1164,83 @@ mod test {
             "a#test" => ["___ROOT___"],
             "b#test" => ["___ROOT___"],
             "c#test" => ["___ROOT___"]
+        };
+        assert_eq!(all_dependencies(&engine), expected);
+    }
+
+    #[test]
+    fn test_engine_tasks_only_package_deps() {
+        let repo_root_dir = TempDir::new("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "a" => [],
+                "b" => ["a"]
+            },
+        );
+        let turbo_jsons = vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "pipeline": {
+                    "build": { "dependsOn": ["^build"] },
+                }
+            })),
+        )]
+        .into_iter()
+        .collect();
+        let engine = EngineBuilder::new(&repo_root, &package_graph, false)
+            .with_turbo_jsons(Some(turbo_jsons))
+            .with_tasks_only(true)
+            .with_tasks(Some(Spanned::new(TaskName::from("build"))))
+            .with_workspaces(vec![PackageName::from("b")])
+            .with_root_tasks(vec![TaskName::from("build")])
+            .build()
+            .unwrap();
+
+        // With task only we shouldn't do package tasks dependencies either
+        let expected = deps! {
+            "b#build" => ["___ROOT___"]
+        };
+        assert_eq!(all_dependencies(&engine), expected);
+    }
+
+    #[test]
+    fn test_engine_tasks_only_task_dep() {
+        let repo_root_dir = TempDir::new("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "a" => [],
+                "b" => []
+            },
+        );
+        let turbo_jsons = vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "pipeline": {
+                    "a#build": { },
+                    "b#build": { "dependsOn": ["a#build"] }
+                }
+            })),
+        )]
+        .into_iter()
+        .collect();
+        let engine = EngineBuilder::new(&repo_root, &package_graph, false)
+            .with_turbo_jsons(Some(turbo_jsons))
+            .with_tasks_only(true)
+            .with_tasks(Some(Spanned::new(TaskName::from("build"))))
+            .with_workspaces(vec![PackageName::from("b")])
+            .with_root_tasks(vec![TaskName::from("build")])
+            .build()
+            .unwrap();
+
+        // With task only we shouldn't do package tasks dependencies either
+        let expected = deps! {
+            "b#build" => ["___ROOT___"]
         };
         assert_eq!(all_dependencies(&engine), expected);
     }

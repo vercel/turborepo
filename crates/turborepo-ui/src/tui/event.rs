@@ -29,6 +29,9 @@ pub enum Event {
     Input {
         bytes: Vec<u8>,
     },
+    UpdateTasks {
+        tasks: Vec<String>,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]

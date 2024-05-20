@@ -5,7 +5,9 @@ use std::{
 
 use petgraph::visit::{depth_first_search, Reversed};
 use serde::Serialize;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
+use turbopath::{
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
+};
 use turborepo_graph_utils as graph;
 use turborepo_lockfiles::Lockfile;
 
@@ -30,6 +32,7 @@ pub struct PackageGraph {
     packages: HashMap<PackageName, PackageInfo>,
     package_manager: PackageManager,
     lockfile: Option<Box<dyn Lockfile>>,
+    repo_root: AbsoluteSystemPathBuf,
 }
 
 /// The WorkspacePackage follows the Vercel glossary of terms where "Workspace"
@@ -128,7 +131,16 @@ impl PackageGraph {
 
     #[tracing::instrument(skip(self))]
     pub fn validate(&self) -> Result<(), Error> {
-        graph::validate_graph(&self.graph).map_err(Error::InvalidPackageGraph)
+        for info in self.packages.values() {
+            let name = info.package_json.name.as_deref();
+            if matches!(name, None | Some("")) {
+                let package_json_path = self.repo_root.resolve(info.package_json_path());
+                return Err(Error::PackageJsonMissingName(package_json_path));
+            }
+        }
+        graph::validate_graph(&self.graph).map_err(Error::InvalidPackageGraph)?;
+
+        Ok(())
     }
 
     pub fn remove_package_dependencies(&mut self) {
@@ -345,7 +357,12 @@ impl PackageGraph {
             })
             .collect::<HashMap<_, HashMap<_, _>>>();
 
-        let closures = turborepo_lockfiles::all_transitive_closures(previous, external_deps)?;
+        // We're comparing to a previous lockfile, it's possible that a package was
+        // added and thus won't exist in the previous lockfile. In that case,
+        // we're fine to ignore it. Assuming there is not a commit with a stale
+        // lockfile, the same commit should add the package, so it will get
+        // picked up as changed.
+        let closures = turborepo_lockfiles::all_transitive_closures(previous, external_deps, true)?;
 
         let global_change = current.global_change(previous);
 
@@ -476,17 +493,24 @@ mod test {
     async fn test_single_package_is_depends_on_root() {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
-        let pkg_graph = PackageGraph::builder(&root, PackageJson::default())
-            .with_package_discovery(MockDiscovery)
-            .with_single_package_mode(true)
-            .build()
-            .await
-            .unwrap();
+        let pkg_graph = PackageGraph::builder(
+            &root,
+            PackageJson {
+                name: Some("my-package".to_owned()),
+                ..Default::default()
+            },
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_single_package_mode(true)
+        .build()
+        .await
+        .unwrap();
 
         let closure =
             pkg_graph.transitive_closure(Some(&PackageNode::Workspace(PackageName::Root)));
         assert!(closure.contains(&PackageNode::Root));
-        assert!(pkg_graph.validate().is_ok());
+        let result = pkg_graph.validate();
+        assert!(result.is_ok(), "expected ok {:?}", result);
     }
 
     #[tokio::test]

@@ -23,7 +23,7 @@ pub fn input(interact: bool) -> Result<Option<Event>, Error> {
     }
 }
 
-/// Converts a crostterm key event into a TUI interaction event
+/// Converts a crossterm key event into a TUI interaction event
 fn translate_key_event(interact: bool, key_event: KeyEvent) -> Option<Event> {
     // On Windows events for releasing a key are produced
     // We skip these to avoid emitting 2 events per key press.

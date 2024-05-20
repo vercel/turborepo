@@ -11,7 +11,7 @@ Setup
       "rootKey": "HEY STELLLLLLLAAAAAAAAAAAAA",
       "files": {
         "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
-        "package.json": "5519edda652c463054307421a3c05ff49f080328",
+        "package.json": "8606ff4b95a5330740d8d9d0948faeada64f1f32",
         "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057"
       },
       "hashOfExternalDependencies": "",
@@ -36,7 +36,7 @@ Setup
         "inputs": {
           ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
-          "package.json": "5519edda652c463054307421a3c05ff49f080328",
+          "package.json": "8606ff4b95a5330740d8d9d0948faeada64f1f32",
           "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057",
           "turbo.json": "ce5bdbed55601768de641f5d8d005a8f5be8d3f7"
         },
@@ -65,7 +65,7 @@ Setup
           "cache": true,
           "dependsOn": [],
           "inputs": [],
-          "outputMode": "full",
+          "outputLogs": "full",
           "persistent": false,
           "env": [],
           "passThroughEnv": null,
@@ -93,7 +93,7 @@ Setup
         "inputs": {
           ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
-          "package.json": "5519edda652c463054307421a3c05ff49f080328",
+          "package.json": "8606ff4b95a5330740d8d9d0948faeada64f1f32",
           "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057",
           "turbo.json": "ce5bdbed55601768de641f5d8d005a8f5be8d3f7"
         },
@@ -120,7 +120,7 @@ Setup
             "build"
           ],
           "inputs": [],
-          "outputMode": "full",
+          "outputLogs": "full",
           "persistent": false,
           "env": [],
           "passThroughEnv": null,

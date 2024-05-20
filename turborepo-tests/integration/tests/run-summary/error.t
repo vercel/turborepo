@@ -57,7 +57,7 @@ Validate that we got a full task summary for the failed task with an error in .e
       "cache": true,
       "dependsOn": [],
       "inputs": [],
-      "outputMode": "full",
+      "outputLogs": "full",
       "persistent": false,
       "env": [],
       "passThroughEnv": null,

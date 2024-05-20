@@ -3,7 +3,7 @@ Setup
 
 # The override-values-task task in the root turbo.json has ALL the config. The workspace config
 # defines the task and overrides all the keys. The tests below use `override-values-task` to assert that:
-# - `outputs`, `inputs`, `env`, and `outputMode` are overriden from the root config.
+# - `outputs`, `inputs`, `env`, and `outputLogs` are overriden from the root config.
 
 # 1. First run, assert that the right `outputs` are cached.
   $ ${TURBO} run override-values-task --filter=override-values > tmp.log
@@ -22,7 +22,7 @@ Setup
     Time:\s*[\.0-9]+m?s  (re)
   
   $ HASH=$(cat tmp.log | grep -E "override-values:override-values-task.* executing .*" | awk '{print $5}')
-  $ tar -tf $TARGET_DIR/node_modules/.cache/turbo/$HASH.tar.zst;
+  $ tar -tf $TARGET_DIR/.turbo/cache/$HASH.tar.zst;
   apps/override-values/.turbo/turbo-override-values-task.log
   apps/override-values/lib/
   apps/override-values/lib/.keep
