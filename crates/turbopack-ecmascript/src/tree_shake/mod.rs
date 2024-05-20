@@ -254,8 +254,6 @@ impl Analyzer<'_> {
 
                         self.g.add_strong_deps(item_id, state.last_writes.iter());
                     }
-
-                    ItemIdGroupKind::StarReexports => {}
                 }
             }
         }
@@ -265,7 +263,6 @@ impl Analyzer<'_> {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum Key {
     ModuleEvaluation,
-    StarReexports,
     Export(String),
 }
 
@@ -297,7 +294,7 @@ async fn get_part_id(result: &SplitResult, part: Vc<ModulePart>) -> Result<u32> 
         None => {
             // We need to handle `*` reexports specially.
             if let ModulePart::Export(..) = &*part {
-                if let Some(&part_id) = entrypoints.get(&Key::StarReexports) {
+                if let Some(&part_id) = entrypoints.get(&Key::ModuleEvaluation) {
                     return Ok(part_id);
                 }
             }
