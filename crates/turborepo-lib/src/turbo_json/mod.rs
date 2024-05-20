@@ -10,10 +10,9 @@ use miette::{NamedSource, SourceSpan};
 use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, RelativeUnixPathBuf};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
 use turborepo_errors::Spanned;
 use turborepo_repository::{package_graph::ROOT_PKG_NAME, package_json::PackageJson};
-use turborepo_telemetry::events::generic::GenericEventBuilder;
 
 use crate::{
     cli::OutputLogsMode,
@@ -50,7 +49,6 @@ pub struct TurboJson {
     path: Option<Arc<str>>,
     pub(crate) extends: Spanned<Vec<String>>,
     pub(crate) global_deps: Vec<String>,
-    pub(crate) global_dot_env: Option<Vec<RelativeUnixPathBuf>>,
     pub(crate) global_env: Vec<String>,
     pub(crate) global_pass_through_env: Option<Vec<String>>,
     pub(crate) tasks: Pipeline,
@@ -115,9 +113,6 @@ pub struct RawTurboJson {
     global_env: Option<Vec<Spanned<UnescapedString>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     global_pass_through_env: Option<Vec<Spanned<UnescapedString>>>,
-    // .env files to consider, in order.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    global_dot_env: Option<Vec<UnescapedString>>,
     // Tasks is a map of task entries which define the task graph
     // and cache behavior on a per task or per package-task basis.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -489,19 +484,6 @@ impl TryFrom<RawTurboJson> for TurboJson {
 
                 global_deps
             },
-            global_dot_env: raw_turbo
-                .global_dot_env
-                .map(|env| -> Result<Vec<RelativeUnixPathBuf>, Error> {
-                    let mut global_dot_env = Vec::new();
-                    for dot_env_path in env {
-                        let type_checked_path = RelativeUnixPathBuf::new(dot_env_path)?;
-                        // These are _explicitly_ not sorted.
-                        global_dot_env.push(type_checked_path);
-                    }
-
-                    Ok(global_dot_env)
-                })
-                .transpose()?,
             tasks: raw_turbo.tasks.unwrap_or_default(),
             // copy these over, we don't need any changes here.
             extends: raw_turbo
@@ -628,11 +610,6 @@ impl TurboJson {
             .collect()
     }
 
-    pub fn track_usage(&self, telemetry: &GenericEventBuilder) {
-        let global_dot_env = self.global_dot_env.as_deref();
-        telemetry.track_global_dot_env(global_dot_env);
-    }
-
     pub fn has_root_tasks(&self) -> bool {
         self.tasks
             .iter()
@@ -749,12 +726,6 @@ mod tests {
             ..TurboJson::default()
         }
     ; "global dependencies (sorted)")]
-    #[test_case(r#"{ "globalDotEnv": [".env.local", ".env"] }"#,
-        TurboJson {
-            global_dot_env: Some(vec![RelativeUnixPathBuf::new(".env.local").unwrap(), RelativeUnixPathBuf::new(".env").unwrap()]),
-            ..TurboJson::default()
-        }
-    ; "global dot env (unsorted)")]
     #[test_case(r#"{ "globalPassThroughEnv": ["GITHUB_TOKEN", "AWS_SECRET_KEY"] }"#,
         TurboJson {
             global_pass_through_env: Some(vec!["AWS_SECRET_KEY".to_string(), "GITHUB_TOKEN".to_string()]),

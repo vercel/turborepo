@@ -337,7 +337,6 @@ impl RunBuilder {
             &root_package_json,
             is_single_package,
         )?;
-        root_turbo_json.track_usage(&run_telemetry);
 
         pkg_dep_graph.validate()?;
 

@@ -73,7 +73,6 @@ pub struct GlobalHashable<'a> {
     pub pass_through_env: &'a [String],
     pub env_mode: EnvMode,
     pub framework_inference: bool,
-    pub dot_env: &'a [turbopath::RelativeUnixPathBuf],
 }
 
 pub struct LockFilePackages(pub Vec<turborepo_lockfiles::Package>);
@@ -411,8 +410,6 @@ mod test {
             pass_through_env: &["pass_through_env".to_string()],
             env_mode: EnvMode::Infer,
             framework_inference: true,
-
-            dot_env: &[turbopath::RelativeUnixPathBuf::new("dotenv".to_string()).unwrap()],
         };
 
         assert_eq!(global_hash.hash(), "2144612ff08bddb9");

@@ -31,7 +31,6 @@ pub struct GlobalHashSummary<'a> {
     pub root_key: &'static str,
     pub files: BTreeMap<RelativeUnixPathBuf, String>,
     pub hash_of_external_dependencies: &'a str,
-    pub global_dot_env: Option<&'a [RelativeUnixPathBuf]>,
     pub environment_variables: GlobalEnvVarSummary<'a>,
 }
 
@@ -46,7 +45,6 @@ impl<'a> TryFrom<GlobalHashableInputs<'a>> for GlobalHashSummary<'a> {
             env,
             resolved_env_vars,
             pass_through_env,
-            dot_env,
             env_at_execution_start,
             ..
         } = global_hashable_inputs;
@@ -80,8 +78,6 @@ impl<'a> TryFrom<GlobalHashableInputs<'a>> for GlobalHashSummary<'a> {
                     .map(|vars| vars.by_source.matching.to_secret_hashable()),
                 pass_through,
             },
-
-            global_dot_env: dot_env,
         })
     }
 }

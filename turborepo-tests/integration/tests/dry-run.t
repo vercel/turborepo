@@ -19,7 +19,6 @@ Setup
     Global Files                          = 1
     External Dependencies Hash            = 459c029558afe716
     Global Cache Key                      = HEY STELLLLLLLAAAAAAAAAAAAA
-    Global .env Files Considered          = 0
     Global Env Vars                       = SOME_ENV_VAR
     Global Env Vars Values                = 
     Inferred Global Env Vars Values       = 

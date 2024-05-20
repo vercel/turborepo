@@ -16,7 +16,6 @@ Setup
         "package.json": "8606ff4b95a5330740d8d9d0948faeada64f1f32"
       },
       "hashOfExternalDependencies": "",
-      "globalDotEnv": null,
       "environmentVariables": {
         "specified": {
           "env": [],

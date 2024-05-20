@@ -15,7 +15,6 @@ Setup
       "foo.txt": "eebae5f3ca7b5831e429e947b7d61edd0de69236"
     },
     "hashOfExternalDependencies": "459c029558afe716",
-    "globalDotEnv": null,
     "environmentVariables": {
       "specified": {
         "env": [

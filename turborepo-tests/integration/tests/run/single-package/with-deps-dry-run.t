@@ -8,7 +8,6 @@ Check
     Global Files                          = 3
     External Dependencies Hash            = 
     Global Cache Key                      = HEY STELLLLLLLAAAAAAAAAAAAA
-    Global .env Files Considered          = 0
     Global Env Vars                       = 
     Global Env Vars Values                = 
     Inferred Global Env Vars Values       = 

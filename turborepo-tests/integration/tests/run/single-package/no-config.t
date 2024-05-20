@@ -10,12 +10,11 @@ Check
     Global Files                          = 2\s* (re)
     External Dependencies Hash            =\s* (re)
     Global Cache Key                      = HEY STELLLLLLLAAAAAAAAAAAAA\s* (re)
-    Global .env Files Considered          = 0\s* (re)
-    Global Env Vars                       =\s* (re)
-    Global Env Vars Values                =\s* (re)
-    Inferred Global Env Vars Values       =\s* (re)
-    Global Passed Through Env Vars        =\s* (re)
-    Global Passed Through Env Vars Values =\s* (re)
+    Global Env Vars                       = 
+    Global Env Vars Values                = 
+    Inferred Global Env Vars Values       = 
+    Global Passed Through Env Vars        = 
+    Global Passed Through Env Vars Values = 
   
   Tasks to Run
   build
