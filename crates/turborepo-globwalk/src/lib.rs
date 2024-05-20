@@ -15,7 +15,8 @@ use path_clean::PathClean;
 use path_slash::PathExt;
 use rayon::prelude::*;
 use regex::Regex;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
+use tracing::debug;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPath};
 use wax::{walk::FileIterator, BuildError, Glob};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -51,10 +52,13 @@ fn join_unix_like_paths(a: &str, b: &str) -> String {
     [a.trim_end_matches('/'), "/", b.trim_start_matches('/')].concat()
 }
 
-fn escape_glob_literals(literal_glob: &str) -> Cow<str> {
+fn glob_literals() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"(?<literal>[\?\*\$:<>\(\)\[\]{},])").unwrap())
-        .replace_all(literal_glob, "\\$literal")
+}
+
+fn escape_glob_literals(literal_glob: &str) -> Cow<str> {
+    glob_literals().replace_all(literal_glob, "\\$literal")
 }
 
 #[tracing::instrument]
@@ -63,6 +67,8 @@ fn preprocess_paths_and_globs(
     include: &[String],
     exclude: &[String],
 ) -> Result<(PathBuf, Vec<String>, Vec<String>), WalkError> {
+    debug!("processing includes: {include:?}");
+    debug!("processing excludes: {exclude:?}");
     let base_path_slash = base_path
         .as_std_path()
         .to_slash()
@@ -76,6 +82,12 @@ fn preprocess_paths_and_globs(
     let (include_paths, lowest_segment) = include
         .iter()
         .map(|s| fix_glob_pattern(s))
+        .map(|mut s| {
+            // We need to check inclusion globs before the join
+            // as to_slash doesn't preserve Windows drive names.
+            add_doublestar_to_dir(base_path, &mut s);
+            s
+        })
         .map(|s| join_unix_like_paths(&base_path_slash, &s))
         .filter_map(|s| collapse_path(&s).map(|(s, v)| (s.to_string(), v)))
         .fold(
@@ -106,6 +118,8 @@ fn preprocess_paths_and_globs(
         // unless it already ends with a double star
         add_trailing_double_star(&mut exclude_paths, &split);
     }
+    debug!("processed includes: {include_paths:?}");
+    debug!("processed excludes: {exclude_paths:?}");
 
     Ok((base_path, include_paths, exclude_paths))
 }
@@ -211,11 +225,44 @@ fn add_trailing_double_star(exclude_paths: &mut Vec<String>, glob: &str) {
         exclude_paths.push(glob.to_string());
     } else {
         // Match Go globby behavior. If the glob doesn't already end in /**, add it
-        // TODO: The Go version uses system separator. Are we forcing all globs to unix
-        // paths?
+        // We use the unix style operator as wax expects unix style paths
         exclude_paths.push(format!("{}/**", glob));
         exclude_paths.push(glob.to_string());
     }
+}
+
+fn add_doublestar_to_dir(base: &AbsoluteSystemPath, glob: &mut String) {
+    // If the glob has a glob literal in it e.g. *
+    // then skip trying to read it as a file path.
+    if glob_literals().is_match(&*glob) {
+        return;
+    }
+
+    // Globs are given in unix style
+    let Ok(glob_path) = RelativeUnixPath::new(&*glob) else {
+        // Glob isn't valid relative unix path so can't check if dir
+        debug!("'{glob}' isn't valid path");
+        return;
+    };
+
+    let path = base.join_unix_path(glob_path);
+
+    let Ok(metadata) = path.symlink_metadata() else {
+        debug!("'{path}' doesn't have metadata");
+        return;
+    };
+
+    if !metadata.is_dir() {
+        return;
+    }
+
+    debug!("'{path}' is a directory");
+
+    // Glob points to a dir, must add **
+    if !glob.ends_with('/') {
+        glob.push('/');
+    }
+    glob.push_str("**");
 }
 
 #[tracing::instrument]
@@ -373,12 +420,13 @@ mod test {
     use std::{collections::HashSet, str::FromStr};
 
     use itertools::Itertools;
+    use tempdir::TempDir;
     use test_case::test_case;
-    use turbopath::AbsoluteSystemPathBuf;
+    use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
     use crate::{
-        collapse_path, escape_glob_literals, fix_glob_pattern, globwalk, ValidatedGlob, WalkError,
-        WalkType,
+        add_doublestar_to_dir, collapse_path, escape_glob_literals, fix_glob_pattern, globwalk,
+        ValidatedGlob, WalkError, WalkType,
     };
 
     #[cfg(unix)]
@@ -1425,5 +1473,27 @@ mod test {
             escape_glob_literals("?*$:<>()[]{},"),
             r"\?\*\$\:\<\>\(\)\[\]\{\}\,"
         );
+    }
+
+    #[test_case("foo", false, "foo" ; "file")]
+    #[test_case("foo", true, "foo/**" ; "dir")]
+    #[test_case("foo/", true, "foo/**" ; "dir slash")]
+    #[test_case("f[o0]o", true, "f[o0]o" ; "non-literal")]
+    fn test_add_double_star(glob: &str, is_dir: bool, expected: &str) {
+        let tmpdir = TempDir::new("doublestar").unwrap();
+        let base = AbsoluteSystemPath::new(tmpdir.path().to_str().unwrap()).unwrap();
+
+        let foo = base.join_component("foo");
+
+        match is_dir {
+            true => foo.create_dir_all().unwrap(),
+            false => foo.create_with_contents(b"bar").unwrap(),
+        }
+
+        let mut glob = glob.to_owned();
+
+        add_doublestar_to_dir(base, &mut glob);
+
+        assert_eq!(glob, expected);
     }
 }
