@@ -41,15 +41,18 @@ impl EcmascriptModuleFacadeModule {
 
     #[turbo_tasks::function]
     pub async fn async_module(self: Vc<Self>) -> Result<Vc<AsyncModule>> {
-        let import_externals =
+        let (import_externals, has_top_level_await) =
             if let Some(async_module) = *self.await?.module.get_async_module().await? {
-                async_module.await?.import_externals
+                (
+                    async_module.await?.import_externals,
+                    async_module.await?.has_top_level_await,
+                )
             } else {
-                false
+                (false, false)
             };
         Ok(AsyncModule {
             placeable: Vc::upcast(self),
-            has_top_level_await: false,
+            has_top_level_await,
             import_externals,
         }
         .cell())
