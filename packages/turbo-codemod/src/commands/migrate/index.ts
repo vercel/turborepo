@@ -111,7 +111,7 @@ export async function migrate(
   }
 
   // step 1
-  const fromVersion = getCurrentVersion(project, options);
+  let fromVersion = getCurrentVersion(project, options);
   if (!fromVersion) {
     return endMigration({
       success: false,
@@ -148,6 +148,12 @@ export async function migrate(
         fromVersion
       )}) is the same as the requested version (${chalk.bold(toVersion)})`,
     });
+  }
+
+  // if migrating "from" to "to" spans a major, floor "from" to ensure all required codemods are run
+  const fromMajor = fromVersion.split(".")[0];
+  if (fromMajor !== toVersion.split(".")[0]) {
+    fromVersion = `${fromMajor}.0.0`;
   }
 
   // step 3
