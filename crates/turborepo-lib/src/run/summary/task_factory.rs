@@ -175,7 +175,7 @@ impl<'a> TaskSummaryFactory<'a> {
             framework,
             dependencies,
             dependents,
-            env_mode: self.global_env_mode.into(),
+            env_mode: self.global_env_mode,
             environment_variables: TaskEnvVarSummary::new(
                 task_definition,
                 env_vars,
