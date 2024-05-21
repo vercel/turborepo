@@ -13,7 +13,7 @@ This test covers:
   \xe2\x80\xa2 Packages in scope: cached (esc)
   \xe2\x80\xa2 Running cached-task-1 in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  cached:cached-task-1: cache miss, executing 21346f9dc1d8f091
+  cached:cached-task-1: cache miss, executing afd2b0c00a8996af
   cached:cached-task-1: 
   cached:cached-task-1: > cached-task-1
   cached:cached-task-1: > echo cached-task-1 > out/foo.min.txt
@@ -38,7 +38,7 @@ This test covers:
   \xe2\x80\xa2 Packages in scope: cached (esc)
   \xe2\x80\xa2 Running cached-task-2 in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  cached:cached-task-2: cache bypass, force executing bf7e4ca31119a2ca
+  cached:cached-task-2: cache bypass, force executing 6580d2dfa8add55b
   cached:cached-task-2: 
   cached:cached-task-2: > cached-task-2
   cached:cached-task-2: > echo cached-task-2 > out/foo.min.txt
@@ -60,7 +60,7 @@ no `cache` config in root, cache:false in workspace
   \xe2\x80\xa2 Packages in scope: cached (esc)
   \xe2\x80\xa2 Running cached-task-3 in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  cached:cached-task-3: cache bypass, force executing 5a6c15882980e64c
+  cached:cached-task-3: cache bypass, force executing 1df473e4a0ec177d
   cached:cached-task-3: 
   cached:cached-task-3: > cached-task-3
   cached:cached-task-3: > echo cached-task-3 > out/foo.min.txt
