@@ -337,7 +337,6 @@ impl RunBuilder {
             &root_package_json,
             is_single_package,
         )?;
-        root_turbo_json.track_usage(&run_telemetry);
 
         pkg_dep_graph.validate()?;
 
@@ -375,7 +374,6 @@ impl RunBuilder {
             pkg_dep_graph.remove_package_dependencies();
             engine = self.build_engine(&pkg_dep_graph, &root_turbo_json, &filtered_pkgs)?;
         }
-        engine.track_usage(&run_telemetry);
 
         let color_selector = ColorSelector::default();
 

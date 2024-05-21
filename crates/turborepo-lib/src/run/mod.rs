@@ -230,7 +230,6 @@ impl Run {
                 pass_through_env,
                 env_mode,
                 self.opts.run_opts.framework_inference,
-                self.root_turbo_json.global_dot_env.as_deref(),
                 &self.scm,
             )?
         };

@@ -503,16 +503,6 @@ impl<'a> RunSummary<'a> {
             tab_writer,
             ui,
             GREY,
-            "  Global .env Files Considered\t=\t{}",
-            self.global_hash_summary
-                .global_dot_env
-                .unwrap_or_default()
-                .len()
-        )?;
-        cwriteln!(
-            tab_writer,
-            ui,
-            GREY,
             "  Global Env Vars\t=\t{}",
             self.global_hash_summary
                 .environment_variables
@@ -660,16 +650,6 @@ impl<'a> RunSummary<'a> {
                 GREY,
                 "  Inputs Files Considered\t=\t{}",
                 task.shared.inputs.len()
-            )?;
-            cwriteln!(
-                tab_writer,
-                ui,
-                GREY,
-                "  .env Files Considered\t=\t{}",
-                task.shared
-                    .dot_env
-                    .as_ref()
-                    .map_or(0, |dot_env| dot_env.len())
             )?;
 
             cwriteln!(
