@@ -182,7 +182,6 @@ impl WithMetadata for RawTaskDefinition {
         if let Some(depends_on) = &mut self.depends_on {
             depends_on.value.add_text(text.clone());
         }
-        self.dot_env.add_text(text.clone());
         self.env.add_text(text.clone());
         self.inputs.add_text(text.clone());
         self.pass_through_env.add_text(text.clone());
@@ -197,7 +196,6 @@ impl WithMetadata for RawTaskDefinition {
         if let Some(depends_on) = &mut self.depends_on {
             depends_on.value.add_path(path.clone());
         }
-        self.dot_env.add_path(path.clone());
         self.env.add_path(path.clone());
         self.inputs.add_path(path.clone());
         self.pass_through_env.add_path(path.clone());

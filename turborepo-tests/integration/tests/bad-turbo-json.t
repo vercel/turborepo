@@ -15,7 +15,7 @@ Run build with package task in non-root turbo.json
     7 |         // this comment verifies that turbo can read .json files with comments
     8 | ,->     "my-app#build": {
     9 | |         "outputs": ["banana.txt", "apple.json"],
-   10 | |         "dotEnv": [".env.local"]
+   10 | |         "inputs": ["$TURBO_DEFAULT$", ".env.local"]
    11 | |->     }
       : `---- unnecessary package syntax found here
    12 |       }
@@ -92,13 +92,13 @@ Run build with syntax errors in turbo.json
    11 |     "my-app#build": {
    12 |       "outputs": ["banana.txt", "apple.json"]42,
       :                                              ^^
-   13 |       "dotEnv": [".env.local"
+   13 |       "inputs": [".env.local"
       `----
   Error: turbo_json_parse_error
   
     x expected `,` but instead found `}`
       ,-[13:1]
-   13 |       "dotEnv": [".env.local"
+   13 |       "inputs": [".env.local"
    14 |     },
       :     ^
    15 | 
