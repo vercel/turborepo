@@ -1,8 +1,6 @@
 {
-  "extends": [
-    "//"
-  ],
-  "pipeline": {
+  "extends": ["//"],
+  "tasks": {
     "add-keys-task": {
       "dependsOn": [
         "add-keys-underlying-task"
