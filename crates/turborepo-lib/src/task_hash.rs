@@ -460,11 +460,13 @@ impl<'a> TaskHasher<'a> {
                     self.env_at_execution_start.from_wildcards(&[
                         "SHELL",
                         // Command Prompt casing of env variables
+                        "APPDATA",
                         "PATH",
                         "SYSTEMROOT",
                         // Powershell casing of env variables
                         "Path",
                         "SystemRoot",
+                        "AppData",
                     ])?;
                 let tracker_env = self
                     .task_hash_tracker
