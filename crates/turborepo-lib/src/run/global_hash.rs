@@ -47,7 +47,6 @@ pub struct GlobalHashableInputs<'a> {
     pub pass_through_env: Option<&'a [String]>,
     pub env_mode: EnvMode,
     pub framework_inference: bool,
-    pub dot_env: Option<&'a [RelativeUnixPathBuf]>,
     pub env_at_execution_start: &'a EnvironmentVariableMap,
 }
 
@@ -63,7 +62,6 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     global_pass_through_env: Option<&'a [String]>,
     env_mode: EnvMode,
     framework_inference: bool,
-    dot_env: Option<&'a [RelativeUnixPathBuf]>,
     hasher: &SCM,
 ) -> Result<GlobalHashableInputs<'a>, Error> {
     let global_hashable_env_vars =
@@ -90,19 +88,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
         .map(|p| root_path.anchor(p).expect("path should be from root"))
         .collect::<Vec<_>>();
 
-    let mut global_file_hash_map =
-        hasher.get_hashes_for_files(root_path, &global_deps_paths, false)?;
-
-    if !dot_env.unwrap_or_default().is_empty() {
-        let system_dot_env = dot_env
-            .into_iter()
-            .flatten()
-            .map(|p| p.to_anchored_system_path_buf());
-
-        let dot_env_object = hasher.hash_existing_of(root_path, system_dot_env)?;
-
-        global_file_hash_map.extend(dot_env_object);
-    }
+    let global_file_hash_map = hasher.get_hashes_for_files(root_path, &global_deps_paths, false)?;
 
     debug!(
         "external deps hash: {}",
@@ -118,7 +104,6 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
         pass_through_env: global_pass_through_env,
         env_mode,
         framework_inference,
-        dot_env,
         env_at_execution_start,
     })
 }
@@ -190,7 +175,6 @@ impl<'a> GlobalHashableInputs<'a> {
             pass_through_env: self.pass_through_env.unwrap_or_default(),
             env_mode: self.env_mode,
             framework_inference: self.framework_inference,
-            dot_env: self.dot_env.unwrap_or_default(),
         };
 
         global_hashable.hash()
@@ -240,7 +224,6 @@ mod tests {
             None,
             EnvMode::Infer,
             false,
-            None,
             &SCM::new(&root),
         );
         assert!(result.is_ok());

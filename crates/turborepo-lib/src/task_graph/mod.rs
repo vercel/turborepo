@@ -49,8 +49,6 @@ pub struct TaskDefinition {
 
     pub(crate) pass_through_env: Option<Vec<String>>,
 
-    pub(crate) dot_env: Option<Vec<RelativeUnixPathBuf>>,
-
     // TopologicalDependencies are tasks from package dependencies.
     // E.g. "build" is a topological dependency in:
     // dependsOn: ['^build'].
@@ -92,7 +90,6 @@ impl Default for TaskDefinition {
             inputs: Default::default(),
             output_logs: Default::default(),
             persistent: Default::default(),
-            dot_env: Default::default(),
             interactive: Default::default(),
         }
     }
