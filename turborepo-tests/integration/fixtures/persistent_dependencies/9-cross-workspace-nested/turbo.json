@@ -1,6 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "pipeline": {
+  "tasks": {
     "app-a#build": {
       "dependsOn": ["app-b#build"]
     },
