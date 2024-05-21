@@ -11,15 +11,7 @@ Test
 
 # workspace-a#generate ran
   $ cat tmp.log | grep "workspace-a:generate"
-<<<<<<< HEAD
-<<<<<<< HEAD
-  workspace-a:generate: cache miss, executing 8e1618d20f6303dc
-=======
-  workspace-a:generate: cache miss, executing fcb7e12d96f4af12
->>>>>>> 2eae5cbd82 (Update tests)
-=======
-  workspace-a:generate: cache miss, executing d350de548298f495
->>>>>>> 37c3c596f1 (chore: update integration tests)
+  workspace-a:generate: cache miss, executing a7a2aa3909d7b0d8
   workspace-a:generate: 
   workspace-a:generate: > generate
   workspace-a:generate: > echo generate-workspace-a
@@ -27,15 +19,7 @@ Test
   workspace-a:generate: generate-workspace-a
 workspace-a#build ran
   $ cat tmp.log | grep "workspace-a:build"
-<<<<<<< HEAD
-<<<<<<< HEAD
-  workspace-a:build: cache miss, executing 50df012517e672e6
-=======
-  workspace-a:build: cache miss, executing 5b44d28ebc0672bb
->>>>>>> 2eae5cbd82 (Update tests)
-=======
-  workspace-a:build: cache miss, executing 803a984423b0bb9e
->>>>>>> 37c3c596f1 (chore: update integration tests)
+  workspace-a:build: cache miss, executing 9ccc135d65c4a495
   workspace-a:build: 
   workspace-a:build: > build
   workspace-a:build: > echo build-workspace-a
@@ -48,15 +32,7 @@ workspace-b#generate DID NOT run
 
 workspace-b#build ran
   $ cat tmp.log | grep "workspace-b:build"
-<<<<<<< HEAD
-<<<<<<< HEAD
-  workspace-b:build: cache miss, executing a4ecaf3902039f0c
-=======
-  workspace-b:build: cache miss, executing e4c450285346e321
->>>>>>> 2eae5cbd82 (Update tests)
-=======
-  workspace-b:build: cache miss, executing 40f573376601ba6a
->>>>>>> 37c3c596f1 (chore: update integration tests)
+  workspace-b:build: cache miss, executing 02c3fac1077fc71c
   workspace-b:build: 
   workspace-b:build: > build
   workspace-b:build: > echo build-workspace-b

@@ -24,19 +24,11 @@ baseline to generate cache
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-<<<<<<< HEAD
-<<<<<<< HEAD
-  my-app:build: cache miss, executing 61394a550211cbe8
-=======
-  my-app:build: cache miss, executing dea27cc2fbbcfe2c
->>>>>>> 2eae5cbd82 (Update tests)
-=======
-  my-app:build: cache miss, executing 709525604475409a
->>>>>>> 37c3c596f1 (chore: update integration tests)
+  my-app:build: cache miss, executing ed450f573b231cb7
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
-    Time:\s*[\.0-9]+m?s  (re)
+    Time:    175ms 
   
 
 # env var=true, missing flag: cache bypass
@@ -44,76 +36,44 @@ baseline to generate cache
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-<<<<<<< HEAD
-<<<<<<< HEAD
-  my-app:build: cache bypass, force executing 61394a550211cbe8
-=======
-  my-app:build: cache bypass, force executing dea27cc2fbbcfe2c
->>>>>>> 2eae5cbd82 (Update tests)
-=======
-  my-app:build: cache bypass, force executing 709525604475409a
->>>>>>> 37c3c596f1 (chore: update integration tests)
+  my-app:build: cache bypass, force executing ed450f573b231cb7
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
-    Time:\s*[\.0-9]+m?s  (re)
+    Time:    177ms 
   
 # env var=true, --flag=true: cache bypass
   $ TURBO_FORCE=true ${TURBO} run build --output-logs=hash-only --filter=my-app --force=true
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-<<<<<<< HEAD
-<<<<<<< HEAD
-  my-app:build: cache bypass, force executing 61394a550211cbe8
-=======
-  my-app:build: cache bypass, force executing dea27cc2fbbcfe2c
->>>>>>> 2eae5cbd82 (Update tests)
-=======
-  my-app:build: cache bypass, force executing 709525604475409a
->>>>>>> 37c3c596f1 (chore: update integration tests)
+  my-app:build: cache bypass, force executing ed450f573b231cb7
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
-    Time:\s*[\.0-9]+m?s  (re)
+    Time:    173ms 
   
 # env var=true, --flag=false: cache hit
   $ TURBO_FORCE=true ${TURBO} run build --output-logs=hash-only --filter=my-app --force=false
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-<<<<<<< HEAD
-<<<<<<< HEAD
-  my-app:build: cache hit, suppressing logs 61394a550211cbe8
-=======
-  my-app:build: cache hit, suppressing logs dea27cc2fbbcfe2c
->>>>>>> 2eae5cbd82 (Update tests)
-=======
-  my-app:build: cache hit, suppressing logs 709525604475409a
->>>>>>> 37c3c596f1 (chore: update integration tests)
+  my-app:build: cache hit, suppressing logs ed450f573b231cb7
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
-    Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
+    Time:    22ms >>> FULL TURBO
   
 # env var=true, --flag (no value): cache bypass
   $ TURBO_FORCE=true ${TURBO} run build --output-logs=hash-only --filter=my-app --force
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-<<<<<<< HEAD
-<<<<<<< HEAD
-  my-app:build: cache bypass, force executing 61394a550211cbe8
-=======
-  my-app:build: cache bypass, force executing dea27cc2fbbcfe2c
->>>>>>> 2eae5cbd82 (Update tests)
-=======
-  my-app:build: cache bypass, force executing 709525604475409a
->>>>>>> 37c3c596f1 (chore: update integration tests)
+  my-app:build: cache bypass, force executing ed450f573b231cb7
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
-    Time:\s*[\.0-9]+m?s  (re)
+    Time:    177ms 
   
 
 # env var=false, missing flag, cache hit
@@ -121,76 +81,44 @@ baseline to generate cache
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-<<<<<<< HEAD
-<<<<<<< HEAD
-  my-app:build: cache hit, suppressing logs 61394a550211cbe8
-=======
-  my-app:build: cache hit, suppressing logs dea27cc2fbbcfe2c
->>>>>>> 2eae5cbd82 (Update tests)
-=======
-  my-app:build: cache hit, suppressing logs 709525604475409a
->>>>>>> 37c3c596f1 (chore: update integration tests)
+  my-app:build: cache hit, suppressing logs ed450f573b231cb7
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
-    Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
+    Time:    22ms >>> FULL TURBO
   
 # env var=false, --flag=true: cache bypass
   $ TURBO_FORCE=false ${TURBO} run build --output-logs=hash-only --filter=my-app --force=true
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-<<<<<<< HEAD
-<<<<<<< HEAD
-  my-app:build: cache bypass, force executing 61394a550211cbe8
-=======
-  my-app:build: cache bypass, force executing dea27cc2fbbcfe2c
->>>>>>> 2eae5cbd82 (Update tests)
-=======
-  my-app:build: cache bypass, force executing 709525604475409a
->>>>>>> 37c3c596f1 (chore: update integration tests)
+  my-app:build: cache bypass, force executing ed450f573b231cb7
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
-    Time:\s*[\.0-9]+m?s  (re)
+    Time:    175ms 
   
 # env var=false, --flag=false: cache hit
   $ TURBO_FORCE=false ${TURBO} run build --output-logs=hash-only --filter=my-app --force=false
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-<<<<<<< HEAD
-<<<<<<< HEAD
-  my-app:build: cache hit, suppressing logs 61394a550211cbe8
-=======
-  my-app:build: cache hit, suppressing logs dea27cc2fbbcfe2c
->>>>>>> 2eae5cbd82 (Update tests)
-=======
-  my-app:build: cache hit, suppressing logs 709525604475409a
->>>>>>> 37c3c596f1 (chore: update integration tests)
+  my-app:build: cache hit, suppressing logs ed450f573b231cb7
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
-    Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
+    Time:    21ms >>> FULL TURBO
   
 # env var=false, --flag (no value): cache bypass
   $ TURBO_FORCE=false ${TURBO} run build --output-logs=hash-only --filter=my-app --force
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-<<<<<<< HEAD
-<<<<<<< HEAD
-  my-app:build: cache bypass, force executing 61394a550211cbe8
-=======
-  my-app:build: cache bypass, force executing dea27cc2fbbcfe2c
->>>>>>> 2eae5cbd82 (Update tests)
-=======
-  my-app:build: cache bypass, force executing 709525604475409a
->>>>>>> 37c3c596f1 (chore: update integration tests)
+  my-app:build: cache bypass, force executing ed450f573b231cb7
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
-    Time:\s*[\.0-9]+m?s  (re)
+    Time:    174ms 
   
 
 # missing env var, missing flag: cache hit
@@ -198,74 +126,42 @@ baseline to generate cache
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-<<<<<<< HEAD
-<<<<<<< HEAD
-  my-app:build: cache hit, suppressing logs 61394a550211cbe8
-=======
-  my-app:build: cache hit, suppressing logs dea27cc2fbbcfe2c
->>>>>>> 2eae5cbd82 (Update tests)
-=======
-  my-app:build: cache hit, suppressing logs 709525604475409a
->>>>>>> 37c3c596f1 (chore: update integration tests)
+  my-app:build: cache hit, suppressing logs ed450f573b231cb7
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
-    Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
+    Time:    21ms >>> FULL TURBO
   
 # missing env var, --flag=true: cache bypass
   $ ${TURBO} run build --output-logs=hash-only --filter=my-app --force=true
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-<<<<<<< HEAD
-<<<<<<< HEAD
-  my-app:build: cache bypass, force executing 61394a550211cbe8
-=======
-  my-app:build: cache bypass, force executing dea27cc2fbbcfe2c
->>>>>>> 2eae5cbd82 (Update tests)
-=======
-  my-app:build: cache bypass, force executing 709525604475409a
->>>>>>> 37c3c596f1 (chore: update integration tests)
+  my-app:build: cache bypass, force executing ed450f573b231cb7
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
-    Time:\s*[\.0-9]+m?s  (re)
+    Time:    175ms 
   
 # missing env var, --flag=false: cache hit
   $ ${TURBO} run build --output-logs=hash-only --filter=my-app --force=false
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-<<<<<<< HEAD
-<<<<<<< HEAD
-  my-app:build: cache hit, suppressing logs 61394a550211cbe8
-=======
-  my-app:build: cache hit, suppressing logs dea27cc2fbbcfe2c
->>>>>>> 2eae5cbd82 (Update tests)
-=======
-  my-app:build: cache hit, suppressing logs 709525604475409a
->>>>>>> 37c3c596f1 (chore: update integration tests)
+  my-app:build: cache hit, suppressing logs ed450f573b231cb7
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
-    Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
+    Time:    21ms >>> FULL TURBO
   
 # missing env var, --flag (no value): cache bypass
   $ ${TURBO} run build --output-logs=hash-only --filter=my-app --force
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-<<<<<<< HEAD
-<<<<<<< HEAD
-  my-app:build: cache bypass, force executing 61394a550211cbe8
-=======
-  my-app:build: cache bypass, force executing dea27cc2fbbcfe2c
->>>>>>> 2eae5cbd82 (Update tests)
-=======
-  my-app:build: cache bypass, force executing 709525604475409a
->>>>>>> 37c3c596f1 (chore: update integration tests)
+  my-app:build: cache bypass, force executing ed450f573b231cb7
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
-    Time:\s*[\.0-9]+m?s  (re)
+    Time:    173ms 
   

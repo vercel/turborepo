@@ -18,12 +18,7 @@ Setup
   Global Hash Inputs
     Global Files                          = 1
     External Dependencies Hash            = 459c029558afe716
-<<<<<<< HEAD
-    Global Cache Key                      = HEY STELLLLLLLAAAAAAAAAAAAA
-=======
     Global Cache Key                      = I can\xe2\x80\x99t see ya, but I know you\xe2\x80\x99re here (esc)
-    Global .env Files Considered          = 0
->>>>>>> 2eae5cbd82 (Update tests)
     Global Env Vars                       = SOME_ENV_VAR
     Global Env Vars Values                = 
     Inferred Global Env Vars Values       = 
@@ -35,57 +30,41 @@ Setup
   my-app#build
     Task                           = build\s* (re)
     Package                        = my-app\s* (re)
-<<<<<<< HEAD
-<<<<<<< HEAD
-    Hash                           = 61394a550211cbe8\s* (re)
-=======
-    Hash                           = dea27cc2fbbcfe2c
->>>>>>> 2eae5cbd82 (Update tests)
-=======
-    Hash                           = 709525604475409a
->>>>>>> 37c3c596f1 (chore: update integration tests)
-    Cached \(Local\)                 = false\s* (re)
-    Cached \(Remote\)                = false\s* (re)
-    Directory                      = apps(\/|\\)my-app\s* (re)
-    Command                        = echo building\s* (re)
-    Outputs                        = apple.json, banana.txt\s* (re)
-    Log File                       = apps(\/|\\)my-app(\/|\\)\.turbo(\/|\\)turbo-build\.log\s* (re)
-    Dependencies                   =\s* (re)
-    Dependents                     =\s* (re)
-    Inputs Files Considered        = 2\s* (re)
-    Env Vars                       =\s* (re)
-    Env Vars Values                =\s* (re)
-    Inferred Env Vars Values       =\s* (re)
-    Passed Through Env Vars        =\s* (re)
-    Passed Through Env Vars Values =\s* (re)
+    Hash                           = ed450f573b231cb7
+    Cached (Local)                 = false
+    Cached (Remote)                = false
+    Directory                      = apps/my-app
+    Command                        = echo building
+    Outputs                        = apple.json, banana.txt
+    Log File                       = apps/my-app/.turbo/turbo-build.log
+    Dependencies                   = 
+    Dependents                     = 
+    Inputs Files Considered        = 2
+    Env Vars                       = 
+    Env Vars Values                = 
+    Inferred Env Vars Values       = 
+    Passed Through Env Vars        = 
+    Passed Through Env Vars Values = 
 
   $ cat tmp-3.txt | grep "util#build" -A 17
   util#build
     Task                           = build\s* (re)
     Package                        = util\s* (re)
-<<<<<<< HEAD
-<<<<<<< HEAD
-    Hash                           = d30fc4474534c30e\s* (re)
-=======
-    Hash                           = e09943c27ed0a75d
->>>>>>> 2eae5cbd82 (Update tests)
-=======
-    Hash                           = 98d1cf4886bbc73d
->>>>>>> 37c3c596f1 (chore: update integration tests)
-    Cached \(Local\)                 = false\s* (re)
-    Cached \(Remote\)                = false\s* (re)
-    Directory                      = packages(\/|\\)util\s* (re)
-    Command                        = echo building\s* (re)
-    Outputs                        =\s* (re)
-    Log File                       = packages(\/|\\)util(\/|\\)\.turbo(\/|\\)turbo-build\.log\s* (re)
-    Dependencies                   =\s* (re)
-    Dependents                     =\s* (re)
-    Inputs Files Considered        = 1\s* (re)
-    Env Vars                       = NODE_ENV\s* (re)
-    Env Vars Values                =\s* (re)
-    Inferred Env Vars Values       =\s* (re)
-    Passed Through Env Vars        =\s* (re)
-    Passed Through Env Vars Values =\s* (re)
+    Hash                           = 41b033e352a43533
+    Cached (Local)                 = false
+    Cached (Remote)                = false
+    Directory                      = packages/util
+    Command                        = echo building
+    Outputs                        = 
+    Log File                       = packages/util/.turbo/turbo-build.log
+    Dependencies                   = 
+    Dependents                     = 
+    Inputs Files Considered        = 1
+    Env Vars                       = NODE_ENV
+    Env Vars Values                = 
+    Inferred Env Vars Values       = 
+    Passed Through Env Vars        = 
+    Passed Through Env Vars Values = 
 
 # Run the task with NODE_ENV set and see it in summary. Use util package so it's just one package
   $ NODE_ENV=banana ${TURBO} run build --dry --filter=util | grep "Environment Variables"

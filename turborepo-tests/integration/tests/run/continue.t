@@ -5,15 +5,7 @@ Run without --continue
   \xe2\x80\xa2 Packages in scope: my-app, other-app, some-lib (esc)
   \xe2\x80\xa2 Running build in 3 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-<<<<<<< HEAD
-<<<<<<< HEAD
-  some-lib:build: cache miss, executing 223a3af003231594
-=======
-  some-lib:build: cache miss, executing 1dd4e409589f7ed7
->>>>>>> 2eae5cbd82 (Update tests)
-=======
-  some-lib:build: cache miss, executing 0b994d7f0402f95c
->>>>>>> 37c3c596f1 (chore: update integration tests)
+  some-lib:build: cache miss, executing 6a27a9769c374e7b
   some-lib:build: 
   some-lib:build: > build
   some-lib:build: > exit 2
@@ -39,15 +31,7 @@ Run without --continue, and with only errors.
   \xe2\x80\xa2 Packages in scope: my-app, other-app, some-lib (esc)
   \xe2\x80\xa2 Running build in 3 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-<<<<<<< HEAD
-<<<<<<< HEAD
-  some-lib:build: cache miss, executing 223a3af003231594
-=======
-  some-lib:build: cache miss, executing 1dd4e409589f7ed7
->>>>>>> 2eae5cbd82 (Update tests)
-=======
-  some-lib:build: cache miss, executing 0b994d7f0402f95c
->>>>>>> 37c3c596f1 (chore: update integration tests)
+  some-lib:build: cache miss, executing 6a27a9769c374e7b
   some-lib:build: 
   some-lib:build: > build
   some-lib:build: > exit 2
@@ -72,15 +56,7 @@ Run with --continue
   \xe2\x80\xa2 Packages in scope: my-app, other-app, some-lib (esc)
   \xe2\x80\xa2 Running build in 3 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-<<<<<<< HEAD
-<<<<<<< HEAD
-  some-lib:build: cache miss, executing 223a3af003231594
-=======
-  some-lib:build: cache miss, executing 1dd4e409589f7ed7
->>>>>>> 2eae5cbd82 (Update tests)
-=======
-  some-lib:build: cache miss, executing 0b994d7f0402f95c
->>>>>>> 37c3c596f1 (chore: update integration tests)
+  some-lib:build: cache miss, executing 6a27a9769c374e7b
   some-lib:build: 
   some-lib:build: > build
   some-lib:build: > exit 2
@@ -90,15 +66,7 @@ Run with --continue
   some-lib:build: npm ERR!   in workspace: some-lib 
   some-lib:build: npm ERR!   at location: (.*)(\/|\\)apps(\/|\\)some-lib  (re)
   some-lib:build: command finished with error, but continuing...
-<<<<<<< HEAD
-<<<<<<< HEAD
-  other-app:build: cache miss, executing 30cb4d864c805a98
-=======
-  other-app:build: cache miss, executing 31791045ed09bca5
->>>>>>> 2eae5cbd82 (Update tests)
-=======
-  other-app:build: cache miss, executing b99fa01691821c56
->>>>>>> 37c3c596f1 (chore: update integration tests)
+  other-app:build: cache miss, executing 39fcb4fcad874e05
   other-app:build: 
   other-app:build: > build
   other-app:build: > exit 3
@@ -118,4 +86,3 @@ Run with --continue
   
    ERROR  run failed: command  exited (1)
   [1]
-

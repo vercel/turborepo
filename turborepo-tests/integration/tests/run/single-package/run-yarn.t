@@ -5,11 +5,7 @@ Check
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-<<<<<<< HEAD
-  build: cache miss, executing 178267ee3c25fe0a
-=======
-  build: cache miss, executing 28e184e0ca4898bd
->>>>>>> 37c3c596f1 (chore: update integration tests)
+  build: cache miss, executing ed245ad45c9be274
   build: yarn run v1.22.17
   build: warning package.json: No license field
   build: $ echo building > foo.txt
@@ -22,11 +18,7 @@ Check
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-<<<<<<< HEAD
-  build: cache hit, replaying logs 178267ee3c25fe0a
-=======
-  build: cache hit, replaying logs 28e184e0ca4898bd
->>>>>>> 37c3c596f1 (chore: update integration tests)
+  build: cache hit, replaying logs ed245ad45c9be274
   build: yarn run v1.22.17
   build: warning package.json: No license field
   build: $ echo building > foo.txt

@@ -11,11 +11,7 @@ Make sure that the internal util package is part of the prune output
   \xe2\x80\xa2 Packages in scope: docs, shared, util (esc)
   \xe2\x80\xa2 Running new-task in 3 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-<<<<<<< HEAD
-  docs:new-task: cache miss, executing 021bcd5005a1c133
-=======
-  docs:new-task: cache miss, executing 447a2edb51632766
->>>>>>> 37c3c596f1 (chore: update integration tests)
+  docs:new-task: cache miss, executing 7e5957e9303be3e2
   docs:new-task: 
   docs:new-task: > docs@ new-task .*out(\/|\\)apps(\/|\\)docs (re)
   docs:new-task: > echo building

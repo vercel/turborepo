@@ -31,11 +31,7 @@ Setup
       {
         "taskId": "build",
         "task": "build",
-<<<<<<< HEAD
-        "hash": "fbef1dba65f21ba4",
-=======
-        "hash": "b69493e87ea97b0e",
->>>>>>> 37c3c596f1 (chore: update integration tests)
+        "hash": "4047a6e65d7dafef",
         "inputs": {
           ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
@@ -90,11 +86,7 @@ Setup
       {
         "taskId": "test",
         "task": "test",
-<<<<<<< HEAD
-        "hash": "75187c3aff97a0a8",
-=======
-        "hash": "29571ce1244345cc",
->>>>>>> 37c3c596f1 (chore: update integration tests)
+        "hash": "89d72e7337505ef6",
         "inputs": {
           ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",

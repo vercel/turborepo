@@ -7,12 +7,7 @@ Check
   Global Hash Inputs
     Global Files                          = 3
     External Dependencies Hash            = 
-<<<<<<< HEAD
-    Global Cache Key                      = HEY STELLLLLLLAAAAAAAAAAAAA
-=======
     Global Cache Key                      = I can\xe2\x80\x99t see ya, but I know you\xe2\x80\x99re here (esc)
-    Global .env Files Considered          = 0
->>>>>>> 37c3c596f1 (chore: update integration tests)
     Global Env Vars                       = 
     Global Env Vars Values                = 
     Inferred Global Env Vars Values       = 
@@ -22,19 +17,15 @@ Check
   Tasks to Run
   build
     Task                           = build\s* (re)
-<<<<<<< HEAD
-    Hash                           = fbef1dba65f21ba4
-=======
-    Hash                           = b69493e87ea97b0e
->>>>>>> 37c3c596f1 (chore: update integration tests)
-    Cached \(Local\)                 = false\s* (re)
-    Cached \(Remote\)                = false\s* (re)
-    Command                        = echo building > foo.txt\s* (re)
-    Outputs                        = foo.txt\s* (re)
-    Log File                       = .turbo(\/|\\)turbo-build.log\s* (re)
-    Dependencies                   =\s* (re)
-    Dependents                     = test\s* (re)
-    Inputs Files Considered        = 5\s* (re)
+    Hash                           = 4047a6e65d7dafef
+    Cached (Local)                 = false
+    Cached (Remote)                = false
+    Command                        = echo building > foo.txt
+    Outputs                        = foo.txt
+    Log File                       = .turbo/turbo-build.log
+    Dependencies                   = 
+    Dependents                     = test
+    Inputs Files Considered        = 5
     Env Vars                       = 
     Env Vars Values                = 
     Inferred Env Vars Values       = 
@@ -44,19 +35,15 @@ Check
     Framework                      = 
   test
     Task                           = test\s* (re)
-<<<<<<< HEAD
-    Hash                           = 75187c3aff97a0a8
-=======
-    Hash                           = 29571ce1244345cc
->>>>>>> 37c3c596f1 (chore: update integration tests)
-    Cached \(Local\)                 = false\s* (re)
-    Cached \(Remote\)                = false\s* (re)
-    Command                        = cat foo.txt\s* (re)
-    Outputs                        =\s* (re)
-    Log File                       = .turbo(\/|\\)turbo-test.log\s* (re)
-    Dependencies                   = build\s* (re)
-    Dependents                     =\s* (re)
-    Inputs Files Considered        = 5\s* (re)
+    Hash                           = 89d72e7337505ef6
+    Cached (Local)                 = false
+    Cached (Remote)                = false
+    Command                        = cat foo.txt
+    Outputs                        = 
+    Log File                       = .turbo/turbo-test.log
+    Dependencies                   = build
+    Dependents                     = 
+    Inputs Files Considered        = 5
     Env Vars                       = 
     Env Vars Values                = 
     Inferred Env Vars Values       = 
