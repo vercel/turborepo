@@ -3,13 +3,13 @@ Setup
 
 # 1. First run, check the hash
   $ ${TURBO} run config-change-task --filter=config-change --dry=json | jq .tasks[0].hash
-  "b795d055df35b872"
+  "e0471b5eddce1aab"
 
 2. Run again and assert task hash stays the same
   $ ${TURBO} run config-change-task --filter=config-change --dry=json | jq .tasks[0].hash
-  "b795d055df35b872"
+  "e0471b5eddce1aab"
 
 3. Change turbo.json and assert that hash changes
   $ cp $TARGET_DIR/apps/config-change/turbo-changed.json $TARGET_DIR/apps/config-change/turbo.json
   $ ${TURBO} run config-change-task --filter=config-change --dry=json | jq .tasks[0].hash
-  "5ab2f944ad74ef44"
+  "41e50d2dc738d0f8"

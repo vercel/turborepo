@@ -16,7 +16,6 @@ Setup
         "package.json": "8606ff4b95a5330740d8d9d0948faeada64f1f32"
       },
       "hashOfExternalDependencies": "",
-      "globalDotEnv": null,
       "environmentVariables": {
         "specified": {
           "env": [],
@@ -33,7 +32,7 @@ Setup
       {
         "taskId": "build",
         "task": "build",
-        "hash": "bfac661137d88079",
+        "hash": "10229b8c4ed48f95",
         "inputs": {
           ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
@@ -63,7 +62,6 @@ Setup
           "persistent": false,
           "env": [],
           "passThroughEnv": null,
-          "dotEnv": null,
           "interactive": false
         },
         "expandedOutputs": [],
@@ -77,8 +75,7 @@ Setup
           "configured": [],
           "inferred": [],
           "passthrough": null
-        },
-        "dotEnv": null
+        }
       }
     ],
     "user": ".*", (re)

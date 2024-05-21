@@ -178,7 +178,7 @@ impl PackageInputsHashes {
                             }
                         }
                     });
-                let mut hash_object = match hash_object {
+                let hash_object = match hash_object {
                     Some(hash_object) => hash_object,
                     None => {
                         let local_hash_result = scm.get_package_file_hashes(
@@ -193,22 +193,6 @@ impl PackageInputsHashes {
                         }
                     }
                 };
-                if let Some(dot_env) = &task_definition.dot_env {
-                    if !dot_env.is_empty() {
-                        let absolute_package_path = repo_root.resolve(package_path);
-                        let dot_env_object = match scm.hash_existing_of(
-                            &absolute_package_path,
-                            dot_env.iter().map(|p| p.to_anchored_system_path_buf()),
-                        ) {
-                            Ok(dot_env_object) => dot_env_object,
-                            Err(err) => return Some(Err(err.into())),
-                        };
-
-                        for (key, value) in dot_env_object {
-                            hash_object.insert(key, value);
-                        }
-                    }
-                }
 
                 let file_hashes = FileHashes(hash_object);
                 let hash = file_hashes.clone().hash();
@@ -404,7 +388,6 @@ impl<'a> TaskHasher<'a> {
                 .as_deref()
                 .unwrap_or_default(),
             env_mode: task_env_mode,
-            dot_env: task_definition.dot_env.as_deref().unwrap_or_default(),
         };
 
         let task_hash = task_hashable.calculate_task_hash();
