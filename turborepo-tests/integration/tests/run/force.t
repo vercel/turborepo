@@ -28,7 +28,7 @@ baseline to generate cache
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
-    Time:    175ms 
+    Time:\s*[\.0-9]+m?s  (re)
   
 
 # env var=true, missing flag: cache bypass
@@ -40,7 +40,7 @@ baseline to generate cache
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
-    Time:    177ms 
+    Time:\s*[\.0-9]+m?s  (re)
   
 # env var=true, --flag=true: cache bypass
   $ TURBO_FORCE=true ${TURBO} run build --output-logs=hash-only --filter=my-app --force=true
@@ -51,7 +51,7 @@ baseline to generate cache
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
-    Time:    173ms 
+    Time:\s*[\.0-9]+m?s  (re)
   
 # env var=true, --flag=false: cache hit
   $ TURBO_FORCE=true ${TURBO} run build --output-logs=hash-only --filter=my-app --force=false
@@ -62,7 +62,7 @@ baseline to generate cache
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
-    Time:    22ms >>> FULL TURBO
+    Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
 # env var=true, --flag (no value): cache bypass
   $ TURBO_FORCE=true ${TURBO} run build --output-logs=hash-only --filter=my-app --force
@@ -73,7 +73,7 @@ baseline to generate cache
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
-    Time:    177ms 
+    Time:\s*[\.0-9]+m?s  (re)
   
 
 # env var=false, missing flag, cache hit
@@ -85,7 +85,7 @@ baseline to generate cache
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
-    Time:    22ms >>> FULL TURBO
+    Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
 # env var=false, --flag=true: cache bypass
   $ TURBO_FORCE=false ${TURBO} run build --output-logs=hash-only --filter=my-app --force=true
@@ -96,7 +96,7 @@ baseline to generate cache
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
-    Time:    175ms 
+    Time:\s*[\.0-9]+m?s  (re)
   
 # env var=false, --flag=false: cache hit
   $ TURBO_FORCE=false ${TURBO} run build --output-logs=hash-only --filter=my-app --force=false
@@ -107,7 +107,7 @@ baseline to generate cache
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
-    Time:    21ms >>> FULL TURBO
+    Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
 # env var=false, --flag (no value): cache bypass
   $ TURBO_FORCE=false ${TURBO} run build --output-logs=hash-only --filter=my-app --force
@@ -118,7 +118,7 @@ baseline to generate cache
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
-    Time:    174ms 
+    Time:\s*[\.0-9]+m?s  (re)
   
 
 # missing env var, missing flag: cache hit
@@ -130,7 +130,7 @@ baseline to generate cache
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
-    Time:    21ms >>> FULL TURBO
+    Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
 # missing env var, --flag=true: cache bypass
   $ ${TURBO} run build --output-logs=hash-only --filter=my-app --force=true
@@ -141,7 +141,7 @@ baseline to generate cache
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
-    Time:    175ms 
+    Time:\s*[\.0-9]+m?s  (re)
   
 # missing env var, --flag=false: cache hit
   $ ${TURBO} run build --output-logs=hash-only --filter=my-app --force=false
@@ -152,7 +152,7 @@ baseline to generate cache
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
-    Time:    21ms >>> FULL TURBO
+    Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
 # missing env var, --flag (no value): cache bypass
   $ ${TURBO} run build --output-logs=hash-only --filter=my-app --force
@@ -163,5 +163,5 @@ baseline to generate cache
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
-    Time:    173ms 
+    Time:\s*[\.0-9]+m?s  (re)
   
