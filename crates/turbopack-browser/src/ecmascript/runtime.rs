@@ -10,7 +10,6 @@ use turbopack_ecmascript::chunk::{
     EcmascriptChunkRuntimeContent, ChunkingContext,
 };
 
-
 use crate::ecmascript::content::EcmascriptDevChunkContent;
 
 /// Development runtime for Ecmascript chunks.
