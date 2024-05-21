@@ -1,4 +1,4 @@
-use std::{fmt::Debug, hash::Hash, sync::Arc};
+use std::{borrow::BorrowMut, fmt::Debug, hash::Hash, sync::Arc};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -6,16 +6,15 @@ use swc_core::{
     base::SwcComments,
     common::{chain, comments::Comments, util::take::Take, Mark, SourceMap},
     ecma::{
-        ast::{Module, ModuleItem, Program, Script},
-        preset_env::{
-            Targets, {self},
-        },
+        ast::{Expr, Module, ModuleItem, Program, Script},
+        preset_env::{self, Targets},
         transforms::{
             base::{feature::FeatureFlag, helpers::inject_helpers, Assumptions},
             react::react,
         },
-        visit::{FoldWith, VisitMutWith},
+        visit::{FoldWith, VisitMut, VisitMutWith},
     },
+    quote,
 };
 use turbo_tasks::{ValueDefault, Vc};
 use turbo_tasks_fs::FileSystemPath;
@@ -182,6 +181,22 @@ impl EcmascriptInputTransform {
                     top_level_mark,
                     unresolved_mark,
                 ));
+
+                if *refresh {
+                    let stmt = quote!(
+                        "\n__turbopack_refresh__.registerExports(module, \
+                         globalThis.$RefreshHelpers$); }\n" as Stmt
+                    );
+
+                    match program {
+                        Program::Module(module) => {
+                            module.body.push(ModuleItem::Stmt(stmt));
+                        }
+                        Program::Script(script) => {
+                            script.body.push(stmt);
+                        }
+                    }
+                }
             }
             EcmascriptInputTransform::CommonJs => {
                 // Explicit type annotation to ensure that we don't duplicate transforms in the
