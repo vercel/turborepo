@@ -53,7 +53,7 @@ pub struct TurboJson {
     pub(crate) global_dot_env: Option<Vec<RelativeUnixPathBuf>>,
     pub(crate) global_env: Vec<String>,
     pub(crate) global_pass_through_env: Option<Vec<String>>,
-    pub(crate) pipeline: Pipeline,
+    pub(crate) tasks: Pipeline,
 }
 
 // Iterable is required to enumerate allowed keys
@@ -118,10 +118,10 @@ pub struct RawTurboJson {
     // .env files to consider, in order.
     #[serde(skip_serializing_if = "Option::is_none")]
     global_dot_env: Option<Vec<UnescapedString>>,
-    // Pipeline is a map of Turbo pipeline entries which define the task graph
+    // Tasks is a map of task entries which define the task graph
     // and cache behavior on a per task or per package-task basis.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub pipeline: Option<Pipeline>,
+    pub tasks: Option<Pipeline>,
     // Configuration options when interfacing with the remote cache
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) remote_cache: Option<RawRemoteCacheOptions>,
@@ -402,7 +402,7 @@ impl RawTurboJson {
     /// workspaces
     pub fn prune_tasks<S: AsRef<str>>(&self, workspaces: &[S]) -> Self {
         let mut this = self.clone();
-        if let Some(pipeline) = &mut this.pipeline {
+        if let Some(pipeline) = &mut this.tasks {
             pipeline.0.retain(|task_name, _| {
                 task_name.in_workspace(ROOT_PKG_NAME)
                     || workspaces
@@ -446,7 +446,7 @@ impl RawTurboJson {
         }
 
         Some(RawTurboJson {
-            pipeline: Some(pipeline),
+            tasks: Some(pipeline),
             ..RawTurboJson::default()
         })
     }
@@ -521,7 +521,7 @@ impl TryFrom<RawTurboJson> for TurboJson {
                     Ok(global_dot_env)
                 })
                 .transpose()?,
-            pipeline: raw_turbo.pipeline.unwrap_or_default(),
+            tasks: raw_turbo.tasks.unwrap_or_default(),
             // copy these over, we don't need any changes here.
             extends: raw_turbo
                 .extends
@@ -571,7 +571,7 @@ impl TurboJson {
             // tasks
             (true, Ok(mut turbo_from_files)) => {
                 let mut pipeline = Pipeline::default();
-                for (task_name, task_definition) in turbo_from_files.pipeline {
+                for (task_name, task_definition) in turbo_from_files.tasks {
                     if task_name.is_package_task() {
                         let (span, text) = task_definition.span_and_text("turbo.json");
 
@@ -585,7 +585,7 @@ impl TurboJson {
                     pipeline.insert(task_name.into_root_task(), task_definition);
                 }
 
-                turbo_from_files.pipeline = pipeline;
+                turbo_from_files.tasks = pipeline;
 
                 turbo_from_files
             }
@@ -599,7 +599,7 @@ impl TurboJson {
                 // Explicitly set cache to Some(false) in this definition
                 // so we can pretend it was set on purpose. That way it
                 // won't get clobbered by the merge function.
-                turbo_json.pipeline.insert(
+                turbo_json.tasks.insert(
                     task_name,
                     Spanned::new(RawTaskDefinition {
                         cache: Some(Spanned::new(false)),
@@ -613,7 +613,7 @@ impl TurboJson {
     }
 
     fn has_task(&self, task_name: &TaskName) -> bool {
-        for key in self.pipeline.keys() {
+        for key in self.tasks.keys() {
             if key == task_name || (key.task() == task_name.task() && !task_name.is_package_task())
             {
                 return true;
@@ -634,12 +634,9 @@ impl TurboJson {
     }
 
     pub fn task(&self, task_id: &TaskId, task_name: &TaskName) -> Option<RawTaskDefinition> {
-        match self.pipeline.get(&task_id.as_task_name()) {
+        match self.tasks.get(&task_id.as_task_name()) {
             Some(entry) => Some(entry.value.clone()),
-            None => self
-                .pipeline
-                .get(task_name)
-                .map(|entry| entry.value.clone()),
+            None => self.tasks.get(task_name).map(|entry| entry.value.clone()),
         }
     }
 
@@ -656,7 +653,7 @@ impl TurboJson {
     }
 
     pub fn has_root_tasks(&self) -> bool {
-        self.pipeline
+        self.tasks
             .iter()
             .any(|(task_name, _)| task_name.package() == Some(ROOT_PKG_NAME))
     }
@@ -666,7 +663,7 @@ type TurboJSONValidation = fn(&TurboJson) -> Vec<Error>;
 
 pub fn validate_no_package_task_syntax(turbo_json: &TurboJson) -> Vec<Error> {
     turbo_json
-        .pipeline
+        .tasks
         .iter()
         .filter(|(task_name, _)| task_name.is_package_task())
         .map(|(task_name, entry)| {
@@ -815,7 +812,7 @@ mod tests {
              ..PackageJson::default()
         },
         TurboJson {
-            pipeline: Pipeline([(
+            tasks: Pipeline([(
                 "//#build".into(),
                 Spanned::new(RawTaskDefinition {
                     cache: Some(Spanned::new(false)),
@@ -828,7 +825,7 @@ mod tests {
     )]
     #[test_case(
         Some(r#"{
-            "pipeline": {
+            "tasks": {
                 "build": {
                     "cache": true
                 }
@@ -839,12 +836,12 @@ mod tests {
              ..PackageJson::default()
         },
         TurboJson {
-            pipeline: Pipeline([(
+            tasks: Pipeline([(
                 "//#build".into(),
                 Spanned::new(RawTaskDefinition {
-                    cache: Some(Spanned::new(true).with_range(84..88)),
+                    cache: Some(Spanned::new(true).with_range(81..85)),
                     ..RawTaskDefinition::default()
-                }).with_range(53..106)
+                }).with_range(50..103)
             ),
             (
                 "//#test".into(),
@@ -876,7 +873,7 @@ mod tests {
         )?;
         turbo_json.text = None;
         turbo_json.path = None;
-        for (_, task_definition) in turbo_json.pipeline.iter_mut() {
+        for (_, task_definition) in turbo_json.tasks.iter_mut() {
             task_definition.path = None;
             task_definition.text = None;
         }
@@ -1057,7 +1054,7 @@ mod tests {
     #[test]
     fn test_turbo_task_pruning() {
         let json = RawTurboJson::parse_from_serde(json!({
-            "pipeline": {
+            "tasks": {
                 "//#top": {},
                 "build": {},
                 "a#build": {},
@@ -1067,7 +1064,7 @@ mod tests {
         .unwrap();
         let pruned_json = json.prune_tasks(&["a"]);
         let expected: RawTurboJson = RawTurboJson::parse_from_serde(json!({
-            "pipeline": {
+            "tasks": {
                 "//#top": {},
                 "build": {},
                 "a#build": {},
@@ -1076,8 +1073,8 @@ mod tests {
         .unwrap();
         // We do this comparison manually so we don't compare the `task_name_range`
         // fields, which are expected to be different
-        let pruned_pipeline = pruned_json.pipeline.unwrap();
-        let expected_pipeline = expected.pipeline.unwrap();
+        let pruned_pipeline = pruned_json.tasks.unwrap();
+        let expected_pipeline = expected.tasks.unwrap();
         for (
             (pruned_task_name, pruned_pipeline_entry),
             (expected_task_name, expected_pipeline_entry),
@@ -1098,7 +1095,7 @@ mod tests {
     #[test_case("junk", None ; "invalid value")]
     fn test_parsing_output_logs_mode(output_logs: &str, expected: Option<OutputLogsMode>) {
         let json: Result<RawTurboJson, _> = RawTurboJson::parse_from_serde(json!({
-            "pipeline": {
+            "tasks": {
                 "build": {
                     "outputLogs": output_logs,
                 }
@@ -1108,7 +1105,7 @@ mod tests {
         let actual = json
             .as_ref()
             .ok()
-            .and_then(|j| j.pipeline.as_ref())
+            .and_then(|j| j.tasks.as_ref())
             .and_then(|pipeline| pipeline.0.get(&TaskName::from("build")))
             .and_then(|build| build.value.output_logs.clone())
             .map(|mode| mode.into_inner());
