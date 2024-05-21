@@ -15,7 +15,6 @@ Setup
         "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057"
       },
       "hashOfExternalDependencies": "",
-      "globalDotEnv": null,
       "environmentVariables": {
         "specified": {
           "env": [],
@@ -32,7 +31,7 @@ Setup
       {
         "taskId": "build",
         "task": "build",
-        "hash": "e48ea8d453fe3216",
+        "hash": "fbef1dba65f21ba4",
         "inputs": {
           ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
@@ -69,7 +68,6 @@ Setup
           "persistent": false,
           "env": [],
           "passThroughEnv": null,
-          "dotEnv": null,
           "interactive": false
         },
         "expandedOutputs": [],
@@ -83,13 +81,12 @@ Setup
           "configured": [],
           "inferred": [],
           "passthrough": null
-        },
-        "dotEnv": null
+        }
       },
       {
         "taskId": "test",
         "task": "test",
-        "hash": "92fa9e0daec0e1ec",
+        "hash": "75187c3aff97a0a8",
         "inputs": {
           ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
@@ -124,7 +121,6 @@ Setup
           "persistent": false,
           "env": [],
           "passThroughEnv": null,
-          "dotEnv": null,
           "interactive": false
         },
         "expandedOutputs": [],
@@ -138,8 +134,7 @@ Setup
           "configured": [],
           "inferred": [],
           "passthrough": null
-        },
-        "dotEnv": null
+        }
       }
     ],
     "user": ".*", (re)

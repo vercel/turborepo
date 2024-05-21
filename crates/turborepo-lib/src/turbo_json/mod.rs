@@ -10,10 +10,9 @@ use miette::{NamedSource, SourceSpan};
 use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, RelativeUnixPathBuf};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
 use turborepo_errors::Spanned;
 use turborepo_repository::{package_graph::ROOT_PKG_NAME, package_json::PackageJson};
-use turborepo_telemetry::events::generic::GenericEventBuilder;
 
 use crate::{
     cli::OutputLogsMode,
@@ -50,7 +49,6 @@ pub struct TurboJson {
     path: Option<Arc<str>>,
     pub(crate) extends: Spanned<Vec<String>>,
     pub(crate) global_deps: Vec<String>,
-    pub(crate) global_dot_env: Option<Vec<RelativeUnixPathBuf>>,
     pub(crate) global_env: Vec<String>,
     pub(crate) global_pass_through_env: Option<Vec<String>>,
     pub(crate) tasks: Pipeline,
@@ -115,9 +113,6 @@ pub struct RawTurboJson {
     global_env: Option<Vec<Spanned<UnescapedString>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     global_pass_through_env: Option<Vec<Spanned<UnescapedString>>>,
-    // .env files to consider, in order.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    global_dot_env: Option<Vec<UnescapedString>>,
     // Tasks is a map of task entries which define the task graph
     // and cache behavior on a per task or per package-task basis.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -170,8 +165,6 @@ pub struct RawTaskDefinition {
     #[serde(skip_serializing_if = "Option::is_none")]
     depends_on: Option<Spanned<Vec<Spanned<UnescapedString>>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    dot_env: Option<Spanned<Vec<UnescapedString>>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     env: Option<Vec<Spanned<UnescapedString>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     inputs: Option<Vec<Spanned<UnescapedString>>>,
@@ -216,7 +209,6 @@ impl RawTaskDefinition {
         set_field!(self, other, persistent);
         set_field!(self, other, env);
         set_field!(self, other, pass_through_env);
-        set_field!(self, other, dot_env);
         set_field!(self, other, interactive);
     }
 }
@@ -355,21 +347,6 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
             })
             .transpose()?;
 
-        let dot_env = raw_task
-            .dot_env
-            .map(|env| -> Result<Vec<RelativeUnixPathBuf>, Error> {
-                // Going to _at least_ be an empty array.
-                let mut dot_env = Vec::new();
-                for dot_env_path in env.into_inner() {
-                    let type_checked_path = RelativeUnixPathBuf::new(dot_env_path)?;
-                    // These are _explicitly_ not sorted.
-                    dot_env.push(type_checked_path);
-                }
-
-                Ok(dot_env)
-            })
-            .transpose()?;
-
         Ok(TaskDefinition {
             outputs,
             cache,
@@ -378,7 +355,6 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
             env,
             inputs,
             pass_through_env,
-            dot_env,
             output_logs: *raw_task.output_logs.unwrap_or_default(),
             persistent: *raw_task.persistent.unwrap_or_default(),
             interactive,
@@ -508,19 +484,6 @@ impl TryFrom<RawTurboJson> for TurboJson {
 
                 global_deps
             },
-            global_dot_env: raw_turbo
-                .global_dot_env
-                .map(|env| -> Result<Vec<RelativeUnixPathBuf>, Error> {
-                    let mut global_dot_env = Vec::new();
-                    for dot_env_path in env {
-                        let type_checked_path = RelativeUnixPathBuf::new(dot_env_path)?;
-                        // These are _explicitly_ not sorted.
-                        global_dot_env.push(type_checked_path);
-                    }
-
-                    Ok(global_dot_env)
-                })
-                .transpose()?,
             tasks: raw_turbo.tasks.unwrap_or_default(),
             // copy these over, we don't need any changes here.
             extends: raw_turbo
@@ -647,11 +610,6 @@ impl TurboJson {
             .collect()
     }
 
-    pub fn track_usage(&self, telemetry: &GenericEventBuilder) {
-        let global_dot_env = self.global_dot_env.as_deref();
-        telemetry.track_global_dot_env(global_dot_env);
-    }
-
     pub fn has_root_tasks(&self) -> bool {
         self.tasks
             .iter()
@@ -768,12 +726,6 @@ mod tests {
             ..TurboJson::default()
         }
     ; "global dependencies (sorted)")]
-    #[test_case(r#"{ "globalDotEnv": [".env.local", ".env"] }"#,
-        TurboJson {
-            global_dot_env: Some(vec![RelativeUnixPathBuf::new(".env.local").unwrap(), RelativeUnixPathBuf::new(".env").unwrap()]),
-            ..TurboJson::default()
-        }
-    ; "global dot env (unsorted)")]
     #[test_case(r#"{ "globalPassThroughEnv": ["GITHUB_TOKEN", "AWS_SECRET_KEY"] }"#,
         TurboJson {
             global_pass_through_env: Some(vec!["AWS_SECRET_KEY".to_string(), "GITHUB_TOKEN".to_string()]),
@@ -897,26 +849,8 @@ mod tests {
     ; "just persistent"
     )]
     #[test_case(
-        r#"{ "dotEnv": [] }"#,
-        RawTaskDefinition {
-            dot_env: Some(Spanned {
-                value: Vec::new(),
-                range: Some(12..14),
-                path: None,
-                text: None,
-            }),
-            ..RawTaskDefinition::default()
-        },
-        TaskDefinition {
-            dot_env: Some(Vec::new()),
-            ..Default::default()
-        }
-        ; "empty dotenv"
-    )]
-    #[test_case(
         r#"{
           "dependsOn": ["cli#build"],
-          "dotEnv": ["package/a/.env"],
           "env": ["OS"],
           "passThroughEnv": ["AWS_SECRET_KEY"],
           "outputs": ["package/a/dist"],
@@ -928,18 +862,16 @@ mod tests {
         }"#,
         RawTaskDefinition {
             depends_on: Some(Spanned::new(vec![Spanned::<UnescapedString>::new("cli#build".into()).with_range(26..37)]).with_range(25..38)),
-            dot_env: Some(Spanned::new(vec!["package/a/.env".into()]).with_range(60..78)),
-            env: Some(vec![Spanned::<UnescapedString>::new("OS".into()).with_range(98..102)]),
-            pass_through_env: Some(vec![Spanned::<UnescapedString>::new("AWS_SECRET_KEY".into()).with_range(134..150)]),
-            outputs: Some(vec![Spanned::<UnescapedString>::new("package/a/dist".into()).with_range(175..191)]),
-            cache: Some(Spanned::new(false).with_range(213..218)),
-            inputs: Some(vec![Spanned::<UnescapedString>::new("package/a/src/**".into()).with_range(241..259)]),
-            output_logs: Some(Spanned::new(OutputLogsMode::Full).with_range(286..292)),
-            persistent: Some(Spanned::new(true).with_range(318..322)),
-            interactive: Some(Spanned::new(true).with_range(349..353)),
+            env: Some(vec![Spanned::<UnescapedString>::new("OS".into()).with_range(58..62)]),
+            pass_through_env: Some(vec![Spanned::<UnescapedString>::new("AWS_SECRET_KEY".into()).with_range(94..110)]),
+            outputs: Some(vec![Spanned::<UnescapedString>::new("package/a/dist".into()).with_range(135..151)]),
+            cache: Some(Spanned::new(false).with_range(173..178)),
+            inputs: Some(vec![Spanned::<UnescapedString>::new("package/a/src/**".into()).with_range(201..219)]),
+            output_logs: Some(Spanned::new(OutputLogsMode::Full).with_range(246..252)),
+            persistent: Some(Spanned::new(true).with_range(278..282)),
+            interactive: Some(Spanned::new(true).with_range(309..313)),
         },
         TaskDefinition {
-          dot_env: Some(vec![RelativeUnixPathBuf::new("package/a/.env").unwrap()]),
           env: vec!["OS".to_string()],
           outputs: TaskOutputs {
               inclusions: vec!["package/a/dist".to_string()],
@@ -959,7 +891,6 @@ mod tests {
     #[test_case(
         r#"{
               "dependsOn": ["cli#build"],
-              "dotEnv": ["package\\a\\.env"],
               "env": ["OS"],
               "passThroughEnv": ["AWS_SECRET_KEY"],
               "outputs": ["package\\a\\dist"],
@@ -970,18 +901,16 @@ mod tests {
             }"#,
         RawTaskDefinition {
             depends_on: Some(Spanned::new(vec![Spanned::<UnescapedString>::new("cli#build".into()).with_range(30..41)]).with_range(29..42)),
-            dot_env: Some(Spanned::new(vec!["package\\a\\.env".into()]).with_range(68..88)),
-            env: Some(vec![Spanned::<UnescapedString>::new("OS".into()).with_range(112..116)]),
-            pass_through_env: Some(vec![Spanned::<UnescapedString>::new("AWS_SECRET_KEY".into()).with_range(152..168)]),
-            outputs: Some(vec![Spanned::<UnescapedString>::new("package\\a\\dist".into()).with_range(197..215)]),
-            cache: Some(Spanned::new(false).with_range(241..246)),
-            inputs: Some(vec![Spanned::<UnescapedString>::new("package\\a\\src\\**".into()).with_range(273..294)]),
-            output_logs: Some(Spanned::new(OutputLogsMode::Full).with_range(325..331)),
-            persistent: Some(Spanned::new(true).with_range(361..365)),
+            env: Some(vec![Spanned::<UnescapedString>::new("OS".into()).with_range(66..70)]),
+            pass_through_env: Some(vec![Spanned::<UnescapedString>::new("AWS_SECRET_KEY".into()).with_range(106..122)]),
+            outputs: Some(vec![Spanned::<UnescapedString>::new("package\\a\\dist".into()).with_range(151..169)]),
+            cache: Some(Spanned::new(false).with_range(195..200)),
+            inputs: Some(vec![Spanned::<UnescapedString>::new("package\\a\\src\\**".into()).with_range(227..248)]),
+            output_logs: Some(Spanned::new(OutputLogsMode::Full).with_range(279..285)),
+            persistent: Some(Spanned::new(true).with_range(315..319)),
             interactive: None,
         },
         TaskDefinition {
-            dot_env: Some(vec![RelativeUnixPathBuf::new("package\\a\\.env").unwrap()]),
             env: vec!["OS".to_string()],
             outputs: TaskOutputs {
                 inclusions: vec!["package\\a\\dist".to_string()],

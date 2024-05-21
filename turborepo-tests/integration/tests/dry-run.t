@@ -19,7 +19,6 @@ Setup
     Global Files                          = 1
     External Dependencies Hash            = 459c029558afe716
     Global Cache Key                      = HEY STELLLLLLLAAAAAAAAAAAAA
-    Global .env Files Considered          = 0
     Global Env Vars                       = SOME_ENV_VAR
     Global Env Vars Values                = 
     Inferred Global Env Vars Values       = 
@@ -27,11 +26,11 @@ Setup
     Global Passed Through Env Vars Values = 
 
 # Part 3 are Tasks to Run, and we have to validate each task separately
-  $ cat tmp-3.txt | grep "my-app#build" -A 18
+  $ cat tmp-3.txt | grep "my-app#build" -A 17
   my-app#build
     Task                           = build\s* (re)
     Package                        = my-app\s* (re)
-    Hash                           = f5b905676d8a275c\s* (re)
+    Hash                           = 61394a550211cbe8\s* (re)
     Cached \(Local\)                 = false\s* (re)
     Cached \(Remote\)                = false\s* (re)
     Directory                      = apps(\/|\\)my-app\s* (re)
@@ -41,18 +40,17 @@ Setup
     Dependencies                   =\s* (re)
     Dependents                     =\s* (re)
     Inputs Files Considered        = 2\s* (re)
-    .env Files Considered          = 1\s* (re)
     Env Vars                       =\s* (re)
     Env Vars Values                =\s* (re)
     Inferred Env Vars Values       =\s* (re)
     Passed Through Env Vars        =\s* (re)
     Passed Through Env Vars Values =\s* (re)
 
-  $ cat tmp-3.txt | grep "util#build" -A 18
+  $ cat tmp-3.txt | grep "util#build" -A 17
   util#build
     Task                           = build\s* (re)
     Package                        = util\s* (re)
-    Hash                           = 1ce33e04f265f95c\s* (re)
+    Hash                           = d30fc4474534c30e\s* (re)
     Cached \(Local\)                 = false\s* (re)
     Cached \(Remote\)                = false\s* (re)
     Directory                      = packages(\/|\\)util\s* (re)
@@ -62,7 +60,6 @@ Setup
     Dependencies                   =\s* (re)
     Dependents                     =\s* (re)
     Inputs Files Considered        = 1\s* (re)
-    .env Files Considered          = 0\s* (re)
     Env Vars                       = NODE_ENV\s* (re)
     Env Vars Values                =\s* (re)
     Inferred Env Vars Values       =\s* (re)
