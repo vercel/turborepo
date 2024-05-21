@@ -30,10 +30,14 @@ Check
   build
     Task                           = build\s* (re)
 <<<<<<< HEAD
+<<<<<<< HEAD
     Hash                           = 10229b8c4ed48f95
 =======
     Hash                           = 64c6a531cb00bb47
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+    Hash                           = 9cff709a1e22ead6
+>>>>>>> 37c3c596f1 (chore: update integration tests)
     Cached \(Local\)                 = false\s* (re)
     Cached \(Remote\)                = false\s* (re)
     Command                        = echo building > foo.txt\s* (re)
@@ -65,10 +69,14 @@ Run real once
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
 <<<<<<< HEAD
+<<<<<<< HEAD
   build: cache bypass, force executing 10229b8c4ed48f95
 =======
   build: cache bypass, force executing 64c6a531cb00bb47
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+  build: cache bypass, force executing 9cff709a1e22ead6
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   build: 
   build: > build
   build: > echo building > foo.txt
@@ -83,10 +91,14 @@ Run a second time, verify no caching because there is no config
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
 <<<<<<< HEAD
+<<<<<<< HEAD
   build: cache bypass, force executing 10229b8c4ed48f95
 =======
   build: cache bypass, force executing 64c6a531cb00bb47
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+  build: cache bypass, force executing 9cff709a1e22ead6
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   build: 
   build: > build
   build: > echo building > foo.txt

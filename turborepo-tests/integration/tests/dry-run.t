@@ -36,10 +36,14 @@ Setup
     Task                           = build\s* (re)
     Package                        = my-app\s* (re)
 <<<<<<< HEAD
+<<<<<<< HEAD
     Hash                           = 61394a550211cbe8\s* (re)
 =======
     Hash                           = dea27cc2fbbcfe2c
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+    Hash                           = 709525604475409a
+>>>>>>> 37c3c596f1 (chore: update integration tests)
     Cached \(Local\)                 = false\s* (re)
     Cached \(Remote\)                = false\s* (re)
     Directory                      = apps(\/|\\)my-app\s* (re)
@@ -60,10 +64,14 @@ Setup
     Task                           = build\s* (re)
     Package                        = util\s* (re)
 <<<<<<< HEAD
+<<<<<<< HEAD
     Hash                           = d30fc4474534c30e\s* (re)
 =======
     Hash                           = e09943c27ed0a75d
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+    Hash                           = 98d1cf4886bbc73d
+>>>>>>> 37c3c596f1 (chore: update integration tests)
     Cached \(Local\)                 = false\s* (re)
     Cached \(Remote\)                = false\s* (re)
     Directory                      = packages(\/|\\)util\s* (re)

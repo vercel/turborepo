@@ -18,10 +18,14 @@
   \xe2\x80\xa2 Running dev in 2 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
 <<<<<<< HEAD
+<<<<<<< HEAD
   app-a:dev: cache miss, executing 123f031c97be8067
 =======
   app-a:dev: cache miss, executing 97835a4c9c3d1c42
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+  app-a:dev: cache miss, executing 62f94dc00b6e5279
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   app-a:dev: 
   app-a:dev: > dev
   app-a:dev: > echo dev-app-a

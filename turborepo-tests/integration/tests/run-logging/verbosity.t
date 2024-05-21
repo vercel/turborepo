@@ -7,10 +7,14 @@ Verbosity level 1
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
 <<<<<<< HEAD
+<<<<<<< HEAD
   util:build: cache bypass, force executing d30fc4474534c30e
 =======
   util:build: cache bypass, force executing e09943c27ed0a75d
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+  util:build: cache bypass, force executing 98d1cf4886bbc73d
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   util:build: 
   util:build: > build
   util:build: > echo building
@@ -26,10 +30,14 @@ Verbosity level 1
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
 <<<<<<< HEAD
+<<<<<<< HEAD
   util:build: cache bypass, force executing d30fc4474534c30e
 =======
   util:build: cache bypass, force executing e09943c27ed0a75d
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+  util:build: cache bypass, force executing 98d1cf4886bbc73d
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   util:build: 
   util:build: > build
   util:build: > echo building

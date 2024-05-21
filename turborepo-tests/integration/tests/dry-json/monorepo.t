@@ -50,10 +50,14 @@ Setup
     "task": "build",
     "package": "my-app",
 <<<<<<< HEAD
+<<<<<<< HEAD
     "hash": "61394a550211cbe8",
 =======
     "hash": "dea27cc2fbbcfe2c",
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+    "hash": "709525604475409a",
+>>>>>>> 37c3c596f1 (chore: update integration tests)
     "inputs": {
       ".env.local": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
       "package.json": "1746e0db2361085b5953a6a3beab08c24af5bc08"
@@ -114,10 +118,14 @@ Setup
     "task": "build",
     "package": "util",
 <<<<<<< HEAD
+<<<<<<< HEAD
     "hash": "d30fc4474534c30e",
 =======
     "hash": "e09943c27ed0a75d",
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+    "hash": "98d1cf4886bbc73d",
+>>>>>>> 37c3c596f1 (chore: update integration tests)
     "inputs": {
       "package.json": "e755064fd7893809d10fc067bb409c7ae516327f"
     },

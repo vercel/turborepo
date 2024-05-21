@@ -7,6 +7,7 @@ Baseline task hashes
   {
     "taskId": "another#build",
 <<<<<<< HEAD
+<<<<<<< HEAD
     "hash": "1d62465edaa86a4e"
   }
   {
@@ -18,15 +19,22 @@ Baseline task hashes
     "hash": "d30fc4474534c30e"
 =======
     "hash": "39902e236d45b17a"
+=======
+    "hash": "843536e46620dad2"
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   }
   {
     "taskId": "my-app#build",
-    "hash": "8f74c4a19d54432c"
+    "hash": "bbfabe4612171fc1"
   }
   {
     "taskId": "util#build",
+<<<<<<< HEAD
     "hash": "e09943c27ed0a75d"
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+    "hash": "98d1cf4886bbc73d"
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   }
 
 Change only my-app#build
@@ -34,6 +42,7 @@ Change only my-app#build
   $ ${TURBO} build --dry=json | jq -r '.tasks | sort_by(.taskId)[] | {taskId, hash}'
   {
     "taskId": "another#build",
+<<<<<<< HEAD
 <<<<<<< HEAD
     "hash": "1d62465edaa86a4e"
   }
@@ -46,15 +55,22 @@ Change only my-app#build
     "hash": "d30fc4474534c30e"
 =======
     "hash": "39902e236d45b17a"
+=======
+    "hash": "843536e46620dad2"
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   }
   {
     "taskId": "my-app#build",
-    "hash": "c741bcbd31d15d60"
+    "hash": "0455e87c8abba36d"
   }
   {
     "taskId": "util#build",
+<<<<<<< HEAD
     "hash": "e09943c27ed0a75d"
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+    "hash": "98d1cf4886bbc73d"
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   }
 
 Change my-app#build dependsOn
@@ -63,33 +79,6 @@ Change my-app#build dependsOn
   {
     "taskId": "another#build",
 <<<<<<< HEAD
-    "hash": "1d62465edaa86a4e"
-  }
-  {
-    "taskId": "my-app#build",
-    "hash": "ccf2441853eb8930"
-  }
-  {
-    "taskId": "util#build",
-    "hash": "d30fc4474534c30e"
-=======
-    "hash": "39902e236d45b17a"
-  }
-  {
-    "taskId": "my-app#build",
-    "hash": "6553128bdbc1036d"
-  }
-  {
-    "taskId": "util#build",
-    "hash": "e09943c27ed0a75d"
->>>>>>> 2eae5cbd82 (Update tests)
-  }
-
-Non-materially modifying the dep graph does nothing.
-  $ cp "$TESTDIR/fixture-configs/d-depends-on-util.json" "$(pwd)/turbo.json" && git commit -am "no comment" --quiet
-  $ ${TURBO} build --dry=json | jq -r '.tasks | sort_by(.taskId)[] | {taskId, hash}'
-  {
-    "taskId": "another#build",
 <<<<<<< HEAD
     "hash": "1d62465edaa86a4e"
   }
@@ -102,15 +91,58 @@ Non-materially modifying the dep graph does nothing.
     "hash": "d30fc4474534c30e"
 =======
     "hash": "39902e236d45b17a"
+=======
+    "hash": "843536e46620dad2"
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   }
   {
     "taskId": "my-app#build",
-    "hash": "6553128bdbc1036d"
+    "hash": "8d584a4d18836787"
   }
   {
     "taskId": "util#build",
+<<<<<<< HEAD
     "hash": "e09943c27ed0a75d"
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+    "hash": "98d1cf4886bbc73d"
+>>>>>>> 37c3c596f1 (chore: update integration tests)
+  }
+
+Non-materially modifying the dep graph does nothing.
+  $ cp "$TESTDIR/fixture-configs/d-depends-on-util.json" "$(pwd)/turbo.json" && git commit -am "no comment" --quiet
+  $ ${TURBO} build --dry=json | jq -r '.tasks | sort_by(.taskId)[] | {taskId, hash}'
+  {
+    "taskId": "another#build",
+<<<<<<< HEAD
+<<<<<<< HEAD
+    "hash": "1d62465edaa86a4e"
+  }
+  {
+    "taskId": "my-app#build",
+    "hash": "ccf2441853eb8930"
+  }
+  {
+    "taskId": "util#build",
+    "hash": "d30fc4474534c30e"
+=======
+    "hash": "39902e236d45b17a"
+=======
+    "hash": "843536e46620dad2"
+>>>>>>> 37c3c596f1 (chore: update integration tests)
+  }
+  {
+    "taskId": "my-app#build",
+    "hash": "8d584a4d18836787"
+  }
+  {
+    "taskId": "util#build",
+<<<<<<< HEAD
+    "hash": "e09943c27ed0a75d"
+>>>>>>> 2eae5cbd82 (Update tests)
+=======
+    "hash": "98d1cf4886bbc73d"
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   }
 
 
@@ -119,6 +151,7 @@ Change util#build impacts itself and my-app
   $ ${TURBO} build --dry=json | jq -r '.tasks | sort_by(.taskId)[] | {taskId, hash}'
   {
     "taskId": "another#build",
+<<<<<<< HEAD
 <<<<<<< HEAD
     "hash": "1d62465edaa86a4e"
   }
@@ -131,13 +164,20 @@ Change util#build impacts itself and my-app
     "hash": "73e9903a46832238"
 =======
     "hash": "39902e236d45b17a"
+=======
+    "hash": "843536e46620dad2"
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   }
   {
     "taskId": "my-app#build",
-    "hash": "fa0fd889b37b9c1b"
+    "hash": "239ff972999c4203"
   }
   {
     "taskId": "util#build",
+<<<<<<< HEAD
     "hash": "b781fbdbf3ba6a42"
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+    "hash": "70eb762a20d17252"
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   }

@@ -33,10 +33,14 @@ Setup
         "taskId": "build",
         "task": "build",
 <<<<<<< HEAD
+<<<<<<< HEAD
         "hash": "10229b8c4ed48f95",
 =======
         "hash": "64c6a531cb00bb47",
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+        "hash": "9cff709a1e22ead6",
+>>>>>>> 37c3c596f1 (chore: update integration tests)
         "inputs": {
           ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",

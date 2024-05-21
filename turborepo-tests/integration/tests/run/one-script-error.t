@@ -8,20 +8,28 @@ Note that npm reports any failed script as exit code 1, even though we "exit 2"
   \xe2\x80\xa2 Running error in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
 <<<<<<< HEAD
+<<<<<<< HEAD
   my-app:okay: cache miss, executing 90bba097751d6fc5
 =======
   my-app:okay: cache miss, executing 60081aaddedc751b
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+  my-app:okay: cache miss, executing 6093fc34e035e405
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   my-app:okay: 
   my-app:okay: > okay
   my-app:okay: > echo working
   my-app:okay: 
   my-app:okay: working
 <<<<<<< HEAD
+<<<<<<< HEAD
   my-app:error: cache miss, executing 6da0be6250fdaee0
 =======
   my-app:error: cache miss, executing a56db94cef498f96
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+  my-app:error: cache miss, executing 947694d8c10a1b15
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   my-app:error: 
   my-app:error: > error
   my-app:error: > exit 2
@@ -47,20 +55,28 @@ Make sure error isn't cached
   \xe2\x80\xa2 Running error in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
 <<<<<<< HEAD
+<<<<<<< HEAD
   my-app:okay: cache hit, replaying logs 90bba097751d6fc5
 =======
   my-app:okay: cache hit, replaying logs 60081aaddedc751b
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+  my-app:okay: cache hit, replaying logs 6093fc34e035e405
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   my-app:okay: 
   my-app:okay: > okay
   my-app:okay: > echo working
   my-app:okay: 
   my-app:okay: working
 <<<<<<< HEAD
+<<<<<<< HEAD
   my-app:error: cache miss, executing 6da0be6250fdaee0
 =======
   my-app:error: cache miss, executing a56db94cef498f96
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+  my-app:error: cache miss, executing 947694d8c10a1b15
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   my-app:error: 
   my-app:error: > error
   my-app:error: > exit 2
@@ -86,20 +102,28 @@ Make sure error code isn't swallowed with continue
   \xe2\x80\xa2 Running okay2 in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
 <<<<<<< HEAD
+<<<<<<< HEAD
   my-app:okay: cache hit, replaying logs 90bba097751d6fc5
 =======
   my-app:okay: cache hit, replaying logs 60081aaddedc751b
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+  my-app:okay: cache hit, replaying logs 6093fc34e035e405
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   my-app:okay: 
   my-app:okay: > okay
   my-app:okay: > echo working
   my-app:okay: 
   my-app:okay: working
 <<<<<<< HEAD
+<<<<<<< HEAD
   my-app:error: cache miss, executing 6da0be6250fdaee0
 =======
   my-app:error: cache miss, executing a56db94cef498f96
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+  my-app:error: cache miss, executing 947694d8c10a1b15
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   my-app:error: 
   my-app:error: > error
   my-app:error: > exit 2
@@ -110,10 +134,14 @@ Make sure error code isn't swallowed with continue
   my-app:error: npm ERR!   at location: .*apps(\/|\\)my-app  (re)
   my-app:error: command finished with error, but continuing...
 <<<<<<< HEAD
+<<<<<<< HEAD
   my-app:okay2: cache miss, executing 9a07ba5887a54500
 =======
   my-app:okay2: cache miss, executing f812a944fbfe6220
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+  my-app:okay2: cache miss, executing 7b197e327802fbd7
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   my-app:okay2: 
   my-app:okay2: > okay2
   my-app:okay2: > echo working

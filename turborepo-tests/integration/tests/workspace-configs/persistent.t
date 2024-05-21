@@ -30,13 +30,21 @@ This test covers:
   \xe2\x80\xa2 Packages in scope: persistent (esc)
   \xe2\x80\xa2 Running persistent-task-2-parent in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
+<<<<<<< HEAD
   persistent:persistent-task-2: cache miss, executing 0053dfd3e40fd7e9
+=======
+  persistent:persistent-task-2: cache miss, executing 19ad479e87510088
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   persistent:persistent-task-2: 
   persistent:persistent-task-2: > persistent-task-2
   persistent:persistent-task-2: > echo persistent-task-2
   persistent:persistent-task-2: 
   persistent:persistent-task-2: persistent-task-2
+<<<<<<< HEAD
   persistent:persistent-task-2-parent: cache miss, executing d91647fc86c1a419
+=======
+  persistent:persistent-task-2-parent: cache miss, executing 35f9cb5e280fef2a
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   persistent:persistent-task-2-parent: 
   persistent:persistent-task-2-parent: > persistent-task-2-parent
   persistent:persistent-task-2-parent: > echo persistent-task-2-parent

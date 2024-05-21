@@ -12,10 +12,14 @@ Setup
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
 <<<<<<< HEAD
+<<<<<<< HEAD
   missing-workspace-config:missing-workspace-config-task: cache miss, executing be6ec3d0f0471849
 =======
   missing-workspace-config:missing-workspace-config-task: cache miss, executing 33148ad4fa9dd10b
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+  missing-workspace-config:missing-workspace-config-task: cache miss, executing 4e01fa4e0bd946c4
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   missing-workspace-config:missing-workspace-config-task: 
   missing-workspace-config:missing-workspace-config-task: > missing-workspace-config-task
   missing-workspace-config:missing-workspace-config-task: > echo running-missing-workspace-config-task > out/foo.min.txt
@@ -38,10 +42,14 @@ Setup
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
 <<<<<<< HEAD
+<<<<<<< HEAD
   missing-workspace-config:missing-workspace-config-task: cache hit, suppressing logs be6ec3d0f0471849
 =======
   missing-workspace-config:missing-workspace-config-task: cache hit, suppressing logs 33148ad4fa9dd10b
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+  missing-workspace-config:missing-workspace-config-task: cache hit, suppressing logs 4e01fa4e0bd946c4
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
@@ -54,10 +62,14 @@ Setup
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
 <<<<<<< HEAD
+<<<<<<< HEAD
   missing-workspace-config:missing-workspace-config-task: cache miss, executing b39bb84af921847c
 =======
   missing-workspace-config:missing-workspace-config-task: cache miss, executing c13ca33fb347baa0
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+  missing-workspace-config:missing-workspace-config-task: cache miss, executing 6225c151c559f42b
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   missing-workspace-config:missing-workspace-config-task: 
   missing-workspace-config:missing-workspace-config-task: > missing-workspace-config-task
   missing-workspace-config:missing-workspace-config-task: > echo running-missing-workspace-config-task > out/foo.min.txt
@@ -75,10 +87,14 @@ Setup
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
 <<<<<<< HEAD
+<<<<<<< HEAD
   missing-workspace-config:missing-workspace-config-task: cache hit, suppressing logs b39bb84af921847c
 =======
   missing-workspace-config:missing-workspace-config-task: cache hit, suppressing logs c13ca33fb347baa0
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+  missing-workspace-config:missing-workspace-config-task: cache hit, suppressing logs 6225c151c559f42b
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
@@ -90,10 +106,14 @@ Setup
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
 <<<<<<< HEAD
+<<<<<<< HEAD
   missing-workspace-config:missing-workspace-config-task: cache miss, executing 4f8cbf0317430e42
 =======
   missing-workspace-config:missing-workspace-config-task: cache miss, executing 61cbbfa582a356e5
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+  missing-workspace-config:missing-workspace-config-task: cache miss, executing b681538b96d64309
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   missing-workspace-config:missing-workspace-config-task: 
   missing-workspace-config:missing-workspace-config-task: > missing-workspace-config-task
   missing-workspace-config:missing-workspace-config-task: > echo running-missing-workspace-config-task > out/foo.min.txt
@@ -110,10 +130,14 @@ Setup
   \xe2\x80\xa2 Running cached-task-4 in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
 <<<<<<< HEAD
+<<<<<<< HEAD
   missing-workspace-config:cached-task-4: cache bypass, force executing c33b6bab007f82f7
 =======
   missing-workspace-config:cached-task-4: cache bypass, force executing 87b4da5214927c4f
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+  missing-workspace-config:cached-task-4: cache bypass, force executing a5c696dfc21bff79
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   missing-workspace-config:cached-task-4: 
   missing-workspace-config:cached-task-4: > cached-task-4
   missing-workspace-config:cached-task-4: > echo cached-task-4 > out/foo.min.txt

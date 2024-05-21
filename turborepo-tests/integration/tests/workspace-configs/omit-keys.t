@@ -14,7 +14,11 @@ Setup
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
+<<<<<<< HEAD
   omit-keys:omit-keys-task: cache miss, executing 28d0677a62c0aa7a
+=======
+  omit-keys:omit-keys-task: cache miss, executing 91c3ad5f59980d38
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   omit-keys:omit-keys-task: 
   omit-keys:omit-keys-task: > omit-keys-task
   omit-keys:omit-keys-task: > echo running-omit-keys-task > out/foo.min.txt
@@ -36,7 +40,11 @@ Setup
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
+<<<<<<< HEAD
   omit-keys:omit-keys-task: cache hit, suppressing logs 28d0677a62c0aa7a
+=======
+  omit-keys:omit-keys-task: cache hit, suppressing logs 91c3ad5f59980d38
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
@@ -48,7 +56,11 @@ Setup
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
+<<<<<<< HEAD
   omit-keys:omit-keys-task: cache miss, executing c3e410b01cce8dd2
+=======
+  omit-keys:omit-keys-task: cache miss, executing a5289231099e7b50
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   omit-keys:omit-keys-task: 
   omit-keys:omit-keys-task: > omit-keys-task
   omit-keys:omit-keys-task: > echo running-omit-keys-task > out/foo.min.txt
@@ -65,7 +77,11 @@ Setup
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
+<<<<<<< HEAD
   omit-keys:omit-keys-task: cache hit, suppressing logs c3e410b01cce8dd2
+=======
+  omit-keys:omit-keys-task: cache hit, suppressing logs a5289231099e7b50
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
@@ -76,7 +92,11 @@ Setup
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
+<<<<<<< HEAD
   omit-keys:omit-keys-task: cache miss, executing 382ecc9fe3be2294
+=======
+  omit-keys:omit-keys-task: cache miss, executing 5b69ac76e44d30e9
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   omit-keys:omit-keys-task: 
   omit-keys:omit-keys-task: > omit-keys-task
   omit-keys:omit-keys-task: > echo running-omit-keys-task > out/foo.min.txt

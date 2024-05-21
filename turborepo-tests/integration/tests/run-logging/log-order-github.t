@@ -10,10 +10,14 @@ because otherwise prysk interprets them as multiline commands
   \xe2\x80\xa2 Remote caching disabled (esc)
   ::group::my-app:build
 <<<<<<< HEAD
+<<<<<<< HEAD
   cache bypass, force executing ee861306d76acfba
 =======
   cache bypass, force executing 7727324039284236
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+  cache bypass, force executing a7563b5dee763172
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   
   >\sbuild (re)
   \>\secho building && sleep 1 && echo done (re)
@@ -23,10 +27,14 @@ because otherwise prysk interprets them as multiline commands
   ::endgroup::
   ::group::util:build
 <<<<<<< HEAD
+<<<<<<< HEAD
   cache bypass, force executing d2c8604a72ebce55
 =======
   cache bypass, force executing a7dd27708069cde0
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+  cache bypass, force executing 5cbbbb3f7adc395b
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   
   >\sbuild (re)
   \>\ssleep 0.5 && echo building && sleep 1 && echo completed (re)
@@ -46,10 +54,14 @@ because otherwise prysk interprets them as multiline commands
   \xe2\x80\xa2 Remote caching disabled (esc)
   ::group::util:build
 <<<<<<< HEAD
+<<<<<<< HEAD
   util:build: cache bypass, force executing d2c8604a72ebce55
 =======
   util:build: cache bypass, force executing a7dd27708069cde0
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+  util:build: cache bypass, force executing 5cbbbb3f7adc395b
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   util:build: 
   util:build: > build
   util:build: > sleep 0.5 && echo building && sleep 1 && echo completed
@@ -70,10 +82,14 @@ Verify that errors are grouped properly
   \xe2\x80\xa2 Remote caching disabled (esc)
   \x1b[;31mutil:fail\x1b[;0m (esc)
 <<<<<<< HEAD
+<<<<<<< HEAD
   cache miss, executing c2f80a6e64adbc38
 =======
   cache miss, executing 38275ed800694fd2
 >>>>>>> 2eae5cbd82 (Update tests)
+=======
+  cache miss, executing fe8b225c95f582d0
+>>>>>>> 37c3c596f1 (chore: update integration tests)
   
   \> fail (re)
   \> echo failing; exit 1 (re)

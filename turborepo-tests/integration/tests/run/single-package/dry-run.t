@@ -7,7 +7,12 @@ Check
   Global Hash Inputs
     Global Files                          = 3
     External Dependencies Hash            = 
+<<<<<<< HEAD
     Global Cache Key                      = HEY STELLLLLLLAAAAAAAAAAAAA
+=======
+    Global Cache Key                      = I can\xe2\x80\x99t see ya, but I know you\xe2\x80\x99re here (esc)
+    Global .env Files Considered          = 0
+>>>>>>> 37c3c596f1 (chore: update integration tests)
     Global Env Vars                       = 
     Global Env Vars Values                = 
     Inferred Global Env Vars Values       = 
@@ -17,7 +22,11 @@ Check
   Tasks to Run
   build
     Task                           = build\s* (re)
+<<<<<<< HEAD
     Hash                           = fbef1dba65f21ba4
+=======
+    Hash                           = b69493e87ea97b0e
+>>>>>>> 37c3c596f1 (chore: update integration tests)
     Cached \(Local\)                 = false\s* (re)
     Cached \(Remote\)                = false\s* (re)
     Command                        = echo building > foo.txt\s* (re)
