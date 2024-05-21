@@ -6,9 +6,10 @@ use turbopack_core::{
     ident::AssetIdent,
 };
 use turbopack_ecmascript::chunk::{
-    ChunkingContext, EcmascriptChunk, EcmascriptChunkPlaceables, EcmascriptChunkRuntime,
-    EcmascriptChunkRuntimeContent,
+    EcmascriptChunk, EcmascriptChunkPlaceables, EcmascriptChunkRuntime,
+    EcmascriptChunkRuntimeContent, ChunkingContext,
 };
+
 
 use crate::ecmascript::content::EcmascriptDevChunkContent;
 
