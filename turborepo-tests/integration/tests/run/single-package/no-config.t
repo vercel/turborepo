@@ -9,25 +9,26 @@ Check
   Global Hash Inputs
     Global Files                          = 2\s* (re)
     External Dependencies Hash            =\s* (re)
-    Global Cache Key                      = I can\xe2\x80\x99t see ya, but I know you\xe2\x80\x99re here (esc)
+    Global Cache Key                      = HEY STELLLLLLLAAAAAAAAAAAAA\s* (re)
     Global Env Vars                       = 
     Global Env Vars Values                = 
     Inferred Global Env Vars Values       = 
     Global Passed Through Env Vars        = 
     Global Passed Through Env Vars Values = 
+    Engines Values                        = 
   
   Tasks to Run
   build
     Task                           = build\s* (re)
-    Hash                           = 12c592ddc0e53a5c
-    Cached (Local)                 = false
-    Cached (Remote)                = false
-    Command                        = echo building > foo.txt
-    Outputs                        = 
-    Log File                       = .turbo(\/|\\)turbo-build.log (re)
-    Dependencies                   = 
-    Dependents                     = 
-    Inputs Files Considered        = 4
+    Hash                           = 5c3c1742edb70bb8
+    Cached \(Local\)                 = false\s* (re)
+    Cached \(Remote\)                = false\s* (re)
+    Command                        = echo building > foo.txt\s* (re)
+    Outputs                        =\s* (re)
+    Log File                       = .turbo(\/|\\)turbo-build.log\s* (re)
+    Dependencies                   =\s* (re)
+    Dependents                     =\s* (re)
+    Inputs Files Considered        = 4\s* (re)
     Env Vars                       = 
     Env Vars Values                = 
     Inferred Env Vars Values       = 
@@ -50,7 +51,7 @@ Run real once
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache bypass, force executing 12c592ddc0e53a5c
+  build: cache bypass, force executing 5c3c1742edb70bb8
   build: 
   build: > build
   build: > echo building > foo.txt
@@ -64,7 +65,7 @@ Run a second time, verify no caching because there is no config
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache bypass, force executing 12c592ddc0e53a5c
+  build: cache bypass, force executing 5c3c1742edb70bb8
   build: 
   build: > build
   build: > echo building > foo.txt

@@ -5,12 +5,12 @@ Check
   $ ${TURBO} run test
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache miss, executing 81a933c332d3f388
+  build: cache miss, executing 6c1cecf7f99d0166
   build: 
   build: > build
   build: > echo building > foo.txt
   build: 
-  test: cache miss, executing 785d8ef1115bde3b
+  test: cache miss, executing d241ae86a1a24a2e
   test: 
   test: > test
   test: > cat foo.txt
@@ -21,16 +21,22 @@ Check
   Cached:    0 cached, 2 total
     Time:\s*[\.0-9]+m?s  (re)
   
+<<<<<<< HEAD
+=======
+>>>>>>> b668d5abb3 (chore: remove task dotEnv field)
+<<<<<<< HEAD
+=======
+>>>>>>> b668d5abb3 (chore: remove task dotEnv field)
 Run a second time, verify caching works because there is a config
   $ ${TURBO} run test
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache hit, replaying logs 81a933c332d3f388
+  build: cache hit, replaying logs 6c1cecf7f99d0166
   build: 
   build: > build
   build: > echo building > foo.txt
   build: 
-  test: cache hit, replaying logs 785d8ef1115bde3b
+  test: cache hit, replaying logs d241ae86a1a24a2e
   test: 
   test: > test
   test: > cat foo.txt
@@ -41,18 +47,26 @@ Run a second time, verify caching works because there is a config
   Cached:    2 cached, 2 total
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
+<<<<<<< HEAD
+=======
+>>>>>>> b668d5abb3 (chore: remove task dotEnv field)
+<<<<<<< HEAD
+=======
+>>>>>>> b668d5abb3 (chore: remove task dotEnv field)
 Run with --output-logs=hash-only
   $ ${TURBO} run test --output-logs=hash-only
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache hit, suppressing logs 81a933c332d3f388
-  test: cache hit, suppressing logs 785d8ef1115bde3b
+  build: cache hit, suppressing logs 6c1cecf7f99d0166
+  test: cache hit, suppressing logs d241ae86a1a24a2e
   
    Tasks:    2 successful, 2 total
   Cached:    2 cached, 2 total
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
-
+<<<<<<< HEAD
+=======
+>>>>>>> b668d5abb3 (chore: remove task dotEnv field)
 Run with --output-logs=errors-only
   $ ${TURBO} run test --output-logs=errors-only
   \xe2\x80\xa2 Running test (esc)
