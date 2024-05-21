@@ -33,10 +33,10 @@ Setup
     Hash                           = ed450f573b231cb7
     Cached (Local)                 = false
     Cached (Remote)                = false
-    Directory                      = apps/my-app
+    Directory                      = apps(\/|\\)my-app (re)
     Command                        = echo building
     Outputs                        = apple.json, banana.txt
-    Log File                       = apps/my-app/.turbo/turbo-build.log
+    Log File                       = apps(\/|\\)my-app(\/|\\).turbo(\/|\\)turbo-build.log (re)
     Dependencies                   = 
     Dependents                     = 
     Inputs Files Considered        = 2
@@ -53,10 +53,10 @@ Setup
     Hash                           = 41b033e352a43533
     Cached (Local)                 = false
     Cached (Remote)                = false
-    Directory                      = packages/util
+    Directory                      = packages(\/|\\)util (re)
     Command                        = echo building
     Outputs                        = 
-    Log File                       = packages/util/.turbo/turbo-build.log
+    Log File                       = packages(\/|\\)util(\/|\\).turbo(\/|\\)turbo-build.log (re)
     Dependencies                   = 
     Dependents                     = 
     Inputs Files Considered        = 1
