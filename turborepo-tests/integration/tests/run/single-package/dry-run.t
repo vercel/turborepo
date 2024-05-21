@@ -22,7 +22,7 @@ Check
     Cached (Remote)                = false
     Command                        = echo building > foo.txt
     Outputs                        = foo.txt
-    Log File                       = .turbo/turbo-build.log
+    Log File                       = .turbo(\/|\\)turbo-build.log (re)
     Dependencies                   = 
     Dependents                     = 
     Inputs Files Considered        = 5
