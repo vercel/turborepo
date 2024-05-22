@@ -3,7 +3,9 @@ use std::{
     str::FromStr,
 };
 
+use either::Either;
 use globwalk::{ValidatedGlob, WalkType};
+use itertools::Itertools;
 use thiserror::Error;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
@@ -116,7 +118,7 @@ fn collect_global_deps(
     if global_file_dependencies.is_empty() {
         return Ok(HashSet::new());
     }
-    let raw_exclusions = match package_manager.get_workspace_globs(root_path) {
+    let workspace_exclusions = match package_manager.get_workspace_globs(root_path) {
         Ok(globs) => globs.raw_exclusions,
         // If we hit a missing workspaces error, we could be in single package mode
         // so we should just use the default globs
@@ -128,13 +130,21 @@ fn collect_global_deps(
             return Err(err.into());
         }
     };
-    let exclusions = raw_exclusions
+    let (raw_inclusions, raw_exclusions): (Vec<_>, Vec<_>) = global_file_dependencies
         .iter()
-        .map(|e| ValidatedGlob::from_str(e))
+        .partition_map(|glob| match glob.strip_prefix('!') {
+            None => Either::Left(glob.as_str()),
+            Some(exclusion) => Either::Right(exclusion),
+        });
+    let exclusions = workspace_exclusions
+        .iter()
+        .map(|s| s.as_str())
+        .chain(raw_exclusions.iter().copied())
+        .map(ValidatedGlob::from_str)
         .collect::<Result<Vec<_>, _>>()?;
 
     #[cfg(not(windows))]
-    let inclusions = global_file_dependencies
+    let inclusions = raw_inclusions
         .iter()
         .map(|i| ValidatedGlob::from_str(i))
         .collect::<Result<Vec<_>, _>>()?;
