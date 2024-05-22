@@ -59,7 +59,11 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
             async_module_info,
         );
 
-        vdbg!(async_module_options);
+        vdbg!(
+            module.full_module.await?.source,
+            module.part,
+            async_module_options
+        );
 
         Ok(EcmascriptChunkItemContent::new(
             content,
