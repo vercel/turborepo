@@ -29,7 +29,7 @@ Run a build
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:build: cache hit, suppressing logs ab899db87390362e
+  my-app:build: cache hit, suppressing logs ded57f1945fa82be
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
