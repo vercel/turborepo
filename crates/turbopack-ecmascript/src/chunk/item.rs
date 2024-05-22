@@ -57,10 +57,6 @@ impl EcmascriptChunkItemContent {
                     ..Default::default()
                 }
             } else {
-                if async_module.is_some() {
-                    bail!("CJS module can't be async.");
-                }
-
                 EcmascriptChunkItemOptions {
                     refresh,
                     externals,
