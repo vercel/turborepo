@@ -73,11 +73,7 @@ impl OptionAsyncModule {
             return Ok(async_module.module_options(async_module_info));
         }
 
-        // For some unknown reason, self is None for many inputs. But it's wrong, and
-        // it's not related to tree shaking
-        Ok(Vc::cell(Some(AsyncModuleOptions {
-            has_top_level_await: true,
-        })))
+        Ok(OptionAsyncModuleOptions::none())
     }
 }
 
