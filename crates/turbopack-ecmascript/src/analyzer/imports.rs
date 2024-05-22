@@ -426,7 +426,7 @@ fn get_import_symbol_from_import(
             _ => local.sym.clone(),
         }),
         ImportSpecifier::Default(..) => ImportedSymbol::Symbol(js_word!("default")),
-        ImportSpecifier::Namespace(..) => ImportedSymbol::Namespace,
+        ImportSpecifier::Namespace(..) => ImportedSymbol::Exports,
     }
 }
 
@@ -443,6 +443,6 @@ fn get_import_symbol_from_export(
             ImportedSymbol::Symbol(orig_name(orig))
         }
         ExportSpecifier::Default(..) => ImportedSymbol::Symbol(js_word!("default")),
-        ExportSpecifier::Namespace(..) => ImportedSymbol::Namespace,
+        ExportSpecifier::Namespace(..) => ImportedSymbol::Exports,
     }
 }
