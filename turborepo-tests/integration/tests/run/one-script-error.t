@@ -7,13 +7,13 @@ Note that npm reports any failed script as exit code 1, even though we "exit 2"
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running error in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:okay: cache miss, executing 90bba097751d6fc5
+  my-app:okay: cache miss, executing 730881de77077bd7
   my-app:okay: 
   my-app:okay: > okay
   my-app:okay: > echo working
   my-app:okay: 
   my-app:okay: working
-  my-app:error: cache miss, executing 6da0be6250fdaee0
+  my-app:error: cache miss, executing 6bcb083c31200821
   my-app:error: 
   my-app:error: > error
   my-app:error: > exit 2
@@ -38,13 +38,13 @@ Make sure error isn't cached
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running error in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:okay: cache hit, replaying logs 90bba097751d6fc5
+  my-app:okay: cache hit, replaying logs 730881de77077bd7
   my-app:okay: 
   my-app:okay: > okay
   my-app:okay: > echo working
   my-app:okay: 
   my-app:okay: working
-  my-app:error: cache miss, executing 6da0be6250fdaee0
+  my-app:error: cache miss, executing 6bcb083c31200821
   my-app:error: 
   my-app:error: > error
   my-app:error: > exit 2
@@ -69,13 +69,13 @@ Make sure error code isn't swallowed with continue
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running okay2 in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:okay: cache hit, replaying logs 90bba097751d6fc5
+  my-app:okay: cache hit, replaying logs 730881de77077bd7
   my-app:okay: 
   my-app:okay: > okay
   my-app:okay: > echo working
   my-app:okay: 
   my-app:okay: working
-  my-app:error: cache miss, executing 6da0be6250fdaee0
+  my-app:error: cache miss, executing 6bcb083c31200821
   my-app:error: 
   my-app:error: > error
   my-app:error: > exit 2
@@ -85,7 +85,7 @@ Make sure error code isn't swallowed with continue
   my-app:error: npm ERR!   in workspace: my-app 
   my-app:error: npm ERR!   at location: .*apps(\/|\\)my-app  (re)
   my-app:error: command finished with error, but continuing...
-  my-app:okay2: cache miss, executing 9a07ba5887a54500
+  my-app:okay2: cache miss, executing c9df11d745bab324
   my-app:okay2: 
   my-app:okay2: > okay2
   my-app:okay2: > echo working

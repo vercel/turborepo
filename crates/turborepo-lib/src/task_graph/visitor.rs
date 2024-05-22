@@ -15,7 +15,7 @@ use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, Instrument, Span};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_ci::{Vendor, VendorBehavior};
-use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
+use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::{
     package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME},
     package_manager::PackageManager,
@@ -195,18 +195,7 @@ impl<'a> Visitor<'a> {
                 .task_definition(&info)
                 .ok_or(Error::MissingDefinition)?;
 
-            let task_env_mode = match self.global_env_mode {
-                // Task env mode is only independent when global env mode is `infer`.
-                EnvMode::Infer if task_definition.pass_through_env.is_some() => {
-                    ResolvedEnvMode::Strict
-                }
-                // If we're in infer mode we have just detected non-usage of strict env vars.
-                // But our behavior's actual meaning of this state is `loose`.
-                EnvMode::Infer => ResolvedEnvMode::Loose,
-                // Otherwise we just use the global env mode.
-                EnvMode::Strict => ResolvedEnvMode::Strict,
-                EnvMode::Loose => ResolvedEnvMode::Loose,
-            };
+            let task_env_mode = self.global_env_mode;
             package_task_event.track_env_mode(&task_env_mode.to_string());
 
             let dependency_set = engine.dependencies(&info).ok_or(Error::MissingDefinition)?;
