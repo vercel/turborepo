@@ -55,7 +55,7 @@ pub use transform::{
     TransformContext, TransformPlugin, UnsupportedServerActionIssue,
 };
 use turbo_tasks::{
-    trace::TraceRawVcs, ReadRef, TaskInput, TryJoinIterExt, Value, ValueToString, Vc,
+    trace::TraceRawVcs, vdbg, ReadRef, TaskInput, TryJoinIterExt, Value, ValueToString, Vc,
 };
 use turbo_tasks_fs::{rope::Rope, FileJsonContent, FileSystemPath};
 use turbopack_core::{
@@ -702,6 +702,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
             .module
             .module_content(this.chunking_context, async_module_info);
 
+        vdbg!(async_module_options);
         Ok(EcmascriptChunkItemContent::new(
             content,
             this.chunking_context,

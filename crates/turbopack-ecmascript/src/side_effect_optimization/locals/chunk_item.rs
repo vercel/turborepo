@@ -1,5 +1,5 @@
 use anyhow::Result;
-use turbo_tasks::Vc;
+use turbo_tasks::{vdbg, Vc};
 use turbopack_core::{
     chunk::{AsyncModuleInfo, ChunkItem, ChunkType, ChunkingContext},
     ident::AssetIdent,
@@ -60,6 +60,8 @@ impl EcmascriptChunkItem for EcmascriptModuleLocalsChunkItem {
             exports,
             async_module_info,
         );
+        vdbg!(async_module_options);
+
         Ok(EcmascriptChunkItemContent::new(
             content,
             self.chunking_context,
