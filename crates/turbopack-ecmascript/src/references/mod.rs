@@ -575,7 +575,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
                     }
                     ImportedSymbol::Symbol(name) => Some(ModulePart::export(name.to_string())),
                     ImportedSymbol::Part(part_id) => Some(ModulePart::internal(*part_id)),
-                    ImportedSymbol::Exports => Some(ModulePart::exports()),
+                    ImportedSymbol::Exports => None,
                     ImportedSymbol::Namespace => None,
                 },
                 None => None,
