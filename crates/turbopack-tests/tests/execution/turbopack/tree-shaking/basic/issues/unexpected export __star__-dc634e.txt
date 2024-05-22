@@ -1,0 +1,4 @@
+warning - [analysis] [project]/crates/turbopack-tests/tests/execution/turbopack/side-effects-optimization/basic/input/node_modules/package-partial/not-compiled.js  unexpected export *
+  export * used with module [project]/crates/turbopack-tests/tests/execution/turbopack/side-effects-optimization/basic/input/node_modules/package-partial/not-compiled.js [test] (ecmascript) which has no exports
+  Typescript only: Did you want to export only types with `export type * from "..."`?
+  Note: Using `export type` is more efficient than `export *` as it won't emit any runtime code.
