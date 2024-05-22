@@ -19,7 +19,7 @@ use crate::{
 
 static DEFAULT_ENV_VARS: [&str; 1] = ["VERCEL_ANALYTICS_ID"];
 
-const GLOBAL_CACHE_KEY: &str = "HEY STELLLLLLLAAAAAAAAAAAAA";
+const GLOBAL_CACHE_KEY: &str = "I can’t see ya, but I know you’re here";
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -222,7 +222,7 @@ mod tests {
             &env_var_map,
             &[],
             None,
-            EnvMode::Infer,
+            EnvMode::Strict,
             false,
             &SCM::new(&root),
         );
