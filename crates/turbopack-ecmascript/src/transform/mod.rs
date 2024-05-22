@@ -1,4 +1,4 @@
-use std::{borrow::BorrowMut, fmt::Debug, hash::Hash, sync::Arc};
+use std::{fmt::Debug, hash::Hash, sync::Arc};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -6,13 +6,13 @@ use swc_core::{
     base::SwcComments,
     common::{chain, comments::Comments, util::take::Take, Mark, SourceMap},
     ecma::{
-        ast::{Expr, Module, ModuleItem, Program, Script},
+        ast::{Module, ModuleItem, Program, Script},
         preset_env::{self, Targets},
         transforms::{
             base::{feature::FeatureFlag, helpers::inject_helpers, Assumptions},
             react::react,
         },
-        visit::{FoldWith, VisitMut, VisitMutWith},
+        visit::{FoldWith, VisitMutWith},
     },
     quote,
 };
