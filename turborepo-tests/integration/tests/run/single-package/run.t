@@ -5,7 +5,7 @@ Check
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache miss, executing fbef1dba65f21ba4
+  build: cache miss, executing 4047a6e65d7dafef
   build: 
   build: > build
   build: > echo building > foo.txt
@@ -22,7 +22,7 @@ Run a second time, verify caching works because there is a config
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache hit, replaying logs fbef1dba65f21ba4
+  build: cache hit, replaying logs 4047a6e65d7dafef
   build: 
   build: > build
   build: > echo building > foo.txt

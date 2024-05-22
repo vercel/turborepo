@@ -32,7 +32,7 @@ Validate that we got a full task summary for the failed task with an error in .e
     "taskId": "my-app#maybefails",
     "task": "maybefails",
     "package": "my-app",
-    "hash": "8f681db4d5b591ee",
+    "hash": "5708afa4de2b80ea",
     "inputs": {
       ".env.local": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
       "package.json": "1746e0db2361085b5953a6a3beab08c24af5bc08"
@@ -65,7 +65,7 @@ Validate that we got a full task summary for the failed task with an error in .e
     },
     "expandedOutputs": [],
     "framework": "",
-    "envMode": "loose",
+    "envMode": "strict",
     "environmentVariables": {
       "specified": {
         "env": [],

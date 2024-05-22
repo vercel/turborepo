@@ -7,7 +7,7 @@ Check
   Global Hash Inputs
     Global Files                          = 3
     External Dependencies Hash            = 
-    Global Cache Key                      = HEY STELLLLLLLAAAAAAAAAAAAA
+    Global Cache Key                      = I can\xe2\x80\x99t see ya, but I know you\xe2\x80\x99re here (esc)
     Global Env Vars                       = 
     Global Env Vars Values                = 
     Inferred Global Env Vars Values       = 
@@ -17,15 +17,15 @@ Check
   Tasks to Run
   build
     Task                           = build\s* (re)
-    Hash                           = fbef1dba65f21ba4
-    Cached \(Local\)                 = false\s* (re)
-    Cached \(Remote\)                = false\s* (re)
-    Command                        = echo building > foo.txt\s* (re)
-    Outputs                        = foo.txt\s* (re)
-    Log File                       = .turbo(\/|\\)turbo-build.log\s* (re)
-    Dependencies                   =\s* (re)
-    Dependents                     =\s* (re)
-    Inputs Files Considered        = 5\s* (re)
+    Hash                           = 4047a6e65d7dafef
+    Cached (Local)                 = false
+    Cached (Remote)                = false
+    Command                        = echo building > foo.txt
+    Outputs                        = foo.txt
+    Log File                       = .turbo(\/|\\)turbo-build.log (re)
+    Dependencies                   = 
+    Dependents                     = 
+    Inputs Files Considered        = 5
     Env Vars                       = 
     Env Vars Values                = 
     Inferred Env Vars Values       = 

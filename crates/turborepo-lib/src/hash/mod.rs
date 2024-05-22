@@ -10,12 +10,11 @@ use std::collections::HashMap;
 
 use capnp::message::{Builder, HeapAllocator};
 pub use traits::TurboHash;
-use turborepo_env::{EnvironmentVariablePairs, ResolvedEnvMode};
+use turborepo_env::EnvironmentVariablePairs;
 
 use crate::{cli::EnvMode, task_graph::TaskOutputs};
 
 mod proto_capnp {
-    use turborepo_env::ResolvedEnvMode;
 
     use crate::cli::EnvMode;
 
@@ -24,18 +23,17 @@ mod proto_capnp {
     impl From<EnvMode> for global_hashable::EnvMode {
         fn from(value: EnvMode) -> Self {
             match value {
-                EnvMode::Infer => global_hashable::EnvMode::Infer,
                 EnvMode::Loose => global_hashable::EnvMode::Loose,
                 EnvMode::Strict => global_hashable::EnvMode::Strict,
             }
         }
     }
 
-    impl From<ResolvedEnvMode> for task_hashable::EnvMode {
-        fn from(value: ResolvedEnvMode) -> Self {
+    impl From<EnvMode> for task_hashable::EnvMode {
+        fn from(value: EnvMode) -> Self {
             match value {
-                ResolvedEnvMode::Loose => task_hashable::EnvMode::Loose,
-                ResolvedEnvMode::Strict => task_hashable::EnvMode::Strict,
+                EnvMode::Loose => task_hashable::EnvMode::Loose,
+                EnvMode::Strict => task_hashable::EnvMode::Strict,
             }
         }
     }
@@ -59,7 +57,7 @@ pub struct TaskHashable<'a> {
     pub(crate) env: &'a [String],
     pub(crate) resolved_env_vars: EnvVarPairs,
     pub(crate) pass_through_env: &'a [String],
-    pub(crate) env_mode: ResolvedEnvMode,
+    pub(crate) env_mode: EnvMode,
 }
 
 #[derive(Debug, Clone)]
@@ -334,7 +332,6 @@ impl From<GlobalHashable<'_>> for Builder<HeapAllocator> {
         }
 
         builder.set_env_mode(match hashable.env_mode {
-            EnvMode::Infer => proto_capnp::global_hashable::EnvMode::Infer,
             EnvMode::Loose => proto_capnp::global_hashable::EnvMode::Loose,
             EnvMode::Strict => proto_capnp::global_hashable::EnvMode::Strict,
         });
@@ -361,7 +358,6 @@ impl From<GlobalHashable<'_>> for Builder<HeapAllocator> {
 #[cfg(test)]
 mod test {
     use test_case::test_case;
-    use turborepo_env::ResolvedEnvMode;
     use turborepo_lockfiles::Package;
 
     use super::{
@@ -386,7 +382,7 @@ mod test {
             env: &["env".to_string()],
             resolved_env_vars: vec![],
             pass_through_env: &["pass_thru_env".to_string()],
-            env_mode: ResolvedEnvMode::Loose,
+            env_mode: EnvMode::Loose,
         };
 
         assert_eq!(task_hashable.hash(), "1f8b13161f57fca1");
@@ -408,11 +404,11 @@ mod test {
             env: &["env".to_string()],
             resolved_env_vars: vec![],
             pass_through_env: &["pass_through_env".to_string()],
-            env_mode: EnvMode::Infer,
+            env_mode: EnvMode::Strict,
             framework_inference: true,
         };
 
-        assert_eq!(global_hash.hash(), "2144612ff08bddb9");
+        assert_eq!(global_hash.hash(), "9f06917065be0a72");
     }
 
     #[test_case(vec![], "459c029558afe716" ; "empty")]
