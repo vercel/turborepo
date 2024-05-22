@@ -322,7 +322,10 @@ fn get_env_var_config(
     turbo_mapping.insert(OsString::from("turbo_teamid"), "team_id");
     turbo_mapping.insert(OsString::from("turbo_token"), "token");
     turbo_mapping.insert(OsString::from("turbo_remote_cache_timeout"), "timeout");
-    turbo_mapping.insert(OsString::from("turbo_api_timeout"), "api_timeout");
+    turbo_mapping.insert(
+        OsString::from("turbo_remote_cache_upload_timeout"),
+        "upload_timeout",
+    );
     turbo_mapping.insert(OsString::from("turbo_experimental_ui"), "experimental_ui");
     turbo_mapping.insert(OsString::from("turbo_preflight"), "preflight");
 
