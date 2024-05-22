@@ -13,7 +13,7 @@ use swc_core::{
 use turbo_tasks::Vc;
 use turbopack_core::{issue::IssueSource, source::Source};
 
-use super::{JsValue, ModuleValue};
+use super::{top_level_await::has_top_level_await, JsValue, ModuleValue};
 use crate::tree_shake::{find_turbopack_part_id_in_asserts, PartId};
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
@@ -130,6 +130,9 @@ pub(crate) struct ImportMap {
 
     /// True, when the module has exports
     has_exports: bool,
+
+    /// True if the module is an ESM module due to top-level await.
+    has_top_level_await: bool,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -151,7 +154,10 @@ pub(crate) struct ImportMapReference {
 
 impl ImportMap {
     pub fn is_esm(&self) -> bool {
-        self.has_exports || !self.imports.is_empty() || !self.namespace_imports.is_empty()
+        self.has_exports
+            || self.has_top_level_await
+            || !self.imports.is_empty()
+            || !self.namespace_imports.is_empty()
     }
 
     pub fn get_import(&self, id: &Id) -> Option<JsValue> {
@@ -391,6 +397,12 @@ impl Visit for Analyzer<'_> {
     }
     fn visit_stmt(&mut self, _: &Stmt) {
         // don't visit children
+    }
+
+    fn visit_program(&mut self, m: &Program) {
+        self.data.has_top_level_await = has_top_level_await(m).is_some();
+
+        m.visit_children_with(self);
     }
 }
 
