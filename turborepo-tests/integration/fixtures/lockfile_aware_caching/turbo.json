@@ -3,7 +3,12 @@
   "tasks": {
     "build": {
       "outputs": [],
-      "inputs": ["package.json"]
+      "env": [
+        "COREPACK_ENABLE_DOWNLOAD_PROMPT"
+      ],
+      "inputs": [
+        "package.json"
+      ]
     }
   }
 }
