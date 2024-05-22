@@ -151,16 +151,16 @@ npx turbo run deploy
 
 Add `.turbo` to your `.gitignore` file. The CLI uses these folders for logs and certain task outputs.
 
-```diff
-+ .turbo
+```sh
+.turbo
 ```
 
 Make sure that your task artifacts, the files and folders you want cached, are also included in your `.gitignore`.
 
-```diff
-+ build/**
-+ dist/**
-+ .next/**
+```sh
+build/**
+dist/**
+.next/**
 ```
 
 Re-run your npm client's `install` command to check your configuration.
