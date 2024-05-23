@@ -286,7 +286,6 @@ pub struct ScopeOpts {
     pub pkg_inference_root: Option<AnchoredSystemPathBuf>,
     pub global_deps: Vec<String>,
     pub filter_patterns: Vec<String>,
-    pub ignore_patterns: Vec<String>,
 }
 
 impl<'a> TryFrom<RunAndExecutionArgs<'a>> for ScopeOpts {
@@ -304,7 +303,6 @@ impl<'a> TryFrom<RunAndExecutionArgs<'a>> for ScopeOpts {
             global_deps: args.execution_args.global_deps.clone(),
             pkg_inference_root,
             filter_patterns: args.execution_args.filter.clone(),
-            ignore_patterns: args.execution_args.ignore.clone(),
         })
     }
 }
@@ -444,7 +442,6 @@ mod test {
             pkg_inference_root: None,
             global_deps: vec![],
             filter_patterns: opts_input.filter_patterns,
-            ignore_patterns: vec![],
         };
         let opts = Opts {
             run_opts,
