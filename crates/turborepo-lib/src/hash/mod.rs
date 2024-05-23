@@ -64,8 +64,9 @@ pub struct TaskHashable<'a> {
 pub struct GlobalHashable<'a> {
     pub global_cache_key: &'static str,
     pub global_file_hash_map: &'a HashMap<turbopath::RelativeUnixPathBuf, String>,
-    // This is None in single package mode
+    // These are None in single package mode
     pub root_external_dependencies_hash: Option<&'a str>,
+    pub root_internal_dependencies_hash: Option<&'a str>,
     pub env: &'a [String],
     pub resolved_env_vars: EnvironmentVariablePairs,
     pub pass_through_env: &'a [String],
@@ -306,6 +307,10 @@ impl From<GlobalHashable<'_>> for Builder<HeapAllocator> {
             builder.set_root_external_deps_hash(root_external_dependencies_hash);
         }
 
+        if let Some(root_internal_dependencies_hash) = hashable.root_internal_dependencies_hash {
+            builder.set_root_internal_deps_hash(root_internal_dependencies_hash);
+        }
+
         {
             let mut entries = builder.reborrow().init_env(hashable.env.len() as u32);
             for (i, env) in hashable.env.iter().enumerate() {
@@ -401,6 +406,7 @@ mod test {
             global_cache_key: "global_cache_key",
             global_file_hash_map: &global_file_hash_map,
             root_external_dependencies_hash: Some("0000000000000000"),
+            root_internal_dependencies_hash: Some("0000000000000001"),
             env: &["env".to_string()],
             resolved_env_vars: vec![],
             pass_through_env: &["pass_through_env".to_string()],
@@ -408,7 +414,7 @@ mod test {
             framework_inference: true,
         };
 
-        assert_eq!(global_hash.hash(), "9f06917065be0a72");
+        assert_eq!(global_hash.hash(), "8d5ecbdc3ff2b3f2");
     }
 
     #[test_case(vec![], "459c029558afe716" ; "empty")]

@@ -31,6 +31,7 @@ pub struct GlobalHashSummary<'a> {
     pub root_key: &'static str,
     pub files: BTreeMap<RelativeUnixPathBuf, String>,
     pub hash_of_external_dependencies: &'a str,
+    pub hash_of_internal_dependencies: &'a str,
     pub environment_variables: GlobalEnvVarSummary<'a>,
 }
 
@@ -42,6 +43,7 @@ impl<'a> TryFrom<GlobalHashableInputs<'a>> for GlobalHashSummary<'a> {
             global_cache_key,
             global_file_hash_map,
             root_external_dependencies_hash,
+            root_internal_dependencies_hash,
             env,
             resolved_env_vars,
             pass_through_env,
@@ -65,6 +67,7 @@ impl<'a> TryFrom<GlobalHashableInputs<'a>> for GlobalHashSummary<'a> {
             files: global_file_hash_map.into_iter().collect(),
             // This can be empty in single package mode
             hash_of_external_dependencies: root_external_dependencies_hash.unwrap_or_default(),
+            hash_of_internal_dependencies: root_internal_dependencies_hash.unwrap_or_default(),
             environment_variables: GlobalEnvVarSummary {
                 specified: GlobalEnvConfiguration {
                     env,
