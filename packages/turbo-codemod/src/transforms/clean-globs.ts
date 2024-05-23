@@ -2,7 +2,7 @@ import path from "node:path";
 import type { Schema as TurboJsonSchema } from "@turbo/types";
 import { readJsonSync } from "fs-extra";
 import { getTurboConfigs } from "@turbo/utils";
-import type { TransformerArgs } from "../types";
+import type { TransformerArgs, Transformer } from "../types";
 import type { TransformerResults } from "../runner";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 
@@ -82,9 +82,9 @@ export function fixGlobPattern(pattern: string): string {
   return oldPattern;
 }
 
-const transformerMeta = {
-  name: `${TRANSFORMER}: ${DESCRIPTION}`,
-  value: TRANSFORMER,
+const transformerMeta: Transformer = {
+  name: TRANSFORMER,
+  description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
   transformer,
 };

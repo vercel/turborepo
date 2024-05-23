@@ -1,7 +1,7 @@
 import path from "node:path";
 import { getWorkspaceDetails, type Project } from "@turbo/workspaces";
 import { readJson } from "fs-extra";
-import type { TransformerArgs } from "../types";
+import type { Transformer, TransformerArgs } from "../types";
 import type { TransformerResults } from "../runner";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 
@@ -116,9 +116,9 @@ export async function transformer({
   return runner.finish();
 }
 
-const transformerMeta = {
-  name: `${TRANSFORMER}: ${DESCRIPTION}`,
-  value: TRANSFORMER,
+const transformerMeta: Transformer = {
+  name: TRANSFORMER,
+  description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
   transformer,
 };
