@@ -1,5 +1,5 @@
-import { TransformerArgs } from "../types";
-import { TransformerResults } from "../runner";
+import type { Transformer, TransformerArgs } from "../types";
+import type { TransformerResults } from "../runner";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 
 // transformer details
@@ -7,10 +7,10 @@ const TRANSFORMER = "{{ name }}";
 const DESCRIPTION = "{{ description }}";
 const INTRODUCED_IN = "{{ introducedIn }}";
 
-export function transformer({
+export async function transformer({
   root,
   options,
-}: TransformerArgs): TransformerResults {
+}: TransformerArgs): Promise<TransformerResults> {
   const { log, runner } = getTransformerHelpers({
     transformer: TRANSFORMER,
     rootPath: root,
@@ -33,13 +33,14 @@ export function transformer({
   return runner.finish();
 }
 
-const transformerMeta = {
-  name: `${TRANSFORMER}: ${DESCRIPTION}`,
-  value: TRANSFORMER,
+const transformerMeta: Transformer = {
+  name: TRANSFORMER,
+  description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
   transformer,
 };
 
+// eslint-disable-next-line import/no-default-export -- transforms require default export
 export default transformerMeta;
 
 

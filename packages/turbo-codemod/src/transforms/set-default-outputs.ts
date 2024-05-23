@@ -2,7 +2,7 @@ import path from "node:path";
 import { readJsonSync, existsSync } from "fs-extra";
 import { type PackageJson, getTurboConfigs } from "@turbo/utils";
 import type { Schema as TurboJsonSchema } from "@turbo/types";
-import type { TransformerArgs } from "../types";
+import type { Transformer, TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
 
@@ -86,7 +86,7 @@ export function transformer({
   return runner.finish();
 }
 
-const transformerMeta = {
+const transformerMeta: Transformer = {
   name: TRANSFORMER,
   description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,

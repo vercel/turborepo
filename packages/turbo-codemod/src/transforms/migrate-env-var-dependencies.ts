@@ -4,7 +4,7 @@ import { type PackageJson, getTurboConfigs } from "@turbo/utils";
 import type { Schema as TurboJsonSchema, Pipeline } from "@turbo/types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
-import type { TransformerArgs } from "../types";
+import type { Transformer, TransformerArgs } from "../types";
 
 // transformer details
 const TRANSFORMER = "migrate-env-var-dependencies";
@@ -169,7 +169,7 @@ export function transformer({
   return runner.finish();
 }
 
-const transformerMeta = {
+const transformerMeta: Transformer = {
   name: TRANSFORMER,
   description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
