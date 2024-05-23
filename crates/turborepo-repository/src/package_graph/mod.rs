@@ -278,6 +278,20 @@ impl PackageGraph {
         dependents
     }
 
+    pub fn root_internal_package_dependencies(&self) -> HashSet<&AnchoredSystemPath> {
+        let dependencies = self.dependencies(&PackageNode::Workspace(PackageName::Root));
+        dependencies
+            .into_iter()
+            .filter_map(|package| match package {
+                PackageNode::Workspace(package) => Some(
+                    self.package_dir(package)
+                        .expect("packages in graph should have info"),
+                ),
+                PackageNode::Root => None,
+            })
+            .collect()
+    }
+
     /// Returns the transitive closure of the given nodes in the package
     /// graph. Note that this includes the nodes themselves. If you want just
     /// the dependencies, or the dependents, use `dependencies` or `ancestors`.
@@ -466,7 +480,6 @@ mod test {
     use std::assert_matches::assert_matches;
 
     use serde_json::json;
-    use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
     use crate::discovery::PackageDiscovery;
@@ -519,7 +532,10 @@ mod test {
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
         let pkg_graph = PackageGraph::builder(
             &root,
-            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+            PackageJson::from_value(
+                json!({ "name": "root", "dependencies": { "a": "workspace:*"} }),
+            )
+            .unwrap(),
         )
         .with_package_discovery(MockDiscovery)
         .with_package_jsons(Some({
@@ -572,6 +588,19 @@ mod test {
 
         let pkg_version = b_external.get("c").unwrap();
         assert_eq!(pkg_version, "1.2.3");
+        let closure =
+            pkg_graph.transitive_closure(Some(&PackageNode::Workspace(PackageName::Root)));
+        assert_eq!(
+            closure,
+            [
+                PackageNode::Root,
+                PackageNode::Workspace(PackageName::Root),
+                PackageNode::Workspace("a".into()),
+                PackageNode::Workspace("b".into()),
+            ]
+            .iter()
+            .collect::<HashSet<_>>()
+        );
     }
 
     #[derive(Debug)]
