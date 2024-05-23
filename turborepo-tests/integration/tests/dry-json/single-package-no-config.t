@@ -16,6 +16,7 @@ Setup
         "package.json": "8606ff4b95a5330740d8d9d0948faeada64f1f32"
       },
       "hashOfExternalDependencies": "",
+      "hashOfInternalDependencies": "",
       "environmentVariables": {
         "specified": {
           "env": [],
@@ -32,7 +33,7 @@ Setup
       {
         "taskId": "build",
         "task": "build",
-        "hash": "a6da7b8ddbe2bb84",
+        "hash": "12c592ddc0e53a5c",
         "inputs": {
           ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",

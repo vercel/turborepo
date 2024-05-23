@@ -519,6 +519,30 @@ pub fn get_external_deps_hash(
     LockFilePackages(transitive_deps).hash()
 }
 
+pub fn get_internal_deps_hash(
+    scm: &SCM,
+    root: &AbsoluteSystemPath,
+    package_dirs: HashSet<&AnchoredSystemPath>,
+) -> Result<String, Error> {
+    if package_dirs.is_empty() {
+        return Ok("".into());
+    }
+
+    let file_hashes = package_dirs
+        .into_par_iter()
+        .map(|package_dir| scm.get_package_file_hashes::<&str>(root, package_dir, &[], None))
+        .reduce(
+            || Ok(HashMap::new()),
+            |acc, hashes| {
+                let mut acc = acc?;
+                let hashes = hashes?;
+                acc.extend(hashes.into_iter());
+                Ok(acc)
+            },
+        )?;
+    Ok(FileHashes(file_hashes).hash())
+}
+
 impl TaskHashTracker {
     pub fn new(input_expanded_hashes: HashMap<TaskId<'static>, FileHashes>) -> Self {
         Self {
