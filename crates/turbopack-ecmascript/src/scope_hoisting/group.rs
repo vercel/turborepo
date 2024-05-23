@@ -5,7 +5,9 @@ use turbopack_core::chunk::{ModuleId, ModuleIds};
 
 /// Counterpart of `Chunk` in webpack scope hoisting
 #[turbo_tasks::value]
-pub struct ModuleScopeGroup {}
+pub struct ModuleScopeGroup {
+    pub scopes: Vc<Vec<Vc<ModuleScope>>>,
+}
 
 /// Counterpart of `Scope` in webpack scope hoisting
 #[turbo_tasks::value]
