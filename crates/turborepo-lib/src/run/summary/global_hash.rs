@@ -43,6 +43,7 @@ impl<'a> TryFrom<GlobalHashableInputs<'a>> for GlobalHashSummary<'a> {
             global_cache_key,
             global_file_hash_map,
             root_external_dependencies_hash,
+            root_internal_dependencies_hash,
             env,
             resolved_env_vars,
             pass_through_env,
