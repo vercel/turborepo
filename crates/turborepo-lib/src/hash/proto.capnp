@@ -19,7 +19,6 @@ struct TaskHashable {
     resolvedEnvVars @9 :List(Text);
     passThruEnv @10 :List(Text);
     envMode @11 :EnvMode;
-    dotEnv @12 :List(Text);
 
     enum EnvMode {
       loose @0;
@@ -36,11 +35,12 @@ struct GlobalHashable {
   globalCacheKey @0 :Text;
   globalFileHashMap @1 :List(Entry);
   rootExternalDepsHash @2 :Text;
-  env @3 :List(Text);
-  resolvedEnvVars @4 :List(Text);
-  passThroughEnv @5 :List(Text);
-  envMode @6 :EnvMode;
-  frameworkInference @7 :Bool;
+  rootInternalDepsHash @3 :Text;
+  env @4 :List(Text);
+  resolvedEnvVars @5 :List(Text);
+  passThroughEnv @6 :List(Text);
+  envMode @7 :EnvMode;
+  frameworkInference @8 :Bool;
 
 
   enum EnvMode {

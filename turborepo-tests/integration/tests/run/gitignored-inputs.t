@@ -16,7 +16,7 @@ Some helper functions to parse the summary file
 
 Just run the util package, it's simpler
   $ ${TURBO} run build --filter=util --output-logs=hash-only --summarize | grep "util:build: cache"
-  util:build: cache miss, executing ae2e852267f3b5c9
+  util:build: cache miss, executing 355a92b6a1cc5f24
 
   $ FIRST=$(/bin/ls .turbo/runs/*.json | head -n1)
   $ echo $(getSummaryTaskId $FIRST "util#build") | jq -r '.inputs."internal.txt"'
@@ -30,7 +30,7 @@ Change the content of internal.txt
 
 Hash does not change, because it is gitignored
   $ ${TURBO} run build --filter=util --output-logs=hash-only --summarize | grep "util:build: cache"
-  util:build: cache miss, executing 117a08af942aa435
+  util:build: cache miss, executing 511d34a1853ba4ab
 
 The internal.txt hash should be different from the one before
   $ SECOND=$(/bin/ls .turbo/runs/*.json | head -n1)
