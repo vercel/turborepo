@@ -124,13 +124,8 @@ impl<'a> FilterResolver<'a, ScopeChangeDetector<'a>> {
             .map(|s| s.as_str())
             .chain(root_turbo_json.global_deps.iter().map(|s| s.as_str()));
 
-        let change_detector = ScopeChangeDetector::new(
-            turbo_root,
-            scm,
-            pkg_graph,
-            global_deps,
-            opts.ignore_patterns.clone(),
-        )?;
+        let change_detector =
+            ScopeChangeDetector::new(turbo_root, scm, pkg_graph, global_deps, vec![])?;
 
         Ok(Self::new_with_change_detector(
             pkg_graph,
