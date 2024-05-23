@@ -3,6 +3,10 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use turbo_tasks::Vc;
 use turbopack_core::chunk::{ModuleId, ModuleIds};
 
+/// Counterpart of `Chunk` in webpack scope hoisting
+#[turbo_tasks::value]
+pub struct ModuleScopeGroup {}
+
 /// Counterpart of `Scope` in webpack scope hoisting
 #[turbo_tasks::value]
 pub struct ModuleScope {}
@@ -12,7 +16,7 @@ pub async fn split_scopes(
     entry: Vc<ModuleId>,
     deps: Vc<FxHashMap<ModuleId, ModuleIds>>,
     lazy: Vc<FxHashSet<(ModuleId, ModuleId)>>,
-) -> Result<Vc<ModuleScope>> {
+) -> Result<Vc<Vec<Vc<ModuleScopeGroup>>>> {
     // If a module is imported only as lazy, it should be in a separate scope
 }
 
