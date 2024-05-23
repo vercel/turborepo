@@ -685,13 +685,6 @@ pub struct ExecutionArgs {
     #[clap(short = 'F', long, group = "scope-filter-group")]
     pub filter: Vec<String>,
 
-    //  ignore filters out files from scope and filter, so we require it here
-    // -----------------------
-    /// Files to ignore when calculating changed files from '--filter'.
-    /// Supports globs.
-    #[clap(long, requires = "scope-filter-group")]
-    pub ignore: Vec<String>,
-
     /// Set type of process output logging. Use "full" to show
     /// all output. Use "hash-only" to show only turbo-computed
     /// task hashes. Use "new-only" to show only new output with
@@ -775,10 +768,6 @@ impl ExecutionArgs {
         // track sizes
         if !self.filter.is_empty() {
             telemetry.track_arg_value("filter:length", self.filter.len(), EventType::NonSensitive);
-        }
-
-        if !self.ignore.is_empty() {
-            telemetry.track_arg_value("ignore:length", self.ignore.len(), EventType::NonSensitive);
         }
     }
 }
@@ -1755,38 +1744,6 @@ mod test {
         "graph with output"
 	)]
     #[test_case::test_case(
-		&["turbo", "run", "build", "--filter", "[main]", "--ignore", "foo.js"],
-        Args {
-            command: Some(Command::Run {
-                execution_args: Box::new(ExecutionArgs {
-                    tasks: vec!["build".to_string()],
-                    ignore: vec!["foo.js".to_string()],
-                    filter: vec![String::from("[main]")],
-                    ..get_default_execution_args()
-                }),
-                run_args: Box::new(get_default_run_args())
-            }),
-            ..Args::default()
-        } ;
-        "single ignore"
-	)]
-    #[test_case::test_case(
-		&["turbo", "run", "build", "--filter", "[main]", "--ignore", "foo.js", "--ignore", "bar.js"],
-        Args {
-            command: Some(Command::Run {
-                execution_args: Box::new(ExecutionArgs {
-                    tasks: vec!["build".to_string()],
-                    ignore: vec!["foo.js".to_string(), "bar.js".to_string()],
-                    filter: vec![String::from("[main]")],
-                    ..get_default_execution_args()
-                }),
-                run_args: Box::new(get_default_run_args())
-            }),
-            ..Args::default()
-        } ;
-        "multiple ignores"
-	)]
-    #[test_case::test_case(
 		&["turbo", "run", "build", "--no-cache"],
         Args {
             command: Some(Command::Run {
@@ -2144,11 +2101,6 @@ mod test {
         &["turbo", "run", "build", "--daemon", "--no-daemon"],
         "cannot be used with '--no-daemon'" ;
         "daemon and no-daemon at the same time"
-    )]
-    #[test_case::test_case(
-        &["turbo", "run", "build", "--ignore", "foo/**"],
-        "the following required arguments were not provided" ;
-        "ignore without filter or scope"
     )]
     #[test_case::test_case(
         &["turbo", "run", "build", "--since", "foo"],

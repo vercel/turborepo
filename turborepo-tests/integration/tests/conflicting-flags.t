@@ -8,13 +8,3 @@ Setup
   For more information, try '--help'.
   
   [1]
-
-  $ ${TURBO} run build --ignore 'app/**'
-   ERROR  the following required arguments were not provided:
-    <--filter <FILTER>>
-  
-  Usage: turbo(\.exe)? run --ignore <IGNORE> <--filter <FILTER>> (re)
-  
-  For more information, try '--help'.
-  
-  [1]
