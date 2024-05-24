@@ -11,6 +11,7 @@ use turbopack_core::{
         ChunkItemExt, ChunkableModule, ChunkableModuleReference, ChunkingContext, ChunkingType,
         ChunkingTypeOption, ModuleId,
     },
+    context::AssetContext,
     issue::{IssueSeverity, IssueSource},
     module::Module,
     reference::ModuleReference,
@@ -158,6 +159,9 @@ impl ModuleReference for EsmAssetReference {
                         Vc::try_resolve_downcast_type(self.origin)
                             .await?
                             .expect("EsmAssetReference origin should be a EcmascriptModuleAsset");
+
+                    let side_effect_free_packages =
+                        full_module.asset_context().side_effect_free_packages();
 
                     if let ModulePart::Evaluation | ModulePart::Exports | ModulePart::Facade =
                         *part.await?

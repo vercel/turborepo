@@ -30,7 +30,7 @@ use ecmascript::{
 use graph::{aggregate, AggregatedGraph, AggregatedGraphNodeContent};
 use module_options::{ModuleOptions, ModuleOptionsContext, ModuleRuleEffect, ModuleType};
 use tracing::Instrument;
-use turbo_tasks::{Completion, Value, ValueToString, Vc};
+use turbo_tasks::{vdbg, Completion, Value, ValueToString, Vc};
 use turbo_tasks_fs::{glob::Glob, FileSystemPath};
 pub use turbopack_core::condition;
 use turbopack_core::{
@@ -183,6 +183,8 @@ async fn apply_module_type(
                                     return Ok(ProcessResult::Ignore.cell());
                                 }
                             }
+
+                            vdbg!(module.ident(), part);
 
                             builder.build_part(part)
                         } else {
@@ -424,23 +426,6 @@ impl ModuleAssetContext {
         reference_type: Value<ReferenceType>,
     ) -> Vc<ProcessResult> {
         process_default(self, source, reference_type, Vec::new())
-    }
-
-    #[turbo_tasks::function]
-    pub async fn side_effect_free_packages(self: Vc<Self>) -> Result<Vc<Glob>> {
-        let pkgs = &*self
-            .await?
-            .module_options_context
-            .await?
-            .side_effect_free_packages;
-
-        let mut globs = Vec::with_capacity(pkgs.len());
-
-        for pkg in pkgs {
-            globs.push(Glob::new(format!("**/node_modules/{{{}}}/**", pkg)));
-        }
-
-        Ok(Glob::alternatives(globs))
     }
 }
 
@@ -756,6 +741,23 @@ impl AssetContext for ModuleAssetContext {
                 ))
             },
         )
+    }
+
+    #[turbo_tasks::function]
+    async fn side_effect_free_packages(self: Vc<Self>) -> Result<Vc<Glob>> {
+        let pkgs = &*self
+            .await?
+            .module_options_context
+            .await?
+            .side_effect_free_packages;
+
+        let mut globs = Vec::with_capacity(pkgs.len());
+
+        for pkg in pkgs {
+            globs.push(Glob::new(format!("**/node_modules/{{{}}}/**", pkg)));
+        }
+
+        Ok(Glob::alternatives(globs))
     }
 }
 
