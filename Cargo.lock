@@ -646,12 +646,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a17bd29f7c70f32e9387f4d4acfa5ea7b7749ef784fb78cf382df97069337b8c"
 
 [[package]]
-name = "base16"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d27c3610c36aee21ce8ac510e6224498de4228ad772a171ed65643a24693a5a8"
-
-[[package]]
 name = "base64"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10166,8 +10160,6 @@ dependencies = [
 name = "turbo-tasks-hash"
 version = "0.1.0"
 dependencies = [
- "base16",
- "hex",
  "md4",
  "turbo-tasks-macros",
  "twox-hash",
