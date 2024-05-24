@@ -141,8 +141,7 @@ impl EcmascriptInputTransform {
         match self {
             EcmascriptInputTransform::GlobalTypeofs { window_value } => {
                 let mut typeofs: AHashMap<JsWord, JsWord> = Default::default();
-                let val = window_value.to_owned();
-                typeofs.insert("window".into(), JsWord::from(val));
+                typeofs.insert("window".into(), JsWord::from(&**window_value));
 
                 program.visit_mut_with(&mut inline_globals2(
                     Default::default(),
