@@ -135,7 +135,7 @@ pub(crate) struct ImportMap {
     has_top_level_await: bool,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) enum ImportedSymbol {
     ModuleEvaluation,
     Symbol(JsWord),
@@ -144,7 +144,7 @@ pub(crate) enum ImportedSymbol {
     Part(u32),
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) struct ImportMapReference {
     pub module_path: JsWord,
     pub imported_symbol: ImportedSymbol,
@@ -438,7 +438,7 @@ fn get_import_symbol_from_import(
             _ => local.sym.clone(),
         }),
         ImportSpecifier::Default(..) => ImportedSymbol::Symbol(js_word!("default")),
-        ImportSpecifier::Namespace(..) => ImportedSymbol::Exports,
+        ImportSpecifier::Namespace(..) => ImportedSymbol::Namespace,
     }
 }
 
@@ -455,6 +455,6 @@ fn get_import_symbol_from_export(
             ImportedSymbol::Symbol(orig_name(orig))
         }
         ExportSpecifier::Default(..) => ImportedSymbol::Symbol(js_word!("default")),
-        ExportSpecifier::Namespace(..) => ImportedSymbol::Exports,
+        ExportSpecifier::Namespace(..) => ImportedSymbol::Namespace,
     }
 }
