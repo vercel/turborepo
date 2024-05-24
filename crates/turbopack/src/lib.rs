@@ -167,6 +167,20 @@ async fn apply_module_type(
                 match options.tree_shaking_mode {
                     Some(TreeShakingMode::ModuleFragments) => Vc::upcast(
                         if let Some(part) = part {
+                            let side_effect_free_packages =
+                                module_asset_context.side_effect_free_packages();
+
+                            let module = builder.clone().build();
+
+                            if let ModulePart::Evaluation = *part.await? {
+                                if *module
+                                    .is_marked_as_side_effect_free(side_effect_free_packages)
+                                    .await?
+                                {
+                                    return Ok(ProcessResult::Ignore.cell());
+                                }
+                            }
+
                             builder.build_part(part)
                         } else {
                             builder.build_part(ModulePart::facade())
