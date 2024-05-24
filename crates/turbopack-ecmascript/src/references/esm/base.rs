@@ -159,10 +159,21 @@ impl ModuleReference for EsmAssetReference {
                             .await?
                             .expect("EsmAssetReference origin should be a EcmascriptModuleAsset");
 
+                    if let ModulePart::Evaluation | ModulePart::Exports | ModulePart::Facade =
+                        *part.await?
+                    {
+                        if *full_module
+                            .is_marked_as_side_effect_free(side_effect_free_packages)
+                            .await?
+                        {
+                            return Ok(ModuleResolveResult::ignored().cell());
+                        }
+                    }
+
                     let module =
                         EcmascriptModulePartAsset::new(full_module, part, self.import_externals);
 
-                    return Ok(ModuleResolveResult::module(Vc::upcast(module)).into());
+                    return Ok(ModuleResolveResult::module(Vc::upcast(module)).cell());
                 }
 
                 bail!("export_name is required for part import")
