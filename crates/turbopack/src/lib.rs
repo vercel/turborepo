@@ -172,7 +172,10 @@ async fn apply_module_type(
 
                             let module = builder.clone().build();
 
-                            if let ModulePart::Evaluation = *part.await? {
+                            if let ModulePart::Evaluation
+                            | ModulePart::Exports
+                            | ModulePart::Facade = *part.await?
+                            {
                                 if *module
                                     .is_marked_as_side_effect_free(side_effect_free_packages)
                                     .await?
