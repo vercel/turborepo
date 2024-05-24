@@ -30,7 +30,7 @@ use ecmascript::{
 use graph::{aggregate, AggregatedGraph, AggregatedGraphNodeContent};
 use module_options::{ModuleOptions, ModuleOptionsContext, ModuleRuleEffect, ModuleType};
 use tracing::Instrument;
-use turbo_tasks::{vdbg, Completion, Value, ValueToString, Vc};
+use turbo_tasks::{Completion, Value, ValueToString, Vc};
 use turbo_tasks_fs::{glob::Glob, FileSystemPath};
 pub use turbopack_core::condition;
 use turbopack_core::{
@@ -183,8 +183,6 @@ async fn apply_module_type(
                                     return Ok(ProcessResult::Ignore.cell());
                                 }
                             }
-
-                            vdbg!(module.ident(), part);
 
                             builder.build_part(part)
                         } else {
