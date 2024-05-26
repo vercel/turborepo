@@ -1,7 +1,7 @@
-/// <reference path="../shared/runtime-utils.ts" />
-/// <reference path="../shared-node/base-externals-utils.ts" />
-/// <reference path="../shared-node/node-externals-utils.ts" />
-/// <reference path="../shared-node/node-wasm-utils.ts" />
+/// <reference path="../../shared/runtime-utils.ts" />
+/// <reference path="../../shared-node/base-externals-utils.ts" />
+/// <reference path="../../shared-node/node-externals-utils.ts" />
+/// <reference path="../../shared-node/node-wasm-utils.ts" />
 
 enum SourceType {
   /**

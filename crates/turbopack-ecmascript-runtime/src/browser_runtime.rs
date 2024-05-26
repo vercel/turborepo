@@ -25,7 +25,7 @@ pub async fn get_browser_runtime_code(
         embed_static_code(asset_context, "shared/runtime-utils.ts".to_string());
     let runtime_base_code = embed_static_code(
         asset_context,
-        "browser/runtime/base/runtime-base.ts".to_string(),
+        "browser/dev/runtime/base/runtime-base.ts".to_string(),
     );
 
     let chunk_loading = &*asset_context
@@ -34,14 +34,15 @@ pub async fn get_browser_runtime_code(
         .chunk_loading()
         .await?;
 
-    let runtime_backend_code = embed_static_code(
-        asset_context,
-        match chunk_loading {
-            ChunkLoading::None => "browser/runtime/none/runtime-backend-none.ts".to_string(),
-            ChunkLoading::NodeJs => "browser/runtime/nodejs/runtime-backend-nodejs.ts".to_string(),
-            ChunkLoading::Dom => "browser/runtime/dom/runtime-backend-dom.ts".to_string(),
-        },
-    );
+    let match_result = match chunk_loading {
+        ChunkLoading::None => "browser/dev/runtime/none/runtime-backend-none.ts".to_string(),
+        ChunkLoading::NodeJs => "browser/dev/runtime/nodejs/runtime-backend-nodejs.ts".to_string(),
+        ChunkLoading::Dom => "browser/dev/runtime/dom/runtime-backend-dom.ts".to_string(),
+    };
+
+    println!("match_result: {:?}", match_result);
+
+    let runtime_backend_code = embed_static_code(asset_context, match_result);
 
     let mut code: CodeBuilder = CodeBuilder::default();
     let output_root = output_root.await?.to_string();
