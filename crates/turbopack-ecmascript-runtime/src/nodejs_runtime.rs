@@ -24,7 +24,7 @@ pub async fn get_nodejs_runtime_code(environment: Vc<Environment>) -> Result<Vc<
     );
     let shared_node_wasm_utils_code =
         embed_static_code(asset_context, "shared-node/node-wasm-utils.ts".to_string());
-    let runtime_code = embed_static_code(asset_context, "build/runtime.ts".to_string());
+    let runtime_code = embed_static_code(asset_context, "nodejs/runtime.ts".to_string());
 
     let mut code = CodeBuilder::default();
     code.push_code(&*shared_runtime_utils_code.await?);

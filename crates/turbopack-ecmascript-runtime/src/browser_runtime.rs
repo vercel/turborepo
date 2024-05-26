@@ -25,7 +25,7 @@ pub async fn get_browser_runtime_code(
         embed_static_code(asset_context, "shared/runtime-utils.ts".to_string());
     let runtime_base_code = embed_static_code(
         asset_context,
-        "dev/runtime/base/runtime-base.ts".to_string(),
+        "browser/runtime/base/runtime-base.ts".to_string(),
     );
 
     let chunk_loading = &*asset_context
@@ -37,9 +37,9 @@ pub async fn get_browser_runtime_code(
     let runtime_backend_code = embed_static_code(
         asset_context,
         match chunk_loading {
-            ChunkLoading::None => "dev/runtime/none/runtime-backend-none.ts".to_string(),
-            ChunkLoading::NodeJs => "dev/runtime/nodejs/runtime-backend-nodejs.ts".to_string(),
-            ChunkLoading::Dom => "dev/runtime/dom/runtime-backend-dom.ts".to_string(),
+            ChunkLoading::None => "browser/runtime/none/runtime-backend-none.ts".to_string(),
+            ChunkLoading::NodeJs => "browser/runtime/nodejs/runtime-backend-nodejs.ts".to_string(),
+            ChunkLoading::Dom => "browser/runtime/dom/runtime-backend-dom.ts".to_string(),
         },
     );
 
