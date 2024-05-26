@@ -21,8 +21,8 @@ Let's imagine we want to run all our tasks across all our workspaces. With a too
 
 ```
 yarn workspaces run lint
-yarn workspaces run test
 yarn workspaces run build
+yarn workspaces run test
 ```
 
 This would mean the tasks run like this:
@@ -63,8 +63,8 @@ Next, we can replace our `yarn workspaces` script with this:
 
 ```diff
 - yarn workspaces run lint
-- yarn workspaces run test
 - yarn workspaces run build
+- yarn workspaces run test
 + turbo run lint test build
 ```
 
