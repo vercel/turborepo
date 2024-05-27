@@ -173,10 +173,7 @@ async fn apply_module_type(
 
                         Vc::upcast(
                             if let Some(part) = part {
-                                if let ModulePart::Evaluation
-                                | ModulePart::Exports
-                                | ModulePart::Facade = *part.await?
-                                {
+                                if let ModulePart::Evaluation | ModulePart::Exports = *part.await? {
                                     if *module
                                         .is_marked_as_side_effect_free(side_effect_free_packages)
                                         .await?
