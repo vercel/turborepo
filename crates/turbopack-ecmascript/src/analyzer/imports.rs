@@ -139,6 +139,7 @@ pub(crate) struct ImportMap {
 pub(crate) enum ImportedSymbol {
     ModuleEvaluation,
     Symbol(JsWord),
+    /// User requested the whole module
     Namespace,
     Exports,
     Part(u32),
