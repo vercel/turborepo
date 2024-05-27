@@ -187,6 +187,14 @@ async fn apply_module_type(
 
                                 builder.build_part(part)
                             } else {
+                                // Facade can be skipped
+                                if *module
+                                    .is_marked_as_side_effect_free(side_effect_free_packages)
+                                    .await?
+                                {
+                                    return Ok(ProcessResult::Ignore.cell());
+                                }
+
                                 builder.build_part(ModulePart::facade())
                             }
                             .await?,
