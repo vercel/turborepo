@@ -6,7 +6,7 @@ use rustc_hash::FxHashMap;
 use swc_core::{
     common::{util::take::Take, SyntaxContext, DUMMY_SP, GLOBALS},
     ecma::ast::{
-        ExportAll, ExportNamedSpecifier, Id, Ident, Module, ModuleDecl, ModuleExportName,
+        ExportNamedSpecifier, Id, Ident, ImportDecl, Module, ModuleDecl, ModuleExportName,
         ModuleItem, NamedExport, Program,
     },
 };
@@ -484,19 +484,18 @@ pub(super) async fn part_of_module(
                         .collect::<Vec<_>>();
                     export_names.sort();
 
-                    // We can't use quote! as `with` is not standard yet
-                    let chunk_prop = create_turbopack_part_id_assert(PartId::ModuleEvaluation);
-
                     module
                         .body
-                        .push(ModuleItem::ModuleDecl(ModuleDecl::ExportAll(ExportAll {
+                        .push(ModuleItem::ModuleDecl(ModuleDecl::Import(ImportDecl {
                             span: DUMMY_SP,
+                            specifiers: vec![],
                             src: Box::new(TURBOPACK_PART_IMPORT_SOURCE.into()),
                             type_only: false,
-                            with: Some(Box::new(chunk_prop)),
+                            with: Some(Box::new(create_turbopack_part_id_assert(
+                                PartId::ModuleEvaluation,
+                            ))),
+                            phase: Default::default(),
                         })));
-
-                    // We can't use quote! as `with` is not standard yet
 
                     let specifiers = export_names
                         .into_iter()

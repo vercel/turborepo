@@ -1133,6 +1133,7 @@ pub(crate) enum PartId {
 }
 
 pub(crate) fn create_turbopack_part_id_assert(dep: PartId) -> ObjectLit {
+    // We can't use quote! as `with` is not standard yet
     ObjectLit {
         span: DUMMY_SP,
         props: vec![PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
