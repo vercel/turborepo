@@ -165,31 +165,41 @@ async fn apply_module_type(
             } else {
                 let options = options.await?;
                 match options.tree_shaking_mode {
-                    Some(TreeShakingMode::ModuleFragments) => Vc::upcast(
-                        if let Some(part) = part {
-                            let side_effect_free_packages =
-                                module_asset_context.side_effect_free_packages();
+                    Some(TreeShakingMode::ModuleFragments) => {
+                        let side_effect_free_packages =
+                            module_asset_context.side_effect_free_packages();
 
-                            let module = builder.clone().build();
+                        let module = builder.clone().build();
 
-                            if let ModulePart::Evaluation
-                            | ModulePart::Exports
-                            | ModulePart::Facade = *part.await?
-                            {
+                        Vc::upcast(
+                            if let Some(part) = part {
+                                if let ModulePart::Evaluation
+                                | ModulePart::Exports
+                                | ModulePart::Facade = *part.await?
+                                {
+                                    if *module
+                                        .is_marked_as_side_effect_free(side_effect_free_packages)
+                                        .await?
+                                    {
+                                        return Ok(ProcessResult::Ignore.cell());
+                                    }
+                                }
+
+                                builder.build_part(part)
+                            } else {
+                                // We can skip ModulePart::Facade
                                 if *module
                                     .is_marked_as_side_effect_free(side_effect_free_packages)
                                     .await?
                                 {
                                     return Ok(ProcessResult::Ignore.cell());
                                 }
-                            }
 
-                            builder.build_part(part)
-                        } else {
-                            builder.build_part(ModulePart::facade())
-                        }
-                        .await?,
-                    ),
+                                builder.build_part(ModulePart::facade())
+                            }
+                            .await?,
+                        )
+                    }
                     Some(TreeShakingMode::ReexportsOnly) => {
                         let side_effect_free_packages =
                             module_asset_context.side_effect_free_packages();
