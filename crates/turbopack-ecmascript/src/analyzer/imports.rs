@@ -321,7 +321,7 @@ impl Visit for Analyzer<'_> {
         let i = self.ensure_reference(
             export.span,
             export.src.value.clone(),
-            symbol.unwrap_or(ImportedSymbol::Exports),
+            symbol.unwrap_or(ImportedSymbol::Namespace),
             annotations,
         );
         if let Some(i) = i {
