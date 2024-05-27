@@ -164,9 +164,7 @@ impl ModuleReference for EsmAssetReference {
                     let side_effect_free_packages =
                         full_module.asset_context().side_effect_free_packages();
 
-                    if let ModulePart::Evaluation | ModulePart::Exports | ModulePart::Facade =
-                        *part.await?
-                    {
+                    if let ModulePart::Evaluation = *part.await? {
                         if *full_module
                             .is_marked_as_side_effect_free(side_effect_free_packages)
                             .await?
