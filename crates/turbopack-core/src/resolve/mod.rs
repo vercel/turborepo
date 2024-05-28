@@ -2328,7 +2328,7 @@ async fn resolve_into_package(
 
     if could_match_others {
         let mut new_pat = path.clone();
-        new_pat.push_front(".".to_string().into());
+        new_pat.push_front(RcStr::from(".").into());
 
         let relative = Request::relative(Value::new(new_pat), query, fragment, true);
         results
@@ -2501,7 +2501,8 @@ async fn handle_exports_imports_field(
     let mut resolved_results = Vec::new();
     for (result_path, conditions) in results {
         if let Some(result_path) = normalize_path(result_path) {
-            let request = Request::parse(Value::new(format!("./{}", result_path).into()));
+            let request =
+                Request::parse(Value::new(RcStr::from(format!("./{}", result_path)).into()));
             let resolve_result = resolve_internal_boxed(package_path, request, options).await?;
             if conditions.is_empty() {
                 resolved_results.push(resolve_result.with_request(path.into()));

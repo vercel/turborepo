@@ -290,7 +290,7 @@ async fn import_mapping_to_result(
             ImportMapResult::Result(ResolveResult::primary(ResolveResultItem::Empty).into())
         }
         ImportMapping::PrimaryAlternative(name, context) => {
-            let request = Request::parse(Value::new(name.to_string().into()));
+            let request = Request::parse(Value::new(name.clone().into()));
 
             ImportMapResult::Alias(request, *context)
         }
