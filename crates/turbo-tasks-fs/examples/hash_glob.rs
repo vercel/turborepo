@@ -9,7 +9,7 @@ use std::{
 
 use anyhow::Result;
 use sha2::{Digest, Sha256};
-use turbo_tasks::{util::FormatDuration, RcStr, TurboTasks, UpdateInfo, Vc};
+use turbo_tasks::{util::FormatDuration, TurboTasks, UpdateInfo, Vc};
 use turbo_tasks_fs::{
     glob::Glob, register, DirectoryEntry, DiskFileSystem, FileContent, FileSystem, FileSystemPath,
     ReadGlobResult,
