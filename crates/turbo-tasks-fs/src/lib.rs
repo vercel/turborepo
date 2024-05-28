@@ -58,7 +58,7 @@ use tokio::{
 };
 use tracing::Instrument;
 use turbo_tasks::{
-    mark_stateful, trace::TraceRawVcs, Completion, InvalidationReason, Invalidator, ReadRef,
+    mark_stateful, trace::TraceRawVcs, Completion, InvalidationReason, Invalidator, RcStr, ReadRef,
     ValueToString, Vc,
 };
 use turbo_tasks_hash::{hash_xxh3_hash64, DeterministicHash, DeterministicHasher};
@@ -77,7 +77,7 @@ use crate::{
 pub trait FileSystem: ValueToString {
     /// Returns the path to the root of the file system.
     fn root(self: Vc<Self>) -> Vc<FileSystemPath> {
-        FileSystemPath::new_normalized(self, String::new())
+        FileSystemPath::new_normalized(self, RcStr::def)
     }
     fn read(self: Vc<Self>, fs_path: Vc<FileSystemPath>) -> Vc<FileContent>;
     fn read_link(self: Vc<Self>, fs_path: Vc<FileSystemPath>) -> Vc<LinkContent>;
@@ -726,12 +726,12 @@ impl ValueToString for DiskFileSystem {
 #[derive(Debug, Clone)]
 pub struct FileSystemPath {
     pub fs: Vc<Box<dyn FileSystem>>,
-    pub path: String,
+    pub path: RcStr,
 }
 
 impl FileSystemPath {
     pub fn is_inside_ref(&self, other: &FileSystemPath) -> bool {
-        if self.fs == other.fs && self.path.starts_with(&other.path) {
+        if self.fs == other.fs && self.path.starts_with(&*other.path) {
             if other.path.is_empty() {
                 true
             } else {
@@ -743,7 +743,7 @@ impl FileSystemPath {
     }
 
     pub fn is_inside_or_equal_ref(&self, other: &FileSystemPath) -> bool {
-        if self.fs == other.fs && self.path.starts_with(&other.path) {
+        if self.fs == other.fs && self.path.starts_with(&*other.path) {
             if other.path.is_empty() {
                 true
             } else {
@@ -1495,9 +1495,9 @@ impl Debug for File {
     }
 }
 
-impl From<String> for File {
-    fn from(s: String) -> Self {
-        File::from_bytes(s.into_bytes())
+impl From<RcStr> for File {
+    fn from(s: RcStr) -> Self {
+        File::from_bytes(String::from(s).into_bytes())
     }
 }
 
