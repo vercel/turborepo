@@ -9,7 +9,7 @@ use std::{env, sync::Mutex};
 
 use anyhow::Result;
 use indexmap::IndexMap;
-use turbo_tasks::Vc;
+use turbo_tasks::{RcStr, Vc};
 
 pub use self::{
     command_line::CommandLineProcessEnv, custom::CustomProcessEnv, dotenv::DotenvProcessEnv,
@@ -51,7 +51,7 @@ pub trait ProcessEnv {
     fn read_all(self: Vc<Self>) -> Vc<EnvMap>;
 
     /// Reads a single env variable. Ignores casing.
-    fn read(self: Vc<Self>, name: String) -> Vc<Option<String>> {
+    fn read(self: Vc<Self>, name: RcStr) -> Vc<Option<String>> {
         case_insensitive_read(self.read_all(), name)
     }
 }

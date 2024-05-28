@@ -9,7 +9,7 @@ use std::{
 
 use anyhow::Result;
 use sha2::{Digest, Sha256};
-use turbo_tasks::{util::FormatDuration, TurboTasks, UpdateInfo, Vc};
+use turbo_tasks::{util::FormatDuration, RcStr, TurboTasks, UpdateInfo, Vc};
 use turbo_tasks_fs::{
     glob::Glob, register, DirectoryEntry, DiskFileSystem, FileContent, FileSystem, FileSystemPath,
     ReadGlobResult,
@@ -26,14 +26,14 @@ async fn main() -> Result<()> {
 
     let task = tt.spawn_root_task(|| {
         Box::pin(async {
-            let root = current_dir().unwrap().to_str().unwrap().to_string();
-            let disk_fs = DiskFileSystem::new("project".to_string(), root, vec![]);
+            let root = current_dir().unwrap().to_str().unwrap().into();
+            let disk_fs = DiskFileSystem::new("project".into(), root, vec![]);
             disk_fs.await?.start_watching()?;
 
             // Smart Pointer cast
             let fs: Vc<Box<dyn FileSystem>> = Vc::upcast(disk_fs);
-            let input = fs.root().join("crates".to_string());
-            let glob = Glob::new("**/*.rs".to_string());
+            let input = fs.root().join("crates".into());
+            let glob = Glob::new("**/*.rs".into());
             let glob_result = input.read_glob(glob, true);
             let dir_hash = hash_glob_result(glob_result);
             print_hash(dir_hash).await?;
@@ -55,11 +55,11 @@ async fn main() -> Result<()> {
 
 #[turbo_tasks::function]
 pub fn empty_string() -> Vc<String> {
-    Vc::cell("".to_string())
+    Vc::cell("".into())
 }
 
 #[turbo_tasks::function]
-async fn print_hash(dir_hash: Vc<RcStr>) -> Result<Vc<()>> {
+async fn print_hash(dir_hash: Vc<String>) -> Result<Vc<()>> {
     println!("DIR HASH: {}", dir_hash.await?.as_str());
     Ok(Default::default())
 }
@@ -99,7 +99,7 @@ async fn hash_file(file_path: Vc<FileSystemPath>) -> Result<Vc<String>> {
         FileContent::Content(file) => hash_content(&mut file.read()),
         FileContent::NotFound => {
             // report error
-            Vc::cell("".to_string())
+            Vc::cell("".into())
         }
     })
 }

@@ -29,7 +29,7 @@ impl StaticAssetsContentSource {
 
     #[turbo_tasks::function]
     pub async fn with_prefix(
-        prefix: Vc<RcStr>,
+        prefix: Vc<String>,
         dir: Vc<FileSystemPath>,
     ) -> Result<Vc<StaticAssetsContentSource>> {
         if cfg!(debug_assertions) {

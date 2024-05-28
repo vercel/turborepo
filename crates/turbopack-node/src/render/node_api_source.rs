@@ -26,7 +26,7 @@ pub fn create_node_api_source(
     route_type: RouteType,
     server_root: Vc<FileSystemPath>,
     route_match: Vc<Box<dyn RouteMatcher>>,
-    pathname: Vc<RcStr>,
+    pathname: Vc<String>,
     entry: Vc<Box<dyn NodeEntry>>,
     render_data: Vc<JsonValue>,
     debug: bool,

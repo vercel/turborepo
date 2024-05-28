@@ -17,7 +17,7 @@ use crate::{asset_context::get_runtime_asset_context, embed_js::embed_static_cod
 pub async fn get_browser_runtime_code(
     environment: Vc<Environment>,
     chunk_base_path: Vc<Option<RcStr>>,
-    output_root: Vc<RcStr>,
+    output_root: Vc<String>,
 ) -> Result<Vc<Code>> {
     let asset_context = get_runtime_asset_context(environment);
 

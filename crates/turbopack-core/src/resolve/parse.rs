@@ -266,8 +266,8 @@ impl Request {
     #[turbo_tasks::function]
     pub fn raw(
         request: Value<Pattern>,
-        query: Vc<RcStr>,
-        fragment: Vc<RcStr>,
+        query: Vc<String>,
+        fragment: Vc<String>,
         force_in_lookup_dir: bool,
     ) -> Vc<Self> {
         Self::cell(Request::Raw {
@@ -281,8 +281,8 @@ impl Request {
     #[turbo_tasks::function]
     pub fn relative(
         request: Value<Pattern>,
-        query: Vc<RcStr>,
-        fragment: Vc<RcStr>,
+        query: Vc<String>,
+        fragment: Vc<String>,
         force_in_lookup_dir: bool,
     ) -> Vc<Self> {
         Self::cell(Request::Relative {
@@ -297,8 +297,8 @@ impl Request {
     pub fn module(
         module: RcStr,
         path: Value<Pattern>,
-        query: Vc<RcStr>,
-        fragment: Vc<RcStr>,
+        query: Vc<String>,
+        fragment: Vc<String>,
     ) -> Vc<Self> {
         Self::cell(Request::Module {
             module,
@@ -348,7 +348,7 @@ impl Request {
     }
 
     #[turbo_tasks::function]
-    pub async fn with_query(self: Vc<Self>, query: Vc<RcStr>) -> Result<Vc<Self>> {
+    pub async fn with_query(self: Vc<Self>, query: Vc<String>) -> Result<Vc<Self>> {
         Ok(match &*self.await? {
             Request::Raw {
                 path,
@@ -423,7 +423,7 @@ impl Request {
     }
 
     #[turbo_tasks::function]
-    pub async fn with_fragment(self: Vc<Self>, fragment: Vc<RcStr>) -> Result<Vc<Self>> {
+    pub async fn with_fragment(self: Vc<Self>, fragment: Vc<String>) -> Result<Vc<Self>> {
         Ok(match &*self.await? {
             Request::Raw {
                 path,

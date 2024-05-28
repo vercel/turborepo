@@ -1,6 +1,6 @@
 use anyhow::Result;
 use indexmap::IndexMap;
-use turbo_tasks::Vc;
+use turbo_tasks::{RcStr, Vc};
 
 use crate::{EnvMap, ProcessEnv};
 
@@ -9,7 +9,7 @@ use crate::{EnvMap, ProcessEnv};
 #[turbo_tasks::value]
 pub struct FilterProcessEnv {
     prior: Vc<Box<dyn ProcessEnv>>,
-    filters: Vec<String>,
+    filters: Vec<RcStr>,
 }
 
 #[turbo_tasks::value_impl]
@@ -18,7 +18,10 @@ impl FilterProcessEnv {
     pub fn new(prior: Vc<Box<dyn ProcessEnv>>, filters: Vec<RcStr>) -> Vc<Self> {
         FilterProcessEnv {
             prior,
-            filters: filters.into_iter().map(|f| f.to_uppercase()).collect(),
+            filters: filters
+                .into_iter()
+                .map(|f| f.to_uppercase().into())
+                .collect(),
         }
         .cell()
     }
@@ -33,7 +36,7 @@ impl ProcessEnv for FilterProcessEnv {
         for (key, value) in &*prior {
             let uppercase = key.to_uppercase();
             for filter in &self.filters {
-                if uppercase.starts_with(filter) {
+                if uppercase.starts_with(&**filter) {
                     filtered.insert(key.clone(), value.clone());
                     break;
                 }
@@ -45,7 +48,7 @@ impl ProcessEnv for FilterProcessEnv {
     #[turbo_tasks::function]
     fn read(&self, name: RcStr) -> Vc<Option<String>> {
         for filter in &self.filters {
-            if name.to_uppercase().starts_with(filter) {
+            if name.to_uppercase().starts_with(&**filter) {
                 return self.prior.read(name);
             }
         }

@@ -80,7 +80,7 @@ impl SingleModuleReference {
     /// Create a new [Vc<SingleModuleReference>] that resolves to the given
     /// asset.
     #[turbo_tasks::function]
-    pub fn new(asset: Vc<Box<dyn Module>>, description: Vc<RcStr>) -> Vc<Self> {
+    pub fn new(asset: Vc<Box<dyn Module>>, description: Vc<String>) -> Vc<Self> {
         Self::cell(SingleModuleReference { asset, description })
     }
 
@@ -126,7 +126,7 @@ impl SingleOutputAssetReference {
     /// Create a new [Vc<SingleOutputAssetReference>] that resolves to the given
     /// asset.
     #[turbo_tasks::function]
-    pub fn new(asset: Vc<Box<dyn OutputAsset>>, description: Vc<RcStr>) -> Vc<Self> {
+    pub fn new(asset: Vc<Box<dyn OutputAsset>>, description: Vc<String>) -> Vc<Self> {
         Self::cell(SingleOutputAssetReference { asset, description })
     }
 

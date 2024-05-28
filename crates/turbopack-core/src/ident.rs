@@ -125,14 +125,14 @@ impl AssetIdent {
     }
 
     #[turbo_tasks::function]
-    pub fn with_query(&self, query: Vc<RcStr>) -> Vc<Self> {
+    pub fn with_query(&self, query: Vc<String>) -> Vc<Self> {
         let mut this = self.clone();
         this.query = query;
         Self::new(Value::new(this))
     }
 
     #[turbo_tasks::function]
-    pub fn with_modifier(&self, modifier: Vc<RcStr>) -> Vc<Self> {
+    pub fn with_modifier(&self, modifier: Vc<String>) -> Vc<Self> {
         let mut this = self.clone();
         this.add_modifier(modifier);
         Self::new(Value::new(this))
@@ -153,7 +153,7 @@ impl AssetIdent {
     }
 
     #[turbo_tasks::function]
-    pub fn with_layer(&self, layer: Vc<RcStr>) -> Vc<Self> {
+    pub fn with_layer(&self, layer: Vc<String>) -> Vc<Self> {
         let mut this = self.clone();
         this.layer = Some(layer);
         Self::new(Value::new(this))

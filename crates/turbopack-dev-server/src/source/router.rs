@@ -26,7 +26,7 @@ pub struct PrefixedRouterContentSource {
 impl PrefixedRouterContentSource {
     #[turbo_tasks::function]
     pub async fn new(
-        prefix: Vc<RcStr>,
+        prefix: Vc<String>,
         routes: Vec<(RcStr, Vc<Box<dyn ContentSource>>)>,
         fallback: Vc<Box<dyn ContentSource>>,
     ) -> Result<Vc<Self>> {

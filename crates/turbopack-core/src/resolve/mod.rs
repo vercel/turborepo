@@ -2269,8 +2269,8 @@ async fn resolve_module_request(
 async fn resolve_into_package(
     path: Value<Pattern>,
     package_path: Vc<FileSystemPath>,
-    query: Vc<RcStr>,
-    fragment: Vc<RcStr>,
+    query: Vc<String>,
+    fragment: Vc<String>,
     options: Vc<ResolveOptions>,
 ) -> Result<Vc<ResolveResult>> {
     let path = path.into_value();
