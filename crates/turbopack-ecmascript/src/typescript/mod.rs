@@ -1,6 +1,6 @@
 use anyhow::Result;
 use serde_json::Value as JsonValue;
-use turbo_tasks::{Value, ValueToString, Vc};
+use turbo_tasks::{RcStr, Value, ValueToString, Vc};
 use turbo_tasks_fs::DirectoryContent;
 use turbopack_core::{
     asset::{Asset, AssetContent},
@@ -67,19 +67,20 @@ impl Module for TsConfigModuleAsset {
                     .map(|s| (source, s.to_string()))
             })
             .await?;
-            let compiler = compiler
+            let compiler: RcStr = compiler
                 .map(|(_, c)| c)
-                .unwrap_or_else(|| "typescript".to_string());
+                .unwrap_or_else(|| "typescript".to_string())
+                .into();
             references.push(Vc::upcast(CompilerReference::new(
                 self.origin,
-                Request::parse(Value::new(compiler.to_string().into())),
+                Request::parse(Value::new(compiler.into())),
             )));
             let require = read_from_tsconfigs(&configs, |json, source| {
                 if let JsonValue::Array(array) = &json["ts-node"]["require"] {
                     Some(
                         array
                             .iter()
-                            .filter_map(|name| name.as_str().map(|s| (source, s.to_string())))
+                            .filter_map(|name| name.as_str().map(|s| (source, RcStr::from(s))))
                             .collect::<Vec<_>>(),
                     )
                 } else {
@@ -103,7 +104,7 @@ impl Module for TsConfigModuleAsset {
                     Some(
                         array
                             .iter()
-                            .filter_map(|name| name.as_str().map(|s| (source, s.to_string())))
+                            .filter_map(|name| name.as_str().map(|s| (source, RcStr::from(s))))
                             .collect::<Vec<_>>(),
                     )
                 } else {
@@ -118,7 +119,7 @@ impl Module for TsConfigModuleAsset {
                 let mut current = self.source.ident().path().parent().resolve().await?;
                 loop {
                     if let DirectoryContent::Entries(entries) = &*current
-                        .join("node_modules/@types".to_string())
+                        .join("node_modules/@types".into())
                         .read_dir()
                         .await?
                     {
@@ -126,7 +127,7 @@ impl Module for TsConfigModuleAsset {
                             if name.starts_with('.') {
                                 None
                             } else {
-                                Some((self.source, name.to_string()))
+                                Some((self.source, name.clone()))
                             }
                         }));
                     }

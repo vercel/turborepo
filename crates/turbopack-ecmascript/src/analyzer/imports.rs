@@ -418,7 +418,7 @@ fn parse_with(with: Option<&ObjectLit>) -> Option<ImportedSymbol> {
     find_turbopack_part_id_in_asserts(with?).map(|v| match v {
         PartId::Internal(index) => ImportedSymbol::Part(index),
         PartId::ModuleEvaluation => ImportedSymbol::ModuleEvaluation,
-        PartId::Export(e) => ImportedSymbol::Symbol(e.into()),
+        PartId::Export(e) => ImportedSymbol::Symbol(e.as_str().into()),
         PartId::Exports => ImportedSymbol::Exports,
     })
 }
