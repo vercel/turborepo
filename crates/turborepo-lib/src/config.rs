@@ -132,6 +132,14 @@ pub enum Error {
         #[source_code]
         text: NamedSource,
     },
+    #[error("found `pipeline` field instead of `tasks`")]
+    #[diagnostic(help("In turbo 2.0, `pipeline` has been renamed to `tasks`"))]
+    PipelineField {
+        #[label("rename `pipeline` field to `tasks`")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+    },
     #[error("Failed to create APIClient: {0}")]
     ApiClient(#[source] turborepo_api_client::Error),
     #[error("{0} is not UTF8.")]
