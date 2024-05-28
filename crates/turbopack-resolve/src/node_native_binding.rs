@@ -258,7 +258,7 @@ pub async fn resolve_node_gyp_build_files(
             Regex::new(r#"['"]target_name['"]\s*:\s*(?:"(.*?)"|'(.*?)')"#)
                 .expect("create napi_build_version regex failed");
     }
-    let binding_gyp_pat = Pattern::new(Pattern::Constant("binding.gyp".to_owned()));
+    let binding_gyp_pat = Pattern::new(Pattern::Constant("binding.gyp".into()));
     let gyp_file = resolve_raw(context_dir, binding_gyp_pat, true);
     if let [binding_gyp] = &gyp_file.primary_sources().await?[..] {
         let mut merged_affecting_sources =
@@ -268,14 +268,14 @@ pub async fn resolve_node_gyp_build_files(
                 if let Some(captured) =
                     GYP_BUILD_TARGET_NAME.captures(&config_file.content().to_str()?)
                 {
-                    let mut resolved: IndexMap<String, Vc<Box<dyn Source>>> =
+                    let mut resolved: IndexMap<RcStr, Vc<Box<dyn Source>>> =
                         IndexMap::with_capacity(captured.len());
                     for found in captured.iter().skip(1).flatten() {
                         let name = found.as_str();
-                        let target_path = context_dir.join("build/Release".to_string());
+                        let target_path = context_dir.join("build/Release".into());
                         let resolved_prebuilt_file = resolve_raw(
                             target_path,
-                            Pattern::new(Pattern::Constant(format!("{}.node", name))),
+                            Pattern::new(Pattern::Constant(format!("{}.node", name).into())),
                             true,
                         )
                         .await?;
@@ -283,7 +283,7 @@ pub async fn resolve_node_gyp_build_files(
                             resolved_prebuilt_file.primary.first()
                         {
                             resolved.insert(
-                                format!("build/Release/{name}.node"),
+                                format!("build/Release/{name}.node").into(),
                                 source.resolve().await?,
                             );
                             merged_affecting_sources
@@ -310,9 +310,9 @@ pub async fn resolve_node_gyp_build_files(
     Ok(resolve_raw(
         context_dir,
         Pattern::new(Pattern::Concatenation(vec![
-            Pattern::Constant(format!("prebuilds/{}/", prebuilt_dir)),
+            Pattern::Constant(format!("prebuilds/{}/", prebuilt_dir).into()),
             Pattern::Dynamic,
-            Pattern::Constant(".node".to_owned()),
+            Pattern::Constant(".node".into()),
         ])),
         true,
     )
