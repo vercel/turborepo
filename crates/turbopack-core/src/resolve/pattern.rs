@@ -23,7 +23,9 @@ pub enum Pattern {
 fn concatenation_push_or_merge_item(list: &mut Vec<Pattern>, pat: Pattern) {
     if let Pattern::Constant(ref s) = pat {
         if let Some(Pattern::Constant(ref mut last)) = list.last_mut() {
-            last.push_str(s);
+            last.mutate(|last| {
+                last.push_str(s);
+            });
             return;
         }
     }
@@ -33,7 +35,9 @@ fn concatenation_push_or_merge_item(list: &mut Vec<Pattern>, pat: Pattern) {
 fn concatenation_push_front_or_merge_item(list: &mut Vec<Pattern>, pat: Pattern) {
     if let Pattern::Constant(mut s) = pat {
         if let Some(Pattern::Constant(ref mut first)) = list.iter_mut().next() {
-            s.push_str(first);
+            s.mutate(|s| {
+                s.push_str(first);
+            });
             *first = s;
             return;
         }
@@ -107,7 +111,9 @@ impl Pattern {
                 concatenation_push_front_or_merge_item(&mut list, take(this));
                 *this = Pattern::Concatenation(list);
             }
-            (Pattern::Constant(str), Pattern::Constant(other)) => str.push_str(&other),
+            (Pattern::Constant(str), Pattern::Constant(other)) => str.mutate(|str| {
+                str.push_str(&other);
+            }),
             (this, pat) => {
                 *this = Pattern::Concatenation(vec![take(this), pat]);
             }
@@ -128,7 +134,9 @@ impl Pattern {
                 *this = Pattern::Concatenation(list);
             }
             (Pattern::Constant(str), Pattern::Constant(mut other)) => {
-                other.push_str(str);
+                other.mutate(|other| {
+                    other.push_str(str);
+                });
                 *str = other;
             }
             (this, pat) => {
@@ -252,7 +260,9 @@ impl Pattern {
                                     if !c.is_empty() {
                                         if let Some(Pattern::Constant(last)) = new_parts.last_mut()
                                         {
-                                            last.push_str(&c);
+                                            last.mutate(|last| {
+                                                last.push_str(&c);
+                                            });
                                         } else {
                                             new_parts.push(Pattern::Constant(c));
                                         }
