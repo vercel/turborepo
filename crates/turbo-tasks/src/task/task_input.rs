@@ -105,6 +105,13 @@ impl AsRef<OsStr> for RcStr {
     }
 }
 
+/// Mimic `&str`
+impl AsRef<[u8]> for RcStr {
+    fn as_ref(&self) -> &[u8] {
+        (*self.0).as_ref()
+    }
+}
+
 impl PartialEq<str> for RcStr {
     fn eq(&self, other: &str) -> bool {
         self.0.as_str() == other
