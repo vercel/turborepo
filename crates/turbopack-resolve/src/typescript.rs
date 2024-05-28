@@ -2,7 +2,7 @@ use std::{collections::HashMap, fmt::Write, mem::take};
 
 use anyhow::Result;
 use serde_json::Value as JsonValue;
-use turbo_tasks::{Value, ValueDefault, Vc};
+use turbo_tasks::{RcStr, Value, ValueDefault, Vc};
 use turbo_tasks_fs::{FileContent, FileJsonContent, FileSystemPath};
 use turbopack_core::{
     asset::Asset,
@@ -327,11 +327,8 @@ pub async fn tsconfig_resolve_options(
 }
 
 #[turbo_tasks::function]
-pub fn tsconfig() -> Vc<Vec<String>> {
-    Vc::cell(vec![
-        "tsconfig.json".to_string(),
-        "jsconfig.json".to_string(),
-    ])
+pub fn tsconfig() -> Vc<Vec<RcStr>> {
+    Vc::cell(vec!["tsconfig.json".into(), "jsconfig.json".into()])
 }
 
 #[turbo_tasks::function]
