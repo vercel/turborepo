@@ -133,7 +133,10 @@ impl Git {
 
     fn execute_git_command(&self, args: &[&str], pathspec: &str) -> Result<Vec<u8>, Error> {
         let mut command = Command::new(self.bin.as_std_path());
-        command.args(args).current_dir(&self.root);
+        command
+            .args(args)
+            .current_dir(&self.root)
+            .env("GIT_OPTIONAL_LOCKS", "false");
 
         if !pathspec.is_empty() {
             command.arg("--").arg(pathspec);
