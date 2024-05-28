@@ -6,7 +6,8 @@ runs:
   steps:
     - name: Install Turbo globally
       shell: bash
+      # Until we are migrate ourselves to 2.0 we pin to the latest 1.x release
       run: |
         VERSION=$(npm view turbo --json | jq -r '.versions | last')
         echo "Latest published version: $VERSION"
-        npm i -g turbo@$VERSION
+        npm i -g turbo@1.13.4-canary.5

@@ -12,12 +12,12 @@ pub mod task_access;
 pub mod task_id;
 pub mod watch;
 
-use std::{collections::HashSet, io::Write, sync::Arc};
+use std::{collections::HashSet, io::Write, sync::Arc, time::Duration};
 
 pub use cache::{CacheOutput, ConfigCache, Error as CacheError, RunCache, TaskCache};
 use chrono::{DateTime, Local};
 use rayon::iter::ParallelBridge;
-use tokio::task::JoinHandle;
+use tokio::{select, task::JoinHandle};
 use tracing::debug;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::{APIAuth, APIClient};
@@ -161,7 +161,66 @@ impl Run {
             tokio::spawn(async move {
                 let _guard = subscriber.listen().await;
                 let spinner = turborepo_ui::start_spinner("...Finishing writing to cache...");
-                run_cache.shutdown_cache().await;
+                if let Ok((status, closed)) = run_cache.shutdown_cache().await {
+                    let fut = async {
+                        loop {
+                            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                            // loop through hashmap, extract items that are still running,
+                            // sum up bit per second
+                            let (bytes_per_second, bytes_uploaded, bytes_total) = {
+                                let status = status.lock().unwrap();
+                                let total_bps: f64 = status
+                                    .iter()
+                                    .filter_map(|(_hash, task)| task.average_bps())
+                                    .sum();
+                                let bytes_uploaded: usize =
+                                    status.iter().filter_map(|(_hash, task)| task.bytes()).sum();
+                                let bytes_total: usize = status
+                                    .iter()
+                                    .filter(|(_hash, task)| !task.done())
+                                    .filter_map(|(_hash, task)| task.size())
+                                    .sum();
+                                (total_bps, bytes_uploaded, bytes_total)
+                            };
+
+                            if bytes_total == 0 {
+                                continue;
+                            }
+
+                            // convert to human readable
+                            let mut formatter = human_format::Formatter::new();
+                            let formatter = formatter.with_decimals(2).with_separator("");
+                            let bytes_per_second =
+                                formatter.with_units("B/s").format(bytes_per_second);
+                            let bytes_remaining = formatter
+                                .with_units("B")
+                                .format(bytes_total.saturating_sub(bytes_uploaded) as f64);
+
+                            spinner.set_message(format!(
+                                "...Finishing writing to cache... ({} remaining, {})",
+                                bytes_remaining, bytes_per_second
+                            ));
+                        }
+                    };
+
+                    let interrupt = async {
+                        if let Ok(fut) = crate::commands::run::get_signal() {
+                            fut.await;
+                        } else {
+                            tracing::warn!("could not register ctrl-c handler");
+                            // wait forever
+                            tokio::time::sleep(Duration::MAX).await;
+                        }
+                    };
+
+                    select! {
+                        _ = closed => {}
+                        _ = fut => {}
+                        _ = interrupt => {tracing::debug!("received interrupt, exiting");}
+                    }
+                } else {
+                    tracing::warn!("could not start shutdown, exiting");
+                }
                 spinner.finish_and_clear();
             });
         }
