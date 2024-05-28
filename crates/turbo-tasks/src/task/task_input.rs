@@ -1,6 +1,7 @@
 use std::{
     any::{type_name, Any},
     borrow::Cow,
+    ffi::OsStr,
     fmt::Display,
     marker::PhantomData,
     ops::Deref,
@@ -78,8 +79,16 @@ impl From<Cow<'_, str>> for RcStr {
     }
 }
 
+/// Mimic `&str`
 impl AsRef<Path> for RcStr {
     fn as_ref(&self) -> &Path {
+        (*self.0).as_ref()
+    }
+}
+
+/// Mimic `&str`
+impl AsRef<OsStr> for RcStr {
+    fn as_ref(&self) -> &OsStr {
         (*self.0).as_ref()
     }
 }
