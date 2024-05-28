@@ -2,6 +2,7 @@ use std::{
     any::{type_name, Any},
     marker::PhantomData,
     ops::Deref,
+    path::Path,
     sync::Arc,
 };
 
@@ -60,6 +61,12 @@ impl From<String> for RcStr {
 impl From<&'_ str> for RcStr {
     fn from(s: &str) -> Self {
         RcStr(Arc::new(s.to_string()))
+    }
+}
+
+impl AsRef<Path> for RcStr {
+    fn as_ref(&self) -> &Path {
+        (*self.0).as_ref()
     }
 }
 
