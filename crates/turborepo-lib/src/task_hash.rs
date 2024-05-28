@@ -118,8 +118,7 @@ impl PackageInputsHashes {
                 let scm_telemetry = package_task_event.child();
                 // Try hashing with the daemon, if we have a connection. If we don't, or if we
                 // timeout or get an error, fallback to local hashing
-                #[cfg(feature = "daemon-file-hashing")]
-                let hash_object = {
+                let hash_object = if cfg!(feature = "daemon-file-hashing") {
                     let handle = tokio::runtime::Handle::current();
                     let mut daemon = daemon
                         .as_ref() // Option::ref
@@ -181,10 +180,9 @@ impl PackageInputsHashes {
                                 }
                             }
                         })
+                } else {
+                    None
                 };
-
-                #[cfg(not(feature = "daemon-file-hashing"))]
-                let hash_object = None;
 
                 let mut hash_object = match hash_object {
                     Some(hash_object) => hash_object,
