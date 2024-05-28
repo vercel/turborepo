@@ -1829,7 +1829,7 @@ async fn resolve_into_folder(
             ResolveIntoPackage::MainField { field: name } => {
                 if let Some(package_json) = &*read_package_json(package_json_path).await? {
                     if let Some(field_value) = package_json[name].as_str() {
-                        let normalized_request = normalize_request(field_value);
+                        let normalized_request: RcStr = normalize_request(field_value).into();
                         if normalized_request.is_empty()
                             || normalized_request == "."
                             || normalized_request == "./"

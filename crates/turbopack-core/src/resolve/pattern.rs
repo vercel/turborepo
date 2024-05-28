@@ -442,7 +442,7 @@ impl Pattern {
                     } else {
                         MatchResult::None
                     }
-                } else if value.starts_with(c) {
+                } else if value.starts_with(&**c) {
                     MatchResult::Consumed {
                         remaining: &value[c.len()..],
                         any_offset: None,
@@ -545,7 +545,7 @@ impl Pattern {
         match self {
             Pattern::Constant(c) => {
                 if let Some(offset) = any_offset {
-                    if let Some(index) = value.find(c) {
+                    if let Some(index) = value.find(&**c) {
                         if index <= offset {
                             NextConstantUntilResult::Consumed(&value[index + c.len()..], None)
                         } else {

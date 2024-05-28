@@ -265,7 +265,7 @@ impl TryFrom<&Value> for ExportsField {
 
                 if !conditions.is_empty() {
                     map.insert(
-                        AliasPattern::Exact(".".to_string()),
+                        AliasPattern::Exact(".".into()),
                         SubpathValue::Conditional(
                             conditions
                                 .into_iter()
