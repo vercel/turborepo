@@ -45,6 +45,14 @@ impl RcStr {
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
+
+    /// This implementation is more efficient than `.to_string()`
+    pub fn into_owned(self) -> String {
+        match Arc::try_unwrap(self.0) {
+            Ok(v) => v,
+            Err(arc) => arc.to_string(),
+        }
+    }
 }
 
 impl Deref for RcStr {
@@ -111,13 +119,9 @@ impl Display for RcStr {
     }
 }
 
-/// This implementation is more efficient than `.to_string()`
 impl From<RcStr> for String {
     fn from(s: RcStr) -> Self {
-        match Arc::try_unwrap(s.0) {
-            Ok(v) => v,
-            Err(arc) => arc.to_string(),
-        }
+        s.into_owned()
     }
 }
 
