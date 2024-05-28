@@ -38,6 +38,10 @@ impl TaskInput for ConcreteTaskInput {
 }
 
 /// This type exists to allow swapping out the underlying string type easily.
+//
+// If you want to change the underlying string type to `Arc<str>`, please ensure that you profile
+// perforamnce. The current implementation offers very cheap `String -> RcStr -> String`, meaning we
+// only pay for the allocation for `Arc` when we pass `format!("").into()` to a function.
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct RcStr(Arc<String>);
 
