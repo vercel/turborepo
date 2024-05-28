@@ -18,7 +18,7 @@ pub struct EmbeddedFileSystem {
 impl EmbeddedFileSystem {
     #[turbo_tasks::function]
     pub(super) fn new(
-        name: String,
+        name: RcStr,
         dir: TransientInstance<&'static Dir<'static>>,
     ) -> Vc<EmbeddedFileSystem> {
         EmbeddedFileSystem { name, dir }.cell()

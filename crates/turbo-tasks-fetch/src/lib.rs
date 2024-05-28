@@ -48,8 +48,8 @@ pub struct OptionProxyConfig(Option<ProxyConfig>);
 
 #[turbo_tasks::function]
 pub async fn fetch(
-    url: Vc<String>,
-    user_agent: Vc<Option<String>>,
+    url: Vc<RcStr>,
+    user_agent: Vc<Option<RcStr>>,
     proxy_option: Vc<OptionProxyConfig>,
 ) -> Result<Vc<FetchResult>> {
     let url = &*url.await?;

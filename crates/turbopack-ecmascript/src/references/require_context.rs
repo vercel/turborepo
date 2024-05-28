@@ -215,7 +215,7 @@ impl RequireContextAssetReference {
     pub fn new(
         source: Vc<Box<dyn Source>>,
         origin: Vc<Box<dyn ResolveOrigin>>,
-        dir: String,
+        dir: RcStr,
         include_subdirs: bool,
         filter: Vc<Regex>,
         path: Vc<AstPath>,
@@ -334,7 +334,7 @@ pub struct RequireContextAsset {
 }
 
 #[turbo_tasks::function]
-fn modifier(dir: String, include_subdirs: bool) -> Vc<String> {
+fn modifier(dir: RcStr, include_subdirs: bool) -> Vc<String> {
     Vc::cell(format!(
         "require.context {}/{}",
         dir,

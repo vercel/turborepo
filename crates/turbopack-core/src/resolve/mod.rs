@@ -896,7 +896,7 @@ impl ResolveResult {
     #[turbo_tasks::function]
     pub async fn with_replaced_request_key(
         self: Vc<Self>,
-        old_request_key: String,
+        old_request_key: RcStr,
         request_key: Value<RequestKey>,
     ) -> Result<Vc<Self>> {
         let this = self.await?;
@@ -928,7 +928,7 @@ impl ResolveResult {
     /// Returns a new [ResolveResult] where all [RequestKey]s are set to the
     /// passed `request`.
     #[turbo_tasks::function]
-    pub async fn with_request(self: Vc<Self>, request: String) -> Result<Vc<Self>> {
+    pub async fn with_request(self: Vc<Self>, request: RcStr) -> Result<Vc<Self>> {
         let this = self.await?;
         let new_primary = this
             .primary
@@ -1108,7 +1108,7 @@ pub enum FindContextFileResult {
 #[turbo_tasks::function]
 pub async fn find_context_file(
     lookup_path: Vc<FileSystemPath>,
-    names: Vc<Vec<String>>,
+    names: Vc<Vec<RcStr>>,
 ) -> Result<Vc<FindContextFileResult>> {
     let mut refs = Vec::new();
     let context_value = lookup_path.await?;
@@ -1158,7 +1158,7 @@ struct FindPackageResult {
 #[turbo_tasks::function]
 async fn find_package(
     lookup_path: Vc<FileSystemPath>,
-    package_name: String,
+    package_name: RcStr,
     options: Vc<ResolveModulesOptions>,
 ) -> Result<Vc<FindPackageResult>> {
     let mut packages = vec![];
@@ -2269,8 +2269,8 @@ async fn resolve_module_request(
 async fn resolve_into_package(
     path: Value<Pattern>,
     package_path: Vc<FileSystemPath>,
-    query: Vc<String>,
-    fragment: Vc<String>,
+    query: Vc<RcStr>,
+    fragment: Vc<RcStr>,
     options: Vc<ResolveOptions>,
 ) -> Result<Vc<ResolveResult>> {
     let path = path.into_value();
@@ -2655,11 +2655,11 @@ impl ModulePart {
         ModulePart::Evaluation.cell()
     }
     #[turbo_tasks::function]
-    pub fn export(export: String) -> Vc<Self> {
+    pub fn export(export: RcStr) -> Vc<Self> {
         ModulePart::Export(Vc::cell(export)).cell()
     }
     #[turbo_tasks::function]
-    pub fn renamed_export(original_export: String, export: String) -> Vc<Self> {
+    pub fn renamed_export(original_export: RcStr, export: RcStr) -> Vc<Self> {
         ModulePart::RenamedExport {
             original_export: Vc::cell(original_export),
             export: Vc::cell(export),
@@ -2667,7 +2667,7 @@ impl ModulePart {
         .cell()
     }
     #[turbo_tasks::function]
-    pub fn renamed_namespace(export: String) -> Vc<Self> {
+    pub fn renamed_namespace(export: RcStr) -> Vc<Self> {
         ModulePart::RenamedNamespace {
             export: Vc::cell(export),
         }

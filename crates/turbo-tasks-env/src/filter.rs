@@ -15,7 +15,7 @@ pub struct FilterProcessEnv {
 #[turbo_tasks::value_impl]
 impl FilterProcessEnv {
     #[turbo_tasks::function]
-    pub fn new(prior: Vc<Box<dyn ProcessEnv>>, filters: Vec<String>) -> Vc<Self> {
+    pub fn new(prior: Vc<Box<dyn ProcessEnv>>, filters: Vec<RcStr>) -> Vc<Self> {
         FilterProcessEnv {
             prior,
             filters: filters.into_iter().map(|f| f.to_uppercase()).collect(),
@@ -43,7 +43,7 @@ impl ProcessEnv for FilterProcessEnv {
     }
 
     #[turbo_tasks::function]
-    fn read(&self, name: String) -> Vc<Option<String>> {
+    fn read(&self, name: RcStr) -> Vc<Option<String>> {
         for filter in &self.filters {
             if name.to_uppercase().starts_with(filter) {
                 return self.prior.read(name);

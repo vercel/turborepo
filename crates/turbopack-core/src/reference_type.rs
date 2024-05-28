@@ -73,7 +73,7 @@ pub struct ImportContext {
 #[turbo_tasks::value_impl]
 impl ImportContext {
     #[turbo_tasks::function]
-    pub fn new(layers: Vec<String>, media: Vec<String>, supports: Vec<String>) -> Vc<Self> {
+    pub fn new(layers: Vec<RcStr>, media: Vec<RcStr>, supports: Vec<RcStr>) -> Vc<Self> {
         ImportContext {
             layers,
             media,
@@ -85,9 +85,9 @@ impl ImportContext {
     #[turbo_tasks::function]
     pub async fn add_attributes(
         self: Vc<Self>,
-        attr_layer: Option<String>,
-        attr_media: Option<String>,
-        attr_supports: Option<String>,
+        attr_layer: Option<RcStr>,
+        attr_media: Option<RcStr>,
+        attr_supports: Option<RcStr>,
     ) -> Result<Vc<Self>> {
         let this = &*self.await?;
 

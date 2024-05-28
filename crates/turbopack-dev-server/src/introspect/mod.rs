@@ -89,7 +89,7 @@ impl GetContentSourceContent for IntrospectionSource {
     #[turbo_tasks::function]
     async fn get(
         self: Vc<Self>,
-        path: String,
+        path: RcStr,
         _data: turbo_tasks::Value<ContentSourceData>,
     ) -> Result<Vc<ContentSourceContent>> {
         // get last segment
@@ -155,15 +155,15 @@ impl GetContentSourceContent for IntrospectionSource {
         };
         let html = format!(
             "<!DOCTYPE html>
-<html><head><title>{title}</title></head>
-<body>
-  <h3>{internal_ty}</h3>
-  <h2>{ty}</h2>
-  <h1>{title}</h1>
-  {details}
-  <ul>{children}</ul>
-</body>
-</html>",
+    <html><head><title>{title}</title></head>
+    <body>
+      <h3>{internal_ty}</h3>
+      <h2>{ty}</h2>
+      <h1>{title}</h1>
+      {details}
+      <ul>{children}</ul>
+    </body>
+    </html>",
             title = HtmlEscaped(title),
             ty = HtmlEscaped(ty),
             children = FormatIter(|| children.iter())

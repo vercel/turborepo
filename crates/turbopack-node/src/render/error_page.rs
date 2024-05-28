@@ -5,8 +5,8 @@ use turbo_tasks_fs::embed_file;
 #[turbo_tasks::function]
 pub(super) async fn error_html(
     status_code: u16,
-    title: String,
-    details: String,
+    title: RcStr,
+    details: RcStr,
 ) -> Result<Vc<String>> {
     let html = create_html(status_code, title, details).await?;
 
@@ -16,8 +16,8 @@ pub(super) async fn error_html(
 #[turbo_tasks::function]
 pub(super) async fn error_html_body(
     status_code: u16,
-    title: String,
-    details: String,
+    title: RcStr,
+    details: RcStr,
 ) -> Result<Vc<String>> {
     let html = create_html(status_code, title, details).await?;
 

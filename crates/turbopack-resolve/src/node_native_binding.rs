@@ -326,7 +326,7 @@ pub struct NodeBindingsReference {
 #[turbo_tasks::value_impl]
 impl NodeBindingsReference {
     #[turbo_tasks::function]
-    pub fn new(context_dir: Vc<FileSystemPath>, file_name: String) -> Vc<Self> {
+    pub fn new(context_dir: Vc<FileSystemPath>, file_name: RcStr) -> Vc<Self> {
         Self::cell(NodeBindingsReference {
             context_dir,
             file_name,
@@ -356,7 +356,7 @@ impl ValueToString for NodeBindingsReference {
 #[turbo_tasks::function]
 pub async fn resolve_node_bindings_files(
     context_dir: Vc<FileSystemPath>,
-    file_name: String,
+    file_name: RcStr,
 ) -> Result<Vc<ModuleResolveResult>> {
     lazy_static! {
         static ref BINDINGS_TRY: [&'static str; 5] = [

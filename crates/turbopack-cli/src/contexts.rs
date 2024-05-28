@@ -206,7 +206,7 @@ fn client_defines(node_env: &NodeEnv) -> Vc<CompileTimeDefines> {
 
 #[turbo_tasks::function]
 pub async fn get_client_compile_time_info(
-    browserslist_query: String,
+    browserslist_query: RcStr,
     node_env: Vc<NodeEnv>,
 ) -> Result<Vc<CompileTimeInfo>> {
     Ok(

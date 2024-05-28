@@ -288,11 +288,7 @@ impl DiskFileSystem {
     ///   root & project dir is different and requires to ignore specific
     ///   subpaths from each.
     #[turbo_tasks::function]
-    pub async fn new(
-        name: String,
-        root: String,
-        ignored_subpaths: Vec<String>,
-    ) -> Result<Vc<Self>> {
+    pub async fn new(name: RcStr, root: RcStr, ignored_subpaths: Vec<RcStr>) -> Result<Vc<Self>> {
         mark_stateful();
         // create the directory for the filesystem on disk, if it doesn't exist
         fs::create_dir_all(&root).await?;
@@ -890,7 +886,7 @@ impl FileSystemPath {
     /// /-separated path is expected to be already normalized (this is asserted
     /// in dev mode).
     #[turbo_tasks::function]
-    fn new_normalized(fs: Vc<Box<dyn FileSystem>>, path: String) -> Vc<Self> {
+    fn new_normalized(fs: Vc<Box<dyn FileSystem>>, path: RcStr) -> Vc<Self> {
         // On Windows, the path must be converted to a unix path before creating. But on
         // Unix, backslashes are a valid char in file names, and the path can be
         // provided by the user, so we allow it.
@@ -911,7 +907,7 @@ impl FileSystemPath {
     /// contain ".." or "." seqments, but it must not leave the root of the
     /// filesystem.
     #[turbo_tasks::function]
-    pub async fn join(self: Vc<Self>, path: String) -> Result<Vc<Self>> {
+    pub async fn join(self: Vc<Self>, path: RcStr) -> Result<Vc<Self>> {
         let this = self.await?;
         if let Some(path) = join_path(&this.path, &path) {
             Ok(Self::new_normalized(this.fs, path))
@@ -926,7 +922,7 @@ impl FileSystemPath {
 
     /// Adds a suffix to the filename. [path] must not contain `/`.
     #[turbo_tasks::function]
-    pub async fn append(self: Vc<Self>, path: String) -> Result<Vc<Self>> {
+    pub async fn append(self: Vc<Self>, path: RcStr) -> Result<Vc<Self>> {
         let this = self.await?;
         if path.contains('/') {
             bail!(
@@ -944,7 +940,7 @@ impl FileSystemPath {
     /// Adds a suffix to the basename of the filename. [appending] must not
     /// contain `/`. Extension will stay intact.
     #[turbo_tasks::function]
-    pub async fn append_to_stem(self: Vc<Self>, appending: String) -> Result<Vc<Self>> {
+    pub async fn append_to_stem(self: Vc<Self>, appending: RcStr) -> Result<Vc<Self>> {
         let this = self.await?;
         if appending.contains('/') {
             bail!(
@@ -968,7 +964,7 @@ impl FileSystemPath {
     /// Similar to [FileSystemPath::join], but returns an Option that will be
     /// None when the joined path would leave the filesystem root.
     #[turbo_tasks::function]
-    pub async fn try_join(self: Vc<Self>, path: String) -> Result<Vc<FileSystemPathOption>> {
+    pub async fn try_join(self: Vc<Self>, path: RcStr) -> Result<Vc<FileSystemPathOption>> {
         let this = self.await?;
         if let Some(path) = join_path(&this.path, &path) {
             Ok(Vc::cell(Some(
@@ -982,7 +978,7 @@ impl FileSystemPath {
     /// Similar to [FileSystemPath::join], but returns an Option that will be
     /// None when the joined path would leave the current path.
     #[turbo_tasks::function]
-    pub async fn try_join_inside(self: Vc<Self>, path: String) -> Result<Vc<FileSystemPathOption>> {
+    pub async fn try_join_inside(self: Vc<Self>, path: RcStr) -> Result<Vc<FileSystemPathOption>> {
         let this = self.await?;
         if let Some(path) = join_path(&this.path, &path) {
             if path.starts_with(&this.path) {
@@ -1032,7 +1028,7 @@ impl FileSystemPath {
     /// Creates a new [`Vc<FileSystemPath>`] like `self` but with the given
     /// extension.
     #[turbo_tasks::function]
-    pub async fn with_extension(self: Vc<Self>, extension: String) -> Result<Vc<FileSystemPath>> {
+    pub async fn with_extension(self: Vc<Self>, extension: RcStr) -> Result<Vc<FileSystemPath>> {
         let this = self.await?;
         let (path_without_extension, _) = this.split_extension();
         Ok(Self::new_normalized(

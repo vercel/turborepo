@@ -26,7 +26,7 @@ pub fn create_node_api_source(
     route_type: RouteType,
     server_root: Vc<FileSystemPath>,
     route_match: Vc<Box<dyn RouteMatcher>>,
-    pathname: Vc<String>,
+    pathname: Vc<RcStr>,
     entry: Vc<Box<dyn NodeEntry>>,
     render_data: Vc<JsonValue>,
     debug: bool,
@@ -109,7 +109,7 @@ impl GetContentSourceContent for NodeApiContentSource {
     #[turbo_tasks::function]
     async fn get(
         &self,
-        path: String,
+        path: RcStr,
         data: Value<ContentSourceData>,
     ) -> Result<Vc<ContentSourceContent>> {
         let Some(params) = &*self.route_match.params(path.clone()).await? else {

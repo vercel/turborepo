@@ -90,7 +90,7 @@ pub async fn create_web_entry_source(
     _env: Vc<Box<dyn ProcessEnv>>,
     eager_compile: bool,
     node_env: Vc<NodeEnv>,
-    browserslist_query: String,
+    browserslist_query: RcStr,
 ) -> Result<Vc<Box<dyn ContentSource>>> {
     let compile_time_info = get_client_compile_time_info(browserslist_query, node_env);
     let asset_context =

@@ -27,7 +27,7 @@ pub async fn read_glob(
 
 #[turbo_tasks::function]
 async fn read_glob_inner(
-    prefix: String,
+    prefix: RcStr,
     directory: Vc<FileSystemPath>,
     glob: Vc<Glob>,
     include_dot_files: bool,

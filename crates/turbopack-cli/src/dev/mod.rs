@@ -227,11 +227,11 @@ impl TurbopackDevServerBuilder {
 
 #[turbo_tasks::function]
 async fn source(
-    root_dir: String,
-    project_dir: String,
+    root_dir: RcStr,
+    project_dir: RcStr,
     entry_requests: TransientInstance<Vec<EntryRequest>>,
     eager_compile: bool,
-    browserslist_query: String,
+    browserslist_query: RcStr,
 ) -> Result<Vc<Box<dyn ContentSource>>> {
     let project_relative = project_dir.strip_prefix(&root_dir).unwrap();
     let project_relative = project_relative

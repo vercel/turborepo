@@ -574,7 +574,7 @@ impl Display for CommandOutput {
 }
 
 #[turbo_tasks::function]
-async fn exec_node(directory: String, path: Vc<FileSystemPath>) -> Result<Vc<CommandOutput>> {
+async fn exec_node(directory: RcStr, path: Vc<FileSystemPath>) -> Result<Vc<CommandOutput>> {
     let mut cmd = Command::new("node");
 
     let p = path.await?;
@@ -673,7 +673,7 @@ fn diff(expected: &str, actual: &str) -> String {
 async fn assert_output(
     expected: Vc<CommandOutput>,
     actual: Vc<CommandOutput>,
-    expected_stderr: Option<String>,
+    expected_stderr: Option<RcStr>,
 ) -> Result<Vc<CommandOutput>> {
     let expected = expected.await?;
     let actual = actual.await?;

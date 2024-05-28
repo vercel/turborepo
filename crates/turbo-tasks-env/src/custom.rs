@@ -32,7 +32,7 @@ impl ProcessEnv for CustomProcessEnv {
     }
 
     #[turbo_tasks::function]
-    async fn read(&self, name: String) -> Result<Vc<Option<String>>> {
+    async fn read(&self, name: RcStr) -> Result<Vc<Option<String>>> {
         let custom = case_insensitive_read(self.custom, name.clone());
         match &*custom.await? {
             Some(_) => Ok(custom),

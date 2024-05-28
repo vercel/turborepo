@@ -48,7 +48,7 @@ async fn chunk_item_info(
 pub async fn make_chunks(
     chunking_context: Vc<Box<dyn ChunkingContext>>,
     chunk_items: Vc<ChunkItemsWithAsyncModuleInfo>,
-    key_prefix: String,
+    key_prefix: RcStr,
     mut referenced_output_assets: Vc<OutputAssets>,
 ) -> Result<Vc<Chunks>> {
     let chunk_items = chunk_items

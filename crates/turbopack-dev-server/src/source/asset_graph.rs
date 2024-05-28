@@ -245,7 +245,7 @@ impl AssetGraphGetContentSourceContent {
     #[turbo_tasks::function]
     pub fn new(
         source: Vc<AssetGraphContentSource>,
-        path: String,
+        path: RcStr,
         asset: Vc<Box<dyn OutputAsset>>,
     ) -> Vc<Self> {
         Self::cell(AssetGraphGetContentSourceContent {
@@ -261,7 +261,7 @@ impl GetContentSourceContent for AssetGraphGetContentSourceContent {
     #[turbo_tasks::function]
     async fn get(
         self: Vc<Self>,
-        _path: String,
+        _path: RcStr,
         _data: Value<ContentSourceData>,
     ) -> Result<Vc<ContentSourceContent>> {
         let this = self.await?;

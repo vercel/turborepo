@@ -26,8 +26,8 @@ pub struct PrefixedRouterContentSource {
 impl PrefixedRouterContentSource {
     #[turbo_tasks::function]
     pub async fn new(
-        prefix: Vc<String>,
-        routes: Vec<(String, Vc<Box<dyn ContentSource>>)>,
+        prefix: Vc<RcStr>,
+        routes: Vec<(RcStr, Vc<Box<dyn ContentSource>>)>,
         fallback: Vc<Box<dyn ContentSource>>,
     ) -> Result<Vc<Self>> {
         Ok(PrefixedRouterContentSource {
@@ -156,7 +156,7 @@ impl GetContentSourceContent for PrefixedRouterGetContentSourceContent {
     #[turbo_tasks::function]
     async fn get(
         &self,
-        path: String,
+        path: RcStr,
         data: Value<ContentSourceData>,
     ) -> Result<Vc<ContentSourceContent>> {
         let prefix = self.mapper.await?.prefix.await?;

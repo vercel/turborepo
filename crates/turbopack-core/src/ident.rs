@@ -125,14 +125,14 @@ impl AssetIdent {
     }
 
     #[turbo_tasks::function]
-    pub fn with_query(&self, query: Vc<String>) -> Vc<Self> {
+    pub fn with_query(&self, query: Vc<RcStr>) -> Vc<Self> {
         let mut this = self.clone();
         this.query = query;
         Self::new(Value::new(this))
     }
 
     #[turbo_tasks::function]
-    pub fn with_modifier(&self, modifier: Vc<String>) -> Vc<Self> {
+    pub fn with_modifier(&self, modifier: Vc<RcStr>) -> Vc<Self> {
         let mut this = self.clone();
         this.add_modifier(modifier);
         Self::new(Value::new(this))
@@ -153,14 +153,14 @@ impl AssetIdent {
     }
 
     #[turbo_tasks::function]
-    pub fn with_layer(&self, layer: Vc<String>) -> Vc<Self> {
+    pub fn with_layer(&self, layer: Vc<RcStr>) -> Vc<Self> {
         let mut this = self.clone();
         this.layer = Some(layer);
         Self::new(Value::new(this))
     }
 
     #[turbo_tasks::function]
-    pub async fn rename_as(&self, pattern: String) -> Result<Vc<Self>> {
+    pub async fn rename_as(&self, pattern: RcStr) -> Result<Vc<Self>> {
         let mut this = self.clone();
         this.rename_as_ref(&pattern).await?;
         Ok(Self::new(Value::new(this)))
@@ -184,7 +184,7 @@ impl AssetIdent {
     pub async fn output_name(
         &self,
         context_path: Vc<FileSystemPath>,
-        expected_extension: String,
+        expected_extension: RcStr,
     ) -> Result<Vc<String>> {
         // TODO(PACK-2140): restrict character set to A–Za–z0–9-_.~'()
         // to be compatible with all operating systems + URLs.

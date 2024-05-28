@@ -176,7 +176,7 @@ async fn run(resource: PathBuf) -> Result<()> {
 }
 
 #[turbo_tasks::function]
-async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
+async fn run_test(resource: RcStr) -> Result<Vc<FileSystemPath>> {
     let test_path = canonicalize(&resource)?;
     assert!(test_path.exists(), "{} does not exist", resource);
     assert!(

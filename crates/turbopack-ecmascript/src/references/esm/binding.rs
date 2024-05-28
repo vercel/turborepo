@@ -32,7 +32,7 @@ impl EsmBinding {
     #[turbo_tasks::function]
     pub fn new(
         reference: Vc<EsmAssetReference>,
-        export: Option<String>,
+        export: Option<RcStr>,
         ast_path: Vc<AstPath>,
     ) -> Vc<Self> {
         EsmBinding {

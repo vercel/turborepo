@@ -2965,7 +2965,7 @@ fn is_invoking_node_process_eval(args: &[JsValue]) -> bool {
 }
 
 #[turbo_tasks::function]
-fn maybe_decode_data_url(url: String) -> Vc<OptionSourceMap> {
+fn maybe_decode_data_url(url: RcStr) -> Vc<OptionSourceMap> {
     if let Ok(map) = decode_data_url(&url) {
         Vc::cell(Some(SourceMap::new_decoded(map).cell()))
     } else {

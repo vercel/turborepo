@@ -262,7 +262,7 @@ impl ChunkingContext for NodeJsChunkingContext {
     async fn chunk_path(
         &self,
         ident: Vc<AssetIdent>,
-        extension: String,
+        extension: RcStr,
     ) -> Result<Vc<FileSystemPath>> {
         let root_path = self.chunk_root_path;
         let name = ident.output_name(self.context_path, extension).await?;
@@ -277,7 +277,7 @@ impl ChunkingContext for NodeJsChunkingContext {
     #[turbo_tasks::function]
     async fn asset_path(
         &self,
-        content_hash: String,
+        content_hash: RcStr,
         original_asset_ident: Vc<AssetIdent>,
     ) -> Result<Vc<FileSystemPath>> {
         let source_path = original_asset_ident.path().await?;

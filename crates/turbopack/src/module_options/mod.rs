@@ -25,7 +25,7 @@ use crate::{
 
 #[turbo_tasks::function]
 async fn package_import_map_from_import_mapping(
-    package_name: String,
+    package_name: RcStr,
     package_mapping: Vc<ImportMapping>,
 ) -> Result<Vc<ImportMap>> {
     let mut import_map = ImportMap::default();
@@ -38,7 +38,7 @@ async fn package_import_map_from_import_mapping(
 
 #[turbo_tasks::function]
 async fn package_import_map_from_context(
-    package_name: String,
+    package_name: RcStr,
     context_path: Vc<FileSystemPath>,
 ) -> Result<Vc<ImportMap>> {
     let mut import_map = ImportMap::default();

@@ -101,7 +101,7 @@ impl DevHtmlAsset {
     }
 
     #[turbo_tasks::function]
-    pub async fn with_body(self: Vc<Self>, body: String) -> Result<Vc<Self>> {
+    pub async fn with_body(self: Vc<Self>, body: RcStr) -> Result<Vc<Self>> {
         let mut html: DevHtmlAsset = self.await?.clone_value();
         html.body = Some(body);
         Ok(html.cell())

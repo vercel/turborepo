@@ -67,7 +67,7 @@ pub struct FollowExportsResult {
 #[turbo_tasks::function]
 pub async fn follow_reexports(
     module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
-    export_name: String,
+    export_name: RcStr,
     side_effect_free_packages: Vc<Glob>,
 ) -> Result<Vc<FollowExportsResult>> {
     if !*module

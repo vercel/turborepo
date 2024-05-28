@@ -9,16 +9,16 @@ pub fn embed_fs() -> Vc<Box<dyn FileSystem>> {
 }
 
 #[turbo_tasks::function]
-pub fn embed_file(path: String) -> Vc<FileContent> {
+pub fn embed_file(path: RcStr) -> Vc<FileContent> {
     embed_fs().root().join(path).read()
 }
 
 #[turbo_tasks::function]
-pub fn embed_file_path(path: String) -> Vc<FileSystemPath> {
+pub fn embed_file_path(path: RcStr) -> Vc<FileSystemPath> {
     embed_fs().root().join(path)
 }
 
 #[turbo_tasks::function]
-pub fn embed_static_code(asset_context: Vc<Box<dyn AssetContext>>, path: String) -> Vc<Code> {
+pub fn embed_static_code(asset_context: Vc<Box<dyn AssetContext>>, path: RcStr) -> Vc<Code> {
     StaticEcmascriptCode::new(asset_context, embed_file_path(path)).code()
 }

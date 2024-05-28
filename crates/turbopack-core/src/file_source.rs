@@ -27,7 +27,7 @@ impl FileSource {
     }
 
     #[turbo_tasks::function]
-    pub fn new_with_query(path: Vc<FileSystemPath>, query: Vc<String>) -> Vc<Self> {
+    pub fn new_with_query(path: Vc<FileSystemPath>, query: Vc<RcStr>) -> Vc<Self> {
         Self::cell(FileSource { path, query })
     }
 }

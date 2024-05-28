@@ -346,7 +346,7 @@ impl ModuleAssetContext {
         compile_time_info: Vc<CompileTimeInfo>,
         module_options_context: Vc<ModuleOptionsContext>,
         resolve_options_context: Vc<ResolveOptionsContext>,
-        layer: Vc<String>,
+        layer: Vc<RcStr>,
     ) -> Vc<Self> {
         Self::cell(ModuleAssetContext {
             transitions,
@@ -364,7 +364,7 @@ impl ModuleAssetContext {
         compile_time_info: Vc<CompileTimeInfo>,
         module_options_context: Vc<ModuleOptionsContext>,
         resolve_options_context: Vc<ResolveOptionsContext>,
-        layer: Vc<String>,
+        layer: Vc<RcStr>,
         transition: Vc<Box<dyn Transition>>,
     ) -> Vc<Self> {
         Self::cell(ModuleAssetContext {
@@ -716,7 +716,7 @@ impl AssetContext for ModuleAssetContext {
     }
 
     #[turbo_tasks::function]
-    async fn with_transition(&self, transition: String) -> Result<Vc<Box<dyn AssetContext>>> {
+    async fn with_transition(&self, transition: RcStr) -> Result<Vc<Box<dyn AssetContext>>> {
         Ok(
             if let Some(transition) = self.transitions.await?.get(&transition) {
                 Vc::upcast(ModuleAssetContext::new_transition(

@@ -89,7 +89,7 @@ impl WebpackLoaders {
         evaluate_context: Vc<Box<dyn AssetContext>>,
         execution_context: Vc<ExecutionContext>,
         loaders: Vc<WebpackLoaderItems>,
-        rename_as: Option<String>,
+        rename_as: Option<RcStr>,
         resolve_options_context: Vc<ResolveOptionsContext>,
     ) -> Vc<Self> {
         WebpackLoaders {
@@ -664,12 +664,19 @@ impl Issue for BuildDependencyIssue {
 
     #[turbo_tasks::function]
     async fn description(&self) -> Result<Vc<OptionStyledString>> {
-        Ok(Vc::cell(Some(StyledString::Line(vec![
-            StyledString::Text("The file at ".to_string()),
-            StyledString::Code(self.path.await?.to_string()),
-            StyledString::Text(" is a build dependency, which is not yet implemented.
-Changing this file or any dependency will not be recognized and might require restarting the server".to_string()),
-        ]).cell())))
+        Ok(Vc::cell(Some(
+            StyledString::Line(vec![
+                StyledString::Text("The file at ".to_string()),
+                StyledString::Code(self.path.await?.to_string()),
+                StyledString::Text(
+                    " is a build dependency, which is not yet implemented.
+    Changing this file or any dependency will not be recognized and might require restarting the \
+                     server"
+                        .to_string(),
+                ),
+            ])
+            .cell(),
+        )))
     }
 }
 

@@ -49,7 +49,7 @@ impl GetContentSourceContent for WrappedGetContentSourceContent {
     #[turbo_tasks::function]
     async fn get(
         &self,
-        path: String,
+        path: RcStr,
         data: Value<ContentSourceData>,
     ) -> Result<Vc<ContentSourceContent>> {
         let res = self.inner.get(path, data);

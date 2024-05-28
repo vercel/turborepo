@@ -42,7 +42,7 @@ fn extend_issues(issues: &mut Vec<ReadRef<PlainIssue>>, new_issues: Vec<ReadRef<
 
 #[turbo_tasks::function]
 async fn get_update_stream_item(
-    resource: String,
+    resource: RcStr,
     from: Vc<VersionState>,
     get_content: TransientInstance<GetContentFn>,
 ) -> Result<Vc<UpdateStreamItem>> {
@@ -159,7 +159,7 @@ async fn get_update_stream_item(
 
 #[turbo_tasks::function]
 async fn compute_update_stream(
-    resource: String,
+    resource: RcStr,
     from: Vc<VersionState>,
     get_content: TransientInstance<GetContentFn>,
     sender: TransientInstance<Sender<Result<ReadRef<UpdateStreamItem>>>>,

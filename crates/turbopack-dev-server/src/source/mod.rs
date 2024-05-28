@@ -111,7 +111,7 @@ impl GetContentSourceContent for ContentSourceContent {
     #[turbo_tasks::function]
     fn get(
         self: Vc<Self>,
-        _path: String,
+        _path: RcStr,
         _data: Value<ContentSourceData>,
     ) -> Vc<ContentSourceContent> {
         self
@@ -163,7 +163,7 @@ pub struct HeaderList(Vec<(String, String)>);
 #[turbo_tasks::value_impl]
 impl HeaderList {
     #[turbo_tasks::function]
-    pub fn new(headers: Vec<(String, String)>) -> Vc<Self> {
+    pub fn new(headers: Vec<(RcStr, RcStr)>) -> Vc<Self> {
         HeaderList(headers).cell()
     }
 

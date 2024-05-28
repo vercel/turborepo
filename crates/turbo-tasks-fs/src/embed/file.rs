@@ -8,8 +8,8 @@ use crate::{DiskFileSystem, File, FileContent, FileSystem};
 
 #[turbo_tasks::function]
 pub async fn content_from_relative_path(
-    package_path: String,
-    path: String,
+    package_path: RcStr,
+    path: RcStr,
 ) -> Result<Vc<FileContent>> {
     let package_path = PathBuf::from(package_path);
     let resolved_path = package_path.join(path);
@@ -30,7 +30,7 @@ pub async fn content_from_relative_path(
 }
 
 #[turbo_tasks::function]
-pub async fn content_from_str(string: String) -> Result<Vc<FileContent>> {
+pub async fn content_from_str(string: RcStr) -> Result<Vc<FileContent>> {
     Ok(File::from(string).into())
 }
 

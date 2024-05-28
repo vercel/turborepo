@@ -144,25 +144,22 @@ async fn my_multi_emitting_function() -> Result<Vc<Thing>> {
 }
 
 #[turbo_tasks::function]
-async fn my_transitive_emitting_function(key: String, _key2: String) -> Result<Vc<Thing>> {
+async fn my_transitive_emitting_function(key: RcStr, _key2: RcStr) -> Result<Vc<Thing>> {
     my_emitting_function(key).await?;
     Ok(Thing::cell(Thing(0)))
 }
 
 #[turbo_tasks::function]
-async fn my_transitive_emitting_function_collectibles(
-    key: String,
-    key2: String,
-) -> Vc<Collectibles> {
+async fn my_transitive_emitting_function_collectibles(key: RcStr, key2: RcStr) -> Vc<Collectibles> {
     let result = my_transitive_emitting_function(key, key2);
     Vc::cell(result.peek_collectibles::<Box<dyn ValueToString>>())
 }
 
 #[turbo_tasks::function]
 async fn my_transitive_emitting_function_with_child_scope(
-    key: String,
-    key2: String,
-    _key3: String,
+    key: RcStr,
+    key2: RcStr,
+    _key3: RcStr,
 ) -> Result<Vc<Thing>> {
     let thing = my_transitive_emitting_function(key, key2);
     thing.strongly_consistent().await?;
@@ -172,7 +169,7 @@ async fn my_transitive_emitting_function_with_child_scope(
 }
 
 #[turbo_tasks::function]
-async fn my_emitting_function(_key: String) -> Result<()> {
+async fn my_emitting_function(_key: RcStr) -> Result<()> {
     sleep(Duration::from_millis(100)).await;
     emit(Vc::upcast::<Box<dyn ValueToString>>(Thing::new(123)));
     emit(Vc::upcast::<Box<dyn ValueToString>>(Thing::new(42)));

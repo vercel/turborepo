@@ -7,11 +7,11 @@ fn embed_fs() -> Vc<Box<dyn FileSystem>> {
 }
 
 #[turbo_tasks::function]
-pub(crate) fn embed_file(path: String) -> Vc<FileContent> {
+pub(crate) fn embed_file(path: RcStr) -> Vc<FileContent> {
     embed_fs().root().join(path).read()
 }
 
 #[turbo_tasks::function]
-pub(crate) fn embed_file_path(path: String) -> Vc<FileSystemPath> {
+pub(crate) fn embed_file_path(path: RcStr) -> Vc<FileSystemPath> {
     embed_fs().root().join(path)
 }

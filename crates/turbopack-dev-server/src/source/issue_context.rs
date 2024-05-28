@@ -24,7 +24,7 @@ impl IssueFilePathContentSource {
     #[turbo_tasks::function]
     pub fn new_file_path(
         file_path: Vc<FileSystemPath>,
-        description: String,
+        description: RcStr,
         source: Vc<Box<dyn ContentSource>>,
     ) -> Vc<Self> {
         IssueFilePathContentSource {
@@ -36,7 +36,7 @@ impl IssueFilePathContentSource {
     }
 
     #[turbo_tasks::function]
-    pub fn new_description(description: String, source: Vc<Box<dyn ContentSource>>) -> Vc<Self> {
+    pub fn new_description(description: RcStr, source: Vc<Box<dyn ContentSource>>) -> Vc<Self> {
         IssueFilePathContentSource {
             file_path: None,
             description,
@@ -111,7 +111,7 @@ impl GetContentSourceContent for IssueContextGetContentSourceContent {
     #[turbo_tasks::function]
     async fn get(
         &self,
-        path: String,
+        path: RcStr,
         data: Value<ContentSourceData>,
     ) -> Result<Vc<ContentSourceContent>> {
         let source = self.source.await?;

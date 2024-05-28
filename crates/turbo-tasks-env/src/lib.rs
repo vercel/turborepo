@@ -35,7 +35,7 @@ impl ProcessEnv for EnvMap {
     }
 
     #[turbo_tasks::function]
-    async fn read(self: Vc<Self>, name: String) -> Vc<Option<String>> {
+    async fn read(self: Vc<Self>, name: RcStr) -> Vc<Option<String>> {
         case_insensitive_read(self, name)
     }
 }
@@ -63,7 +63,7 @@ pub fn sorted_env_vars() -> IndexMap<String, String> {
 }
 
 #[turbo_tasks::function]
-pub async fn case_insensitive_read(map: Vc<EnvMap>, name: String) -> Result<Vc<Option<String>>> {
+pub async fn case_insensitive_read(map: Vc<EnvMap>, name: RcStr) -> Result<Vc<Option<String>>> {
     Ok(Vc::cell(
         to_uppercase_map(map)
             .await?

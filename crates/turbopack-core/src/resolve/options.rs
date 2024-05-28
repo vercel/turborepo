@@ -477,7 +477,7 @@ impl ResolveOptions {
 
     /// Overrides the extensions used for resolving
     #[turbo_tasks::function]
-    pub async fn with_extensions(self: Vc<Self>, extensions: Vec<String>) -> Result<Vc<Self>> {
+    pub async fn with_extensions(self: Vc<Self>, extensions: Vec<RcStr>) -> Result<Vc<Self>> {
         let mut resolve_options = self.await?.clone_value();
         resolve_options.extensions = extensions;
         Ok(resolve_options.into())

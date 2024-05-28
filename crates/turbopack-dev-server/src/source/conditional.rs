@@ -164,7 +164,7 @@ impl GetContentSourceContent for ActivateOnGetContentSource {
     #[turbo_tasks::function]
     async fn get(
         self: Vc<Self>,
-        path: String,
+        path: RcStr,
         data: Value<ContentSourceData>,
     ) -> Result<Vc<ContentSourceContent>> {
         turbo_tasks::emit(Vc::upcast::<Box<dyn ContentSourceSideEffect>>(self));

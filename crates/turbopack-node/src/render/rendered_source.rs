@@ -49,7 +49,7 @@ pub fn create_node_rendered_source(
     route_type: RouteType,
     server_root: Vc<FileSystemPath>,
     route_match: Vc<Box<dyn RouteMatcher>>,
-    pathname: Vc<String>,
+    pathname: Vc<RcStr>,
     entry: Vc<Box<dyn NodeEntry>>,
     fallback_page: Vc<DevHtmlAsset>,
     render_data: Vc<JsonValue>,
@@ -167,7 +167,7 @@ impl GetContentSourceContent for NodeRenderContentSource {
     #[turbo_tasks::function]
     async fn get(
         &self,
-        path: String,
+        path: RcStr,
         data: Value<ContentSourceData>,
     ) -> Result<Vc<ContentSourceContent>> {
         let pathname = self.pathname.await?;

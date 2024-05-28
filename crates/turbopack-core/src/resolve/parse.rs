@@ -259,15 +259,15 @@ impl Request {
     }
 
     #[turbo_tasks::function]
-    pub fn parse_string(request: String) -> Vc<Self> {
+    pub fn parse_string(request: RcStr) -> Vc<Self> {
         Self::cell(Request::parse_ref(request.into()))
     }
 
     #[turbo_tasks::function]
     pub fn raw(
         request: Value<Pattern>,
-        query: Vc<String>,
-        fragment: Vc<String>,
+        query: Vc<RcStr>,
+        fragment: Vc<RcStr>,
         force_in_lookup_dir: bool,
     ) -> Vc<Self> {
         Self::cell(Request::Raw {
@@ -281,8 +281,8 @@ impl Request {
     #[turbo_tasks::function]
     pub fn relative(
         request: Value<Pattern>,
-        query: Vc<String>,
-        fragment: Vc<String>,
+        query: Vc<RcStr>,
+        fragment: Vc<RcStr>,
         force_in_lookup_dir: bool,
     ) -> Vc<Self> {
         Self::cell(Request::Relative {
@@ -295,10 +295,10 @@ impl Request {
 
     #[turbo_tasks::function]
     pub fn module(
-        module: String,
+        module: RcStr,
         path: Value<Pattern>,
-        query: Vc<String>,
-        fragment: Vc<String>,
+        query: Vc<RcStr>,
+        fragment: Vc<RcStr>,
     ) -> Vc<Self> {
         Self::cell(Request::Module {
             module,
@@ -348,7 +348,7 @@ impl Request {
     }
 
     #[turbo_tasks::function]
-    pub async fn with_query(self: Vc<Self>, query: Vc<String>) -> Result<Vc<Self>> {
+    pub async fn with_query(self: Vc<Self>, query: Vc<RcStr>) -> Result<Vc<Self>> {
         Ok(match &*self.await? {
             Request::Raw {
                 path,
@@ -423,7 +423,7 @@ impl Request {
     }
 
     #[turbo_tasks::function]
-    pub async fn with_fragment(self: Vc<Self>, fragment: Vc<String>) -> Result<Vc<Self>> {
+    pub async fn with_fragment(self: Vc<Self>, fragment: Vc<RcStr>) -> Result<Vc<Self>> {
         Ok(match &*self.await? {
             Request::Raw {
                 path,
@@ -498,7 +498,7 @@ impl Request {
     }
 
     #[turbo_tasks::function]
-    pub async fn append_path(self: Vc<Self>, suffix: String) -> Result<Vc<Self>> {
+    pub async fn append_path(self: Vc<Self>, suffix: RcStr) -> Result<Vc<Self>> {
         Ok(match &*self.await? {
             Request::Raw {
                 path,

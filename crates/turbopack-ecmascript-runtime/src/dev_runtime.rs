@@ -16,8 +16,8 @@ use crate::{asset_context::get_runtime_asset_context, embed_js::embed_static_cod
 #[turbo_tasks::function]
 pub async fn get_browser_runtime_code(
     environment: Vc<Environment>,
-    chunk_base_path: Vc<Option<String>>,
-    output_root: Vc<String>,
+    chunk_base_path: Vc<Option<RcStr>>,
+    output_root: Vc<RcStr>,
 ) -> Result<Vc<Code>> {
     let asset_context = get_runtime_asset_context(environment);
 

@@ -157,10 +157,10 @@ impl TurbopackBuildBuilder {
 
 #[turbo_tasks::function]
 async fn build_internal(
-    project_dir: String,
-    root_dir: String,
+    project_dir: RcStr,
+    root_dir: RcStr,
     entry_requests: Vc<EntryRequests>,
-    browserslist_query: String,
+    browserslist_query: RcStr,
     minify_type: MinifyType,
 ) -> Result<Vc<()>> {
     let env = Environment::new(Value::new(ExecutionEnvironment::Browser(

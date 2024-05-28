@@ -232,10 +232,10 @@ async fn add_glob_results(
 #[turbo_tasks::function]
 async fn input_to_modules(
     fs: Vc<Box<dyn FileSystem>>,
-    input: Vec<String>,
+    input: Vec<RcStr>,
     exact: bool,
-    process_cwd: Option<String>,
-    context_directory: String,
+    process_cwd: Option<RcStr>,
+    context_directory: RcStr,
     module_options: TransientInstance<ModuleOptionsContext>,
     resolve_options: TransientInstance<ResolveOptionsContext>,
 ) -> Result<Vc<Modules>> {
@@ -620,7 +620,7 @@ async fn main_operation(
 #[turbo_tasks::function]
 async fn create_module_asset(
     root: Vc<FileSystemPath>,
-    process_cwd: Option<String>,
+    process_cwd: Option<RcStr>,
     module_options: TransientInstance<ModuleOptionsContext>,
     resolve_options: TransientInstance<ResolveOptionsContext>,
 ) -> Result<Vc<ModuleAssetContext>> {
