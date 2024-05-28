@@ -1,5 +1,5 @@
 use anyhow::{bail, Result};
-use turbo_tasks::{Value, Vc};
+use turbo_tasks::{RcStr, Value, Vc};
 use turbo_tasks_fs::{glob::Glob, FileSystemPath};
 
 use crate::{
@@ -75,7 +75,7 @@ pub trait AssetContext {
     ) -> Vc<ModuleResolveResult>;
 
     /// Gets a new AssetContext with the transition applied.
-    fn with_transition(self: Vc<Self>, transition: String) -> Vc<Box<dyn AssetContext>>;
+    fn with_transition(self: Vc<Self>, transition: RcStr) -> Vc<Box<dyn AssetContext>>;
 
     fn side_effect_free_packages(self: Vc<Self>) -> Vc<Glob>;
 }

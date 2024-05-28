@@ -905,7 +905,7 @@ impl ResolveResult {
             .primary
             .iter()
             .filter_map(|(k, v)| {
-                let remaining = k.request.as_ref()?.strip_prefix(&old_request_key)?;
+                let remaining = k.request.as_ref()?.strip_prefix(&*old_request_key)?;
                 Some((
                     RequestKey {
                         request: request_key
@@ -2190,7 +2190,7 @@ async fn resolve_module_request(
 
     let result = find_package(
         lookup_path,
-        module.to_string(),
+        module.into(),
         resolve_modules_options(options).resolve().await?,
     )
     .await?;

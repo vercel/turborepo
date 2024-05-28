@@ -30,7 +30,7 @@ pub trait GenerateSourceMap {
     fn generate_source_map(self: Vc<Self>) -> Vc<OptionSourceMap>;
 
     /// Returns an individual section of the larger source map, if found.
-    fn by_section(self: Vc<Self>, _section: String) -> Vc<OptionSourceMap> {
+    fn by_section(self: Vc<Self>, _section: RcStr) -> Vc<OptionSourceMap> {
         Vc::cell(None)
     }
 }
@@ -391,10 +391,10 @@ impl SourceMap {
         origin: Vc<FileSystemPath>,
     ) -> Result<Vc<Self>> {
         async fn resolve_source(
-            source_request: Arc<str>,
-            source_content: Option<Arc<str>>,
+            source_request: RcStr,
+            source_content: Option<RcStr>,
             origin: Vc<FileSystemPath>,
-        ) -> Result<(Arc<str>, Arc<str>)> {
+        ) -> Result<(RcStr, RcStr)> {
             Ok(
                 if let Some(path) = *origin.parent().try_join(source_request.to_string()).await? {
                     let path_str = path.to_string().await?;

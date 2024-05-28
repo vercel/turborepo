@@ -778,7 +778,7 @@ pub async fn read_matches(
     force_in_lookup_dir: bool,
     pattern: Vc<Pattern>,
 ) -> Result<Vc<PatternMatches>> {
-    let mut prefix = prefix;
+    let mut prefix = prefix.to_string();
     let pat = pattern.await?;
     let mut results = Vec::new();
     let mut nested = Vec::new();
@@ -795,9 +795,9 @@ pub async fn read_matches(
                 if until_end {
                     if handled.insert(str) {
                         if let Some(fs_path) = &*if force_in_lookup_dir {
-                            lookup_dir.try_join_inside(str.to_string()).await?
+                            lookup_dir.try_join_inside(str.into()).await?
                         } else {
-                            lookup_dir.try_join(str.to_string()).await?
+                            lookup_dir.try_join(str.into()).await?
                         } {
                             let fs_path = fs_path.resolve().await?;
                             // This explicit deref of `context` is necessary

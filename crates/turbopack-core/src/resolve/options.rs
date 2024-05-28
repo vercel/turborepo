@@ -500,7 +500,7 @@ impl ResolveOptions {
 #[derive(Hash, Clone, Debug)]
 pub struct ResolveModulesOptions {
     pub modules: Vec<ResolveModules>,
-    pub extensions: Vec<String>,
+    pub extensions: Vec<RcStr>,
 }
 
 #[turbo_tasks::function]
