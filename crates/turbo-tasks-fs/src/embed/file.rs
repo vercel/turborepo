@@ -19,13 +19,13 @@ pub async fn content_from_relative_path(
     let path = resolved_path.file_name().unwrap().to_str().unwrap();
 
     let disk_fs = DiskFileSystem::new(
-        root_path.to_string_lossy().to_string(),
-        root_path.to_string_lossy().to_string(),
+        root_path.to_string_lossy().into(),
+        root_path.to_string_lossy().into(),
         vec![],
     );
     disk_fs.await?.start_watching()?;
 
-    let fs_path = disk_fs.root().join(path.to_string());
+    let fs_path = disk_fs.root().join(path.into());
     Ok(fs_path.read())
 }
 

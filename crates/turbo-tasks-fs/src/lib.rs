@@ -77,7 +77,7 @@ use crate::{
 pub trait FileSystem: ValueToString {
     /// Returns the path to the root of the file system.
     fn root(self: Vc<Self>) -> Vc<FileSystemPath> {
-        FileSystemPath::new_normalized(self, RcStr::def)
+        FileSystemPath::new_normalized(self, RcStr::default())
     }
     fn read(self: Vc<Self>, fs_path: Vc<FileSystemPath>) -> Vc<FileContent>;
     fn read_link(self: Vc<Self>, fs_path: Vc<FileSystemPath>) -> Vc<LinkContent>;
@@ -119,7 +119,7 @@ pub struct DiskFileSystem {
 impl DiskFileSystem {
     /// Returns the root as Path
     fn root_path(&self) -> &Path {
-        simplified(Path::new(&self.root))
+        simplified(Path::new(&*self.root))
     }
 
     /// registers the path as an invalidator for the current task,

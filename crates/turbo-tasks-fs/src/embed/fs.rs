@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 use include_dir::{Dir, DirEntry};
-use turbo_tasks::{Completion, TransientInstance, ValueToString, Vc};
+use turbo_tasks::{Completion, RcStr, TransientInstance, ValueToString, Vc};
 
 use crate::{
     DirectoryContent, DirectoryEntry, File, FileContent, FileMeta, FileSystem, FileSystemPath,
@@ -9,7 +9,7 @@ use crate::{
 
 #[turbo_tasks::value(serialization = "none")]
 pub struct EmbeddedFileSystem {
-    name: String,
+    name: RcStr,
     #[turbo_tasks(trace_ignore)]
     dir: TransientInstance<&'static Dir<'static>>,
 }
