@@ -611,7 +611,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
                     }
                     Reexport::Namespace { exported: n } => {
                         visitor.esm_exports.insert(
-                            n.to_string(),
+                            n.as_str().into(),
                             EsmExport::ImportedNamespace(Vc::upcast(import_ref)),
                         );
                     }
@@ -620,10 +620,10 @@ pub(crate) async fn analyse_ecmascript_module_internal(
                         exported: e,
                     } => {
                         visitor.esm_exports.insert(
-                            e.to_string(),
+                            e.as_str().into(),
                             EsmExport::ImportedBinding(
                                 Vc::upcast(import_ref),
-                                i.to_string(),
+                                i.to_string().into(),
                                 false,
                             ),
                         );
@@ -2458,9 +2458,9 @@ struct ModuleReferencesVisitor<'a> {
     old_analyser: StaticAnalyser,
     import_references: &'a [Vc<EsmAssetReference>],
     analysis: &'a mut AnalyzeEcmascriptModuleResultBuilder,
-    esm_exports: BTreeMap<String, EsmExport>,
+    esm_exports: BTreeMap<RcStr, EsmExport>,
     esm_star_exports: Vec<Vc<Box<dyn ModuleReference>>>,
-    webpack_runtime: Option<(String, Span)>,
+    webpack_runtime: Option<(RcStr, Span)>,
     webpack_entry: bool,
     webpack_chunks: Vec<Lit>,
 }
