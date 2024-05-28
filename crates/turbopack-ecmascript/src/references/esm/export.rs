@@ -110,7 +110,7 @@ pub async fn follow_reexports(
         }
 
         // Try to find the export in the star exports
-        if !exports_ref.star_exports.is_empty() && export_name != "default" {
+        if !exports_ref.star_exports.is_empty() && &*export_name != "default" {
             let result = get_all_export_names(module).await?;
             if let Some(m) = result.esm_exports.get(&export_name) {
                 module = *m;
@@ -352,7 +352,7 @@ fn emit_star_exports_issue(source_ident: Vc<AssetIdent>, message: String) {
 #[turbo_tasks::value(shared)]
 #[derive(Hash, Debug)]
 pub struct EsmExports {
-    pub exports: BTreeMap<String, EsmExport>,
+    pub exports: BTreeMap<RcStr, EsmExport>,
     pub star_exports: Vec<Vc<Box<dyn ModuleReference>>>,
 }
 

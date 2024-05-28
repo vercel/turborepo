@@ -1,5 +1,5 @@
 use anyhow::Result;
-use turbo_tasks::{Value, ValueToString, Vc};
+use turbo_tasks::{RcStr, Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     context::AssetContext,
@@ -54,7 +54,7 @@ impl ValueToString for TsConfigReference {
 #[derive(Hash, Debug)]
 pub struct TsReferencePathAssetReference {
     pub origin: Vc<Box<dyn ResolveOrigin>>,
-    pub path: String,
+    pub path: RcStr,
 }
 
 #[turbo_tasks::value_impl]

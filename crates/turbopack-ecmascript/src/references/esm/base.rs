@@ -107,7 +107,7 @@ impl EsmAssetReference {
     fn get_origin(&self) -> Vc<Box<dyn ResolveOrigin>> {
         let mut origin = self.origin;
         if let Some(transition) = self.annotations.transition() {
-            origin = origin.with_transition(transition.to_string());
+            origin = origin.with_transition(transition.into());
         }
         origin
     }

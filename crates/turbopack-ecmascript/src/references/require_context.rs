@@ -13,7 +13,7 @@ use swc_core::{
     },
     quote, quote_expr,
 };
-use turbo_tasks::{primitives::Regex, Value, ValueToString, Vc};
+use turbo_tasks::{primitives::Regex, RcStr, Value, ValueToString, Vc};
 use turbo_tasks_fs::{DirectoryContent, DirectoryEntry, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
