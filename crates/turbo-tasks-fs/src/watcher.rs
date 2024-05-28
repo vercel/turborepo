@@ -18,7 +18,7 @@ use notify_debouncer_full::{DebounceEventResult, DebouncedEvent, Debouncer, File
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use tracing::instrument;
-use turbo_tasks::{spawn_thread, Invalidator};
+use turbo_tasks::{spawn_thread, Invalidator, RcStr};
 
 use crate::{
     format_absolute_fs_path,
@@ -124,9 +124,9 @@ impl DiskWatcher {
     /// - Doesn't emit Modify events after a Create event
     pub(crate) fn start_watching(
         self: Arc<Self>,
-        name: String,
+        name: RcStr,
         root_path: PathBuf,
-        report_invalidation_reason: Option<(String, PathBuf)>,
+        report_invalidation_reason: Option<(RcStr, PathBuf)>,
         invalidation_lock: Arc<RwLock<()>>,
         invalidator_map: Arc<InvalidatorMap>,
         dir_invalidator_map: Arc<InvalidatorMap>,

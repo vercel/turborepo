@@ -382,7 +382,7 @@ impl FileSystem for DiskFileSystem {
                 let file_name = path.file_name()?.to_str()?.to_string();
                 let path_to_root = sys_to_unix(path.strip_prefix(&self.root).ok()?.to_str()?);
 
-                let fs_path = FileSystemPath::new_normalized(fs_path.fs, path_to_root.to_string());
+                let fs_path = FileSystemPath::new_normalized(fs_path.fs, path_to_root.into());
 
                 let entry = match e.file_type() {
                     Ok(t) if t.is_file() => DirectoryEntry::File(fs_path),
