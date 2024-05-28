@@ -2,7 +2,7 @@ use std::{path::Path, sync::Arc};
 
 use anyhow::{Context, Result};
 use dunce::canonicalize;
-use turbo_tasks::Vc;
+use turbo_tasks::{RcStr, Vc};
 
 use crate::{DiskFileSystem, File, FileContent, FileSystem};
 
@@ -27,7 +27,7 @@ pub async fn content_from_relative_path(
 }
 
 #[turbo_tasks::function]
-pub async fn content_from_str(string: Arc<String>) -> Result<Vc<FileContent>> {
+pub async fn content_from_str(string: RcStr) -> Result<Vc<FileContent>> {
     Ok(File::from(string).into())
 }
 
