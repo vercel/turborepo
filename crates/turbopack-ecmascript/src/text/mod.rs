@@ -49,7 +49,7 @@ impl Asset for TextContentFileSource {
             return Ok(AssetContent::file(FileContent::NotFound.cell()));
         };
         let text = content.content().to_str()?;
-        let code = format!("export default {};", StringifyJs(&text));
+        let code: RcStr = format!("export default {};", StringifyJs(&text)).into();
         let content = FileContent::Content(code.into()).cell();
         Ok(AssetContent::file(content))
     }

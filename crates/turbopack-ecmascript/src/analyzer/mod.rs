@@ -486,7 +486,7 @@ impl From<f64> for JsValue {
 
 impl From<RcStr> for JsValue {
     fn from(v: RcStr) -> Self {
-        ConstantValue::Str(v).into()
+        ConstantValue::Str(v.into()).into()
     }
 }
 

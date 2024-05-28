@@ -52,7 +52,7 @@ pub(crate) enum DirListEntry {
 }
 
 #[turbo_tasks::value(transparent)]
-pub(crate) struct DirList(IndexMap<String, DirListEntry>);
+pub(crate) struct DirList(IndexMap<RcStr, DirListEntry>);
 
 #[turbo_tasks::value_impl]
 impl DirList {
@@ -134,7 +134,7 @@ impl DirList {
 }
 
 #[turbo_tasks::value(transparent)]
-pub(crate) struct FlatDirList(IndexMap<String, Vc<FileSystemPath>>);
+pub(crate) struct FlatDirList(IndexMap<RcStr, Vc<FileSystemPath>>);
 
 #[turbo_tasks::value_impl]
 impl FlatDirList {
