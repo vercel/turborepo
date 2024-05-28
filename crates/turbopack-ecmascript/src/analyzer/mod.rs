@@ -3307,7 +3307,7 @@ pub fn parse_require_context(args: &[JsValue]) -> Result<RequireContextOptions> 
         bail!("require.context() only supports 1-3 arguments (mode is not supported)");
     }
 
-    let Some(dir) = args[0].as_str().map(|s| s.to_string()) else {
+    let Some(dir) = args[0].as_str().map(|s| s.into()) else {
         bail!("require.context(dir, ...) requires dir to be a constant string");
     };
 

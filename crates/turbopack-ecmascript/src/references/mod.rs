@@ -1959,7 +1959,7 @@ async fn handle_free_var_reference(
                     Some(TreeShakingMode::ModuleFragments)
                     | Some(TreeShakingMode::ReexportsOnly) => export
                         .as_ref()
-                        .map(|export| ModulePart::export(export.to_string())),
+                        .map(|export| ModulePart::export(export.clone())),
                     None => None,
                 },
                 state.import_externals,
