@@ -547,7 +547,7 @@ impl AliasPattern {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, TraceRawVcs)]
 enum AliasKey {
     Exact,
-    Wildcard { suffix: String },
+    Wildcard { suffix: RcStr },
 }
 
 /// Result of a lookup in the alias map.

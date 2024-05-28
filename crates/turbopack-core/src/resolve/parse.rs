@@ -55,11 +55,11 @@ pub enum Request {
     },
 }
 
-fn split_off_query_fragment(raw: String) -> (Pattern, Vc<String>, Vc<String>) {
+fn split_off_query_fragment(raw: RcStr) -> (Pattern, Vc<String>, Vc<String>) {
     let Some((raw, query)) = raw.split_once('?') else {
         if let Some((raw, fragment)) = raw.split_once('#') {
             return (
-                Pattern::Constant(raw.to_string()),
+                Pattern::Constant(raw.into()),
                 Vc::<String>::default(),
                 Vc::cell(fragment.to_string()),
             );
@@ -188,7 +188,7 @@ impl Request {
                             split_off_query_fragment(path.as_str().to_string());
 
                         return Request::Module {
-                            module: module.as_str().to_string(),
+                            module: module.as_str().into(),
                             path,
                             query,
                             fragment,

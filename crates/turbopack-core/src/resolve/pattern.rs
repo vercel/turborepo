@@ -861,7 +861,12 @@ pub async fn read_matches(
                             prefix.push_str(subpath);
                             nested.push((
                                 0,
-                                read_matches(fs_path, prefix.into(), force_in_lookup_dir, pattern),
+                                read_matches(
+                                    fs_path,
+                                    prefix.clone().into(),
+                                    force_in_lookup_dir,
+                                    pattern,
+                                ),
                             ));
                             prefix.truncate(len);
                         }
