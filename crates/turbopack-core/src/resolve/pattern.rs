@@ -55,7 +55,7 @@ fn concatenation_extend_or_merge_items(
 
 impl Pattern {
     // TODO this should be removed in favor of pattern resolving
-    pub fn into_string(self) -> Option<String> {
+    pub fn into_string(self) -> Option<RcStr> {
         match self {
             Pattern::Constant(str) => Some(str),
             _ => None,
@@ -428,7 +428,7 @@ impl Pattern {
         match self {
             Pattern::Constant(c) => {
                 if let Some(offset) = any_offset {
-                    if let Some(index) = value.find(c) {
+                    if let Some(index) = value.find(&**c) {
                         if index <= offset {
                             MatchResult::Consumed {
                                 remaining: &value[index + c.len()..],

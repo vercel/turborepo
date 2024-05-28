@@ -21,7 +21,7 @@ pub enum Request {
         fragment: Vc<String>,
     },
     Module {
-        module: String,
+        module: RcStr,
         path: Pattern,
         query: Vc<String>,
         fragment: Vc<String>,
@@ -506,7 +506,7 @@ impl Request {
                 force_in_lookup_dir,
                 fragment,
             } => {
-                let mut pat = Pattern::concat([path.clone(), suffix.into()]);
+                let mut pat = Pattern::concat([path.clone(), suffix.into_owned().into()]);
                 pat.normalize();
                 Self::raw(Value::new(pat), *query, *fragment, *force_in_lookup_dir)
             }
@@ -516,7 +516,7 @@ impl Request {
                 force_in_lookup_dir,
                 fragment,
             } => {
-                let mut pat = Pattern::concat([path.clone(), suffix.into()]);
+                let mut pat = Pattern::concat([path.clone(), suffix.into_owned().into()]);
                 pat.normalize();
                 Self::relative(Value::new(pat), *query, *fragment, *force_in_lookup_dir)
             }
@@ -526,16 +526,21 @@ impl Request {
                 query,
                 fragment,
             } => {
-                let mut pat = Pattern::concat([path.clone(), suffix.into()]);
+                let mut pat = Pattern::concat([path.clone(), suffix.into_owned().into()]);
                 pat.normalize();
-                Self::module(module.clone(), Value::new(pat), *query, *fragment)
+                Self::module(
+                    module.into_owned().clone(),
+                    Value::new(pat),
+                    *query,
+                    *fragment,
+                )
             }
             Request::ServerRelative {
                 path,
                 query,
                 fragment,
             } => {
-                let mut pat = Pattern::concat([path.clone(), suffix.into()]);
+                let mut pat = Pattern::concat([path.clone(), suffix.into_owned().into()]);
                 pat.normalize();
                 Self::ServerRelative {
                     path: pat,
@@ -549,7 +554,7 @@ impl Request {
                 query,
                 fragment,
             } => {
-                let mut pat = Pattern::concat([path.clone(), suffix.into()]);
+                let mut pat = Pattern::concat([path.clone(), suffix.into_owned().into()]);
                 pat.normalize();
                 Self::Windows {
                     path: pat,
@@ -560,7 +565,7 @@ impl Request {
             }
             Request::Empty => Self::parse(Value::new(suffix.into())),
             Request::PackageInternal { path } => {
-                let mut pat = Pattern::concat([path.clone(), suffix.into()]);
+                let mut pat = Pattern::concat([path.clone(), suffix.into_owned().into()]);
                 pat.normalize();
                 Self::PackageInternal { path: pat }.cell()
             }
