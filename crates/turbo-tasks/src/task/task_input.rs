@@ -1,6 +1,6 @@
 use std::{
     any::{type_name, Any},
-    borrow::Cow,
+    borrow::{Borrow, Cow},
     ffi::OsStr,
     fmt::Display,
     marker::PhantomData,
@@ -73,6 +73,12 @@ impl Deref for RcStr {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
+        self.0.as_str()
+    }
+}
+
+impl Borrow<str> for RcStr {
+    fn borrow(&self) -> &str {
         self.0.as_str()
     }
 }
