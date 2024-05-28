@@ -1,6 +1,7 @@
 use std::{
     any::{type_name, Any},
     marker::PhantomData,
+    ops::Deref,
     sync::Arc,
 };
 
@@ -31,7 +32,19 @@ impl TaskInput for ConcreteTaskInput {
     }
 }
 
-impl TaskInput for Arc<String> {
+/// This type exists to allow swapping out the underlying string type easily.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RcStr(Arc<String>);
+
+impl Deref for RcStr {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.as_str()
+    }
+}
+
+impl TaskInput for RcStr {
     fn try_from_concrete(input: &ConcreteTaskInput) -> Result<Self> {
         match input {
             ConcreteTaskInput::String(s) => Ok(s.clone()),

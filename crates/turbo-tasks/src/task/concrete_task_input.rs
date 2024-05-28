@@ -11,6 +11,7 @@ use std::{
 use anyhow::Result;
 use serde::{ser::SerializeTuple, Deserialize, Serialize};
 
+use super::task_input::RcStr;
 use crate::{
     backend::CellContent,
     id::{FunctionId, TraitTypeId},
@@ -330,7 +331,7 @@ pub enum ConcreteTaskInput {
     TaskOutput(TaskId),
     TaskCell(TaskId, CellId),
     List(Vec<ConcreteTaskInput>),
-    String(Arc<String>),
+    String(RcStr),
     Bool(bool),
     Usize(usize),
     I8(i8),
