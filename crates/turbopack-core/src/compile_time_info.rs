@@ -1,6 +1,6 @@
 use anyhow::Result;
 use indexmap::IndexMap;
-use turbo_tasks::Vc;
+use turbo_tasks::{RcStr, Vc};
 use turbo_tasks_fs::FileSystemPath;
 
 use crate::environment::Environment;
@@ -131,12 +131,12 @@ impl CompileTimeDefines {
 #[derive(Debug, Clone)]
 pub enum FreeVarReference {
     EcmaScriptModule {
-        request: String,
+        request: RcStr,
         lookup_path: Option<Vc<FileSystemPath>>,
-        export: Option<String>,
+        export: Option<RcStr>,
     },
     Value(CompileTimeDefineValue),
-    Error(String),
+    Error(RcStr),
 }
 
 impl From<bool> for FreeVarReference {
