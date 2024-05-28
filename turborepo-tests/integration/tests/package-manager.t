@@ -45,10 +45,16 @@ Clear package manager field in package.json
 
 Delete package-lock.json
   $ rm package-lock.json
-
+  
 Use yarn 1.22.19
   $ corepack prepare yarn@1.22.19 --activate
   Preparing yarn@1.22.19 for immediate activation...
+  
+  $ echo $PATH
+  
+  $ which -a yarn
+
+  $ which -a npm
 
 Create yarn.lock
   $ touch yarn.lock
