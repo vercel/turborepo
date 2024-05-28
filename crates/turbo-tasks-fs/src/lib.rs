@@ -714,7 +714,7 @@ impl FileSystem for DiskFileSystem {
 impl ValueToString for DiskFileSystem {
     #[turbo_tasks::function]
     fn to_string(&self) -> Vc<String> {
-        Vc::cell(self.name.clone())
+        Vc::cell(self.name.to_string())
     }
 }
 
@@ -764,7 +764,7 @@ impl FileSystemPath {
         if self.fs != inner.fs {
             return None;
         }
-        let path = inner.path.strip_prefix(&self.path)?;
+        let path = inner.path.strip_prefix(&*self.path)?;
         if self.path.is_empty() {
             Some(path)
         } else if let Some(stripped) = path.strip_prefix('/') {
@@ -964,7 +964,7 @@ impl FileSystemPath {
         let this = self.await?;
         if let Some(path) = join_path(&this.path, &path) {
             Ok(Vc::cell(Some(
-                Self::new_normalized(this.fs, path).resolve().await?,
+                Self::new_normalized(this.fs, path.into()).resolve().await?,
             )))
         } else {
             Ok(FileSystemPathOption::none())
@@ -977,9 +977,9 @@ impl FileSystemPath {
     pub async fn try_join_inside(self: Vc<Self>, path: RcStr) -> Result<Vc<FileSystemPathOption>> {
         let this = self.await?;
         if let Some(path) = join_path(&this.path, &path) {
-            if path.starts_with(&this.path) {
+            if path.starts_with(&*this.path) {
                 return Ok(Vc::cell(Some(
-                    Self::new_normalized(this.fs, path).resolve().await?,
+                    Self::new_normalized(this.fs, path.into()).resolve().await?,
                 )));
             }
         }
@@ -1032,8 +1032,8 @@ impl FileSystemPath {
             // Like `Path::with_extension` and `PathBuf::set_extension`, if the extension is empty,
             // we remove the extension altogether.
             match extension.is_empty() {
-                true => path_without_extension.to_string(),
-                false => format!("{path_without_extension}.{extension}"),
+                true => path_without_extension.into(),
+                false => format!("{path_without_extension}.{extension}").into(),
             },
         ))
     }
@@ -1078,7 +1078,7 @@ pub async fn rebase(
         if new_base.path.is_empty() {
             new_path = fs_path.path.clone();
         } else {
-            new_path = [new_base.path.as_str(), "/", &fs_path.path].concat();
+            new_path = [new_base.path.as_str(), "/", &fs_path.path].concat().into();
         }
     } else {
         let base_path = [&old_base.path, "/"].concat();
@@ -1091,9 +1091,11 @@ pub async fn rebase(
             );
         }
         if new_base.path.is_empty() {
-            new_path = [&fs_path.path[base_path.len()..]].concat();
+            new_path = [&fs_path.path[base_path.len()..]].concat().into();
         } else {
-            new_path = [new_base.path.as_str(), &fs_path.path[old_base.path.len()..]].concat();
+            new_path = [new_base.path.as_str(), &fs_path.path[old_base.path.len()..]]
+                .concat()
+                .into();
         }
     }
     Ok(new_base.fs.root().join(new_path))
@@ -1163,7 +1165,7 @@ impl FileSystemPath {
             Some(index) => path[..index].to_string(),
             None => "".to_string(),
         };
-        Ok(FileSystemPath::new_normalized(this.fs, p))
+        Ok(FileSystemPath::new_normalized(this.fs, p.into()))
     }
 
     #[turbo_tasks::function]
@@ -1214,11 +1216,7 @@ impl FileSystemPath {
             .rsplit_once('/')
             .map_or(this.path.as_str(), |(_, name)| name);
         let real_self = if parent_result.path != parent {
-            parent_result
-                .path
-                .join(basename.to_string())
-                .resolve()
-                .await?
+            parent_result.path.join(basename.into()).resolve().await?
         } else {
             self
         };
@@ -1231,7 +1229,7 @@ impl FileSystemPath {
                 } else {
                     result.path
                 }
-                .join(target.to_string())
+                .join(target.clone())
                 .resolve()
                 .await?;
                 return Ok(result.cell());
@@ -1945,24 +1943,24 @@ mod tests {
 
             let path_txt = FileSystemPath::new_normalized(fs, "foo/bar.txt".into());
 
-            let path_json = path_txt.with_extension("json".to_string());
+            let path_json = path_txt.with_extension("json".into());
             assert_eq!(&*path_json.await.unwrap().path, "foo/bar.json");
 
-            let path_no_ext = path_txt.with_extension("".to_string());
+            let path_no_ext = path_txt.with_extension("".into());
             assert_eq!(&*path_no_ext.await.unwrap().path, "foo/bar");
 
-            let path_new_ext = path_no_ext.with_extension("json".to_string());
+            let path_new_ext = path_no_ext.with_extension("json".into());
             assert_eq!(&*path_new_ext.await.unwrap().path, "foo/bar.json");
 
             let path_no_slash_txt = FileSystemPath::new_normalized(fs, "bar.txt".into());
 
-            let path_no_slash_json = path_no_slash_txt.with_extension("json".to_string());
+            let path_no_slash_json = path_no_slash_txt.with_extension("json".into());
             assert_eq!(path_no_slash_json.await.unwrap().path.as_str(), "bar.json");
 
-            let path_no_slash_no_ext = path_no_slash_txt.with_extension("".to_string());
+            let path_no_slash_no_ext = path_no_slash_txt.with_extension("".into());
             assert_eq!(path_no_slash_no_ext.await.unwrap().path.as_str(), "bar");
 
-            let path_no_slash_new_ext = path_no_slash_no_ext.with_extension("json".to_string());
+            let path_no_slash_new_ext = path_no_slash_no_ext.with_extension("json".into());
             assert_eq!(
                 path_no_slash_new_ext.await.unwrap().path.as_str(),
                 "bar.json"
