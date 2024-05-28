@@ -13,13 +13,10 @@ pub fn node_cjs_resolve_options(root: Vc<FileSystemPath>) -> Vc<ResolveOptions> 
         ("require".to_string(), ConditionValue::Set),
     ]
     .into();
-    let extensions = vec![".js".to_string(), ".json".to_string(), ".node".to_string()];
+    let extensions = vec![".js".into(), ".json".into(), ".node".into()];
     ResolveOptions {
         extensions,
-        modules: vec![ResolveModules::Nested(
-            root,
-            vec!["node_modules".to_string()],
-        )],
+        modules: vec![ResolveModules::Nested(root, vec!["node_modules".into()])],
         into_package: vec![
             ResolveIntoPackage::ExportsField {
                 conditions: conditions.clone(),
@@ -33,7 +30,7 @@ pub fn node_cjs_resolve_options(root: Vc<FileSystemPath>) -> Vc<ResolveOptions> 
             conditions,
             unspecified_conditions: ConditionValue::Unset,
         }],
-        default_files: vec!["index".to_string()],
+        default_files: vec!["index".into()],
         ..Default::default()
     }
     .cell()
@@ -46,14 +43,11 @@ pub fn node_esm_resolve_options(root: Vc<FileSystemPath>) -> Vc<ResolveOptions> 
         ("import".to_string(), ConditionValue::Set),
     ]
     .into();
-    let extensions = vec![".js".to_string(), ".json".to_string(), ".node".to_string()];
+    let extensions = vec![".js".into(), ".json".into(), ".node".into()];
     ResolveOptions {
         fully_specified: true,
         extensions,
-        modules: vec![ResolveModules::Nested(
-            root,
-            vec!["node_modules".to_string()],
-        )],
+        modules: vec![ResolveModules::Nested(root, vec!["node_modules".into()])],
         into_package: vec![
             ResolveIntoPackage::ExportsField {
                 conditions: conditions.clone(),
@@ -67,7 +61,7 @@ pub fn node_esm_resolve_options(root: Vc<FileSystemPath>) -> Vc<ResolveOptions> 
             conditions,
             unspecified_conditions: ConditionValue::Unset,
         }],
-        default_files: vec!["index".to_string()],
+        default_files: vec!["index".into()],
         ..Default::default()
     }
     .cell()

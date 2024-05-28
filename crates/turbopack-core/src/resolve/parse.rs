@@ -563,7 +563,7 @@ impl Request {
                 }
                 .cell()
             }
-            Request::Empty => Self::parse(Value::new(suffix.into())),
+            Request::Empty => Self::parse(Value::new(suffix.into_owned().into())),
             Request::PackageInternal { path } => {
                 let mut pat = Pattern::concat([path.clone(), suffix.into_owned().into()]);
                 pat.normalize();
@@ -585,7 +585,7 @@ impl Request {
                 .cell()
             }
             Request::Unknown { path } => {
-                let mut pat = Pattern::concat([path.clone(), suffix.into()]);
+                let mut pat = Pattern::concat([path.clone(), suffix.into_owned().into()]);
                 pat.normalize();
                 Self::Unknown { path: pat }.cell()
             }
