@@ -200,7 +200,10 @@ impl EcmascriptInputTransform {
 
                 if *refresh {
                     let stmt = quote!(
-                        "\n__turbopack_refresh__.registerExports(module, \
+                        // AMP / No-JS mode does not inject these helpers
+                        "\nif (typeof globalThis.$RefreshHelpers$ === 'object' && \
+                         globalThis.$RefreshHelpers !== null) { \
+                         __turbopack_refresh__.registerExports(module, \
                          globalThis.$RefreshHelpers$); }\n" as Stmt
                     );
 
