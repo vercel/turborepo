@@ -774,7 +774,7 @@ impl FileSystemPath {
         }
     }
 
-    pub fn get_relative_path_to(&self, other: &FileSystemPath) -> Option<String> {
+    pub fn get_relative_path_to(&self, other: &FileSystemPath) -> Option<RcStr> {
         if self.fs != other.fs {
             return None;
         }
@@ -791,7 +791,7 @@ impl FileSystemPath {
         while self_segments.peek() == other_segments.peek() {
             self_segments.next();
             if other_segments.next().is_none() {
-                return Some(".".to_string());
+                return Some(".".into());
             }
         }
         let mut result = Vec::new();
@@ -805,7 +805,7 @@ impl FileSystemPath {
         for segment in other_segments {
             result.push(segment);
         }
-        Some(result.join("/"))
+        Some(result.join("/").into())
     }
 
     /// Returns the final component of the FileSystemPath, or an empty string
