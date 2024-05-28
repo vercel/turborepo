@@ -185,7 +185,7 @@ impl Request {
                         .and_then(|caps| caps.get(1).zip(caps.get(2)))
                     {
                         let (path, query, fragment) =
-                            split_off_query_fragment(path.as_str().to_string());
+                            split_off_query_fragment(path.as_str().into());
 
                         return Request::Module {
                             module: module.as_str().into(),

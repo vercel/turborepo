@@ -1685,7 +1685,7 @@ async fn resolve_internal_inline(
                 fragment,
             } => {
                 let mut new_pat = path.clone();
-                new_pat.push_front(".".to_string().into());
+                new_pat.push_front(RcStr::from(".").into());
                 let relative = Request::relative(Value::new(new_pat), *query, *fragment, true);
 
                 if !has_alias {
@@ -1831,8 +1831,8 @@ async fn resolve_into_folder(
                     if let Some(field_value) = package_json[name].as_str() {
                         let normalized_request: RcStr = normalize_request(field_value).into();
                         if normalized_request.is_empty()
-                            || normalized_request == "."
-                            || normalized_request == "./"
+                            || &*normalized_request == "."
+                            || &*normalized_request == "./"
                         {
                             continue;
                         }
@@ -2175,7 +2175,7 @@ async fn resolve_module_request(
         options,
         options_value,
         |_| {
-            let full_pattern = Pattern::concat([module.to_string().into(), path.clone()]);
+            let full_pattern = Pattern::concat([RcStr::from(module).into(), path.clone()]);
             full_pattern.into_string()
         },
         query,
@@ -2244,8 +2244,8 @@ async fn resolve_module_request(
     if options_value.prefer_relative {
         let module_prefix: RcStr = format!("./{module}").into();
         let pattern = Pattern::concat([
-            module_prefix.clone().into_owned().into(),
-            "/".to_string().into(),
+            module_prefix.clone().into(),
+            RcStr::from("/").into(),
             path.clone(),
         ]);
         let relative = Request::relative(Value::new(pattern), query, fragment, true);
@@ -2294,7 +2294,7 @@ async fn resolve_into_package(
                     todo!("pattern into an exports field is not implemented yet");
                 };
 
-                let path = if path == "/" {
+                let path = if &*path == "/" {
                     ".".to_string()
                 } else {
                     format!(".{path}")
