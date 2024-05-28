@@ -46,6 +46,8 @@ Clear package manager field in package.json
 Delete package-lock.json
   $ rm package-lock.json
   
+  $ yarn --version
+  
 Use yarn 1.22.19
   $ corepack prepare yarn@1.22.19 --activate
   Preparing yarn@1.22.19 for immediate activation...
@@ -66,6 +68,8 @@ Run test run
 Use yarn 3.5.1
   $ corepack prepare yarn@3.5.1 --activate
   Preparing yarn@3.5.1 for immediate activation...
+
+  $ yarn --version
 
 Run test run
   $ TURBO_LOG_VERBOSITY=off ${TURBO} info --json | jq .packageManager
