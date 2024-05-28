@@ -452,7 +452,7 @@ impl FileSystem for DiskFileSystem {
         };
 
         let (target, file_type) = if is_link_absolute {
-            let target_string = relative_to_root_path.to_string_lossy().to_string();
+            let target_string: RcStr = relative_to_root_path.to_string_lossy().into();
             (
                 target_string.clone(),
                 FileSystemPath::new_normalized(fs_path.fs(), target_string)
@@ -461,14 +461,10 @@ impl FileSystem for DiskFileSystem {
             )
         } else {
             let link_path_string_cow = link_path.to_string_lossy();
-            let link_path_unix = sys_to_unix(&link_path_string_cow);
+            let link_path_unix: RcStr = sys_to_unix(&link_path_string_cow).into();
             (
-                link_path_unix.to_string(),
-                fs_path
-                    .parent()
-                    .join(link_path_unix.to_string())
-                    .get_type()
-                    .await?,
+                link_path_unix.clone(),
+                fs_path.parent().join(link_path_unix).get_type().await?,
             )
         };
 
@@ -1425,7 +1421,7 @@ pub enum LinkContent {
     // normalized, which means in `fn write_link` we couldn't restore the raw value of the file
     // link because there is only **dist** path in `fn write_link`, and we need the raw path if
     // we want to restore the link value in `fn write_link`
-    Link { target: String, link_type: LinkType },
+    Link { target: RcStr, link_type: LinkType },
     Invalid,
     NotFound,
 }
