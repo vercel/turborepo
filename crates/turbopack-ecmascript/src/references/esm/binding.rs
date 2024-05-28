@@ -9,7 +9,7 @@ use swc_core::{
         visit::fields::{CalleeField, PropField},
     },
 };
-use turbo_tasks::Vc;
+use turbo_tasks::{RcStr, Vc};
 use turbopack_core::chunk::ChunkingContext;
 
 use super::EsmAssetReference;

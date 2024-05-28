@@ -5,7 +5,7 @@ use swc_core::{
     ecma::ast::{self, Expr, ExprStmt, Ident, Lit, ModuleItem, Program, Script, Stmt},
     quote,
 };
-use turbo_tasks::{Value, ValueToString, Vc};
+use turbo_tasks::{RcStr, Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::{
         ChunkItemExt, ChunkableModule, ChunkableModuleReference, ChunkingContext, ChunkingType,
@@ -36,7 +36,7 @@ use crate::{
 #[turbo_tasks::value]
 pub enum ReferencedAsset {
     Some(Vc<Box<dyn EcmascriptChunkPlaceable>>),
-    External(String, ExternalType),
+    External(RcStr, ExternalType),
     None,
 }
 

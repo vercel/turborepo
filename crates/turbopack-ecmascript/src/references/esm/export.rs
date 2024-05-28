@@ -14,7 +14,7 @@ use swc_core::{
     },
     quote, quote_expr,
 };
-use turbo_tasks::{trace::TraceRawVcs, TryFlatJoinIterExt, ValueToString, Vc};
+use turbo_tasks::{trace::TraceRawVcs, RcStr, TryFlatJoinIterExt, ValueToString, Vc};
 use turbo_tasks_fs::glob::Glob;
 use turbopack_core::{
     chunk::ChunkingContext,
