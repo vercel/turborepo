@@ -2118,7 +2118,7 @@ fn analyze_amd_define_with_deps(
                     requests.push(AmdDefineDependencyElement::Module);
                 }
                 _ => {
-                    let request = Request::parse_string(dep.to_string());
+                    let request = Request::parse_string(dep.into());
                     let reference = AmdDefineAssetReference::new(
                         origin,
                         request,

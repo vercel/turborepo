@@ -484,9 +484,15 @@ impl From<f64> for JsValue {
     }
 }
 
+impl From<RcStr> for JsValue {
+    fn from(v: RcStr) -> Self {
+        ConstantValue::Str(v).into()
+    }
+}
+
 impl From<String> for JsValue {
     fn from(v: String) -> Self {
-        ConstantValue::Str(v.into()).into()
+        RcStr::from(v).into()
     }
 }
 
@@ -3478,9 +3484,9 @@ pub mod test_utils {
                 Ok(options) => {
                     let mut map = IndexMap::new();
 
-                    map.insert("./a".into(), format!("[context: {}]/a", options.dir));
-                    map.insert("./b".into(), format!("[context: {}]/b", options.dir));
-                    map.insert("./c".into(), format!("[context: {}]/c", options.dir));
+                    map.insert("./a".into(), format!("[context: {}]/a", options.dir).into());
+                    map.insert("./b".into(), format!("[context: {}]/b", options.dir).into());
+                    map.insert("./c".into(), format!("[context: {}]/c", options.dir).into());
 
                     JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContextRequire(
                         Vc::cell(map),
