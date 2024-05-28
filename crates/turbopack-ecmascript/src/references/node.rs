@@ -75,7 +75,7 @@ async fn resolve_reference_from_dir(
         (Some(abs_path), Some(rel_path)) => Either::Right(
             read_matches(
                 parent_path.root().resolve().await?,
-                "/ROOT/".to_string(),
+                "/ROOT/".into(),
                 true,
                 Pattern::new(abs_path.or_any_nested_file()),
             )
@@ -84,7 +84,7 @@ async fn resolve_reference_from_dir(
             .chain(
                 read_matches(
                     parent_path,
-                    "".to_string(),
+                    "".into(),
                     true,
                     Pattern::new(rel_path.or_any_nested_file()),
                 )
@@ -96,7 +96,7 @@ async fn resolve_reference_from_dir(
             // absolute path only
             read_matches(
                 parent_path.root().resolve().await?,
-                "/ROOT/".to_string(),
+                "/ROOT/".into(),
                 true,
                 Pattern::new(abs_path.or_any_nested_file()),
             )
@@ -107,7 +107,7 @@ async fn resolve_reference_from_dir(
             // relative path only
             read_matches(
                 parent_path,
-                "".to_string(),
+                "".into(),
                 true,
                 Pattern::new(rel_path.or_any_nested_file()),
             )

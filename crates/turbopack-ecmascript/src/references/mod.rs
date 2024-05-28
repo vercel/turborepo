@@ -1627,7 +1627,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
             let args = linked_args(args).await?;
             if args.len() == 1 {
                 let first_arg = state.link_value(args[0].clone(), in_try).await?;
-                if let Some(ref s) = first_arg.as_str() {
+                if let Some(s) = first_arg.as_str() {
                     analysis
                         .add_reference(NodeBindingsReference::new(origin.origin_path(), s.into()));
                     return Ok(());
@@ -1720,7 +1720,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
             let args = linked_args(args).await?;
             if let Some(p) = args.first().and_then(|arg| arg.as_str()) {
                 let abs_pattern = if p.starts_with("/ROOT/") {
-                    Pattern::Constant(format!("{p}/intl"))
+                    Pattern::Constant(format!("{p}/intl").into())
                 } else {
                     let linked_func_call = state
                         .link_value(
@@ -1799,7 +1799,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                     {
                         analysis.add_reference(DirAssetReference::new(
                             source,
-                            Pattern::new(Pattern::Constant(dir)),
+                            Pattern::new(Pattern::Constant(dir.into())),
                         ));
                     }
                     return Ok(());
