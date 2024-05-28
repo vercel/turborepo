@@ -646,12 +646,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a17bd29f7c70f32e9387f4d4acfa5ea7b7749ef784fb78cf382df97069337b8c"
 
 [[package]]
-name = "base16"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d27c3610c36aee21ce8ac510e6224498de4228ad772a171ed65643a24693a5a8"
-
-[[package]]
 name = "base64"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4248,9 +4242,9 @@ dependencies = [
 
 [[package]]
 name = "lightningcss"
-version = "1.0.0-alpha.56"
+version = "1.0.0-alpha.57"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "668e9f1774a4dda9e2233ad0f78c6987878bcf4201d2085bc3517a7f84d0ee92"
+checksum = "10bc10261f46b8df263b80e7779d1748b1880488cd951fbb9e096430cead10e6"
 dependencies = [
  "ahash 0.8.9",
  "bitflags 2.5.0",
@@ -4260,7 +4254,6 @@ dependencies = [
  "dashmap",
  "data-encoding",
  "getrandom",
- "indexmap 2.2.6",
  "itertools 0.10.5",
  "lazy_static",
  "lightningcss-derive",
@@ -8957,9 +8950,9 @@ dependencies = [
 
 [[package]]
 name = "swc_relay"
-version = "0.44.13"
+version = "0.44.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b36a22861087d88f0ae4d78800b6fd44e2dc5b541f8da53e81388c611bab0ef9"
+checksum = "14a596e01319abf55b8a8c7e36a82aa0d1ac01a18a99ce9b07a7fbcbfd544466"
 dependencies = [
  "once_cell",
  "regex",
@@ -9295,9 +9288,9 @@ dependencies = [
 
 [[package]]
 name = "testing"
-version = "0.35.24"
+version = "0.35.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c71dd5265f4921fe51b386b1496c63ac058589d8cd38de6b61489a98c6019a16"
+checksum = "15028f8ec7f95006f4e00e6c5ab6620f322bc6dc208a6cba09afa36375981cec"
 dependencies = [
  "ansi_term",
  "cargo_metadata",
@@ -10166,8 +10159,6 @@ dependencies = [
 name = "turbo-tasks-hash"
 version = "0.1.0"
 dependencies = [
- "base16",
- "hex",
  "md4",
  "turbo-tasks-macros",
  "twox-hash",
