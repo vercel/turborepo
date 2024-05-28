@@ -713,8 +713,8 @@ enum NextConstantUntilResult<'a, 'b> {
     Consumed(&'b str, Option<usize>),
 }
 
-impl From<String> for Pattern {
-    fn from(s: String) -> Self {
+impl From<RcStr> for Pattern {
+    fn from(s: RcStr) -> Self {
         Pattern::Constant(s)
     }
 }

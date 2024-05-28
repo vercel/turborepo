@@ -75,7 +75,7 @@ fn split_off_query_fragment(raw: RcStr) -> (Pattern, Vc<String>, Vc<String>) {
     let (query, fragment) = query.split_once('#').unwrap_or((query, ""));
 
     (
-        Pattern::Constant(raw.to_string()),
+        Pattern::Constant(raw.into()),
         Vc::cell(format!("?{}", query)),
         Vc::cell(format!("#{}", fragment)),
     )
@@ -506,7 +506,7 @@ impl Request {
                 force_in_lookup_dir,
                 fragment,
             } => {
-                let mut pat = Pattern::concat([path.clone(), suffix.into_owned().into()]);
+                let mut pat = Pattern::concat([path.clone(), suffix.into()]);
                 pat.normalize();
                 Self::raw(Value::new(pat), *query, *fragment, *force_in_lookup_dir)
             }
@@ -516,7 +516,7 @@ impl Request {
                 force_in_lookup_dir,
                 fragment,
             } => {
-                let mut pat = Pattern::concat([path.clone(), suffix.into_owned().into()]);
+                let mut pat = Pattern::concat([path.clone(), suffix.into()]);
                 pat.normalize();
                 Self::relative(Value::new(pat), *query, *fragment, *force_in_lookup_dir)
             }
@@ -526,7 +526,7 @@ impl Request {
                 query,
                 fragment,
             } => {
-                let mut pat = Pattern::concat([path.clone(), suffix.into_owned().into()]);
+                let mut pat = Pattern::concat([path.clone(), suffix.into()]);
                 pat.normalize();
                 Self::module(module.clone(), Value::new(pat), *query, *fragment)
             }
@@ -535,7 +535,7 @@ impl Request {
                 query,
                 fragment,
             } => {
-                let mut pat = Pattern::concat([path.clone(), suffix.into_owned().into()]);
+                let mut pat = Pattern::concat([path.clone(), suffix.into()]);
                 pat.normalize();
                 Self::ServerRelative {
                     path: pat,
@@ -549,7 +549,7 @@ impl Request {
                 query,
                 fragment,
             } => {
-                let mut pat = Pattern::concat([path.clone(), suffix.into_owned().into()]);
+                let mut pat = Pattern::concat([path.clone(), suffix.into()]);
                 pat.normalize();
                 Self::Windows {
                     path: pat,
@@ -558,9 +558,9 @@ impl Request {
                 }
                 .cell()
             }
-            Request::Empty => Self::parse(Value::new(suffix.into_owned().into())),
+            Request::Empty => Self::parse(Value::new(suffix.into())),
             Request::PackageInternal { path } => {
-                let mut pat = Pattern::concat([path.clone(), suffix.into_owned().into()]);
+                let mut pat = Pattern::concat([path.clone(), suffix.into()]);
                 pat.normalize();
                 Self::PackageInternal { path: pat }.cell()
             }
@@ -580,7 +580,7 @@ impl Request {
                 .cell()
             }
             Request::Unknown { path } => {
-                let mut pat = Pattern::concat([path.clone(), suffix.into_owned().into()]);
+                let mut pat = Pattern::concat([path.clone(), suffix.into()]);
                 pat.normalize();
                 Self::Unknown { path: pat }.cell()
             }

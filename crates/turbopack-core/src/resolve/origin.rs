@@ -1,5 +1,5 @@
 use anyhow::Result;
-use turbo_tasks::{Upcast, Value, Vc};
+use turbo_tasks::{RcStr, Upcast, Value, Vc};
 use turbo_tasks_fs::FileSystemPath;
 
 use super::{options::ResolveOptions, parse::Request, ModuleResolveResult};
@@ -137,7 +137,7 @@ impl ResolveOrigin for PlainResolveOrigin {
 #[turbo_tasks::value]
 struct ResolveOriginWithTransition {
     previous: Vc<Box<dyn ResolveOrigin>>,
-    transition: String,
+    transition: RcStr,
 }
 
 #[turbo_tasks::value_impl]

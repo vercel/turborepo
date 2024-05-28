@@ -386,7 +386,9 @@ impl<'a, T> AliasMapIter<'a, T> {
         let Some((prefix, map)) = self.iter.next() else {
             return false;
         };
-        let prefix = String::from_utf8(prefix).expect("invalid UTF-8 key in AliasMap");
+        let prefix = String::from_utf8(prefix)
+            .expect("invalid UTF-8 key in AliasMap")
+            .into();
         self.current_prefix_iterator = Some(AliasMapIterItem {
             prefix,
             iterator: map.iter(),
