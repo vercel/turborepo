@@ -2509,10 +2509,10 @@ fn for_each_ident_in_decl(decl: &Decl, f: &mut impl FnMut(RcStr)) {
         }
     }
 }
-fn for_each_ident_in_pat(pat: &Pat, f: &mut impl FnMut(String)) {
+fn for_each_ident_in_pat(pat: &Pat, f: &mut impl FnMut(RcStr)) {
     match pat {
         Pat::Ident(BindingIdent { id, .. }) => {
-            f(id.sym.to_string());
+            f(id.sym.as_str().into());
         }
         Pat::Array(ArrayPat { elems, .. }) => elems.iter().for_each(|e| {
             if let Some(e) = e {
@@ -2528,7 +2528,7 @@ fn for_each_ident_in_pat(pat: &Pat, f: &mut impl FnMut(String)) {
                     for_each_ident_in_pat(value, f);
                 }
                 ObjectPatProp::Assign(AssignPatProp { key, .. }) => {
-                    f(key.sym.to_string());
+                    f(key.sym.as_str().into());
                 }
                 ObjectPatProp::Rest(RestPat { arg, .. }) => {
                     for_each_ident_in_pat(arg, f);
@@ -2590,8 +2590,8 @@ impl<'a> VisitAstPath for ModuleReferencesVisitor<'a> {
                         );
                     }
                     ExportSpecifier::Named(ExportNamedSpecifier { orig, exported, .. }) => {
-                        let key = to_string(exported.as_ref().unwrap_or(orig));
-                        let binding_name = to_string(orig);
+                        let key = to_string(exported.as_ref().unwrap_or(orig)).as_str().into();
+                        let binding_name = to_string(orig).as_str().into();
                         let export = {
                             let imported_binding = if let ModuleExportName::Ident(ident) = orig {
                                 self.eval_context.imports.get_binding(&ident.to_id())
