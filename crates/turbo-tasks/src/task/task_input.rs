@@ -1,5 +1,6 @@
 use std::{
     any::{type_name, Any},
+    fmt::Display,
     marker::PhantomData,
     ops::Deref,
     path::{Path, PathBuf},
@@ -70,9 +71,25 @@ impl AsRef<Path> for RcStr {
     }
 }
 
+impl Display for RcStr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self.0, f)
+    }
+}
+
+/// This implementation is more efficient than `.to_string()`
+impl From<RcStr> for String {
+    fn from(s: RcStr) -> Self {
+        match Arc::try_unwrap(s.0) {
+            Ok(v) => v,
+            Err(arc) => arc.to_string(),
+        }
+    }
+}
+
 impl From<RcStr> for PathBuf {
     fn from(s: RcStr) -> Self {
-        PathBuf::from(&**s.0)
+        String::from(s).into()
     }
 }
 
