@@ -812,12 +812,12 @@ pub async fn read_matches(
                                     FileSystemEntryType::File => {
                                         results.push((
                                             index,
-                                            PatternMatch::File(prefix.to_string(), fs_path),
+                                            PatternMatch::File(prefix.clone().into(), fs_path),
                                         ));
                                     }
                                     FileSystemEntryType::Directory => results.push((
                                         index,
-                                        PatternMatch::Directory(prefix.to_string(), fs_path),
+                                        PatternMatch::Directory(prefix.clone().into(), fs_path),
                                     )),
                                     FileSystemEntryType::Symlink => {
                                         if let LinkContent::Link { link_type, .. } =
@@ -827,14 +827,17 @@ pub async fn read_matches(
                                                 results.push((
                                                     index,
                                                     PatternMatch::Directory(
-                                                        prefix.clone(),
+                                                        prefix.clone().into(),
                                                         fs_path,
                                                     ),
                                                 ));
                                             } else {
                                                 results.push((
                                                     index,
-                                                    PatternMatch::File(prefix.clone(), fs_path),
+                                                    PatternMatch::File(
+                                                        prefix.clone().into(),
+                                                        fs_path,
+                                                    ),
                                                 ))
                                             }
                                         }
@@ -849,21 +852,16 @@ pub async fn read_matches(
                     let subpath = &str[..=str.rfind('/').unwrap()];
                     if handled.insert(subpath) {
                         if let Some(fs_path) = &*if force_in_lookup_dir {
-                            lookup_dir.try_join_inside(subpath.to_string()).await?
+                            lookup_dir.try_join_inside(subpath.into()).await?
                         } else {
-                            lookup_dir.try_join(subpath.to_string()).await?
+                            lookup_dir.try_join(subpath.into()).await?
                         } {
                             let fs_path = fs_path.resolve().await?;
                             let len = prefix.len();
                             prefix.push_str(subpath);
                             nested.push((
                                 0,
-                                read_matches(
-                                    fs_path,
-                                    prefix.to_string(),
-                                    force_in_lookup_dir,
-                                    pattern,
-                                ),
+                                read_matches(fs_path, prefix.into(), force_in_lookup_dir, pattern),
                             ));
                             prefix.truncate(len);
                         }
@@ -931,7 +929,7 @@ pub async fn read_matches(
                 if let Some(pos) = pat.could_match_position(&prefix) {
                     nested.push((
                         pos,
-                        read_matches(lookup_dir, prefix.to_string(), false, pattern),
+                        read_matches(lookup_dir, prefix.to_string().into(), false, pattern),
                     ));
                 }
                 prefix.pop();
@@ -940,7 +938,7 @@ pub async fn read_matches(
                 if let Some(pos) = pat.could_match_position(&prefix) {
                     nested.push((
                         pos,
-                        read_matches(lookup_dir, prefix.to_string(), false, pattern),
+                        read_matches(lookup_dir, prefix.to_string().into(), false, pattern),
                     ));
                 }
                 prefix.pop();
@@ -955,7 +953,10 @@ pub async fn read_matches(
                                 prefix.push_str(key);
                                 // {prefix}{key}
                                 if let Some(pos) = pat.match_position(&prefix) {
-                                    results.push((pos, PatternMatch::File(prefix.clone(), *path)));
+                                    results.push((
+                                        pos,
+                                        PatternMatch::File(prefix.clone().into(), *path),
+                                    ));
                                 }
                                 prefix.truncate(len)
                             }
@@ -969,7 +970,7 @@ pub async fn read_matches(
                                 if let Some(pos) = pat.match_position(&prefix) {
                                     results.push((
                                         pos,
-                                        PatternMatch::Directory(prefix.clone(), *path),
+                                        PatternMatch::Directory(prefix.clone().into(), *path),
                                     ));
                                 }
                                 prefix.push('/');
@@ -977,13 +978,13 @@ pub async fn read_matches(
                                 if let Some(pos) = pat.match_position(&prefix) {
                                     results.push((
                                         pos,
-                                        PatternMatch::Directory(prefix.clone(), *path),
+                                        PatternMatch::Directory(prefix.clone().into(), *path),
                                     ));
                                 }
                                 if let Some(pos) = pat.could_match_position(&prefix) {
                                     nested.push((
                                         pos,
-                                        read_matches(*path, prefix.clone(), true, pattern),
+                                        read_matches(*path, prefix.clone().into(), true, pattern),
                                     ));
                                 }
                                 prefix.truncate(len)
@@ -1002,12 +1003,15 @@ pub async fn read_matches(
                                         if link_type.contains(LinkType::DIRECTORY) {
                                             results.push((
                                                 pos,
-                                                PatternMatch::Directory(prefix.clone(), *fs_path),
+                                                PatternMatch::Directory(
+                                                    prefix.clone().into(),
+                                                    *fs_path,
+                                                ),
                                             ));
                                         } else {
                                             results.push((
                                                 pos,
-                                                PatternMatch::File(prefix.clone(), *fs_path),
+                                                PatternMatch::File(prefix.clone().into(), *fs_path),
                                             ));
                                         }
                                     }
@@ -1020,7 +1024,10 @@ pub async fn read_matches(
                                         if link_type.contains(LinkType::DIRECTORY) {
                                             results.push((
                                                 pos,
-                                                PatternMatch::Directory(prefix.clone(), *fs_path),
+                                                PatternMatch::Directory(
+                                                    prefix.clone().into(),
+                                                    *fs_path,
+                                                ),
                                             ));
                                         }
                                     }
