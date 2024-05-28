@@ -147,14 +147,14 @@ impl FlatDirList {
 #[turbo_tasks::value]
 #[derive(Debug)]
 pub struct RequireContextMapEntry {
-    pub origin_relative: String,
+    pub origin_relative: RcStr,
     pub request: Vc<Request>,
     pub result: Vc<ModuleResolveResult>,
 }
 
 /// The resolved context map for a `require.context(..)` call.
 #[turbo_tasks::value(transparent)]
-pub struct RequireContextMap(IndexMap<String, RequireContextMapEntry>);
+pub struct RequireContextMap(IndexMap<RcStr, RequireContextMapEntry>);
 
 #[turbo_tasks::value_impl]
 impl RequireContextMap {

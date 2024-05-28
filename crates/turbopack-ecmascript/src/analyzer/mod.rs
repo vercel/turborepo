@@ -3347,7 +3347,7 @@ pub fn parse_require_context(args: &[JsValue]) -> Result<RequireContextOptions> 
 
 #[turbo_tasks::value(transparent)]
 #[derive(Debug, Clone)]
-pub struct RequireContextValue(IndexMap<String, String>);
+pub struct RequireContextValue(IndexMap<RcStr, RcStr>);
 
 #[turbo_tasks::value_impl]
 impl RequireContextValue {

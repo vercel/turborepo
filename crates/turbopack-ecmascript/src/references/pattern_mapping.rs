@@ -11,7 +11,7 @@ use swc_core::{
     },
     quote, quote_expr,
 };
-use turbo_tasks::{debug::ValueDebugFormat, trace::TraceRawVcs, TryJoinIterExt, Value, Vc};
+use turbo_tasks::{debug::ValueDebugFormat, trace::TraceRawVcs, RcStr, TryJoinIterExt, Value, Vc};
 use turbopack_core::{
     chunk::{ChunkItemExt, ChunkableModule, ChunkingContext, ModuleId},
     issue::{code_gen::CodeGenerationIssue, IssueExt, IssueSeverity, StyledString},
@@ -49,7 +49,7 @@ pub(crate) enum SinglePatternMapping {
     /// ```
     ModuleLoader(ModuleId),
     /// External reference with request and type
-    External(String, ExternalType),
+    External(RcStr, ExternalType),
 }
 
 /// A mapping from a request pattern (e.g. "./module", `./images/${name}.png`)

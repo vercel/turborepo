@@ -2570,10 +2570,10 @@ impl<'a> VisitAstPath for ModuleReferencesVisitor<'a> {
 
         if export.src.is_none() {
             for spec in export.specifiers.iter() {
-                fn to_string(name: &ModuleExportName) -> String {
+                fn to_string(name: &ModuleExportName) -> &JsWord {
                     match name {
-                        ModuleExportName::Ident(ident) => ident.sym.to_string(),
-                        ModuleExportName::Str(str) => str.value.to_string(),
+                        ModuleExportName::Ident(ident) => &ident.sym,
+                        ModuleExportName::Str(str) => &str.value,
                     }
                 }
                 match spec {
