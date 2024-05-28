@@ -60,6 +60,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        turbo_version:
+          - 1.13.4-canary.5
+          - 2.0.0-canary.0
         os:
           - name: ubuntu
             runner:
@@ -96,6 +99,8 @@ jobs:
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
+        with:
+          turbo-version: ${{ matrix.turbo_version }}
 
       - name: Run tests
         # We manually set TURBO_API to an empty string to override Hetzner env
@@ -103,4 +108,9 @@ jobs:
         # to run when turbo core changes. This job (`js_packages`) does not run on turborpeo core
         # changes, and we don't want to enable that beahvior for _all_ our JS packages.
         run: |
-          TURBO_API= turbo run check-types test --filter=docs --filter="!turborepo-repository" --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
+          TURBO_API= turbo run check-types test \
+          --filter=docs \
+          --filter="!turborepo-repository" \
+          --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] \
+          --color \
+          --env-mode=strict
