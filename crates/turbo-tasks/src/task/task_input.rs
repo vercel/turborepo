@@ -36,7 +36,7 @@ impl TaskInput for ConcreteTaskInput {
 }
 
 /// This type exists to allow swapping out the underlying string type easily.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct RcStr(Arc<String>);
 
 impl Deref for RcStr {
