@@ -556,7 +556,7 @@ impl Pattern {
                     } else {
                         NextConstantUntilResult::NoMatch
                     }
-                } else if let Some(stripped) = value.strip_prefix(c) {
+                } else if let Some(stripped) = value.strip_prefix(&**c) {
                     NextConstantUntilResult::Consumed(stripped, None)
                 } else if let Some(stripped) = c.strip_prefix(value) {
                     NextConstantUntilResult::Partial(stripped, true)
@@ -886,7 +886,7 @@ pub async fn read_matches(
                 if let Some(pos) = pat.match_position(&prefix) {
                     results.push((
                         pos,
-                        PatternMatch::Directory(prefix.clone(), lookup_dir.parent()),
+                        PatternMatch::Directory(prefix.clone().into(), lookup_dir.parent()),
                     ));
                 }
 
@@ -895,13 +895,13 @@ pub async fn read_matches(
                 if let Some(pos) = pat.match_position(&prefix) {
                     results.push((
                         pos,
-                        PatternMatch::Directory(prefix.clone(), lookup_dir.parent()),
+                        PatternMatch::Directory(prefix.clone().into(), lookup_dir.parent()),
                     ));
                 }
                 if let Some(pos) = pat.could_match_position(&prefix) {
                     nested.push((
                         pos,
-                        read_matches(lookup_dir.parent(), prefix.clone(), false, pattern),
+                        read_matches(lookup_dir.parent(), prefix.clone().into(), false, pattern),
                     ));
                 }
                 prefix.pop();
@@ -912,7 +912,10 @@ pub async fn read_matches(
                 prefix.push('.');
                 // {prefix}.
                 if let Some(pos) = pat.match_position(&prefix) {
-                    results.push((pos, PatternMatch::Directory(prefix.clone(), lookup_dir)));
+                    results.push((
+                        pos,
+                        PatternMatch::Directory(prefix.clone().into(), lookup_dir),
+                    ));
                 }
                 prefix.pop();
             }
@@ -1039,7 +1042,10 @@ pub async fn read_matches(
                                         if link_type.contains(LinkType::DIRECTORY) {
                                             results.push((
                                                 pos,
-                                                PatternMatch::Directory(prefix.clone(), *fs_path),
+                                                PatternMatch::Directory(
+                                                    prefix.clone().into(),
+                                                    *fs_path,
+                                                ),
                                             ));
                                         }
                                     }

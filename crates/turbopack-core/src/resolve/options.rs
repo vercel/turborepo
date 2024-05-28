@@ -129,13 +129,19 @@ impl AliasTemplate for Vc<ImportMapping> {
             Ok(match this {
                 ImportMapping::External(name, ty) => {
                     if let Some(name) = name {
-                        ImportMapping::External(Some(name.clone().replace('*', capture)), *ty)
+                        ImportMapping::External(
+                            Some(name.clone().replace('*', capture).into()),
+                            *ty,
+                        )
                     } else {
                         ImportMapping::External(None, *ty)
                     }
                 }
                 ImportMapping::PrimaryAlternative(name, context) => {
-                    ImportMapping::PrimaryAlternative(name.clone().replace('*', capture), *context)
+                    ImportMapping::PrimaryAlternative(
+                        name.clone().replace('*', capture).into(),
+                        *context,
+                    )
                 }
                 ImportMapping::Direct(_) | ImportMapping::Ignore | ImportMapping::Empty => {
                     this.clone()
@@ -217,12 +223,12 @@ impl ImportMap {
     /// to create a singleton.
     pub fn insert_singleton_alias<'a>(
         &mut self,
-        prefix: impl Into<String> + 'a,
+        prefix: impl Into<RcStr> + 'a,
         context_path: Vc<FileSystemPath>,
     ) {
-        let prefix = prefix.into();
-        let wildcard_prefix = prefix.clone() + "/";
-        let wildcard_alias: String = prefix.clone() + "/*";
+        let prefix: RcStr = prefix.into();
+        let wildcard_prefix: RcStr = (prefix.to_string() + "/").into();
+        let wildcard_alias: RcStr = (prefix.to_string() + "/*").into();
         self.insert_exact_alias(
             &prefix,
             ImportMapping::PrimaryAlternative(prefix.clone(), Some(context_path)).cell(),
