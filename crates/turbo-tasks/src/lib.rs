@@ -99,7 +99,7 @@ pub use read_ref::ReadRef;
 pub use state::State;
 pub use task::{
     concrete_task_input::{ConcreteTaskInput, SharedReference, SharedValue},
-    task_input::TaskInput,
+    task_input::{RcStr, TaskInput},
 };
 pub use trait_ref::{IntoTraitRef, TraitRef};
 pub use turbo_tasks_macros::{function, value, value_impl, value_trait, TaskInput};
