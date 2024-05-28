@@ -394,13 +394,13 @@ impl SourceMap {
             source_request: Arc<str>,
             source_content: Option<Arc<str>>,
             origin: Vc<FileSystemPath>,
-        ) -> Result<(RcStr, RcStr)> {
+        ) -> Result<(Arc<str>, Arc<str>)> {
             Ok(
                 if let Some(path) = *origin.parent().try_join((&*source_request).into()).await? {
                     let path_str = path.to_string().await?;
                     let source = format!("{SOURCE_MAP_PREFIX}{}", path_str);
                     let source_content = if let Some(source_content) = source_content {
-                        (&*source_content).into()
+                        source_content
                     } else if let FileContent::Content(file) = &*path.read().await? {
                         let text = file.content().to_str()?;
                         text.to_string().into()
@@ -417,14 +417,13 @@ impl SourceMap {
                             s[0].replace('.', "_")
                         });
                     let source = format!("{SOURCE_MAP_PREFIX}{}/{}", origin_str, source);
-                    let source_content =
-                        source_content.map(|v| (&*v).into()).unwrap_or_else(|| {
-                            format!(
-                                "unable to access {source_request} in {origin_str} (it's leaving \
-                                 the filesystem root)"
-                            )
-                            .into()
-                        });
+                    let source_content = source_content.unwrap_or_else(|| {
+                        format!(
+                            "unable to access {source_request} in {origin_str} (it's leaving the \
+                             filesystem root)"
+                        )
+                        .into()
+                    });
                     (source.into(), source_content)
                 },
             )
