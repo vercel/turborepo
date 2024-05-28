@@ -154,7 +154,7 @@ impl AliasTemplate for Vc<ImportMapping> {
                         .await?,
                 ),
                 ImportMapping::Dynamic(replacement) => {
-                    (*replacement.replace(capture.to_string()).await?).clone()
+                    (*replacement.replace(capture.into()).await?).clone()
                 }
             }
             .cell())
@@ -523,7 +523,7 @@ pub async fn resolve_modules_options(
 
 #[turbo_tasks::value_trait]
 pub trait ImportMappingReplacement {
-    fn replace(self: Vc<Self>, capture: String) -> Vc<ImportMapping>;
+    fn replace(self: Vc<Self>, capture: RcStr) -> Vc<ImportMapping>;
     fn result(
         self: Vc<Self>,
         lookup_path: Vc<FileSystemPath>,

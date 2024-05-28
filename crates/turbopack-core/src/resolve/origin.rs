@@ -44,7 +44,7 @@ pub trait ResolveOriginExt: Send {
     fn resolve_options(self: Vc<Self>, reference_type: Value<ReferenceType>) -> Vc<ResolveOptions>;
 
     /// Adds a transition that is used for resolved assets.
-    fn with_transition(self: Vc<Self>, transition: String) -> Vc<Box<dyn ResolveOrigin>>;
+    fn with_transition(self: Vc<Self>, transition: RcStr) -> Vc<Box<dyn ResolveOrigin>>;
 }
 
 impl<T> ResolveOriginExt for T
@@ -65,7 +65,7 @@ where
             .resolve_options(self.origin_path(), reference_type)
     }
 
-    fn with_transition(self: Vc<Self>, transition: String) -> Vc<Box<dyn ResolveOrigin>> {
+    fn with_transition(self: Vc<Self>, transition: RcStr) -> Vc<Box<dyn ResolveOrigin>> {
         Vc::upcast(
             ResolveOriginWithTransition {
                 previous: Vc::upcast(self),

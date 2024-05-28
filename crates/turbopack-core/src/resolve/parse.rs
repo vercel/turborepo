@@ -141,7 +141,7 @@ impl Request {
                     Request::PackageInternal {
                         path: Pattern::Constant(r),
                     }
-                } else if r.starts_with("./") || r.starts_with("../") || r == "." || r == ".." {
+                } else if r.starts_with("./") || r.starts_with("../") || &*r == "." || &*r == ".." {
                     let (path, query, fragment) = split_off_query_fragment(r);
 
                     Request::Relative {
