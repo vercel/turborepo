@@ -96,10 +96,15 @@ pub fn expand_fields<
     expand_unnamed: EU,
     expand_unit: U,
 ) -> R {
+    if fields.is_empty() {
+        // any empty struct (regardless of the syntax used during declaration) is
+        // equivalent to a unit struct
+        return expand_unit(ident);
+    }
     match fields {
         Fields::Named(named) => expand_named(ident, named),
         Fields::Unnamed(unnamed) => expand_unnamed(ident, unnamed),
-        Fields::Unit => expand_unit(ident),
+        Fields::Unit => unreachable!(),
     }
 }
 
