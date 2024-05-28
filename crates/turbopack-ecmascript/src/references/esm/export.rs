@@ -37,11 +37,11 @@ pub enum EsmExport {
     /// A local binding that is exported (export { a } or export const a = 1)
     ///
     /// The last bool is true if the binding is a mutable binding
-    LocalBinding(String, bool),
+    LocalBinding(RcStr, bool),
     /// An imported binding that is exported (export { a as b } from "...")
     ///
     /// The last bool is true if the binding is a mutable binding
-    ImportedBinding(Vc<Box<dyn ModuleReference>>, String, bool),
+    ImportedBinding(Vc<Box<dyn ModuleReference>>, RcStr, bool),
     /// An imported namespace that is exported (export * from "...")
     ImportedNamespace(Vc<Box<dyn ModuleReference>>),
     /// An error occurred while resolving the export
@@ -148,10 +148,10 @@ pub async fn follow_reexports(
 
 async fn handle_declared_export(
     module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
-    export_name: String,
+    export_name: RcStr,
     export: &EsmExport,
     side_effect_free_packages: Vc<Glob>,
-) -> Result<ControlFlow<FollowExportsResult, (Vc<Box<dyn EcmascriptChunkPlaceable>>, String)>> {
+) -> Result<ControlFlow<FollowExportsResult, (Vc<Box<dyn EcmascriptChunkPlaceable>>, RcStr)>> {
     match export {
         EsmExport::ImportedBinding(reference, name, _) => {
             if let ReferencedAsset::Some(module) =
@@ -163,11 +163,11 @@ async fn handle_declared_export(
                 {
                     return Ok(ControlFlow::Break(FollowExportsResult {
                         module,
-                        export_name: Some(name.to_string()),
+                        export_name: Some(name.clone()),
                         ty: FoundExportType::SideEffects,
                     }));
                 }
-                return Ok(ControlFlow::Continue((module, name.to_string())));
+                return Ok(ControlFlow::Continue((module, name.clone())));
             }
         }
         EsmExport::ImportedNamespace(reference) => {
