@@ -24,7 +24,7 @@ use swc_core::{
         atoms::{Atom, JsWord},
     },
 };
-use turbo_tasks::Vc;
+use turbo_tasks::{RcStr, Vc};
 use turbopack_core::compile_time_info::CompileTimeDefineValue;
 use url::Url;
 
@@ -3258,7 +3258,7 @@ impl WellKnownObjectKind {
 
 #[derive(Debug, Clone)]
 pub struct RequireContextOptions {
-    pub dir: String,
+    pub dir: RcStr,
     pub include_subdirs: bool,
     /// this is a regex (pattern, flags)
     pub filter: Regex,

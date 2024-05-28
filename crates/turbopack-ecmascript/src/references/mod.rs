@@ -1602,7 +1602,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                     let current_context = origin
                         .origin_path()
                         .root()
-                        .join(s.trim_start_matches("/ROOT/").to_string());
+                        .join(s.trim_start_matches("/ROOT/").into());
                     analysis.add_reference(NodeGypBuildReference::new(
                         current_context,
                         compile_time_info.environment().compile_target(),
@@ -1628,10 +1628,8 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
             if args.len() == 1 {
                 let first_arg = state.link_value(args[0].clone(), in_try).await?;
                 if let Some(ref s) = first_arg.as_str() {
-                    analysis.add_reference(NodeBindingsReference::new(
-                        origin.origin_path(),
-                        s.to_string(),
-                    ));
+                    analysis
+                        .add_reference(NodeBindingsReference::new(origin.origin_path(), s.into()));
                     return Ok(());
                 }
             }
