@@ -6,7 +6,7 @@ use futures::TryFutureExt;
 use turbo_tasks_macros::primitive as __turbo_tasks_internal_primitive;
 
 use crate::{
-    TryJoinIterExt, Vc, {self as turbo_tasks},
+    RcStr, TryJoinIterExt, Vc, {self as turbo_tasks},
 };
 
 __turbo_tasks_internal_primitive!(());
@@ -26,17 +26,17 @@ impl Vc<String> {
 }
 
 __turbo_tasks_internal_primitive!(Option<String>);
-__turbo_tasks_internal_primitive!(Vec<String>);
+__turbo_tasks_internal_primitive!(Vec<RcStr>);
 
 #[turbo_tasks::function]
-fn empty_string_vec() -> Vc<Vec<String>> {
+fn empty_string_vec() -> Vc<Vec<RcStr>> {
     Vc::cell(Vec::new())
 }
 
 impl Vc<Vec<String>> {
     #[deprecated(note = "use Default::default() instead")]
     #[inline(always)]
-    pub fn empty() -> Vc<Vec<String>> {
+    pub fn empty() -> Vc<Vec<RcStr>> {
         empty_string_vec()
     }
 }
