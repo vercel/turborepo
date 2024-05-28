@@ -60,7 +60,7 @@ pub enum FoundExportType {
 #[turbo_tasks::value]
 pub struct FollowExportsResult {
     pub module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
-    pub export_name: Option<String>,
+    pub export_name: Option<RcStr>,
     pub ty: FoundExportType,
 }
 

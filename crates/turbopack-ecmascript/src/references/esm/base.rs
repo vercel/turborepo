@@ -297,13 +297,13 @@ impl CodeGenerateable for EsmAssetReference {
                                 quote!(
                                     "var $name = __turbopack_external_import__($id);" as Stmt,
                                     name = Ident::new(ident.clone().into(), DUMMY_SP),
-                                    id: Expr = Expr::Lit(request.clone().into())
+                                    id: Expr = Expr::Lit(request.to_string().into())
                                 )
                             } else {
                                 quote!(
                                     "var $name = __turbopack_external_require__($id, true);" as Stmt,
                                     name = Ident::new(ident.clone().into(), DUMMY_SP),
-                                    id: Expr = Expr::Lit(request.clone().into())
+                                    id: Expr = Expr::Lit(request.to_string().into())
                                 )
                             };
                             insert_hoisted_stmt(program, stmt);
@@ -330,7 +330,7 @@ impl CodeGenerateable for EsmAssetReference {
                             let stmt = quote!(
                                 "var $name = __turbopack_external_require__($id, true);" as Stmt,
                                 name = Ident::new(ident.clone().into(), DUMMY_SP),
-                                id: Expr = Expr::Lit(request.clone().into())
+                                id: Expr = Expr::Lit(request.to_string().into())
                             );
                             insert_hoisted_stmt(program, stmt);
                         }));
