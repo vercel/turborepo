@@ -25,7 +25,7 @@ pub struct LockedVersions {}
 pub enum ResolveModules {
     /// when inside of path, use the list of directories to
     /// resolve inside these
-    Nested(Vc<FileSystemPath>, Vec<String>),
+    Nested(Vc<FileSystemPath>, Vec<RcStr>),
     /// look into that directory
     Path(Vc<FileSystemPath>),
     /// lookup versions based on lockfile in the registry filesystem

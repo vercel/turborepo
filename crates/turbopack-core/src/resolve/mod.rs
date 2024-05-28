@@ -415,7 +415,7 @@ impl Display for ExternalType {
 #[derive(Clone, Debug)]
 pub enum ResolveResultItem {
     Source(Vc<Box<dyn Source>>),
-    External(String, ExternalType),
+    External(RcStr, ExternalType),
     Ignore,
     Error(Vc<String>),
     Empty,
@@ -712,7 +712,7 @@ impl ResolveResult {
 
     /// Returns a new [ResolveResult] where all [RequestKey]s are set to the
     /// passed `request`.
-    pub fn with_request_ref(&self, request: String) -> Self {
+    pub fn with_request_ref(&self, request: RcStr) -> Self {
         let new_primary = self
             .primary
             .iter()
@@ -911,7 +911,7 @@ impl ResolveResult {
                         request: request_key
                             .request
                             .as_ref()
-                            .map(|r| format!("{}{}", r, remaining)),
+                            .map(|r| format!("{}{}", r, remaining).into()),
                         conditions: request_key.conditions.clone(),
                     },
                     v.clone(),
@@ -1258,7 +1258,7 @@ pub async fn resolve_raw(
     async fn to_result(request: &str, path: Vc<FileSystemPath>) -> Result<Vc<ResolveResult>> {
         let RealPathResult { path, symlinks } = &*path.realpath_with_links().await?;
         Ok(ResolveResult::source_with_affecting_sources(
-            RequestKey::new(request.to_string()),
+            RequestKey::new(request.into()),
             Vc::upcast(FileSource::new(*path)),
             symlinks
                 .iter()
@@ -1279,7 +1279,7 @@ pub async fn resolve_raw(
         .and_then(|pat| pat.filter_could_not_match("/ROOT/fsd8nz8og54z"))
     {
         let path = Pattern::new(pat);
-        let matches = read_matches(lookup_dir.root(), "/ROOT/".to_string(), true, path).await?;
+        let matches = read_matches(lookup_dir.root(), "/ROOT/".into(), true, path).await?;
         if matches.len() > 10000 {
             let path_str = path.to_string().await?;
             println!(
@@ -1298,7 +1298,7 @@ pub async fn resolve_raw(
     }
 
     {
-        let matches = read_matches(lookup_dir, "".to_string(), force_in_lookup_dir, path).await?;
+        let matches = read_matches(lookup_dir, "".into(), force_in_lookup_dir, path).await?;
         if matches.len() > 10000 {
             println!(
                 "WARN: resolving pattern {} in {} leads to {} results",
@@ -1592,7 +1592,7 @@ async fn resolve_internal_inline(
                 let mut results = Vec::new();
                 let matches = read_matches(
                     lookup_path,
-                    "".to_string(),
+                    "".into(),
                     *force_in_lookup_dir,
                     Pattern::new(path.clone()).resolve().await?,
                 )
@@ -1764,7 +1764,7 @@ async fn resolve_internal_inline(
                 query: _,
                 fragment: _,
             } => {
-                let uri = format!("{}{}", protocol, remainder);
+                let uri: RcStr = format!("{}{}", protocol, remainder).into();
                 ResolveResult::primary_with_key(
                     RequestKey::new(uri.clone()),
                     ResolveResultItem::External(uri, ExternalType::Url),

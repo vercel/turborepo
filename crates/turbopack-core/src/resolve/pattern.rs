@@ -754,8 +754,8 @@ impl ValueToString for Pattern {
 
 #[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, TraceRawVcs, Serialize, Deserialize)]
 pub enum PatternMatch {
-    File(String, Vc<FileSystemPath>),
-    Directory(String, Vc<FileSystemPath>),
+    File(RcStr, Vc<FileSystemPath>),
+    Directory(RcStr, Vc<FileSystemPath>),
 }
 
 // TODO this isn't super efficient
