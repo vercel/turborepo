@@ -53,6 +53,8 @@ Use yarn 1.22.19
   Preparing yarn@1.22.19 for immediate activation...
   
   $ echo $PATH
+
+  $ echo $PRYSK_TEMP
   
   $ which -a yarn
 
