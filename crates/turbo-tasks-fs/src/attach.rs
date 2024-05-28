@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 use auto_hash_map::AutoMap;
-use turbo_tasks::{Completion, ValueToString, Vc};
+use turbo_tasks::{Completion, RcStr, ValueToString, Vc};
 
 use crate::{
     DirectoryContent, DirectoryEntry, FileContent, FileMeta, FileSystem, FileSystemPath,
@@ -16,7 +16,7 @@ pub struct AttachedFileSystem {
     root_fs: Vc<Box<dyn FileSystem>>,
     // we turn this into a string because creating a FileSystemPath requires the filesystem which
     // we are creating (circular reference)
-    child_path: String,
+    child_path: RcStr,
     child_fs: Vc<Box<dyn FileSystem>>,
 }
 
@@ -112,7 +112,7 @@ impl AttachedFileSystem {
                 .root()
                 .resolve()
                 .await?
-                .join(inner_path.to_string())
+                .join(inner_path.into())
         } else {
             this.root_fs.root().resolve().await?.join(path.path.clone())
         })

@@ -98,8 +98,8 @@ pub trait FileSystem: ValueToString {
 
 #[turbo_tasks::value(cell = "new", eq = "manual")]
 pub struct DiskFileSystem {
-    pub name: String,
-    pub root: String,
+    pub name: RcStr,
+    pub root: RcStr,
     #[turbo_tasks(debug_ignore, trace_ignore)]
     #[serde(skip)]
     mutex_map: MutexMap<PathBuf>,
@@ -896,7 +896,7 @@ impl FileSystemPath {
             path,
         );
         debug_assert!(
-            normalize_path(&path).as_ref() == Some(&path),
+            normalize_path(&path).as_deref() == Some(&*path),
             "path {} must be normalized",
             path,
         );
@@ -910,7 +910,7 @@ impl FileSystemPath {
     pub async fn join(self: Vc<Self>, path: RcStr) -> Result<Vc<Self>> {
         let this = self.await?;
         if let Some(path) = join_path(&this.path, &path) {
-            Ok(Self::new_normalized(this.fs, path))
+            Ok(Self::new_normalized(this.fs, path.into()))
         } else {
             bail!(
                 "Vc<FileSystemPath>(\"{}\").join(\"{}\") leaves the filesystem root",
@@ -933,7 +933,7 @@ impl FileSystemPath {
         }
         Ok(Self::new_normalized(
             this.fs,
-            format!("{}{}", this.path, path),
+            format!("{}{}", this.path, path).into(),
         ))
     }
 
@@ -952,12 +952,12 @@ impl FileSystemPath {
         if let (path, Some(ext)) = this.split_extension() {
             return Ok(Self::new_normalized(
                 this.fs,
-                format!("{}{}.{}", path, appending, ext),
+                format!("{}{}.{}", path, appending, ext).into(),
             ));
         }
         Ok(Self::new_normalized(
             this.fs,
-            format!("{}{}", this.path, appending),
+            format!("{}{}", this.path, appending).into(),
         ))
     }
 
