@@ -420,7 +420,7 @@ pub struct ResolveOptions {
     /// request first.
     pub prefer_relative: bool,
     /// The extensions that should be added to a request when resolving.
-    pub extensions: Vec<String>,
+    pub extensions: Vec<RcStr>,
     /// The locations where to resolve modules.
     pub modules: Vec<ResolveModules>,
     /// How to resolve packages.
@@ -428,7 +428,7 @@ pub struct ResolveOptions {
     /// How to resolve in packages.
     pub in_package: Vec<ResolveInPackage>,
     /// The default files to resolve in a folder.
-    pub default_files: Vec<String>,
+    pub default_files: Vec<RcStr>,
     /// An import map to use before resolving a request.
     pub import_map: Option<Vc<ImportMap>>,
     /// An import map to use when a request is otherwise unresolveable.

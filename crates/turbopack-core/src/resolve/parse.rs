@@ -1,7 +1,7 @@
 use anyhow::Result;
 use lazy_static::lazy_static;
 use regex::Regex;
-use turbo_tasks::{TryJoinIterExt, Value, ValueToString, Vc};
+use turbo_tasks::{RcStr, TryJoinIterExt, Value, ValueToString, Vc};
 
 use super::pattern::Pattern;
 

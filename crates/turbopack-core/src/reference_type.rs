@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use anyhow::Result;
 use indexmap::IndexMap;
-use turbo_tasks::Vc;
+use turbo_tasks::{RcStr, Vc};
 
 use crate::{module::Module, resolve::ModulePart};
 
@@ -65,9 +65,9 @@ pub struct ImportAttributes {
 #[derive(Debug, Default)]
 #[turbo_tasks::value]
 pub struct ImportContext {
-    pub layers: Vec<String>,
-    pub supports: Vec<String>,
-    pub media: Vec<String>,
+    pub layers: Vec<RcStr>,
+    pub supports: Vec<RcStr>,
+    pub media: Vec<RcStr>,
 }
 
 #[turbo_tasks::value_impl]
@@ -95,7 +95,7 @@ impl ImportContext {
             let mut layers = this.layers.clone();
             if let Some(attr_layer) = attr_layer {
                 if !layers.contains(&attr_layer) {
-                    layers.push(attr_layer.to_owned());
+                    layers.push(attr_layer.into());
                 }
             }
             layers
@@ -105,7 +105,7 @@ impl ImportContext {
             let mut media = this.media.clone();
             if let Some(attr_media) = attr_media {
                 if !media.contains(&attr_media) {
-                    media.push(attr_media.to_owned());
+                    media.push(attr_media.into());
                 }
             }
             media
@@ -115,7 +115,7 @@ impl ImportContext {
             let mut supports = this.supports.clone();
             if let Some(attr_supports) = attr_supports {
                 if !supports.contains(&attr_supports) {
-                    supports.push(attr_supports.to_owned());
+                    supports.push(attr_supports.into());
                 }
             }
             supports

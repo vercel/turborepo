@@ -1,7 +1,7 @@
 use std::fmt::Write;
 
 use anyhow::Result;
-use turbo_tasks::{Value, ValueToString, Vc};
+use turbo_tasks::{RcStr, Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbo_tasks_hash::{encode_hex, hash_xxh3_hash64, DeterministicHash, Xxh3Hash64Hasher};
 
@@ -39,7 +39,7 @@ impl AssetIdent {
         let root = self.path.root();
         let path = self.path.await?;
         self.path = root
-            .join(pattern.replace('*', &path.path))
+            .join(pattern.replace('*', &path.path).into())
             .resolve()
             .await?;
         Ok(())
@@ -196,7 +196,7 @@ impl AssetIdent {
         } else {
             clean_separators(&self.path.to_string().await?)
         };
-        let removed_extension = name.ends_with(&expected_extension);
+        let removed_extension = name.ends_with(&*expected_extension);
         if removed_extension {
             name.truncate(name.len() - expected_extension.len());
         }
