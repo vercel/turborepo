@@ -57,7 +57,7 @@ use tokio::{
 };
 use tracing::Instrument;
 use turbo_tasks::{
-    mark_stateful, trace::TraceRawVcs, Completion, InvalidationReason, Invalidator, ReadRef,
+    mark_stateful, trace::TraceRawVcs, Completion, InvalidationReason, Invalidator, RcStr, ReadRef,
     ValueToString, Vc,
 };
 use turbo_tasks_hash::{hash_xxh3_hash64, DeterministicHash, DeterministicHasher};
@@ -97,8 +97,8 @@ pub trait FileSystem: ValueToString {
 
 #[turbo_tasks::value(cell = "new", eq = "manual")]
 pub struct DiskFileSystem {
-    pub name: Arc<String>,
-    pub root: Arc<String>,
+    pub name: RcStr,
+    pub root: RcStr,
     #[turbo_tasks(debug_ignore, trace_ignore)]
     #[serde(skip)]
     mutex_map: MutexMap<PathBuf>,
@@ -287,14 +287,10 @@ impl DiskFileSystem {
     ///   root & project dir is different and requires to ignore specific
     ///   subpaths from each.
     #[turbo_tasks::function]
-    pub async fn new(
-        name: Arc<String>,
-        root: Arc<String>,
-        ignored_subpaths: Vec<Arc<String>>,
-    ) -> Result<Vc<Self>> {
+    pub async fn new(name: RcStr, root: RcStr, ignored_subpaths: Vec<RcStr>) -> Result<Vc<Self>> {
         mark_stateful();
         // create the directory for the filesystem on disk, if it doesn't exist
-        fs::create_dir_all(&**root).await?;
+        fs::create_dir_all(&root).await?;
 
         let instance = DiskFileSystem {
             name,

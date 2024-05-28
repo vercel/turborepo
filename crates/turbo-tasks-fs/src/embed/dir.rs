@@ -1,17 +1,15 @@
-use std::sync::Arc;
-
 pub use ::include_dir::{
     include_dir, {self},
 };
 use anyhow::Result;
-use turbo_tasks::{TransientInstance, Vc};
+use turbo_tasks::{RcStr, TransientInstance, Vc};
 
 use crate::{embed::EmbeddedFileSystem, DiskFileSystem, FileSystem};
 
 #[turbo_tasks::function]
 pub async fn directory_from_relative_path(
-    name: Arc<String>,
-    path: Arc<String>,
+    name: RcStr,
+    path: RcStr,
 ) -> Result<Vc<Box<dyn FileSystem>>> {
     let disk_fs = DiskFileSystem::new(name, path, vec![]);
     disk_fs.await?.start_watching()?;
@@ -21,7 +19,7 @@ pub async fn directory_from_relative_path(
 
 #[turbo_tasks::function]
 pub async fn directory_from_include_dir(
-    name: Arc<String>,
+    name: RcStr,
     dir: TransientInstance<&'static include_dir::Dir<'static>>,
 ) -> Result<Vc<Box<dyn FileSystem>>> {
     Ok(Vc::upcast(EmbeddedFileSystem::new(name, dir)))
