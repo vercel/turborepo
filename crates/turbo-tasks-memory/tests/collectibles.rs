@@ -5,7 +5,7 @@ use std::{collections::HashSet, sync::Arc, time::Duration};
 use anyhow::Result;
 use auto_hash_map::AutoSet;
 use tokio::time::sleep;
-use turbo_tasks::{emit, CollectiblesSource, ValueToString, Vc};
+use turbo_tasks::{emit, CollectiblesSource, RcStr, ValueToString, Vc};
 use turbo_tasks_testing::{register, run};
 register!();
 
@@ -144,28 +144,22 @@ async fn my_multi_emitting_function() -> Result<Vc<Thing>> {
 }
 
 #[turbo_tasks::function]
-async fn my_transitive_emitting_function(
-    key: Arc<String>,
-    _key2: Arc<String>,
-) -> Result<Vc<Thing>> {
+async fn my_transitive_emitting_function(key: RcStr, _key2: Arc<String>) -> Result<Vc<Thing>> {
     my_emitting_function(key).await?;
     Ok(Thing::cell(Thing(0)))
 }
 
 #[turbo_tasks::function]
-async fn my_transitive_emitting_function_collectibles(
-    key: Arc<String>,
-    key2: Arc<String>,
-) -> Vc<Collectibles> {
+async fn my_transitive_emitting_function_collectibles(key: RcStr, key2: RcStr) -> Vc<Collectibles> {
     let result = my_transitive_emitting_function(key, key2);
     Vc::cell(result.peek_collectibles::<Box<dyn ValueToString>>())
 }
 
 #[turbo_tasks::function]
 async fn my_transitive_emitting_function_with_child_scope(
-    key: Arc<String>,
-    key2: Arc<String>,
-    _key3: Arc<String>,
+    key: RcStr,
+    key2: RcStr,
+    _key3: RcStr,
 ) -> Result<Vc<Thing>> {
     let thing = my_transitive_emitting_function(key, key2);
     thing.strongly_consistent().await?;
