@@ -476,7 +476,7 @@ mod tests {
         struct GenericField<T>(T);
 
         test_conversion!(GenericField(42));
-        test_conversion!(GenericField("42".into()));
+        test_conversion!(GenericField(RcStr::from("42")));
         Ok(())
     }
 
@@ -525,7 +525,7 @@ mod tests {
     fn test_multiple_variants_and_heterogeneous_fields() -> Result<()> {
         test_conversion!(MultipleVariantsAndHeterogeneousFields::Variant5 {
             named: 42,
-            other: Arc::new("42".into())
+            other: "42".into()
         });
         Ok(())
     }
