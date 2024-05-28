@@ -1,5 +1,6 @@
 use std::{
     any::{type_name, Any},
+    borrow::Cow,
     fmt::Display,
     marker::PhantomData,
     ops::Deref,
@@ -62,6 +63,12 @@ impl From<String> for RcStr {
 impl From<&'_ str> for RcStr {
     fn from(s: &str) -> Self {
         RcStr(Arc::new(s.to_string()))
+    }
+}
+
+impl From<Cow<'_, str>> for RcStr {
+    fn from(s: Cow<str>) -> Self {
+        RcStr(Arc::new(s.into_owned()))
     }
 }
 
