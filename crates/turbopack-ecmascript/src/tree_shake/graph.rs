@@ -23,6 +23,7 @@ use swc_core::{
         utils::{find_pat_ids, private_ident, quote_ident, IdentExt},
     },
 };
+use turbo_tasks::RcStr;
 
 use super::{
     util::{ids_captured_by, ids_used_by, ids_used_by_ignoring_nested},
@@ -1128,7 +1129,7 @@ const ASSERT_CHUNK_KEY: &str = "__turbopack_part__";
 pub(crate) enum PartId {
     ModuleEvaluation,
     Exports,
-    Export(String),
+    Export(RcStr),
     Internal(u32),
 }
 

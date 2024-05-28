@@ -2487,7 +2487,7 @@ fn as_parent_path(ast_path: &AstNodePath<AstParentNodeRef<'_>>) -> Vec<AstParent
     ast_path.iter().map(|n| n.kind()).collect()
 }
 
-fn for_each_ident_in_decl(decl: &Decl, f: &mut impl FnMut(String)) {
+fn for_each_ident_in_decl(decl: &Decl, f: &mut impl FnMut(RcStr)) {
     match decl {
         Decl::Class(ClassDecl { ident, .. }) | Decl::Fn(FnDecl { ident, .. }) => {
             f(ident.sym.to_string());

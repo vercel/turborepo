@@ -503,7 +503,7 @@ pub(super) async fn part_of_module(
                             swc_core::ecma::ast::ExportSpecifier::Named(ExportNamedSpecifier {
                                 span: DUMMY_SP,
                                 orig: ModuleExportName::Ident(Ident::new(
-                                    export_name.into(),
+                                    export_name.as_str().into(),
                                     DUMMY_SP,
                                 )),
                                 exported: None,
@@ -579,7 +579,7 @@ pub(super) async fn part_of_module(
                             swc_core::ecma::ast::ExportSpecifier::Named(ExportNamedSpecifier {
                                 span: DUMMY_SP,
                                 orig: ModuleExportName::Ident(Ident::new(
-                                    export_name.into(),
+                                    export_name.as_str().into(),
                                     DUMMY_SP,
                                 )),
                                 exported: None,
