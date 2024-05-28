@@ -31,7 +31,43 @@ impl TaskInput for ConcreteTaskInput {
     }
 }
 
-impl TaskInput for String {
+/// This type exists to allow swapping out the underlying string type easily.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct RcStr(Arc<String>);
+
+impl Deref for RcStr {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.as_str()
+    }
+}
+
+impl From<Arc<String>> for RcStr {
+    fn from(s: Arc<String>) -> Self {
+        RcStr(s)
+    }
+}
+
+impl From<String> for RcStr {
+    fn from(s: String) -> Self {
+        RcStr(Arc::new(s))
+    }
+}
+
+impl From<&'_ str> for RcStr {
+    fn from(s: &str) -> Self {
+        RcStr(Arc::new(s.to_string()))
+    }
+}
+
+impl AsRef<Path> for RcStr {
+    fn as_ref(&self) -> &Path {
+        (*self.0).as_ref()
+    }
+}
+
+impl TaskInput for RcStr {
     fn try_from_concrete(input: &ConcreteTaskInput) -> Result<Self> {
         match input {
             ConcreteTaskInput::String(s) => Ok(s.clone()),
