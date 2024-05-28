@@ -193,7 +193,7 @@ impl ImportMap {
     /// Inserts an exact alias into the import map.
     pub fn insert_exact_alias<'a>(
         &mut self,
-        pattern: impl Into<String> + 'a,
+        pattern: impl Into<RcStr> + 'a,
         mapping: Vc<ImportMapping>,
     ) {
         self.map.insert(AliasPattern::exact(pattern), mapping);
@@ -202,7 +202,7 @@ impl ImportMap {
     /// Inserts a wildcard alias into the import map.
     pub fn insert_wildcard_alias<'a>(
         &mut self,
-        prefix: impl Into<String> + 'a,
+        prefix: impl Into<RcStr> + 'a,
         mapping: Vc<ImportMapping>,
     ) {
         self.map.insert(AliasPattern::wildcard(prefix, ""), mapping);
@@ -211,8 +211,8 @@ impl ImportMap {
     /// Inserts a wildcard alias with suffix into the import map.
     pub fn insert_wildcard_alias_with_suffix<'p, 's>(
         &mut self,
-        prefix: impl Into<String> + 'p,
-        suffix: impl Into<String> + 's,
+        prefix: impl Into<RcStr> + 'p,
+        suffix: impl Into<RcStr> + 's,
         mapping: Vc<ImportMapping>,
     ) {
         self.map

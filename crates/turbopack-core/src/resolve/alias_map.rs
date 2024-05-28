@@ -14,6 +14,7 @@ use serde::{
 use turbo_tasks::{
     debug::{internal::PassthroughDebug, ValueDebugFormat, ValueDebugFormatString},
     trace::{TraceRawVcs, TraceRawVcsContext},
+    RcStr,
 };
 
 /// A map of [`AliasPattern`]s to the [`Template`]s they resolve to.
@@ -492,9 +493,9 @@ where
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum AliasPattern {
     /// Will match an exact string.
-    Exact(String),
+    Exact(RcStr),
     /// Will match a pattern with a single wildcard.
-    Wildcard { prefix: String, suffix: String },
+    Wildcard { prefix: RcStr, suffix: RcStr },
 }
 
 impl AliasPattern {
@@ -522,7 +523,7 @@ impl AliasPattern {
     /// Creates a pattern that will only match exactly what was passed in.
     pub fn exact<'a, T>(pattern: T) -> Self
     where
-        T: Into<String> + 'a,
+        T: Into<RcStr> + 'a,
     {
         AliasPattern::Exact(pattern.into())
     }
@@ -533,8 +534,8 @@ impl AliasPattern {
     /// 3. a suffix.
     pub fn wildcard<'p, 's, P, S>(prefix: P, suffix: S) -> Self
     where
-        P: Into<String> + 'p,
-        S: Into<String> + 's,
+        P: Into<RcStr> + 'p,
+        S: Into<RcStr> + 's,
     {
         AliasPattern::Wildcard {
             prefix: prefix.into(),
