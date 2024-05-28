@@ -230,7 +230,7 @@ impl ImportMap {
         let wildcard_prefix: RcStr = (prefix.to_string() + "/").into();
         let wildcard_alias: RcStr = (prefix.to_string() + "/*").into();
         self.insert_exact_alias(
-            &prefix,
+            prefix.clone(),
             ImportMapping::PrimaryAlternative(prefix.clone(), Some(context_path)).cell(),
         );
         self.insert_wildcard_alias(

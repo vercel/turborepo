@@ -312,14 +312,16 @@ pub struct AliasMapIntoIter<T> {
 }
 
 struct AliasMapIntoIterItem<T> {
-    prefix: String,
+    prefix: RcStr,
     iterator: std::collections::btree_map::IntoIter<AliasKey, T>,
 }
 
 impl<T> AliasMapIntoIter<T> {
     fn advance_iter(&mut self) -> Option<&mut AliasMapIntoIterItem<T>> {
         let (prefix, map) = self.iter.next()?;
-        let prefix = String::from_utf8(prefix).expect("invalid UTF-8 key in AliasMap");
+        let prefix = String::from_utf8(prefix)
+            .expect("invalid UTF-8 key in AliasMap")
+            .into();
         self.current_prefix_iterator = Some(AliasMapIntoIterItem {
             prefix,
             iterator: map.into_iter(),
@@ -375,7 +377,7 @@ pub struct AliasMapIter<'a, T> {
 }
 
 struct AliasMapIterItem<'a, T> {
-    prefix: String,
+    prefix: RcStr,
     iterator: std::collections::btree_map::Iter<'a, AliasKey, T>,
 }
 
@@ -471,7 +473,7 @@ where
                         // The suffix is longer than what remains of the request.
                         suffix.len() > remaining.len()
                             // Not a suffix match.
-                            || !remaining.ends_with(suffix)
+                            || !remaining.ends_with(&**suffix)
                         {
                             continue;
                         }
@@ -509,14 +511,14 @@ impl AliasPattern {
     {
         let mut pattern = pattern.into();
         if let Some(wildcard_index) = pattern.find('*') {
-            let suffix = pattern[wildcard_index + 1..].to_string();
+            let suffix = pattern[wildcard_index + 1..].into();
             pattern.truncate(wildcard_index);
             AliasPattern::Wildcard {
-                prefix: pattern,
+                prefix: pattern.into(),
                 suffix,
             }
         } else {
-            AliasPattern::Exact(pattern.to_string())
+            AliasPattern::Exact(pattern.into())
         }
     }
 
