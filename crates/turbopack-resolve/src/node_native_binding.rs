@@ -3,7 +3,7 @@ use indexmap::IndexMap;
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use turbo_tasks::{TryFlatJoinIterExt, ValueToString, Vc};
+use turbo_tasks::{RcStr, TryFlatJoinIterExt, ValueToString, Vc};
 use turbo_tasks_fs::{
     glob::Glob, json::parse_json_rope_with_source_context, DirectoryEntry, FileContent,
     FileSystemEntryType, FileSystemPath,
@@ -109,7 +109,7 @@ pub async fn resolve_node_pre_gyp_files(
                 let config_file_dir = config_file_path.parent();
                 let node_pre_gyp_config: NodePreGypConfigJson =
                     parse_json_rope_with_source_context(config_file.content())?;
-                let mut sources: IndexMap<String, Vc<Box<dyn Source>>> = IndexMap::new();
+                let mut sources: IndexMap<RcStr, Vc<Box<dyn Source>>> = IndexMap::new();
                 for version in node_pre_gyp_config.binary.napi_versions.iter() {
                     let native_binding_path = NAPI_VERSION_TEMPLATE.replace(
                         node_pre_gyp_config.binary.module_path.as_str(),
@@ -120,20 +120,22 @@ pub async fn resolve_node_pre_gyp_files(
                         PLATFORM_TEMPLATE.replace(&native_binding_path, platform.as_str());
                     let native_binding_path =
                         ARCH_TEMPLATE.replace(&native_binding_path, compile_target.arch.as_str());
-                    let native_binding_path = LIBC_TEMPLATE.replace(
-                        &native_binding_path,
-                        // node-pre-gyp only cares about libc on linux
-                        if platform == Platform::Linux {
-                            compile_target.libc.as_str()
-                        } else {
-                            "unknown"
-                        },
-                    );
+                    let native_binding_path: RcStr = LIBC_TEMPLATE
+                        .replace(
+                            &native_binding_path,
+                            // node-pre-gyp only cares about libc on linux
+                            if platform == Platform::Linux {
+                                compile_target.libc.as_str()
+                            } else {
+                                "unknown"
+                            },
+                        )
+                        .into();
 
                     for (key, entry) in config_file_dir
-                        .join(native_binding_path.to_string())
+                        .join(native_binding_path.clone())
                         .read_glob(
-                            Glob::new(format!("*.{}", compile_target.dylib_ext())),
+                            Glob::new(format!("*.{}", compile_target.dylib_ext()).into()),
                             false,
                         )
                         .await?
@@ -144,16 +146,17 @@ pub async fn resolve_node_pre_gyp_files(
                             entry
                         {
                             sources.insert(
-                                format!("{native_binding_path}/{key}"),
+                                format!("{native_binding_path}/{key}").into(),
                                 Vc::upcast(FileSource::new(dylib)),
                             );
                         }
                     }
 
-                    let node_file_path = format!(
+                    let node_file_path: RcStr = format!(
                         "{}/{}.node",
                         native_binding_path, node_pre_gyp_config.binary.module_name
-                    );
+                    )
+                    .into();
                     let resolved_file_vc = config_file_dir.join(node_file_path.clone());
                     sources.insert(
                         node_file_path,
@@ -163,8 +166,8 @@ pub async fn resolve_node_pre_gyp_files(
                 for (key, entry) in config_file_dir
                     // TODO
                     // read the dependencies path from `bindings.gyp`
-                    .join("deps/lib".to_string())
-                    .read_glob(Glob::new("*".to_string()), false)
+                    .join("deps/lib".into())
+                    .read_glob(Glob::new("*".into()), false)
                     .await?
                     .results
                     .iter()
@@ -172,7 +175,7 @@ pub async fn resolve_node_pre_gyp_files(
                     match *entry {
                         DirectoryEntry::File(dylib) => {
                             sources.insert(
-                                format!("deps/lib/{key}"),
+                                format!("deps/lib/{key}").into(),
                                 Vc::upcast(FileSource::new(dylib)),
                             );
                         }
@@ -182,7 +185,7 @@ pub async fn resolve_node_pre_gyp_files(
                                 affecting_paths.push(symlink);
                             }
                             sources.insert(
-                                format!("deps/lib/{key}"),
+                                format!("deps/lib/{key}").into(),
                                 Vc::upcast(FileSource::new(realpath_with_links.path)),
                             );
                         }
