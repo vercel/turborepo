@@ -2,7 +2,7 @@ use std::{
     any::{type_name, Any},
     marker::PhantomData,
     ops::Deref,
-    path::Path,
+    path::{Path, PathBuf},
     sync::Arc,
 };
 
@@ -67,6 +67,12 @@ impl From<&'_ str> for RcStr {
 impl AsRef<Path> for RcStr {
     fn as_ref(&self) -> &Path {
         (*self.0).as_ref()
+    }
+}
+
+impl From<RcStr> for PathBuf {
+    fn from(s: RcStr) -> Self {
+        PathBuf::from(&**s.0)
     }
 }
 
