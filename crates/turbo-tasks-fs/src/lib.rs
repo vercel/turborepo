@@ -379,7 +379,7 @@ impl FileSystem for DiskFileSystem {
                 let path = e.path();
 
                 // we filter out any non unicode names and paths without the same root here
-                let file_name = path.file_name()?.to_str()?.to_string();
+                let file_name: RcStr = path.file_name()?.to_str()?.into();
                 let path_to_root = sys_to_unix(path.strip_prefix(&self.root).ok()?.to_str()?);
 
                 let fs_path = FileSystemPath::new_normalized(fs_path.fs, path_to_root.into());
@@ -1846,12 +1846,12 @@ impl From<&DirectoryEntry> for FileSystemEntryType {
 #[turbo_tasks::value]
 #[derive(Debug)]
 pub enum DirectoryContent {
-    Entries(AutoMap<String, DirectoryEntry>),
+    Entries(AutoMap<RcStr, DirectoryEntry>),
     NotFound,
 }
 
 impl DirectoryContent {
-    pub fn new(entries: AutoMap<String, DirectoryEntry>) -> Vc<Self> {
+    pub fn new(entries: AutoMap<RcStr, DirectoryEntry>) -> Vc<Self> {
         Self::cell(DirectoryContent::Entries(entries))
     }
 

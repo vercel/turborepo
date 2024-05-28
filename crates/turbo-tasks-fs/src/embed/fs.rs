@@ -55,11 +55,16 @@ impl FileSystem for EmbeddedFileSystem {
             .entries()
             .iter()
             .map(|e| {
-                let entry_name = e.path().file_name().unwrap_or_default().to_string_lossy();
-                let entry_path = path.join(entry_name.clone().into());
+                let entry_name: RcStr = e
+                    .path()
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into();
+                let entry_path = path.join(entry_name.clone());
 
                 (
-                    entry_name.to_string(),
+                    entry_name,
                     match e {
                         DirEntry::Dir(_) => DirectoryEntry::Directory(entry_path),
                         DirEntry::File(_) => DirectoryEntry::File(entry_path),
