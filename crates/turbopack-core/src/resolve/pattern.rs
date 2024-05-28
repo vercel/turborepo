@@ -13,7 +13,7 @@ use turbo_tasks_fs::{
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(PartialOrd, Ord, Hash, Clone, Debug, Default)]
 pub enum Pattern {
-    Constant(String),
+    Constant(RcStr),
     #[default]
     Dynamic,
     Alternatives(Vec<Pattern>),

@@ -88,13 +88,13 @@ pub enum ResolveInPackage {
 #[turbo_tasks::value(shared)]
 #[derive(Clone)]
 pub enum ImportMapping {
-    External(Option<String>, ExternalType),
+    External(Option<RcStr>, ExternalType),
     /// An already resolved result that will be returned directly.
     Direct(Vc<ResolveResult>),
     /// A request alias that will be resolved first, and fall back to resolving
     /// the original request if it fails. Useful for the tsconfig.json
     /// `compilerOptions.paths` option and Next aliases.
-    PrimaryAlternative(String, Option<Vc<FileSystemPath>>),
+    PrimaryAlternative(RcStr, Option<Vc<FileSystemPath>>),
     Ignore,
     Empty,
     Alternatives(Vec<Vc<ImportMapping>>),
@@ -269,9 +269,9 @@ async fn import_mapping_to_result(
         ImportMapping::Direct(result) => ImportMapResult::Result(*result),
         ImportMapping::External(name, ty) => ImportMapResult::Result(
             ResolveResult::primary(if let Some(name) = name {
-                ResolveResultItem::External(name.to_string(), *ty)
+                ResolveResultItem::External(name.clone(), *ty)
             } else if let Some(request) = request.await?.request() {
-                ResolveResultItem::External(request, *ty)
+                ResolveResultItem::External(request.into(), *ty)
             } else {
                 bail!("Cannot resolve external reference without request")
             })

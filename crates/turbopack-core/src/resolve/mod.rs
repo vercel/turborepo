@@ -65,7 +65,7 @@ use crate::{error::PrettyPrintError, issue::IssueSeverity};
 pub enum ModuleResolveResultItem {
     Module(Vc<Box<dyn Module>>),
     OutputAsset(Vc<Box<dyn OutputAsset>>),
-    External(String, ExternalType),
+    External(RcStr, ExternalType),
     Ignore,
     Error(Vc<String>),
     Empty,
@@ -1821,7 +1821,7 @@ async fn resolve_into_folder(
     package_path: Vc<FileSystemPath>,
     options: Vc<ResolveOptions>,
 ) -> Result<Vc<ResolveResult>> {
-    let package_json_path = package_path.join("package.json".to_string());
+    let package_json_path = package_path.join("package.json".into());
     let options_value = options.await?;
 
     for resolve_into_package in options_value.into_package.iter() {
@@ -1850,7 +1850,7 @@ async fn resolve_into_folder(
                         // we are not that strict when a main field fails to resolve
                         // we continue to try other alternatives
                         if !result.is_unresolveable_ref() {
-                            let mut result = result.with_request_ref(".".to_string());
+                            let mut result = result.with_request_ref(".".into());
                             result.add_affecting_source_ref(Vc::upcast(FileSource::new(
                                 package_json_path,
                             )));
@@ -1870,11 +1870,11 @@ async fn resolve_into_folder(
     // fall back to dir/index.[js,ts,...]
     let pattern = match &options_value.default_files[..] {
         [] => return Ok(ResolveResult::unresolveable().into()),
-        [file] => Pattern::Constant(format!("./{file}")),
+        [file] => Pattern::Constant(format!("./{file}").into()),
         files => Pattern::Alternatives(
             files
                 .iter()
-                .map(|file| Pattern::Constant(format!("./{file}")))
+                .map(|file| Pattern::Constant(format!("./{file}").into()))
                 .collect(),
         ),
     };
