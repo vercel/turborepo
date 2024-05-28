@@ -11,8 +11,8 @@ default = ["rustls-tls", "daemon-package-discovery"]
 native-tls = ["turborepo-api-client/native-tls", "turbo-updater/native-tls"]
 rustls-tls = ["turborepo-api-client/rustls-tls", "turbo-updater/rustls-tls"]
 
-go-daemon = []
 daemon-package-discovery = []
+daemon-file-hashing = []
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
