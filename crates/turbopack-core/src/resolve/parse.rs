@@ -528,12 +528,7 @@ impl Request {
             } => {
                 let mut pat = Pattern::concat([path.clone(), suffix.into_owned().into()]);
                 pat.normalize();
-                Self::module(
-                    module.into_owned().clone(),
-                    Value::new(pat),
-                    *query,
-                    *fragment,
-                )
+                Self::module(module.clone(), Value::new(pat), *query, *fragment)
             }
             Request::ServerRelative {
                 path,

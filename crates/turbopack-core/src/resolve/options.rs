@@ -103,7 +103,7 @@ pub enum ImportMapping {
 
 impl ImportMapping {
     pub fn primary_alternatives(
-        list: Vec<String>,
+        list: Vec<RcStr>,
         lookup_path: Option<Vc<FileSystemPath>>,
     ) -> ImportMapping {
         if list.is_empty() {
