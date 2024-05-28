@@ -69,26 +69,17 @@ const SCRIPTS_TO_DISPLAY: Record<string, string> = {
 
 export async function create(
   directory: CreateCommandArgument,
-  packageManagerCmd: CreateCommandArgument,
   opts: CreateCommandOptions
 ) {
   // track CLI command start
   opts.telemetry?.trackCommandStatus({ command: "create", status: "start" });
-  opts.telemetry?.trackArgumentPackageManager(packageManagerCmd);
   opts.telemetry?.trackArgumentDirectory(Boolean(directory));
   trackOptions(opts);
 
-  const {
-    packageManager: packageManagerOpt,
-    skipInstall,
-    skipTransforms,
-  } = opts;
+  const { packageManager, skipInstall, skipTransforms } = opts;
   logger.log(chalk.bold(turboGradient(`\n>>> TURBOREPO\n`)));
   info(`Welcome to Turborepo! Let's get you set up with a new codebase.`);
   logger.log();
-
-  // if both the package manager option and command are provided, the option takes precedence
-  const packageManager = packageManagerOpt ?? packageManagerCmd;
 
   const [online, availablePackageManagers] = await Promise.all([
     isOnline(),
