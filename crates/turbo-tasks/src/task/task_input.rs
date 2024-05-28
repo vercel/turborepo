@@ -45,6 +45,24 @@ impl Deref for RcStr {
     }
 }
 
+impl From<Arc<String>> for RcStr {
+    fn from(s: Arc<String>) -> Self {
+        RcStr(s)
+    }
+}
+
+impl From<String> for RcStr {
+    fn from(s: String) -> Self {
+        RcStr(Arc::new(s))
+    }
+}
+
+impl From<&'_ str> for RcStr {
+    fn from(s: &str) -> Self {
+        RcStr(Arc::new(s.to_string()))
+    }
+}
+
 impl TaskInput for RcStr {
     fn try_from_concrete(input: &ConcreteTaskInput) -> Result<Self> {
         match input {
@@ -422,7 +440,7 @@ mod tests {
         #[derive(Clone, TaskInput, Eq, PartialEq, Debug)]
         struct MultipleUnnamedFields(u32, RcStr);
 
-        test_conversion!(MultipleUnnamedFields(42, "42".to_string().into()));
+        test_conversion!(MultipleUnnamedFields(42, "42".into()));
         Ok(())
     }
 
@@ -458,7 +476,7 @@ mod tests {
         struct GenericField<T>(T);
 
         test_conversion!(GenericField(42));
-        test_conversion!(GenericField(Arc::new("42".to_string())));
+        test_conversion!(GenericField("42".into()));
         Ok(())
     }
 
