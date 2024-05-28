@@ -117,6 +117,9 @@ pub struct RawTurboJson {
     // and cache behavior on a per task or per package-task basis.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tasks: Option<Pipeline>,
+
+    #[serde(skip_serializing)]
+    pub pipeline: Option<Spanned<Pipeline>>,
     // Configuration options when interfacing with the remote cache
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) remote_cache: Option<RawRemoteCacheOptions>,
@@ -432,6 +435,10 @@ impl TryFrom<RawTurboJson> for TurboJson {
     type Error = Error;
 
     fn try_from(raw_turbo: RawTurboJson) -> Result<Self, Error> {
+        if let Some(pipeline) = raw_turbo.pipeline {
+            let (span, text) = pipeline.span_and_text("turbo.json");
+            return Err(Error::PipelineField { span, text });
+        }
         let mut global_env = HashSet::new();
         let mut global_file_dependencies = HashSet::new();
 
