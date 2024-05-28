@@ -1,10 +1,13 @@
 use std::{
     any::{type_name, Any},
     marker::PhantomData,
+    ops::Deref,
+    path::Path,
     sync::Arc,
 };
 
 use anyhow::{anyhow, bail, Result};
+use serde::{Deserialize, Serialize};
 
 use super::concrete_task_input::TransientSharedValue;
 use crate::{
@@ -442,7 +445,7 @@ mod tests {
     #[test]
     fn test_multiple_unnamed_fields() -> Result<()> {
         #[derive(Clone, TaskInput, Eq, PartialEq, Debug)]
-        struct MultipleUnnamedFields(u32, String);
+        struct MultipleUnnamedFields(u32, RcStr);
 
         test_conversion!(MultipleUnnamedFields(42, "42".into()));
         Ok(())
@@ -464,7 +467,7 @@ mod tests {
         #[derive(Clone, TaskInput, Eq, PartialEq, Debug)]
         struct MultipleNamedFields {
             named: u32,
-            other: String,
+            other: RcStr,
         }
 
         test_conversion!(MultipleNamedFields {
@@ -480,7 +483,7 @@ mod tests {
         struct GenericField<T>(T);
 
         test_conversion!(GenericField(42));
-        test_conversion!(GenericField("42".to_string()));
+        test_conversion!(GenericField(RcStr::from("42")));
         Ok(())
     }
 
@@ -521,8 +524,8 @@ mod tests {
         Variant1,
         Variant2(u32),
         Variant3 { named: u32 },
-        Variant4(u32, String),
-        Variant5 { named: u32, other: String },
+        Variant4(u32, RcStr),
+        Variant5 { named: u32, other: RcStr },
     }
 
     #[test]
@@ -541,8 +544,8 @@ mod tests {
             Variant1,
             Variant2(MultipleVariantsAndHeterogeneousFields),
             Variant3 { named: OneVariant },
-            Variant4(OneVariant, String),
-            Variant5 { named: OneVariant, other: String },
+            Variant4(OneVariant, RcStr),
+            Variant5 { named: OneVariant, other: RcStr },
         }
 
         test_conversion!(NestedVariants::Variant5 {
