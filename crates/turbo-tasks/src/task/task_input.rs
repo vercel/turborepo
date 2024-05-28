@@ -6,6 +6,7 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, Result};
+use serde::{Deserialize, Serialize};
 
 use super::concrete_task_input::TransientSharedValue;
 use crate::{
@@ -33,7 +34,7 @@ impl TaskInput for ConcreteTaskInput {
 }
 
 /// This type exists to allow swapping out the underlying string type easily.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct RcStr(Arc<String>);
 
 impl Deref for RcStr {
@@ -419,7 +420,7 @@ mod tests {
     #[test]
     fn test_multiple_unnamed_fields() -> Result<()> {
         #[derive(Clone, TaskInput, Eq, PartialEq, Debug)]
-        struct MultipleUnnamedFields(u32, Arc<String>);
+        struct MultipleUnnamedFields(u32, RcStr);
 
         test_conversion!(MultipleUnnamedFields(42, "42".to_string().into()));
         Ok(())
@@ -441,7 +442,7 @@ mod tests {
         #[derive(Clone, TaskInput, Eq, PartialEq, Debug)]
         struct MultipleNamedFields {
             named: u32,
-            other: Arc<String>,
+            other: RcStr,
         }
 
         test_conversion!(MultipleNamedFields {
@@ -498,8 +499,8 @@ mod tests {
         Variant1,
         Variant2(u32),
         Variant3 { named: u32 },
-        Variant4(u32, Arc<String>),
-        Variant5 { named: u32, other: Arc<String> },
+        Variant4(u32, RcStr),
+        Variant5 { named: u32, other: RcStr },
     }
 
     #[test]
@@ -517,14 +518,9 @@ mod tests {
         enum NestedVariants {
             Variant1,
             Variant2(MultipleVariantsAndHeterogeneousFields),
-            Variant3 {
-                named: OneVariant,
-            },
-            Variant4(OneVariant, Arc<String>),
-            Variant5 {
-                named: OneVariant,
-                other: Arc<String>,
-            },
+            Variant3 { named: OneVariant },
+            Variant4(OneVariant, RcStr),
+            Variant5 { named: OneVariant, other: RcStr },
         }
 
         test_conversion!(NestedVariants::Variant5 {
