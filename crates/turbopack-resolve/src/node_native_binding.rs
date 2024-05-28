@@ -323,7 +323,7 @@ pub async fn resolve_node_gyp_build_files(
 #[derive(Hash, Clone, Debug)]
 pub struct NodeBindingsReference {
     pub context_dir: Vc<FileSystemPath>,
-    pub file_name: String,
+    pub file_name: RcStr,
 }
 
 #[turbo_tasks::value_impl]
@@ -374,7 +374,7 @@ pub async fn resolve_node_bindings_files(
     loop {
         let resolved = resolve_raw(
             root_context_dir,
-            Pattern::new(Pattern::Constant("package.json".to_owned())),
+            Pattern::new(Pattern::Constant("package.json".into())),
             true,
         )
         .first_source()
@@ -395,7 +395,7 @@ pub async fn resolve_node_bindings_files(
         root_context_dir = parent;
     }
 
-    let try_path = |sub_path: String| async move {
+    let try_path = |sub_path: RcStr| async move {
         let path = root_context_dir.join(sub_path.clone());
         Ok(
             if matches!(*path.get_type().await?, FileSystemEntryType::File) {
@@ -411,7 +411,7 @@ pub async fn resolve_node_bindings_files(
 
     let modules = BINDINGS_TRY
         .iter()
-        .map(|try_dir| try_path(format!("{}/{}", try_dir, &file_name)))
+        .map(|try_dir| try_path(format!("{}/{}", try_dir, &file_name).into()))
         .try_flat_join()
         .await?;
     Ok(ModuleResolveResult::modules(modules).cell())
