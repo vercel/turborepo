@@ -98,6 +98,7 @@ impl Eq for ConstantNumber {}
 pub enum ConstantString {
     Word(JsWord),
     Atom(Atom),
+    RcStr(RcStr),
 }
 
 impl ConstantString {
@@ -105,6 +106,7 @@ impl ConstantString {
         match self {
             Self::Word(s) => s,
             Self::Atom(s) => s,
+            Self::RcStr(s) => s,
         }
     }
 
@@ -148,6 +150,12 @@ impl From<&'static str> for ConstantString {
 impl From<String> for ConstantString {
     fn from(v: String) -> Self {
         ConstantString::Atom(v.into())
+    }
+}
+
+impl From<RcStr> for ConstantString {
+    fn from(v: RcStr) -> Self {
+        ConstantString::RcStr(v)
     }
 }
 
