@@ -205,7 +205,7 @@ async fn handle_declared_export(
 
 #[turbo_tasks::value]
 struct AllExportNamesResult {
-    esm_exports: IndexMap<String, Vc<Box<dyn EcmascriptChunkPlaceable>>>,
+    esm_exports: IndexMap<RcStr, Vc<Box<dyn EcmascriptChunkPlaceable>>>,
     dynamic_exporting_modules: Vec<Vc<Box<dyn EcmascriptChunkPlaceable>>>,
 }
 
@@ -263,7 +263,7 @@ async fn get_all_export_names(
 
 #[turbo_tasks::value]
 pub struct ExpandStarResult {
-    pub star_exports: Vec<String>,
+    pub star_exports: Vec<RcStr>,
     pub has_dynamic_exports: bool,
 }
 
@@ -364,7 +364,7 @@ pub struct EsmExports {
 #[turbo_tasks::value(shared)]
 #[derive(Hash, Debug)]
 pub struct ExpandedExports {
-    pub exports: BTreeMap<String, EsmExport>,
+    pub exports: BTreeMap<RcStr, EsmExport>,
     /// Modules we couldn't analyse all exports of.
     pub dynamic_exports: Vec<Vc<Box<dyn EcmascriptChunkPlaceable>>>,
 }
@@ -373,7 +373,7 @@ pub struct ExpandedExports {
 impl EsmExports {
     #[turbo_tasks::function]
     pub async fn expand_exports(&self) -> Result<Vc<ExpandedExports>> {
-        let mut exports: BTreeMap<String, EsmExport> = self.exports.clone();
+        let mut exports: BTreeMap<RcStr, EsmExport> = self.exports.clone();
         let mut dynamic_exports = vec![];
 
         for esm_ref in self.star_exports.iter() {
@@ -391,7 +391,7 @@ impl EsmExports {
                 if !exports.contains_key(export) {
                     exports.insert(
                         export.clone(),
-                        EsmExport::ImportedBinding(Vc::upcast(*esm_ref), export.to_string(), false),
+                        EsmExport::ImportedBinding(Vc::upcast(*esm_ref), export.clone(), false),
                     );
                 }
             }
@@ -493,7 +493,7 @@ impl CodeGenerateable for EsmExports {
                 props.push(PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
                     key: PropName::Str(Str {
                         span: DUMMY_SP,
-                        value: exported.clone().into(),
+                        value: exported.as_str().into(),
                         raw: None,
                     }),
                     value: Box::new(expr),

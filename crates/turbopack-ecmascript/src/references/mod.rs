@@ -474,15 +474,13 @@ pub(crate) async fn analyse_ecmascript_module_internal(
                     let text = &comment.text;
                     if let Some(m) = REFERENCE_PATH.captures(text) {
                         let path = &m[1];
-                        analysis.add_reference(TsReferencePathAssetReference::new(
-                            origin,
-                            path.to_string(),
-                        ));
+                        analysis
+                            .add_reference(TsReferencePathAssetReference::new(origin, path.into()));
                     } else if let Some(m) = REFERENCE_TYPES.captures(text) {
                         let types = &m[1];
                         analysis.add_reference(TsReferenceTypeAssetReference::new(
                             origin,
-                            types.to_string(),
+                            types.into(),
                         ));
                     }
                 }
@@ -509,7 +507,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
     if let Some((_, path)) = paths_by_pos.into_iter().max_by_key(|&(pos, _)| pos) {
         let origin_path = origin.origin_path();
         if path.ends_with(".map") {
-            let source_map_origin = origin_path.parent().join(path.to_string());
+            let source_map_origin = origin_path.parent().join(path.into());
             let reference = SourceMapReference::new(origin_path, source_map_origin);
             analysis.add_reference(reference);
             let source_map = reference.generate_source_map();
@@ -520,7 +518,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
             source_map_from_comment = true;
         } else if path.starts_with("data:application/json;base64,") {
             let source_map_origin = origin_path;
-            let source_map = maybe_decode_data_url(path.to_string());
+            let source_map = maybe_decode_data_url(path.into());
             analysis.set_source_map(convert_to_turbopack_source_map(
                 source_map,
                 source_map_origin,
@@ -554,7 +552,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
     for (i, r) in eval_context.imports.references().enumerate() {
         let r = EsmAssetReference::new(
             origin,
-            Request::parse(Value::new(r.module_path.to_string().into())),
+            Request::parse(Value::new(RcStr::from(&*r.module_path).into())),
             r.issue_source,
             Value::new(r.annotations.clone()),
             match options.tree_shaking_mode {
@@ -563,7 +561,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
                         evaluation_references.push(i);
                         Some(ModulePart::evaluation())
                     }
-                    ImportedSymbol::Symbol(name) => Some(ModulePart::export(name.to_string())),
+                    ImportedSymbol::Symbol(name) => Some(ModulePart::export((&**name).into())),
                     ImportedSymbol::Part(part_id) => Some(ModulePart::internal(*part_id)),
                     ImportedSymbol::Exports => Some(ModulePart::exports()),
                     ImportedSymbol::Namespace => None,
@@ -573,7 +571,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
                         evaluation_references.push(i);
                         Some(ModulePart::evaluation())
                     }
-                    ImportedSymbol::Symbol(name) => Some(ModulePart::export(name.to_string())),
+                    ImportedSymbol::Symbol(name) => Some(ModulePart::export((&**name).into())),
                     ImportedSymbol::Part(part_id) => Some(ModulePart::internal(*part_id)),
                     ImportedSymbol::Exports => None,
                     ImportedSymbol::Namespace => None,

@@ -23,7 +23,7 @@ use crate::{
 #[derive(Hash, Debug)]
 pub struct EsmBinding {
     pub reference: Vc<EsmAssetReference>,
-    pub export: Option<String>,
+    pub export: Option<RcStr>,
     pub ast_path: Vc<AstPath>,
 }
 
