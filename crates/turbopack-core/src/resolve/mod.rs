@@ -430,7 +430,7 @@ pub enum ResolveResultItem {
 #[derive(Clone, Debug, Default, Hash, Ord, PartialOrd)]
 #[turbo_tasks::value(serialization = "auto_for_input")]
 pub struct RequestKey {
-    pub request: Option<String>,
+    pub request: Option<RcStr>,
     pub conditions: BTreeMap<String, bool>,
 }
 
@@ -456,7 +456,7 @@ impl Display for RequestKey {
 }
 
 impl RequestKey {
-    pub fn new(request: String) -> Self {
+    pub fn new(request: RcStr) -> Self {
         RequestKey {
             request: Some(request),
             ..Default::default()
@@ -1095,8 +1095,8 @@ async fn imports_field(lookup_path: Vc<FileSystemPath>) -> Result<Vc<ImportsFiel
 }
 
 #[turbo_tasks::function]
-pub fn package_json() -> Vc<Vec<String>> {
-    Vc::cell(vec!["package.json".to_string()])
+pub fn package_json() -> Vc<Vec<RcStr>> {
+    Vc::cell(vec!["package.json".into()])
 }
 
 #[turbo_tasks::value(shared)]

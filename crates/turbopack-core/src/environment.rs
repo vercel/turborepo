@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use swc_core::ecma::preset_env::{Version, Versions};
-use turbo_tasks::{Value, Vc};
+use turbo_tasks::{RcStr, Value, Vc};
 use turbo_tasks_env::ProcessEnv;
 
 use crate::target::CompileTarget;
@@ -149,18 +149,14 @@ impl Environment {
     }
 
     #[turbo_tasks::function]
-    pub async fn resolve_extensions(self: Vc<Self>) -> Result<Vc<Vec<String>>> {
+    pub async fn resolve_extensions(self: Vc<Self>) -> Result<Vc<Vec<RcStr>>> {
         let env = self.await?;
         Ok(match env.execution {
             ExecutionEnvironment::NodeJsBuildTime(..) | ExecutionEnvironment::NodeJsLambda(_) => {
-                Vc::cell(vec![
-                    ".js".to_string(),
-                    ".node".to_string(),
-                    ".json".to_string(),
-                ])
+                Vc::cell(vec![".js".into(), ".node".into(), ".json".into()])
             }
             ExecutionEnvironment::EdgeWorker(_) | ExecutionEnvironment::Browser(_) => {
-                Vc::<Vec<String>>::default()
+                Vc::<Vec<RcStr>>::default()
             }
             ExecutionEnvironment::Custom(_) => todo!(),
         })
@@ -181,15 +177,15 @@ impl Environment {
     }
 
     #[turbo_tasks::function]
-    pub async fn resolve_conditions(self: Vc<Self>) -> Result<Vc<Vec<String>>> {
+    pub async fn resolve_conditions(self: Vc<Self>) -> Result<Vc<Vec<RcStr>>> {
         let env = self.await?;
         Ok(match env.execution {
             ExecutionEnvironment::NodeJsBuildTime(..) | ExecutionEnvironment::NodeJsLambda(_) => {
-                Vc::cell(vec!["node".to_string()])
+                Vc::cell(vec!["node".into()])
             }
-            ExecutionEnvironment::Browser(_) => Vc::<Vec<String>>::default(),
+            ExecutionEnvironment::Browser(_) => Vc::<Vec<RcStr>>::default(),
             ExecutionEnvironment::EdgeWorker(_) => {
-                Vc::cell(vec!["edge-light".to_string(), "worker".to_string()])
+                Vc::cell(vec!["edge-light".into(), "worker".into()])
             }
             ExecutionEnvironment::Custom(_) => todo!(),
         })
