@@ -40,6 +40,12 @@ impl TaskInput for ConcreteTaskInput {
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct RcStr(Arc<String>);
 
+impl RcStr {
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
 impl Deref for RcStr {
     type Target = str;
 
