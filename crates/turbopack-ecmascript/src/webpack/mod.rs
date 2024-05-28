@@ -96,7 +96,7 @@ impl ModuleReference for WebpackChunkAssetReference {
                     Lit::Num(num) => format!("{num}"),
                     _ => todo!(),
                 };
-                let filename = format!("./chunks/{}.js", chunk_id);
+                let filename = format!("./chunks/{}.js", chunk_id).into();
                 let source = Vc::upcast(FileSource::new(context_path.join(filename)));
 
                 ModuleResolveResult::module(Vc::upcast(WebpackModuleAsset::new(

@@ -2490,7 +2490,7 @@ fn as_parent_path(ast_path: &AstNodePath<AstParentNodeRef<'_>>) -> Vec<AstParent
 fn for_each_ident_in_decl(decl: &Decl, f: &mut impl FnMut(RcStr)) {
     match decl {
         Decl::Class(ClassDecl { ident, .. }) | Decl::Fn(FnDecl { ident, .. }) => {
-            f(ident.sym.to_string());
+            f(ident.sym.as_str().into());
         }
         Decl::Var(var_decl) => {
             let decls = &*var_decl.decls;
