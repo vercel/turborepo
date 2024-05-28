@@ -45,7 +45,7 @@ export function transformer({
 
 function migrateConfig(config: TurboJsonSchema) {
   const mapGlob = (glob: string) => fixGlobPattern(glob);
-  for (const [_, taskDef] of Object.entries(config.pipeline)) {
+  for (const [_, taskDef] of Object.entries(config.tasks)) {
     taskDef.inputs = taskDef.inputs?.map(mapGlob);
     taskDef.outputs = taskDef.outputs?.map(mapGlob);
   }

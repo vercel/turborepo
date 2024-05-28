@@ -41,7 +41,7 @@ function migrateRootConfig(config: RootSchema) {
 }
 
 function migrateTaskConfigs(config: TurboJsonSchema) {
-  for (const [_, taskDef] of Object.entries(config.pipeline)) {
+  for (const [_, taskDef] of Object.entries(config.tasks)) {
     const { env, passThroughEnv } = taskDef;
 
     if (Array.isArray(env)) {

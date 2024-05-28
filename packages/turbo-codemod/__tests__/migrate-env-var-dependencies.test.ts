@@ -8,11 +8,11 @@ import {
   transformer,
 } from "../src/transforms/migrate-env-var-dependencies";
 
-const getTestTurboConfig = (override: Schema = { pipeline: {} }): Schema => {
+const getTestTurboConfig = (override: Schema = { tasks: {} }): Schema => {
   const config = {
     $schema: "./docs/public/schema.json",
     globalDependencies: ["$GLOBAL_ENV_KEY"],
-    pipeline: {
+    tasks: {
       test: {
         outputs: ["coverage/**/*"],
         dependsOn: ["^build"],
@@ -52,7 +52,7 @@ describe("migrate-env-var-dependencies", () => {
 
     it("finds env keys in legacy turbo.json - multiple pipeline keys", () => {
       const config = getTestTurboConfig({
-        pipeline: { test: { dependsOn: ["$MY_ENV"] } },
+        tasks: { test: { dependsOn: ["$MY_ENV"] } },
       });
       const { hasKeys, envVars } = hasLegacyEnvVarDependencies(config);
       expect(hasKeys).toEqual(true);
@@ -70,7 +70,7 @@ describe("migrate-env-var-dependencies", () => {
       // override to exclude keys
       const config = getTestTurboConfig({
         globalDependencies: [],
-        pipeline: { build: { dependsOn: [] } },
+        tasks: { build: { dependsOn: [] } },
       });
       const { hasKeys, envVars } = hasLegacyEnvVarDependencies(config);
       expect(hasKeys).toEqual(false);
@@ -79,7 +79,7 @@ describe("migrate-env-var-dependencies", () => {
 
     it("finds env keys in turbo.json - no global", () => {
       const { hasKeys, envVars } = hasLegacyEnvVarDependencies({
-        pipeline: { build: { dependsOn: ["$cool"] } },
+        tasks: { build: { dependsOn: ["$cool"] } },
       });
       expect(hasKeys).toEqual(true);
       expect(envVars).toMatchInlineSnapshot(`
@@ -93,7 +93,7 @@ describe("migrate-env-var-dependencies", () => {
   describe("migratePipeline - utility", () => {
     it("migrates pipeline with env var dependencies", () => {
       const config = getTestTurboConfig();
-      const { build } = config.pipeline;
+      const { build } = config.tasks;
       const pipeline = migratePipeline(build);
       expect(pipeline).toHaveProperty("env");
       expect(pipeline.env).toMatchInlineSnapshot(`
@@ -111,7 +111,7 @@ describe("migrate-env-var-dependencies", () => {
 
     it("migrates pipeline with no env var dependencies", () => {
       const config = getTestTurboConfig();
-      const { test } = config.pipeline;
+      const { test } = config.tasks;
       const pipeline = migratePipeline(test);
       expect(pipeline.env).toBeUndefined();
       expect(pipeline.dependsOn).toMatchInlineSnapshot(`
@@ -123,9 +123,9 @@ describe("migrate-env-var-dependencies", () => {
 
     it("migrates pipeline with existing env key", () => {
       const config = getTestTurboConfig({
-        pipeline: { test: { env: ["$MY_ENV"], dependsOn: ["^build"] } },
+        tasks: { test: { env: ["$MY_ENV"], dependsOn: ["^build"] } },
       });
-      const { test } = config.pipeline;
+      const { test } = config.tasks;
       const pipeline = migratePipeline(test);
       expect(pipeline).toHaveProperty("env");
       expect(pipeline.env).toMatchInlineSnapshot(`
@@ -142,11 +142,11 @@ describe("migrate-env-var-dependencies", () => {
 
     it("migrates pipeline with incomplete env key", () => {
       const config = getTestTurboConfig({
-        pipeline: {
+        tasks: {
           test: { env: ["$MY_ENV"], dependsOn: ["^build", "$SUPER_COOL"] },
         },
       });
-      const { test } = config.pipeline;
+      const { test } = config.tasks;
       const pipeline = migratePipeline(test);
       expect(pipeline).toHaveProperty("env");
       expect(pipeline.env).toMatchInlineSnapshot(`
@@ -164,11 +164,11 @@ describe("migrate-env-var-dependencies", () => {
 
     it("migrates pipeline with duplicate env keys", () => {
       const config = getTestTurboConfig({
-        pipeline: {
+        tasks: {
           test: { env: ["$MY_ENV"], dependsOn: ["^build", "$MY_ENV"] },
         },
       });
-      const { test } = config.pipeline;
+      const { test } = config.tasks;
       const pipeline = migratePipeline(test);
       expect(pipeline).toHaveProperty("env");
       expect(pipeline.env).toMatchInlineSnapshot(`
@@ -232,7 +232,7 @@ describe("migrate-env-var-dependencies", () => {
     it("migrates config with no env var dependencies", () => {
       const config = getTestTurboConfig({
         globalDependencies: [],
-        pipeline: {
+        tasks: {
           build: { dependsOn: ["^build"] },
         },
       });
@@ -272,7 +272,7 @@ describe("migrate-env-var-dependencies", () => {
 
     it("migrates config with inconsistent config", () => {
       const config = getTestTurboConfig({
-        pipeline: {
+        tasks: {
           test: { env: ["$MY_ENV"], dependsOn: ["^build", "$SUPER_COOL"] },
         },
       });
@@ -323,7 +323,7 @@ describe("migrate-env-var-dependencies", () => {
 
     it("migrates config with duplicate env keys", () => {
       const config = getTestTurboConfig({
-        pipeline: {
+        tasks: {
           test: { env: ["$MY_ENV"], dependsOn: ["^build", "$MY_ENV"] },
         },
       });
