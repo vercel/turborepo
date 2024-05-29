@@ -103,7 +103,7 @@ impl GetContentSourceContent for IssueContextGetContentSourceContent {
         let result = self
             .get_content
             .vary()
-            .issue_file_path(source.file_path, &source.description)
+            .issue_file_path(source.file_path, &*source.description)
             .await?;
         Ok(result)
     }
@@ -118,7 +118,7 @@ impl GetContentSourceContent for IssueContextGetContentSourceContent {
         let result = self
             .get_content
             .get(path, data)
-            .issue_file_path(source.file_path, &source.description)
+            .issue_file_path(source.file_path, &*source.description)
             .await?;
         Ok(result)
     }
