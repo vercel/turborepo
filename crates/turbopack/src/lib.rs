@@ -30,7 +30,7 @@ use ecmascript::{
 use graph::{aggregate, AggregatedGraph, AggregatedGraphNodeContent};
 use module_options::{ModuleOptions, ModuleOptionsContext, ModuleRuleEffect, ModuleType};
 use tracing::Instrument;
-use turbo_tasks::{Completion, Value, ValueToString, Vc};
+use turbo_tasks::{Completion, RcStr, Value, ValueToString, Vc};
 use turbo_tasks_fs::{glob::Glob, FileSystemPath};
 pub use turbopack_core::condition;
 use turbopack_core::{
@@ -756,7 +756,7 @@ impl AssetContext for ModuleAssetContext {
         let mut globs = Vec::with_capacity(pkgs.len());
 
         for pkg in pkgs {
-            globs.push(Glob::new(format!("**/node_modules/{{{}}}/**", pkg)));
+            globs.push(Glob::new(format!("**/node_modules/{{{}}}/**", pkg).into()));
         }
 
         Ok(Glob::alternatives(globs))
