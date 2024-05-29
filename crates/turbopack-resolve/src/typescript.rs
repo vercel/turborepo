@@ -461,7 +461,7 @@ async fn apply_typescript_types_options(
                 unspecified_conditions,
             } = into
             {
-                conditions.insert("types".to_string(), ConditionValue::Set);
+                conditions.insert("types".into(), ConditionValue::Set);
                 Some(ResolveIntoPackage::ExportsField {
                     conditions,
                     unspecified_conditions,
@@ -477,7 +477,7 @@ async fn apply_typescript_types_options(
             field: "types".into(),
         });
     for conditions in get_condition_maps(&mut resolve_options) {
-        conditions.insert("types".to_string(), ConditionValue::Set);
+        conditions.insert("types".into(), ConditionValue::Set);
     }
     Ok(resolve_options.into())
 }

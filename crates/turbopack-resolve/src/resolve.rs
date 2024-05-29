@@ -127,31 +127,31 @@ async fn base_resolve_options(
 
     let conditions = {
         let mut conditions: ResolutionConditions = [
-            ("import".to_string(), ConditionValue::Unknown),
-            ("require".to_string(), ConditionValue::Unknown),
+            ("import".into(), ConditionValue::Unknown),
+            ("require".into(), ConditionValue::Unknown),
         ]
         .into_iter()
         .collect();
         if opt.browser {
-            conditions.insert("browser".to_string(), ConditionValue::Set);
+            conditions.insert("browser".into(), ConditionValue::Set);
         }
         if opt.module {
-            conditions.insert("module".to_string(), ConditionValue::Set);
+            conditions.insert("module".into(), ConditionValue::Set);
         }
         if let Some(environment) = emulating {
             for condition in environment.resolve_conditions().await?.iter() {
-                conditions.insert(condition.to_string(), ConditionValue::Set);
+                conditions.insert(condition.clone(), ConditionValue::Set);
             }
         }
         for condition in opt.custom_conditions.iter() {
-            conditions.insert(condition.to_string(), ConditionValue::Set);
+            conditions.insert(condition.clone(), ConditionValue::Set);
         }
         // Infer some well-known conditions
         let dev = conditions.get("development").cloned();
         let prod = conditions.get("production").cloned();
         if prod.is_none() {
             conditions.insert(
-                "production".to_string(),
+                "production".into(),
                 if matches!(dev, Some(ConditionValue::Set)) {
                     ConditionValue::Unset
                 } else {
@@ -161,7 +161,7 @@ async fn base_resolve_options(
         }
         if dev.is_none() {
             conditions.insert(
-                "development".to_string(),
+                "development".into(),
                 if matches!(prod, Some(ConditionValue::Set)) {
                     ConditionValue::Unset
                 } else {
