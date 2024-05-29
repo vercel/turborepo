@@ -11,7 +11,7 @@ use indexmap::IndexSet;
 pub use node_entry::{NodeEntry, NodeRenderingEntries, NodeRenderingEntry};
 use turbo_tasks::{
     graph::{AdjacencyMap, GraphTraversal},
-    Completion, Completions, TryJoinIterExt, ValueToString, Vc,
+    Completion, Completions, RcStr, TryJoinIterExt, ValueToString, Vc,
 };
 use turbo_tasks_env::ProcessEnv;
 use turbo_tasks_fs::{to_sys_path, File, FileSystemPath};
@@ -278,7 +278,7 @@ pub async fn get_intermediate_asset(
 #[turbo_tasks::value(shared)]
 pub struct ResponseHeaders {
     pub status: u16,
-    pub headers: Vec<(String, String)>,
+    pub headers: Vec<(RcStr, RcStr)>,
 }
 
 pub fn register() {

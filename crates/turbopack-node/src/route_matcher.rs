@@ -5,13 +5,13 @@ use turbo_tasks::{RcStr, Vc};
 #[derive(Debug, Clone)]
 #[serde(untagged)]
 pub enum Param {
-    Single(String),
-    Multi(Vec<String>),
+    Single(RcStr),
+    Multi(Vec<RcStr>),
 }
 
 #[turbo_tasks::value(transparent)]
 #[derive(Debug, Clone)]
-pub struct Params(pub Option<IndexMap<String, Param>>);
+pub struct Params(pub Option<IndexMap<RcStr, Param>>);
 
 /// Extracts parameters from a URL path.
 pub trait RouteMatcherRef {

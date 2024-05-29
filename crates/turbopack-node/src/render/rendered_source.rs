@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use indexmap::IndexSet;
 use serde_json::Value as JsonValue;
-use turbo_tasks::{Value, Vc};
+use turbo_tasks::{RcStr, Value, Vc};
 use turbo_tasks_env::ProcessEnv;
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
@@ -208,7 +208,7 @@ impl GetContentSourceContent for NodeRenderContentSource {
                 original_url: original_url.clone(),
                 raw_query: raw_query.clone(),
                 raw_headers: raw_headers.clone(),
-                path: pathname.clone_value(),
+                path: pathname.as_str().into(),
                 data: Some(self.render_data.await?),
             }
             .cell(),

@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as JsonValue};
 use turbo_tasks::{
-    trace::TraceRawVcs, Completion, TaskInput, TryJoinIterExt, Value, ValueToString, Vc,
+    trace::TraceRawVcs, Completion, RcStr, TaskInput, TryJoinIterExt, Value, ValueToString, Vc,
 };
 use turbo_tasks_bytes::stream::SingleValue;
 use turbo_tasks_env::ProcessEnv;
@@ -56,17 +56,17 @@ use crate::{
 #[serde(rename_all = "camelCase")]
 #[turbo_tasks::value(serialization = "custom")]
 struct WebpackLoadersProcessingResult {
-    source: String,
-    map: Option<String>,
+    source: RcStr,
+    map: Option<RcStr>,
     #[turbo_tasks(trace_ignore)]
     assets: Option<Vec<EmittedAsset>>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, TraceRawVcs, Serialize, Deserialize)]
 pub struct WebpackLoaderItem {
-    pub loader: String,
+    pub loader: RcStr,
     #[turbo_tasks(trace_ignore)]
-    pub options: serde_json::Map<String, serde_json::Value>,
+    pub options: serde_json::Map<RcStr, serde_json::Value>,
 }
 
 #[derive(Debug, Clone)]
@@ -78,7 +78,7 @@ pub struct WebpackLoaders {
     evaluate_context: Vc<Box<dyn AssetContext>>,
     execution_context: Vc<ExecutionContext>,
     loaders: Vc<WebpackLoaderItems>,
-    rename_as: Option<String>,
+    rename_as: Option<RcStr>,
     resolve_options_context: Vc<ResolveOptionsContext>,
 }
 
@@ -309,14 +309,14 @@ pub struct LogInfo {
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum InfoMessage {
     FileDependency {
-        path: String,
+        path: RcStr,
     },
     BuildDependency {
-        path: String,
+        path: RcStr,
     },
     DirDependency {
-        path: String,
-        glob: String,
+        path: RcStr,
+        glob: RcStr,
     },
     EmittedError {
         severity: IssueSeverity,
@@ -346,15 +346,15 @@ pub enum RequestMessage {
     #[serde(rename_all = "camelCase")]
     Resolve {
         options: WebpackResolveOptions,
-        lookup_path: String,
-        request: String,
+        lookup_path: RcStr,
+        request: RcStr,
     },
 }
 
 #[derive(Serialize, Debug)]
 #[serde(untagged)]
 pub enum ResponseMessage {
-    Resolve { path: String },
+    Resolve { path: RcStr },
 }
 
 #[derive(Clone, PartialEq, Eq, TaskInput)]
