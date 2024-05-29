@@ -2643,8 +2643,8 @@ impl<'a> VisitAstPath for ModuleReferencesVisitor<'a> {
         ast_path: &mut AstNodePath<AstParentNodeRef<'r>>,
     ) {
         self.esm_exports.insert(
-            "default".to_string(),
-            EsmExport::LocalBinding(magic_identifier::mangle("default export"), false),
+            "default".into(),
+            EsmExport::LocalBinding(magic_identifier::mangle("default export").into(), false),
         );
         self.analysis
             .add_code_gen(EsmModuleItem::new(Vc::cell(as_parent_path(ast_path))));
@@ -2659,12 +2659,12 @@ impl<'a> VisitAstPath for ModuleReferencesVisitor<'a> {
         match &export.decl {
             DefaultDecl::Class(ClassExpr { ident, .. }) | DefaultDecl::Fn(FnExpr { ident, .. }) => {
                 self.esm_exports.insert(
-                    "default".to_string(),
+                    "default".into(),
                     EsmExport::LocalBinding(
                         ident
                             .as_ref()
-                            .map(|i| i.sym.to_string())
-                            .unwrap_or_else(|| magic_identifier::mangle("default export")),
+                            .map(|i| i.sym.as_str().into())
+                            .unwrap_or_else(|| magic_identifier::mangle("default export").into()),
                         false,
                     ),
                 );
