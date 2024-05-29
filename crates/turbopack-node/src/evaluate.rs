@@ -92,9 +92,7 @@ pub async fn get_evaluate_pool(
 ) -> Result<Vc<NodeJsPool>> {
     let runtime_asset = asset_context
         .process(
-            Vc::upcast(FileSource::new(embed_file_path(
-                "ipc/evaluate.ts".to_string(),
-            ))),
+            Vc::upcast(FileSource::new(embed_file_path("ipc/evaluate.ts".into()))),
             Value::new(ReferenceType::Internal(InnerAssets::empty())),
         )
         .module();
@@ -108,11 +106,11 @@ pub async fn get_evaluate_pool(
     } else {
         Cow::Owned(format!("{file_name}.js"))
     };
-    let path = chunking_context.output_root().join(file_name.to_string());
+    let path = chunking_context.output_root().join(file_name.into());
     let entry_module = asset_context
         .process(
             Vc::upcast(VirtualSource::new(
-                runtime_asset.ident().path().join("evaluate.js".to_string()),
+                runtime_asset.ident().path().join("evaluate.js".into()),
                 AssetContent::file(
                     File::from("import { run } from 'RUNTIME'; run(() => import('INNER'))").into(),
                 ),
@@ -137,7 +135,7 @@ pub async fn get_evaluate_pool(
     let runtime_entries = {
         let globals_module = asset_context
             .process(
-                Vc::upcast(FileSource::new(embed_file_path("globals.ts".to_string()))),
+                Vc::upcast(FileSource::new(embed_file_path("globals.ts".into()))),
                 Value::new(ReferenceType::Internal(InnerAssets::empty())),
             )
             .module();

@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use turbo_tasks::Vc;
+use turbo_tasks::{RcStr, Vc};
 use turbo_tasks_fs::embed_file;
 
 #[turbo_tasks::function]
@@ -27,7 +27,7 @@ pub(super) async fn error_html_body(
     Ok(Vc::cell(body.to_string()))
 }
 
-async fn create_html(status_code: u16, title: String, details: String) -> Result<String> {
+async fn create_html(status_code: u16, title: RcStr, details: RcStr) -> Result<String> {
     let file_content = embed_file!("src/render/error.html").await?;
     let file = file_content
         .as_content()
