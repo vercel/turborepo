@@ -74,7 +74,7 @@ pub async fn resolve_source_request(
                         // do the rewrite
                         match &rewrite.ty {
                             RewriteType::Location { path_and_query } => {
-                                let new_uri = Uri::try_from(path_and_query)?;
+                                let new_uri = Uri::try_from(path_and_query.as_str())?;
                                 let new_asset_path =
                                     urlencoding::decode(&new_uri.path()[1..])?.into_owned();
                                 request_overwrites.uri = new_uri;
@@ -85,7 +85,7 @@ pub async fn resolve_source_request(
                                 source,
                                 path_and_query,
                             } => {
-                                let new_uri = Uri::try_from(path_and_query)?;
+                                let new_uri = Uri::try_from(path_and_query.as_str())?;
                                 let new_asset_path =
                                     urlencoding::decode(&new_uri.path()[1..])?.into_owned();
                                 request_overwrites.uri = new_uri;

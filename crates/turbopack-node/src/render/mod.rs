@@ -54,8 +54,8 @@ enum RenderStaticIncomingMessage {
     #[serde(rename_all = "camelCase")]
     Response {
         status_code: u16,
-        headers: Vec<(String, String)>,
-        body: String,
+        headers: Vec<(RcStr, RcStr)>,
+        body: RcStr,
     },
     Headers {
         data: ResponseHeaders,
@@ -65,7 +65,7 @@ enum RenderStaticIncomingMessage {
     },
     BodyEnd,
     Rewrite {
-        path: String,
+        path: RcStr,
     },
     Error(StructuredError),
 }
