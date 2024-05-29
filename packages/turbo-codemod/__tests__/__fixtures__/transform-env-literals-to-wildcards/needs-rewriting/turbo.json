@@ -1,25 +1,11 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalEnv": [
-    "NO!",
-    "!!!",
-    "!!!"
-  ],
-  "globalPassThroughEnv": [
-    "DOES",
-    "**BOLD**",
-    "WORK"
-  ],
+  "globalEnv": ["NO!", "!!!", "!!!"],
+  "globalPassThroughEnv": ["DOES", "**BOLD**", "WORK"],
   "tasks": {
     "build": {
-      "env": [
-        "PLAIN",
-        "SMALL_PRINT*"
-      ],
-      "passThroughEnv": [
-        "PASSWORD",
-        "*****"
-      ]
+      "env": ["PLAIN", "SMALL_PRINT*"],
+      "passThroughEnv": ["PASSWORD", "*****"]
     }
   }
 }

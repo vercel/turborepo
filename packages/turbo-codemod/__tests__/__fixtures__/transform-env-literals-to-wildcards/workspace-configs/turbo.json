@@ -1,21 +1,11 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalEnv": [
-    "!*!*"
-  ],
-  "globalPassThroughEnv": [
-    "!*!*"
-  ],
+  "globalEnv": ["!*!*"],
+  "globalPassThroughEnv": ["!*!*"],
   "tasks": {
     "build": {
-      "env": [
-        "NO_ROOT_ENV",
-        "!*!*ROOT"
-      ],
-      "passThroughEnv": [
-        "NO_ROOT_PASSTHROUGH_ENV",
-        "!*!*ROOT"
-      ]
+      "env": ["NO_ROOT_ENV", "!*!*ROOT"],
+      "passThroughEnv": ["NO_ROOT_PASSTHROUGH_ENV", "!*!*ROOT"]
     }
   }
 }

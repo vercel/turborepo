@@ -1,13 +1,9 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "experimentalGlobalPassThroughEnv": [
-    "GLOBAL_PASSTHROUGH"
-  ],
+  "experimentalGlobalPassThroughEnv": ["GLOBAL_PASSTHROUGH"],
   "tasks": {
     "build": {
-      "experimentalPassThroughEnv": [
-        "TASK_PASSTHROUGH"
-      ]
+      "experimentalPassThroughEnv": ["TASK_PASSTHROUGH"]
     }
   }
 }
