@@ -191,7 +191,7 @@ impl ModuleCssAsset {
                                 original: name.to_string(),
                                 from: CssModuleComposeReference::new(
                                     Vc::upcast(self),
-                                    Request::parse(Value::new(specifier.to_string().into())),
+                                    Request::parse(Value::new(specifier.clone().into())),
                                 ),
                             }
                         }

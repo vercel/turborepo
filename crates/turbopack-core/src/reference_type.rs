@@ -55,9 +55,9 @@ pub enum EcmaScriptModulesReferenceSubType {
 #[derive(Debug)]
 #[turbo_tasks::value(shared)]
 pub struct ImportAttributes {
-    pub layer: Option<String>,
-    pub supports: Option<String>,
-    pub media: Option<String>,
+    pub layer: Option<RcStr>,
+    pub supports: Option<RcStr>,
+    pub media: Option<RcStr>,
 }
 
 /// The accumulated list of conditions that should be applied to this module
@@ -95,7 +95,7 @@ impl ImportContext {
             let mut layers = this.layers.clone();
             if let Some(attr_layer) = attr_layer {
                 if !layers.contains(&attr_layer) {
-                    layers.push(attr_layer.into());
+                    layers.push(attr_layer);
                 }
             }
             layers
@@ -105,7 +105,7 @@ impl ImportContext {
             let mut media = this.media.clone();
             if let Some(attr_media) = attr_media {
                 if !media.contains(&attr_media) {
-                    media.push(attr_media.into());
+                    media.push(attr_media);
                 }
             }
             media
@@ -115,7 +115,7 @@ impl ImportContext {
             let mut supports = this.supports.clone();
             if let Some(attr_supports) = attr_supports {
                 if !supports.contains(&attr_supports) {
-                    supports.push(attr_supports.into());
+                    supports.push(attr_supports);
                 }
             }
             supports

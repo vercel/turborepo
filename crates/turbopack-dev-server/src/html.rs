@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use mime_guess::mime::TEXT_HTML_UTF_8;
-use turbo_tasks::{ReadRef, TryJoinIterExt, Value, Vc};
+use turbo_tasks::{RcStr, ReadRef, TryJoinIterExt, Value, Vc};
 use turbo_tasks_fs::{File, FileSystemPath};
 use turbo_tasks_hash::{encode_hex, Xxh3Hash64Hasher};
 use turbopack_core::{
@@ -31,7 +31,7 @@ type DevHtmlEntry = (
 pub struct DevHtmlAsset {
     path: Vc<FileSystemPath>,
     entries: Vec<DevHtmlEntry>,
-    body: Option<String>,
+    body: Option<RcStr>,
 }
 
 #[turbo_tasks::function]
