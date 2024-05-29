@@ -1,5 +1,5 @@
 use anyhow::Result;
-use turbo_tasks::{Completion, State, Value, Vc};
+use turbo_tasks::{Completion, RcStr, State, Value, Vc};
 use turbopack_core::introspect::{Introspectable, IntrospectableChildren};
 
 use super::{

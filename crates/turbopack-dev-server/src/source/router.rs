@@ -1,7 +1,7 @@
 use std::iter::once;
 
 use anyhow::Result;
-use turbo_tasks::{TryJoinIterExt, Value, Vc};
+use turbo_tasks::{RcStr, TryJoinIterExt, Value, Vc};
 use turbopack_core::introspect::{Introspectable, IntrospectableChildren};
 
 use super::{
@@ -18,7 +18,7 @@ use crate::source::{route_tree::MapGetContentSourceContent, ContentSources};
 #[turbo_tasks::value(shared)]
 pub struct PrefixedRouterContentSource {
     pub prefix: Vc<String>,
-    pub routes: Vec<(String, Vc<Box<dyn ContentSource>>)>,
+    pub routes: Vec<(RcStr, Vc<Box<dyn ContentSource>>)>,
     pub fallback: Vc<Box<dyn ContentSource>>,
 }
 
