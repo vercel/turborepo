@@ -19,6 +19,7 @@ impl Git {
         let mut git = Command::new(self.bin.as_std_path())
             .args([
                 "status",
+                "--no-optional-locks",
                 "--untracked-files",
                 "--no-renames",
                 "-z",

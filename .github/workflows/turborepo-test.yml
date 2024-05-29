@@ -138,6 +138,7 @@ jobs:
         with:
           windows: ${{ matrix.os.runner == 'windows-latest' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node-version: "18.20.2"
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
@@ -147,7 +148,7 @@ jobs:
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
           fi
-          turbo run build --filter=cli --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+          TURBO_API= turbo run build --filter=cli --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
         shell: bash
         env:
           SCCACHE_BUCKET: turborepo-sccache
@@ -194,6 +195,7 @@ jobs:
         with:
           windows: ${{ matrix.os.runner == 'windows-latest' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node-version: "18.20.2"
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
@@ -236,6 +238,7 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node-version: "18.20.2"
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
@@ -305,6 +308,7 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node-version: "18.20.2"
 
       - name: Run cargo check
         run: |
@@ -371,6 +375,7 @@ jobs:
         with:
           windows: ${{ matrix.os.runner == 'windows-latest' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node-version: "18.20.2"
 
       - name: Run tests
         timeout-minutes: 120
