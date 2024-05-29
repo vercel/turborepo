@@ -11,7 +11,10 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_env::{get_global_hashable_env_vars, DetailedMap, EnvironmentVariableMap};
 use turborepo_lockfiles::Lockfile;
-use turborepo_repository::package_manager::{self, PackageManager};
+use turborepo_repository::{
+    package_graph::PackageInfo,
+    package_manager::{self, PackageManager},
+};
 use turborepo_scm::SCM;
 
 use crate::{
@@ -41,9 +44,10 @@ pub enum Error {
 pub struct GlobalHashableInputs<'a> {
     pub global_cache_key: &'static str,
     pub global_file_hash_map: HashMap<RelativeUnixPathBuf, String>,
-    // These are `None` in single package mode
+    // This is `None` in single package mode
     pub root_external_dependencies_hash: Option<&'a str>,
     pub root_internal_dependencies_hash: Option<&'a str>,
+    pub engines: Option<HashMap<&'a str, &'a str>>,
     pub env: &'a [String],
     // Only Option to allow #[derive(Default)]
     pub resolved_env_vars: Option<DetailedMap>,
@@ -57,6 +61,7 @@ pub struct GlobalHashableInputs<'a> {
 pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     root_external_dependencies_hash: Option<&'a str>,
     root_internal_dependencies_hash: Option<&'a str>,
+    root_package: &'a PackageInfo,
     root_path: &AbsoluteSystemPath,
     package_manager: &PackageManager,
     lockfile: Option<&L>,
@@ -68,6 +73,8 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     framework_inference: bool,
     hasher: &SCM,
 ) -> Result<GlobalHashableInputs<'a>, Error> {
+    let engines = root_package.package_json.engines();
+
     let global_hashable_env_vars =
         get_global_hashable_env_vars(env_at_execution_start, global_env)?;
 
@@ -104,6 +111,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
         global_file_hash_map,
         root_external_dependencies_hash,
         root_internal_dependencies_hash,
+        engines,
         env: global_env,
         resolved_env_vars: Some(global_hashable_env_vars),
         pass_through_env: global_pass_through_env,
@@ -180,6 +188,7 @@ impl<'a> GlobalHashableInputs<'a> {
             global_file_hash_map: &self.global_file_hash_map,
             root_external_dependencies_hash: self.root_external_dependencies_hash,
             root_internal_dependencies_hash: self.root_internal_dependencies_hash,
+            engines: self.engines.clone().unwrap_or_default(),
             env: self.env,
             resolved_env_vars: self
                 .resolved_env_vars
@@ -200,7 +209,7 @@ mod tests {
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_env::EnvironmentVariableMap;
     use turborepo_lockfiles::Lockfile;
-    use turborepo_repository::package_manager::PackageManager;
+    use turborepo_repository::{package_graph::PackageInfo, package_manager::PackageManager};
     use turborepo_scm::SCM;
 
     use super::get_global_hash_inputs;
@@ -222,6 +231,7 @@ mod tests {
             .unwrap();
 
         let env_var_map = EnvironmentVariableMap::default();
+        let package_info = PackageInfo::default();
         let lockfile: Option<&dyn Lockfile> = None;
         #[cfg(windows)]
         let file_deps = ["C:\\some\\path".to_string()];
@@ -230,6 +240,7 @@ mod tests {
         let result = get_global_hash_inputs(
             None,
             None,
+            &package_info,
             &root,
             &PackageManager::Pnpm,
             lockfile,

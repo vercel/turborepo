@@ -282,6 +282,7 @@ impl Run {
             get_global_hash_inputs(
                 root_external_dependencies_hash.as_deref(),
                 root_internal_dependencies_hash.as_deref(),
+                root_workspace,
                 &self.repo_root,
                 self.pkg_dep_graph.package_manager(),
                 self.pkg_dep_graph.lockfile(),

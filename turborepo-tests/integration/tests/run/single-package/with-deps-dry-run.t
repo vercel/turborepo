@@ -13,19 +13,20 @@ Check
     Inferred Global Env Vars Values       = 
     Global Passed Through Env Vars        = 
     Global Passed Through Env Vars Values = 
+    Engines Values                        = 
   
   Tasks to Run
   build
     Task                           = build\s* (re)
-    Hash                           = 81a933c332d3f388
-    Cached (Local)                 = false
-    Cached (Remote)                = false
-    Command                        = echo building > foo.txt
-    Outputs                        = foo.txt
-    Log File                       = .turbo(\/|\\)turbo-build.log (re)
-    Dependencies                   = 
-    Dependents                     = test
-    Inputs Files Considered        = 5
+    Hash                           = 7ece7b62aad25615
+    Cached \(Local\)                 = false\s* (re)
+    Cached \(Remote\)                = false\s* (re)
+    Command                        = echo building > foo.txt\s* (re)
+    Outputs                        = foo.txt\s* (re)
+    Log File                       = .turbo(\/|\\)turbo-build.log\s* (re)
+    Dependencies                   =\s* (re)
+    Dependents                     = test\s* (re)
+    Inputs Files Considered        = 5\s* (re)
     Env Vars                       = 
     Env Vars Values                = 
     Inferred Env Vars Values       = 
@@ -35,15 +36,15 @@ Check
     Framework                      = 
   test
     Task                           = test\s* (re)
-    Hash                           = 785d8ef1115bde3b
-    Cached (Local)                 = false
-    Cached (Remote)                = false
-    Command                        = cat foo.txt
-    Outputs                        = 
-    Log File                       = .turbo(\/|\\)turbo-test.log (re)
-    Dependencies                   = build
-    Dependents                     = 
-    Inputs Files Considered        = 5
+    Hash                           = cb5839f7284aa5f3
+    Cached \(Local\)                 = false\s* (re)
+    Cached \(Remote\)                = false\s* (re)
+    Command                        = cat foo.txt\s* (re)
+    Outputs                        =\s* (re)
+    Log File                       = .turbo(\/|\\)turbo-test.log\s* (re)
+    Dependencies                   = build\s* (re)
+    Dependents                     =\s* (re)
+    Inputs Files Considered        = 5\s* (re)
     Env Vars                       = 
     Env Vars Values                = 
     Inferred Env Vars Values       = 

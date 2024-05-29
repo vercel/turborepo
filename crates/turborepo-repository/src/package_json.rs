@@ -1,4 +1,7 @@
-use std::{collections::BTreeMap, str::FromStr};
+use std::{
+    collections::{BTreeMap, HashMap},
+    str::FromStr,
+};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -78,6 +81,19 @@ impl PackageJson {
             .get(script_name)
             .filter(|command| !command.is_empty())
             .map(|command| command.as_str())
+    }
+
+    pub fn engines(&self) -> Option<HashMap<&str, &str>> {
+        let engines = self.other.get("engines")?.as_object()?;
+        Some(
+            engines
+                .iter()
+                .filter_map(|(key, value)| {
+                    let value = value.as_str()?;
+                    Some((key.as_str(), value))
+                })
+                .collect(),
+        )
     }
 }
 
