@@ -26,7 +26,7 @@ impl ProcessEnv for EmbeddableProcessEnv {
 
         let encoded = prior
             .iter()
-            .map(|(k, v)| (k.clone(), StringifyJs(v).to_string()))
+            .map(|(k, v)| (k.clone(), StringifyJs(v).to_string().into()))
             .collect();
 
         Ok(Vc::cell(encoded))

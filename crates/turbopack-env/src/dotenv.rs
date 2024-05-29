@@ -18,7 +18,7 @@ pub async fn load_env(project_path: Vc<FileSystemPath>) -> Result<Vc<Box<dyn Pro
     let env = Vc::upcast(CustomProcessEnv::new(
         env,
         Vc::cell(indexmap! {
-            "NODE_ENV".to_string() => node_env.to_string(),
+            "NODE_ENV".into() => node_env.into(),
         }),
     ));
 
