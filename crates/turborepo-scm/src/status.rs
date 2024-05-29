@@ -19,13 +19,13 @@ impl Git {
         let mut git = Command::new(self.bin.as_std_path())
             .args([
                 "status",
-                "--no-optional-locks",
                 "--untracked-files",
                 "--no-renames",
                 "-z",
                 "--",
                 ".",
             ])
+            .env("GIT_OPTIONAL_LOCKS", "0")
             .current_dir(root_path)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
