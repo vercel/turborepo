@@ -57,7 +57,9 @@ pub trait ProcessEnv {
 }
 
 pub fn sorted_env_vars() -> IndexMap<RcStr, RcStr> {
-    let mut vars = env::vars().collect::<IndexMap<_, _>>();
+    let mut vars = env::vars()
+        .map(|(k, v)| (k.into(), v.into()))
+        .collect::<IndexMap<_, _>>();
     vars.sort_keys();
     vars
 }
@@ -78,7 +80,7 @@ async fn to_uppercase_map(map: Vc<EnvMap>) -> Result<Vc<EnvMap>> {
     let map = &*map.await?;
     let mut new = IndexMap::with_capacity(map.len());
     for (k, v) in map {
-        new.insert(k.to_uppercase(), v.clone());
+        new.insert(k.to_uppercase().into(), v.clone());
     }
     Ok(Vc::cell(new))
 }
