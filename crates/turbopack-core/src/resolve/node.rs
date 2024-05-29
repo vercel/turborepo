@@ -23,7 +23,7 @@ pub fn node_cjs_resolve_options(root: Vc<FileSystemPath>) -> Vc<ResolveOptions> 
                 unspecified_conditions: ConditionValue::Unset,
             },
             ResolveIntoPackage::MainField {
-                field: "main".to_string(),
+                field: "main".into(),
             },
         ],
         in_package: vec![ResolveInPackage::ImportsField {
@@ -54,7 +54,7 @@ pub fn node_esm_resolve_options(root: Vc<FileSystemPath>) -> Vc<ResolveOptions> 
                 unspecified_conditions: ConditionValue::Unset,
             },
             ResolveIntoPackage::MainField {
-                field: "main".to_string(),
+                field: "main".into(),
             },
         ],
         in_package: vec![ResolveInPackage::ImportsField {

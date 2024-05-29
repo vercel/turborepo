@@ -68,14 +68,14 @@ pub enum ResolveIntoPackage {
     /// [main]: https://nodejs.org/api/packages.html#main
     /// [module]: https://esbuild.github.io/api/#main-fields
     /// [browser]: https://esbuild.github.io/api/#main-fields
-    MainField { field: String },
+    MainField { field: RcStr },
 }
 
 // The different ways to resolve a request withing a package
 #[derive(TraceRawVcs, Hash, PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
 pub enum ResolveInPackage {
     /// Using a alias field which allows to map requests
-    AliasField(String),
+    AliasField(RcStr),
     /// Using the [imports] field.
     ///
     /// [imports]: https://nodejs.org/api/packages.html#imports
