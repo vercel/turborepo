@@ -382,8 +382,10 @@ jobs:
         run: |
           cargo groups test turborepo-libraries
 
-  cleanup:
-    name: Cleanup
+  summary:
+    name: Turborepo Test Summary
+    runs-on: ubuntu-latest
+    if: always()
     needs:
       - determine_jobs
       - build_turborepo
@@ -393,6 +395,51 @@ jobs:
       - rust_check
       - rust_clippy
       - rust_test
+    steps:
+      - name: Compute info
+        id: info
+        if: always()
+        run: |
+          cancelled=false
+          failure=false
+
+          subjob () {
+            local result=$1
+            if [ "$result" = "cancelled" ]; then
+              cancelled=true
+            elif [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
+              failure=true
+            fi
+          }
+
+          subjob ${{needs.determine_jobs.result}}
+          subjob ${{needs.build_turborepo.result}}
+          subjob ${{needs.integration.result}}
+          subjob ${{needs.examples.result}}
+          subjob ${{needs.rust_lint.result}}
+          subjob ${{needs.rust_check.result}}
+          subjob ${{needs.rust_clippy.result}}
+          subjob ${{needs.rust_test.result}}
+
+          if [ "$cancelled" = "true" ]; then
+              echo "cancelled=true" >> $GITHUB_OUTPUT
+          elif [ "$failure" = "true" ]; then
+            echo "failure=true" >> $GITHUB_OUTPUT
+          else
+            echo "success=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Failed
+        if: steps.info.outputs.failure == 'true'
+        run: exit 1
+
+      - name: Succeeded
+        if: steps.info.outputs.success == 'true'
+        run: echo Ok
+
+  cleanup:
+    name: Cleanup
+    needs: summary
     if: always()
     uses: ./.github/workflows/pr-clean-caches.yml
     secrets: inherit
