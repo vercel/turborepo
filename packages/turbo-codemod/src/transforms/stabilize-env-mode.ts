@@ -1,8 +1,11 @@
 import path from "node:path";
 import { readJsonSync, existsSync } from "fs-extra";
 import { type PackageJson, getTurboConfigs } from "@turbo/utils";
-import type { Schema as TurboJsonSchema } from "@turbo/types";
-import type { RootSchema } from "@turbo/types/src/types/config";
+import type {
+  EnvWildcard,
+  RootSchema,
+  WorkspaceSchema,
+} from "@turbo/types/src/types/config";
 import type { TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
@@ -13,7 +16,17 @@ const DESCRIPTION =
   "Rewrite experimentalPassThroughEnv and experimentalGlobalPassThroughEnv";
 const INTRODUCED_IN = "1.10.0";
 
-function migrateRootConfig(config: RootSchema) {
+interface LegacyRootSchema extends RootSchema {
+  experimentalGlobalPassThroughEnv?: null | Array<EnvWildcard>;
+}
+
+interface LegacyWorkspaceSchema extends WorkspaceSchema {
+  experimentalGlobalPassThroughEnv?: null | Array<EnvWildcard>;
+}
+
+type LegacySchema = LegacyRootSchema | LegacyWorkspaceSchema;
+
+function migrateRootConfig(config: LegacyRootSchema) {
   const oldConfig = config.experimentalGlobalPassThroughEnv;
   const newConfig = config.globalPassThroughEnv;
   // Set to an empty array is meaningful, so we have undefined as an option here.
@@ -45,7 +58,7 @@ function migrateRootConfig(config: RootSchema) {
   return migrateTaskConfigs(config);
 }
 
-function migrateTaskConfigs(config: TurboJsonSchema) {
+function migrateTaskConfigs(config: LegacySchema) {
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
     const oldConfig = taskDef.experimentalPassThroughEnv;
     const newConfig = taskDef.passThroughEnv;
@@ -119,7 +132,7 @@ export function transformer({
     });
   }
 
-  const turboJson = readJsonSync(turboConfigPath) as TurboJsonSchema;
+  const turboJson = readJsonSync(turboConfigPath) as LegacySchema;
   runner.modifyFile({
     filePath: turboConfigPath,
     after: migrateRootConfig(turboJson),
