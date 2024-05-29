@@ -132,7 +132,7 @@ impl Introspectable for StaticAssetsContentSource {
                     DirectoryEntry::Other(_) => todo!("what's DirectoryContent::Other?"),
                     DirectoryEntry::Error => todo!(),
                 };
-                (Vc::cell(name.clone()), child)
+                (Vc::cell(name.to_string()), child)
             })
             .collect();
         Ok(Vc::cell(children))

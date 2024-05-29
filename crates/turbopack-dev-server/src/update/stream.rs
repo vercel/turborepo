@@ -281,7 +281,7 @@ pub enum UpdateStreamItem {
 #[turbo_tasks::value(serialization = "none")]
 struct FatalStreamIssue {
     description: Vc<StyledString>,
-    resource: String,
+    resource: RcStr,
 }
 
 #[turbo_tasks::value_impl]

@@ -292,10 +292,10 @@ impl RouteTree {
             if let Some(segment) = segments.next() {
                 let remainder = segments.remainder().unwrap_or("");
                 if let Some(tree) = static_segments.get(segment) {
-                    results.extend(tree.get(remainder.to_string()).await?.iter().copied());
+                    results.extend(tree.get(remainder.into()).await?.iter().copied());
                 }
                 for tree in dynamic_segments.iter() {
-                    results.extend(tree.get(remainder.to_string()).await?.iter().copied());
+                    results.extend(tree.get(remainder.into()).await?.iter().copied());
                 }
             } else {
                 results.extend(sources.iter().copied());

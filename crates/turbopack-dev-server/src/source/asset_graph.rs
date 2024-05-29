@@ -177,13 +177,13 @@ async fn expand(
     }
     for (sub_path, asset) in assets {
         let asset = asset.resolve().await?;
-        if sub_path == "index.html" {
-            map.insert("".to_string(), asset);
+        if &*sub_path == "index.html" {
+            map.insert("".into(), asset);
         } else if let Some(p) = sub_path.strip_suffix("/index.html") {
-            map.insert(p.to_string(), asset);
+            map.insert(p.into(), asset);
             map.insert(format!("{p}/"), asset);
         } else if let Some(p) = sub_path.strip_suffix(".html") {
-            map.insert(p.to_string(), asset);
+            map.insert(p.into(), asset);
         }
         map.insert(sub_path, asset);
     }
@@ -193,16 +193,16 @@ async fn expand(
 fn get_sub_paths(sub_path: &str) -> ([RcStr; 3], usize) {
     let sub_paths_buffer: [RcStr; 3];
     let n = if sub_path == "index.html" {
-        sub_paths_buffer = ["".to_string(), sub_path.to_string(), String::new()];
+        sub_paths_buffer = ["".into(), sub_path.into(), String::new()];
         2
     } else if let Some(p) = sub_path.strip_suffix("/index.html") {
-        sub_paths_buffer = [p.to_string(), format!("{p}/"), sub_path.to_string()];
+        sub_paths_buffer = [p.into(), format!("{p}/"), sub_path.into()];
         3
     } else if let Some(p) = sub_path.strip_suffix(".html") {
-        sub_paths_buffer = [p.to_string(), sub_path.to_string(), String::new()];
+        sub_paths_buffer = [p.into(), sub_path.into(), String::new()];
         2
     } else {
-        sub_paths_buffer = [sub_path.to_string(), String::new(), String::new()];
+        sub_paths_buffer = [sub_path.into(), String::new(), String::new()];
         1
     };
     (sub_paths_buffer, n)
@@ -236,7 +236,7 @@ impl ContentSource for AssetGraphContentSource {
 #[turbo_tasks::value]
 struct AssetGraphGetContentSourceContent {
     source: Vc<AssetGraphContentSource>,
-    path: String,
+    path: RcStr,
     asset: Vc<Box<dyn OutputAsset>>,
 }
 
@@ -279,7 +279,7 @@ impl ContentSourceSideEffect for AssetGraphGetContentSourceContent {
         let source = self.source.await?;
 
         if let Some(expanded) = &source.expanded {
-            expanded.update_conditionally(|expanded| expanded.insert(self.path.to_string()));
+            expanded.update_conditionally(|expanded| expanded.insert(self.path.clone()));
         }
         Ok(Completion::new())
     }
