@@ -23,7 +23,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
       $schema: "https://turbo.build/schema.json",
       globalEnv: [],
       globalPassThroughEnv: [],
-      pipeline: {
+      tasks: {
         build: {
           env: [],
           passThroughEnv: [],
@@ -57,7 +57,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
       $schema: "https://turbo.build/schema.json",
-      pipeline: {
+      tasks: {
         build: {},
       },
     });
@@ -90,7 +90,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
       $schema: "https://turbo.build/schema.json",
       globalEnv: ["NO!", "\\!!!", "\\!!!"],
       globalPassThroughEnv: ["DOES", "\\*\\*BOLD\\*\\*", "WORK"],
-      pipeline: {
+      tasks: {
         build: {
           env: ["PLAIN", "SMALL_PRINT\\*"],
           passThroughEnv: ["PASSWORD", "\\*\\*\\*\\*\\*"],
@@ -126,7 +126,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
       $schema: "https://turbo.build/schema.json",
       globalEnv: ["\\!\\*!\\*"],
       globalPassThroughEnv: ["\\!\\*!\\*"],
-      pipeline: {
+      tasks: {
         build: {
           env: ["NO_ROOT_ENV", "\\!\\*!\\*ROOT"],
           passThroughEnv: ["NO_ROOT_PASSTHROUGH_ENV", "\\!\\*!\\*ROOT"],
@@ -136,7 +136,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
 
     expect(JSON.parse(read("apps/docs/turbo.json") || "{}")).toStrictEqual({
       extends: ["//"],
-      pipeline: {
+      tasks: {
         build: {
           env: ["NO_DOCS_ENV", "\\!\\*!\\*DOCS"],
           passThroughEnv: ["NO_DOCS_PASSTHROUGH_ENV", "\\!\\*!\\*DOCS"],
@@ -146,7 +146,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
 
     expect(JSON.parse(read("apps/website/turbo.json") || "{}")).toStrictEqual({
       extends: ["//"],
-      pipeline: {
+      tasks: {
         build: {
           env: ["NO_WEBSITE_ENV", "\\!\\*!\\*WEBSITE"],
           passThroughEnv: ["NO_WEBSITE_PASSTHROUGH_ENV", "\\!\\*!\\*WEBSITE"],

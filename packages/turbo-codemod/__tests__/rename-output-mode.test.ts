@@ -21,7 +21,7 @@ describe("rename-output-mode", () => {
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
       $schema: "https://turbo.build/schema.json",
-      pipeline: {
+      tasks: {
         "build-one": {
           outputLogs: "hash-only",
         },
@@ -58,7 +58,7 @@ describe("rename-output-mode", () => {
 
     expect(readJson("turbo.json") || "{}").toStrictEqual({
       $schema: "https://turbo.build/schema.json",
-      pipeline: {
+      tasks: {
         "build-one": {
           outputLogs: "new-only",
         },
@@ -72,7 +72,7 @@ describe("rename-output-mode", () => {
     expect(readJson("apps/docs/turbo.json") || "{}").toStrictEqual({
       $schema: "https://turbo.build/schema.json",
       extends: ["//"],
-      pipeline: {
+      tasks: {
         build: {},
       },
     });
@@ -80,7 +80,7 @@ describe("rename-output-mode", () => {
     expect(readJson("apps/web/turbo.json") || "{}").toStrictEqual({
       $schema: "https://turbo.build/schema.json",
       extends: ["//"],
-      pipeline: {
+      tasks: {
         build: {
           outputLogs: "none",
         },
@@ -90,7 +90,7 @@ describe("rename-output-mode", () => {
     expect(readJson("packages/ui/turbo.json") || "{}").toStrictEqual({
       $schema: "https://turbo.build/schema.json",
       extends: ["//"],
-      pipeline: {
+      tasks: {
         "build-three": {
           outputLogs: "new-only",
         },
@@ -167,7 +167,7 @@ describe("rename-output-mode", () => {
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
       $schema: "https://turbo.build/schema.json",
-      pipeline: {
+      tasks: {
         "build-one": {
           outputLogs: "hash-only",
         },
@@ -233,7 +233,7 @@ describe("rename-output-mode", () => {
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
       $schema: "https://turbo.build/schema.json",
-      pipeline: {
+      tasks: {
         "build-one": {
           outputLogs: "errors-only",
         },
@@ -295,7 +295,7 @@ describe("rename-output-mode", () => {
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
       $schema: "https://turbo.build/schema.json",
       globalDependencies: ["$NEXT_PUBLIC_API_KEY", "$STRIPE_API_KEY", ".env"],
-      pipeline: {},
+      tasks: {},
     });
 
     expect(result.fatalError).toBeUndefined();
@@ -324,7 +324,7 @@ describe("rename-output-mode", () => {
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
       $schema: "https://turbo.build/schema.json",
-      pipeline: {
+      tasks: {
         "build-one": {
           dependsOn: ["build-two"],
         },

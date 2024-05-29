@@ -21,7 +21,7 @@ describe("set-default-outputs", () => {
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
       $schema: "https://turbo.build/schema.json",
-      pipeline: {
+      tasks: {
         "build-one": {
           outputs: ["foo"],
         },
@@ -58,7 +58,7 @@ describe("set-default-outputs", () => {
 
     expect(readJson("turbo.json") || "{}").toStrictEqual({
       $schema: "https://turbo.build/schema.json",
-      pipeline: {
+      tasks: {
         "build-one": {
           outputs: ["foo"],
         },
@@ -72,7 +72,7 @@ describe("set-default-outputs", () => {
     expect(readJson("apps/docs/turbo.json") || "{}").toStrictEqual({
       $schema: "https://turbo.build/schema.json",
       extends: ["//"],
-      pipeline: {
+      tasks: {
         build: {
           outputs: ["dist/**", "build/**"],
         },
@@ -82,7 +82,7 @@ describe("set-default-outputs", () => {
     expect(readJson("apps/web/turbo.json") || "{}").toStrictEqual({
       $schema: "https://turbo.build/schema.json",
       extends: ["//"],
-      pipeline: {
+      tasks: {
         build: {},
       },
     });
@@ -90,7 +90,7 @@ describe("set-default-outputs", () => {
     expect(readJson("packages/ui/turbo.json") || "{}").toStrictEqual({
       $schema: "https://turbo.build/schema.json",
       extends: ["//"],
-      pipeline: {
+      tasks: {
         "build-three": {
           outputs: ["dist/**", "build/**"],
         },
@@ -167,7 +167,7 @@ describe("set-default-outputs", () => {
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
       $schema: "https://turbo.build/schema.json",
-      pipeline: {
+      tasks: {
         "build-one": {
           outputs: ["foo"],
         },
@@ -233,7 +233,7 @@ describe("set-default-outputs", () => {
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
       $schema: "https://turbo.build/schema.json",
-      pipeline: {
+      tasks: {
         "build-one": {
           outputs: ["foo"],
         },
@@ -295,7 +295,7 @@ describe("set-default-outputs", () => {
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
       $schema: "https://turbo.build/schema.json",
       globalDependencies: ["$NEXT_PUBLIC_API_KEY", "$STRIPE_API_KEY", ".env"],
-      pipeline: {},
+      tasks: {},
     });
 
     expect(result.fatalError).toBeUndefined();
@@ -324,7 +324,7 @@ describe("set-default-outputs", () => {
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
       $schema: "https://turbo.build/schema.json",
-      pipeline: {
+      tasks: {
         "build-one": {
           dependsOn: ["build-two"],
           outputs: ["dist/**", "build/**"],

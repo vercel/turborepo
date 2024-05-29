@@ -326,7 +326,7 @@ describe("create-turbo-config", () => {
 
     // turbo.json should exist
     const turboJsonConfig = JSON.parse(read("turbo.json") || "{}");
-    expect(turboJsonConfig.pipeline).toBeDefined();
+    expect(turboJsonConfig.tasks).toBeDefined();
 
     // no config should exist in package.json
     const packageJsonConfig = JSON.parse(read("package.json") || "{}");

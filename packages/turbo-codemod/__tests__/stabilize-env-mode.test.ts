@@ -25,7 +25,7 @@ describe.only("stabilize-env-mode", () => {
         "EXPERIMENTAL_GLOBAL_PASSTHROUGH",
         "GLOBAL_PASSTHROUGH",
       ],
-      pipeline: {
+      tasks: {
         build: {
           passThroughEnv: ["EXPERIMENTAL_TASK_PASSTHROUGH", "TASK_PASSTHROUGH"],
         },
@@ -63,7 +63,7 @@ describe.only("stabilize-env-mode", () => {
         "EXPERIMENTAL_GLOBAL_PASSTHROUGH",
         "GLOBAL_PASSTHROUGH",
       ],
-      pipeline: {
+      tasks: {
         build: {
           passThroughEnv: [
             "DUPLICATE_TASK",
@@ -101,7 +101,7 @@ describe.only("stabilize-env-mode", () => {
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
       $schema: "https://turbo.build/schema.json",
       globalPassThroughEnv: [],
-      pipeline: {
+      tasks: {
         build: {
           passThroughEnv: [],
         },
@@ -134,7 +134,7 @@ describe.only("stabilize-env-mode", () => {
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
       $schema: "https://turbo.build/schema.json",
-      pipeline: {
+      tasks: {
         build: {},
       },
     });
@@ -166,7 +166,7 @@ describe.only("stabilize-env-mode", () => {
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
       $schema: "https://turbo.build/schema.json",
       globalPassThroughEnv: ["GLOBAL_PASSTHROUGH"],
-      pipeline: {
+      tasks: {
         build: {
           passThroughEnv: ["TASK_PASSTHROUGH"],
         },
@@ -200,7 +200,7 @@ describe.only("stabilize-env-mode", () => {
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
       $schema: "https://turbo.build/schema.json",
       globalPassThroughEnv: ["GLOBAL_PASSTHROUGH"],
-      pipeline: {
+      tasks: {
         build: {
           passThroughEnv: ["TASK_PASSTHROUGH"],
         },
@@ -237,7 +237,7 @@ describe.only("stabilize-env-mode", () => {
         "EXPERIMENTAL_GLOBAL_PASSTHROUGH",
         "GLOBAL_PASSTHROUGH",
       ],
-      pipeline: {
+      tasks: {
         build: {
           passThroughEnv: ["EXPERIMENTAL_TASK_PASSTHROUGH", "TASK_PASSTHROUGH"],
         },
@@ -246,7 +246,7 @@ describe.only("stabilize-env-mode", () => {
 
     expect(JSON.parse(read("apps/docs/turbo.json") || "{}")).toStrictEqual({
       extends: ["//"],
-      pipeline: {
+      tasks: {
         build: {
           passThroughEnv: [
             "DOCS_TASK_PASSTHROUGH",
@@ -258,7 +258,7 @@ describe.only("stabilize-env-mode", () => {
 
     expect(JSON.parse(read("apps/website/turbo.json") || "{}")).toStrictEqual({
       extends: ["//"],
-      pipeline: {
+      tasks: {
         build: {
           passThroughEnv: [
             "EXPERIMENTAL_WEBSITE_TASK_PASSTHROUGH",
