@@ -377,7 +377,7 @@ impl PostCssTransformedAsset {
             css_path
         } else {
             // This shouldn't be an error since it can happen on virtual assets
-            "".to_string()
+            "".into()
         };
 
         let config_value = evaluate_webpack_loader(WebpackLoaderContext {
