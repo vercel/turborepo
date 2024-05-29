@@ -132,7 +132,7 @@ impl<'a> From<sourcemap::Token<'a>> for Token {
                     .to_string(),
                 original_line: t.get_src_line() as usize,
                 original_column: t.get_src_col() as usize,
-                name: t.get_name().map(String::from),
+                name: t.get_name().map(RcStr::from),
             })
         } else {
             Token::Synthetic(SyntheticToken {
