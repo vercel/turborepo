@@ -155,7 +155,7 @@ impl ContentSourceContent {
 
 /// A list of headers arranged as contiguous (name, value) pairs.
 #[turbo_tasks::value(transparent)]
-pub struct HeaderList(Vec<(String, String)>);
+pub struct HeaderList(Vec<(RcStr, RcStr)>);
 
 #[turbo_tasks::value_impl]
 impl HeaderList {
@@ -180,22 +180,22 @@ impl HeaderList {
 #[derive(Clone, Debug, PartialOrd, Ord, Hash, Default)]
 pub struct ContentSourceData {
     /// HTTP method, if requested.
-    pub method: Option<String>,
+    pub method: Option<RcStr>,
     /// The full url (including query string), if requested.
-    pub url: Option<String>,
+    pub url: Option<RcStr>,
     /// The full url (including query string) before rewrites where applied, if
     /// requested.
-    pub original_url: Option<String>,
+    pub original_url: Option<RcStr>,
     /// Query string items, if requested.
     pub query: Option<Query>,
     /// raw query string, if requested. Does not include the `?`.
-    pub raw_query: Option<String>,
+    pub raw_query: Option<RcStr>,
     /// HTTP headers, might contain multiple headers with the same name, if
     /// requested.
     pub headers: Option<Headers>,
     /// Raw HTTP headers, might contain multiple headers with the same name, if
     /// requested.
-    pub raw_headers: Option<Vec<(String, String)>>,
+    pub raw_headers: Option<Vec<(RcStr, RcStr)>>,
     /// Request body, if requested.
     pub body: Option<Vc<Body>>,
     /// See [ContentSourceDataVary::cache_buster].

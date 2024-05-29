@@ -8,7 +8,7 @@ use hyper::{
     header::{HeaderName as HyperHeaderName, HeaderValue as HyperHeaderValue},
     Uri,
 };
-use turbo_tasks::{TransientInstance, Value, Vc};
+use turbo_tasks::{RcStr, TransientInstance, Value, Vc};
 
 use super::{
     headers::{HeaderValue, Headers},
@@ -43,7 +43,7 @@ pub async fn resolve_source_request(
 ) -> Result<Vc<ResolveSourceRequestResult>> {
     let original_path = request.uri.path().to_string();
     // Remove leading slash.
-    let mut current_asset_path = urlencoding::decode(&original_path[1..])?.into_owned();
+    let mut current_asset_path: RcStr = urlencoding::decode(&original_path[1..])?.into();
     let mut request_overwrites = (*request).clone();
     let mut response_header_overwrites = Vec::new();
     let mut route_tree = source.get_routes().resolve_strongly_consistent().await?;
@@ -78,7 +78,7 @@ pub async fn resolve_source_request(
                                 let new_asset_path =
                                     urlencoding::decode(&new_uri.path()[1..])?.into_owned();
                                 request_overwrites.uri = new_uri;
-                                current_asset_path = new_asset_path;
+                                current_asset_path = new_asset_path.into();
                                 continue 'routes;
                             }
                             RewriteType::ContentSource {
@@ -89,7 +89,7 @@ pub async fn resolve_source_request(
                                 let new_asset_path =
                                     urlencoding::decode(&new_uri.path()[1..])?.into_owned();
                                 request_overwrites.uri = new_uri;
-                                current_asset_path = new_asset_path;
+                                current_asset_path = new_asset_path.into();
                                 route_tree =
                                     source.get_routes().resolve_strongly_consistent().await?;
                                 continue 'routes;
