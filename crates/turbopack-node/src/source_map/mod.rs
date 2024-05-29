@@ -237,7 +237,7 @@ async fn resolve_source_mapping(
                 PROJECT_FILESYSTEM_NAME,
                 "]/"
             )) {
-                let fs_path = project_dir.join(project_path.to_string());
+                let fs_path = project_dir.join(project_path.into());
                 if lib_code {
                     return Ok(ResolvedSourceMapping::MappedLibrary {
                         frame: frame.clone(),
