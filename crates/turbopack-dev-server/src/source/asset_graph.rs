@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::Result;
 use indexmap::{indexset, IndexMap, IndexSet};
-use turbo_tasks::{Completion, State, TryJoinIterExt, Value, ValueToString, Vc};
+use turbo_tasks::{Completion, RcStr, State, TryJoinIterExt, Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     asset::Asset,

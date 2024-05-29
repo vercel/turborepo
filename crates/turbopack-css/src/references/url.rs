@@ -124,7 +124,7 @@ pub async fn resolve_url_reference(
     // currently works as all chunks are in the same directory.
     let chunk_path = chunking_context.chunk_path(
         AssetIdent::from_path(this.origin.origin_path()),
-        ".css".to_string(),
+        ".css".into(),
     );
     let context_path = chunk_path.parent().await?;
 
@@ -134,6 +134,7 @@ pub async fn resolve_url_reference(
         let path = asset.ident().path().await?;
         let relative_path = context_path
             .get_relative_path_to(&path)
+            .map(|v| v.into_owned())
             .unwrap_or_else(|| format!("/{}", path.path));
 
         return Ok(Vc::cell(Some(relative_path)));
