@@ -17,7 +17,7 @@ pub use self::{
 };
 
 #[turbo_tasks::value(transparent)]
-pub struct EnvMap(#[turbo_tasks(trace_ignore)] IndexMap<String, String>);
+pub struct EnvMap(#[turbo_tasks(trace_ignore)] IndexMap<RcStr, RcStr>);
 
 #[turbo_tasks::value_impl]
 impl EnvMap {
@@ -56,7 +56,7 @@ pub trait ProcessEnv {
     }
 }
 
-pub fn sorted_env_vars() -> IndexMap<String, String> {
+pub fn sorted_env_vars() -> IndexMap<RcStr, RcStr> {
     let mut vars = env::vars().collect::<IndexMap<_, _>>();
     vars.sort_keys();
     vars
@@ -67,8 +67,9 @@ pub async fn case_insensitive_read(map: Vc<EnvMap>, name: RcStr) -> Result<Vc<Op
     Ok(Vc::cell(
         to_uppercase_map(map)
             .await?
-            .get(&name.to_uppercase())
-            .cloned(),
+            .get(&RcStr::from(name.to_uppercase()))
+            .cloned()
+            .map(|v| v.into_owned()),
     ))
 }
 
