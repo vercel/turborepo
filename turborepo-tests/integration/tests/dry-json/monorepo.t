@@ -15,6 +15,7 @@ Setup
       "foo.txt": "eebae5f3ca7b5831e429e947b7d61edd0de69236"
     },
     "hashOfExternalDependencies": "459c029558afe716",
+    "hashOfInternalDependencies": "",
     "environmentVariables": {
       "specified": {
         "env": [
@@ -50,7 +51,7 @@ Setup
     "taskId": "my-app#build",
     "task": "build",
     "package": "my-app",
-    "hash": "4dc68e628703cbf4",
+    "hash": "0555ce94ca234049",
     "inputs": {
       ".env.local": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
       "package.json": "1746e0db2361085b5953a6a3beab08c24af5bc08"
@@ -110,7 +111,7 @@ Setup
     "taskId": "util#build",
     "task": "build",
     "package": "util",
-    "hash": "728076a89c49afbf",
+    "hash": "bf1798d3e46e1b48",
     "inputs": {
       "package.json": "e755064fd7893809d10fc067bb409c7ae516327f"
     },

@@ -15,6 +15,7 @@ Setup
         "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057"
       },
       "hashOfExternalDependencies": "",
+      "hashOfInternalDependencies": "",
       "environmentVariables": {
         "specified": {
           "env": [],
@@ -32,7 +33,7 @@ Setup
       {
         "taskId": "build",
         "task": "build",
-        "hash": "6c1cecf7f99d0166",
+        "hash": "7ece7b62aad25615",
         "inputs": {
           ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
@@ -87,7 +88,7 @@ Setup
       {
         "taskId": "test",
         "task": "test",
-        "hash": "d241ae86a1a24a2e",
+        "hash": "cb5839f7284aa5f3",
         "inputs": {
           ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
