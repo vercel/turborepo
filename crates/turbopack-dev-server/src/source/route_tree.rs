@@ -98,7 +98,7 @@ impl RouteTrees {
 pub struct RouteTree {
     base: Vec<BaseSegment>,
     sources: Vec<Vc<Box<dyn GetContentSourceContent>>>,
-    static_segments: IndexMap<String, Vc<RouteTree>>,
+    static_segments: IndexMap<RcStr, Vc<RouteTree>>,
     dynamic_segments: Vec<Vc<RouteTree>>,
     catch_all_sources: Vec<Vc<Box<dyn GetContentSourceContent>>>,
     fallback_sources: Vec<Vc<Box<dyn GetContentSourceContent>>>,

@@ -181,7 +181,7 @@ pub(super) struct UpdateStream(
 impl UpdateStream {
     #[tracing::instrument(skip(get_content), name = "UpdateStream::new")]
     pub async fn new(
-        resource: String,
+        resource: RcStr,
         get_content: TransientInstance<GetContentFn>,
     ) -> Result<UpdateStream> {
         let (sx, rx) = tokio::sync::mpsc::channel(32);

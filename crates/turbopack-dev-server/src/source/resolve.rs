@@ -134,26 +134,28 @@ async fn request_to_data(
 ) -> Result<ContentSourceData> {
     let mut data = ContentSourceData::default();
     if vary.method {
-        data.method = Some(request.method.clone());
+        data.method = Some(request.method.into());
     }
     if vary.url {
-        data.url = Some(request.uri.to_string());
+        data.url = Some(request.uri.to_string().into());
     }
     if vary.original_url {
-        data.original_url = Some(original_request.uri.to_string());
+        data.original_url = Some(original_request.uri.to_string().into());
     }
     if vary.body {
         data.body = Some(request.body.clone().into());
     }
     if vary.raw_query {
-        data.raw_query = Some(request.uri.query().unwrap_or("").to_string());
+        data.raw_query = Some(request.uri.query().unwrap_or("").into());
     }
     if vary.raw_headers {
         data.raw_headers = Some(
             request
                 .headers
                 .iter()
-                .map(|(name, value)| Ok((name.to_string(), value.to_str()?.to_string())))
+                .map(|(name, value)| {
+                    Ok((name.to_string().into(), value.to_str()?.to_string().into()))
+                })
                 .collect::<Result<Vec<_>>>()?,
         );
     }

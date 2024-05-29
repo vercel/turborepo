@@ -181,7 +181,7 @@ async fn expand(
             map.insert("".into(), asset);
         } else if let Some(p) = sub_path.strip_suffix("/index.html") {
             map.insert(p.into(), asset);
-            map.insert(format!("{p}/"), asset);
+            map.insert(format!("{p}/").into(), asset);
         } else if let Some(p) = sub_path.strip_suffix(".html") {
             map.insert(p.into(), asset);
         }

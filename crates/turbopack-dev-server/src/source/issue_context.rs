@@ -148,7 +148,7 @@ impl Introspectable for IssueFilePathContentSource {
                 let title = source.title().await?;
                 Vc::cell(format!("{}: {}", self.description, title))
             } else {
-                Vc::cell(self.description.clone())
+                Vc::cell(self.description.to_string())
             },
         )
     }
