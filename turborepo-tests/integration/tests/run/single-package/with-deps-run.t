@@ -21,12 +21,6 @@ Check
   Cached:    0 cached, 2 total
     Time:\s*[\.0-9]+m?s  (re)
   
-<<<<<<< HEAD
-=======
->>>>>>> b668d5abb3 (chore: remove task dotEnv field)
-<<<<<<< HEAD
-=======
->>>>>>> b668d5abb3 (chore: remove task dotEnv field)
 Run a second time, verify caching works because there is a config
   $ ${TURBO} run test
   \xe2\x80\xa2 Running test (esc)
@@ -47,12 +41,6 @@ Run a second time, verify caching works because there is a config
   Cached:    2 cached, 2 total
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
-<<<<<<< HEAD
-=======
->>>>>>> b668d5abb3 (chore: remove task dotEnv field)
-<<<<<<< HEAD
-=======
->>>>>>> b668d5abb3 (chore: remove task dotEnv field)
 Run with --output-logs=hash-only
   $ ${TURBO} run test --output-logs=hash-only
   \xe2\x80\xa2 Running test (esc)
@@ -64,9 +52,6 @@ Run with --output-logs=hash-only
   Cached:    2 cached, 2 total
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
-<<<<<<< HEAD
-=======
->>>>>>> b668d5abb3 (chore: remove task dotEnv field)
 Run with --output-logs=errors-only
   $ ${TURBO} run test --output-logs=errors-only
   \xe2\x80\xa2 Running test (esc)

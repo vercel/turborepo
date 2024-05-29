@@ -30,12 +30,6 @@ Setup
   Cached:    0 cached, 2 total
     Time:\s*[\.0-9]+m?s  (re)
   
-<<<<<<< HEAD
-=======
->>>>>>> 37c3c596f1 (chore: update integration tests)
-<<<<<<< HEAD
-=======
->>>>>>> 37c3c596f1 (chore: update integration tests)
   $ HASH=$(cat tmp.log | grep -E "add-keys:add-keys-task.* executing .*" | awk '{print $5}')
   $ tar -tf $TARGET_DIR/.turbo/cache/$HASH.tar.zst;
   apps/add-keys/.turbo/turbo-add-keys-task.log

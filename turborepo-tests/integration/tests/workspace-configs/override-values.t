@@ -21,9 +21,6 @@ Setup
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
-<<<<<<< HEAD
-=======
->>>>>>> 37c3c596f1 (chore: update integration tests)
   $ HASH=$(cat tmp.log | grep -E "override-values:override-values-task.* executing .*" | awk '{print $5}')
   $ tar -tf $TARGET_DIR/.turbo/cache/$HASH.tar.zst;
   apps/override-values/.turbo/turbo-override-values-task.log
@@ -46,9 +43,6 @@ Setup
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
-<<<<<<< HEAD
-=======
->>>>>>> 37c3c596f1 (chore: update integration tests)
 3. Change input file and assert cache miss
   $ echo "more text" >> $TARGET_DIR/apps/override-values/src/bar.txt
   $ ${TURBO} run override-values-task --filter=override-values
