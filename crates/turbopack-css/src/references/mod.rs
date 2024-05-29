@@ -137,7 +137,7 @@ impl VisitMut for ModuleReferencesVisitor<'_> {
 
             let vc = UrlAssetReference::new(
                 self.origin,
-                Request::parse(Value::new(src.to_string().into())),
+                Request::parse(Value::new(RcStr::from(src.as_str()).into())),
                 IssueSource::from_swc_offsets(
                     Vc::upcast(self.source),
                     issue_span.lo.0 as _,

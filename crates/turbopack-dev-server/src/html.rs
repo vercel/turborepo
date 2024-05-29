@@ -118,7 +118,7 @@ impl DevHtmlAsset {
         for chunk in &*self.chunks().await? {
             let chunk_path = &*chunk.ident().path().await?;
             if let Some(relative_path) = context_path.get_path_to(chunk_path) {
-                chunk_paths.push(format!("/{relative_path}"));
+                chunk_paths.push(format!("/{relative_path}").into());
             }
         }
 
