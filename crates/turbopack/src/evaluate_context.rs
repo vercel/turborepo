@@ -40,18 +40,18 @@ pub async fn node_evaluate_asset_context(
     import_map.insert_wildcard_alias(
         "@vercel/turbopack-node/",
         ImportMapping::PrimaryAlternative(
-            "./*".to_string(),
+            "./*".into(),
             Some(turbopack_node::embed_js::embed_fs().root()),
         )
         .cell(),
     );
     let import_map = import_map.cell();
-    let node_env =
-        if let Some(node_env) = &*execution_context.env().read("NODE_ENV".to_string()).await? {
-            node_env.clone()
-        } else {
-            "development".to_string()
-        };
+    let node_env = if let Some(node_env) = &*execution_context.env().read("NODE_ENV".into()).await?
+    {
+        node_env.clone()
+    } else {
+        "development".to_string()
+    };
 
     // base context used for node_modules (and context for app code will be derived
     // from this)
@@ -59,7 +59,7 @@ pub async fn node_evaluate_asset_context(
         enable_node_modules: Some(execution_context.project_path().root().resolve().await?),
         enable_node_externals: true,
         enable_node_native_modules: true,
-        custom_conditions: vec![node_env.clone(), "node".to_string()],
+        custom_conditions: vec![node_env.into(), "node".to_string()],
         ..Default::default()
     };
     // app code context, includes a rule to switch to the node_modules context
