@@ -25,7 +25,7 @@ impl Git {
                 "--",
                 ".",
             ])
-            .env("GIT_OPTIONAL_LOCKS", "false")
+            .env("GIT_OPTIONAL_LOCKS", "0")
             .current_dir(root_path)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

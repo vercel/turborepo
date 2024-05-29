@@ -136,7 +136,7 @@ impl Git {
         command
             .args(args)
             .current_dir(&self.root)
-            .env("GIT_OPTIONAL_LOCKS", "false");
+            .env("GIT_OPTIONAL_LOCKS", "0");
 
         if !pathspec.is_empty() {
             command.arg("--").arg(pathspec);
