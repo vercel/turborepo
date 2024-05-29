@@ -101,7 +101,7 @@ pub struct OriginalToken {
     pub original_file: String,
     pub original_line: usize,
     pub original_column: usize,
-    pub name: Option<String>,
+    pub name: Option<RcStr>,
 }
 
 impl Token {
