@@ -66,8 +66,8 @@ pub async fn resolve_source_request(
                             request_overwrites.headers.clear();
                             for (name, value) in &*headers.await? {
                                 request_overwrites.headers.insert(
-                                    HyperHeaderName::try_from(name)?,
-                                    HyperHeaderValue::try_from(value)?,
+                                    HyperHeaderName::try_from(name.as_str())?,
+                                    HyperHeaderValue::try_from(value.as_str())?,
                                 );
                             }
                         }

@@ -190,8 +190,8 @@ async fn expand(
     Ok(map)
 }
 
-fn get_sub_paths(sub_path: &str) -> ([String; 3], usize) {
-    let sub_paths_buffer: [String; 3];
+fn get_sub_paths(sub_path: &str) -> ([RcStr; 3], usize) {
+    let sub_paths_buffer: [RcStr; 3];
     let n = if sub_path == "index.html" {
         sub_paths_buffer = ["".to_string(), sub_path.to_string(), String::new()];
         2
