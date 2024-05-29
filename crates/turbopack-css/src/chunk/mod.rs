@@ -285,7 +285,7 @@ impl OutputAsset for CssChunk {
 
         Ok(AssetIdent::from_path(this.chunking_context.chunk_path(
             AssetIdent::new(Value::new(ident)),
-            ".css".to_string(),
+            ".css".into(),
         )))
     }
 
