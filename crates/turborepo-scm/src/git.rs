@@ -184,21 +184,9 @@ impl Git {
         file_path: &AbsoluteSystemPath,
     ) -> Result<Vec<u8>, Error> {
         let anchored_file_path = self.root.anchor(file_path)?;
-        let mut command = Command::new(self.bin.as_std_path());
-        let command = command
-            .arg("show")
-            .arg(format!("{}:{}", from_commit, anchored_file_path.as_str()))
-            .current_dir(&self.root);
+        let arg = format!("{}:{}", from_commit, anchored_file_path.as_str());
 
-        let output = command.output()?;
-        if output.status.success() {
-            Ok(output.stdout)
-        } else {
-            Err(Error::Git(
-                String::from_utf8_lossy(&output.stderr).to_string(),
-                Backtrace::capture(),
-            ))
-        }
+        self.execute_git_command(&["show", &arg], "")
     }
 }
 
