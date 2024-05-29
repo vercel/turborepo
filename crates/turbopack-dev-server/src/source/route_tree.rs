@@ -28,7 +28,7 @@ impl BaseSegment {
     pub fn from_static_pathname(str: &str) -> impl Iterator<Item = BaseSegment> + '_ {
         str.split('/')
             .filter(|s| !s.is_empty())
-            .map(|s| BaseSegment::Static(s.to_string()))
+            .map(|s| BaseSegment::Static(s.into()))
     }
 }
 

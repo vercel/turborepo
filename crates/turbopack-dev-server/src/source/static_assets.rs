@@ -24,7 +24,7 @@ impl StaticAssetsContentSource {
     // TODO(WEB-1151): Remove this method and migrate users to `with_prefix`.
     #[turbo_tasks::function]
     pub fn new(prefix: RcStr, dir: Vc<FileSystemPath>) -> Vc<StaticAssetsContentSource> {
-        StaticAssetsContentSource::with_prefix(Vc::cell(prefix), dir)
+        StaticAssetsContentSource::with_prefix(Vc::cell(prefix.into_owned()), dir)
     }
 
     #[turbo_tasks::function]

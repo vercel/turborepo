@@ -134,7 +134,7 @@ async fn request_to_data(
 ) -> Result<ContentSourceData> {
     let mut data = ContentSourceData::default();
     if vary.method {
-        data.method = Some(request.method.into());
+        data.method = Some(request.method.clone().into());
     }
     if vary.url {
         data.url = Some(request.uri.to_string().into());

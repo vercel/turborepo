@@ -431,7 +431,7 @@ where
     fn issue_file_path(
         self: Vc<Self>,
         file_path: Vc<FileSystemPath>,
-        description: String,
+        description: RcStr,
     ) -> Vc<Box<dyn ContentSource>> {
         Vc::upcast(IssueFilePathContentSource::new_file_path(
             file_path,
