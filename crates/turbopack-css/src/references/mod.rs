@@ -167,7 +167,7 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
 
                 self.references.push(Vc::upcast(ImportAssetReference::new(
                     self.origin,
-                    Request::parse(Value::new(src.to_string().into())),
+                    Request::parse(Value::new(RcStr::from(src).into())),
                     ImportAttributes::new_from_lightningcss(&i.clone().into_owned()).into(),
                     self.import_context,
                     IssueSource::from_line_col(
@@ -204,7 +204,7 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
 
             let vc = UrlAssetReference::new(
                 self.origin,
-                Request::parse(Value::new(src.to_string().into())),
+                Request::parse(Value::new(RcStr::from(src).into())),
                 IssueSource::from_line_col(
                     Vc::upcast(self.source),
                     SourcePos {
