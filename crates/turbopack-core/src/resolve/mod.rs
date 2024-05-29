@@ -2086,7 +2086,7 @@ async fn apply_in_package(
             continue;
         };
 
-        let Some(field_value) = package_json[field].as_object() else {
+        let Some(field_value) = package_json[field.as_str()].as_object() else {
             continue;
         };
 
