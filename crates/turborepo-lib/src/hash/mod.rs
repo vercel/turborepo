@@ -66,6 +66,7 @@ pub struct GlobalHashable<'a> {
     pub global_file_hash_map: &'a HashMap<turbopath::RelativeUnixPathBuf, String>,
     // These are None in single package mode
     pub root_external_dependencies_hash: Option<&'a str>,
+    pub root_internal_dependencies_hash: Option<&'a str>,
     pub engines: HashMap<&'a str, &'a str>,
     pub env: &'a [String],
     pub resolved_env_vars: EnvironmentVariablePairs,
@@ -424,6 +425,7 @@ mod test {
             global_cache_key: "global_cache_key",
             global_file_hash_map: &global_file_hash_map,
             root_external_dependencies_hash: Some("0000000000000000"),
+            root_internal_dependencies_hash: Some("0000000000000001"),
             engines: Default::default(),
             env: &["env".to_string()],
             resolved_env_vars: vec![],
@@ -432,7 +434,7 @@ mod test {
             framework_inference: true,
         };
 
-        assert_eq!(global_hash.hash(), "215cf70acde752ce");
+        assert_eq!(global_hash.hash(), "5072bd005ec02799");
     }
 
     #[test_case(vec![], "459c029558afe716" ; "empty")]

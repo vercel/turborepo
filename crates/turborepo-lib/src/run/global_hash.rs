@@ -20,7 +20,6 @@ use turborepo_scm::SCM;
 use crate::{
     cli::EnvMode,
     hash::{GlobalHashable, TurboHash},
-    task_hash::get_external_deps_hash,
 };
 
 static DEFAULT_ENV_VARS: [&str; 1] = ["VERCEL_ANALYTICS_ID"];
@@ -46,8 +45,8 @@ pub struct GlobalHashableInputs<'a> {
     pub global_cache_key: &'static str,
     pub global_file_hash_map: HashMap<RelativeUnixPathBuf, String>,
     // This is `None` in single package mode
-    pub root_external_dependencies_hash: Option<String>,
-    pub root_internal_dependencies_hash: Option<String>,
+    pub root_external_dependencies_hash: Option<&'a str>,
+    pub root_internal_dependencies_hash: Option<&'a str>,
     pub engines: Option<HashMap<&'a str, &'a str>>,
     pub env: &'a [String],
     // Only Option to allow #[derive(Default)]
@@ -60,7 +59,8 @@ pub struct GlobalHashableInputs<'a> {
 
 #[allow(clippy::too_many_arguments)]
 pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
-    is_monorepo: bool,
+    root_external_dependencies_hash: Option<&'a str>,
+    root_internal_dependencies_hash: Option<&'a str>,
     root_package: &'a PackageInfo,
     root_path: &AbsoluteSystemPath,
     package_manager: &PackageManager,
@@ -73,9 +73,6 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     framework_inference: bool,
     hasher: &SCM,
 ) -> Result<GlobalHashableInputs<'a>, Error> {
-    let root_external_dependencies_hash =
-        is_monorepo.then(|| get_external_deps_hash(&root_package.transitive_dependencies));
-
     let engines = root_package.package_json.engines();
 
     let global_hashable_env_vars =
@@ -243,7 +240,8 @@ mod tests {
         #[cfg(not(windows))]
         let file_deps = ["/some/path".to_string()];
         let result = get_global_hash_inputs(
-            false,
+            None,
+            None,
             &package_info,
             &root,
             &PackageManager::Pnpm,
