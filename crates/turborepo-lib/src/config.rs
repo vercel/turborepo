@@ -782,7 +782,7 @@ mod test {
         assert_eq!(config.team_slug(), None);
         assert_eq!(config.team_id(), None);
         assert_eq!(config.token(), None);
-        assert!(config.experimental_ui());
+        assert!(!config.experimental_ui());
         assert!(!config.preflight());
     }
 
