@@ -272,7 +272,7 @@ impl DepGraph {
                         required_vars.insert(id);
 
                         if let Some(export) = &data[item].export {
-                            exports.insert(Key::Export(export.to_string()), ix as u32);
+                            exports.insert(Key::Export(export.as_str().into()), ix as u32);
                         }
                     }
                     ItemId::Group(ItemIdGroupKind::ModuleEvaluation) => {

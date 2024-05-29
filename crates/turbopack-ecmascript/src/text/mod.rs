@@ -36,7 +36,7 @@ impl Source for TextContentFileSource {
         self.source
             .ident()
             .with_modifier(modifier())
-            .rename_as("*.mjs".to_string())
+            .rename_as("*.mjs".into())
     }
 }
 
