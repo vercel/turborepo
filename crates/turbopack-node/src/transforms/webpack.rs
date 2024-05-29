@@ -66,7 +66,7 @@ struct WebpackLoadersProcessingResult {
 pub struct WebpackLoaderItem {
     pub loader: RcStr,
     #[turbo_tasks(trace_ignore)]
-    pub options: serde_json::Map<RcStr, serde_json::Value>,
+    pub options: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone)]
@@ -221,7 +221,7 @@ impl WebpackLoadersProcessedAsset {
             resolve_options_context: Some(transform.resolve_options_context),
             args: vec![
                 Vc::cell(content.into()),
-                Vc::cell(resource_path.into()),
+                Vc::cell(resource_path.to_string().into()),
                 Vc::cell(json!(*loaders)),
             ],
             additional_invalidation: Completion::immutable(),
@@ -329,13 +329,13 @@ pub enum InfoMessage {
 #[serde(rename_all = "camelCase")]
 
 pub struct WebpackResolveOptions {
-    alias_fields: Option<Vec<String>>,
-    condition_names: Option<Vec<String>>,
+    alias_fields: Option<Vec<RcStr>>,
+    condition_names: Option<Vec<RcStr>>,
     no_package_json: bool,
-    extensions: Option<Vec<String>>,
-    main_fields: Option<Vec<String>>,
+    extensions: Option<Vec<RcStr>>,
+    main_fields: Option<Vec<RcStr>>,
     no_exports_field: bool,
-    main_files: Option<Vec<String>>,
+    main_files: Option<Vec<RcStr>>,
     no_modules: bool,
     prefer_relative: bool,
 }
