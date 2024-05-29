@@ -20,9 +20,9 @@ use super::{
 };
 
 #[turbo_tasks::value(transparent)]
-struct OutputAssetsMap(IndexMap<String, Vc<Box<dyn OutputAsset>>>);
+struct OutputAssetsMap(IndexMap<RcStr, Vc<Box<dyn OutputAsset>>>);
 
-type ExpandedState = State<HashSet<String>>;
+type ExpandedState = State<HashSet<RcStr>>;
 
 #[turbo_tasks::value(serialization = "none", eq = "manual", cell = "new")]
 pub struct AssetGraphContentSource {
@@ -105,7 +105,7 @@ async fn expand(
     root_assets: &IndexSet<Vc<Box<dyn OutputAsset>>>,
     root_path: &FileSystemPath,
     expanded: Option<&ExpandedState>,
-) -> Result<IndexMap<String, Vc<Box<dyn OutputAsset>>>> {
+) -> Result<IndexMap<RcStr, Vc<Box<dyn OutputAsset>>>> {
     let mut map = IndexMap::new();
     let mut assets = Vec::new();
     let mut queue = VecDeque::with_capacity(32);
@@ -223,7 +223,7 @@ impl ContentSource for AssetGraphContentSource {
                     RouteType::Exact,
                     Vc::upcast(AssetGraphGetContentSourceContent::new(
                         self,
-                        path.to_string(),
+                        path.clone(),
                         *asset,
                     )),
                 )

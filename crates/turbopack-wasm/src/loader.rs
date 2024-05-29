@@ -73,7 +73,8 @@ pub(crate) async fn compiling_loader_source(
 
             export default mod;
         "#
-    };
+    }
+    .into();
 
     Ok(Vc::upcast(VirtualSource::new(
         source.ident().path().append("_.loader.mjs".into()),
