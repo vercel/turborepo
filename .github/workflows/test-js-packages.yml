@@ -104,3 +104,46 @@ jobs:
         # changes, and we don't want to enable that beahvior for _all_ our JS packages.
         run: |
           TURBO_API= turbo run check-types test --filter="!turborepo-repository" --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
+
+  summary:
+    name: Turborepo JS Test Summary
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - determine_jobs
+      - js_packages
+    steps:
+      - name: Compute info
+        id: info
+        if: always()
+        run: |
+          cancelled=false
+          failure=false
+
+          subjob () {
+            local result=$1
+            if [ "$result" = "cancelled" ]; then
+              cancelled=true
+            elif [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
+              failure=true
+            fi
+          }
+
+          subjob ${{needs.determine_jobs.result}}
+          subjob ${{needs.js_packages.result}}
+
+          if [ "$cancelled" = "true" ]; then
+              echo "cancelled=true" >> $GITHUB_OUTPUT
+          elif [ "$failure" = "true" ]; then
+            echo "failure=true" >> $GITHUB_OUTPUT
+          else
+            echo "success=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Failed
+        if: steps.info.outputs.failure == 'true'
+        run: exit 1
+
+      - name: Succeeded
+        if: steps.info.outputs.success == 'true'
+        run: echo Ok
