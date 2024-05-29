@@ -59,7 +59,7 @@ pub async fn node_evaluate_asset_context(
         enable_node_modules: Some(execution_context.project_path().root().resolve().await?),
         enable_node_externals: true,
         enable_node_native_modules: true,
-        custom_conditions: vec![node_env.into(), "node".to_string()],
+        custom_conditions: vec![node_env.into(), "node".into()],
         ..Default::default()
     };
     // app code context, includes a rule to switch to the node_modules context
@@ -93,6 +93,6 @@ pub async fn node_evaluate_asset_context(
         }
         .cell(),
         resolve_options_context,
-        Vc::cell(layer),
+        Vc::cell(layer.into_owned()),
     )))
 }
