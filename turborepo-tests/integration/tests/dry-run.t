@@ -24,47 +24,48 @@ Setup
     Inferred Global Env Vars Values       = 
     Global Passed Through Env Vars        = 
     Global Passed Through Env Vars Values = 
+    Engines Values                        = 
 
 # Part 3 are Tasks to Run, and we have to validate each task separately
   $ cat tmp-3.txt | grep "my-app#build" -A 17
   my-app#build
     Task                           = build\s* (re)
     Package                        = my-app\s* (re)
-    Hash                           = 270f1ef47a80f1d1
-    Cached (Local)                 = false
-    Cached (Remote)                = false
-    Directory                      = apps(\/|\\)my-app (re)
-    Command                        = echo building
-    Outputs                        = apple.json, banana.txt
-    Log File                       = apps(\/|\\)my-app(\/|\\).turbo(\/|\\)turbo-build.log (re)
-    Dependencies                   = 
-    Dependents                     = 
-    Inputs Files Considered        = 2
-    Env Vars                       = 
-    Env Vars Values                = 
-    Inferred Env Vars Values       = 
-    Passed Through Env Vars        = 
-    Passed Through Env Vars Values = 
+    Hash                           = 0555ce94ca234049
+    Cached \(Local\)                 = false\s* (re)
+    Cached \(Remote\)                = false\s* (re)
+    Directory                      = apps(\/|\\)my-app\s* (re)
+    Command                        = echo building\s* (re)
+    Outputs                        = apple.json, banana.txt\s* (re)
+    Log File                       = apps(\/|\\)my-app(\/|\\)\.turbo(\/|\\)turbo-build\.log\s* (re)
+    Dependencies                   =\s* (re)
+    Dependents                     =\s* (re)
+    Inputs Files Considered        = 2\s* (re)
+    Env Vars                       =\s* (re)
+    Env Vars Values                =\s* (re)
+    Inferred Env Vars Values       =\s* (re)
+    Passed Through Env Vars        =\s* (re)
+    Passed Through Env Vars Values =\s* (re)
 
   $ cat tmp-3.txt | grep "util#build" -A 17
   util#build
     Task                           = build\s* (re)
     Package                        = util\s* (re)
-    Hash                           = fad2a643cb480b55
-    Cached (Local)                 = false
-    Cached (Remote)                = false
-    Directory                      = packages(\/|\\)util (re)
-    Command                        = echo building
-    Outputs                        = 
-    Log File                       = packages(\/|\\)util(\/|\\).turbo(\/|\\)turbo-build.log (re)
-    Dependencies                   = 
-    Dependents                     = 
-    Inputs Files Considered        = 1
-    Env Vars                       = NODE_ENV
-    Env Vars Values                = 
-    Inferred Env Vars Values       = 
-    Passed Through Env Vars        = 
-    Passed Through Env Vars Values = 
+    Hash                           = bf1798d3e46e1b48
+    Cached \(Local\)                 = false\s* (re)
+    Cached \(Remote\)                = false\s* (re)
+    Directory                      = packages(\/|\\)util\s* (re)
+    Command                        = echo building\s* (re)
+    Outputs                        =\s* (re)
+    Log File                       = packages(\/|\\)util(\/|\\)\.turbo(\/|\\)turbo-build\.log\s* (re)
+    Dependencies                   =\s* (re)
+    Dependents                     =\s* (re)
+    Inputs Files Considered        = 1\s* (re)
+    Env Vars                       = NODE_ENV\s* (re)
+    Env Vars Values                =\s* (re)
+    Inferred Env Vars Values       =\s* (re)
+    Passed Through Env Vars        =\s* (re)
+    Passed Through Env Vars Values =\s* (re)
 
 # Run the task with NODE_ENV set and see it in summary. Use util package so it's just one package
   $ NODE_ENV=banana ${TURBO} run build --dry --filter=util | grep "Environment Variables"

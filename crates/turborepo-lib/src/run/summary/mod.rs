@@ -538,6 +538,20 @@ impl<'a> RunSummary<'a> {
                 .unwrap_or_default()
                 .join(", ")
         )?;
+        cwriteln!(
+            tab_writer,
+            ui,
+            GREY,
+            "  Engines Values\t=\t{}",
+            self.global_hash_summary
+                .engines
+                .as_ref()
+                .map(|engines| engines
+                    .iter()
+                    .map(|(key, value)| format!("{key}={value}"))
+                    .join(", "))
+                .unwrap_or_default()
+        )?;
 
         tab_writer.flush()?;
         println!();
