@@ -1491,7 +1491,13 @@ impl Debug for File {
 
 impl From<RcStr> for File {
     fn from(s: RcStr) -> Self {
-        File::from_bytes(s.into_owned().into_bytes())
+        s.into_owned().into()
+    }
+}
+
+impl From<String> for File {
+    fn from(s: String) -> Self {
+        File::from_bytes(s.into_bytes())
     }
 }
 
