@@ -2472,7 +2472,7 @@ async fn handle_exports_imports_field(
     options: Vc<ResolveOptions>,
     exports_imports_field: &AliasMap<SubpathValue>,
     path: &str,
-    conditions: &BTreeMap<String, ConditionValue>,
+    conditions: &BTreeMap<RcStr, ConditionValue>,
     unspecified_conditions: &ConditionValue,
     query: Vc<String>,
 ) -> Result<Vc<ResolveResult>> {
@@ -2530,7 +2530,7 @@ async fn resolve_package_internal_with_imports_field(
     request: Vc<Request>,
     resolve_options: Vc<ResolveOptions>,
     pattern: &Pattern,
-    conditions: &BTreeMap<String, ConditionValue>,
+    conditions: &BTreeMap<RcStr, ConditionValue>,
     unspecified_conditions: &ConditionValue,
 ) -> Result<Vc<ResolveResult>> {
     let Pattern::Constant(specifier) = pattern else {

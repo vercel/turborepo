@@ -8,6 +8,7 @@ use anyhow::{bail, Result};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use turbo_tasks::RcStr;
 
 use super::{
     alias_map::{AliasMap, AliasMapIter, AliasPattern, AliasTemplate},
@@ -47,11 +48,11 @@ pub enum SubpathValue {
     /// file that uses ESM syntax.
     /// Node defines several conditions in https://nodejs.org/api/packages.html#conditional-exports
     /// TODO: Should this use an enum of predefined keys?
-    Conditional(Vec<(String, SubpathValue)>),
+    Conditional(Vec<(RcStr, SubpathValue)>),
 
     /// A result subpath, defined with `"path": "other"`, remaps imports of
     /// `path` to `other`.
-    Result(String),
+    Result(RcStr),
 
     /// An excluded subpath, defined with `"path": null`, prevents importing
     /// this subpath.
@@ -91,7 +92,7 @@ impl SubpathValue {
     /// also exposed to the consumer.
     pub fn add_results<'a>(
         &'a self,
-        conditions: &BTreeMap<String, ConditionValue>,
+        conditions: &BTreeMap<RcStr, ConditionValue>,
         unspecified_condition: &ConditionValue,
         condition_overrides: &mut HashMap<&'a str, ConditionValue>,
         target: &mut Vec<(&'a str, Vec<(&'a str, bool)>)>,

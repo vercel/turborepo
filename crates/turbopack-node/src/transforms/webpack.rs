@@ -129,7 +129,7 @@ impl Source for WebpackLoadersProcessedAsset {
     async fn ident(&self) -> Result<Vc<AssetIdent>> {
         Ok(
             if let Some(rename_as) = self.transform.await?.rename_as.as_deref() {
-                self.source.ident().rename_as(rename_as.to_string())
+                self.source.ident().rename_as(rename_as.into())
             } else {
                 self.source.ident()
             },
@@ -164,7 +164,7 @@ struct ProcessWebpackLoadersResult {
 fn webpack_loaders_executor(evaluate_context: Vc<Box<dyn AssetContext>>) -> Vc<ProcessResult> {
     evaluate_context.process(
         Vc::upcast(FileSource::new(embed_file_path(
-            "transforms/webpack-loaders.ts".to_string(),
+            "transforms/webpack-loaders.ts".into(),
         ))),
         Value::new(ReferenceType::Internal(InnerAssets::empty())),
     )
@@ -566,7 +566,7 @@ async fn apply_webpack_resolve_options(
             .extract_if(|field| matches!(field, ResolveInPackage::AliasField(..)))
             .collect::<Vec<_>>();
         for field in alias_fields {
-            if field == "..." {
+            if &*field == "..." {
                 resolve_options.in_package.extend(take(&mut old));
             } else {
                 resolve_options

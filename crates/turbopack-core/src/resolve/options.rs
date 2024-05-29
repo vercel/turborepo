@@ -51,7 +51,7 @@ impl From<bool> for ConditionValue {
     }
 }
 
-pub type ResolutionConditions = BTreeMap<String, ConditionValue>;
+pub type ResolutionConditions = BTreeMap<RcStr, ConditionValue>;
 
 /// The different ways to resolve a package, as described in package.json.
 #[derive(TraceRawVcs, Hash, PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
