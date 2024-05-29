@@ -11,7 +11,7 @@ use swc_core::css::{
     ast::UrlValue,
     visit::{VisitMut, VisitMutWith},
 };
-use turbo_tasks::{Value, Vc};
+use turbo_tasks::{RcStr, Value, Vc};
 use turbopack_core::{
     issue::{IssueSeverity, IssueSource},
     reference::ModuleReference,
@@ -103,7 +103,7 @@ impl VisitMut for ModuleReferencesVisitor<'_> {
 
         self.references.push(Vc::upcast(ImportAssetReference::new(
             self.origin,
-            Request::parse(Value::new(src.to_string().into())),
+            Request::parse(Value::new(RcStr::from(src.as_str()).into())),
             ImportAttributes::new_from_swc(&i.clone()).into(),
             self.import_context,
             IssueSource::from_swc_offsets(

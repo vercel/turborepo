@@ -167,12 +167,12 @@ impl DevHtmlAsset {
 
 #[turbo_tasks::value]
 struct DevHtmlAssetContent {
-    chunk_paths: Vec<String>,
-    body: Option<String>,
+    chunk_paths: Vec<RcStr>,
+    body: Option<RcStr>,
 }
 
 impl DevHtmlAssetContent {
-    fn new(chunk_paths: Vec<String>, body: Option<String>) -> Vc<Self> {
+    fn new(chunk_paths: Vec<RcStr>, body: Option<RcStr>) -> Vc<Self> {
         DevHtmlAssetContent { chunk_paths, body }.cell()
     }
 }
@@ -204,12 +204,13 @@ impl DevHtmlAssetContent {
             None => "",
         };
 
-        let html = format!(
+        let html: RcStr = format!(
             "<!DOCTYPE html>\n<html>\n<head>\n{}\n</head>\n<body>\n{}\n{}\n</body>\n</html>",
             stylesheets.join("\n"),
             body,
             scripts.join("\n"),
-        );
+        )
+        .into();
 
         Ok(AssetContent::file(
             File::from(html).with_content_type(TEXT_HTML_UTF_8).into(),
