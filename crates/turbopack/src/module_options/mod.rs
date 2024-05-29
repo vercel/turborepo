@@ -415,9 +415,9 @@ impl ModuleOptions {
                     .context("execution_context is required for the postcss_transform")?;
 
                 let import_map = if let Some(postcss_package) = options.postcss_package {
-                    package_import_map_from_import_mapping("postcss".to_string(), postcss_package)
+                    package_import_map_from_import_mapping("postcss".into(), postcss_package)
                 } else {
-                    package_import_map_from_context("postcss".to_string(), path)
+                    package_import_map_from_context("postcss".into(), path)
                 };
 
                 rules.push(ModuleRule::new(
@@ -428,7 +428,7 @@ impl ModuleOptions {
                                 execution_context,
                                 Some(import_map),
                                 None,
-                                "postcss".to_string(),
+                                "postcss".into(),
                             ),
                             execution_context,
                             options.config_location,
@@ -542,11 +542,11 @@ impl ModuleOptions {
                 webpack_loaders_options.loader_runner_package
             {
                 package_import_map_from_import_mapping(
-                    "loader-runner".to_string(),
+                    "loader-runner".into(),
                     loader_runner_package,
                 )
             } else {
-                package_import_map_from_context("loader-runner".to_string(), path)
+                package_import_map_from_context("loader-runner".into(), path)
             };
             for (glob, rule) in webpack_loaders_options.rules.await?.iter() {
                 rules.push(ModuleRule::new(
@@ -576,7 +576,7 @@ impl ModuleOptions {
                                     execution_context,
                                     Some(import_map),
                                     None,
-                                    "webpack_loaders".to_string(),
+                                    "webpack_loaders".into(),
                                 ),
                                 execution_context,
                                 rule.loaders,
