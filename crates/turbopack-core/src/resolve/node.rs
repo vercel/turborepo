@@ -9,8 +9,8 @@ use super::options::{
 #[turbo_tasks::function]
 pub fn node_cjs_resolve_options(root: Vc<FileSystemPath>) -> Vc<ResolveOptions> {
     let conditions: ResolutionConditions = [
-        ("node".to_string(), ConditionValue::Set),
-        ("require".to_string(), ConditionValue::Set),
+        ("node".into(), ConditionValue::Set),
+        ("require".into(), ConditionValue::Set),
     ]
     .into();
     let extensions = vec![".js".into(), ".json".into(), ".node".into()];
@@ -39,8 +39,8 @@ pub fn node_cjs_resolve_options(root: Vc<FileSystemPath>) -> Vc<ResolveOptions> 
 #[turbo_tasks::function]
 pub fn node_esm_resolve_options(root: Vc<FileSystemPath>) -> Vc<ResolveOptions> {
     let conditions: ResolutionConditions = [
-        ("node".to_string(), ConditionValue::Set),
-        ("import".to_string(), ConditionValue::Set),
+        ("node".into(), ConditionValue::Set),
+        ("import".into(), ConditionValue::Set),
     ]
     .into();
     let extensions = vec![".js".into(), ".json".into(), ".node".into()];

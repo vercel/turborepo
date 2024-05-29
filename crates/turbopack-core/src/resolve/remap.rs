@@ -74,7 +74,7 @@ impl AliasTemplate for SubpathValue {
                     .map(|(condition, value)| Ok((condition.clone(), value.replace(capture)?)))
                     .collect::<Result<Vec<_>>>()?,
             ),
-            SubpathValue::Result(value) => SubpathValue::Result(value.replace('*', capture)),
+            SubpathValue::Result(value) => SubpathValue::Result(value.replace('*', capture).into()),
             SubpathValue::Excluded => SubpathValue::Excluded,
         })
     }
@@ -171,7 +171,7 @@ impl SubpathValue {
     fn try_new(value: &Value, ty: ExportImport) -> Result<Self> {
         match value {
             Value::Null => Ok(SubpathValue::Excluded),
-            Value::String(s) => Ok(SubpathValue::Result(s.to_string())),
+            Value::String(s) => Ok(SubpathValue::Result(s.into())),
             Value::Number(_) => bail!("numeric values are invalid in {ty}s field entries"),
             Value::Bool(_) => bail!("boolean values are invalid in {ty}s field entries"),
             Value::Object(object) => Ok(SubpathValue::Conditional(
@@ -186,7 +186,7 @@ impl SubpathValue {
                             );
                         }
 
-                        Ok((key.to_string(), SubpathValue::try_new(value, ty)?))
+                        Ok((key.as_str().into(), SubpathValue::try_new(value, ty)?))
                     })
                     .collect::<Result<Vec<_>>>()?,
             )),
