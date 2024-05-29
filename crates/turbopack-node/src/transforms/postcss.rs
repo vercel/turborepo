@@ -374,7 +374,7 @@ impl PostCssTransformedAsset {
             .await?
             .get_relative_path_to(&*css_fs_path.await?)
         {
-            css_path
+            css_path.into_owned()
         } else {
             // This shouldn't be an error since it can happen on virtual assets
             "".into()

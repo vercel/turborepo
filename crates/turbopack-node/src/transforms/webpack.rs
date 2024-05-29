@@ -607,7 +607,7 @@ async fn apply_webpack_resolve_options(
             .extract_if(|field| matches!(field, ResolveIntoPackage::MainField { .. }))
             .collect::<Vec<_>>();
         for field in main_fields {
-            if field == "..." {
+            if &*field == "..." {
                 resolve_options.into_package.extend(take(&mut old));
             } else {
                 resolve_options

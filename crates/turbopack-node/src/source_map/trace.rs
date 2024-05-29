@@ -140,7 +140,12 @@ impl SourceMapTrace {
                 file: t.original_file.clone().into(),
                 line: Some(t.original_line.saturating_add(1)),
                 column: Some(t.original_column.saturating_add(1)),
-                name: t.name.clone().or_else(|| this.name.clone()).map(Into::into),
+                name: t
+                    .name
+                    .clone()
+                    .or_else(|| this.name.clone())
+                    .map(|v| v.into_owned())
+                    .map(Cow::Owned),
             }),
             _ => TraceResult::NotFound,
         };
