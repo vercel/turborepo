@@ -46,12 +46,12 @@ pub async fn node_evaluate_asset_context(
         .cell(),
     );
     let import_map = import_map.cell();
-    let node_env = if let Some(node_env) = &*execution_context.env().read("NODE_ENV".into()).await?
-    {
-        node_env.clone()
-    } else {
-        "development".to_string()
-    };
+    let node_env: RcStr =
+        if let Some(node_env) = &*execution_context.env().read("NODE_ENV".into()).await? {
+            node_env.as_str().into()
+        } else {
+            "development".into()
+        };
 
     // base context used for node_modules (and context for app code will be derived
     // from this)
@@ -59,7 +59,7 @@ pub async fn node_evaluate_asset_context(
         enable_node_modules: Some(execution_context.project_path().root().resolve().await?),
         enable_node_externals: true,
         enable_node_native_modules: true,
-        custom_conditions: vec![node_env.into(), "node".into()],
+        custom_conditions: vec![node_env.clone().into(), "node".into()],
         ..Default::default()
     };
     // app code context, includes a rule to switch to the node_modules context
