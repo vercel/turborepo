@@ -474,7 +474,7 @@ async fn apply_typescript_types_options(
     resolve_options
         .into_package
         .push(ResolveIntoPackage::MainField {
-            field: "types".to_string(),
+            field: "types".into(),
         });
     for conditions in get_condition_maps(&mut resolve_options) {
         conditions.insert("types".to_string(), ConditionValue::Set);

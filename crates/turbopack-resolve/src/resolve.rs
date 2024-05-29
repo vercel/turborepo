@@ -219,16 +219,16 @@ async fn base_resolve_options(
             }];
             if opt.browser {
                 resolve_into.push(ResolveIntoPackage::MainField {
-                    field: "browser".to_string(),
+                    field: "browser".into(),
                 });
             }
             if opt.module {
                 resolve_into.push(ResolveIntoPackage::MainField {
-                    field: "module".to_string(),
+                    field: "module".into(),
                 });
             }
             resolve_into.push(ResolveIntoPackage::MainField {
-                field: "main".to_string(),
+                field: "main".into(),
             });
             resolve_into
         },
@@ -238,7 +238,7 @@ async fn base_resolve_options(
                 unspecified_conditions: ConditionValue::Unset,
             }];
             if opt.browser {
-                resolve_in.push(ResolveInPackage::AliasField("browser".to_string()));
+                resolve_in.push(ResolveInPackage::AliasField("browser".into()));
             }
             resolve_in
         },
