@@ -2143,7 +2143,7 @@ async fn apply_in_package(
             severity: IssueSeverity::Error.cell(),
             file_path: *package_json_path,
             request_type: format!("alias field ({field})"),
-            request: Request::parse(Value::new(Pattern::Constant(request.into()))),
+            request: Request::parse(Value::new(Pattern::Constant(request))),
             resolve_options: options,
             error_message: Some(format!("invalid alias field value: {}", value)),
             source: None,

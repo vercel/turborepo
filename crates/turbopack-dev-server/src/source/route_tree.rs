@@ -3,7 +3,7 @@ use std::{fmt::Write, mem::replace};
 use anyhow::Result;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use turbo_tasks::{trace::TraceRawVcs, TaskInput, TryJoinIterExt, ValueToString, Vc};
+use turbo_tasks::{trace::TraceRawVcs, RcStr, TaskInput, TryJoinIterExt, ValueToString, Vc};
 
 use super::{GetContentSourceContent, GetContentSourceContents};
 
@@ -20,7 +20,7 @@ pub enum RouteType {
 /// Some normal segment of a route.
 #[derive(TaskInput, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
 pub enum BaseSegment {
-    Static(String),
+    Static(RcStr),
     Dynamic,
 }
 

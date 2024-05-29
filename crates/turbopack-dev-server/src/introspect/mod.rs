@@ -1,7 +1,7 @@
 use std::{borrow::Cow, collections::HashSet, fmt::Display};
 
 use anyhow::Result;
-use turbo_tasks::{ReadRef, TryJoinIterExt, Vc};
+use turbo_tasks::{RcStr, ReadRef, TryJoinIterExt, Vc};
 use turbo_tasks_fs::{json::parse_json_with_source_context, File};
 use turbopack_core::{
     asset::AssetContent,
@@ -153,7 +153,7 @@ impl GetContentSourceContent for IntrospectionSource {
                 details = HtmlEscaped(details)
             )
         };
-        let html = format!(
+        let html: RcStr = format!(
             "<!DOCTYPE html>
     <html><head><title>{title}</title></head>
     <body>
@@ -167,7 +167,8 @@ impl GetContentSourceContent for IntrospectionSource {
             title = HtmlEscaped(title),
             ty = HtmlEscaped(ty),
             children = FormatIter(|| children.iter())
-        );
+        )
+        .into();
         Ok(ContentSourceContent::static_content(
             AssetContent::file(
                 File::from(html)
