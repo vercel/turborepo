@@ -30,5 +30,10 @@ pub async fn split_scopes(
 }
 
 pub trait DepGraph {
-    fn has_edge(&self, from: ModuleId, to: ModuleId) -> bool;
+    fn get_edge(&self, from: ModuleId, to: ModuleId) -> Option<EdgeData>;
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct EdgeData {
+    pub is_lazy: bool,
 }
