@@ -1,5 +1,5 @@
 use anyhow::Result;
-use turbo_tasks::{Value, Vc};
+use turbo_tasks::{RcStr, Value, Vc};
 
 use super::{
     ContentSourceContent, ContentSourceData, ContentSourceDataVary, GetContentSourceContent,

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use turbo_tasks::{Value, Vc};
+use turbo_tasks::{RcStr, Value, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     introspect::{Introspectable, IntrospectableChildren},
@@ -15,7 +15,7 @@ use super::{
 #[turbo_tasks::value]
 pub struct IssueFilePathContentSource {
     file_path: Option<Vc<FileSystemPath>>,
-    description: String,
+    description: RcStr,
     source: Vc<Box<dyn ContentSource>>,
 }
 

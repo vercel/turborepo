@@ -80,7 +80,7 @@ impl DevHtmlAsset {
     pub fn new_with_body(
         path: Vc<FileSystemPath>,
         entries: Vec<DevHtmlEntry>,
-        body: String,
+        body: RcStr,
     ) -> Vc<Self> {
         DevHtmlAsset {
             path,
