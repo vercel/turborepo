@@ -314,7 +314,7 @@ export class Project {
         this.projectRoot.turboConfig
       );
 
-      Object.entries(this.projectRoot.turboConfig.pipeline).forEach(
+      Object.entries(this.projectRoot.turboConfig.tasks).forEach(
         ([taskName, taskDefinition]) => {
           const { workspaceName, scriptName } = getTaskAddress(taskName);
           if (workspaceName) {
@@ -341,7 +341,7 @@ export class Project {
         return;
       }
 
-      Object.entries(projectWorkspace.turboConfig.pipeline).forEach(
+      Object.entries(projectWorkspace.turboConfig.tasks).forEach(
         ([taskName, taskDefinition]) => {
           const { workspaceName: erroneousWorkspaceName, scriptName } =
             getTaskAddress(taskName);

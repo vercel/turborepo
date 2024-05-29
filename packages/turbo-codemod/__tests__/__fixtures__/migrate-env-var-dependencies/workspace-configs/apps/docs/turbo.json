@@ -1,9 +1,13 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "extends": ["//"],
-  "pipeline": {
+  "extends": [
+    "//"
+  ],
+  "tasks": {
     "build": {
-      "env": ["ENV_3"]
+      "env": [
+        "ENV_3"
+      ]
     }
   }
 }

@@ -15,7 +15,7 @@ const DESCRIPTION =
 const INTRODUCED_IN = "1.7.0";
 
 function migrateConfig(config: TurboJsonSchema) {
-  for (const [_, taskDef] of Object.entries(config.pipeline)) {
+  for (const [_, taskDef] of Object.entries(config.tasks)) {
     if (taskDef.cache !== false) {
       if (!taskDef.outputs) {
         taskDef.outputs = DEFAULT_OUTPUTS;

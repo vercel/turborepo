@@ -15,9 +15,7 @@ const INTRODUCED_IN = "1.5.0";
 export function hasLegacyEnvVarDependencies(config: TurboJsonSchema) {
   const dependsOn = [
     "extends" in config ? [] : config.globalDependencies,
-    Object.values(config.pipeline).flatMap(
-      (pipeline) => pipeline.dependsOn ?? []
-    ),
+    Object.values(config.tasks).flatMap((pipeline) => pipeline.dependsOn ?? []),
   ].flat();
   const envVars = dependsOn.filter((dep) => dep?.startsWith("$"));
   return { hasKeys: Boolean(envVars.length), envVars };
@@ -93,11 +91,11 @@ export function migrateGlobal(config: TurboJsonSchema) {
 
 export function migrateConfig(config: TurboJsonSchema) {
   const migratedConfig = migrateGlobal(config);
-  Object.keys(config.pipeline).forEach((pipelineKey) => {
-    config.pipeline;
-    if (pipelineKey in config.pipeline) {
-      const pipeline = migratedConfig.pipeline[pipelineKey];
-      migratedConfig.pipeline[pipelineKey] = {
+  Object.keys(config.tasks).forEach((pipelineKey) => {
+    config.tasks;
+    if (pipelineKey in config.tasks) {
+      const pipeline = migratedConfig.tasks[pipelineKey];
+      migratedConfig.tasks[pipelineKey] = {
         ...pipeline,
         ...migratePipeline(pipeline),
       };

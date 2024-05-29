@@ -14,7 +14,7 @@ export interface BaseSchema {
    * @defaultValue `{}`
    */
   // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style -- it's more readable to specify a name for the key
-  pipeline: {
+  tasks: {
     /**
      * The name of a task that can be executed by turbo. If turbo finds a workspace
      * package with a package.json scripts object with a matching key, it will apply the

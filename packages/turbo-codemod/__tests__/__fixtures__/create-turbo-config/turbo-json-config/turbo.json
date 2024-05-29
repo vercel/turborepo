@@ -1,12 +1,15 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "pipeline": {
+  "tasks": {
     "turbo-only": {
       "cache": false,
       "persistent": true
     },
     "build": {
-      "outputs": [".next/**", "!.next/cache/**"]
+      "outputs": [
+        ".next/**",
+        "!.next/cache/**"
+      ]
     },
     "lint": {
       "outputs": []

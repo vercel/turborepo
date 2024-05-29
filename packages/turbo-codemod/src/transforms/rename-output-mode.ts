@@ -13,7 +13,7 @@ const DESCRIPTION =
 const INTRODUCED_IN = "2.0.0";
 
 function migrateConfig(config: TurboJsonSchema) {
-  for (const [_, taskDef] of Object.entries(config.pipeline)) {
+  for (const [_, taskDef] of Object.entries(config.tasks)) {
     if (Object.prototype.hasOwnProperty.call(taskDef, "outputMode")) {
       //@ts-expect-error - outputMode is no longer in the schema
       taskDef.outputLogs = taskDef.outputMode as OutputMode;

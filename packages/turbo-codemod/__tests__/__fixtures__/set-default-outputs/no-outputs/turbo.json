@@ -1,8 +1,10 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "pipeline": {
+  "tasks": {
     "build-one": {
-      "dependsOn": ["build-two"]
+      "dependsOn": [
+        "build-two"
+      ]
     },
     "build-two": {
       "cache": false

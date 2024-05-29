@@ -1,9 +1,13 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "extends": ["//"],
-  "pipeline": {
+  "extends": [
+    "//"
+  ],
+  "tasks": {
     "build": {
-      "dependsOn": ["$IS_SERVER"]
+      "dependsOn": [
+        "$IS_SERVER"
+      ]
     }
   }
 }

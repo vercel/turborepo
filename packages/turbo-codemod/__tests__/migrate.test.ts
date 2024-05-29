@@ -77,7 +77,7 @@ describe("migrate", () => {
     });
     expect(readJson("turbo.json")).toStrictEqual({
       $schema: "https://turbo.build/schema.json",
-      pipeline: {
+      tasks: {
         build: {
           outputs: [".next/**", "!.next/cache/**"],
         },
@@ -234,7 +234,7 @@ describe("migrate", () => {
     });
     expect(readJson("turbo.json")).toStrictEqual({
       $schema: "https://turbo.build/schema.json",
-      pipeline: {
+      tasks: {
         build: {
           outputs: [".next/**", "!.next/cache/**"],
         },
@@ -319,7 +319,7 @@ describe("migrate", () => {
     });
     expect(readJson("turbo.json")).toStrictEqual({
       $schema: "https://turbo.build/schema.json",
-      pipeline: {
+      tasks: {
         build: {
           outputs: [".next/**", "!.next/cache/**"],
         },
@@ -525,7 +525,7 @@ describe("migrate", () => {
     });
     expect(readJson("turbo.json")).toStrictEqual({
       $schema: "https://turbo.build/schema.json",
-      pipeline: {
+      tasks: {
         build: {
           outputs: [".next/**", "!.next/cache/**"],
         },
@@ -633,7 +633,7 @@ describe("migrate", () => {
     });
     expect(readJson("turbo.json")).toStrictEqual({
       $schema: "https://turbo.build/schema.json",
-      pipeline: {
+      tasks: {
         build: {
           outputs: [".next/**", "!.next/cache/**"],
         },

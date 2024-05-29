@@ -1,9 +1,15 @@
 {
-  "extends": ["//"],
-  "pipeline": {
+  "extends": [
+    "//"
+  ],
+  "tasks": {
     "build": {
-      "experimentalPassThroughEnv": ["EXPERIMENTAL_DOCS_TASK_PASSTHROUGH"],
-      "passThroughEnv": ["DOCS_TASK_PASSTHROUGH"]
+      "experimentalPassThroughEnv": [
+        "EXPERIMENTAL_DOCS_TASK_PASSTHROUGH"
+      ],
+      "passThroughEnv": [
+        "DOCS_TASK_PASSTHROUGH"
+      ]
     }
   }
 }

@@ -1,9 +1,17 @@
 {
-  "extends": ["//"],
-  "pipeline": {
+  "extends": [
+    "//"
+  ],
+  "tasks": {
     "build": {
-      "env": ["NO_DOCS_ENV", "!*!*DOCS"],
-      "passThroughEnv": ["NO_DOCS_PASSTHROUGH_ENV", "!*!*DOCS"]
+      "env": [
+        "NO_DOCS_ENV",
+        "!*!*DOCS"
+      ],
+      "passThroughEnv": [
+        "NO_DOCS_PASSTHROUGH_ENV",
+        "!*!*DOCS"
+      ]
     }
   }
 }

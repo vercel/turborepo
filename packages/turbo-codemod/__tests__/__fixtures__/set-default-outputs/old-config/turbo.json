@@ -1,8 +1,10 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "pipeline": {
+  "tasks": {
     "build-one": {
-      "outputs": ["foo"]
+      "outputs": [
+        "foo"
+      ]
     },
     "build-two": {
       "outputs": []

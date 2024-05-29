@@ -1,9 +1,17 @@
 {
-  "extends": ["//"],
-  "pipeline": {
+  "extends": [
+    "//"
+  ],
+  "tasks": {
     "build": {
-      "env": ["NO_WEBSITE_ENV", "!*!*WEBSITE"],
-      "passThroughEnv": ["NO_WEBSITE_PASSTHROUGH_ENV", "!*!*WEBSITE"]
+      "env": [
+        "NO_WEBSITE_ENV",
+        "!*!*WEBSITE"
+      ],
+      "passThroughEnv": [
+        "NO_WEBSITE_PASSTHROUGH_ENV",
+        "!*!*WEBSITE"
+      ]
     }
   }
 }
