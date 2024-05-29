@@ -110,7 +110,7 @@ impl ValueToString for TsReferencePathAssetReference {
 #[derive(Hash, Debug)]
 pub struct TsReferenceTypeAssetReference {
     pub origin: Vc<Box<dyn ResolveOrigin>>,
-    pub module: String,
+    pub module: RcStr,
 }
 
 #[turbo_tasks::value_impl]
@@ -129,7 +129,7 @@ impl ModuleReference for TsReferenceTypeAssetReference {
             self.origin,
             Request::module(
                 self.module.clone(),
-                Value::new("".to_string().into()),
+                Value::new("".into()),
                 Vc::<String>::default(),
                 Vc::<String>::default(),
             ),

@@ -2737,7 +2737,7 @@ impl<'a> VisitAstPath for ModuleReferencesVisitor<'a> {
                                     if let [ExprOrSpread { spread: None, expr }] = &call.args[..] {
                                         if let Some(Lit::Str(str)) = expr.as_lit() {
                                             self.webpack_runtime =
-                                                Some((str.value.to_string(), call.span));
+                                                Some((str.value.as_str().into(), call.span));
                                             return;
                                         }
                                     }
