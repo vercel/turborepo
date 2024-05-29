@@ -25,7 +25,8 @@ Setup
         "configured": [],
         "inferred": [],
         "passthrough": null
-      }
+      },
+      "engines": null
     },
     "envMode": "strict",
     "frameworkInference": true,
@@ -33,7 +34,7 @@ Setup
       {
         "taskId": "build",
         "task": "build",
-        "hash": "12c592ddc0e53a5c",
+        "hash": "e2b99dad85a4ff66",
         "inputs": {
           ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
