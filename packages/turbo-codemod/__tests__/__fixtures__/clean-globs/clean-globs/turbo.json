@@ -2,24 +2,12 @@
   "$schema": "../../../../../../docs/public/schema.json",
   "tasks": {
     "case_1": {
-      "inputs": [
-        "../../app-store/**/**",
-        "**/**/result.json"
-      ],
-      "outputs": [
-        "../../app-store/**/**",
-        "**/**/result.json"
-      ]
+      "inputs": ["../../app-store/**/**", "**/**/result.json"],
+      "outputs": ["../../app-store/**/**", "**/**/result.json"]
     },
     "case_2": {
-      "inputs": [
-        "!**/dist",
-        "!**/node_modules"
-      ],
-      "outputs": [
-        "!**/dist",
-        "!**/node_modules"
-      ]
+      "inputs": ["!**/dist", "!**/node_modules"],
+      "outputs": ["!**/dist", "!**/node_modules"]
     },
     "case_3": {
       "inputs": [

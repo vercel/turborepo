@@ -1,19 +1,12 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "extends": [
-    "//"
-  ],
+  "extends": ["//"],
   "tasks": {
     "build": {
       // old
-      "dependsOn": [
-        "build",
-        "$ENV_2"
-      ],
+      "dependsOn": ["build", "$ENV_2"],
       // new
-      "env": [
-        "ENV_1"
-      ]
+      "env": ["ENV_1"]
     }
   }
 }

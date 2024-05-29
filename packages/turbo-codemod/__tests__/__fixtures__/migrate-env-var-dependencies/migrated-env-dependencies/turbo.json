@@ -1,40 +1,24 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": [],
-  "globalEnv": [
-    "NEXT_PUBLIC_API_KEY",
-    "STRIPE_API_KEY"
-  ],
+  "globalEnv": ["NEXT_PUBLIC_API_KEY", "STRIPE_API_KEY"],
   "tasks": {
     "build": {
-      "dependsOn": [
-        "^build"
-      ],
-      "env": [
-        "PROD_API_KEY"
-      ],
-      "outputs": [
-        ".next/**",
-        "!.next/cache/**"
-      ]
+      "dependsOn": ["^build"],
+      "env": ["PROD_API_KEY"],
+      "outputs": [".next/**", "!.next/cache/**"]
     },
     "dev": {
       "cache": false
     },
     "lint": {
       "dependsOn": [],
-      "env": [
-        "IS_CI"
-      ],
+      "env": ["IS_CI"],
       "outputs": []
     },
     "test": {
-      "dependsOn": [
-        "test"
-      ],
-      "env": [
-        "IS_CI"
-      ],
+      "dependsOn": ["test"],
+      "env": ["IS_CI"],
       "outputs": []
     }
   }

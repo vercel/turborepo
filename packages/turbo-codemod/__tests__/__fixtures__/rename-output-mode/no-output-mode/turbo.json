@@ -2,9 +2,7 @@
   "$schema": "https://turbo.build/schema.json",
   "tasks": {
     "build-one": {
-      "dependsOn": [
-        "build-two"
-      ]
+      "dependsOn": ["build-two"]
     },
     "build-two": {
       "cache": false
