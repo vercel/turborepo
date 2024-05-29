@@ -420,7 +420,7 @@ pub trait ContentSourceExt: Send {
     fn issue_file_path(
         self: Vc<Self>,
         file_path: Vc<FileSystemPath>,
-        description: String,
+        description: RcStr,
     ) -> Vc<Box<dyn ContentSource>>;
 }
 
