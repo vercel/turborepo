@@ -23,17 +23,19 @@ pub struct ModuleScope {
 #[turbo_tasks::function]
 pub async fn split_scopes(
     entry: Vc<ModuleId>,
-    deps: Vc<FxHashMap<ModuleId, ModuleIds>>,
-    lazy: Vc<FxHashSet<(ModuleId, ModuleId)>>,
+    dep_graph: Vc<Box<dyn DepGraph>>,
 ) -> Result<Vc<Vec<Vc<ModuleScopeGroup>>>> {
     // If a module is imported only as lazy, it should be in a separate scope
 }
 
+#[turbo_tasks::value_trait]
 pub trait DepGraph {
-    fn get_edge(&self, from: ModuleId, to: ModuleId) -> Option<EdgeData>;
+    fn deps(&self, id: Vc<ModuleId>) -> Vc<ModuleIds>;
+
+    fn get_edge(&self, from: Vc<ModuleId>, to: ModuleId) -> Vc<Option<EdgeData>>;
 }
 
-#[derive(Debug, Clone, Copy)]
+#[turbo_tasks::value]
 pub struct EdgeData {
     pub is_lazy: bool,
 }
