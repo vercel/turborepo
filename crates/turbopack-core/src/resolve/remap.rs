@@ -171,7 +171,7 @@ impl SubpathValue {
     fn try_new(value: &Value, ty: ExportImport) -> Result<Self> {
         match value {
             Value::Null => Ok(SubpathValue::Excluded),
-            Value::String(s) => Ok(SubpathValue::Result(s.into())),
+            Value::String(s) => Ok(SubpathValue::Result(s.as_str().into())),
             Value::Number(_) => bail!("numeric values are invalid in {ty}s field entries"),
             Value::Bool(_) => bail!("boolean values are invalid in {ty}s field entries"),
             Value::Object(object) => Ok(SubpathValue::Conditional(
@@ -205,7 +205,7 @@ struct ResultsIterMut<'a> {
 }
 
 impl<'a> Iterator for ResultsIterMut<'a> {
-    type Item = &'a mut String;
+    type Item = &'a mut RcStr;
 
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(value) = self.stack.pop() {
@@ -272,7 +272,7 @@ impl TryFrom<&Value> for ExportsField {
                                 .into_iter()
                                 .map(|(key, value)| {
                                     Ok((
-                                        key.to_string(),
+                                        key.as_str().into(),
                                         SubpathValue::try_new(value, ExportImport::Export)?,
                                     ))
                                 })
@@ -287,7 +287,7 @@ impl TryFrom<&Value> for ExportsField {
                 let mut map = AliasMap::new();
                 map.insert(
                     AliasPattern::exact("."),
-                    SubpathValue::Result(string.to_string()),
+                    SubpathValue::Result(string.as_str().into()),
                 );
                 map
             }
@@ -379,7 +379,9 @@ fn expand_folder_shorthand(key: &str, value: &mut SubpathValue) -> Result<AliasP
     for result in value.results_mut() {
         if result.ends_with('/') {
             if result.find('*').is_none() {
-                result.push('*');
+                result.mutate(|result| {
+                    result.push('*');
+                });
             } else {
                 bail!(
                     "invalid exports field value \"{}\" for key \"{}\": \"*\" is not allowed in \
