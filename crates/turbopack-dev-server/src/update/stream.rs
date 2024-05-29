@@ -55,7 +55,7 @@ async fn get_update_stream_item(
         Err(e) => {
             plain_issues.push(
                 FatalStreamIssue {
-                    resource: resource,
+                    resource,
                     description: StyledString::Text(format!("{}", PrettyPrintError(&e))).cell(),
                 }
                 .cell()
