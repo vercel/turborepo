@@ -11,6 +11,7 @@ use std::{
 
 use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
+use turbo_tasks_hash::{DeterministicHash, DeterministicHasher};
 
 use super::concrete_task_input::TransientSharedValue;
 use crate::{
@@ -66,6 +67,13 @@ impl RcStr {
         let mut s = self.0.as_ref().clone();
         f(&mut s);
         self.0 = Arc::new(s);
+    }
+}
+
+impl DeterministicHash for RcStr {
+    fn deterministic_hash<H: DeterministicHasher>(&self, state: &mut H) {
+        state.write_usize(self.len());
+        state.write_bytes(self.as_bytes());
     }
 }
 
