@@ -54,7 +54,7 @@ impl ContentSource for IssueFilePathContentSource {
         let routes = this
             .source
             .get_routes()
-            .issue_file_path(this.file_path, &this.description)
+            .issue_file_path(this.file_path, &*this.description)
             .await?;
         Ok(routes.map_routes(Vc::upcast(
             IssueContextContentSourceMapper { source: self }.cell(),

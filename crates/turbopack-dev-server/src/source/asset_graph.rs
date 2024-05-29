@@ -193,16 +193,16 @@ async fn expand(
 fn get_sub_paths(sub_path: &str) -> ([RcStr; 3], usize) {
     let sub_paths_buffer: [RcStr; 3];
     let n = if sub_path == "index.html" {
-        sub_paths_buffer = ["".into(), sub_path.into(), String::new()];
+        sub_paths_buffer = ["".into(), sub_path.into(), Default::default()];
         2
     } else if let Some(p) = sub_path.strip_suffix("/index.html") {
-        sub_paths_buffer = [p.into(), format!("{p}/"), sub_path.into()];
+        sub_paths_buffer = [p.into(), format!("{p}/").into(), sub_path.into()];
         3
     } else if let Some(p) = sub_path.strip_suffix(".html") {
-        sub_paths_buffer = [p.into(), sub_path.into(), String::new()];
+        sub_paths_buffer = [p.into(), sub_path.into(), Default::default()];
         2
     } else {
-        sub_paths_buffer = [sub_path.into(), String::new(), String::new()];
+        sub_paths_buffer = [sub_path.into(), Default::default(), Default::default()];
         1
     };
     (sub_paths_buffer, n)

@@ -40,7 +40,7 @@ impl PrefixedRouterContentSource {
 }
 
 fn get_children(
-    routes: &[(String, Vc<Box<dyn ContentSource>>)],
+    routes: &[(RcStr, Vc<Box<dyn ContentSource>>)],
     fallback: &Vc<Box<dyn ContentSource>>,
 ) -> Vc<ContentSources> {
     Vc::cell(
@@ -53,7 +53,7 @@ fn get_children(
 }
 
 async fn get_introspection_children(
-    routes: &[(String, Vc<Box<dyn ContentSource>>)],
+    routes: &[(RcStr, Vc<Box<dyn ContentSource>>)],
     fallback: &Vc<Box<dyn ContentSource>>,
 ) -> Result<Vc<IntrospectableChildren>> {
     Ok(Vc::cell(
@@ -120,7 +120,7 @@ impl ContentSource for PrefixedRouterContentSource {
 #[turbo_tasks::value]
 struct PrefixedRouterContentSourceMapper {
     prefix: Vc<String>,
-    path: String,
+    path: RcStr,
 }
 
 #[turbo_tasks::value_impl]
