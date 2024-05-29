@@ -1,6 +1,6 @@
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use turbo_tasks::{trace::TraceRawVcs, ValueDefault, Vc};
+use turbo_tasks::{trace::TraceRawVcs, RcStr, ValueDefault, Vc};
 use turbopack_core::{
     condition::ContextCondition, environment::Environment, resolve::options::ImportMapping,
 };
@@ -16,12 +16,12 @@ use super::ModuleRule;
 #[derive(Clone, PartialEq, Eq, Debug, TraceRawVcs, Serialize, Deserialize)]
 pub struct LoaderRuleItem {
     pub loaders: Vc<WebpackLoaderItems>,
-    pub rename_as: Option<String>,
+    pub rename_as: Option<RcStr>,
 }
 
 #[derive(Default)]
 #[turbo_tasks::value(transparent)]
-pub struct WebpackRules(IndexMap<String, LoaderRuleItem>);
+pub struct WebpackRules(IndexMap<RcStr, LoaderRuleItem>);
 
 #[derive(Default)]
 #[turbo_tasks::value(transparent)]
