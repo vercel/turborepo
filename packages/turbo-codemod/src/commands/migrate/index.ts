@@ -150,12 +150,6 @@ export async function migrate(
     });
   }
 
-  // if migrating "from" to "to" spans a major, floor "from" to ensure all required codemods are run
-  const fromMajor = fromVersion.split(".")[0];
-  if (fromMajor !== toVersion.split(".")[0]) {
-    fromVersion = `${fromMajor}.0.0`;
-  }
-
   // step 3
   const codemods = getTransformsForMigration({ fromVersion, toVersion });
   if (codemods.length === 0) {

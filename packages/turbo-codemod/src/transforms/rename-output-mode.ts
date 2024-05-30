@@ -11,7 +11,7 @@ import type { TransformerResults } from "../runner";
 const TRANSFORMER = "rename-output-mode";
 const DESCRIPTION =
   'Rename the "outputMode" key to "outputLogs" in `turbo.json`';
-const INTRODUCED_IN = "2.0.0";
+const INTRODUCED_IN = "2.0.0-canary.0";
 
 function migrateConfig(config: SchemaV1) {
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
