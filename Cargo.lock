@@ -737,6 +737,8 @@ dependencies = [
 [[package]]
 name = "biome_console"
 version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c672a9e31e47f8df74549a570ea3245a93ce3404115c724bb16762fcbbfe17e1"
 dependencies = [
     "biome_markup",
     "biome_text_size",
@@ -749,7 +751,9 @@ dependencies = [
 
 [[package]]
 name = "biome_deserialize"
-version = "0.5.7"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6f619dc8ca0595ed8850d729ebc71722d4233aba68c5aec7d9993a53e59f3fe"
 dependencies = [
     "biome_console",
     "biome_deserialize_macros",
@@ -765,7 +769,9 @@ dependencies = [
 
 [[package]]
 name = "biome_deserialize_macros"
-version = "0.5.7"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07c12826fff87ac09f63bbacf8bdf5225dfdf890da04d426f758cbcacf068e3e"
 dependencies = [
     "biome_string_case",
     "proc-macro-error",
@@ -777,6 +783,8 @@ dependencies = [
 [[package]]
 name = "biome_diagnostics"
 version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe1317b6d610541c4e6a0e1f803a946f153ace3468bbc77a8f273dcb04ee526f"
 dependencies = [
     "backtrace",
     "biome_console",
@@ -798,6 +806,8 @@ dependencies = [
 [[package]]
 name = "biome_diagnostics_categories"
 version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "832080d68a2ee2f198d98ff5d26fc0f5c2566907f773d105a4a049ee07664d19"
 dependencies = [
     "quote",
     "serde",
@@ -806,6 +816,8 @@ dependencies = [
 [[package]]
 name = "biome_diagnostics_macros"
 version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "540fec04d2e789fb992128c63d111b650733274afffff1cb3f26c8dff5167d3b"
 dependencies = [
     "proc-macro-error",
     "proc-macro2",
@@ -816,6 +828,8 @@ dependencies = [
 [[package]]
 name = "biome_json_factory"
 version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e409eb289040f3660689dad178b00b6ac8cfa9a7fffd8225f35cb6b3d36437cf"
 dependencies = [
     "biome_json_syntax",
     "biome_rowan",
@@ -824,6 +838,8 @@ dependencies = [
 [[package]]
 name = "biome_json_parser"
 version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c6d23fb9b683e6356c094b4a0cb38f8aa0acee60ce9c3ef24628d21a204de4d"
 dependencies = [
     "biome_console",
     "biome_diagnostics",
@@ -839,6 +855,8 @@ dependencies = [
 [[package]]
 name = "biome_json_syntax"
 version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2645ca57f75680d3d390b2482c35db5850b1d849e1f96151a12f15f4abdb097"
 dependencies = [
     "biome_rowan",
     "serde",
@@ -847,6 +865,8 @@ dependencies = [
 [[package]]
 name = "biome_markup"
 version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a7f11cf91599594528e97d216044ef4e410a103327212d909f215cbafe2fd9c"
 dependencies = [
     "proc-macro-error",
     "proc-macro2",
@@ -856,6 +876,8 @@ dependencies = [
 [[package]]
 name = "biome_parser"
 version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "955dd999f32c086371d5c0e64b4ea1a50f50c98f1f31a3b9fe17ef47198de19b"
 dependencies = [
     "biome_console",
     "biome_diagnostics",
@@ -869,6 +891,8 @@ dependencies = [
 [[package]]
 name = "biome_rowan"
 version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3c2dc25a7ba6ae89526340034abed6c89fac35b79060786771e32ed4aac77e7"
 dependencies = [
     "biome_text_edit",
     "biome_text_size",
@@ -881,10 +905,14 @@ dependencies = [
 [[package]]
 name = "biome_string_case"
 version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c28b4d0e08c2f13f1c9e0df4e7a8f9bfa03ef3803713d1bcd5110578cc5c67be"
 
 [[package]]
 name = "biome_text_edit"
 version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d486fdd96d5dad6428213ce64e6b9eb5bfb2fce6387fe901e844d386283de509"
 dependencies = [
     "biome_text_size",
     "serde",
@@ -894,6 +922,8 @@ dependencies = [
 [[package]]
 name = "biome_text_size"
 version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ec604d15cefdced636255400359aeacfdea5d1e79445efc7aa32a0de7f0319b"
 dependencies = [
     "serde",
 ]
@@ -901,6 +931,8 @@ dependencies = [
 [[package]]
 name = "biome_unicode_table"
 version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "87e8604d34b02180a58af1dbdaac166f1805f27f5370934142a3246f83870952"
 
 [[package]]
 name = "bitflags"
@@ -4515,6 +4547,15 @@ dependencies = [
 
 [[package]]
 name = "memoffset"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d61c719bcfbcf5d62b3a09efa6088de8c54bc0bfcd3ea7ae39fcc186108b8de1"
+dependencies = [
+    "autocfg",
+]
+
+[[package]]
+name = "memoffset"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a634b1c61a95585bd15607c6ab0c4e5b226e695ff2800ba0cdccddf208c406c"
@@ -6451,12 +6492,6 @@ dependencies = [
     "webpki-roots 0.22.6",
     "winreg",
 ]
-
-[[package]]
-name = "result"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "194d8e591e405d1eecf28819740abed6d719d1a2db87fc0bcdedee9a26d55560"
 
 [[package]]
 name = "rgb"
@@ -11945,12 +11980,6 @@ name = "vlq"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "65dd7eed29412da847b0f78bcec0ac98588165988a8cfe41d4ea1d429f8ccfff"
-
-[[package]]
-name = "void"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
 
 [[package]]
 name = "vte"

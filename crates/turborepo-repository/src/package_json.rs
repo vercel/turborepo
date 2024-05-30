@@ -35,14 +35,17 @@ pub struct PackageJson {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pnpm: Option<PnpmConfig>,
     // Unstructured fields kept for round trip capabilities
+    #[serde(flatten)]
     pub other: BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PnpmConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub patched_dependencies: Option<BTreeMap<String, RelativeUnixPathBuf>>,
     // Unstructured config options kept for round trip capabilities
+    #[serde(flatten)]
     pub other: BTreeMap<String, serde_json::Value>,
 }
 
@@ -55,6 +58,7 @@ pub struct RawPackageJson {
     pub dev_dependencies: Option<BTreeMap<String, UnescapedString>>,
     pub optional_dependencies: Option<BTreeMap<String, UnescapedString>>,
     pub peer_dependencies: Option<BTreeMap<String, UnescapedString>>,
+    #[deserializable(rename = "turbo")]
     pub legacy_turbo_config: Option<serde_json::Value>,
     pub scripts: BTreeMap<String, UnescapedString>,
     pub resolutions: Option<BTreeMap<String, UnescapedString>>,
@@ -91,13 +95,13 @@ impl From<RawPackageJson> for PackageJson {
             package_manager: raw.package_manager.map(|s| s.into()),
             dependencies: raw
                 .dependencies
-                .map(|m| m.into_iter().map(|(k, v)| (k.into(), v.into())).collect()),
+                .map(|m| m.into_iter().map(|(k, v)| (k, v.into())).collect()),
             dev_dependencies: raw
                 .dev_dependencies
-                .map(|m| m.into_iter().map(|(k, v)| (k.into(), v.into())).collect()),
+                .map(|m| m.into_iter().map(|(k, v)| (k, v.into())).collect()),
             optional_dependencies: raw
                 .optional_dependencies
-                .map(|m| m.into_iter().map(|(k, v)| (k.into(), v.into())).collect()),
+                .map(|m| m.into_iter().map(|(k, v)| (k, v.into())).collect()),
             peer_dependencies: raw
                 .peer_dependencies
                 .map(|m| m.into_iter().map(|(k, v)| (k, v.into())).collect()),
@@ -108,7 +112,7 @@ impl From<RawPackageJson> for PackageJson {
                 .collect(),
             resolutions: raw
                 .resolutions
-                .map(|m| m.into_iter().map(|(k, v)| (k.into(), v.into())).collect()),
+                .map(|m| m.into_iter().map(|(k, v)| (k, v.into())).collect()),
             pnpm: raw.pnpm.map(|p| p.into()),
             other: raw
                 .other
@@ -165,13 +169,12 @@ impl PackageJson {
         Ok(package_json)
     }
 
-    pub fn all_dependencies(&self) -> impl Iterator<Item = (&str, &str)> + '_ {
+    pub fn all_dependencies(&self) -> impl Iterator<Item = (&String, &String)> + '_ {
         self.dev_dependencies
             .iter()
             .flatten()
             .chain(self.optional_dependencies.iter().flatten())
             .chain(self.dependencies.iter().flatten())
-            .map(|(s1, s2)| (s1.as_ref(), s2.as_ref()))
     }
 
     /// Returns the command for script_name if it is non-empty

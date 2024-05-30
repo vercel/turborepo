@@ -13,7 +13,6 @@ use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
     iter,
-    str::FromStr,
     sync::{Arc, Mutex},
 };
 

@@ -558,7 +558,7 @@ struct Dependencies {
 }
 
 impl Dependencies {
-    pub fn new<'a, S: AsRef<str> + 'a, I: IntoIterator<Item = (S, S)>>(
+    pub fn new<'a, I: IntoIterator<Item = (&'a String, &'a String)>>(
         repo_root: &AbsoluteSystemPath,
         workspace_json_path: &AnchoredSystemPathBuf,
         workspaces: &HashMap<PackageName, PackageInfo>,
@@ -575,12 +575,10 @@ impl Dependencies {
         let splitter =
             DependencySplitter::new(repo_root, workspace_dir, workspaces, package_manager, npmrc);
         for (name, version) in dependencies.into_iter() {
-            let name = name.as_ref();
-            let version = version.as_ref();
             if let Some(workspace) = splitter.is_internal(name, version) {
                 internal.insert(workspace);
             } else {
-                external.insert(name.to_owned(), version.to_owned());
+                external.insert(name.clone(), version.clone());
             }
         }
         Self { internal, external }

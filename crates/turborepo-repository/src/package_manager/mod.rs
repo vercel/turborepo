@@ -535,7 +535,7 @@ impl PackageManager {
                         .resolutions
                         .iter()
                         .flatten()
-                        .map(|(k, v)| (k.clone().into(), v.clone().into())),
+                        .map(|(k, v)| (k.clone(), v.clone())),
                 )),
             )?),
         })
