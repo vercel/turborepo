@@ -67,6 +67,7 @@ pub struct GlobalHashable<'a> {
     // These are None in single package mode
     pub root_external_dependencies_hash: Option<&'a str>,
     pub root_internal_dependencies_hash: Option<&'a str>,
+    pub engines: HashMap<&'a str, &'a str>,
     pub env: &'a [String],
     pub resolved_env_vars: EnvironmentVariablePairs,
     pub pass_through_env: &'a [String],
@@ -303,6 +304,24 @@ impl From<GlobalHashable<'_>> for Builder<HeapAllocator> {
             }
         }
 
+        {
+            let mut entries = builder
+                .reborrow()
+                .init_engines(hashable.engines.len() as u32);
+
+            // get a sorted iterator over keys and values of the hashmap
+            // and set the entries in the capnp message
+
+            let mut hashable: Vec<_> = hashable.engines.iter().collect();
+            hashable.sort_by(|a, b| a.0.cmp(b.0));
+
+            for (i, (key, value)) in hashable.iter().enumerate() {
+                let mut entry = entries.reborrow().get(i as u32);
+                entry.set_key(key);
+                entry.set_value(value);
+            }
+        }
+
         if let Some(root_external_dependencies_hash) = hashable.root_external_dependencies_hash {
             builder.set_root_external_deps_hash(root_external_dependencies_hash);
         }
@@ -407,6 +426,7 @@ mod test {
             global_file_hash_map: &global_file_hash_map,
             root_external_dependencies_hash: Some("0000000000000000"),
             root_internal_dependencies_hash: Some("0000000000000001"),
+            engines: Default::default(),
             env: &["env".to_string()],
             resolved_env_vars: vec![],
             pass_through_env: &["pass_through_env".to_string()],
@@ -414,7 +434,7 @@ mod test {
             framework_inference: true,
         };
 
-        assert_eq!(global_hash.hash(), "8d5ecbdc3ff2b3f2");
+        assert_eq!(global_hash.hash(), "5072bd005ec02799");
     }
 
     #[test_case(vec![], "459c029558afe716" ; "empty")]
