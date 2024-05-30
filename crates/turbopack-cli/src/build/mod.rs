@@ -180,7 +180,7 @@ async fn build_internal(
         .unwrap_or(project_relative)
         .replace(MAIN_SEPARATOR, "/");
     let project_path = project_fs.root().join(project_relative);
-    let build_output_root = output_fs.root().join("dist".to_string());
+    let build_output_root = output_fs.root().join("dist".into());
 
     let node_env = NodeEnv::Production.cell();
 
