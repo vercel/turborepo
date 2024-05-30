@@ -1,7 +1,4 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    str::FromStr,
-};
+use std::collections::{BTreeMap, HashMap};
 
 use anyhow::Result;
 use biome_deserialize::{json::deserialize_from_json_str, Text};
@@ -103,8 +100,7 @@ impl From<RawPackageJson> for PackageJson {
                 .map(|m| m.into_iter().map(|(k, v)| (k.into(), v.into())).collect()),
             peer_dependencies: raw
                 .peer_dependencies
-                .map(|m| m.into_iter().map(|(k, v)| (k.into(), v.into())).collect()),
-            legacy_turbo_config: raw.legacy_turbo_config.map(|v| v.to_string()),
+                .map(|m| m.into_iter().map(|(k, v)| (k, v.into())).collect()),
             scripts: raw
                 .scripts
                 .into_iter()
