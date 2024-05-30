@@ -7,7 +7,7 @@ describe("migrate-dot-env", () => {
     directory: __dirname,
     test: "migrate-dot-env",
   });
-  it("migrates turbo.json outputs - basic", () => {
+  it("migrates turbo.json dot-env - basic", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "with-dot-env",
