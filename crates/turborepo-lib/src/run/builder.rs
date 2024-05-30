@@ -94,7 +94,7 @@ impl RunBuilder {
             opts.run_opts.experimental_space_id = config.spaces_id().map(|s| s.to_owned());
         }
         let version = base.version();
-        let experimental_ui = config.experimental_ui();
+        let experimental_ui = config.ui();
         let processes = ProcessManager::new(
             // We currently only use a pty if the following are met:
             // - we're attached to a tty
