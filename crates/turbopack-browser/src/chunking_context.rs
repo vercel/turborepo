@@ -1,6 +1,6 @@
 use anyhow::{bail, Context, Result};
 use tracing::Instrument;
-use turbo_tasks::{Value, ValueToString, Vc};
+use turbo_tasks::{RcStr, Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     chunk::{
@@ -270,7 +270,7 @@ impl ChunkingContext for BrowserChunkingContext {
     ) -> Result<Vc<FileSystemPath>> {
         let root_path = self.chunk_root_path;
         let name = ident.output_name(self.context_path, extension).await?;
-        Ok(root_path.join(name.clone_value()))
+        Ok(root_path.join(name.clone_value().into()))
     }
 
     #[turbo_tasks::function]
@@ -329,7 +329,7 @@ impl ChunkingContext for BrowserChunkingContext {
                 content_hash = &content_hash[..8]
             ),
         };
-        Ok(self.asset_root_path.join(asset_path))
+        Ok(self.asset_root_path.join(asset_path.into()))
     }
 
     #[turbo_tasks::function]
