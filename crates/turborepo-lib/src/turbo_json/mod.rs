@@ -123,8 +123,8 @@ pub struct RawTurboJson {
     // Configuration options when interfacing with the remote cache
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) remote_cache: Option<RawRemoteCacheOptions>,
-    #[serde(skip_serializing_if = "Option::is_none", rename = "experimentalUI")]
-    pub experimental_ui: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "ui")]
+    pub ui: Option<bool>,
 
     #[deserializable(rename = "//")]
     #[serde(skip)]
@@ -714,7 +714,7 @@ mod tests {
     use serde_json::json;
     use tempfile::tempdir;
     use test_case::test_case;
-    use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, RelativeUnixPathBuf};
+    use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
     use turborepo_repository::package_json::PackageJson;
 
     use super::{Pipeline, RawTurboJson, Spanned};
@@ -1048,11 +1048,11 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
-    #[test_case(r#"{ "experimentalUI": true }"#, Some(true) ; "t")]
-    #[test_case(r#"{ "experimentalUI": false }"#, Some(false) ; "f")]
+    #[test_case(r#"{ "ui": false }"#, Some(false) ; "f")]
+    #[test_case(r#"{ "ui": true }"#, Some(true) ; "t")]
     #[test_case(r#"{}"#, None ; "missing")]
-    fn test_experimental_ui(json: &str, expected: Option<bool>) {
+    fn test_ui(json: &str, expected: Option<bool>) {
         let json = RawTurboJson::parse(json, AnchoredSystemPath::new("").unwrap()).unwrap();
-        assert_eq!(json.experimental_ui, expected);
+        assert_eq!(json.ui, expected);
     }
 }
