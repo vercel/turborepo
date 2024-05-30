@@ -70,7 +70,7 @@ impl TurbopackBuildBuilder {
             project_dir,
             root_dir,
             entry_requests: vec![],
-            browserslist_query: "chrome 64, edge 79, firefox 67, opera 51, safari 12".to_owned(),
+            browserslist_query: "chrome 64, edge 79, firefox 67, opera 51, safari 12".into(),
             log_level: IssueSeverity::Warning,
             show_all: false,
             log_detail: false,
@@ -83,7 +83,7 @@ impl TurbopackBuildBuilder {
         self
     }
 
-    pub fn browserslist_query(mut self, browserslist_query: String) -> Self {
+    pub fn browserslist_query(mut self, browserslist_query: RcStr) -> Self {
         self.browserslist_query = browserslist_query;
         self
     }

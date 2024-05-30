@@ -37,16 +37,16 @@ macro_rules! definable_name_map_internal {
         $crate::definable_name_map_internal!($map, $($more)+);
     };
     ($name:ident) => {
-        [stringify!($name).to_string()]
+        [stringify!($name).into()]
     };
     ($name:ident . $($more:ident).+) => {
-        $crate::definable_name_map_internal!($($more).+, [stringify!($name).to_string()])
+        $crate::definable_name_map_internal!($($more).+, [stringify!($name).into()])
     };
     ($name:ident, [$($array:expr),+]) => {
-        [$($array),+, stringify!($name).to_string()]
+        [$($array),+, stringify!($name).into()]
     };
     ($name:ident . $($more:ident).+, [$($array:expr),+]) => {
-        $crate::definable_name_map_internal!($($more).+, [$($array),+, stringify!($name).to_string()])
+        $crate::definable_name_map_internal!($($more).+, [$($array),+, stringify!($name).into()])
     };
 }
 
