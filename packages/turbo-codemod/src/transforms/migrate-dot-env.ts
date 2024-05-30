@@ -22,7 +22,7 @@ function migrateConfig(config: TurboJsonSchema) {
     delete config.globalDotEnv;
   }
 
-  for (const [_, taskDef] of Object.entries(config.pipeline)) {
+  for (const [_, taskDef] of Object.entries(config.tasks)) {
     if ("dotEnv" in taskDef) {
       if (taskDef.dotEnv) {
         taskDef.inputs = taskDef.inputs ?? ["$TURBO_DEFAULT$"];
