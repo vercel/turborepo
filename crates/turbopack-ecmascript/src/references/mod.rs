@@ -2206,7 +2206,7 @@ async fn value_visitor_inner(
                 continue;
             }
             if v.iter_defineable_name_rev()
-                .eq(name.iter().map(Cow::Borrowed).rev())
+                .eq(name.iter().map(|v| Cow::Borrowed(&**v)).rev())
             {
                 return Ok((value.into(), true));
             }
