@@ -49,10 +49,10 @@ pub fn register() {
 
 pub struct TurbopackBuildBuilder {
     turbo_tasks: Arc<TurboTasks<MemoryBackend>>,
-    project_dir: String,
-    root_dir: String,
+    project_dir: RcStr,
+    root_dir: RcStr,
     entry_requests: Vec<EntryRequest>,
-    browserslist_query: String,
+    browserslist_query: RcStr,
     log_level: IssueSeverity,
     show_all: bool,
     log_detail: bool,
@@ -62,8 +62,8 @@ pub struct TurbopackBuildBuilder {
 impl TurbopackBuildBuilder {
     pub fn new(
         turbo_tasks: Arc<TurboTasks<MemoryBackend>>,
-        project_dir: String,
-        root_dir: String,
+        project_dir: RcStr,
+        root_dir: RcStr,
     ) -> Self {
         TurbopackBuildBuilder {
             turbo_tasks,
@@ -174,11 +174,12 @@ async fn build_internal(
     )));
     let output_fs = output_fs(project_dir.clone());
     let project_fs = project_fs(root_dir.clone());
-    let project_relative = project_dir.strip_prefix(&root_dir).unwrap();
-    let project_relative = project_relative
+    let project_relative = project_dir.strip_prefix(&*root_dir).unwrap();
+    let project_relative: RcStr = project_relative
         .strip_prefix(MAIN_SEPARATOR)
         .unwrap_or(project_relative)
-        .replace(MAIN_SEPARATOR, "/");
+        .replace(MAIN_SEPARATOR, "/")
+        .into();
     let project_path = project_fs.root().join(project_relative);
     let build_output_root = output_fs.root().join("dist".into());
 
