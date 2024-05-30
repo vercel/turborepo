@@ -61,7 +61,7 @@ pub async fn get_client_import_map(project_path: Vc<FileSystemPath>) -> Result<V
     import_map.insert_wildcard_alias(
         "@vercel/turbopack-ecmascript-runtime/",
         ImportMapping::PrimaryAlternative(
-            "./*".to_string(),
+            "./*".into(),
             Some(turbopack_ecmascript_runtime::embed_fs().root()),
         )
         .cell(),
@@ -77,7 +77,7 @@ pub async fn get_client_resolve_options_context(
     let next_client_import_map = get_client_import_map(project_path);
     let module_options_context = ResolveOptionsContext {
         enable_node_modules: Some(project_path.root().resolve().await?),
-        custom_conditions: vec!["development".to_string()],
+        custom_conditions: vec!["development".into()],
         import_map: Some(next_client_import_map),
         browser: true,
         module: true,

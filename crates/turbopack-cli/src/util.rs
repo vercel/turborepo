@@ -52,10 +52,10 @@ pub fn normalize_dirs(
     })
 }
 
-pub fn normalize_entries(entries: &Option<Vec<RcStr>>) -> Vec<RcStr> {
+pub fn normalize_entries(entries: &Option<Vec<String>>) -> Vec<RcStr> {
     entries
         .as_ref()
-        .cloned()
+        .map(|v| v.iter().map(|v| RcStr::from(&**v)).collect())
         .unwrap_or_else(|| vec!["src/entry".into()])
 }
 
