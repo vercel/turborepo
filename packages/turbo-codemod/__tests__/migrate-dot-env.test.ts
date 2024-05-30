@@ -45,7 +45,7 @@ describe("migrate-dot-env", () => {
     `);
   });
 
-  it("migrates turbo.json outputs - workspace configs", () => {
+  it("migrates turbo.json dot-env - workspace configs", () => {
     // load the fixture for the test
     const { root, readJson } = useFixture({
       fixture: "workspace-configs",
