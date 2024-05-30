@@ -377,7 +377,7 @@ fn node_file_trace<B: Backend + 'static>(
         let package_root: RcStr = package_root.to_string_lossy().into();
         let input: RcStr = format!("node-file-trace/{input_path}").into();
         let directory_path = tests_output_root.join(format!("{mode}_{input}"));
-        let directory = directory_path.to_string_lossy().to_string();
+        let directory: RcStr = directory_path.to_string_lossy().into();
 
         remove_dir_all(&directory)
             .or_else(|err| {
@@ -434,7 +434,7 @@ fn node_file_trace<B: Backend + 'static>(
                     ResolveOptionsContext {
                         enable_node_native_modules: true,
                         enable_node_modules: Some(input_dir),
-                        custom_conditions: vec!["node".to_string()],
+                        custom_conditions: vec!["node".into()],
                         ..Default::default()
                     }
                     .cell(),
@@ -455,7 +455,8 @@ fn node_file_trace<B: Backend + 'static>(
                 #[cfg(not(feature = "bench_against_node_nft"))]
                 {
                     let output = exec_node(directory.clone(), output_path);
-                    let output = assert_output(original_output, output, expected_stderr);
+                    let output =
+                        assert_output(original_output, output, expected_stderr.map(From::from));
                     output.await
                 }
                 #[cfg(feature = "bench_against_node_nft")]
@@ -679,8 +680,8 @@ async fn assert_output(
     Ok(CommandOutput::cell(CommandOutput {
         stdout: diff(&expected.stdout, &actual.stdout),
         stderr: if let Some(expected_stderr) = expected_stderr {
-            if actual.stderr.contains(&expected_stderr)
-                && expected.stderr.contains(&expected_stderr)
+            if actual.stderr.contains(&*expected_stderr)
+                && expected.stderr.contains(&*expected_stderr)
             {
                 String::new()
             } else {
