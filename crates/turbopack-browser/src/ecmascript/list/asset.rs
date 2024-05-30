@@ -111,7 +111,7 @@ impl OutputAsset for EcmascriptDevChunkList {
 
         let ident = AssetIdent::new(Value::new(ident));
         Ok(AssetIdent::from_path(
-            self.chunking_context.chunk_path(ident, ".js".to_string()),
+            self.chunking_context.chunk_path(ident, ".js".into()),
         ))
     }
 

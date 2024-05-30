@@ -31,14 +31,14 @@ async fn main() -> Result<()> {
     let task = tt.spawn_root_task(|| {
         Box::pin(async {
             let root = current_dir().unwrap().to_str().unwrap().to_string();
-            let disk_fs = DiskFileSystem::new(PROJECT_FILESYSTEM_NAME.to_string(), root, vec![]);
+            let disk_fs = DiskFileSystem::new(PROJECT_FILESYSTEM_NAME.into(), root, vec![]);
             disk_fs.await?.start_watching()?;
 
             // Smart Pointer cast
             let fs: Vc<Box<dyn FileSystem>> = Vc::upcast(disk_fs);
-            let input = fs.root().join("demo".to_string());
-            let output = fs.root().join("out".to_string());
-            let entry = fs.root().join("demo/index.js".to_string());
+            let input = fs.root().join("demo".into());
+            let output = fs.root().join("out".into());
+            let entry = fs.root().join("demo/index.js".into());
 
             let source = FileSource::new(entry);
             let module_asset_context = turbopack::ModuleAssetContext::new(
@@ -51,7 +51,7 @@ async fn main() -> Result<()> {
                     enable_typescript: true,
                     enable_react: true,
                     enable_node_modules: Some(fs.root()),
-                    custom_conditions: vec!["development".to_string()],
+                    custom_conditions: vec!["development".into()],
                     ..Default::default()
                 }
                 .cell(),
