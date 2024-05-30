@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use turbo_tasks::{TryJoinIterExt, Value, Vc};
+use turbo_tasks::{RcStr, TryJoinIterExt, Value, Vc};
 use turbo_tasks_env::ProcessEnv;
 use turbo_tasks_fs::FileSystemPath;
 use turbopack::ecmascript::EcmascriptModuleAsset;
