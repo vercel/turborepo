@@ -4,7 +4,8 @@ import path from "node:path";
 import type { WorkspaceConfig } from "@turbo/utils";
 import { getWorkspaceConfigs } from "@turbo/utils";
 import type { Pipeline } from "@turbo/types";
-import type { RootSchema } from "@turbo/types/src/types/config";
+import type { RootSchema, RootSchemaV1 } from "@turbo/types/src/types/config";
+import { forEachTaskDef } from "@turbo/utils/src/getTurboConfigs";
 import { dotEnv } from "./dotenv-processing";
 import { wildcardTests } from "./wildcard-processing";
 
@@ -131,7 +132,7 @@ function processDotEnv(
 
 function processGlobal(
   workspacePath: string,
-  rootTurboJson: RootSchema
+  rootTurboJson: RootSchema | RootSchemaV1
 ): EnvironmentConfig {
   return {
     legacyConfig: processLegacyConfig(rootTurboJson.globalDependencies),
@@ -314,7 +315,8 @@ export class Project {
         this.projectRoot.turboConfig
       );
 
-      Object.entries(this.projectRoot.turboConfig.pipeline).forEach(
+      forEachTaskDef(
+        this.projectRoot.turboConfig,
         ([taskName, taskDefinition]) => {
           const { workspaceName, scriptName } = getTaskAddress(taskName);
           if (workspaceName) {
@@ -341,7 +343,8 @@ export class Project {
         return;
       }
 
-      Object.entries(projectWorkspace.turboConfig.pipeline).forEach(
+      forEachTaskDef(
+        projectWorkspace.turboConfig,
         ([taskName, taskDefinition]) => {
           const { workspaceName: erroneousWorkspaceName, scriptName } =
             getTaskAddress(taskName);

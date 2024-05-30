@@ -1,8 +1,7 @@
 import path from "node:path";
 import { readJsonSync, existsSync } from "fs-extra";
 import { type PackageJson, getTurboConfigs } from "@turbo/utils";
-import type { Schema as TurboJsonSchema } from "@turbo/types";
-import type { RootSchema } from "@turbo/types/src/types/config";
+import type { SchemaV1, RootSchemaV1 } from "@turbo/types/src/types/config";
 import type { Transformer, TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
@@ -13,7 +12,7 @@ const DESCRIPTION =
   "Rewrite experimentalPassThroughEnv and experimentalGlobalPassThroughEnv";
 const INTRODUCED_IN = "1.10.0";
 
-function migrateRootConfig(config: RootSchema) {
+function migrateRootConfig(config: RootSchemaV1) {
   const oldConfig = config.experimentalGlobalPassThroughEnv;
   const newConfig = config.globalPassThroughEnv;
   // Set to an empty array is meaningful, so we have undefined as an option here.
@@ -45,7 +44,7 @@ function migrateRootConfig(config: RootSchema) {
   return migrateTaskConfigs(config);
 }
 
-function migrateTaskConfigs(config: TurboJsonSchema) {
+function migrateTaskConfigs(config: SchemaV1) {
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
     const oldConfig = taskDef.experimentalPassThroughEnv;
     const newConfig = taskDef.passThroughEnv;
@@ -119,7 +118,7 @@ export function transformer({
     });
   }
 
-  const turboJson = readJsonSync(turboConfigPath) as TurboJsonSchema;
+  const turboJson = readJsonSync(turboConfigPath) as SchemaV1;
   runner.modifyFile({
     filePath: turboConfigPath,
     after: migrateRootConfig(turboJson),
@@ -129,7 +128,7 @@ export function transformer({
   const allTurboJsons = getTurboConfigs(root);
   allTurboJsons.forEach((workspaceConfig) => {
     const { config, turboConfigPath: filePath, isRootConfig } = workspaceConfig;
-    if (!isRootConfig) {
+    if (!isRootConfig && "pipeline" in config) {
       runner.modifyFile({
         filePath,
         after: migrateTaskConfigs(config),
