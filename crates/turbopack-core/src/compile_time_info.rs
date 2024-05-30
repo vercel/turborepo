@@ -171,7 +171,7 @@ impl From<CompileTimeDefineValue> for FreeVarReference {
 
 #[turbo_tasks::value(transparent)]
 #[derive(Debug, Clone)]
-pub struct FreeVarReferences(pub IndexMap<Vec<String>, FreeVarReference>);
+pub struct FreeVarReferences(pub IndexMap<Vec<RcStr>, FreeVarReference>);
 
 #[turbo_tasks::value_impl]
 impl FreeVarReferences {

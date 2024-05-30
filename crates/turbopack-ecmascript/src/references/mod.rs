@@ -1844,11 +1844,11 @@ async fn handle_member(
                 if name.len() != def_name_len + 1 {
                     continue;
                 }
-                let mut it = name.iter().map(Cow::Borrowed).rev();
+                let mut it = name.iter().map(|v| Cow::Borrowed(&**v)).rev();
                 if it.next().unwrap() != Cow::Borrowed(prop) {
                     continue;
                 }
-                if obj.iter_defineable_name_rev().eq(it)
+                if it.eq(obj.iter_defineable_name_rev())
                     && handle_free_var_reference(ast_path, value, span, state, analysis).await?
                 {
                     return Ok(());
@@ -1890,7 +1890,7 @@ async fn handle_free_var(
 
             if var
                 .iter_defineable_name_rev()
-                .eq(name.iter().map(Cow::Borrowed).rev())
+                .eq(name.iter().map(|v| Cow::Borrowed(&**v)).rev())
                 && handle_free_var_reference(ast_path, value, span, state, analysis).await?
             {
                 return Ok(());
