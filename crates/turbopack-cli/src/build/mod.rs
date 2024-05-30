@@ -277,7 +277,7 @@ async fn build_internal(
                                             .unwrap()
                                             .into(),
                                     )
-                                    .with_extension("entry.js".to_string()),
+                                    .with_extension("entry.js".into()),
                                 Vc::upcast(ecmascript),
                                 EvaluatableAssets::one(Vc::upcast(ecmascript)),
                                 Value::new(AvailabilityInfo::Root),
