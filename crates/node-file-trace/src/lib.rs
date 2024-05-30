@@ -242,7 +242,7 @@ async fn input_to_modules(
     let root = fs.root();
     let process_cwd = process_cwd
         .clone()
-        .map(|p| format!("/ROOT{}", p.trim_start_matches(&context_directory)));
+        .map(|p| format!("/ROOT{}", p.trim_start_matches(&*context_directory)).into());
 
     let asset_context: Vc<Box<dyn AssetContext>> = Vc::upcast(create_module_asset(
         root,
@@ -283,7 +283,7 @@ fn process_context(dir: &Path, context_directory: Option<&String>) -> Result<Str
         .to_string())
 }
 
-fn make_relative_path(dir: &Path, context_directory: &str, input: &str) -> Result<String> {
+fn make_relative_path(dir: &Path, context_directory: &str, input: &str) -> Result<RcStr> {
     let mut input = PathBuf::from(input);
     if !input.is_absolute() {
         input = dir.join(input);
@@ -299,10 +299,11 @@ fn make_relative_path(dir: &Path, context_directory: &str, input: &str) -> Resul
     Ok(input
         .to_str()
         .ok_or_else(|| anyhow!("input contains invalid characters"))?
-        .replace('\\', "/"))
+        .replace('\\', "/")
+        .into())
 }
 
-fn process_input(dir: &Path, context_directory: &str, input: &[String]) -> Result<Vec<String>> {
+fn process_input(dir: &Path, context_directory: &str, input: &[String]) -> Result<Vec<RcStr>> {
     input
         .iter()
         .map(|input| make_relative_path(dir, context_directory, input))
@@ -626,7 +627,7 @@ async fn create_module_asset(
 ) -> Result<Vc<ModuleAssetContext>> {
     let env = Environment::new(Value::new(ExecutionEnvironment::NodeJsLambda(
         NodeJsEnvironment {
-            cwd: Vc::cell(process_cwd),
+            cwd: Vc::cell(process_cwd.map(|v| v.into_owned())),
             ..Default::default()
         }
         .into(),
@@ -635,12 +636,12 @@ async fn create_module_asset(
     let glob_mappings = vec![
         (
             root,
-            Glob::new("**/*/next/dist/server/next.js".to_string()),
+            Glob::new("**/*/next/dist/server/next.js".into()),
             ImportMapping::Ignore.into(),
         ),
         (
             root,
-            Glob::new("**/*/next/dist/bin/next".to_string()),
+            Glob::new("**/*/next/dist/bin/next".into()),
             ImportMapping::Ignore.into(),
         ),
     ];
