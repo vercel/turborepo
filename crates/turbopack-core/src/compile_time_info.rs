@@ -108,11 +108,11 @@ impl From<serde_json::Value> for CompileTimeDefineValue {
 
 #[turbo_tasks::value(transparent)]
 #[derive(Debug, Clone)]
-pub struct CompileTimeDefines(pub IndexMap<Vec<String>, CompileTimeDefineValue>);
+pub struct CompileTimeDefines(pub IndexMap<Vec<RcStr>, CompileTimeDefineValue>);
 
 impl IntoIterator for CompileTimeDefines {
-    type Item = (Vec<String>, CompileTimeDefineValue);
-    type IntoIter = indexmap::map::IntoIter<Vec<String>, CompileTimeDefineValue>;
+    type Item = (Vec<RcStr>, CompileTimeDefineValue);
+    type IntoIter = indexmap::map::IntoIter<Vec<RcStr>, CompileTimeDefineValue>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
