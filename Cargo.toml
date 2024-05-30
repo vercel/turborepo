@@ -215,12 +215,12 @@ async-trait = "0.1.64"
 atty = "0.2.14"
 axum = "0.6.2"
 axum-server = "0.4.4"
-biome_console = { path = "../biome/crates/biome_console" }
-biome_deserialize = { path = "../biome/crates/biome_deserialize", features = ["serde"] }
-biome_deserialize_macros = { path = "../biome/crates/biome_deserialize_macros" }
-biome_diagnostics = { path = "../biome/crates/biome_diagnostics" }
-biome_json_parser = { path = "../biome/crates/biome_json_parser" }
-biome_json_syntax = { path = "../biome/crates/biome_json_syntax" }
+biome_console = { version = "0.5.7" }
+biome_deserialize = { version = "0.6.0", features = ["serde"] }
+biome_deserialize_macros = { version = "0.6.0" }
+biome_diagnostics = { version = "0.5.7" }
+biome_json_parser = { version = "0.5.7" }
+biome_json_syntax = { version = "0.5.7" }
 bytes = "1.1.0"
 camino = { version = "1.1.4", features = ["serde1"] }
 chrono = "0.4.23"

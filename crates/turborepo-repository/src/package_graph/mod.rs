@@ -68,7 +68,7 @@ pub struct PackageInfo {
 
 impl PackageInfo {
     pub fn package_name(&self) -> Option<String> {
-        self.package_json.name.clone().into()
+        self.package_json.name.clone()
     }
 
     pub fn package_json_path(&self) -> &AnchoredSystemPath {
