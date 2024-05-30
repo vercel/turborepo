@@ -295,7 +295,7 @@ pub struct BrowserEnvironment {
     pub dom: bool,
     pub web_worker: bool,
     pub service_worker: bool,
-    pub browserslist_query: String,
+    pub browserslist_query: RcStr,
 }
 
 #[turbo_tasks::value(shared)]
