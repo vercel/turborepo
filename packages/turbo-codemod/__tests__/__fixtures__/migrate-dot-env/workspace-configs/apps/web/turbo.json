@@ -1,0 +1,11 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "pipeline": {
+    "build": {
+      // old
+      "dotEnv": [".env"],
+      "inputs": ["src/**/*.ts"]
+    }
+  }
+}
