@@ -142,6 +142,12 @@ impl PartialEq<str> for RcStr {
     }
 }
 
+impl PartialEq<&'_ str> for RcStr {
+    fn eq(&self, other: &&str) -> bool {
+        self.0.as_str() == *other
+    }
+}
+
 impl PartialEq<String> for RcStr {
     fn eq(&self, other: &String) -> bool {
         self.as_str() == other.as_str()
