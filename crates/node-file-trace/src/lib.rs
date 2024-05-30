@@ -22,8 +22,8 @@ use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::mpsc::channel;
 use turbo_tasks::{
-    backend::Backend, util::FormatDuration, TaskId, TransientInstance, TransientValue, TurboTasks,
-    UpdateInfo, Value, Vc,
+    backend::Backend, util::FormatDuration, RcStr, TaskId, TransientInstance, TransientValue,
+    TurboTasks, UpdateInfo, Value, Vc,
 };
 use turbo_tasks_fs::{
     glob::Glob, DirectoryEntry, DiskFileSystem, FileSystem, FileSystemPath, ReadGlobResult,
@@ -188,7 +188,7 @@ impl Args {
 }
 
 async fn create_fs(name: &str, root: &str, watch: bool) -> Result<Vc<Box<dyn FileSystem>>> {
-    let fs = DiskFileSystem::new(name.to_string(), root.to_string(), vec![]);
+    let fs = DiskFileSystem::new(name.into(), root.into(), vec![]);
     if watch {
         fs.await?.start_watching()?;
     } else {
