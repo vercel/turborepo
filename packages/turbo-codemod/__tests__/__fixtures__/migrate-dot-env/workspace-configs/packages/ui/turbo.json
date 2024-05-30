@@ -1,13 +1,9 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "extends": [
-    "//"
-  ],
+  "extends": ["//"],
   "pipeline": {
     "build-three": {
-      "dotEnv": [
-        ".env"
-      ]
+      "dotEnv": [".env"]
     }
   }
 }
