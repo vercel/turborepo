@@ -159,7 +159,7 @@ async fn run(resource: PathBuf, snapshot_mode: IssueSnapshotMode) -> Result<JsRe
     let tt = TurboTasks::new(MemoryBackend::default());
     tt.run_once(async move {
         let resource_str = resource.to_str().unwrap();
-        let prepared_test = prepare_test(resource_str.to_string());
+        let prepared_test = prepare_test(resource_str.into());
         let run_result = run_test(prepared_test);
         if matches!(snapshot_mode, IssueSnapshotMode::Snapshots) {
             snapshot_issues(prepared_test, run_result).await?;
@@ -204,9 +204,9 @@ async fn prepare_test(resource: RcStr) -> Result<Vc<PreparedTest>> {
         &*REPO_ROOT,
         resource_path.display()
     ))?;
-    let relative_path = sys_to_unix(relative_path.to_str().unwrap());
-    let path = root_fs.root().join(relative_path.to_string());
-    let project_path = project_root.join(relative_path.to_string());
+    let relative_path: RcStr = sys_to_unix(relative_path.to_str().unwrap()).into();
+    let path = root_fs.root().join(relative_path.clone());
+    let project_path = project_root.join(relative_path.clone());
     let tests_path = project_fs.root().join("crates/turbopack-tests".into());
 
     let options_file = path.join("options.json".into());
