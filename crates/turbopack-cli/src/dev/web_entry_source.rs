@@ -41,8 +41,8 @@ pub fn get_client_chunking_context(
             project_path,
             server_root,
             server_root,
-            server_root.join("/_chunks".to_string()),
-            server_root.join("/_assets".to_string()),
+            server_root.join("/_chunks".into()),
+            server_root.join("/_assets".into()),
             environment,
             RuntimeType::Development,
         )
@@ -67,13 +67,12 @@ pub async fn get_client_runtime_entries(
     // because the bootstrap contains JSX which requires Refresh's global
     // functions to be available.
     if let Some(request) = enable_react_refresh {
-        runtime_entries
-            .push(RuntimeEntry::Request(request, project_path.join("_".to_string())).cell())
+        runtime_entries.push(RuntimeEntry::Request(request, project_path.join("_".into())).cell())
     };
 
     runtime_entries.push(
         RuntimeEntry::Source(Vc::upcast(FileSource::new(embed_file_path(
-            "entry/bootstrap.ts".to_string(),
+            "entry/bootstrap.ts".into(),
         ))))
         .cell(),
     );
@@ -101,7 +100,7 @@ pub async fn create_web_entry_source(
 
     let runtime_entries = entries.resolve_entries(asset_context);
 
-    let origin = PlainResolveOrigin::new(asset_context, project_path.join("_".to_string()));
+    let origin = PlainResolveOrigin::new(asset_context, project_path.join("_".into()));
     let entries = entry_requests
         .into_iter()
         .map(|request| async move {
@@ -146,7 +145,7 @@ pub async fn create_web_entry_source(
         .await?;
 
     let entry_asset = Vc::upcast(DevHtmlAsset::new(
-        server_root.join("index.html".to_string()),
+        server_root.join("index.html".into()),
         entries,
     ));
 

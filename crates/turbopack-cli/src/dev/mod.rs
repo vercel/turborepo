@@ -110,7 +110,7 @@ impl TurbopackDevServerBuilder {
         self
     }
 
-    pub fn browserslist_query(mut self, browserslist_query: String) -> TurbopackDevServerBuilder {
+    pub fn browserslist_query(mut self, browserslist_query: RcStr) -> TurbopackDevServerBuilder {
         self.browserslist_query = browserslist_query;
         self
     }

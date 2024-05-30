@@ -12,7 +12,7 @@ use anyhow::{bail, Context, Result};
 use dunce::canonicalize;
 use serde::Deserialize;
 use serde_json::json;
-use turbo_tasks::{ReadRef, TryJoinIterExt, TurboTasks, Value, ValueToString, Vc};
+use turbo_tasks::{RcStr, ReadRef, TryJoinIterExt, TurboTasks, Value, ValueToString, Vc};
 use turbo_tasks_env::DotenvProcessEnv;
 use turbo_tasks_fs::{
     json::parse_json_with_source_context, util::sys_to_unix, DiskFileSystem, FileSystem,
@@ -165,7 +165,7 @@ async fn run(resource: PathBuf) -> Result<()> {
             .try_join()
             .await?;
 
-        snapshot_issues(plain_issues, out.join("issues".to_string()), &REPO_ROOT)
+        snapshot_issues(plain_issues, out.join("issues".into()), &REPO_ROOT)
             .await
             .context("Unable to handle issues")?;
         Ok(Vc::<()>::default())
@@ -190,14 +190,14 @@ async fn run_test(resource: RcStr) -> Result<Vc<FileSystemPath>> {
         Err(_) => SnapshotOptions::default(),
         Ok(options_str) => parse_json_with_source_context(&options_str).unwrap(),
     };
-    let root_fs = DiskFileSystem::new("workspace".to_string(), REPO_ROOT.clone(), vec![]);
-    let project_fs = DiskFileSystem::new("project".to_string(), REPO_ROOT.clone(), vec![]);
+    let root_fs = DiskFileSystem::new("workspace".into(), REPO_ROOT.clone(), vec![]);
+    let project_fs = DiskFileSystem::new("project".into(), REPO_ROOT.clone(), vec![]);
     let project_root = project_fs.root();
 
     let relative_path = test_path.strip_prefix(&*REPO_ROOT)?;
-    let relative_path = sys_to_unix(relative_path.to_str().unwrap());
-    let path = root_fs.root().join(relative_path.to_string());
-    let project_path = project_root.join(relative_path.to_string());
+    let relative_path: RcStr = sys_to_unix(relative_path.to_str().unwrap()).into();
+    let path = root_fs.root().join(relative_path.clone());
+    let project_path = project_root.join(relative_path.clone());
 
     let entry_asset = project_path.join(options.entry);
 
