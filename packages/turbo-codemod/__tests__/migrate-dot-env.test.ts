@@ -125,7 +125,7 @@ describe("migrate-dot-env", () => {
     `);
   });
 
-  it("migrates turbo.json outputs - dry", () => {
+  it("migrates turbo.json dot-env - dry", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "with-dot-env",
@@ -154,7 +154,7 @@ describe("migrate-dot-env", () => {
     `);
   });
 
-  it("migrates turbo.json outputs - print", () => {
+  it("migrates turbo.json dot-env - print", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "with-dot-env",
@@ -192,7 +192,7 @@ describe("migrate-dot-env", () => {
     `);
   });
 
-  it("migrates turbo.json outputs - dry & print", () => {
+  it("migrates turbo.json dot-env - dry & print", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "with-dot-env",
@@ -221,7 +221,7 @@ describe("migrate-dot-env", () => {
     `);
   });
 
-  it("migrates turbo.json outputs - config with no pipeline", () => {
+  it("migrates turbo.json dot-env - config with no pipeline", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "no-pipeline",
@@ -251,7 +251,7 @@ describe("migrate-dot-env", () => {
     `);
   });
 
-  it("migrates turbo.json outputs - config with no dot env", () => {
+  it("migrates turbo.json dot-env - config with no dot env", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "no-dot-env",
