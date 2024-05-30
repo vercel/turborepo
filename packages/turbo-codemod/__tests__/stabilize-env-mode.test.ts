@@ -1,7 +1,7 @@
 import { setupTestFixtures } from "@turbo/test-utils";
 import { transformer } from "../src/transforms/stabilize-env-mode";
 
-describe.only("stabilize-env-mode", () => {
+describe("stabilize-env-mode", () => {
   const { useFixture } = setupTestFixtures({
     directory: __dirname,
     test: "stabilize-env-mode",

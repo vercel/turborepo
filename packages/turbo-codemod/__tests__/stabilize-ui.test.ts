@@ -1,7 +1,7 @@
 import { setupTestFixtures } from "@turbo/test-utils";
 import { transformer } from "../src/transforms/stabilize-ui";
 
-describe.only("stabilize-ui", () => {
+describe("stabilize-ui", () => {
   const { useFixture } = setupTestFixtures({
     directory: __dirname,
     test: "stabilize-ui",
