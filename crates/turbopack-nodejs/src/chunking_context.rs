@@ -293,7 +293,7 @@ impl ChunkingContext for NodeJsChunkingContext {
                 content_hash = &content_hash[..8]
             ),
         };
-        Ok(self.asset_root_path.join(asset_path))
+        Ok(self.asset_root_path.join(asset_path.into()))
     }
 
     #[turbo_tasks::function]
