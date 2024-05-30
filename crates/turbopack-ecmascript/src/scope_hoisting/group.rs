@@ -32,7 +32,7 @@ pub async fn split_scopes(
 pub trait DepGraph {
     fn deps(&self, id: Vc<ModuleId>) -> Vc<ModuleIds>;
 
-    fn get_edge(&self, from: Vc<ModuleId>, to: ModuleId) -> Vc<Option<EdgeData>>;
+    fn get_edge(&self, from: Vc<ModuleId>, to: Vc<ModuleId>) -> Vc<Option<EdgeData>>;
 }
 
 #[turbo_tasks::value]
