@@ -131,13 +131,13 @@ export interface RootSchema extends BaseSchema {
   remoteCache?: RemoteCache;
 
   /**
-   * Enable use of the new UI for `turbo`.
+   * Enable use of the UI for `turbo`.
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#experimentalui
    *
-   * @defaultValue `{}`
+   * @defaultValue `true`
    */
-  experimentalUI?: boolean;
+  ui?: boolean;
 }
 
 export type LegacyRootSchema = RootSchema & LegacyBaseSchema;
