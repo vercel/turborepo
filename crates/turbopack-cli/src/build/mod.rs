@@ -232,7 +232,7 @@ async fn build_internal(
         .await?)
         .to_vec();
 
-    let origin = PlainResolveOrigin::new(asset_context, output_fs.root().join("_".to_string()));
+    let origin = PlainResolveOrigin::new(asset_context, output_fs.root().join("_".into()));
     let project_dir = &project_dir;
     let entries = entry_requests
         .into_iter()
@@ -275,7 +275,7 @@ async fn build_internal(
                                             .await?
                                             .as_deref()
                                             .unwrap()
-                                            .to_string(),
+                                            .into(),
                                     )
                                     .with_extension("entry.js".to_string()),
                                 Vc::upcast(ecmascript),

@@ -78,8 +78,8 @@ macro_rules! free_var_references {
 #[derive(Debug, Clone, Hash, PartialOrd, Ord)]
 pub enum CompileTimeDefineValue {
     Bool(bool),
-    String(String),
-    JSON(String),
+    String(RcStr),
+    JSON(RcStr),
 }
 
 impl From<bool> for CompileTimeDefineValue {
@@ -88,21 +88,27 @@ impl From<bool> for CompileTimeDefineValue {
     }
 }
 
+impl From<RcStr> for CompileTimeDefineValue {
+    fn from(value: RcStr) -> Self {
+        Self::String(value)
+    }
+}
+
 impl From<String> for CompileTimeDefineValue {
     fn from(value: String) -> Self {
-        Self::String(value)
+        Self::String(value.into())
     }
 }
 
 impl From<&str> for CompileTimeDefineValue {
     fn from(value: &str) -> Self {
-        Self::String(value.to_string())
+        Self::String(value.into())
     }
 }
 
 impl From<serde_json::Value> for CompileTimeDefineValue {
     fn from(value: serde_json::Value) -> Self {
-        Self::JSON(value.to_string())
+        Self::JSON(value.to_string().into())
     }
 }
 
