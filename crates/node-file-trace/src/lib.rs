@@ -527,8 +527,11 @@ async fn main_operation(
         ref process_cwd,
         ..
     } = args.common();
-    let context_directory = process_context(&dir, context_directory.as_ref()).unwrap();
+    let context_directory: RcStr = process_context(&dir, context_directory.as_ref())
+        .unwrap()
+        .into();
     let fs = create_fs("context directory", &context_directory, watch).await?;
+    let process_cwd = process_cwd.clone().map(RcStr::from);
 
     match *args {
         Args::Print { common: _ } => {
