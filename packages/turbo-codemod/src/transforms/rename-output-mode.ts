@@ -1,7 +1,8 @@
 import path from "node:path";
 import { readJsonSync, existsSync } from "fs-extra";
 import { type PackageJson, getTurboConfigs } from "@turbo/utils";
-import type { Schema as TurboJsonSchema, OutputMode } from "@turbo/types";
+import type { OutputMode } from "@turbo/types";
+import type { SchemaV1 } from "@turbo/types/src/types/config";
 import type { Transformer, TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
@@ -12,7 +13,7 @@ const DESCRIPTION =
   'Rename the "outputMode" key to "outputLogs" in `turbo.json`';
 const INTRODUCED_IN = "2.0.0";
 
-function migrateConfig(config: TurboJsonSchema) {
+function migrateConfig(config: SchemaV1) {
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
     if (Object.prototype.hasOwnProperty.call(taskDef, "outputMode")) {
       //@ts-expect-error - outputMode is no longer in the schema
@@ -61,7 +62,7 @@ export function transformer({
     });
   }
 
-  const turboJson = readJsonSync(turboConfigPath) as TurboJsonSchema;
+  const turboJson = readJsonSync(turboConfigPath) as SchemaV1;
   runner.modifyFile({
     filePath: turboConfigPath,
     after: migrateConfig(turboJson),
@@ -71,10 +72,12 @@ export function transformer({
   const workspaceConfigs = getTurboConfigs(root);
   workspaceConfigs.forEach((workspaceConfig) => {
     const { config, turboConfigPath: filePath } = workspaceConfig;
-    runner.modifyFile({
-      filePath,
-      after: migrateConfig(config),
-    });
+    if ("pipeline" in config) {
+      runner.modifyFile({
+        filePath,
+        after: migrateConfig(config),
+      });
+    }
   });
 
   return runner.finish();

@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { Schema as TurboJsonSchema } from "@turbo/types";
+import type { SchemaV1 } from "@turbo/types/src/types/config";
 import { readJsonSync } from "fs-extra";
 import { getTurboConfigs } from "@turbo/utils";
 import type { TransformerArgs, Transformer } from "../types";
@@ -24,7 +24,7 @@ export function transformer({
 
   const turboConfigPath = path.join(root, "turbo.json");
 
-  const turboJson = readJsonSync(turboConfigPath) as TurboJsonSchema;
+  const turboJson = readJsonSync(turboConfigPath) as SchemaV1;
   runner.modifyFile({
     filePath: turboConfigPath,
     after: migrateConfig(turboJson),
@@ -34,16 +34,18 @@ export function transformer({
   const workspaceConfigs = getTurboConfigs(root);
   workspaceConfigs.forEach((workspaceConfig) => {
     const { config, turboConfigPath: filePath } = workspaceConfig;
-    runner.modifyFile({
-      filePath,
-      after: migrateConfig(config),
-    });
+    if ("pipeline" in config) {
+      runner.modifyFile({
+        filePath,
+        after: migrateConfig(config),
+      });
+    }
   });
 
   return runner.finish();
 }
 
-function migrateConfig(config: TurboJsonSchema) {
+function migrateConfig(config: SchemaV1) {
   const mapGlob = (glob: string) => fixGlobPattern(glob);
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
     taskDef.inputs = taskDef.inputs?.map(mapGlob);

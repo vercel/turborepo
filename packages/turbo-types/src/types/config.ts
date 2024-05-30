@@ -1,6 +1,11 @@
 /* This file generates the `schema.json` file. */
 export type Schema = RootSchema | WorkspaceSchema;
 
+/* Used to support codemods that target turbo 1 */
+export type LegacySchema = LegacyRootSchema | LegacyWorkspaceSchema;
+
+export type SchemaV1 = RootSchemaV1 | WorkspaceSchemaV1;
+
 export interface BaseSchema {
   /** @defaultValue https://turbo.build/schema.json */
   $schema?: string;
@@ -14,7 +19,7 @@ export interface BaseSchema {
    * @defaultValue `{}`
    */
   // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style -- it's more readable to specify a name for the key
-  pipeline: {
+  tasks: {
     /**
      * The name of a task that can be executed by turbo. If turbo finds a workspace
      * package with a package.json scripts object with a matching key, it will apply the
@@ -23,6 +28,15 @@ export interface BaseSchema {
     [script: string]: Pipeline;
   };
 }
+
+export interface BaseSchemaV1 {
+  // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style -- it's more readable to specify a name for the key
+  pipeline: {
+    [script: string]: Pipeline;
+  };
+}
+
+export type LegacyBaseSchema = BaseSchema | BaseSchemaV1;
 
 export interface WorkspaceSchema extends BaseSchema {
   /**
@@ -39,6 +53,10 @@ export interface WorkspaceSchema extends BaseSchema {
    */
   extends: Array<string>;
 }
+
+export type LegacyWorkspaceSchema = WorkspaceSchema & LegacyBaseSchema;
+
+export type WorkspaceSchemaV1 = Omit<WorkspaceSchema, "tasks"> & BaseSchemaV1;
 
 export interface RootSchema extends BaseSchema {
   /**
@@ -121,6 +139,10 @@ export interface RootSchema extends BaseSchema {
    */
   experimentalUI?: boolean;
 }
+
+export type LegacyRootSchema = RootSchema & LegacyBaseSchema;
+
+export type RootSchemaV1 = Omit<RootSchema, "tasks"> & BaseSchemaV1;
 
 export interface Pipeline {
   /**
