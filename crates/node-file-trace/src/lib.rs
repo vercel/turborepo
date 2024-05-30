@@ -315,7 +315,7 @@ pub async fn start(
     turbo_tasks: Option<&Arc<TurboTasks<MemoryBackend>>>,
     module_options: Option<ModuleOptionsContext>,
     resolve_options: Option<ResolveOptionsContext>,
-) -> Result<Vec<String>> {
+) -> Result<Vec<RcStr>> {
     register();
     let &CommonArgs {
         memory_limit,
@@ -395,7 +395,7 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
     final_finish: impl FnOnce(Arc<TurboTasks<B>>, TaskId, Duration) -> F,
     module_options: Option<ModuleOptionsContext>,
     resolve_options: Option<ResolveOptionsContext>,
-) -> Result<Vec<String>> {
+) -> Result<Vec<RcStr>> {
     let &CommonArgs {
         watch,
         show_all,
@@ -495,7 +495,7 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
             if has_return_value {
                 let output_read_ref = output.await?;
                 let output_iter = output_read_ref.iter().cloned();
-                sender.send(output_iter.collect::<Vec<String>>()).await?;
+                sender.send(output_iter.collect::<Vec<RcStr>>()).await?;
                 drop(sender);
             }
             Ok::<Vc<()>, _>(Default::default())
@@ -516,7 +516,7 @@ async fn main_operation(
     args: TransientInstance<Args>,
     module_options: TransientInstance<ModuleOptionsContext>,
     resolve_options: TransientInstance<ResolveOptionsContext>,
-) -> Result<Vc<Vec<String>>> {
+) -> Result<Vc<Vec<RcStr>>> {
     let dir = current_dir.into_value();
     let args = &*args;
     let &CommonArgs {
@@ -553,7 +553,7 @@ async fn main_operation(
                     .await?;
                 for asset in set.await?.iter() {
                     let path = asset.ident().path().await?;
-                    result.insert(path.path.to_string());
+                    result.insert(RcStr::from(&*path.path));
                 }
             }
 
