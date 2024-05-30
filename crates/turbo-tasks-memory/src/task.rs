@@ -1412,7 +1412,6 @@ impl Task {
             Done { .. } => {
                 let result = func(&mut state.output)?;
                 drop(state);
-
                 Ok(Ok(result))
             }
             Dirty {
