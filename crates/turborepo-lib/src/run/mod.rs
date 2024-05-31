@@ -145,7 +145,8 @@ impl Run {
         if self.should_print_prelude {
             self.print_run_prelude();
         }
-        if !self.experimental_ui {
+        // Don't start UI if doing a dry run
+        if !self.experimental_ui || self.opts.run_opts.dry_run.is_some() {
             return None;
         }
 
