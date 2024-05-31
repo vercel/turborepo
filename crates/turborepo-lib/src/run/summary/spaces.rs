@@ -148,10 +148,7 @@ impl SpacesClient {
         let space_id = space_id?;
         let is_linked = api_auth.as_ref().map_or(false, |auth| auth.is_linked());
         if !is_linked {
-            eprintln!(
-                "Error: experimentalSpaceId is enabled, but repo is not linked to API. Run `turbo \
-                 link` or `turbo login` first"
-            );
+            // TODO: Add back spaces warning with new UI
             return None;
         }
         let api_auth = api_auth.expect("presence of api auth was just checked");
