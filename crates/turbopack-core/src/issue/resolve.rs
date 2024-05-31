@@ -77,7 +77,9 @@ impl Issue for ResolvingIssue {
                 }
             }
         }
-        Ok(Vc::cell(Some(StyledString::Text(description).cell())))
+        Ok(Vc::cell(Some(
+            StyledString::Text(description.into()).cell(),
+        )))
     }
 
     #[turbo_tasks::function]
@@ -104,7 +106,7 @@ impl Issue for ResolvingIssue {
             "Type of request: {request_type}",
             request_type = self.request_type,
         )?;
-        Ok(Vc::cell(Some(StyledString::Text(detail).cell())))
+        Ok(Vc::cell(Some(StyledString::Text(detail.into()).cell())))
     }
 
     #[turbo_tasks::function]

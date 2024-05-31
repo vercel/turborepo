@@ -37,19 +37,19 @@ impl Issue for UnsupportedModuleIssue {
     async fn description(&self) -> Result<Vc<OptionStyledString>> {
         Ok(Vc::cell(Some(
             StyledString::Line(vec![
-                StyledString::Text("The ".to_string()),
+                StyledString::Text("The ".into()),
                 StyledString::Text(
                     match &self.package_path {
                         Some(_) => "module",
                         None => "package",
                     }
-                    .to_string(),
+                    .into(),
                 ),
                 StyledString::Code(match &self.package_path {
-                    Some(path) => format!(" {}{}", self.package, path),
-                    None => format!(" {}", self.package),
+                    Some(path) => format!(" {}{}", self.package, path).into(),
+                    None => format!(" {}", self.package).into(),
                 }),
-                StyledString::Text(" is not yet supported".to_string()),
+                StyledString::Text(" is not yet supported".into()),
             ])
             .cell(),
         )))
