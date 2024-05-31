@@ -107,7 +107,7 @@ fn result_to_issue<T>(ident: Vc<AssetIdent>, result: Result<T>) -> Option<T> {
         Err(err) => {
             ImageProcessingIssue {
                 path: ident.path(),
-                message: StyledString::Text(format!("{}", PrettyPrintError(&err))).cell(),
+                message: StyledString::Text(format!("{}", PrettyPrintError(&err)).into()).cell(),
                 issue_severity: None,
                 title: None,
             }

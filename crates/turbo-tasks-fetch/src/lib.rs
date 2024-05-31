@@ -117,7 +117,7 @@ impl FetchError {
         };
 
         FetchError {
-            detail: StyledString::Text(error.to_string()).cell(),
+            detail: StyledString::Text(error.to_string().into()).cell(),
             url: Vc::cell(url.to_owned()),
             kind: kind.into(),
         }
@@ -167,7 +167,7 @@ impl Issue for FetchIssue {
 
     #[turbo_tasks::function]
     fn title(&self) -> Vc<StyledString> {
-        StyledString::Text("Error while requesting resource".to_string()).cell()
+        StyledString::Text("Error while requesting resource".into()).cell()
     }
 
     #[turbo_tasks::function]
@@ -185,15 +185,17 @@ impl Issue for FetchIssue {
                 FetchErrorKind::Connect => format!(
                     "There was an issue establishing a connection while requesting {}.",
                     url
-                ),
-                FetchErrorKind::Status(status) => {
-                    format!(
-                        "Received response with status {} when requesting {}",
-                        status, url
-                    )
+                )
+                .into(),
+                FetchErrorKind::Status(status) => format!(
+                    "Received response with status {} when requesting {}",
+                    status, url
+                )
+                .into(),
+                FetchErrorKind::Timeout => {
+                    format!("Connection timed out when requesting {}", url).into()
                 }
-                FetchErrorKind::Timeout => format!("Connection timed out when requesting {}", url),
-                FetchErrorKind::Other => format!("There was an issue requesting {}", url),
+                FetchErrorKind::Other => format!("There was an issue requesting {}", url).into(),
             })
             .cell(),
         )))

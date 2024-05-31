@@ -115,7 +115,7 @@ async fn errors_on_failed_connection() {
 
         let issue = err_vc.to_issue(IssueSeverity::Error.into(), get_issue_context());
         assert_eq!(*issue.severity().await?, IssueSeverity::Error);
-        assert_eq!(*issue.description().await?.unwrap().await?, StyledString::Text("There was an issue establishing a connection while requesting https://doesnotexist/foo.woff.".to_string()));
+        assert_eq!(*issue.description().await?.unwrap().await?, StyledString::Text("There was an issue establishing a connection while requesting https://doesnotexist/foo.woff.".into()));
     }
 }
 
@@ -136,7 +136,7 @@ async fn errors_on_404() {
 
         let issue = err_vc.to_issue(IssueSeverity::Error.into(), get_issue_context());
         assert_eq!(*issue.severity().await?, IssueSeverity::Error);
-        assert_eq!(*issue.description().await?.unwrap().await?, StyledString::Text(format!("Received response with status 404 when requesting {}", &resource_url)));
+        assert_eq!(*issue.description().await?.unwrap().await?, StyledString::Text(format!("Received response with status 404 when requesting {}", &resource_url).into()));
     }
 }
 
