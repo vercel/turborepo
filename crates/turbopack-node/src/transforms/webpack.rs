@@ -649,7 +649,7 @@ impl Issue for BuildDependencyIssue {
 
     #[turbo_tasks::function]
     fn title(&self) -> Vc<StyledString> {
-        StyledString::Text("Build dependencies are not yet supported".to_string()).cell()
+        StyledString::Text("Build dependencies are not yet supported".into()).cell()
     }
 
     #[turbo_tasks::function]
@@ -666,13 +666,13 @@ impl Issue for BuildDependencyIssue {
     async fn description(&self) -> Result<Vc<OptionStyledString>> {
         Ok(Vc::cell(Some(
             StyledString::Line(vec![
-                StyledString::Text("The file at ".to_string()),
-                StyledString::Code(self.path.await?.to_string()),
+                StyledString::Text("The file at ".into()),
+                StyledString::Code(self.path.await?.as_str().into()),
                 StyledString::Text(
                     " is a build dependency, which is not yet implemented.
     Changing this file or any dependency will not be recognized and might require restarting the \
                      server"
-                        .to_string(),
+                        .into(),
                 ),
             ])
             .cell(),
