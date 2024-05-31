@@ -509,10 +509,12 @@ impl AliasPattern {
     /// characters, including path separators.
     pub fn parse<'a, T>(pattern: T) -> Self
     where
-        T: Into<String> + 'a,
+        T: Into<RcStr> + 'a,
     {
-        let mut pattern = pattern.into();
+        let pattern = pattern.into();
         if let Some(wildcard_index) = pattern.find('*') {
+            let mut pattern = pattern.into_owned();
+
             let suffix = pattern[wildcard_index + 1..].into();
             pattern.truncate(wildcard_index);
             AliasPattern::Wildcard {

@@ -408,10 +408,10 @@ fn expand_folder_shorthand(key: &str, value: &mut SubpathValue) -> Result<AliasP
 #[derive(Default)]
 pub struct ResolveAliasMap(#[turbo_tasks(trace_ignore)] AliasMap<SubpathValue>);
 
-impl TryFrom<&IndexMap<String, Value>> for ResolveAliasMap {
+impl TryFrom<&IndexMap<RcStr, Value>> for ResolveAliasMap {
     type Error = anyhow::Error;
 
-    fn try_from(object: &IndexMap<String, Value>) -> Result<Self> {
+    fn try_from(object: &IndexMap<RcStr, Value>) -> Result<Self> {
         let mut map = AliasMap::new();
 
         for (key, value) in object.iter() {
