@@ -258,7 +258,7 @@ impl TryFrom<&Value> for ExportsField {
                     let pattern = if is_folder_shorthand(key) {
                         expand_folder_shorthand(key, &mut value)?
                     } else {
-                        AliasPattern::parse(key)
+                        AliasPattern::parse(key.as_str())
                     };
 
                     map.insert(pattern, value);
@@ -341,7 +341,7 @@ impl TryFrom<&Value> for ImportsField {
                         bail!("imports key \"{key}\" must begin with a '#'")
                     }
                     let value = SubpathValue::try_new(value, ExportImport::Import)?;
-                    map.insert(AliasPattern::parse(key), value);
+                    map.insert(AliasPattern::parse(key.as_str()), value);
                 }
 
                 map
@@ -420,7 +420,7 @@ impl TryFrom<&IndexMap<RcStr, Value>> for ResolveAliasMap {
             let pattern = if is_folder_shorthand(key) {
                 expand_folder_shorthand(key, &mut value)?
             } else {
-                AliasPattern::parse(key)
+                AliasPattern::parse(key.as_str())
             };
 
             map.insert(pattern, value);

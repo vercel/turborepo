@@ -522,7 +522,7 @@ impl AliasPattern {
                 suffix,
             }
         } else {
-            AliasPattern::Exact(pattern.into())
+            AliasPattern::Exact(pattern)
         }
     }
 
