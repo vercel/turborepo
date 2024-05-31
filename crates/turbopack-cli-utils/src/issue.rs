@@ -39,14 +39,14 @@ impl<'de> serde::Deserialize<'de> for IssueSeverityCliOption {
 impl clap::ValueEnum for IssueSeverityCliOption {
     fn value_variants<'a>() -> &'a [Self] {
         const VARIANTS: [IssueSeverityCliOption; 8] = [
-            Self(IssueSeverity::Bug),
-            Self(IssueSeverity::Fatal),
-            Self(IssueSeverity::Error),
-            Self(IssueSeverity::Warning),
-            Self(IssueSeverity::Hint),
-            Self(IssueSeverity::Note),
-            Self(IssueSeverity::Suggestion),
-            Self(IssueSeverity::Info),
+            IssueSeverityCliOption(IssueSeverity::Bug),
+            IssueSeverityCliOption(IssueSeverity::Fatal),
+            IssueSeverityCliOption(IssueSeverity::Error),
+            IssueSeverityCliOption(IssueSeverity::Warning),
+            IssueSeverityCliOption(IssueSeverity::Hint),
+            IssueSeverityCliOption(IssueSeverity::Note),
+            IssueSeverityCliOption(IssueSeverity::Suggestion),
+            IssueSeverityCliOption(IssueSeverity::Info),
         ];
         &VARIANTS
     }
