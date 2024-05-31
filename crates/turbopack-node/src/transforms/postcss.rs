@@ -288,7 +288,7 @@ async fn postcss_executor(
             AssetContent::File(embed_file("transforms/postcss.ts".into())).cell(),
         )),
         Value::new(ReferenceType::Internal(Vc::cell(indexmap! {
-            "CONFIG".to_string() => config_asset
+            "CONFIG".into() => config_asset
         }))),
     ))
 }
@@ -415,9 +415,9 @@ impl PostCssTransformedAsset {
 #[turbo_tasks::value]
 struct PostCssTransformIssue {
     source: Vc<FileSystemPath>,
-    description: String,
+    description: RcStr,
     severity: Vc<IssueSeverity>,
-    title: String,
+    title: RcStr,
 }
 
 #[turbo_tasks::value_impl]
@@ -429,14 +429,12 @@ impl Issue for PostCssTransformIssue {
 
     #[turbo_tasks::function]
     fn title(&self) -> Vc<StyledString> {
-        StyledString::Text(self.title.to_string()).cell()
+        StyledString::Text(self.title.clone()).cell()
     }
 
     #[turbo_tasks::function]
     fn description(&self) -> Vc<OptionStyledString> {
-        Vc::cell(Some(
-            StyledString::Text(self.description.to_string()).cell(),
-        ))
+        Vc::cell(Some(StyledString::Text(self.description.clone()).cell()))
     }
 
     #[turbo_tasks::function]

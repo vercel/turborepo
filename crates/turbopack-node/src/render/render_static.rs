@@ -167,7 +167,7 @@ async fn static_error(
 
     let issue = RenderingIssue {
         file_path: path,
-        message: StyledString::Text(error).cell(),
+        message: StyledString::Text(error.into()).cell(),
         status: status.and_then(|status| status.code()),
     };
 
