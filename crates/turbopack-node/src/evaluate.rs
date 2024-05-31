@@ -116,8 +116,8 @@ pub async fn get_evaluate_pool(
                 ),
             )),
             Value::new(ReferenceType::Internal(Vc::cell(indexmap! {
-                "INNER".to_string() => module_asset,
-                "RUNTIME".to_string() => runtime_asset
+                "INNER".into() => module_asset,
+                "RUNTIME".into() => runtime_asset
             }))),
         )
         .module();
@@ -583,7 +583,7 @@ pub struct EvaluationIssue {
 impl Issue for EvaluationIssue {
     #[turbo_tasks::function]
     fn title(&self) -> Vc<StyledString> {
-        StyledString::Text("Error evaluating Node.js code".to_string()).cell()
+        StyledString::Text("Error evaluating Node.js code".into()).cell()
     }
 
     #[turbo_tasks::function]
@@ -607,7 +607,8 @@ impl Issue for EvaluationIssue {
                         self.project_dir,
                         FormattingMode::Plain,
                     )
-                    .await?,
+                    .await?
+                    .into(),
             )
             .cell(),
         )))
