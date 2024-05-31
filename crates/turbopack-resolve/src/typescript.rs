@@ -31,7 +31,7 @@ use crate::ecmascript::get_condition_maps;
 pub struct TsConfigIssue {
     pub severity: Vc<IssueSeverity>,
     pub source_ident: Vc<AssetIdent>,
-    pub message: String,
+    pub message: RcStr,
 }
 
 #[turbo_tasks::function]
@@ -65,7 +65,7 @@ pub async fn read_tsconfigs(
                 TsConfigIssue {
                     severity: IssueSeverity::Error.into(),
                     source_ident: tsconfig.ident(),
-                    message,
+                    message: message.into(),
                 }
                 .cell()
                 .emit();
@@ -91,7 +91,8 @@ pub async fn read_tsconfigs(
                         TsConfigIssue {
                             severity: IssueSeverity::Error.into(),
                             source_ident: tsconfig.ident(),
-                            message: format!("extends: \"{}\" doesn't resolve correctly", extends),
+                            message: format!("extends: \"{}\" doesn't resolve correctly", extends)
+                                .into(),
                         }
                         .cell()
                         .emit();
@@ -492,7 +493,7 @@ impl Issue for TsConfigIssue {
     #[turbo_tasks::function]
     async fn title(&self) -> Result<Vc<StyledString>> {
         Ok(
-            StyledString::Text("An issue occurred while parsing a tsconfig.json file.".to_string())
+            StyledString::Text("An issue occurred while parsing a tsconfig.json file.".into())
                 .cell(),
         )
     }
