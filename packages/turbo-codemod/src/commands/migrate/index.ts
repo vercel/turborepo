@@ -111,7 +111,7 @@ export async function migrate(
   }
 
   // step 1
-  let fromVersion = getCurrentVersion(project, options);
+  const fromVersion = getCurrentVersion(project, options);
   if (!fromVersion) {
     return endMigration({
       success: false,
