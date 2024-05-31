@@ -14,8 +14,8 @@ use async_trait::async_trait;
 use auto_hash_map::AutoSet;
 use serde::Serialize;
 use turbo_tasks::{
-    emit, CollectiblesSource, RawVc, ReadRef, TransientInstance, TransientValue, TryJoinIterExt,
-    Upcast, ValueToString, Vc,
+    emit, CollectiblesSource, RawVc, RcStr, ReadRef, TransientInstance, TransientValue,
+    TryJoinIterExt, Upcast, ValueToString, Vc,
 };
 use turbo_tasks_fs::{FileContent, FileLine, FileLinesContent, FileSystemPath};
 use turbo_tasks_hash::{DeterministicHash, Xxh3Hash64Hasher};
@@ -88,12 +88,12 @@ pub enum StyledString {
     /// block elements, just like the top level [StyledString].
     Stack(Vec<StyledString>),
     /// Some prose text.
-    Text(String),
+    Text(RcStr),
     /// Code snippet.
     // TODO add language to support syntax hightlighting
-    Code(String),
+    Code(RcStr),
     /// Some important text.
-    Strong(String),
+    Strong(RcStr),
 }
 
 #[turbo_tasks::value_trait]

@@ -82,42 +82,42 @@ fn split_off_query_fragment(raw: RcStr) -> (Pattern, Vc<String>, Vc<String>) {
 }
 
 impl Request {
-    pub fn request(&self) -> Option<String> {
+    pub fn request(&self) -> Option<RcStr> {
         Some(match self {
             Request::Raw {
                 path: Pattern::Constant(path),
                 ..
-            } => path.to_string(),
+            } => path.clone(),
             Request::Relative {
                 path: Pattern::Constant(path),
                 ..
-            } => path.to_string(),
+            } => path.clone(),
             Request::Module {
                 module,
                 path: Pattern::Constant(path),
                 ..
-            } => format!("{module}{path}"),
+            } => format!("{module}{path}").into(),
             Request::ServerRelative {
                 path: Pattern::Constant(path),
                 ..
-            } => path.to_string(),
+            } => path.clone(),
             Request::Windows {
                 path: Pattern::Constant(path),
                 ..
-            } => path.to_string(),
-            Request::Empty => "".to_string(),
+            } => path.clone(),
+            Request::Empty => "".into(),
             Request::PackageInternal {
                 path: Pattern::Constant(path),
                 ..
-            } => path.to_string(),
+            } => path.clone(),
             Request::Uri {
                 protocol,
                 remainder,
                 ..
-            } => format!("{protocol}{remainder}"),
+            } => format!("{protocol}{remainder}").into(),
             Request::Unknown {
                 path: Pattern::Constant(path),
-            } => path.to_string(),
+            } => path.clone(),
             _ => return None,
         })
     }
