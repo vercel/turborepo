@@ -39,7 +39,9 @@ impl Issue for RenderingIssue {
 
         if let Some(status) = self.status {
             if status != 0 {
-                details.push(StyledString::Text(format!("Node.js exit code: {status}")).into());
+                details.push(StyledString::Text(
+                    format!("Node.js exit code: {status}").into(),
+                ));
             }
         }
 

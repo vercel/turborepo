@@ -74,7 +74,7 @@ impl WebAssemblyModuleAsset {
         let module = self.asset_context.process(
             loader_source,
             Value::new(ReferenceType::Internal(Vc::cell(indexmap! {
-                "WASM_PATH".to_string() => Vc::upcast(RawWebAssemblyModuleAsset::new(self.source, self.asset_context)),
+                "WASM_PATH".into() => Vc::upcast(RawWebAssemblyModuleAsset::new(self.source, self.asset_context)),
             }))),
         ).module();
 
