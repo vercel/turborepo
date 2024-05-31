@@ -133,7 +133,7 @@ pub enum Error {
         text: NamedSource,
     },
     #[error("found `pipeline` field instead of `tasks`")]
-    #[diagnostic(help("Deprecated in 2.0: `pipeline` has been renamed to `tasks`"))]
+    #[diagnostic(help("changed in 2.0: `pipeline` has been renamed to `tasks`"))]
     PipelineField {
         #[label("rename `pipeline` field to `tasks`")]
         span: Option<SourceSpan>,
