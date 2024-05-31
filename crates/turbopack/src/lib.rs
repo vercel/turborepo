@@ -550,12 +550,11 @@ async fn process_default_internal(
                             Some(module_type) => {
                                 ModuleIssue {
                                     ident,
-                                    title: StyledString::Text("Invalid module type".to_string())
-                                        .cell(),
+                                    title: StyledString::Text("Invalid module type".into()).cell(),
                                     description: StyledString::Text(
                                         "The module type must be Ecmascript or Typescript to add \
                                          Ecmascript transforms"
-                                            .to_string(),
+                                            .into(),
                                     )
                                     .cell(),
                                 }
@@ -566,12 +565,11 @@ async fn process_default_internal(
                             None => {
                                 ModuleIssue {
                                     ident,
-                                    title: StyledString::Text("Missing module type".to_string())
-                                        .cell(),
+                                    title: StyledString::Text("Missing module type".into()).cell(),
                                     description: StyledString::Text(
                                         "The module type effect must be applied before adding \
                                          Ecmascript transforms"
-                                            .to_string(),
+                                            .into(),
                                     )
                                     .cell(),
                                 }
@@ -591,11 +589,11 @@ async fn process_default_internal(
         None => {
             ModuleIssue {
                 ident,
-                title: StyledString::Text("Unknown module type".to_string()).cell(),
+                title: StyledString::Text("Unknown module type".into()).cell(),
                 description: StyledString::Text(
                     r"This module doesn't have an associated type. Use a known file extension, or register a loader for it.
 
-Read more: https://nextjs.org/docs/app/api-reference/next-config-js/turbo#webpack-loaders".to_string(),
+Read more: https://nextjs.org/docs/app/api-reference/next-config-js/turbo#webpack-loaders".into(),
                 )
                 .cell(),
             }

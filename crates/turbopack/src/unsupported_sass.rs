@@ -71,10 +71,13 @@ impl Issue for UnsupportedSassModuleIssue {
 
     #[turbo_tasks::function]
     async fn title(&self) -> Result<Vc<StyledString>> {
-        Ok(StyledString::Text(format!(
-            "Unsupported Sass request: {}",
-            self.request.await?.request().as_deref().unwrap_or("N/A")
-        ))
+        Ok(StyledString::Text(
+            format!(
+                "Unsupported Sass request: {}",
+                self.request.await?.request().as_deref().unwrap_or("N/A")
+            )
+            .into(),
+        )
         .cell())
     }
 
@@ -86,10 +89,8 @@ impl Issue for UnsupportedSassModuleIssue {
     #[turbo_tasks::function]
     fn description(&self) -> Vc<OptionStyledString> {
         Vc::cell(Some(
-            StyledString::Text(
-                "Turbopack does not yet support importing Sass modules.".to_string(),
-            )
-            .cell(),
+            StyledString::Text("Turbopack does not yet support importing Sass modules.".into())
+                .cell(),
         ))
     }
 
