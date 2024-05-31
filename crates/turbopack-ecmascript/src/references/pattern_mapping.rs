@@ -359,9 +359,9 @@ async fn to_single_pattern_mapping(
     }
     CodeGenerationIssue {
         severity: IssueSeverity::Bug.into(),
-        title: StyledString::Text("non-ecmascript placeable asset".to_string()).cell(),
+        title: StyledString::Text("non-ecmascript placeable asset".into()).cell(),
         message: StyledString::Text(
-            "asset is not placeable in ESM chunks, so it doesn't have a module id".to_string(),
+            "asset is not placeable in ESM chunks, so it doesn't have a module id".into(),
         )
         .cell(),
         path: origin.origin_path(),
