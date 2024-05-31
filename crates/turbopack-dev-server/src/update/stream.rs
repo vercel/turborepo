@@ -56,7 +56,8 @@ async fn get_update_stream_item(
             plain_issues.push(
                 FatalStreamIssue {
                     resource,
-                    description: StyledString::Text(format!("{}", PrettyPrintError(&e))).cell(),
+                    description: StyledString::Text(format!("{}", PrettyPrintError(&e)).into())
+                        .cell(),
                 }
                 .cell()
                 .into_plain(OptionIssueProcessingPathItems::none())
@@ -303,7 +304,7 @@ impl Issue for FatalStreamIssue {
 
     #[turbo_tasks::function]
     fn title(&self) -> Vc<StyledString> {
-        StyledString::Text("Fatal error while getting content to stream".to_string()).cell()
+        StyledString::Text("Fatal error while getting content to stream".into()).cell()
     }
 
     #[turbo_tasks::function]
