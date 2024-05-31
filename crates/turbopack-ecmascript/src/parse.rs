@@ -185,7 +185,7 @@ async fn parse_internal(
     let content = match content.await {
         Ok(content) => content,
         Err(error) => {
-            let error = PrettyPrintError(&error).to_string();
+            let error: RcStr = PrettyPrintError(&error).to_string().into();
             ReadSourceIssue {
                 source,
                 error: error.clone(),
@@ -227,7 +227,7 @@ async fn parse_internal(
                     }
                 }
                 Err(error) => {
-                    let error = PrettyPrintError(&error).to_string();
+                    let error: RcStr = PrettyPrintError(&error).to_string().into();
                     ReadSourceIssue {
                         source,
                         error: error.clone(),
@@ -451,7 +451,7 @@ async fn parse_content(
 #[turbo_tasks::value]
 struct ReadSourceIssue {
     source: Vc<Box<dyn Source>>,
-    error: String,
+    error: RcStr,
 }
 
 #[turbo_tasks::value_impl]
@@ -469,10 +469,14 @@ impl Issue for ReadSourceIssue {
     #[turbo_tasks::function]
     fn description(&self) -> Vc<OptionStyledString> {
         Vc::cell(Some(
-            StyledString::Text(format!(
-                "An unexpected error happened while trying to read the source code to parse: {}",
-                self.error
-            ))
+            StyledString::Text(
+                format!(
+                    "An unexpected error happened while trying to read the source code to parse: \
+                     {}",
+                    self.error
+                )
+                .into(),
+            )
             .cell(),
         ))
     }
