@@ -327,7 +327,7 @@ async fn parse_content(
                 let mut has_errors = vec![];
                 for e in parser.take_errors() {
                     let mut e = e.into_diagnostic(&parser_handler);
-                    has_errors.extend(e.message.iter().map(|m| m.0.clone()));
+                    has_errors.extend(e.message.iter().map(|m| m.0.as_str().into()));
                     e.emit();
                 }
 
@@ -341,7 +341,7 @@ async fn parse_content(
                     Ok(parsed_program) => parsed_program,
                     Err(e) => {
                         let mut e = e.into_diagnostic(&parser_handler);
-                        let messages = e.message.iter().map(|m| m.0.clone()).collect();
+                        let messages = e.message.iter().map(|m| m.0.as_str().into()).collect();
 
                         e.emit();
 
@@ -463,7 +463,7 @@ impl Issue for ReadSourceIssue {
 
     #[turbo_tasks::function]
     fn title(&self) -> Vc<StyledString> {
-        StyledString::Text("Reading source code for parsing failed".to_string()).cell()
+        StyledString::Text("Reading source code for parsing failed".into()).cell()
     }
 
     #[turbo_tasks::function]

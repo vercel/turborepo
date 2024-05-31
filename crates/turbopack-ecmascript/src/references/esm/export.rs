@@ -336,7 +336,7 @@ pub async fn expand_star_exports(
     .cell())
 }
 
-fn emit_star_exports_issue(source_ident: Vc<AssetIdent>, message: String) {
+fn emit_star_exports_issue(source_ident: Vc<AssetIdent>, message: RcStr) {
     AnalyzeIssue {
         code: None,
         message: StyledString::Text(message).cell(),
