@@ -208,7 +208,7 @@ export function getWorkspaceConfigs(
 export function forEachTaskDef(
   config: LegacySchema,
   f: (value: [string, Pipeline]) => void
-) {
+): void {
   if ("pipeline" in config) {
     Object.entries(config.pipeline).forEach(f);
   } else {

@@ -1,7 +1,12 @@
 import path from "node:path";
 import { readJsonSync, existsSync } from "fs-extra";
-import { type PackageJson, getTurboConfigs } from "@turbo/utils";
+import {
+  type PackageJson,
+  getTurboConfigs,
+  forEachTaskDef,
+} from "@turbo/utils";
 import type { Schema as TurboJsonSchema } from "@turbo/types";
+import type { LegacySchema } from "@turbo/types/src/types/config";
 import type { Transformer, TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
@@ -9,9 +14,9 @@ import type { TransformerResults } from "../runner";
 // transformer details
 const TRANSFORMER = "migrate-dot-env";
 const DESCRIPTION = 'Migrate the "dotEnv" entries to "inputs" in `turbo.json`';
-const INTRODUCED_IN = "2.0.0";
+const INTRODUCED_IN = "2.0.0-canary.0";
 
-function migrateConfig(config: TurboJsonSchema) {
+function migrateConfig(config: LegacySchema) {
   if ("globalDotEnv" in config) {
     if (config.globalDotEnv) {
       config.globalDependencies = config.globalDependencies ?? [];
@@ -22,7 +27,7 @@ function migrateConfig(config: TurboJsonSchema) {
     delete config.globalDotEnv;
   }
 
-  for (const [_, taskDef] of Object.entries(config.tasks)) {
+  forEachTaskDef(config, ([_, taskDef]) => {
     if ("dotEnv" in taskDef) {
       if (taskDef.dotEnv) {
         taskDef.inputs = taskDef.inputs ?? ["$TURBO_DEFAULT$"];
@@ -32,7 +37,7 @@ function migrateConfig(config: TurboJsonSchema) {
       }
       delete taskDef.dotEnv;
     }
-  }
+  });
 
   return config;
 }
