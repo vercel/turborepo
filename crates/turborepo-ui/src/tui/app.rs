@@ -1,5 +1,5 @@
 use std::{
-    io::{self, Stdout},
+    io::{self, Stdout, Write},
     time::{Duration, Instant},
 };
 
@@ -160,6 +160,8 @@ fn poll(interact: bool, receiver: &AppReceiver, deadline: Instant) -> Option<Eve
 fn startup() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
     crossterm::terminal::enable_raw_mode()?;
     let mut stdout = io::stdout();
+    // Ensure all pending writes are flushed before we switch to alternative screen
+    stdout.flush()?;
     crossterm::execute!(
         stdout,
         crossterm::event::EnableMouseCapture,
