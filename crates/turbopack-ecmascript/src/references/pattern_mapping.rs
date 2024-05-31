@@ -322,14 +322,17 @@ async fn to_single_pattern_mapping(
             CodeGenerationIssue {
                 severity: IssueSeverity::Bug.into(),
                 title: StyledString::Text(
-                    "pattern mapping is not implemented for this result".to_string(),
+                    "pattern mapping is not implemented for this result".into(),
                 )
                 .cell(),
-                message: StyledString::Text(format!(
-                    "the reference resolves to a non-trivial result, which is not supported yet: \
-                     {:?}",
-                    resolve_item
-                ))
+                message: StyledString::Text(
+                    format!(
+                        "the reference resolves to a non-trivial result, which is not supported \
+                         yet: {:?}",
+                        resolve_item
+                    )
+                    .into(),
+                )
                 .cell(),
                 path: origin.origin_path(),
             }

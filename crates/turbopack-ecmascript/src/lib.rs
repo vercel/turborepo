@@ -539,7 +539,7 @@ impl Module for EcmascriptModuleAsset {
         if let Some(inner_assets) = self.inner_assets {
             let mut ident = self.source.ident().await?.clone_value();
             for (name, asset) in inner_assets.await?.iter() {
-                ident.add_asset(Vc::cell(name.clone()), asset.ident());
+                ident.add_asset(Vc::cell(name.to_string()), asset.ident());
             }
             ident.add_modifier(modifier());
             ident.layer = Some(self.asset_context.layer());
