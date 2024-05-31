@@ -141,6 +141,10 @@ impl Run {
     }
 
     pub fn start_experimental_ui(&self) -> Option<(AppSender, JoinHandle<Result<(), tui::Error>>)> {
+        // Print prelude here as this needs to happen before the UI is started
+        if self.should_print_prelude {
+            self.print_run_prelude();
+        }
         if !self.experimental_ui {
             return None;
         }
@@ -153,9 +157,6 @@ impl Run {
     }
 
     pub async fn run(&mut self, experimental_ui_sender: Option<AppSender>) -> Result<i32, Error> {
-        if self.should_print_prelude {
-            self.print_run_prelude();
-        }
         if let Some(subscriber) = self.signal_handler.subscribe() {
             let run_cache = self.run_cache.clone();
             tokio::spawn(async move {
