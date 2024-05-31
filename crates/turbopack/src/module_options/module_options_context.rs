@@ -151,7 +151,7 @@ pub struct ModuleOptionsContext {
 
     pub use_swc_css: bool,
 
-    pub side_effect_free_packages: Vec<String>,
+    pub side_effect_free_packages: Vec<RcStr>,
 }
 
 #[turbo_tasks::value_impl]
