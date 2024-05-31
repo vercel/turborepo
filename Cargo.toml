@@ -5,6 +5,7 @@ members = [
   "crates/node-file-trace",
   "crates/tower-uds",
   "crates/turbo-tasks*",
+  "crates/turbo-prehash",
   "crates/turbopack*",
   "crates/turborepo*",
   "packages/turbo-repository/rust",
@@ -128,6 +129,7 @@ signposter = { path = "crates/turbo-tasks-signposter" }
 signposter-sys = { path = "crates/turbo-tasks-signposter-sys" }
 tracing-signpost = { path = "crates/turbo-tasks-tracing-signpost" }
 swc-ast-explorer = { path = "crates/turbopack-swc-ast-explorer" }
+turbo-prehash = { path = "crates/turbo-prehash" }
 turbo-tasks-malloc = { path = "crates/turbo-tasks-malloc", default-features = false }
 turbo-tasks = { path = "crates/turbo-tasks" }
 turbo-tasks-build = { path = "crates/turbo-tasks-build" }
