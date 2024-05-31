@@ -1044,7 +1044,7 @@ async fn exports_field(package_json_path: Vc<FileSystemPath>) -> Result<Vc<Expor
         Err(err) => {
             PackageJsonIssue {
                 path: package_json_path,
-                error_message: err.to_string(),
+                error_message: err.to_string().into(),
             }
             .cell()
             .emit();
@@ -1085,7 +1085,7 @@ async fn imports_field(lookup_path: Vc<FileSystemPath>) -> Result<Vc<ImportsFiel
         Err(err) => {
             PackageJsonIssue {
                 path: *package_json_path,
-                error_message: err.to_string(),
+                error_message: err.to_string().into(),
             }
             .cell()
             .emit();
