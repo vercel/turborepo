@@ -800,7 +800,7 @@ impl Issue for EvaluateErrorLoggingIssue {
 
     #[turbo_tasks::function]
     fn title(&self) -> Vc<StyledString> {
-        StyledString::Text("Error logging while running loader".to_string()).cell()
+        StyledString::Text("Error logging while running loader".into()).cell()
     }
 
     #[turbo_tasks::function]
@@ -826,11 +826,13 @@ impl Issue for EvaluateErrorLoggingIssue {
             .logging
             .iter()
             .map(|log| match log.log_type {
-                LogType::Error => StyledString::Strong(fmt_args("<e> ".to_string(), &log.args)),
-                LogType::Warn => StyledString::Text(fmt_args("<w> ".to_string(), &log.args)),
-                LogType::Info => StyledString::Text(fmt_args("<i> ".to_string(), &log.args)),
-                LogType::Log => StyledString::Text(fmt_args("<l> ".to_string(), &log.args)),
-                LogType::Clear => StyledString::Strong("---".to_string()),
+                LogType::Error => {
+                    StyledString::Strong(fmt_args("<e> ".to_string(), &log.args).into())
+                }
+                LogType::Warn => StyledString::Text(fmt_args("<w> ".to_string(), &log.args).into()),
+                LogType::Info => StyledString::Text(fmt_args("<i> ".to_string(), &log.args).into()),
+                LogType::Log => StyledString::Text(fmt_args("<l> ".to_string(), &log.args).into()),
+                LogType::Clear => StyledString::Strong("---".into()),
                 _ => {
                     unimplemented!("{:?} is not implemented", log.log_type)
                 }
