@@ -777,10 +777,8 @@ pub(crate) async fn analyse_ecmascript_module_internal(
     } else if let Some(span) = top_level_await_span {
         AnalyzeIssue {
             code: None,
-            message: StyledString::Text(
-                "top level await is only supported in ESM modules.".to_string(),
-            )
-            .cell(),
+            message: StyledString::Text("top level await is only supported in ESM modules.".into())
+                .cell(),
             source_ident: source.ident(),
             severity: IssueSeverity::Error.into(),
             source: Some(issue_source(source, span)),

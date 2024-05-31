@@ -299,7 +299,8 @@ pub async fn expand_star_exports(
                      `export type` is more efficient than `export *` as it won't emit any runtime \
                      code.",
                     asset.ident().to_string().await?
-                ),
+                )
+                .into(),
             ),
             EcmascriptExports::Value => emit_star_exports_issue(
                 asset.ident(),
@@ -308,7 +309,8 @@ pub async fn expand_star_exports(
                      is not exported with export *)\nDid you want to use `export {{ default }} \
                      from \"...\";` instead?",
                     asset.ident().to_string().await?
-                ),
+                )
+                .into(),
             ),
             EcmascriptExports::CommonJs => {
                 has_dynamic_exports = true;
@@ -320,7 +322,8 @@ pub async fn expand_star_exports(
                          b, c }} from \"...\") or rewrite the module to ESM, to avoid the \
                          additional runtime code.`",
                         asset.ident().to_string().await?
-                    ),
+                    )
+                    .into(),
                 );
             }
             EcmascriptExports::DynamicNamespace => {
