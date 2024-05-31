@@ -14,7 +14,7 @@ const INTRODUCED_IN = "2.0.0-canary.0";
 function migrateConfig(config: SchemaV1): Schema {
   const { pipeline, ...rest } = config;
 
-  return { tasks: pipeline, ...rest };
+  return { ...rest, tasks: pipeline };
 }
 
 export function transformer({
