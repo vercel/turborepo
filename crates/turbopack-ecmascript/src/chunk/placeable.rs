@@ -58,11 +58,14 @@ async fn side_effects_from_package_json(
                             SideEffectsInPackageJsonIssue {
                                 path: package_json,
                                 description: Some(
-                                    StyledString::Text(format!(
-                                        "Each element in sideEffects must be a string, but found \
-                                         {:?}",
-                                        side_effect
-                                    ))
+                                    StyledString::Text(
+                                        format!(
+                                            "Each element in sideEffects must be a string, but \
+                                             found {:?}",
+                                            side_effect
+                                        )
+                                        .into(),
+                                    )
                                     .cell(),
                                 ),
                             }
@@ -78,10 +81,13 @@ async fn side_effects_from_package_json(
                                 SideEffectsInPackageJsonIssue {
                                     path: package_json,
                                     description: Some(
-                                        StyledString::Text(format!(
-                                            "Invalid glob in sideEffects: {}",
-                                            PrettyPrintError(&err)
-                                        ))
+                                        StyledString::Text(
+                                            format!(
+                                                "Invalid glob in sideEffects: {}",
+                                                PrettyPrintError(&err)
+                                            )
+                                            .into(),
+                                        )
                                         .cell(),
                                     ),
                                 }

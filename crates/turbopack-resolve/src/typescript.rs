@@ -296,7 +296,8 @@ pub async fn tsconfig_resolve_options(
                                  expected\n{key}: {value:#}",
                                 key = serde_json::to_string(key)?,
                                 value = value
-                            ),
+                            )
+                            .into(),
                         }
                         .cell()
                         .emit()

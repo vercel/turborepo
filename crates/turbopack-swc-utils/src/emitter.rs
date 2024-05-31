@@ -44,8 +44,8 @@ impl Emitter for IssueEmitter {
             .collect::<Vec<_>>()
             .join("");
         let code = db.code.as_ref().map(|d| match d {
-            DiagnosticId::Error(s) => format!("error {s}"),
-            DiagnosticId::Lint(s) => format!("lint {s}"),
+            DiagnosticId::Error(s) => format!("error {s}").into(),
+            DiagnosticId::Lint(s) => format!("lint {s}").into(),
         });
 
         let title;
@@ -76,7 +76,7 @@ impl Emitter for IssueEmitter {
             .cell(),
             source_ident: self.source.ident(),
             title: Vc::cell(title),
-            message: StyledString::Text(message).cell(),
+            message: StyledString::Text(message.into()).cell(),
             code,
             source,
         }
