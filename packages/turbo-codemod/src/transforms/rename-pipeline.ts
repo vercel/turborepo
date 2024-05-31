@@ -9,7 +9,7 @@ import type { TransformerResults } from "../runner";
 // transformer details
 const TRANSFORMER = "rename-pipeline";
 const DESCRIPTION = 'Rename the "pipeline" key to "tasks" in `turbo.json`';
-const INTRODUCED_IN = "2.0.0";
+const INTRODUCED_IN = "2.0.0-canary.0";
 
 function migrateConfig(config: SchemaV1): Schema {
   const { pipeline, ...rest } = config;

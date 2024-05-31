@@ -13,6 +13,7 @@ const TRANSFORMER = "set-default-outputs";
 const DESCRIPTION =
   'Add the "outputs" key with defaults where it is missing in `turbo.json`';
 const INTRODUCED_IN = "1.7.0";
+const IDEMPOTENT = false;
 
 function migrateConfig(config: SchemaV1) {
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
@@ -92,6 +93,7 @@ const transformerMeta: Transformer = {
   name: TRANSFORMER,
   description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
+  idempotent: IDEMPOTENT,
   transformer,
 };
 

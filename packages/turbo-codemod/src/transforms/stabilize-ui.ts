@@ -8,7 +8,7 @@ import type { TransformerResults } from "../runner";
 // transformer details
 const TRANSFORMER = "stabilize-ui";
 const DESCRIPTION = 'Rename the "experimentalUI" key to "ui" in `turbo.json`';
-const INTRODUCED_IN = "2.0.0";
+const INTRODUCED_IN = "2.0.0-canary.0";
 
 interface ExperimentalSchema extends RootSchema {
   experimentalUI?: boolean;

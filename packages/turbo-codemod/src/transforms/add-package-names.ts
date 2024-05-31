@@ -8,7 +8,7 @@ import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 // transformer details
 const TRANSFORMER = "add-package-names";
 const DESCRIPTION = "Ensure all packages have a name in their package.json";
-const INTRODUCED_IN = "2.0.0";
+const INTRODUCED_IN = "2.0.0-canary.0";
 
 interface PartialPackageJson {
   name?: string;
