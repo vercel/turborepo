@@ -10,7 +10,7 @@ use crate::{module::Module, resolve::ModulePart};
 /// per-module aliases of some requests to already created module assets.
 /// Name is usually in UPPER_CASE to make it clear that this is an inner asset.
 #[turbo_tasks::value(transparent)]
-pub struct InnerAssets(IndexMap<String, Vc<Box<dyn Module>>>);
+pub struct InnerAssets(IndexMap<RcStr, Vc<Box<dyn Module>>>);
 
 #[turbo_tasks::value_impl]
 impl InnerAssets {

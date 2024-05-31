@@ -106,10 +106,13 @@ async fn side_effects_from_package_json(
                 SideEffectsInPackageJsonIssue {
                     path: package_json,
                     description: Some(
-                        StyledString::Text(format!(
-                            "sideEffects must be a boolean or an array, but found {:?}",
-                            side_effects
-                        ))
+                        StyledString::Text(
+                            format!(
+                                "sideEffects must be a boolean or an array, but found {:?}",
+                                side_effects
+                            )
+                            .into(),
+                        )
                         .cell(),
                     ),
                 }
@@ -146,7 +149,7 @@ impl Issue for SideEffectsInPackageJsonIssue {
 
     #[turbo_tasks::function]
     fn title(&self) -> Vc<StyledString> {
-        StyledString::Text("Invalid value for sideEffects in package.json".to_string()).cell()
+        StyledString::Text("Invalid value for sideEffects in package.json".into()).cell()
     }
 
     #[turbo_tasks::function]

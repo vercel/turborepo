@@ -21,7 +21,7 @@ use swc_core::{
     },
 };
 use tracing::Instrument;
-use turbo_tasks::{util::WrapFuture, Value, ValueToString, Vc};
+use turbo_tasks::{util::WrapFuture, RcStr, Value, ValueToString, Vc};
 use turbo_tasks_fs::{FileContent, FileSystemPath};
 use turbo_tasks_hash::hash_xxh3_hash64;
 use turbopack_core::{
@@ -58,7 +58,7 @@ pub enum ParseResult {
         source_map: Arc<swc_core::common::SourceMap>,
     },
     Unparseable {
-        messages: Option<Vec<String>>,
+        messages: Option<Vec<RcStr>>,
     },
     NotFound,
 }
@@ -405,7 +405,7 @@ async fn parse_content(
                 } else {
                     None
                 };
-                let messages = Some(messages.unwrap_or_else(|| vec![string.to_string()]));
+                let messages = Some(messages.unwrap_or_else(|| vec![string.into()]));
                 return Ok(ParseResult::Unparseable { messages });
             }
 
