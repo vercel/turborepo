@@ -667,7 +667,7 @@ impl Issue for BuildDependencyIssue {
         Ok(Vc::cell(Some(
             StyledString::Line(vec![
                 StyledString::Text("The file at ".into()),
-                StyledString::Code(self.path.await?.as_str().into()),
+                StyledString::Code(self.path.await?.to_string().into()),
                 StyledString::Text(
                     " is a build dependency, which is not yet implemented.
     Changing this file or any dependency will not be recognized and might require restarting the \
@@ -748,7 +748,7 @@ impl Issue for EvaluateEmittedErrorIssue {
 
     #[turbo_tasks::function]
     fn title(&self) -> Vc<StyledString> {
-        StyledString::Text("Issue while running loader".to_string()).cell()
+        StyledString::Text("Issue while running loader".into()).cell()
     }
 
     #[turbo_tasks::function]
@@ -762,7 +762,8 @@ impl Issue for EvaluateEmittedErrorIssue {
                         self.project_dir,
                         FormattingMode::Plain,
                     )
-                    .await?,
+                    .await?
+                    .into(),
             )
             .cell(),
         )))
