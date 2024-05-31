@@ -338,7 +338,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
                                         Module {from} referenced in `composes: ... from {from};` can't be resolved.
                                     "#,
                                     from = &*from.await?.request.to_string().await?
-                                },
+                                }.into(),
                             }.cell().emit();
                             continue;
                         };
@@ -355,7 +355,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
                                         Module {from} referenced in `composes: ... from {from};` is not a CSS module.
                                     "#,
                                     from = &*from.await?.request.to_string().await?
-                                },
+                                }.into(),
                             }.cell().emit();
                             continue;
                         };
@@ -429,7 +429,7 @@ fn generate_minimal_source_map(filename: String, source: String) -> Vc<ParseResu
 struct CssModuleComposesIssue {
     severity: Vc<IssueSeverity>,
     source: Vc<AssetIdent>,
-    message: String,
+    message: RcStr,
 }
 
 #[turbo_tasks::value_impl]
@@ -442,7 +442,7 @@ impl Issue for CssModuleComposesIssue {
     #[turbo_tasks::function]
     async fn title(&self) -> Result<Vc<StyledString>> {
         Ok(StyledString::Text(
-            "An issue occurred while resolving a CSS module `composes:` rule".to_string(),
+            "An issue occurred while resolving a CSS module `composes:` rule".into(),
         )
         .cell())
     }

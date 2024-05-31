@@ -1102,7 +1102,7 @@ impl Issue for ParsingIssue {
 
     #[turbo_tasks::function]
     fn title(&self) -> Vc<StyledString> {
-        StyledString::Text("Parsing css source code failed".to_string()).cell()
+        StyledString::Text("Parsing css source code failed".into()).cell()
     }
 
     #[turbo_tasks::function]
@@ -1113,7 +1113,7 @@ impl Issue for ParsingIssue {
     #[turbo_tasks::function]
     async fn description(&self) -> Result<Vc<OptionStyledString>> {
         Ok(Vc::cell(Some(
-            StyledString::Text(self.msg.await?.clone_value()).cell(),
+            StyledString::Text(self.msg.await?.as_str().into()).cell(),
         )))
     }
 }
