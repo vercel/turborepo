@@ -4,7 +4,7 @@ use anyhow::Result;
 use indexmap::IndexSet;
 use turbo_tasks::{
     graph::{AdjacencyMap, GraphTraversal},
-    RcStr, TryJoinIterExt, ValueToString, Vc,
+    TryJoinIterExt, ValueToString, Vc,
 };
 
 use crate::{
