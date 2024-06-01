@@ -11,6 +11,7 @@ use crate::{
 
 __turbo_tasks_internal_primitive!(());
 __turbo_tasks_internal_primitive!(String);
+__turbo_tasks_internal_primitive!(RcStr);
 
 #[turbo_tasks::function]
 fn empty_string() -> Vc<String> {
