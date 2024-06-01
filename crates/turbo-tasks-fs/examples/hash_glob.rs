@@ -54,7 +54,7 @@ async fn main() -> Result<()> {
 }
 
 #[turbo_tasks::function]
-pub fn empty_string() -> Vc<RcStr> {
+pub fn empty_string() -> Vc<String> {
     Vc::cell("".into())
 }
 
@@ -65,7 +65,7 @@ async fn print_hash(dir_hash: Vc<String>) -> Result<Vc<()>> {
 }
 
 #[turbo_tasks::function]
-async fn hash_glob_result(result: Vc<ReadGlobResult>) -> Result<Vc<RcStr>> {
+async fn hash_glob_result(result: Vc<ReadGlobResult>) -> Result<Vc<String>> {
     let result = result.await?;
     let mut hashes = BTreeMap::new();
     for (name, entry) in result.results.iter() {
@@ -93,7 +93,7 @@ async fn hash_glob_result(result: Vc<ReadGlobResult>) -> Result<Vc<RcStr>> {
 }
 
 #[turbo_tasks::function]
-async fn hash_file(file_path: Vc<FileSystemPath>) -> Result<Vc<RcStr>> {
+async fn hash_file(file_path: Vc<FileSystemPath>) -> Result<Vc<String>> {
     let content = file_path.read().await?;
     Ok(match &*content {
         FileContent::Content(file) => hash_content(&mut file.read()),
@@ -104,7 +104,7 @@ async fn hash_file(file_path: Vc<FileSystemPath>) -> Result<Vc<RcStr>> {
     })
 }
 
-fn hash_content<R: Read>(content: &mut R) -> Vc<RcStr> {
+fn hash_content<R: Read>(content: &mut R) -> Vc<String> {
     let mut hasher = Sha256::new();
     let mut buf = [0; 1024];
     while let Ok(size) = content.read(&mut buf) {
