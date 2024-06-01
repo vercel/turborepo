@@ -9,7 +9,7 @@ use std::{
 
 use anyhow::Result;
 use sha2::{Digest, Sha256};
-use turbo_tasks::{util::FormatDuration, RcStr, TurboTasks, UpdateInfo, Vc};
+use turbo_tasks::{util::FormatDuration, TurboTasks, UpdateInfo, Vc};
 use turbo_tasks_fs::{
     register, DirectoryContent, DirectoryEntry, DiskFileSystem, FileContent, FileSystem,
     FileSystemPath,
@@ -118,7 +118,7 @@ fn hash_content<R: Read>(content: &mut R) -> Vc<String> {
     while let Ok(size) = content.read(&mut buf) {
         hasher.update(&buf[0..size]);
     }
-    let result = format!("{:x}", hasher.finalize()).into();
+    let result = format!("{:x}", hasher.finalize());
 
     Vc::cell(result)
 }

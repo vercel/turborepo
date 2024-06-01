@@ -85,7 +85,7 @@ async fn hash_glob_result(result: Vc<ReadGlobResult>) -> Result<Vc<String>> {
     let hash = hash_content(
         &mut hashes
             .into_values()
-            .collect::<Vec<RcStr>>()
+            .collect::<Vec<String>>()
             .join(",")
             .as_bytes(),
     );
