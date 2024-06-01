@@ -13,7 +13,7 @@ use crate::{
 #[turbo_tasks::value]
 pub struct FileSource {
     pub path: Vc<FileSystemPath>,
-    pub query: Vc<RcStr>,
+    pub query: Vc<String>,
 }
 
 #[turbo_tasks::value_impl]
