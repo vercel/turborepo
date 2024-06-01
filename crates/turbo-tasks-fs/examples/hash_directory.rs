@@ -92,7 +92,7 @@ async fn hash_directory(directory: Vc<FileSystemPath>) -> Result<Vc<RcStr>> {
     let hash = hash_content(
         &mut hashes
             .into_values()
-            .collect::<Vec<String>>()
+            .collect::<Vec<RcStr>>()
             .join(",")
             .as_bytes(),
     );

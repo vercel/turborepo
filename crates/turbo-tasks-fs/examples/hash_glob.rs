@@ -9,7 +9,7 @@ use std::{
 
 use anyhow::Result;
 use sha2::{Digest, Sha256};
-use turbo_tasks::{util::FormatDuration, TurboTasks, UpdateInfo, Vc};
+use turbo_tasks::{util::FormatDuration, RcStr, TurboTasks, UpdateInfo, Vc};
 use turbo_tasks_fs::{
     glob::Glob, register, DirectoryEntry, DiskFileSystem, FileContent, FileSystem, FileSystemPath,
     ReadGlobResult,
@@ -54,7 +54,7 @@ async fn main() -> Result<()> {
 }
 
 #[turbo_tasks::function]
-pub fn empty_string() -> Vc<String> {
+pub fn empty_string() -> Vc<RcStr> {
     Vc::cell("".into())
 }
 
@@ -65,7 +65,7 @@ async fn print_hash(dir_hash: Vc<String>) -> Result<Vc<()>> {
 }
 
 #[turbo_tasks::function]
-async fn hash_glob_result(result: Vc<ReadGlobResult>) -> Result<Vc<String>> {
+async fn hash_glob_result(result: Vc<ReadGlobResult>) -> Result<Vc<RcStr>> {
     let result = result.await?;
     let mut hashes = BTreeMap::new();
     for (name, entry) in result.results.iter() {
@@ -85,7 +85,7 @@ async fn hash_glob_result(result: Vc<ReadGlobResult>) -> Result<Vc<String>> {
     let hash = hash_content(
         &mut hashes
             .into_values()
-            .collect::<Vec<String>>()
+            .collect::<Vec<RcStr>>()
             .join(",")
             .as_bytes(),
     );
@@ -93,7 +93,7 @@ async fn hash_glob_result(result: Vc<ReadGlobResult>) -> Result<Vc<String>> {
 }
 
 #[turbo_tasks::function]
-async fn hash_file(file_path: Vc<FileSystemPath>) -> Result<Vc<String>> {
+async fn hash_file(file_path: Vc<FileSystemPath>) -> Result<Vc<RcStr>> {
     let content = file_path.read().await?;
     Ok(match &*content {
         FileContent::Content(file) => hash_content(&mut file.read()),
@@ -104,7 +104,7 @@ async fn hash_file(file_path: Vc<FileSystemPath>) -> Result<Vc<String>> {
     })
 }
 
-fn hash_content<R: Read>(content: &mut R) -> Vc<String> {
+fn hash_content<R: Read>(content: &mut R) -> Vc<RcStr> {
     let mut hasher = Sha256::new();
     let mut buf = [0; 1024];
     while let Ok(size) = content.read(&mut buf) {
@@ -112,5 +112,5 @@ fn hash_content<R: Read>(content: &mut R) -> Vc<String> {
     }
     let result = format!("{:x}", hasher.finalize());
 
-    Vc::cell(result)
+    Vc::cell(result.into())
 }
