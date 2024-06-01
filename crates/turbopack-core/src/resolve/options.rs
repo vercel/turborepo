@@ -277,7 +277,7 @@ async fn import_mapping_to_result(
             ResolveResult::primary(if let Some(name) = name {
                 ResolveResultItem::External(name.clone(), *ty)
             } else if let Some(request) = request.await?.request() {
-                ResolveResultItem::External(request.into(), *ty)
+                ResolveResultItem::External(request, *ty)
             } else {
                 bail!("Cannot resolve external reference without request")
             })
