@@ -6,6 +6,7 @@ import type { SchemaV1 } from "@turbo/types/src/types/config";
 import type { Transformer, TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
+import { loadTurboJson } from "../utils/loadTurboJson";
 
 // transformer details
 const TRANSFORMER = "rename-output-mode";
@@ -62,7 +63,7 @@ export function transformer({
     });
   }
 
-  const turboJson = readJsonSync(turboConfigPath) as SchemaV1;
+  const turboJson: SchemaV1 = loadTurboJson(turboConfigPath);
   runner.modifyFile({
     filePath: turboConfigPath,
     after: migrateConfig(turboJson),

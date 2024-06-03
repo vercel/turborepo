@@ -6,6 +6,7 @@ import type { SchemaV1 } from "@turbo/types/src/types/config";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
 import type { Transformer, TransformerArgs } from "../types";
+import { loadTurboJson } from "../utils/loadTurboJson";
 
 // transformer details
 const TRANSFORMER = "migrate-env-var-dependencies";
@@ -145,7 +146,7 @@ export function transformer({
     });
   }
 
-  let turboJson = readJsonSync(turboConfigPath) as SchemaV1;
+  let turboJson: SchemaV1 = loadTurboJson(turboConfigPath);
   if (hasLegacyEnvVarDependencies(turboJson).hasKeys) {
     turboJson = migrateConfig(turboJson);
   }
