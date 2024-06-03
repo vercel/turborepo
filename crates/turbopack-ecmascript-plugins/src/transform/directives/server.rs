@@ -4,7 +4,7 @@ use swc_core::{
     ecma::ast::{ModuleItem, Program},
     quote,
 };
-use turbo_tasks::Vc;
+use turbo_tasks::{RcStr, Vc};
 use turbopack_core::issue::IssueExt;
 use turbopack_ecmascript::{CustomTransformer, TransformContext, UnsupportedServerActionIssue};
 

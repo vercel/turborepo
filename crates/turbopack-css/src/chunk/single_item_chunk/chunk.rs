@@ -147,12 +147,12 @@ impl GenerateSourceMap for SingleItemCssChunk {
 
 #[turbo_tasks::function]
 fn introspectable_type() -> Vc<RcStr> {
-    Vc::cell("single asset css chunk".to_string())
+    Vc::cell("single asset css chunk".into())
 }
 
 #[turbo_tasks::function]
 fn entry_module_key() -> Vc<RcStr> {
-    Vc::cell("entry module".to_string())
+    Vc::cell("entry module".into())
 }
 
 #[turbo_tasks::value_impl]
@@ -176,6 +176,6 @@ impl Introspectable for SingleItemCssChunk {
             "Chunk item: {}",
             this.item.asset_ident().to_string().await?
         )?;
-        Ok(Vc::cell(details))
+        Ok(Vc::cell(details.into()))
     }
 }

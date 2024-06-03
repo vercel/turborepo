@@ -441,7 +441,7 @@ pub struct CssChunkType {}
 impl ValueToString for CssChunkType {
     #[turbo_tasks::function]
     fn to_string(&self) -> Vc<RcStr> {
-        Vc::cell("css".to_string())
+        Vc::cell("css".into())
     }
 }
 
