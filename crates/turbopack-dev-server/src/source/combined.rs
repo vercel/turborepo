@@ -73,7 +73,7 @@ impl Introspectable for CombinedContentSource {
         if titles.len() > NUMBER_OF_TITLES_TO_DISPLAY {
             titles[NUMBER_OF_TITLES_TO_DISPLAY] = "...";
         }
-        Ok(Vc::cell(titles.join(", ")))
+        Ok(Vc::cell(titles.join(", ").into()))
     }
 
     #[turbo_tasks::function]

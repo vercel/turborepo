@@ -87,17 +87,17 @@ impl MapGetContentSourceContent for ConditionalContentSourceMapper {
 
 #[turbo_tasks::function]
 fn introspectable_type() -> Vc<RcStr> {
-    Vc::cell("conditional content source".to_string())
+    Vc::cell("conditional content source".into())
 }
 
 #[turbo_tasks::function]
 fn activator_key() -> Vc<RcStr> {
-    Vc::cell("activator".to_string())
+    Vc::cell("activator".into())
 }
 
 #[turbo_tasks::function]
 fn action_key() -> Vc<RcStr> {
-    Vc::cell("action".to_string())
+    Vc::cell("action".into())
 }
 
 #[turbo_tasks::value_impl]
