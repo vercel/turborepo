@@ -1,10 +1,11 @@
 import path from "node:path";
-import { readJsonSync, existsSync } from "fs-extra";
+import { existsSync } from "fs-extra";
 import { getTurboConfigs } from "@turbo/utils";
 import type { Schema, SchemaV1 } from "@turbo/types/src/types/config";
 import type { Transformer, TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
+import { loadTurboJson } from "../utils/loadTurboJson";
 
 // transformer details
 const TRANSFORMER = "rename-pipeline";
@@ -35,7 +36,7 @@ export function transformer({
     });
   }
 
-  const turboJson = readJsonSync(turboConfigPath) as SchemaV1;
+  const turboJson: SchemaV1 = loadTurboJson(turboConfigPath);
   runner.modifyFile({
     filePath: turboConfigPath,
     after: migrateConfig(turboJson),
