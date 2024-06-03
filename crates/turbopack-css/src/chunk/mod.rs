@@ -275,7 +275,7 @@ impl OutputAsset for CssChunk {
             } else {
                 ServerFileSystem::new().root()
             },
-            query: Vc::<String>::default(),
+            query: Vc::<RcStr>::default(),
             fragment: None,
             assets,
             modifiers: Vec::new(),

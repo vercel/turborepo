@@ -60,15 +60,15 @@ fn split_off_query_fragment(raw: RcStr) -> (Pattern, Vc<RcStr>, Vc<RcStr>) {
         if let Some((raw, fragment)) = raw.split_once('#') {
             return (
                 Pattern::Constant(raw.into()),
-                Vc::<String>::default(),
+                Vc::<RcStr>::default(),
                 Vc::cell(fragment.to_string()),
             );
         }
 
         return (
             Pattern::Constant(raw),
-            Vc::<String>::default(),
-            Vc::<String>::default(),
+            Vc::<RcStr>::default(),
+            Vc::<RcStr>::default(),
         );
     };
 
@@ -174,8 +174,8 @@ impl Request {
                             return Request::Uri {
                                 protocol: protocol.as_str().to_string(),
                                 remainder: remainder.as_str().to_string(),
-                                query: Vc::<String>::default(),
-                                fragment: Vc::<String>::default(),
+                                query: Vc::<RcStr>::default(),
+                                fragment: Vc::<RcStr>::default(),
                             };
                         }
                     }
@@ -603,13 +603,13 @@ impl Request {
             Request::Module { query, .. } => *query,
             Request::ServerRelative { query, .. } => *query,
             Request::Windows { query, .. } => *query,
-            Request::Empty => Vc::<String>::default(),
-            Request::PackageInternal { .. } => Vc::<String>::default(),
-            Request::Uri { .. } => Vc::<String>::default(),
-            Request::Unknown { .. } => Vc::<String>::default(),
-            Request::Dynamic => Vc::<String>::default(),
+            Request::Empty => Vc::<RcStr>::default(),
+            Request::PackageInternal { .. } => Vc::<RcStr>::default(),
+            Request::Uri { .. } => Vc::<RcStr>::default(),
+            Request::Unknown { .. } => Vc::<RcStr>::default(),
+            Request::Dynamic => Vc::<RcStr>::default(),
             // TODO: is this correct, should we return the first one instead?
-            Request::Alternatives { .. } => Vc::<String>::default(),
+            Request::Alternatives { .. } => Vc::<RcStr>::default(),
         }
     }
 }

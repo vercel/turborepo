@@ -93,7 +93,7 @@ impl OutputAsset for EcmascriptDevChunkList {
     async fn ident(&self) -> Result<Vc<AssetIdent>> {
         let mut ident = self.ident.await?.clone_value();
         for &evaluatable_asset in self.evaluatable_assets.await?.iter() {
-            ident.add_asset(Vc::<String>::default(), evaluatable_asset.ident());
+            ident.add_asset(Vc::<RcStr>::default(), evaluatable_asset.ident());
         }
 
         ident.add_modifier(modifier());

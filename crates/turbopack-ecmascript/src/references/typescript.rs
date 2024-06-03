@@ -130,8 +130,8 @@ impl ModuleReference for TsReferenceTypeAssetReference {
             Request::module(
                 self.module.clone(),
                 Value::new(RcStr::default().into()),
-                Vc::<String>::default(),
-                Vc::<String>::default(),
+                Vc::<RcStr>::default(),
+                Vc::<RcStr>::default(),
             ),
         )
     }
