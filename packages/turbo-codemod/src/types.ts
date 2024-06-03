@@ -12,7 +12,7 @@ export interface Transformer {
 
 export interface TransformerOptions {
   force: boolean;
-  dry: boolean;
+  dryRun: boolean;
   print: boolean;
 }
 

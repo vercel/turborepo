@@ -53,7 +53,7 @@ export async function migrate(
   options: MigrateCommandOptions
 ) {
   // check git status
-  if (!options.dry) {
+  if (!options.dryRun) {
     checkGitStatus({ directory, force: options.force });
   }
 
@@ -161,7 +161,7 @@ export async function migrate(
 
   // shutdown the turbo daemon before running codemods and upgrading
   // the daemon can handle version mismatches, but we do this as an extra precaution
-  if (!options.dry) {
+  if (!options.dryRun) {
     shutdownDaemon({ project });
   }
 
@@ -224,7 +224,7 @@ export async function migrate(
 
   // install
   if (options.install) {
-    if (options.dry) {
+    if (options.dryRun) {
       logger.log(
         `Upgrading turbo with ${chalk.bold(upgradeCommand)} ${chalk.dim(
           "(dry run)"

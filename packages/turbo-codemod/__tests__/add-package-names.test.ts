@@ -16,7 +16,7 @@ describe("add-package-names", () => {
     // run the transformer
     const result = await transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     // result should be correct
@@ -58,7 +58,7 @@ describe("add-package-names", () => {
     // run the transformer
     const result = await transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     // result should be correct
@@ -95,7 +95,7 @@ describe("add-package-names", () => {
     // run the transformer
     const result = await transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     // result should be correct
