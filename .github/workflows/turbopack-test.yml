@@ -204,6 +204,21 @@ jobs:
         run: |
           CARGO_BUILD_TARGET="wasm32-wasip1-threads" RUSTFLAGS="-D warnings -A deprecated" cargo groups check turbopack-wasi --release
 
+  # From https://github.com/ast-grep/action/tree/v1.5/?tab=readme-ov-file#inputs
+  ast_grep_lint:
+    runs-on: ubuntu-latest
+    name: Turbopack ast-grep lint
+    steps:
+      - name: Set turbopack paths
+        run: echo "GITHUB_TURBOPACK_PATHS=$(cargo groups list turbopack | awk '{ print $2 }' | tr '\n' ' ')" >> $GITHUB_ENV
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: ast-grep lint step
+        uses: wbinnssmith/action@wbinnssmith/paths-schema
+        with:
+          paths: ${{ env.GITHUB_TURBOPACK_PATHS }}
+          version: 0.23.0
+
   turbopack_rust_clippy:
     needs: [turbopack_rust_check]
     name: Turbopack rust clippy
@@ -225,10 +240,6 @@ jobs:
       - name: Run cargo clippy
         run: |
           RUSTFLAGS="-D warnings -A deprecated" cargo groups clippy turbopack --features rustls-tls
-
-      - name: Run ast-grep lints
-        run: |
-          npx --package @ast-grep/cli -- ast-grep scan $(cargo groups list turbopack | awk '{ print $2 }' | tr '\n' ' ')
 
   next_dev_check:
     needs: [determine_jobs]
