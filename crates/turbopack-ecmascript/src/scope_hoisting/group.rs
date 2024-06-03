@@ -1,4 +1,5 @@
 use anyhow::Result;
+use async_recursion::async_recursion;
 use rustc_hash::{FxHashMap, FxHashSet};
 use turbo_tasks::Vc;
 use turbopack_core::{
@@ -27,6 +28,7 @@ struct Workspace {
 }
 
 impl Workspace {
+    #[async_recursion]
     async fn start_scope(&mut self, entry: Vc<Box<dyn Module>>) -> Result<()> {
         let deps = self.dep_graph.deps(entry);
         let mut modules = vec![entry];
