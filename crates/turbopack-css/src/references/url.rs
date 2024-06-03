@@ -134,8 +134,7 @@ pub async fn resolve_url_reference(
         let path = asset.ident().path().await?;
         let relative_path = context_path
             .get_relative_path_to(&path)
-            .map(|v| v.into_owned())
-            .unwrap_or_else(|| format!("/{}", path.path));
+            .unwrap_or_else(|| format!("/{}", path.path).into());
 
         return Ok(Vc::cell(Some(relative_path)));
     }
@@ -194,7 +193,7 @@ impl<'i> Visitor<'i> for AssetReferenceReplacer<'_> {
         u.visit_children(self)?;
 
         if let Some(new) = self.urls.get(&*u.url) {
-            u.url = new.clone().into();
+            u.url = new.as_str().into();
         }
 
         Ok(())
