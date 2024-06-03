@@ -93,6 +93,6 @@ pub async fn node_evaluate_asset_context(
         }
         .cell(),
         resolve_options_context,
-        Vc::cell(layer.into_owned()),
+        Vc::cell(layer),
     )))
 }
