@@ -1,6 +1,6 @@
 use anyhow::Result;
 use indexmap::IndexMap;
-use turbo_tasks::{TraitRef, TryJoinIterExt, Vc};
+use turbo_tasks::{RcStr, TraitRef, TryJoinIterExt, Vc};
 use turbo_tasks_hash::{encode_hex, Xxh3Hash64Hasher};
 use turbopack_core::version::{Version, VersionedContentMerger};
 
@@ -60,6 +60,6 @@ impl Version for EcmascriptDevChunkListVersion {
         }
         let hash = hasher.finish();
         let hex_hash = encode_hex(hash);
-        Ok(Vc::cell(hex_hash))
+        Ok(Vc::cell(hex_hash.into()))
     }
 }
