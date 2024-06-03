@@ -1,5 +1,5 @@
 use anyhow::{bail, Result};
-use turbo_tasks::{TryJoinIterExt, ValueDefault, ValueToString, Vc};
+use turbo_tasks::{RcStr, TryJoinIterExt, ValueDefault, ValueToString, Vc};
 use turbopack_core::{
     chunk::{
         AsyncModuleInfo, Chunk, ChunkItem, ChunkItemWithAsyncModuleInfo, ChunkType, ChunkingContext,
@@ -17,7 +17,7 @@ pub struct EcmascriptChunkType {}
 impl ValueToString for EcmascriptChunkType {
     #[turbo_tasks::function]
     fn to_string(&self) -> Vc<RcStr> {
-        Vc::cell("ecmascript".to_string())
+        Vc::cell("ecmascript".into())
     }
 }
 

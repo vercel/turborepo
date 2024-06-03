@@ -1,5 +1,5 @@
 use anyhow::Result;
-use turbo_tasks::{Value, Vc};
+use turbo_tasks::{RcStr, Value, Vc};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{availability_info::AvailabilityInfo, ChunkableModule, ChunkingContext},
@@ -12,7 +12,7 @@ use crate::async_chunk::chunk_item::AsyncLoaderChunkItem;
 
 #[turbo_tasks::function]
 fn modifier() -> Vc<RcStr> {
-    Vc::cell("async loader".to_string())
+    Vc::cell("async loader".into())
 }
 
 /// The AsyncLoaderModule is a module that loads another module async, by
