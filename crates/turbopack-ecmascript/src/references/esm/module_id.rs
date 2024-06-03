@@ -44,10 +44,9 @@ impl ModuleReference for EsmModuleIdAssetReference {
 impl ValueToString for EsmModuleIdAssetReference {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<Vc<RcStr>> {
-        Ok(Vc::cell(format!(
-            "module id of {}",
-            self.inner.to_string().await?,
-        )))
+        Ok(Vc::cell(
+            format!("module id of {}", self.inner.to_string().await?,).into(),
+        ))
     }
 }
 
@@ -74,7 +73,7 @@ impl CodeGenerateable for EsmModuleIdAssetReference {
                 .id()
                 .await?;
             let id = Expr::Lit(match &*id {
-                ModuleId::String(s) => s.clone().into(),
+                ModuleId::String(s) => s.as_str().into(),
                 ModuleId::Number(n) => (*n as f64).into(),
             });
             visitors.push(
