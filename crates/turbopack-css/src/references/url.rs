@@ -10,7 +10,7 @@ use swc_core::css::{
     ast::UrlValue,
     visit::{VisitMut, VisitMutWith},
 };
-use turbo_tasks::{debug::ValueDebug, Value, ValueToString, Vc};
+use turbo_tasks::{debug::ValueDebug, RcStr, Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::{
         ChunkableModule, ChunkableModuleReference, ChunkingContext, ChunkingType,
@@ -109,7 +109,7 @@ impl ValueToString for UrlAssetReference {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<Vc<RcStr>> {
         Ok(Vc::cell(
-            format!("url {}", self.request.to_string().await?,),
+            format!("url {}", self.request.to_string().await?,).into(),
         ))
     }
 }
@@ -145,7 +145,7 @@ pub async fn resolve_url_reference(
 
 pub fn replace_url_references(
     ss: &mut StyleSheetLike<'static, 'static>,
-    urls: &HashMap<String, String>,
+    urls: &HashMap<RcStr, RcStr>,
 ) {
     let mut replacer = AssetReferenceReplacer { urls };
     match ss {
@@ -159,7 +159,7 @@ pub fn replace_url_references(
 }
 
 struct AssetReferenceReplacer<'a> {
-    urls: &'a HashMap<String, String>,
+    urls: &'a HashMap<RcStr, RcStr>,
 }
 
 impl VisitMut for AssetReferenceReplacer<'_> {

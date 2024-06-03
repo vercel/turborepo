@@ -247,10 +247,9 @@ impl ModuleReference for ImportAssetReference {
 impl ValueToString for ImportAssetReference {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<Vc<RcStr>> {
-        Ok(Vc::cell(format!(
-            "import(url) {}",
-            self.request.to_string().await?,
-        )))
+        Ok(Vc::cell(
+            format!("import(url) {}", self.request.to_string().await?,).into(),
+        ))
     }
 }
 
@@ -269,10 +268,9 @@ impl CodeGenerateable for ImportAssetReference {
             ..
         } = &*this.request.await?
         {
-            imports.push(CssImport::External(Vc::cell(format!(
-                "{}{}",
-                protocol, remainder
-            ))))
+            imports.push(CssImport::External(Vc::cell(
+                format!("{}{}", protocol, remainder).into(),
+            )))
         }
 
         Ok(CodeGeneration { imports }.into())

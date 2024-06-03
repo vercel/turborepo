@@ -428,7 +428,7 @@ pub async fn finalize_css(
             for (src, reference) in (*url_references.await?).iter() {
                 let resolved = resolve_url_reference(*reference, chunking_context).await?;
                 if let Some(v) = resolved.as_ref().cloned() {
-                    url_map.insert(src.to_string(), v);
+                    url_map.insert(RcStr::from(src.as_str()), v);
                 }
             }
 
