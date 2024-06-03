@@ -2665,7 +2665,7 @@ impl ModulePart {
     #[turbo_tasks::function]
     pub fn renamed_namespace(export: RcStr) -> Vc<Self> {
         ModulePart::RenamedNamespace {
-            export: Vc::cell(export.into_owned()),
+            export: Vc::cell(export),
         }
         .cell()
     }

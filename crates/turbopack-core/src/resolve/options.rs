@@ -311,7 +311,7 @@ impl ValueToString for ImportMapResult {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<Vc<RcStr>> {
         match self {
-            ImportMapResult::Result(_) => Ok(Vc::cell("Resolved by import map".to_string())),
+            ImportMapResult::Result(_) => Ok(Vc::cell("Resolved by import map".into())),
             ImportMapResult::Alias(request, context) => {
                 let s = if let Some(path) = context {
                     let path = path.to_string().await?;
@@ -323,7 +323,7 @@ impl ValueToString for ImportMapResult {
                 } else {
                     format!("aliased to {}", request.to_string().await?)
                 };
-                Ok(Vc::cell(s))
+                Ok(Vc::cell(s.into()))
             }
             ImportMapResult::Alternatives(alternatives) => {
                 let strings = alternatives
