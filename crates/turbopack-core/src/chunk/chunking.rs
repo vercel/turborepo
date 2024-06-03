@@ -107,7 +107,7 @@ type ChunkItemWithInfo = (
     Vc<Box<dyn ChunkItem>>,
     Option<Vc<AsyncModuleInfo>>,
     usize,
-    ReadRef<String>,
+    ReadRef<RcStr>,
 );
 
 struct SplitContext<'a> {
