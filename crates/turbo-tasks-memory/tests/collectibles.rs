@@ -189,6 +189,6 @@ impl Thing {
 impl ValueToString for Thing {
     #[turbo_tasks::function]
     fn to_string(&self) -> Vc<RcStr> {
-        Vc::cell(self.0.to_string())
+        Vc::cell(self.0.to_string().into())
     }
 }

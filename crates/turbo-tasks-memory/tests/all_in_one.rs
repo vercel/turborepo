@@ -163,7 +163,7 @@ impl MyStructValue {
 impl ValueToString for MyStructValue {
     #[turbo_tasks::function]
     fn to_string(&self) -> Vc<RcStr> {
-        Vc::cell(self.value.to_string())
+        Vc::cell(self.value.to_string().into())
     }
 }
 
@@ -178,7 +178,7 @@ impl MyTrait for MyStructValue {
         if let Some(next) = self.next {
             return Ok(next.my_trait_function3());
         }
-        Ok(Vc::cell(self.value.to_string()))
+        Ok(Vc::cell(self.value.to_string().into()))
     }
 }
 

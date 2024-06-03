@@ -1008,7 +1008,7 @@ impl FileSystemPath {
     #[turbo_tasks::function]
     pub async fn extension(self: Vc<Self>) -> Result<Vc<RcStr>> {
         let this = self.await?;
-        Ok(Vc::cell(this.extension_ref().unwrap_or("").to_string()))
+        Ok(Vc::cell(this.extension_ref().unwrap_or("").into()))
     }
 
     #[turbo_tasks::function]
@@ -1244,11 +1244,9 @@ impl FileSystemPath {
 impl ValueToString for FileSystemPath {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<Vc<RcStr>> {
-        Ok(Vc::cell(format!(
-            "[{}]/{}",
-            self.fs.to_string().await?,
-            self.path
-        )))
+        Ok(Vc::cell(
+            format!("[{}]/{}", self.fs.to_string().await?, self.path).into(),
+        ))
     }
 }
 
@@ -1760,7 +1758,7 @@ impl ValueToString for FileJsonContent {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<Vc<RcStr>> {
         match self {
-            FileJsonContent::Content(json) => Ok(Vc::cell(json.to_string())),
+            FileJsonContent::Content(json) => Ok(Vc::cell(json.to_string().into())),
             FileJsonContent::Unparseable(e) => Err(anyhow!("File is not valid JSON: {}", e)),
             FileJsonContent::NotFound => Err(anyhow!("File not found")),
         }
@@ -1911,7 +1909,7 @@ impl FileSystem for NullFileSystem {
 impl ValueToString for NullFileSystem {
     #[turbo_tasks::function]
     fn to_string(&self) -> Vc<RcStr> {
-        Vc::cell(String::from("null"))
+        Vc::cell(RcStr::from("null"))
     }
 }
 

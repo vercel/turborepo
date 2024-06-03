@@ -1,11 +1,11 @@
 use anyhow::{bail, Result};
-use turbo_tasks::{Completion, ValueDefault, ValueToString, Vc};
+use turbo_tasks::{Completion, RcStr, ValueDefault, ValueToString, Vc};
 
 use super::{DirectoryContent, FileContent, FileMeta, FileSystem, FileSystemPath, LinkContent};
 
 #[turbo_tasks::value]
 pub struct VirtualFileSystem {
-    name: String,
+    name: RcStr,
 }
 
 impl VirtualFileSystem {
