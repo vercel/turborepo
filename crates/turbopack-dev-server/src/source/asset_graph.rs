@@ -305,7 +305,7 @@ impl Introspectable for AssetGraphContentSource {
     #[turbo_tasks::function]
     fn details(&self) -> Vc<RcStr> {
         Vc::cell(if let Some(expanded) = &self.expanded {
-            format!("{} assets expanded", expanded.get().len())
+            format!("{} assets expanded", expanded.get().len()).into()
         } else {
             "eager".into()
         })

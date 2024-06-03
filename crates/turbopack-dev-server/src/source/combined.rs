@@ -40,7 +40,7 @@ impl ContentSource for CombinedContentSource {
 impl Introspectable for CombinedContentSource {
     #[turbo_tasks::function]
     fn ty(&self) -> Vc<RcStr> {
-        Vc::cell("combined content source".to_string())
+        Vc::cell("combined content source".into())
     }
 
     #[turbo_tasks::function]
@@ -78,7 +78,7 @@ impl Introspectable for CombinedContentSource {
 
     #[turbo_tasks::function]
     async fn children(&self) -> Result<Vc<IntrospectableChildren>> {
-        let source = Vc::cell("source".to_string());
+        let source = Vc::cell("source".into());
         Ok(Vc::cell(
             self.sources
                 .iter()
