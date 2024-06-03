@@ -24,17 +24,17 @@ pub struct IntrospectionSource {
 impl Introspectable for IntrospectionSource {
     #[turbo_tasks::function]
     fn ty(&self) -> Vc<RcStr> {
-        Vc::cell("introspection-source".to_string())
+        Vc::cell("introspection-source".into())
     }
 
     #[turbo_tasks::function]
     fn title(&self) -> Vc<RcStr> {
-        Vc::cell("introspection-source".to_string())
+        Vc::cell("introspection-source".into())
     }
 
     #[turbo_tasks::function]
     fn children(&self) -> Vc<IntrospectableChildren> {
-        let name = Vc::cell("root".to_string());
+        let name = Vc::cell("root".into());
         Vc::cell(self.roots.iter().map(|root| (name, *root)).collect())
     }
 }
