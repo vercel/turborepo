@@ -293,7 +293,7 @@ async fn render_stream_internal(
                         "text/html; charset=utf-8".into(),
                     )],
                 });
-                yield RenderItem::BodyChunk(body.into());
+                yield RenderItem::BodyChunk(body.into_owned().into_bytes().into());
                 return;
             }
             v => {

@@ -264,10 +264,13 @@ impl Introspectable for NodeRenderContentSource {
 
     #[turbo_tasks::function]
     async fn details(&self) -> Result<Vc<RcStr>> {
-        Ok(Vc::cell(format!(
-            "base: {:?}\ntype: {:?}",
-            self.base_segments, self.route_type
-        )))
+        Ok(Vc::cell(
+            format!(
+                "base: {:?}\ntype: {:?}",
+                self.base_segments, self.route_type
+            )
+            .into(),
+        ))
     }
 
     #[turbo_tasks::function]
