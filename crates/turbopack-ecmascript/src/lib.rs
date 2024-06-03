@@ -178,7 +178,7 @@ impl Display for EcmascriptModuleAssetType {
 
 #[turbo_tasks::function]
 fn modifier() -> Vc<RcStr> {
-    Vc::cell("ecmascript".to_string())
+    Vc::cell("ecmascript".into())
 }
 
 #[derive(PartialEq, Eq, Clone, TraceRawVcs)]
@@ -894,7 +894,7 @@ async fn gen_content_with_visitors(
                 error_messages = messages
                     .as_ref()
                     .and_then(|m| { m.first().map(|f| format!("\n{}", f)) })
-                    .unwrap_or("".to_string())
+                    .unwrap_or("".into())
             )
             .into(),
             source_map: None,

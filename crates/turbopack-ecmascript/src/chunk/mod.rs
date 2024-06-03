@@ -65,12 +65,12 @@ impl EcmascriptChunk {
 
 #[turbo_tasks::function]
 fn chunk_item_key() -> Vc<RcStr> {
-    Vc::cell("chunk item".to_string())
+    Vc::cell("chunk item".into())
 }
 
 #[turbo_tasks::function]
 fn availability_root_key() -> Vc<RcStr> {
-    Vc::cell("current_availability_root".to_string())
+    Vc::cell("current_availability_root".into())
 }
 
 #[turbo_tasks::value_impl]
@@ -175,12 +175,12 @@ impl Asset for EcmascriptChunk {
 
 #[turbo_tasks::function]
 fn introspectable_type() -> Vc<RcStr> {
-    Vc::cell("ecmascript chunk".to_string())
+    Vc::cell("ecmascript chunk".into())
 }
 
 #[turbo_tasks::function]
 fn chunk_item_module_key() -> Vc<RcStr> {
-    Vc::cell("module".to_string())
+    Vc::cell("module".into())
 }
 
 #[turbo_tasks::value_impl]

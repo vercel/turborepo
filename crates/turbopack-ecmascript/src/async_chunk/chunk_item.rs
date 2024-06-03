@@ -170,7 +170,9 @@ impl ChunkItem for AsyncLoaderChunkItem {
         if let Some(available_chunk_items) =
             self.module.await?.availability_info.available_chunk_items()
         {
-            ident = ident.with_modifier(Vc::cell(available_chunk_items.hash().await?.to_string()));
+            ident = ident.with_modifier(Vc::cell(
+                available_chunk_items.hash().await?.to_string().into(),
+            ));
         }
         Ok(ident)
     }
