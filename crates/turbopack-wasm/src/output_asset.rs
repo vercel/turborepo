@@ -1,5 +1,5 @@
 use anyhow::Result;
-use turbo_tasks::Vc;
+use turbo_tasks::{RcStr, Vc};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::ChunkingContext,
@@ -12,7 +12,7 @@ use crate::source::WebAssemblySource;
 
 #[turbo_tasks::function]
 fn modifier() -> Vc<RcStr> {
-    Vc::cell("wasm".to_string())
+    Vc::cell("wasm".into())
 }
 
 /// Emits the [WebAssemblySource] at a chunk path determined by the
