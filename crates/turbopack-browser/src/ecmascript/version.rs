@@ -61,6 +61,6 @@ impl Version for EcmascriptDevChunkVersion {
         }
         let hash = hasher.finish();
         let hex_hash = encode_hex(hash);
-        Vc::cell(hex_hash)
+        Vc::cell(hex_hash.into())
     }
 }

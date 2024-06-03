@@ -221,7 +221,7 @@ impl NodeJsChunkingContext {
 impl ChunkingContext for NodeJsChunkingContext {
     #[turbo_tasks::function]
     fn name(&self) -> Vc<RcStr> {
-        Vc::cell("unknown".to_string())
+        Vc::cell("unknown".into())
     }
 
     #[turbo_tasks::function]
@@ -247,15 +247,18 @@ impl ChunkingContext for NodeJsChunkingContext {
             .strip_prefix(&format!("{}/", this.client_root.await?.path))
             .context("expected client root to contain asset path")?;
 
-        Ok(Vc::cell(format!(
-            "{}{}",
-            this.asset_prefix
-                .await?
-                .as_ref()
-                .map(|s| s.to_owned())
-                .unwrap_or_else(|| "/".to_owned()),
-            asset_path
-        )))
+        Ok(Vc::cell(
+            format!(
+                "{}{}",
+                this.asset_prefix
+                    .await?
+                    .as_ref()
+                    .map(|s| s.to_owned())
+                    .unwrap_or_else(|| "/".to_owned()),
+                asset_path
+            )
+            .into(),
+        ))
     }
 
     #[turbo_tasks::function]
