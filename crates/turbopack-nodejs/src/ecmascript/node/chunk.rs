@@ -118,12 +118,12 @@ impl GenerateSourceMap for EcmascriptBuildNodeChunk {
 
 #[turbo_tasks::function]
 fn introspectable_type() -> Vc<RcStr> {
-    Vc::cell("ecmascript build node chunk".to_string())
+    Vc::cell("ecmascript build node chunk".into())
 }
 
 #[turbo_tasks::function]
 fn introspectable_details() -> Vc<RcStr> {
-    Vc::cell("generates a production EcmaScript chunk targeting Node.js".to_string())
+    Vc::cell("generates a production EcmaScript chunk targeting Node.js".into())
 }
 
 #[turbo_tasks::value_impl]
@@ -149,7 +149,7 @@ impl Introspectable for EcmascriptBuildNodeChunk {
         let introspectable_chunk = Vc::upcast::<Box<dyn Introspectable>>(self.chunk)
             .resolve()
             .await?;
-        children.insert((Vc::cell("chunk".to_string()), introspectable_chunk));
+        children.insert((Vc::cell("chunk".into()), introspectable_chunk));
         Ok(Vc::cell(children))
     }
 }
