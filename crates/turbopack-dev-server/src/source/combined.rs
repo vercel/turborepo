@@ -1,5 +1,5 @@
 use anyhow::Result;
-use turbo_tasks::{TryJoinIterExt, Vc};
+use turbo_tasks::{RcStr, TryJoinIterExt, Vc};
 use turbopack_core::introspect::{Introspectable, IntrospectableChildren};
 
 use super::{

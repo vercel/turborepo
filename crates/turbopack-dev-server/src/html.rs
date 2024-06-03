@@ -36,7 +36,7 @@ pub struct DevHtmlAsset {
 
 #[turbo_tasks::function]
 fn dev_html_chunk_reference_description() -> Vc<RcStr> {
-    Vc::cell("dev html chunk".to_string())
+    Vc::cell("dev html chunk".into())
 }
 
 #[turbo_tasks::value_impl]
@@ -255,6 +255,6 @@ impl Version for DevHtmlAssetVersion {
         }
         let hash = hasher.finish();
         let hex_hash = encode_hex(hash);
-        Ok(Vc::cell(hex_hash))
+        Ok(Vc::cell(hex_hash.into()))
     }
 }
