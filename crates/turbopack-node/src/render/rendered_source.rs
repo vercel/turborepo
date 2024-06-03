@@ -247,7 +247,7 @@ impl GetContentSourceContent for NodeRenderContentSource {
 
 #[turbo_tasks::function]
 fn introspectable_type() -> Vc<RcStr> {
-    Vc::cell("node render content source".to_string())
+    Vc::cell("node render content source".into())
 }
 
 #[turbo_tasks::value_impl]
@@ -276,11 +276,11 @@ impl Introspectable for NodeRenderContentSource {
         for &entry in self.entry.entries().await?.iter() {
             let entry = entry.await?;
             set.insert((
-                Vc::cell("module".to_string()),
+                Vc::cell("module".into()),
                 IntrospectableModule::new(Vc::upcast(entry.module)),
             ));
             set.insert((
-                Vc::cell("intermediate asset".to_string()),
+                Vc::cell("intermediate asset".into()),
                 IntrospectableOutputAsset::new(get_intermediate_asset(
                     entry.chunking_context,
                     entry.module,
