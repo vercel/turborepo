@@ -287,7 +287,7 @@ impl ContentSourceSideEffect for AssetGraphGetContentSourceContent {
 
 #[turbo_tasks::function]
 fn introspectable_type() -> Vc<RcStr> {
-    Vc::cell("asset graph content source".to_string())
+    Vc::cell("asset graph content source".into())
 }
 
 #[turbo_tasks::value_impl]
@@ -307,16 +307,16 @@ impl Introspectable for AssetGraphContentSource {
         Vc::cell(if let Some(expanded) = &self.expanded {
             format!("{} assets expanded", expanded.get().len())
         } else {
-            "eager".to_string()
+            "eager".into()
         })
     }
 
     #[turbo_tasks::function]
     async fn children(self: Vc<Self>) -> Result<Vc<IntrospectableChildren>> {
         let this = self.await?;
-        let key = Vc::cell("root".to_string());
-        let inner_key = Vc::cell("inner".to_string());
-        let expanded_key = Vc::cell("expanded".to_string());
+        let key = Vc::cell("root".into());
+        let inner_key = Vc::cell("inner".into());
+        let expanded_key = Vc::cell("expanded".into());
 
         let root_assets = this.root_assets.await?;
         let root_asset_children = root_assets
@@ -345,7 +345,7 @@ impl Introspectable for AssetGraphContentSource {
 
 #[turbo_tasks::function]
 fn fully_expaned_introspectable_type() -> Vc<RcStr> {
-    Vc::cell("fully expanded asset graph content source".to_string())
+    Vc::cell("fully expanded asset graph content source".into())
 }
 
 #[turbo_tasks::value]
@@ -366,7 +366,7 @@ impl Introspectable for FullyExpaned {
     #[turbo_tasks::function]
     async fn children(&self) -> Result<Vc<IntrospectableChildren>> {
         let source = self.0.await?;
-        let key = Vc::cell("asset".to_string());
+        let key = Vc::cell("asset".into());
 
         let expanded_assets =
             expand(&*source.root_assets.await?, &*source.root_path.await?, None).await?;
