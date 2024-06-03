@@ -1,5 +1,5 @@
 use anyhow::Result;
-use turbo_tasks::{Value, Vc};
+use turbo_tasks::{RcStr, Value, Vc};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{
@@ -16,7 +16,7 @@ use crate::chunk::{EcmascriptChunkPlaceable, EcmascriptExports};
 
 #[turbo_tasks::function]
 fn modifier() -> Vc<RcStr> {
-    Vc::cell("manifest chunk".to_string())
+    Vc::cell("manifest chunk".into())
 }
 
 /// The manifest module is deferred until requested by the manifest loader
