@@ -64,12 +64,12 @@ impl EcmascriptChunk {
 }
 
 #[turbo_tasks::function]
-fn chunk_item_key() -> Vc<String> {
+fn chunk_item_key() -> Vc<RcStr> {
     Vc::cell("chunk item".to_string())
 }
 
 #[turbo_tasks::function]
-fn availability_root_key() -> Vc<String> {
+fn availability_root_key() -> Vc<RcStr> {
     Vc::cell("current_availability_root".to_string())
 }
 
@@ -145,7 +145,7 @@ impl Chunk for EcmascriptChunk {
 #[turbo_tasks::value_impl]
 impl ValueToString for EcmascriptChunk {
     #[turbo_tasks::function]
-    async fn to_string(self: Vc<Self>) -> Result<Vc<String>> {
+    async fn to_string(self: Vc<Self>) -> Result<Vc<RcStr>> {
         Ok(Vc::cell(format!(
             "chunk {}",
             self.ident().to_string().await?
@@ -175,29 +175,29 @@ impl Asset for EcmascriptChunk {
 }
 
 #[turbo_tasks::function]
-fn introspectable_type() -> Vc<String> {
+fn introspectable_type() -> Vc<RcStr> {
     Vc::cell("ecmascript chunk".to_string())
 }
 
 #[turbo_tasks::function]
-fn chunk_item_module_key() -> Vc<String> {
+fn chunk_item_module_key() -> Vc<RcStr> {
     Vc::cell("module".to_string())
 }
 
 #[turbo_tasks::value_impl]
 impl Introspectable for EcmascriptChunk {
     #[turbo_tasks::function]
-    fn ty(&self) -> Vc<String> {
+    fn ty(&self) -> Vc<RcStr> {
         introspectable_type()
     }
 
     #[turbo_tasks::function]
-    fn title(self: Vc<Self>) -> Vc<String> {
+    fn title(self: Vc<Self>) -> Vc<RcStr> {
         self.path().to_string()
     }
 
     #[turbo_tasks::function]
-    async fn details(self: Vc<Self>) -> Result<Vc<String>> {
+    async fn details(self: Vc<Self>) -> Result<Vc<RcStr>> {
         let content = content_to_details(self.content());
         let mut details = String::new();
         let this = self.await?;

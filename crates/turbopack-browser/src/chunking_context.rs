@@ -239,7 +239,7 @@ impl BrowserChunkingContext {
 #[turbo_tasks::value_impl]
 impl ChunkingContext for BrowserChunkingContext {
     #[turbo_tasks::function]
-    fn name(&self) -> Vc<String> {
+    fn name(&self) -> Vc<RcStr> {
         if let Some(name) = &self.name {
             Vc::cell(name.clone())
         } else {
@@ -274,7 +274,7 @@ impl ChunkingContext for BrowserChunkingContext {
     }
 
     #[turbo_tasks::function]
-    async fn asset_url(self: Vc<Self>, ident: Vc<AssetIdent>) -> Result<Vc<String>> {
+    async fn asset_url(self: Vc<Self>, ident: Vc<AssetIdent>) -> Result<Vc<RcStr>> {
         let this = self.await?;
         let asset_path = ident.path().await?.to_string();
         let asset_path = asset_path

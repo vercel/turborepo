@@ -18,24 +18,24 @@ impl IntrospectableSource {
 }
 
 #[turbo_tasks::function]
-fn ty() -> Vc<String> {
+fn ty() -> Vc<RcStr> {
     Vc::cell("source".to_string())
 }
 
 #[turbo_tasks::value_impl]
 impl Introspectable for IntrospectableSource {
     #[turbo_tasks::function]
-    fn ty(&self) -> Vc<String> {
+    fn ty(&self) -> Vc<RcStr> {
         ty()
     }
 
     #[turbo_tasks::function]
-    fn title(&self) -> Vc<String> {
+    fn title(&self) -> Vc<RcStr> {
         self.0.ident().to_string()
     }
 
     #[turbo_tasks::function]
-    fn details(&self) -> Vc<String> {
+    fn details(&self) -> Vc<RcStr> {
         content_to_details(self.0.content())
     }
 }

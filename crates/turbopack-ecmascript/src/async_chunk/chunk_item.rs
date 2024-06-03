@@ -153,7 +153,7 @@ impl EcmascriptChunkItem for AsyncLoaderChunkItem {
 }
 
 #[turbo_tasks::function]
-fn chunk_reference_description() -> Vc<String> {
+fn chunk_reference_description() -> Vc<RcStr> {
     Vc::cell("chunk".to_string())
 }
 

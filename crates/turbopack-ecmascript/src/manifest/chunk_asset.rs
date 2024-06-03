@@ -15,7 +15,7 @@ use super::chunk_item::ManifestChunkItem;
 use crate::chunk::{EcmascriptChunkPlaceable, EcmascriptExports};
 
 #[turbo_tasks::function]
-fn modifier() -> Vc<String> {
+fn modifier() -> Vc<RcStr> {
     Vc::cell("manifest chunk".to_string())
 }
 
@@ -97,7 +97,7 @@ impl ManifestAsyncModule {
 }
 
 #[turbo_tasks::function]
-fn manifest_chunk_reference_description() -> Vc<String> {
+fn manifest_chunk_reference_description() -> Vc<RcStr> {
     Vc::cell("manifest chunk".to_string())
 }
 

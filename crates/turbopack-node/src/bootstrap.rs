@@ -21,7 +21,7 @@ pub(super) struct NodeJsBootstrapAsset {
 }
 
 #[turbo_tasks::function]
-fn node_js_bootstrap_chunk_reference_description() -> Vc<String> {
+fn node_js_bootstrap_chunk_reference_description() -> Vc<RcStr> {
     Vc::cell("node.js bootstrap chunk".to_string())
 }
 

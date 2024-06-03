@@ -30,7 +30,7 @@ use crate::{
 };
 
 #[turbo_tasks::function]
-fn modifier() -> Vc<String> {
+fn modifier() -> Vc<RcStr> {
     Vc::cell("chunk group files".to_string())
 }
 
@@ -45,12 +45,12 @@ pub struct ChunkGroupFilesAsset {
 }
 
 #[turbo_tasks::function]
-fn module_description() -> Vc<String> {
+fn module_description() -> Vc<RcStr> {
     Vc::cell("module".to_string())
 }
 
 #[turbo_tasks::function]
-fn runtime_entry_description() -> Vc<String> {
+fn runtime_entry_description() -> Vc<RcStr> {
     Vc::cell("runtime entry".to_string())
 }
 
@@ -184,7 +184,7 @@ impl EcmascriptChunkItem for ChunkGroupFilesChunkItem {
 }
 
 #[turbo_tasks::function]
-fn chunk_group_chunk_reference_description() -> Vc<String> {
+fn chunk_group_chunk_reference_description() -> Vc<RcStr> {
     Vc::cell("chunk group chunk".to_string())
 }
 
@@ -236,17 +236,17 @@ impl ChunkItem for ChunkGroupFilesChunkItem {
 #[turbo_tasks::value_impl]
 impl Introspectable for ChunkGroupFilesAsset {
     #[turbo_tasks::function]
-    fn ty(&self) -> Vc<String> {
+    fn ty(&self) -> Vc<RcStr> {
         Vc::cell("chunk group files asset".to_string())
     }
 
     #[turbo_tasks::function]
-    fn details(self: Vc<Self>) -> Vc<String> {
+    fn details(self: Vc<Self>) -> Vc<RcStr> {
         content_to_details(self.content())
     }
 
     #[turbo_tasks::function]
-    fn title(self: Vc<Self>) -> Vc<String> {
+    fn title(self: Vc<Self>) -> Vc<RcStr> {
         self.ident().to_string()
     }
 

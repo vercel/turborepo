@@ -7,7 +7,7 @@ pub(super) async fn error_html(
     status_code: u16,
     title: RcStr,
     details: RcStr,
-) -> Result<Vc<String>> {
+) -> Result<Vc<RcStr>> {
     let html = create_html(status_code, title, details).await?;
 
     Ok(Vc::cell(html))
@@ -18,7 +18,7 @@ pub(super) async fn error_html_body(
     status_code: u16,
     title: RcStr,
     details: RcStr,
-) -> Result<Vc<String>> {
+) -> Result<Vc<RcStr>> {
     let html = create_html(status_code, title, details).await?;
 
     let (_, body) = html.split_once("<body>").context("no body in html")?;

@@ -127,7 +127,7 @@ impl GetContentSourceContent for IssueContextGetContentSourceContent {
 #[turbo_tasks::value_impl]
 impl Introspectable for IssueFilePathContentSource {
     #[turbo_tasks::function]
-    async fn ty(&self) -> Result<Vc<String>> {
+    async fn ty(&self) -> Result<Vc<RcStr>> {
         Ok(
             if let Some(source) =
                 Vc::try_resolve_sidecast::<Box<dyn Introspectable>>(self.source).await?
@@ -140,7 +140,7 @@ impl Introspectable for IssueFilePathContentSource {
     }
 
     #[turbo_tasks::function]
-    async fn title(&self) -> Result<Vc<String>> {
+    async fn title(&self) -> Result<Vc<RcStr>> {
         Ok(
             if let Some(source) =
                 Vc::try_resolve_sidecast::<Box<dyn Introspectable>>(self.source).await?
@@ -154,7 +154,7 @@ impl Introspectable for IssueFilePathContentSource {
     }
 
     #[turbo_tasks::function]
-    async fn details(&self) -> Result<Vc<String>> {
+    async fn details(&self) -> Result<Vc<RcStr>> {
         Ok(
             if let Some(source) =
                 Vc::try_resolve_sidecast::<Box<dyn Introspectable>>(self.source).await?

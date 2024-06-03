@@ -16,7 +16,7 @@ pub(super) struct EcmascriptDevMergedChunkVersion {
 #[turbo_tasks::value_impl]
 impl Version for EcmascriptDevMergedChunkVersion {
     #[turbo_tasks::function]
-    async fn id(&self) -> Result<Vc<String>> {
+    async fn id(&self) -> Result<Vc<RcStr>> {
         let mut hasher = Xxh3Hash64Hasher::new();
         hasher.write_value(self.versions.len());
         let sorted_ids = {

@@ -22,7 +22,7 @@ use crate::{
 };
 
 #[turbo_tasks::function]
-fn modifier() -> Vc<String> {
+fn modifier() -> Vc<RcStr> {
     Vc::cell("loader".to_string())
 }
 
@@ -74,12 +74,12 @@ impl ManifestLoaderChunkItem {
 }
 
 #[turbo_tasks::function]
-fn manifest_loader_chunk_reference_description() -> Vc<String> {
+fn manifest_loader_chunk_reference_description() -> Vc<RcStr> {
     Vc::cell("manifest loader chunk".to_string())
 }
 
 #[turbo_tasks::function]
-fn chunk_data_reference_description() -> Vc<String> {
+fn chunk_data_reference_description() -> Vc<RcStr> {
     Vc::cell("chunk data reference".to_string())
 }
 

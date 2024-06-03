@@ -27,7 +27,7 @@ use turbopack_ecmascript::chunk::{
 };
 
 #[turbo_tasks::function]
-fn modifier() -> Vc<String> {
+fn modifier() -> Vc<RcStr> {
     Vc::cell("json".to_string())
 }
 

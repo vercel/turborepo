@@ -225,7 +225,7 @@ impl OutputChunk for CssChunk {
 }
 
 #[turbo_tasks::function]
-fn chunk_item_key() -> Vc<String> {
+fn chunk_item_key() -> Vc<RcStr> {
     Vc::cell("chunk item".to_string())
 }
 
@@ -358,7 +358,7 @@ pub struct CssChunkPlaceables(Vec<Vc<Box<dyn CssChunkPlaceable>>>);
 #[derive(Clone, Debug)]
 #[turbo_tasks::value(shared)]
 pub enum CssImport {
-    External(Vc<String>),
+    External(Vc<RcStr>),
     Internal(Vc<ImportAssetReference>, Vc<Box<dyn CssChunkItem>>),
     Composes(Vc<Box<dyn CssChunkItem>>),
 }
@@ -382,29 +382,29 @@ pub trait CssChunkItem: ChunkItem {
 }
 
 #[turbo_tasks::function]
-fn introspectable_type() -> Vc<String> {
+fn introspectable_type() -> Vc<RcStr> {
     Vc::cell("css chunk".to_string())
 }
 
 #[turbo_tasks::function]
-fn entry_module_key() -> Vc<String> {
+fn entry_module_key() -> Vc<RcStr> {
     Vc::cell("entry module".to_string())
 }
 
 #[turbo_tasks::value_impl]
 impl Introspectable for CssChunk {
     #[turbo_tasks::function]
-    fn ty(&self) -> Vc<String> {
+    fn ty(&self) -> Vc<RcStr> {
         introspectable_type()
     }
 
     #[turbo_tasks::function]
-    fn title(self: Vc<Self>) -> Vc<String> {
+    fn title(self: Vc<Self>) -> Vc<RcStr> {
         self.path().to_string()
     }
 
     #[turbo_tasks::function]
-    async fn details(self: Vc<Self>) -> Result<Vc<String>> {
+    async fn details(self: Vc<Self>) -> Result<Vc<RcStr>> {
         let content = content_to_details(self.content());
         let mut details = String::new();
         let this = self.await?;
@@ -440,7 +440,7 @@ pub struct CssChunkType {}
 #[turbo_tasks::value_impl]
 impl ValueToString for CssChunkType {
     #[turbo_tasks::function]
-    fn to_string(&self) -> Vc<String> {
+    fn to_string(&self) -> Vc<RcStr> {
         Vc::cell("css".to_string())
     }
 }

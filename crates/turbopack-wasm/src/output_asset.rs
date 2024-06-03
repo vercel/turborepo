@@ -11,7 +11,7 @@ use turbopack_core::{
 use crate::source::WebAssemblySource;
 
 #[turbo_tasks::function]
-fn modifier() -> Vc<String> {
+fn modifier() -> Vc<RcStr> {
     Vc::cell("wasm".to_string())
 }
 

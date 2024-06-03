@@ -93,7 +93,7 @@ impl Chunk for SingleItemCssChunk {
 }
 
 #[turbo_tasks::function]
-fn single_item_modifier() -> Vc<String> {
+fn single_item_modifier() -> Vc<RcStr> {
     Vc::cell("single item css chunk".to_string())
 }
 
@@ -146,29 +146,29 @@ impl GenerateSourceMap for SingleItemCssChunk {
 }
 
 #[turbo_tasks::function]
-fn introspectable_type() -> Vc<String> {
+fn introspectable_type() -> Vc<RcStr> {
     Vc::cell("single asset css chunk".to_string())
 }
 
 #[turbo_tasks::function]
-fn entry_module_key() -> Vc<String> {
+fn entry_module_key() -> Vc<RcStr> {
     Vc::cell("entry module".to_string())
 }
 
 #[turbo_tasks::value_impl]
 impl Introspectable for SingleItemCssChunk {
     #[turbo_tasks::function]
-    fn ty(&self) -> Vc<String> {
+    fn ty(&self) -> Vc<RcStr> {
         introspectable_type()
     }
 
     #[turbo_tasks::function]
-    fn title(self: Vc<Self>) -> Vc<String> {
+    fn title(self: Vc<Self>) -> Vc<RcStr> {
         self.path().to_string()
     }
 
     #[turbo_tasks::function]
-    async fn details(self: Vc<Self>) -> Result<Vc<String>> {
+    async fn details(self: Vc<Self>) -> Result<Vc<RcStr>> {
         let this = self.await?;
         let mut details = String::new();
         write!(

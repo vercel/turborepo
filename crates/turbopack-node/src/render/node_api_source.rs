@@ -26,7 +26,7 @@ pub fn create_node_api_source(
     route_type: RouteType,
     server_root: Vc<FileSystemPath>,
     route_match: Vc<Box<dyn RouteMatcher>>,
-    pathname: Vc<String>,
+    pathname: Vc<RcStr>,
     entry: Vc<Box<dyn NodeEntry>>,
     render_data: Vc<JsonValue>,
     debug: bool,
@@ -61,7 +61,7 @@ pub struct NodeApiContentSource {
     base_segments: Vec<BaseSegment>,
     route_type: RouteType,
     server_root: Vc<FileSystemPath>,
-    pathname: Vc<String>,
+    pathname: Vc<RcStr>,
     route_match: Vc<Box<dyn RouteMatcher>>,
     entry: Vc<Box<dyn NodeEntry>>,
     render_data: Vc<JsonValue>,
@@ -71,7 +71,7 @@ pub struct NodeApiContentSource {
 #[turbo_tasks::value_impl]
 impl NodeApiContentSource {
     #[turbo_tasks::function]
-    pub async fn get_pathname(self: Vc<Self>) -> Result<Vc<String>> {
+    pub async fn get_pathname(self: Vc<Self>) -> Result<Vc<RcStr>> {
         Ok(self.await?.pathname)
     }
 }
@@ -157,24 +157,24 @@ impl GetContentSourceContent for NodeApiContentSource {
 }
 
 #[turbo_tasks::function]
-fn introspectable_type() -> Vc<String> {
+fn introspectable_type() -> Vc<RcStr> {
     Vc::cell("node api content source".to_string())
 }
 
 #[turbo_tasks::value_impl]
 impl Introspectable for NodeApiContentSource {
     #[turbo_tasks::function]
-    fn ty(&self) -> Vc<String> {
+    fn ty(&self) -> Vc<RcStr> {
         introspectable_type()
     }
 
     #[turbo_tasks::function]
-    fn title(&self) -> Vc<String> {
+    fn title(&self) -> Vc<RcStr> {
         self.pathname
     }
 
     #[turbo_tasks::function]
-    async fn details(&self) -> Result<Vc<String>> {
+    async fn details(&self) -> Result<Vc<RcStr>> {
         Ok(Vc::cell(format!(
             "base: {:?}\ntype: {:?}",
             self.base_segments, self.route_type

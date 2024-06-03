@@ -86,29 +86,29 @@ impl MapGetContentSourceContent for ConditionalContentSourceMapper {
 }
 
 #[turbo_tasks::function]
-fn introspectable_type() -> Vc<String> {
+fn introspectable_type() -> Vc<RcStr> {
     Vc::cell("conditional content source".to_string())
 }
 
 #[turbo_tasks::function]
-fn activator_key() -> Vc<String> {
+fn activator_key() -> Vc<RcStr> {
     Vc::cell("activator".to_string())
 }
 
 #[turbo_tasks::function]
-fn action_key() -> Vc<String> {
+fn action_key() -> Vc<RcStr> {
     Vc::cell("action".to_string())
 }
 
 #[turbo_tasks::value_impl]
 impl Introspectable for ConditionalContentSource {
     #[turbo_tasks::function]
-    fn ty(&self) -> Vc<String> {
+    fn ty(&self) -> Vc<RcStr> {
         introspectable_type()
     }
 
     #[turbo_tasks::function]
-    async fn details(&self) -> Result<Vc<String>> {
+    async fn details(&self) -> Result<Vc<RcStr>> {
         Ok(Vc::cell(
             if *self.activated.get() {
                 "activated"
@@ -120,7 +120,7 @@ impl Introspectable for ConditionalContentSource {
     }
 
     #[turbo_tasks::function]
-    async fn title(&self) -> Result<Vc<String>> {
+    async fn title(&self) -> Result<Vc<RcStr>> {
         if let Some(activator) =
             Vc::try_resolve_sidecast::<Box<dyn Introspectable>>(self.activator).await?
         {

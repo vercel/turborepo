@@ -67,7 +67,7 @@ pub enum ModuleResolveResultItem {
     OutputAsset(Vc<Box<dyn OutputAsset>>),
     External(RcStr, ExternalType),
     Ignore,
-    Error(Vc<String>),
+    Error(Vc<RcStr>),
     Empty,
     Custom(u8),
     Unresolveable,
@@ -417,7 +417,7 @@ pub enum ResolveResultItem {
     Source(Vc<Box<dyn Source>>),
     External(RcStr, ExternalType),
     Ignore,
-    Error(Vc<String>),
+    Error(Vc<RcStr>),
     Empty,
     Custom(u8),
     Unresolveable,
@@ -480,7 +480,7 @@ impl Default for ResolveResult {
 #[turbo_tasks::value_impl]
 impl ValueToString for ResolveResult {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
         let mut result = String::new();
         for (i, (request, item)) in self.primary.iter().enumerate() {
             if i > 0 {
@@ -1895,9 +1895,9 @@ async fn resolve_relative_request(
     options: Vc<ResolveOptions>,
     options_value: &ResolveOptions,
     path_pattern: &Pattern,
-    query: Vc<String>,
+    query: Vc<RcStr>,
     force_in_lookup_dir: bool,
-    fragment: Vc<String>,
+    fragment: Vc<RcStr>,
 ) -> Result<Vc<ResolveResult>> {
     // Check alias field for aliases first
     let lookup_path_ref = &*lookup_path.await?;
@@ -2063,8 +2063,8 @@ async fn apply_in_package(
     options: Vc<ResolveOptions>,
     options_value: &ResolveOptions,
     get_request: impl Fn(&FileSystemPath) -> Option<RcStr>,
-    query: Vc<String>,
-    fragment: Vc<String>,
+    query: Vc<RcStr>,
+    fragment: Vc<RcStr>,
 ) -> Result<Option<Vc<ResolveResult>>> {
     // Check alias field for module aliases first
     for in_package in options_value.in_package.iter() {
@@ -2166,8 +2166,8 @@ async fn resolve_module_request(
     options_value: &ResolveOptions,
     module: &str,
     path: &Pattern,
-    query: Vc<String>,
-    fragment: Vc<String>,
+    query: Vc<RcStr>,
+    fragment: Vc<RcStr>,
 ) -> Result<Vc<ResolveResult>> {
     // Check alias field for module aliases first
     if let Some(result) = apply_in_package(
@@ -2264,8 +2264,8 @@ async fn resolve_module_request(
 async fn resolve_into_package(
     path: Value<Pattern>,
     package_path: Vc<FileSystemPath>,
-    query: Vc<String>,
-    fragment: Vc<String>,
+    query: Vc<RcStr>,
+    fragment: Vc<RcStr>,
     options: Vc<ResolveOptions>,
 ) -> Result<Vc<ResolveResult>> {
     let path = path.into_value();
@@ -2345,7 +2345,7 @@ async fn resolve_import_map_result(
     original_lookup_path: Vc<FileSystemPath>,
     original_request: Vc<Request>,
     options: Vc<ResolveOptions>,
-    query: Vc<String>,
+    query: Vc<RcStr>,
 ) -> Result<Option<Vc<ResolveResult>>> {
     Ok(match result {
         ImportMapResult::Result(result) => Some(*result),
@@ -2393,7 +2393,7 @@ fn resolve_import_map_result_boxed<'a>(
     original_lookup_path: Vc<FileSystemPath>,
     original_request: Vc<Request>,
     options: Vc<ResolveOptions>,
-    query: Vc<String>,
+    query: Vc<RcStr>,
 ) -> Pin<Box<dyn Future<Output = ResolveImportMapResult> + Send + 'a>> {
     Box::pin(resolve_import_map_result(
         result,
@@ -2413,8 +2413,8 @@ async fn resolved(
     original_request: Vc<Request>,
     options_value: &ResolveOptions,
     options: Vc<ResolveOptions>,
-    query: Vc<String>,
-    fragment: Vc<String>,
+    query: Vc<RcStr>,
+    fragment: Vc<RcStr>,
 ) -> Result<Vc<ResolveResult>> {
     let RealPathResult { path, symlinks } = &*fs_path.realpath_with_links().await?;
 
@@ -2474,7 +2474,7 @@ async fn handle_exports_imports_field(
     path: &str,
     conditions: &BTreeMap<RcStr, ConditionValue>,
     unspecified_conditions: &ConditionValue,
-    query: Vc<String>,
+    query: Vc<RcStr>,
 ) -> Result<Vc<ResolveResult>> {
     let mut results = Vec::new();
     let mut conditions_state = HashMap::new();
@@ -2625,14 +2625,14 @@ pub enum ModulePart {
     /// all exports are unused.
     Evaluation,
     /// Represents an export of a module.
-    Export(Vc<String>),
+    Export(Vc<RcStr>),
     /// Represents a renamed export of a module.
     RenamedExport {
-        original_export: Vc<String>,
-        export: Vc<String>,
+        original_export: Vc<RcStr>,
+        export: Vc<RcStr>,
     },
     /// Represents a namespace object of a module exported as named export.
-    RenamedNamespace { export: Vc<String> },
+    RenamedNamespace { export: Vc<RcStr> },
     /// A pointer to a specific part.
     Internal(u32),
     /// The local declarations of a module.
@@ -2690,7 +2690,7 @@ impl ModulePart {
 #[turbo_tasks::value_impl]
 impl ValueToString for ModulePart {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
         Ok(Vc::cell(match self {
             ModulePart::Evaluation => "module evaluation".to_string(),
             ModulePart::Export(export) => format!("export {}", export.await?),

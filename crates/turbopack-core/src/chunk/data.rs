@@ -27,7 +27,7 @@ pub struct ChunkDataOption(Option<Vc<ChunkData>>);
 pub struct ChunksData(Vec<Vc<ChunkData>>);
 
 #[turbo_tasks::function]
-fn module_chunk_reference_description() -> Vc<String> {
+fn module_chunk_reference_description() -> Vc<RcStr> {
     Vc::cell("module chunk".to_string())
 }
 

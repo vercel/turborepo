@@ -281,7 +281,7 @@ impl NodeJsEnvironment {
 #[turbo_tasks::value(shared)]
 pub enum NodeJsVersion {
     Current(Vc<Box<dyn ProcessEnv>>),
-    Static(Vc<String>),
+    Static(Vc<RcStr>),
 }
 
 impl Default for NodeJsVersion {
@@ -305,7 +305,7 @@ pub struct EdgeWorkerEnvironment {}
 pub struct RuntimeVersions(#[turbo_tasks(trace_ignore)] pub Versions);
 
 #[turbo_tasks::function]
-pub async fn get_current_nodejs_version(env: Vc<Box<dyn ProcessEnv>>) -> Result<Vc<String>> {
+pub async fn get_current_nodejs_version(env: Vc<Box<dyn ProcessEnv>>) -> Result<Vc<RcStr>> {
     let path_read = env.read("PATH".into()).await?;
     let path = path_read.as_ref().context("env must have PATH")?;
     let mut cmd = Command::new("node");

@@ -44,7 +44,7 @@ pub struct ProxyResult {
 #[turbo_tasks::value_impl]
 impl Version for ProxyResult {
     #[turbo_tasks::function]
-    async fn id(&self) -> Result<Vc<String>> {
+    async fn id(&self) -> Result<Vc<RcStr>> {
         let mut hash = Xxh3Hash64Hasher::new();
         hash.write_u16(self.status);
         for (name, value) in &self.headers {

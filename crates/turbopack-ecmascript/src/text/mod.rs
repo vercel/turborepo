@@ -10,7 +10,7 @@ use turbopack_core::{
 use crate::utils::StringifyJs;
 
 #[turbo_tasks::function]
-fn modifier() -> Vc<String> {
+fn modifier() -> Vc<RcStr> {
     Vc::cell("text content".to_string())
 }
 

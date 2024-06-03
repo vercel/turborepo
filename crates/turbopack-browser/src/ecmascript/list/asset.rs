@@ -62,28 +62,28 @@ impl EcmascriptDevChunkList {
 #[turbo_tasks::value_impl]
 impl ValueToString for EcmascriptDevChunkList {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
         Ok(Vc::cell("Ecmascript Dev Chunk List".to_string()))
     }
 }
 
 #[turbo_tasks::function]
-fn modifier() -> Vc<String> {
+fn modifier() -> Vc<RcStr> {
     Vc::cell("ecmascript dev chunk list".to_string())
 }
 
 #[turbo_tasks::function]
-fn dynamic_modifier() -> Vc<String> {
+fn dynamic_modifier() -> Vc<RcStr> {
     Vc::cell("dynamic".to_string())
 }
 
 #[turbo_tasks::function]
-fn chunk_list_chunk_reference_description() -> Vc<String> {
+fn chunk_list_chunk_reference_description() -> Vc<RcStr> {
     Vc::cell("chunk list chunk".to_string())
 }
 
 #[turbo_tasks::function]
-fn chunk_key() -> Vc<String> {
+fn chunk_key() -> Vc<RcStr> {
     Vc::cell("chunk".to_string())
 }
 

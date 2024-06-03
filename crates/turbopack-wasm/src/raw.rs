@@ -21,7 +21,7 @@ use turbopack_ecmascript::{
 use crate::{output_asset::WebAssemblyAsset, source::WebAssemblySource};
 
 #[turbo_tasks::function]
-fn modifier() -> Vc<String> {
+fn modifier() -> Vc<RcStr> {
     Vc::cell("wasm raw".to_string())
 }
 

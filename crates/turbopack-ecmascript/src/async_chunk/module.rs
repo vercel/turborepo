@@ -11,7 +11,7 @@ use turbopack_core::{
 use crate::async_chunk::chunk_item::AsyncLoaderChunkItem;
 
 #[turbo_tasks::function]
-fn modifier() -> Vc<String> {
+fn modifier() -> Vc<RcStr> {
     Vc::cell("async loader".to_string())
 }
 
@@ -46,7 +46,7 @@ impl AsyncLoaderModule {
 }
 
 #[turbo_tasks::function]
-fn inner_module_reference_description() -> Vc<String> {
+fn inner_module_reference_description() -> Vc<RcStr> {
     Vc::cell("async module".to_string())
 }
 

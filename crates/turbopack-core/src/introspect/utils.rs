@@ -14,32 +14,32 @@ use crate::{
 };
 
 #[turbo_tasks::function]
-fn reference_ty() -> Vc<String> {
+fn reference_ty() -> Vc<RcStr> {
     Vc::cell("reference".to_string())
 }
 
 #[turbo_tasks::function]
-fn parallel_reference_ty() -> Vc<String> {
+fn parallel_reference_ty() -> Vc<RcStr> {
     Vc::cell("parallel reference".to_string())
 }
 
 #[turbo_tasks::function]
-fn parallel_inherit_async_reference_ty() -> Vc<String> {
+fn parallel_inherit_async_reference_ty() -> Vc<RcStr> {
     Vc::cell("parallel reference (inherit async module)".to_string())
 }
 
 #[turbo_tasks::function]
-fn async_reference_ty() -> Vc<String> {
+fn async_reference_ty() -> Vc<RcStr> {
     Vc::cell("async reference".to_string())
 }
 
 #[turbo_tasks::function]
-fn passthrough_reference_ty() -> Vc<String> {
+fn passthrough_reference_ty() -> Vc<RcStr> {
     Vc::cell("passthrough reference".to_string())
 }
 
 #[turbo_tasks::function]
-pub async fn content_to_details(content: Vc<AssetContent>) -> Result<Vc<String>> {
+pub async fn content_to_details(content: Vc<AssetContent>) -> Result<Vc<RcStr>> {
     Ok(match &*content.await? {
         AssetContent::File(file_content) => match &*file_content.await? {
             FileContent::Content(file) => {

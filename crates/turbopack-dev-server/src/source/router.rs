@@ -17,7 +17,7 @@ use crate::source::{route_tree::MapGetContentSourceContent, ContentSources};
 /// other subpaths, including if the request path does not include the prefix.
 #[turbo_tasks::value(shared)]
 pub struct PrefixedRouterContentSource {
-    pub prefix: Vc<String>,
+    pub prefix: Vc<RcStr>,
     pub routes: Vec<(RcStr, Vc<Box<dyn ContentSource>>)>,
     pub fallback: Vc<Box<dyn ContentSource>>,
 }
@@ -26,7 +26,7 @@ pub struct PrefixedRouterContentSource {
 impl PrefixedRouterContentSource {
     #[turbo_tasks::function]
     pub async fn new(
-        prefix: Vc<String>,
+        prefix: Vc<RcStr>,
         routes: Vec<(RcStr, Vc<Box<dyn ContentSource>>)>,
         fallback: Vc<Box<dyn ContentSource>>,
     ) -> Result<Vc<Self>> {
@@ -119,7 +119,7 @@ impl ContentSource for PrefixedRouterContentSource {
 
 #[turbo_tasks::value]
 struct PrefixedRouterContentSourceMapper {
-    prefix: Vc<String>,
+    prefix: Vc<RcStr>,
     path: RcStr,
 }
 
@@ -176,12 +176,12 @@ impl GetContentSourceContent for PrefixedRouterGetContentSourceContent {
 #[turbo_tasks::value_impl]
 impl Introspectable for PrefixedRouterContentSource {
     #[turbo_tasks::function]
-    fn ty(&self) -> Vc<String> {
+    fn ty(&self) -> Vc<RcStr> {
         Vc::cell("prefixed router content source".to_string())
     }
 
     #[turbo_tasks::function]
-    async fn details(&self) -> Result<Vc<String>> {
+    async fn details(&self) -> Result<Vc<RcStr>> {
         let prefix = self.prefix.await?;
         Ok(Vc::cell(format!("prefix: '{}'", prefix)))
     }

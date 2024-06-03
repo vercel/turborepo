@@ -286,24 +286,24 @@ impl ContentSourceSideEffect for AssetGraphGetContentSourceContent {
 }
 
 #[turbo_tasks::function]
-fn introspectable_type() -> Vc<String> {
+fn introspectable_type() -> Vc<RcStr> {
     Vc::cell("asset graph content source".to_string())
 }
 
 #[turbo_tasks::value_impl]
 impl Introspectable for AssetGraphContentSource {
     #[turbo_tasks::function]
-    fn ty(&self) -> Vc<String> {
+    fn ty(&self) -> Vc<RcStr> {
         introspectable_type()
     }
 
     #[turbo_tasks::function]
-    fn title(&self) -> Vc<String> {
+    fn title(&self) -> Vc<RcStr> {
         self.root_path.to_string()
     }
 
     #[turbo_tasks::function]
-    fn details(&self) -> Vc<String> {
+    fn details(&self) -> Vc<RcStr> {
         Vc::cell(if let Some(expanded) = &self.expanded {
             format!("{} assets expanded", expanded.get().len())
         } else {
@@ -344,7 +344,7 @@ impl Introspectable for AssetGraphContentSource {
 }
 
 #[turbo_tasks::function]
-fn fully_expaned_introspectable_type() -> Vc<String> {
+fn fully_expaned_introspectable_type() -> Vc<RcStr> {
     Vc::cell("fully expanded asset graph content source".to_string())
 }
 
@@ -354,12 +354,12 @@ struct FullyExpaned(Vc<AssetGraphContentSource>);
 #[turbo_tasks::value_impl]
 impl Introspectable for FullyExpaned {
     #[turbo_tasks::function]
-    fn ty(&self) -> Vc<String> {
+    fn ty(&self) -> Vc<RcStr> {
         fully_expaned_introspectable_type()
     }
 
     #[turbo_tasks::function]
-    async fn title(&self) -> Result<Vc<String>> {
+    async fn title(&self) -> Result<Vc<RcStr>> {
         Ok(self.0.await?.root_path.to_string())
     }
 

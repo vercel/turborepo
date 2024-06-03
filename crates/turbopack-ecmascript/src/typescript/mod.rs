@@ -189,7 +189,7 @@ impl ModuleReference for CompilerReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for CompilerReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
         Ok(Vc::cell(format!(
             "compiler reference {}",
             self.request.to_string().await?
@@ -222,7 +222,7 @@ impl ModuleReference for TsExtendsReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for TsExtendsReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
         Ok(Vc::cell(format!(
             "tsconfig extends {}",
             self.config.ident().to_string().await?,
@@ -256,7 +256,7 @@ impl ModuleReference for TsNodeRequireReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for TsNodeRequireReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
         Ok(Vc::cell(format!(
             "tsconfig tsnode require {}",
             self.request.to_string().await?
@@ -290,7 +290,7 @@ impl ModuleReference for TsConfigTypesReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for TsConfigTypesReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
         Ok(Vc::cell(format!(
             "tsconfig types {}",
             self.request.to_string().await?,

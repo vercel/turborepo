@@ -25,7 +25,7 @@ use crate::{
 };
 
 #[turbo_tasks::function]
-fn modifier(use_swc_css: bool) -> Vc<String> {
+fn modifier(use_swc_css: bool) -> Vc<RcStr> {
     if use_swc_css {
         Vc::cell("swc css".to_string())
     } else {

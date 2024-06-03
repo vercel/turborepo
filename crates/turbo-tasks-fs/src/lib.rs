@@ -713,7 +713,7 @@ impl FileSystem for DiskFileSystem {
 #[turbo_tasks::value_impl]
 impl ValueToString for DiskFileSystem {
     #[turbo_tasks::function]
-    fn to_string(&self) -> Vc<String> {
+    fn to_string(&self) -> Vc<RcStr> {
         Vc::cell(self.name.to_string())
     }
 }
@@ -1006,7 +1006,7 @@ impl FileSystemPath {
     }
 
     #[turbo_tasks::function]
-    pub async fn extension(self: Vc<Self>) -> Result<Vc<String>> {
+    pub async fn extension(self: Vc<Self>) -> Result<Vc<RcStr>> {
         let this = self.await?;
         Ok(Vc::cell(this.extension_ref().unwrap_or("").to_string()))
     }
@@ -1243,7 +1243,7 @@ impl FileSystemPath {
 #[turbo_tasks::value_impl]
 impl ValueToString for FileSystemPath {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
         Ok(Vc::cell(format!(
             "[{}]/{}",
             self.fs.to_string().await?,
@@ -1758,7 +1758,7 @@ impl ValueToString for FileJsonContent {
     /// This operation will only succeed if the file contents are a valid JSON
     /// value.
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
         match self {
             FileJsonContent::Content(json) => Ok(Vc::cell(json.to_string())),
             FileJsonContent::Unparseable(e) => Err(anyhow!("File is not valid JSON: {}", e)),
@@ -1910,7 +1910,7 @@ impl FileSystem for NullFileSystem {
 #[turbo_tasks::value_impl]
 impl ValueToString for NullFileSystem {
     #[turbo_tasks::function]
-    fn to_string(&self) -> Vc<String> {
+    fn to_string(&self) -> Vc<RcStr> {
         Vc::cell(String::from("null"))
     }
 }

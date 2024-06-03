@@ -134,7 +134,7 @@ pub trait Issue {
 
     /// A link to relevant documentation of the issue. Only displayed in console
     /// if the user explicitly asks for detailed messages.
-    fn documentation_link(self: Vc<Self>) -> Vc<String> {
+    fn documentation_link(self: Vc<Self>) -> Vc<RcStr> {
         Vc::<String>::default()
     }
 
@@ -202,13 +202,13 @@ trait IssueProcessingPath {
 #[turbo_tasks::value]
 pub struct IssueProcessingPathItem {
     pub file_path: Option<Vc<FileSystemPath>>,
-    pub description: Vc<String>,
+    pub description: Vc<RcStr>,
 }
 
 #[turbo_tasks::value_impl]
 impl ValueToString for IssueProcessingPathItem {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
         if let Some(context) = self.file_path {
             let description_str = self.description.await?;
             Ok(Vc::cell(format!(

@@ -14,14 +14,14 @@ __turbo_tasks_internal_primitive!(String);
 __turbo_tasks_internal_primitive!(RcStr);
 
 #[turbo_tasks::function]
-fn empty_string() -> Vc<String> {
+fn empty_string() -> Vc<RcStr> {
     Vc::cell(String::new())
 }
 
-impl Vc<String> {
+impl Vc<RcStr> {
     #[deprecated(note = "use Default::default() instead")]
     #[inline(always)]
-    pub fn empty() -> Vc<String> {
+    pub fn empty() -> Vc<RcStr> {
         empty_string()
     }
 }

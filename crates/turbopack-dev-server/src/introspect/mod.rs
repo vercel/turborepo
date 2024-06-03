@@ -23,12 +23,12 @@ pub struct IntrospectionSource {
 #[turbo_tasks::value_impl]
 impl Introspectable for IntrospectionSource {
     #[turbo_tasks::function]
-    fn ty(&self) -> Vc<String> {
+    fn ty(&self) -> Vc<RcStr> {
         Vc::cell("introspection-source".to_string())
     }
 
     #[turbo_tasks::function]
-    fn title(&self) -> Vc<String> {
+    fn title(&self) -> Vc<RcStr> {
         Vc::cell("introspection-source".to_string())
     }
 

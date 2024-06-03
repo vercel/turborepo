@@ -112,7 +112,7 @@ impl FileSystem for EmbeddedFileSystem {
 #[turbo_tasks::value_impl]
 impl ValueToString for EmbeddedFileSystem {
     #[turbo_tasks::function]
-    fn to_string(&self) -> Vc<String> {
+    fn to_string(&self) -> Vc<RcStr> {
         Vc::cell(self.name.to_string())
     }
 }

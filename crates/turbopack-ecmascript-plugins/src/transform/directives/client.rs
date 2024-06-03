@@ -8,11 +8,11 @@ use super::{is_client_module, server_to_client_proxy::create_proxy_module};
 
 #[derive(Debug)]
 pub struct ClientDirectiveTransformer {
-    transition_name: Vc<String>,
+    transition_name: Vc<RcStr>,
 }
 
 impl ClientDirectiveTransformer {
-    pub fn new(transition_name: Vc<String>) -> Self {
+    pub fn new(transition_name: Vc<RcStr>) -> Self {
         Self { transition_name }
     }
 }

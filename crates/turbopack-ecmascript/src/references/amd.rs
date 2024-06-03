@@ -71,7 +71,7 @@ impl ModuleReference for AmdDefineAssetReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for AmdDefineAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
         Ok(Vc::cell(format!(
             "AMD define dependency {}",
             self.request.to_string().await?,

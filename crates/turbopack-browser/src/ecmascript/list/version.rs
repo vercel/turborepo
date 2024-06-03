@@ -22,7 +22,7 @@ pub(super) struct EcmascriptDevChunkListVersion {
 #[turbo_tasks::value_impl]
 impl Version for EcmascriptDevChunkListVersion {
     #[turbo_tasks::function]
-    async fn id(&self) -> Result<Vc<String>> {
+    async fn id(&self) -> Result<Vc<RcStr>> {
         let by_path = {
             let mut by_path = self
                 .by_path

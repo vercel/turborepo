@@ -28,19 +28,19 @@ impl ContentSource for LazyInstantiatedContentSource {
 }
 
 #[turbo_tasks::function]
-fn introspectable_type() -> Vc<String> {
+fn introspectable_type() -> Vc<RcStr> {
     Vc::cell("lazy instantiated content source".to_string())
 }
 
 #[turbo_tasks::function]
-fn source_key() -> Vc<String> {
+fn source_key() -> Vc<RcStr> {
     Vc::cell("source".to_string())
 }
 
 #[turbo_tasks::value_impl]
 impl Introspectable for LazyInstantiatedContentSource {
     #[turbo_tasks::function]
-    fn ty(&self) -> Vc<String> {
+    fn ty(&self) -> Vc<RcStr> {
         introspectable_type()
     }
 

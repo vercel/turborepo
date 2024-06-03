@@ -35,7 +35,7 @@ pub struct DevHtmlAsset {
 }
 
 #[turbo_tasks::function]
-fn dev_html_chunk_reference_description() -> Vc<String> {
+fn dev_html_chunk_reference_description() -> Vc<RcStr> {
     Vc::cell("dev html chunk".to_string())
 }
 
@@ -245,7 +245,7 @@ struct DevHtmlAssetVersion {
 #[turbo_tasks::value_impl]
 impl Version for DevHtmlAssetVersion {
     #[turbo_tasks::function]
-    async fn id(&self) -> Result<Vc<String>> {
+    async fn id(&self) -> Result<Vc<RcStr>> {
         let mut hasher = Xxh3Hash64Hasher::new();
         for relative_path in &*self.content.chunk_paths {
             hasher.write_ref(relative_path);

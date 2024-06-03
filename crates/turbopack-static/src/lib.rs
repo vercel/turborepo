@@ -38,7 +38,7 @@ use turbopack_ecmascript::{
 use self::output_asset::StaticAsset;
 
 #[turbo_tasks::function]
-fn modifier() -> Vc<String> {
+fn modifier() -> Vc<RcStr> {
     Vc::cell("static".to_string())
 }
 

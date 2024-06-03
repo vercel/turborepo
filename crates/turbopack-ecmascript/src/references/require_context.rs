@@ -262,7 +262,7 @@ impl ModuleReference for RequireContextAssetReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for RequireContextAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
         Ok(Vc::cell(format!(
             "require.context {}/{}",
             self.dir,
@@ -314,7 +314,7 @@ impl ModuleReference for ResolvedModuleReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for ResolvedModuleReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
         Ok(Vc::cell("resolved reference".to_string()))
     }
 }
@@ -334,7 +334,7 @@ pub struct RequireContextAsset {
 }
 
 #[turbo_tasks::function]
-fn modifier(dir: RcStr, include_subdirs: bool) -> Vc<String> {
+fn modifier(dir: RcStr, include_subdirs: bool) -> Vc<RcStr> {
     Vc::cell(format!(
         "require.context {}/{}",
         dir,

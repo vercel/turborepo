@@ -57,29 +57,29 @@ impl Asset for SourceMapAsset {
 }
 
 #[turbo_tasks::function]
-fn introspectable_type() -> Vc<String> {
+fn introspectable_type() -> Vc<RcStr> {
     Vc::cell("source map".to_string())
 }
 
 #[turbo_tasks::function]
-fn introspectable_details() -> Vc<String> {
+fn introspectable_details() -> Vc<RcStr> {
     Vc::cell("source map of an asset".to_string())
 }
 
 #[turbo_tasks::value_impl]
 impl Introspectable for SourceMapAsset {
     #[turbo_tasks::function]
-    fn ty(&self) -> Vc<String> {
+    fn ty(&self) -> Vc<RcStr> {
         introspectable_type()
     }
 
     #[turbo_tasks::function]
-    fn title(self: Vc<Self>) -> Vc<String> {
+    fn title(self: Vc<Self>) -> Vc<RcStr> {
         self.ident().to_string()
     }
 
     #[turbo_tasks::function]
-    fn details(&self) -> Vc<String> {
+    fn details(&self) -> Vc<RcStr> {
         introspectable_details()
     }
 

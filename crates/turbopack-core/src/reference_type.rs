@@ -125,7 +125,7 @@ impl ImportContext {
     }
 
     #[turbo_tasks::function]
-    pub fn modifier(&self) -> Result<Vc<String>> {
+    pub fn modifier(&self) -> Result<Vc<RcStr>> {
         use std::fmt::Write;
         let mut modifier = String::new();
         if !self.layers.is_empty() {

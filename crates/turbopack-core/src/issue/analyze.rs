@@ -12,7 +12,7 @@ use crate::ident::AssetIdent;
 pub struct AnalyzeIssue {
     pub severity: Vc<IssueSeverity>,
     pub source_ident: Vc<AssetIdent>,
-    pub title: Vc<String>,
+    pub title: Vc<RcStr>,
     pub message: Vc<StyledString>,
     pub code: Option<RcStr>,
     pub source: Option<Vc<IssueSource>>,

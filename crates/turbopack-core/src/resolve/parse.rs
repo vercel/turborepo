@@ -10,31 +10,31 @@ use super::pattern::Pattern;
 pub enum Request {
     Raw {
         path: Pattern,
-        query: Vc<String>,
+        query: Vc<RcStr>,
         force_in_lookup_dir: bool,
-        fragment: Vc<String>,
+        fragment: Vc<RcStr>,
     },
     Relative {
         path: Pattern,
-        query: Vc<String>,
+        query: Vc<RcStr>,
         force_in_lookup_dir: bool,
-        fragment: Vc<String>,
+        fragment: Vc<RcStr>,
     },
     Module {
         module: RcStr,
         path: Pattern,
-        query: Vc<String>,
-        fragment: Vc<String>,
+        query: Vc<RcStr>,
+        fragment: Vc<RcStr>,
     },
     ServerRelative {
         path: Pattern,
-        query: Vc<String>,
-        fragment: Vc<String>,
+        query: Vc<RcStr>,
+        fragment: Vc<RcStr>,
     },
     Windows {
         path: Pattern,
-        query: Vc<String>,
-        fragment: Vc<String>,
+        query: Vc<RcStr>,
+        fragment: Vc<RcStr>,
     },
     Empty,
     PackageInternal {
@@ -43,8 +43,8 @@ pub enum Request {
     Uri {
         protocol: String,
         remainder: String,
-        query: Vc<String>,
-        fragment: Vc<String>,
+        query: Vc<RcStr>,
+        fragment: Vc<RcStr>,
     },
     Unknown {
         path: Pattern,
@@ -55,7 +55,7 @@ pub enum Request {
     },
 }
 
-fn split_off_query_fragment(raw: RcStr) -> (Pattern, Vc<String>, Vc<String>) {
+fn split_off_query_fragment(raw: RcStr) -> (Pattern, Vc<RcStr>, Vc<RcStr>) {
     let Some((raw, query)) = raw.split_once('?') else {
         if let Some((raw, fragment)) = raw.split_once('#') {
             return (
@@ -266,8 +266,8 @@ impl Request {
     #[turbo_tasks::function]
     pub fn raw(
         request: Value<Pattern>,
-        query: Vc<String>,
-        fragment: Vc<String>,
+        query: Vc<RcStr>,
+        fragment: Vc<RcStr>,
         force_in_lookup_dir: bool,
     ) -> Vc<Self> {
         Self::cell(Request::Raw {
@@ -281,8 +281,8 @@ impl Request {
     #[turbo_tasks::function]
     pub fn relative(
         request: Value<Pattern>,
-        query: Vc<String>,
-        fragment: Vc<String>,
+        query: Vc<RcStr>,
+        fragment: Vc<RcStr>,
         force_in_lookup_dir: bool,
     ) -> Vc<Self> {
         Self::cell(Request::Relative {
@@ -297,8 +297,8 @@ impl Request {
     pub fn module(
         module: RcStr,
         path: Value<Pattern>,
-        query: Vc<String>,
-        fragment: Vc<String>,
+        query: Vc<RcStr>,
+        fragment: Vc<RcStr>,
     ) -> Vc<Self> {
         Self::cell(Request::Module {
             module,
@@ -348,7 +348,7 @@ impl Request {
     }
 
     #[turbo_tasks::function]
-    pub async fn with_query(self: Vc<Self>, query: Vc<String>) -> Result<Vc<Self>> {
+    pub async fn with_query(self: Vc<Self>, query: Vc<RcStr>) -> Result<Vc<Self>> {
         Ok(match &*self.await? {
             Request::Raw {
                 path,
@@ -423,7 +423,7 @@ impl Request {
     }
 
     #[turbo_tasks::function]
-    pub async fn with_fragment(self: Vc<Self>, fragment: Vc<String>) -> Result<Vc<Self>> {
+    pub async fn with_fragment(self: Vc<Self>, fragment: Vc<RcStr>) -> Result<Vc<Self>> {
         Ok(match &*self.await? {
             Request::Raw {
                 path,
@@ -596,7 +596,7 @@ impl Request {
     }
 
     #[turbo_tasks::function]
-    pub fn query(&self) -> Vc<String> {
+    pub fn query(&self) -> Vc<RcStr> {
         match self {
             Request::Raw { query, .. } => *query,
             Request::Relative { query, .. } => *query,
@@ -617,7 +617,7 @@ impl Request {
 #[turbo_tasks::value_impl]
 impl ValueToString for Request {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
         Ok(Vc::cell(match self {
             Request::Raw {
                 path,

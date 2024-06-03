@@ -186,7 +186,7 @@ impl RouteTree {
 #[turbo_tasks::value_impl]
 impl ValueToString for RouteTree {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
         let RouteTree {
             base,
             sources,

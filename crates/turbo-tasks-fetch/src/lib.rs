@@ -30,7 +30,7 @@ pub struct HttpResponseBody(pub Vec<u8>);
 #[turbo_tasks::value_impl]
 impl HttpResponseBody {
     #[turbo_tasks::function]
-    pub async fn to_string(self: Vc<Self>) -> Result<Vc<String>> {
+    pub async fn to_string(self: Vc<Self>) -> Result<Vc<RcStr>> {
         let this = &*self.await?;
         Ok(Vc::cell(std::str::from_utf8(&this.0)?.to_owned()))
     }
@@ -48,7 +48,7 @@ pub struct OptionProxyConfig(Option<ProxyConfig>);
 
 #[turbo_tasks::function]
 pub async fn fetch(
-    url: Vc<String>,
+    url: Vc<RcStr>,
     user_agent: Vc<Option<String>>,
     proxy_option: Vc<OptionProxyConfig>,
 ) -> Result<Vc<FetchResult>> {
@@ -99,7 +99,7 @@ pub enum FetchErrorKind {
 
 #[turbo_tasks::value(shared)]
 pub struct FetchError {
-    pub url: Vc<String>,
+    pub url: Vc<RcStr>,
     pub kind: Vc<FetchErrorKind>,
     pub detail: Vc<StyledString>,
 }
@@ -148,7 +148,7 @@ impl FetchError {
 pub struct FetchIssue {
     pub issue_context: Vc<FileSystemPath>,
     pub severity: Vc<IssueSeverity>,
-    pub url: Vc<String>,
+    pub url: Vc<RcStr>,
     pub kind: Vc<FetchErrorKind>,
     pub detail: Vc<StyledString>,
 }

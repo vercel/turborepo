@@ -51,7 +51,7 @@ impl EcmascriptBuildNodeChunkVersion {
 #[turbo_tasks::value_impl]
 impl Version for EcmascriptBuildNodeChunkVersion {
     #[turbo_tasks::function]
-    fn id(&self) -> Vc<String> {
+    fn id(&self) -> Vc<RcStr> {
         let mut hasher = Xxh3Hash64Hasher::new();
         hasher.write_ref(&self.chunk_path);
         hasher.write_ref(&self.minify_type);

@@ -24,7 +24,7 @@ pub mod parse;
 pub(crate) mod references;
 
 #[turbo_tasks::function]
-fn modifier() -> Vc<String> {
+fn modifier() -> Vc<RcStr> {
     Vc::cell("webpack".to_string())
 }
 
@@ -114,7 +114,7 @@ impl ModuleReference for WebpackChunkAssetReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for WebpackChunkAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
         let chunk_id = match &self.chunk_id {
             Lit::Str(str) => str.value.to_string(),
             Lit::Num(num) => format!("{num}"),
@@ -147,7 +147,7 @@ impl ModuleReference for WebpackEntryAssetReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for WebpackEntryAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
         Ok(Vc::cell("webpack entry".to_string()))
     }
 }
@@ -191,7 +191,7 @@ impl ModuleReference for WebpackRuntimeAssetReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for WebpackRuntimeAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
         Ok(Vc::cell(format!(
             "webpack {}",
             self.request.to_string().await?,

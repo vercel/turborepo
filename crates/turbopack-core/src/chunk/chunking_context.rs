@@ -43,7 +43,7 @@ pub struct ChunkGroupResult {
 /// A context for the chunking that influences the way chunks are created
 #[turbo_tasks::value_trait]
 pub trait ChunkingContext {
-    fn name(self: Vc<Self>) -> Vc<String>;
+    fn name(self: Vc<Self>) -> Vc<RcStr>;
     fn context_path(self: Vc<Self>) -> Vc<FileSystemPath>;
     fn output_root(self: Vc<Self>) -> Vc<FileSystemPath>;
 
@@ -63,7 +63,7 @@ pub trait ChunkingContext {
 
     /// Returns a URL (relative or absolute, depending on the asset prefix) to
     /// the static asset based on its `ident`.
-    fn asset_url(self: Vc<Self>, ident: Vc<AssetIdent>) -> Result<Vc<String>>;
+    fn asset_url(self: Vc<Self>, ident: Vc<AssetIdent>) -> Result<Vc<RcStr>>;
 
     fn asset_path(
         self: Vc<Self>,

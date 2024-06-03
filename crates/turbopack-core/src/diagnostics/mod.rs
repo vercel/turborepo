@@ -25,9 +25,9 @@ pub trait Diagnostic {
     /// `slow_perf_event`, or something else. This is not strongly typed
     /// though; since consumer or implementation may need to define own
     /// category.
-    fn category(&self) -> Vc<String>;
+    fn category(&self) -> Vc<RcStr>;
     /// Name of the specific diagnostic event.
-    fn name(&self) -> Vc<String>;
+    fn name(&self) -> Vc<RcStr>;
     /// Arbitarary payload included in the diagnostic event.
     fn payload(&self) -> Vc<DiagnosticPayload>;
 

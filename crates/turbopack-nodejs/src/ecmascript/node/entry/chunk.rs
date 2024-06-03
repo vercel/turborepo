@@ -153,18 +153,18 @@ impl EcmascriptBuildNodeEntryChunk {
 #[turbo_tasks::value_impl]
 impl ValueToString for EcmascriptBuildNodeEntryChunk {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
         Ok(Vc::cell("Ecmascript Build Node Evaluate Chunk".to_string()))
     }
 }
 
 #[turbo_tasks::function]
-fn modifier() -> Vc<String> {
+fn modifier() -> Vc<RcStr> {
     Vc::cell("ecmascript build node evaluate chunk".to_string())
 }
 
 #[turbo_tasks::function]
-fn chunk_reference_description() -> Vc<String> {
+fn chunk_reference_description() -> Vc<RcStr> {
     Vc::cell("chunk".to_string())
 }
 

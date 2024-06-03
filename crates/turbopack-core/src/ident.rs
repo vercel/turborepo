@@ -13,25 +13,25 @@ pub struct AssetIdent {
     /// The primary path of the asset
     pub path: Vc<FileSystemPath>,
     /// The query string of the asset (e.g. `?foo=bar`)
-    pub query: Vc<String>,
+    pub query: Vc<RcStr>,
     /// The fragment of the asset (e.g. `#foo`)
-    pub fragment: Option<Vc<String>>,
+    pub fragment: Option<Vc<RcStr>>,
     /// The assets that are nested in this asset
-    pub assets: Vec<(Vc<String>, Vc<AssetIdent>)>,
+    pub assets: Vec<(Vc<RcStr>, Vc<AssetIdent>)>,
     /// The modifiers of this asset (e.g. `client chunks`)
-    pub modifiers: Vec<Vc<String>>,
+    pub modifiers: Vec<Vc<RcStr>>,
     /// The part of the asset that is a (ECMAScript) module
     pub part: Option<Vc<ModulePart>>,
     /// The asset layer the asset was created from.
-    pub layer: Option<Vc<String>>,
+    pub layer: Option<Vc<RcStr>>,
 }
 
 impl AssetIdent {
-    pub fn add_modifier(&mut self, modifier: Vc<String>) {
+    pub fn add_modifier(&mut self, modifier: Vc<RcStr>) {
         self.modifiers.push(modifier);
     }
 
-    pub fn add_asset(&mut self, key: Vc<String>, asset: Vc<AssetIdent>) {
+    pub fn add_asset(&mut self, key: Vc<RcStr>, asset: Vc<AssetIdent>) {
         self.assets.push((key, asset));
     }
 
@@ -49,7 +49,7 @@ impl AssetIdent {
 #[turbo_tasks::value_impl]
 impl ValueToString for AssetIdent {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
         let mut s = self.path.to_string().await?.clone_value();
 
         let query = self.query.await?;
@@ -125,14 +125,14 @@ impl AssetIdent {
     }
 
     #[turbo_tasks::function]
-    pub fn with_query(&self, query: Vc<String>) -> Vc<Self> {
+    pub fn with_query(&self, query: Vc<RcStr>) -> Vc<Self> {
         let mut this = self.clone();
         this.query = query;
         Self::new(Value::new(this))
     }
 
     #[turbo_tasks::function]
-    pub fn with_modifier(&self, modifier: Vc<String>) -> Vc<Self> {
+    pub fn with_modifier(&self, modifier: Vc<RcStr>) -> Vc<Self> {
         let mut this = self.clone();
         this.add_modifier(modifier);
         Self::new(Value::new(this))
@@ -153,7 +153,7 @@ impl AssetIdent {
     }
 
     #[turbo_tasks::function]
-    pub fn with_layer(&self, layer: Vc<String>) -> Vc<Self> {
+    pub fn with_layer(&self, layer: Vc<RcStr>) -> Vc<Self> {
         let mut this = self.clone();
         this.layer = Some(layer);
         Self::new(Value::new(this))
@@ -172,7 +172,7 @@ impl AssetIdent {
     }
 
     #[turbo_tasks::function]
-    pub fn query(&self) -> Vc<String> {
+    pub fn query(&self) -> Vc<RcStr> {
         self.query
     }
 
@@ -185,7 +185,7 @@ impl AssetIdent {
         &self,
         context_path: Vc<FileSystemPath>,
         expected_extension: RcStr,
-    ) -> Result<Vc<String>> {
+    ) -> Result<Vc<RcStr>> {
         // TODO(PACK-2140): restrict character set to A–Za–z0–9-_.~'()
         // to be compatible with all operating systems + URLs.
 

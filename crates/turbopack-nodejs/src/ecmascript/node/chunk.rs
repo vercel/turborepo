@@ -41,13 +41,13 @@ impl EcmascriptBuildNodeChunk {
 #[turbo_tasks::value_impl]
 impl ValueToString for EcmascriptBuildNodeChunk {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
         Ok(Vc::cell("Ecmascript Build Node Chunk".to_string()))
     }
 }
 
 #[turbo_tasks::function]
-fn modifier() -> Vc<String> {
+fn modifier() -> Vc<RcStr> {
     Vc::cell("ecmascript build node chunk".to_string())
 }
 
@@ -117,29 +117,29 @@ impl GenerateSourceMap for EcmascriptBuildNodeChunk {
 }
 
 #[turbo_tasks::function]
-fn introspectable_type() -> Vc<String> {
+fn introspectable_type() -> Vc<RcStr> {
     Vc::cell("ecmascript build node chunk".to_string())
 }
 
 #[turbo_tasks::function]
-fn introspectable_details() -> Vc<String> {
+fn introspectable_details() -> Vc<RcStr> {
     Vc::cell("generates a production EcmaScript chunk targeting Node.js".to_string())
 }
 
 #[turbo_tasks::value_impl]
 impl Introspectable for EcmascriptBuildNodeChunk {
     #[turbo_tasks::function]
-    fn ty(&self) -> Vc<String> {
+    fn ty(&self) -> Vc<RcStr> {
         introspectable_type()
     }
 
     #[turbo_tasks::function]
-    fn title(self: Vc<Self>) -> Vc<String> {
+    fn title(self: Vc<Self>) -> Vc<RcStr> {
         self.ident().to_string()
     }
 
     #[turbo_tasks::function]
-    fn details(&self) -> Vc<String> {
+    fn details(&self) -> Vc<RcStr> {
         introspectable_details()
     }
 

@@ -177,7 +177,7 @@ impl Display for EcmascriptModuleAssetType {
 }
 
 #[turbo_tasks::function]
-fn modifier() -> Vc<String> {
+fn modifier() -> Vc<RcStr> {
     Vc::cell("ecmascript".to_string())
 }
 

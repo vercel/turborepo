@@ -42,7 +42,7 @@ pub trait AssetContext {
     fn compile_time_info(self: Vc<Self>) -> Vc<CompileTimeInfo>;
 
     /// Gets the layer of the asset context.
-    fn layer(self: Vc<Self>) -> Vc<String>;
+    fn layer(self: Vc<Self>) -> Vc<RcStr>;
 
     /// Gets the resolve options for a given path.
     fn resolve_options(

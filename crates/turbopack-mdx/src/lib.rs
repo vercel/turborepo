@@ -27,7 +27,7 @@ use turbopack_ecmascript::{
 };
 
 #[turbo_tasks::function]
-fn modifier() -> Vc<String> {
+fn modifier() -> Vc<RcStr> {
     Vc::cell("mdx".to_string())
 }
 

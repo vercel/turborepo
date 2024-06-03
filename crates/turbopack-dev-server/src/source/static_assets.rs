@@ -15,7 +15,7 @@ use super::{
 
 #[turbo_tasks::value(shared)]
 pub struct StaticAssetsContentSource {
-    pub prefix: Vc<String>,
+    pub prefix: Vc<RcStr>,
     pub dir: Vc<FileSystemPath>,
 }
 
@@ -29,7 +29,7 @@ impl StaticAssetsContentSource {
 
     #[turbo_tasks::function]
     pub async fn with_prefix(
-        prefix: Vc<String>,
+        prefix: Vc<RcStr>,
         dir: Vc<FileSystemPath>,
     ) -> Result<Vc<StaticAssetsContentSource>> {
         if cfg!(debug_assertions) {
@@ -104,7 +104,7 @@ impl GetContentSourceContent for StaticAssetsContentSourceItem {
 #[turbo_tasks::value_impl]
 impl Introspectable for StaticAssetsContentSource {
     #[turbo_tasks::function]
-    fn ty(&self) -> Vc<String> {
+    fn ty(&self) -> Vc<RcStr> {
         Vc::cell("static assets directory content source".to_string())
     }
 

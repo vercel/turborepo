@@ -1083,7 +1083,7 @@ impl TransformConfig for ModuleTransformConfig {
 
 #[turbo_tasks::value]
 struct ParsingIssue {
-    msg: Vc<String>,
+    msg: Vc<RcStr>,
     file: Vc<FileSystemPath>,
     source: Vc<OptionIssueSource>,
 }

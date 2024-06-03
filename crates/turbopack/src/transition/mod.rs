@@ -32,7 +32,7 @@ pub trait Transition {
         compile_time_info
     }
     /// Apply modifications to the layer
-    fn process_layer(self: Vc<Self>, layer: Vc<String>) -> Vc<String> {
+    fn process_layer(self: Vc<Self>, layer: Vc<RcStr>) -> Vc<RcStr> {
         layer
     }
     /// Apply modifications/wrapping to the module options context
