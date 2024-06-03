@@ -391,7 +391,7 @@ describe("migrate-env-var-dependencies", () => {
       // run the transformer
       const result = transformer({
         root,
-        options: { force: false, dry: false, print: false },
+        options: { force: false, dryRun: false, print: false },
       });
 
       expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -441,7 +441,7 @@ describe("migrate-env-var-dependencies", () => {
       // run the transformer
       const result = transformer({
         root,
-        options: { force: false, dry: false, print: false },
+        options: { force: false, dryRun: false, print: false },
       });
 
       expect(readJson("turbo.json") || "{}").toStrictEqual({
@@ -525,7 +525,7 @@ describe("migrate-env-var-dependencies", () => {
       // run the transformer
       const result = transformer({
         root,
-        options: { force: false, dry: false, print: false },
+        options: { force: false, dryRun: false, print: false },
       });
 
       expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -568,7 +568,7 @@ describe("migrate-env-var-dependencies", () => {
       // run the transformer
       const repeatResult = transformer({
         root,
-        options: { force: false, dry: false, print: false },
+        options: { force: false, dryRun: false, print: false },
       });
 
       expect(repeatResult.fatalError).toBeUndefined();
@@ -594,7 +594,7 @@ describe("migrate-env-var-dependencies", () => {
       // run the transformer
       const result = transformer({
         root,
-        options: { force: false, dry: true, print: false },
+        options: { force: false, dryRun: true, print: false },
       });
 
       // make sure it didn't change
@@ -621,7 +621,7 @@ describe("migrate-env-var-dependencies", () => {
       // run the transformer
       const result = transformer({
         root,
-        options: { force: false, dry: false, print: true },
+        options: { force: false, dryRun: false, print: true },
       });
 
       expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -673,7 +673,7 @@ describe("migrate-env-var-dependencies", () => {
       // run the transformer
       const result = transformer({
         root,
-        options: { force: false, dry: true, print: true },
+        options: { force: false, dryRun: true, print: true },
       });
 
       // make sure it didn't change
@@ -702,7 +702,7 @@ describe("migrate-env-var-dependencies", () => {
       // run the transformer
       const result = transformer({
         root,
-        options: { force: false, dry: false, print: false },
+        options: { force: false, dryRun: false, print: false },
       });
 
       expect(JSON.parse(read("turbo.json") || "{}")).toEqual(turboJson);
@@ -730,7 +730,7 @@ describe("migrate-env-var-dependencies", () => {
       // run the transformer
       const result = transformer({
         root,
-        options: { force: false, dry: false, print: false },
+        options: { force: false, dryRun: false, print: false },
       });
 
       expect(read("turbo.json")).toBeUndefined();
@@ -749,7 +749,7 @@ describe("migrate-env-var-dependencies", () => {
       // run the transformer
       const result = transformer({
         root,
-        options: { force: false, dry: false, print: false },
+        options: { force: false, dryRun: false, print: false },
       });
 
       expect(result.fatalError).toBeDefined();
