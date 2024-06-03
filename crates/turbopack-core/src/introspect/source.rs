@@ -19,7 +19,7 @@ impl IntrospectableSource {
 
 #[turbo_tasks::function]
 fn ty() -> Vc<RcStr> {
-    Vc::cell("source".to_string())
+    Vc::cell("source".into())
 }
 
 #[turbo_tasks::value_impl]

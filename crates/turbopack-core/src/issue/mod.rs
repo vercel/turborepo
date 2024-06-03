@@ -135,7 +135,7 @@ pub trait Issue {
     /// A link to relevant documentation of the issue. Only displayed in console
     /// if the user explicitly asks for detailed messages.
     fn documentation_link(self: Vc<Self>) -> Vc<RcStr> {
-        Vc::<String>::default()
+        Vc::<RcStr>::default()
     }
 
     /// The source location that caused the issue. Eg, for a parsing error it
@@ -211,11 +211,9 @@ impl ValueToString for IssueProcessingPathItem {
     async fn to_string(&self) -> Result<Vc<RcStr>> {
         if let Some(context) = self.file_path {
             let description_str = self.description.await?;
-            Ok(Vc::cell(format!(
-                "{} ({})",
-                context.to_string().await?,
-                description_str
-            )))
+            Ok(Vc::cell(
+                format!("{} ({})", context.to_string().await?, description_str).into(),
+            ))
         } else {
             Ok(self.description)
         }
@@ -704,7 +702,7 @@ impl IssueSource {
 #[turbo_tasks::value(serialization = "none")]
 #[derive(Clone, Debug)]
 pub struct PlainSource {
-    pub ident: ReadRef<String>,
+    pub ident: ReadRef<RcStr>,
     #[turbo_tasks(debug_ignore)]
     pub content: ReadRef<FileContent>,
 }
