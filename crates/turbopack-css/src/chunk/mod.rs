@@ -5,7 +5,7 @@ use std::fmt::Write;
 
 use anyhow::{bail, Result};
 use indexmap::IndexSet;
-use turbo_tasks::{TryJoinIterExt, Value, ValueDefault, ValueToString, Vc};
+use turbo_tasks::{RcStr, TryJoinIterExt, Value, ValueDefault, ValueToString, Vc};
 use turbo_tasks_fs::{rope::Rope, File, FileSystem};
 use turbopack_core::{
     asset::{Asset, AssetContent},
@@ -383,12 +383,12 @@ pub trait CssChunkItem: ChunkItem {
 
 #[turbo_tasks::function]
 fn introspectable_type() -> Vc<RcStr> {
-    Vc::cell("css chunk".to_string())
+    Vc::cell("css chunk".into())
 }
 
 #[turbo_tasks::function]
 fn entry_module_key() -> Vc<RcStr> {
-    Vc::cell("entry module".to_string())
+    Vc::cell("entry module".into())
 }
 
 #[turbo_tasks::value_impl]
@@ -415,7 +415,7 @@ impl Introspectable for CssChunk {
         }
         details += "\nContent:\n\n";
         write!(details, "{}", content.await?)?;
-        Ok(Vc::cell(details))
+        Ok(Vc::cell(details.into()))
     }
 
     #[turbo_tasks::function]
