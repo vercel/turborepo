@@ -24,7 +24,7 @@ impl StaticAssetsContentSource {
     // TODO(WEB-1151): Remove this method and migrate users to `with_prefix`.
     #[turbo_tasks::function]
     pub fn new(prefix: RcStr, dir: Vc<FileSystemPath>) -> Vc<StaticAssetsContentSource> {
-        StaticAssetsContentSource::with_prefix(Vc::cell(prefix.into_owned()), dir)
+        StaticAssetsContentSource::with_prefix(Vc::cell(prefix), dir)
     }
 
     #[turbo_tasks::function]
@@ -105,7 +105,7 @@ impl GetContentSourceContent for StaticAssetsContentSourceItem {
 impl Introspectable for StaticAssetsContentSource {
     #[turbo_tasks::function]
     fn ty(&self) -> Vc<RcStr> {
-        Vc::cell("static assets directory content source".to_string())
+        Vc::cell("static assets directory content source".into())
     }
 
     #[turbo_tasks::function]
@@ -125,14 +125,14 @@ impl Introspectable for StaticAssetsContentSource {
                     }
                     DirectoryEntry::Directory(path) => {
                         Vc::upcast(StaticAssetsContentSource::with_prefix(
-                            Vc::cell(format!("{}{name}/", &*prefix)),
+                            Vc::cell(format!("{}{name}/", &*prefix).into()),
                             *path,
                         ))
                     }
                     DirectoryEntry::Other(_) => todo!("what's DirectoryContent::Other?"),
                     DirectoryEntry::Error => todo!(),
                 };
-                (Vc::cell(name.to_string()), child)
+                (Vc::cell(name.clone()), child)
             })
             .collect();
         Ok(Vc::cell(children))
