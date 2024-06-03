@@ -15,7 +15,7 @@ pub mod fixed;
 pub mod output_asset;
 
 use anyhow::Result;
-use turbo_tasks::{ValueToString, Vc};
+use turbo_tasks::{RcStr, ValueToString, Vc};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{ChunkItem, ChunkType, ChunkableModule, ChunkingContext},
@@ -39,7 +39,7 @@ use self::output_asset::StaticAsset;
 
 #[turbo_tasks::function]
 fn modifier() -> Vc<RcStr> {
-    Vc::cell("static".to_string())
+    Vc::cell("static".into())
 }
 
 #[turbo_tasks::value]

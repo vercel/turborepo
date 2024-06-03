@@ -64,7 +64,7 @@ async fn get_introspection_children(
             .map(|(path, source)| async move {
                 Ok(Vc::try_resolve_sidecast::<Box<dyn Introspectable>>(source)
                     .await?
-                    .map(|i| (Vc::cell(path.into_owned()), i)))
+                    .map(|i| (Vc::cell(path), i)))
             })
             .try_join()
             .await?
@@ -160,7 +160,7 @@ impl GetContentSourceContent for PrefixedRouterGetContentSourceContent {
         data: Value<ContentSourceData>,
     ) -> Result<Vc<ContentSourceContent>> {
         let prefix = self.mapper.await?.prefix.await?;
-        if let Some(path) = path.strip_prefix(&*prefix) {
+        if let Some(path) = path.strip_prefix(&**prefix) {
             if path.is_empty() {
                 return Ok(self.get_content.get("".into(), data));
             } else if prefix.is_empty() {
@@ -177,13 +177,13 @@ impl GetContentSourceContent for PrefixedRouterGetContentSourceContent {
 impl Introspectable for PrefixedRouterContentSource {
     #[turbo_tasks::function]
     fn ty(&self) -> Vc<RcStr> {
-        Vc::cell("prefixed router content source".to_string())
+        Vc::cell("prefixed router content source".into())
     }
 
     #[turbo_tasks::function]
     async fn details(&self) -> Result<Vc<RcStr>> {
         let prefix = self.prefix.await?;
-        Ok(Vc::cell(format!("prefix: '{}'", prefix)))
+        Ok(Vc::cell(format!("prefix: '{}'", prefix).into()))
     }
 
     #[turbo_tasks::function]
