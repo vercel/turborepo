@@ -524,7 +524,7 @@ impl ValueToString for ResolveResult {
             }
             result.push(')');
         }
-        Ok(Vc::cell(result))
+        Ok(Vc::cell(result.into()))
     }
 }
 
@@ -1334,12 +1334,12 @@ pub async fn resolve_inline(
     options: Vc<ResolveOptions>,
 ) -> Result<Vc<ResolveResult>> {
     let span = {
-        let lookup_path = lookup_path.to_string().await?;
-        let request = request.to_string().await?;
+        let lookup_path = lookup_path.to_string().await?.to_string();
+        let request = request.to_string().await?.to_string();
         tracing::info_span!(
             "resolving",
-            lookup_path = *lookup_path,
-            request = *request,
+            lookup_path = lookup_path,
+            request = request,
             reference_type = display(&reference_type),
         )
     };

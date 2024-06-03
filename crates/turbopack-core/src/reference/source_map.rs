@@ -66,9 +66,12 @@ impl GenerateSourceMap for SourceMapReference {
 impl ValueToString for SourceMapReference {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<Vc<RcStr>> {
-        Ok(Vc::cell(format!(
-            "source map file is referenced by {}",
-            self.from.to_string().await?
-        )))
+        Ok(Vc::cell(
+            format!(
+                "source map file is referenced by {}",
+                self.from.to_string().await?
+            )
+            .into(),
+        ))
     }
 }

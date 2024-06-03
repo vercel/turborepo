@@ -158,7 +158,7 @@ impl ImportContext {
                 write!(modifier, "supports({})", supports)?
             }
         }
-        Ok(Vc::cell(modifier))
+        Ok(Vc::cell(modifier.into()))
     }
 }
 
