@@ -58,7 +58,7 @@ impl Workspace {
 pub async fn split_scopes(
     entry: Vc<Box<dyn Module>>,
     dep_graph: Vc<Box<dyn DepGraph>>,
-) -> Result<Vc<Vec<Vc<ModuleScopeGroup>>>> {
+) -> Result<Vc<ModuleScopeGroup>> {
     // If a module is imported only as lazy, it should be in a separate scope
 
     let mut workspace = Workspace {
