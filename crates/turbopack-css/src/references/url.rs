@@ -118,7 +118,7 @@ impl ValueToString for UrlAssetReference {
 pub async fn resolve_url_reference(
     url: Vc<UrlAssetReference>,
     chunking_context: Vc<Box<dyn ChunkingContext>>,
-) -> Result<Vc<Option<String>>> {
+) -> Result<Vc<Option<RcStr>>> {
     let this = url.await?;
     // TODO(WEB-662) This is not the correct way to get the current chunk path. It
     // currently works as all chunks are in the same directory.

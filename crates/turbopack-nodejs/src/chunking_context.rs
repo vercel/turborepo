@@ -33,7 +33,7 @@ pub struct NodeJsChunkingContextBuilder {
 }
 
 impl NodeJsChunkingContextBuilder {
-    pub fn asset_prefix(mut self, asset_prefix: Vc<Option<String>>) -> Self {
+    pub fn asset_prefix(mut self, asset_prefix: Vc<Option<RcStr>>) -> Self {
         self.chunking_context.asset_prefix = asset_prefix;
         self
     }
@@ -75,7 +75,7 @@ pub struct NodeJsChunkingContext {
     /// Static assets are placed at this path
     asset_root_path: Vc<FileSystemPath>,
     /// Static assets requested from this url base
-    asset_prefix: Vc<Option<String>>,
+    asset_prefix: Vc<Option<RcStr>>,
     /// The environment chunks will be evaluated in.
     environment: Vc<Environment>,
     /// The kind of runtime to include in the output.
@@ -143,7 +143,7 @@ impl NodeJsChunkingContext {
     }
 
     #[turbo_tasks::function]
-    pub fn asset_prefix(&self) -> Vc<Option<String>> {
+    pub fn asset_prefix(&self) -> Vc<Option<RcStr>> {
         self.asset_prefix
     }
 

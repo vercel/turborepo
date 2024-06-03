@@ -45,11 +45,11 @@ impl Vc<Vec<String>> {
 __turbo_tasks_internal_primitive!(Option<u16>);
 
 #[turbo_tasks::function]
-fn option_string_none() -> Vc<Option<String>> {
+fn option_string_none() -> Vc<Option<RcStr>> {
     Vc::cell(None)
 }
 
-impl Vc<Option<String>> {
+impl Vc<Option<RcStr>> {
     #[deprecated(note = "use Default::default() instead")]
     pub fn none() -> Self {
         option_string_none()

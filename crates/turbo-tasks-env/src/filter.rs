@@ -46,7 +46,7 @@ impl ProcessEnv for FilterProcessEnv {
     }
 
     #[turbo_tasks::function]
-    fn read(&self, name: RcStr) -> Vc<Option<String>> {
+    fn read(&self, name: RcStr) -> Vc<Option<RcStr>> {
         for filter in &self.filters {
             if name.to_uppercase().starts_with(&**filter) {
                 return self.prior.read(name);

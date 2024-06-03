@@ -192,7 +192,7 @@ impl Environment {
     }
 
     #[turbo_tasks::function]
-    pub async fn cwd(self: Vc<Self>) -> Result<Vc<Option<String>>> {
+    pub async fn cwd(self: Vc<Self>) -> Result<Vc<Option<RcStr>>> {
         let env = self.await?;
         Ok(match env.execution {
             ExecutionEnvironment::NodeJsBuildTime(env)
@@ -237,7 +237,7 @@ pub struct NodeJsEnvironment {
     pub compile_target: Vc<CompileTarget>,
     pub node_version: Vc<NodeJsVersion>,
     // user specified process.cwd
-    pub cwd: Vc<Option<String>>,
+    pub cwd: Vc<Option<RcStr>>,
 }
 
 impl Default for NodeJsEnvironment {

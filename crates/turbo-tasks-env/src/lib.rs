@@ -35,7 +35,7 @@ impl ProcessEnv for EnvMap {
     }
 
     #[turbo_tasks::function]
-    async fn read(self: Vc<Self>, name: RcStr) -> Vc<Option<String>> {
+    async fn read(self: Vc<Self>, name: RcStr) -> Vc<Option<RcStr>> {
         case_insensitive_read(self, name)
     }
 }
@@ -51,7 +51,7 @@ pub trait ProcessEnv {
     fn read_all(self: Vc<Self>) -> Vc<EnvMap>;
 
     /// Reads a single env variable. Ignores casing.
-    fn read(self: Vc<Self>, name: RcStr) -> Vc<Option<String>> {
+    fn read(self: Vc<Self>, name: RcStr) -> Vc<Option<RcStr>> {
         case_insensitive_read(self.read_all(), name)
     }
 }
@@ -65,7 +65,7 @@ pub fn sorted_env_vars() -> IndexMap<RcStr, RcStr> {
 }
 
 #[turbo_tasks::function]
-pub async fn case_insensitive_read(map: Vc<EnvMap>, name: RcStr) -> Result<Vc<Option<String>>> {
+pub async fn case_insensitive_read(map: Vc<EnvMap>, name: RcStr) -> Result<Vc<Option<RcStr>>> {
     Ok(Vc::cell(
         to_uppercase_map(map)
             .await?

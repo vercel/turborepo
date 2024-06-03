@@ -42,12 +42,12 @@ impl BrowserChunkingContextBuilder {
         self
     }
 
-    pub fn asset_base_path(mut self, asset_base_path: Vc<Option<String>>) -> Self {
+    pub fn asset_base_path(mut self, asset_base_path: Vc<Option<RcStr>>) -> Self {
         self.chunking_context.asset_base_path = asset_base_path;
         self
     }
 
-    pub fn chunk_base_path(mut self, chunk_base_path: Vc<Option<String>>) -> Self {
+    pub fn chunk_base_path(mut self, chunk_base_path: Vc<Option<RcStr>>) -> Self {
         self.chunking_context.chunk_base_path = chunk_base_path;
         self
     }
@@ -108,10 +108,10 @@ pub struct BrowserChunkingContext {
     asset_root_path: Vc<FileSystemPath>,
     /// Base path that will be prepended to all chunk URLs when loading them.
     /// This path will not appear in chunk paths or chunk data.
-    chunk_base_path: Vc<Option<String>>,
+    chunk_base_path: Vc<Option<RcStr>>,
     /// URL prefix that will be prepended to all static asset URLs when loading
     /// them.
-    asset_base_path: Vc<Option<String>>,
+    asset_base_path: Vc<Option<RcStr>>,
     /// Enable HMR for this chunking
     enable_hot_module_replacement: bool,
     /// The environment chunks will be evaluated in.
@@ -166,7 +166,7 @@ impl BrowserChunkingContext {
     }
 
     /// Returns the asset base path.
-    pub fn chunk_base_path(&self) -> Vc<Option<String>> {
+    pub fn chunk_base_path(&self) -> Vc<Option<RcStr>> {
         self.chunk_base_path
     }
 

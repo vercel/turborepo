@@ -37,9 +37,9 @@ pub enum EcmascriptInputTransform {
         #[serde(default)]
         refresh: bool,
         // swc.jsc.transform.react.importSource
-        import_source: Vc<Option<String>>,
+        import_source: Vc<Option<RcStr>>,
         // swc.jsc.transform.react.runtime,
-        runtime: Vc<Option<String>>,
+        runtime: Vc<Option<RcStr>>,
     },
     GlobalTypeofs {
         window_value: String,
