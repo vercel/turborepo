@@ -1,6 +1,6 @@
 use anyhow::Result;
 use swc_core::ecma::ast::Lit;
-use turbo_tasks::{Value, ValueToString, Vc};
+use turbo_tasks::{RcStr, Value, ValueToString, Vc};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     file_source::FileSource,
@@ -25,7 +25,7 @@ pub(crate) mod references;
 
 #[turbo_tasks::function]
 fn modifier() -> Vc<RcStr> {
-    Vc::cell("webpack".to_string())
+    Vc::cell("webpack".into())
 }
 
 #[turbo_tasks::value]
