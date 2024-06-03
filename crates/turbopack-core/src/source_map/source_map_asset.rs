@@ -58,12 +58,12 @@ impl Asset for SourceMapAsset {
 
 #[turbo_tasks::function]
 fn introspectable_type() -> Vc<RcStr> {
-    Vc::cell("source map".to_string())
+    Vc::cell("source map".into())
 }
 
 #[turbo_tasks::function]
 fn introspectable_details() -> Vc<RcStr> {
-    Vc::cell("source map of an asset".to_string())
+    Vc::cell("source map of an asset".into())
 }
 
 #[turbo_tasks::value_impl]
@@ -88,7 +88,7 @@ impl Introspectable for SourceMapAsset {
         let mut children = IndexSet::new();
         if let Some(asset) = Vc::try_resolve_sidecast::<Box<dyn Introspectable>>(self.asset).await?
         {
-            children.insert((Vc::cell("asset".to_string()), asset));
+            children.insert((Vc::cell("asset".into()), asset));
         }
         Ok(Vc::cell(children))
     }
