@@ -1,10 +1,10 @@
 import path from "node:path";
 import type { SchemaV1 } from "@turbo/types/src/types/config";
-import { readJsonSync } from "fs-extra";
 import { getTurboConfigs } from "@turbo/utils";
 import type { TransformerArgs, Transformer } from "../types";
 import type { TransformerResults } from "../runner";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import { loadTurboJson } from "../utils/loadTurboJson";
 
 // transformer details
 const TRANSFORMER = "clean-globs";
@@ -24,7 +24,7 @@ export function transformer({
 
   const turboConfigPath = path.join(root, "turbo.json");
 
-  const turboJson = readJsonSync(turboConfigPath) as SchemaV1;
+  const turboJson: SchemaV1 = loadTurboJson(turboConfigPath);
   runner.modifyFile({
     filePath: turboConfigPath,
     after: migrateConfig(turboJson),

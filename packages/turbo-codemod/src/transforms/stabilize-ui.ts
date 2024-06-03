@@ -1,9 +1,10 @@
 import path from "node:path";
-import { readJsonSync, existsSync } from "fs-extra";
+import { existsSync } from "fs-extra";
 import type { RootSchema } from "@turbo/types/src/types/config";
 import type { Transformer, TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
+import { loadTurboJson } from "../utils/loadTurboJson";
 
 // transformer details
 const TRANSFORMER = "stabilize-ui";
@@ -42,7 +43,7 @@ export function transformer({
     });
   }
 
-  const turboJson = readJsonSync(turboConfigPath) as RootSchema;
+  const turboJson: RootSchema = loadTurboJson(turboConfigPath);
   runner.modifyFile({
     filePath: turboConfigPath,
     after: migrateConfig(turboJson),
