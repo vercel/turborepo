@@ -120,5 +120,5 @@ fn hash_content<R: Read>(content: &mut R) -> Vc<RcStr> {
     }
     let result = format!("{:x}", hasher.finalize());
 
-    Vc::cell(result)
+    Vc::cell(result.into())
 }

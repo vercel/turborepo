@@ -9,7 +9,7 @@ use std::{
 
 use anyhow::Result;
 use sha2::{Digest, Sha256};
-use turbo_tasks::{util::FormatDuration, TurboTasks, UpdateInfo, Vc};
+use turbo_tasks::{util::FormatDuration, RcStr, TurboTasks, UpdateInfo, Vc};
 use turbo_tasks_fs::{
     glob::Glob, register, DirectoryEntry, DiskFileSystem, FileContent, FileSystem, FileSystemPath,
     ReadGlobResult,
@@ -85,7 +85,7 @@ async fn hash_glob_result(result: Vc<ReadGlobResult>) -> Result<Vc<RcStr>> {
     let hash = hash_content(
         &mut hashes
             .into_values()
-            .collect::<Vec<String>>()
+            .collect::<Vec<RcStr>>()
             .join(",")
             .as_bytes(),
     );
@@ -112,5 +112,5 @@ fn hash_content<R: Read>(content: &mut R) -> Vc<RcStr> {
     }
     let result = format!("{:x}", hasher.finalize());
 
-    Vc::cell(result)
+    Vc::cell(result.into())
 }
