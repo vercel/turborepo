@@ -115,7 +115,7 @@ impl Introspectable for ConditionalContentSource {
             } else {
                 "not activated"
             }
-            .to_string(),
+            .into(),
         ))
     }
 
