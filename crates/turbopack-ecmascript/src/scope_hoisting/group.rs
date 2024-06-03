@@ -1,12 +1,7 @@
 use anyhow::Result;
 use async_recursion::async_recursion;
-use rustc_hash::{FxHashMap, FxHashSet};
 use turbo_tasks::Vc;
-use turbopack_core::{
-    chunk::{ModuleId, ModuleIds},
-    ident::AssetIdent,
-    module::Module,
-};
+use turbopack_core::module::Module;
 
 /// Counterpart of `Chunk` in webpack scope hoisting
 #[turbo_tasks::value]
