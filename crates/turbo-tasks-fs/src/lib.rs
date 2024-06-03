@@ -714,7 +714,7 @@ impl FileSystem for DiskFileSystem {
 impl ValueToString for DiskFileSystem {
     #[turbo_tasks::function]
     fn to_string(&self) -> Vc<RcStr> {
-        Vc::cell(self.name.to_string())
+        Vc::cell(self.name.clone())
     }
 }
 
