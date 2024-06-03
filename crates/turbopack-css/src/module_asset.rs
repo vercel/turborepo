@@ -36,7 +36,7 @@ use crate::{
 
 #[turbo_tasks::function]
 fn modifier() -> Vc<RcStr> {
-    Vc::cell("css module".to_string())
+    Vc::cell("css module".into())
 }
 
 #[turbo_tasks::value]

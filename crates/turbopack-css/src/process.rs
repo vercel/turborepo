@@ -33,7 +33,7 @@ use swc_core::{
     },
 };
 use tracing::Instrument;
-use turbo_tasks::{ValueToString, Vc};
+use turbo_tasks::{RcStr, ValueToString, Vc};
 use turbo_tasks_fs::{FileContent, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
@@ -477,8 +477,8 @@ pub async fn parse_css(
     use_swc_css: bool,
 ) -> Result<Vc<ParseCssResult>> {
     let span = {
-        let name = source.ident().to_string().await?;
-        tracing::info_span!("parse css", name = *name)
+        let name = source.ident().to_string().await?.to_string();
+        tracing::info_span!("parse css", name = name)
     };
     async move {
         let content = source.content();
@@ -597,7 +597,7 @@ async fn process_content(
 
                                 ParsingIssue {
                                     file: fs_path_vc,
-                                    msg: Vc::cell(err.to_string()),
+                                    msg: Vc::cell(err.to_string().into()),
                                     source: Vc::cell(source),
                                 }
                                 .cell()
@@ -642,7 +642,7 @@ async fn process_content(
             Box::new(IssueEmitter::new(
                 source,
                 cm.clone(),
-                Some("Parsing css source code failed".to_string()),
+                Some("Parsing css source code failed".into()),
             )),
         );
 
