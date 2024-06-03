@@ -31,7 +31,6 @@ pub async fn request_to_string(request: Vc<Request>) -> Result<Vc<RcStr>> {
         request
             .await?
             .request()
-            .map(|v| v.into_owned())
             // TODO: Handle Request::Dynamic, Request::Alternatives
             .unwrap_or_else(|| "unknown".into()),
     ))

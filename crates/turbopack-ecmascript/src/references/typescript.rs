@@ -43,10 +43,9 @@ impl ModuleReference for TsConfigReference {
 impl ValueToString for TsConfigReference {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<Vc<RcStr>> {
-        Ok(Vc::cell(format!(
-            "tsconfig {}",
-            self.tsconfig.to_string().await?,
-        )))
+        Ok(Vc::cell(
+            format!("tsconfig {}", self.tsconfig.to_string().await?,).into(),
+        ))
     }
 }
 
@@ -99,10 +98,9 @@ impl ModuleReference for TsReferencePathAssetReference {
 impl ValueToString for TsReferencePathAssetReference {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<Vc<RcStr>> {
-        Ok(Vc::cell(format!(
-            "typescript reference path comment {}",
-            self.path,
-        )))
+        Ok(Vc::cell(
+            format!("typescript reference path comment {}", self.path,).into(),
+        ))
     }
 }
 
@@ -141,9 +139,8 @@ impl ModuleReference for TsReferenceTypeAssetReference {
 impl ValueToString for TsReferenceTypeAssetReference {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<Vc<RcStr>> {
-        Ok(Vc::cell(format!(
-            "typescript reference type comment {}",
-            self.module,
-        )))
+        Ok(Vc::cell(
+            format!("typescript reference type comment {}", self.module,).into(),
+        ))
     }
 }
