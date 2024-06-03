@@ -782,7 +782,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
             source_ident: source.ident(),
             severity: IssueSeverity::Error.into(),
             source: Some(issue_source(source, span)),
-            title: Vc::cell("unexpected top level await".to_string()),
+            title: Vc::cell("unexpected top level await".into()),
         }
         .cell()
         .emit();
