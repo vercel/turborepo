@@ -4,7 +4,7 @@ use swc_core::{
     ecma::ast::{Expr, Ident},
     quote,
 };
-use turbo_tasks::{ValueToString, Vc};
+use turbo_tasks::{RcStr, ValueToString, Vc};
 use turbopack_core::{
     chunk::{
         ChunkItemExt, ChunkableModule, ChunkableModuleReference, ChunkingContext, ChunkingType,
@@ -57,7 +57,7 @@ impl ValueToString for EcmascriptModulePartReference {
     #[turbo_tasks::function]
     fn to_string(&self) -> Vc<RcStr> {
         self.part
-            .map_or_else(|| Vc::cell("module".to_string()), |part| part.to_string())
+            .map_or_else(|| Vc::cell("module".into()), |part| part.to_string())
     }
 }
 

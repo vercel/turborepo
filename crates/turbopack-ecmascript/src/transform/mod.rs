@@ -18,7 +18,7 @@ use swc_core::{
     },
     quote,
 };
-use turbo_tasks::{ValueDefault, Vc};
+use turbo_tasks::{RcStr, ValueDefault, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     environment::Environment,
