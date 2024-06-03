@@ -758,7 +758,7 @@ impl Display for Pattern {
 impl ValueToString for Pattern {
     #[turbo_tasks::function]
     fn to_string(&self) -> Vc<RcStr> {
-        Vc::cell(self.to_string())
+        Vc::cell(self.to_string().into())
     }
 }
 

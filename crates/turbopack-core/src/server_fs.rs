@@ -65,6 +65,6 @@ impl FileSystem for ServerFileSystem {
 impl ValueToString for ServerFileSystem {
     #[turbo_tasks::function]
     fn to_string(&self) -> Vc<RcStr> {
-        Vc::cell("root of the server".to_string())
+        Vc::cell("root of the server".into())
     }
 }
