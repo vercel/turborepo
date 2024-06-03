@@ -113,6 +113,7 @@ impl WatchClient {
         });
 
         let run = RunBuilder::new(new_base)?
+            .watch_mode()
             .build(&handler, telemetry.clone())
             .await?;
 
@@ -266,6 +267,7 @@ impl WatchClient {
 
                 let mut run = RunBuilder::new(new_base)?
                     .with_entrypoint_packages(packages)
+                    .watch_mode()
                     .hide_prelude()
                     .build(&signal_handler, telemetry)
                     .await?;
@@ -299,6 +301,7 @@ impl WatchClient {
                 // rebuild run struct
                 self.run = RunBuilder::new(base.clone())?
                     .hide_prelude()
+                    .watch_mode()
                     .build(&self.handler, self.telemetry.clone())
                     .await?;
 

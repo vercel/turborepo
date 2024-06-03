@@ -64,6 +64,7 @@ pub struct RunBuilder {
     // this package.
     entrypoint_packages: Option<HashSet<PackageName>>,
     should_print_prelude_override: Option<bool>,
+    is_watch_mode: Option<bool>,
 }
 
 impl RunBuilder {
@@ -116,6 +117,7 @@ impl RunBuilder {
             analytics_sender: None,
             entrypoint_packages: None,
             should_print_prelude_override: None,
+            is_watch_mode: None,
         })
     }
 
@@ -126,6 +128,11 @@ impl RunBuilder {
 
     pub fn hide_prelude(mut self) -> Self {
         self.should_print_prelude_override = Some(false);
+        self
+    }
+
+    pub fn watch_mode(mut self) -> Self {
+        self.is_watch_mode = Some(true);
         self
     }
 
@@ -413,6 +420,7 @@ impl RunBuilder {
             signal_handler: signal_handler.clone(),
             daemon,
             should_print_prelude,
+            is_watch_mode: self.is_watch_mode.unwrap_or(false),
         })
     }
 

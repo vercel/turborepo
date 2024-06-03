@@ -65,6 +65,7 @@ pub struct Run {
     daemon: Option<DaemonClient<DaemonConnector>>,
     should_print_prelude: bool,
     experimental_ui: bool,
+    is_watch_mode: bool,
 }
 
 impl Run {
@@ -376,7 +377,7 @@ impl Run {
                 &self.engine,
                 &self.env_at_execution_start,
                 self.opts.scope_opts.pkg_inference_root.as_deref(),
-                self.experimental_ui,
+                self.is_watch_mode,
             )
             .await?;
 

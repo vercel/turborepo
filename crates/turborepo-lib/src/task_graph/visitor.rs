@@ -337,7 +337,7 @@ impl<'a> Visitor<'a> {
         engine: &Engine,
         env_at_execution_start: &EnvironmentVariableMap,
         pkg_inference_root: Option<&AnchoredSystemPath>,
-        has_experimental_ui: bool,
+        is_watch_mode: bool,
     ) -> Result<(), Error> {
         let Self {
             package_graph,
@@ -366,7 +366,7 @@ impl<'a> Visitor<'a> {
                 engine,
                 task_hasher.task_hash_tracker(),
                 env_at_execution_start,
-                has_experimental_ui,
+                is_watch_mode,
             )
             .await?)
     }
