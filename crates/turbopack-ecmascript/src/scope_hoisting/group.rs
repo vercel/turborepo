@@ -70,7 +70,8 @@ pub async fn split_scopes(
 
     Ok(ModuleScopeGroup {
         scopes: Vc::cell(workspace.scopes),
-    })
+    }
+    .cell())
 }
 
 #[turbo_tasks::value_trait]
