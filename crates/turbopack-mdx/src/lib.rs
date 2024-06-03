@@ -3,7 +3,7 @@
 
 use anyhow::{anyhow, Context, Result};
 use mdxjs::{compile, MdxParseOptions, Options};
-use turbo_tasks::{Value, ValueDefault, Vc};
+use turbo_tasks::{RcStr, Value, ValueDefault, Vc};
 use turbo_tasks_fs::{rope::Rope, File, FileContent, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
@@ -28,7 +28,7 @@ use turbopack_ecmascript::{
 
 #[turbo_tasks::function]
 fn modifier() -> Vc<RcStr> {
-    Vc::cell("mdx".to_string())
+    Vc::cell("mdx".into())
 }
 
 #[turbo_tasks::value(shared)]
