@@ -19,7 +19,7 @@ impl VirtualFileSystem {
     /// [`Vc<VirtualFileSystem>`].
     pub fn new() -> Vc<Self> {
         Self::cell(VirtualFileSystem {
-            name: "virtual file system".to_string(),
+            name: "virtual file system".into(),
         })
     }
 
@@ -31,7 +31,7 @@ impl VirtualFileSystem {
     /// will never be equivalent, nor be interoperable, with a
     /// [`Vc<FileSystemPath>`] created from another
     /// [`Vc<VirtualFileSystem>`].
-    pub fn new_with_name(name: String) -> Vc<Self> {
+    pub fn new_with_name(name: RcStr) -> Vc<Self> {
         Self::cell(VirtualFileSystem { name })
     }
 }
