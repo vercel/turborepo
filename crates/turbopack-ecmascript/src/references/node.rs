@@ -42,10 +42,9 @@ impl ModuleReference for PackageJsonReference {
 impl ValueToString for PackageJsonReference {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<Vc<RcStr>> {
-        Ok(Vc::cell(format!(
-            "package.json {}",
-            self.package_json.to_string().await?,
-        )))
+        Ok(Vc::cell(
+            format!("package.json {}", self.package_json.to_string().await?,).into(),
+        ))
     }
 }
 
@@ -152,9 +151,8 @@ impl ModuleReference for DirAssetReference {
 impl ValueToString for DirAssetReference {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<Vc<RcStr>> {
-        Ok(Vc::cell(format!(
-            "directory assets {}",
-            self.path.to_string().await?,
-        )))
+        Ok(Vc::cell(
+            format!("directory assets {}", self.path.to_string().await?,).into(),
+        ))
     }
 }
