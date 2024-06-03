@@ -1528,12 +1528,12 @@ async fn resolve_internal_inline(
     options: Vc<ResolveOptions>,
 ) -> Result<Vc<ResolveResult>> {
     let span = {
-        let lookup_path = lookup_path.to_string().await?;
-        let request = request.to_string().await?;
+        let lookup_path = lookup_path.to_string().await?.to_string();
+        let request = request.to_string().await?.to_string();
         tracing::info_span!(
             "internal resolving",
-            lookup_path = *lookup_path,
-            request = *request
+            lookup_path = lookup_path,
+            request = request
         )
     };
     async move {
@@ -1657,7 +1657,7 @@ async fn resolve_internal_inline(
                     path,
                     *query,
                     *force_in_lookup_dir,
-                    Vc::cell(String::new()),
+                    Vc::cell(RcStr::default()),
                 )
                 .await?
             }
@@ -1982,7 +1982,7 @@ async fn resolve_relative_request(
                                     options_value,
                                     options,
                                     query,
-                                    Vc::cell(String::new()),
+                                    Vc::cell(RcStr::default()),
                                 )
                                 .await?,
                             );
@@ -2022,7 +2022,7 @@ async fn resolve_relative_request(
                             options_value,
                             options,
                             query,
-                            Vc::cell(String::new()),
+                            Vc::cell(RcStr::default()),
                         )
                         .await?,
                     );
@@ -2566,7 +2566,7 @@ async fn resolve_package_internal_with_imports_field(
         specifier,
         conditions,
         unspecified_conditions,
-        Vc::<String>::default(),
+        Vc::<RcStr>::default(),
     )
     .await
 }
@@ -2652,13 +2652,13 @@ impl ModulePart {
     }
     #[turbo_tasks::function]
     pub fn export(export: RcStr) -> Vc<Self> {
-        ModulePart::Export(Vc::cell(export.into_owned())).cell()
+        ModulePart::Export(Vc::cell(export)).cell()
     }
     #[turbo_tasks::function]
     pub fn renamed_export(original_export: RcStr, export: RcStr) -> Vc<Self> {
         ModulePart::RenamedExport {
-            original_export: Vc::cell(original_export.into_owned()),
-            export: Vc::cell(export.into_owned()),
+            original_export: Vc::cell(original_export),
+            export: Vc::cell(export),
         }
         .cell()
     }
