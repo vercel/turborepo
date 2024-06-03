@@ -335,9 +335,9 @@ impl ValueToString for ImportMapResult {
                     .iter()
                     .map(|string| string.as_str())
                     .collect::<Vec<_>>();
-                Ok(Vc::cell(strings.join(" | ")))
+                Ok(Vc::cell(strings.join(" | ").into()))
             }
-            ImportMapResult::NoEntry => Ok(Vc::cell("No import map entry".to_string())),
+            ImportMapResult::NoEntry => Ok(Vc::cell("No import map entry".into())),
         }
     }
 }
