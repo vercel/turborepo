@@ -713,7 +713,7 @@ impl FileSystem for DiskFileSystem {
 #[turbo_tasks::value_impl]
 impl ValueToString for DiskFileSystem {
     #[turbo_tasks::function]
-    fn to_string(&self) -> Vc<RcStr> {
+    fn to_string(&self) -> Vc<String> {
         Vc::cell(self.name.to_string())
     }
 }
@@ -1006,7 +1006,7 @@ impl FileSystemPath {
     }
 
     #[turbo_tasks::function]
-    pub async fn extension(self: Vc<Self>) -> Result<Vc<RcStr>> {
+    pub async fn extension(self: Vc<Self>) -> Result<Vc<String>> {
         let this = self.await?;
         Ok(Vc::cell(this.extension_ref().unwrap_or("").to_string()))
     }
@@ -1048,7 +1048,7 @@ impl FileSystemPath {
     ///   `.`s within;
     /// * Otherwise, the portion of the file name before the final `.`
     #[turbo_tasks::function]
-    pub async fn file_stem(self: Vc<Self>) -> Result<Vc<Option<RcStr>>> {
+    pub async fn file_stem(self: Vc<Self>) -> Result<Vc<Option<String>>> {
         let this = self.await?;
         let (_, file_stem, _) = this.split_file_stem_extension();
         if file_stem.is_empty() {
@@ -1910,7 +1910,7 @@ impl FileSystem for NullFileSystem {
 #[turbo_tasks::value_impl]
 impl ValueToString for NullFileSystem {
     #[turbo_tasks::function]
-    fn to_string(&self) -> Vc<RcStr> {
+    fn to_string(&self) -> Vc<String> {
         Vc::cell(String::from("null"))
     }
 }

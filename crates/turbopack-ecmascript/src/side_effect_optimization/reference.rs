@@ -55,7 +55,7 @@ impl EcmascriptModulePartReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for EcmascriptModulePartReference {
     #[turbo_tasks::function]
-    fn to_string(&self) -> Vc<RcStr> {
+    fn to_string(&self) -> Vc<String> {
         self.part
             .map_or_else(|| Vc::cell("module".to_string()), |part| part.to_string())
     }

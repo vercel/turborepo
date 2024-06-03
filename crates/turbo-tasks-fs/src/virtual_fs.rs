@@ -91,7 +91,7 @@ impl FileSystem for VirtualFileSystem {
 #[turbo_tasks::value_impl]
 impl ValueToString for VirtualFileSystem {
     #[turbo_tasks::function]
-    fn to_string(&self) -> Vc<RcStr> {
+    fn to_string(&self) -> Vc<String> {
         Vc::cell(self.name.clone())
     }
 }

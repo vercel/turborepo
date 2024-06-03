@@ -65,7 +65,7 @@ impl Display for ModuleId {
 #[turbo_tasks::value_impl]
 impl ValueToString for ModuleId {
     #[turbo_tasks::function]
-    fn to_string(&self) -> Vc<RcStr> {
+    fn to_string(&self) -> Vc<String> {
         Vc::cell(self.to_string())
     }
 }
