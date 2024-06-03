@@ -193,7 +193,7 @@ impl<'i> Visitor<'i> for AssetReferenceReplacer<'_> {
         u.visit_children(self)?;
 
         if let Some(new) = self.urls.get(&*u.url) {
-            u.url = new.as_str().into();
+            u.url = new.to_string().into();
         }
 
         Ok(())
