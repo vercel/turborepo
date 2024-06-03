@@ -55,7 +55,7 @@ async fn main() -> Result<()> {
                     ..Default::default()
                 }
                 .cell(),
-                Vc::cell("default".to_string()),
+                Vc::cell("default".into()),
             );
             let module = module_asset_context
                 .process(
