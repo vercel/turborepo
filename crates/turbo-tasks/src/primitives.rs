@@ -27,6 +27,7 @@ impl Vc<String> {
 }
 
 __turbo_tasks_internal_primitive!(Option<String>);
+__turbo_tasks_internal_primitive!(Option<RcStr>);
 __turbo_tasks_internal_primitive!(Vec<RcStr>);
 
 #[turbo_tasks::function]
