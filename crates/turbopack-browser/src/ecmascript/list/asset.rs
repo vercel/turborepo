@@ -1,5 +1,5 @@
 use anyhow::Result;
-use turbo_tasks::{Value, ValueToString, Vc};
+use turbo_tasks::{RcStr, Value, ValueToString, Vc};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{ChunkingContext, EvaluatableAssets},
@@ -63,28 +63,28 @@ impl EcmascriptDevChunkList {
 impl ValueToString for EcmascriptDevChunkList {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<Vc<RcStr>> {
-        Ok(Vc::cell("Ecmascript Dev Chunk List".to_string()))
+        Ok(Vc::cell("Ecmascript Dev Chunk List".into()))
     }
 }
 
 #[turbo_tasks::function]
 fn modifier() -> Vc<RcStr> {
-    Vc::cell("ecmascript dev chunk list".to_string())
+    Vc::cell("ecmascript dev chunk list".into())
 }
 
 #[turbo_tasks::function]
 fn dynamic_modifier() -> Vc<RcStr> {
-    Vc::cell("dynamic".to_string())
+    Vc::cell("dynamic".into())
 }
 
 #[turbo_tasks::function]
 fn chunk_list_chunk_reference_description() -> Vc<RcStr> {
-    Vc::cell("chunk list chunk".to_string())
+    Vc::cell("chunk list chunk".into())
 }
 
 #[turbo_tasks::function]
 fn chunk_key() -> Vc<RcStr> {
-    Vc::cell("chunk".to_string())
+    Vc::cell("chunk".into())
 }
 
 #[turbo_tasks::value_impl]
