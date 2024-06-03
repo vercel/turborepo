@@ -15,7 +15,7 @@ __turbo_tasks_internal_primitive!(RcStr);
 
 #[turbo_tasks::function]
 fn empty_string() -> Vc<RcStr> {
-    Vc::cell(String::new())
+    Vc::cell(RcStr::from(""))
 }
 
 impl Vc<RcStr> {

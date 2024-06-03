@@ -2,7 +2,7 @@
 
 use anyhow::{anyhow, Result};
 use indexmap::{IndexMap, IndexSet};
-use turbo_tasks::{debug::ValueDebug, Value, ValueToString, Vc};
+use turbo_tasks::{debug::ValueDebug, RcStr, Value, ValueToString, Vc};
 use turbo_tasks_testing::{register, run};
 
 register!();
@@ -135,9 +135,9 @@ impl ValueToString for MyEnumValue {
     #[turbo_tasks::function]
     fn to_string(&self) -> Vc<RcStr> {
         match self {
-            MyEnumValue::Yeah(value) => Vc::cell(value.to_string()),
-            MyEnumValue::Nah => Vc::cell("nah".to_string()),
-            MyEnumValue::More(more) => more.to_string(),
+            MyEnumValue::Yeah(value) => Vc::cell(value.to_string().into()),
+            MyEnumValue::Nah => Vc::cell("nah".into()),
+            MyEnumValue::More(more) => more.to_string().into(),
         }
     }
 }
