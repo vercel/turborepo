@@ -226,7 +226,7 @@ impl OutputChunk for CssChunk {
 
 #[turbo_tasks::function]
 fn chunk_item_key() -> Vc<RcStr> {
-    Vc::cell("chunk item".to_string())
+    Vc::cell("chunk item".into())
 }
 
 #[turbo_tasks::value_impl]
