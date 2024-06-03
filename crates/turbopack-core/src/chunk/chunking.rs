@@ -21,7 +21,7 @@ use crate::output::OutputAssets;
 #[turbo_tasks::value]
 struct ChunkItemInfo {
     ty: Vc<Box<dyn ChunkType>>,
-    name: Vc<String>,
+    name: Vc<RcStr>,
     size: usize,
 }
 

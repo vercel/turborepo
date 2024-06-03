@@ -45,7 +45,7 @@ impl ModuleReference for CssModuleComposeReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for CssModuleComposeReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
         Ok(Vc::cell(format!(
             "compose(url) {}",
             self.request.to_string().await?,

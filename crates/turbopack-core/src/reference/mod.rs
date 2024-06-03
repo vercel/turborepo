@@ -70,7 +70,7 @@ impl ModuleReference for SingleModuleReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for SingleModuleReference {
     #[turbo_tasks::function]
-    fn to_string(&self) -> Vc<String> {
+    fn to_string(&self) -> Vc<RcStr> {
         self.description
     }
 }
@@ -116,7 +116,7 @@ impl ModuleReference for SingleOutputAssetReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for SingleOutputAssetReference {
     #[turbo_tasks::function]
-    fn to_string(&self) -> Vc<String> {
+    fn to_string(&self) -> Vc<RcStr> {
         self.description
     }
 }

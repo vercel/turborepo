@@ -32,7 +32,7 @@ impl ModuleReference for InternalCssAssetReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for InternalCssAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
         Ok(Vc::cell(format!(
             "internal css {}",
             self.module.ident().to_string().await?

@@ -4,7 +4,7 @@ pub mod source;
 pub mod utils;
 
 use indexmap::IndexSet;
-use turbo_tasks::Vc;
+use turbo_tasks::{RcStr, Vc};
 
 type VcDynIntrospectable = Vc<Box<dyn Introspectable>>;
 

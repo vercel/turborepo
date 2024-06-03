@@ -107,7 +107,7 @@ impl ChunkableModuleReference for UrlAssetReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for UrlAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
         Ok(Vc::cell(
             format!("url {}", self.request.to_string().await?,),
         ))

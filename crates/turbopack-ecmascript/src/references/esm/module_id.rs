@@ -43,7 +43,7 @@ impl ModuleReference for EsmModuleIdAssetReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for EsmModuleIdAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
         Ok(Vc::cell(format!(
             "module id of {}",
             self.inner.to_string().await?,

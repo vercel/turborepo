@@ -321,6 +321,6 @@ pub async fn get_current_nodejs_version(env: Vc<Box<dyn ProcessEnv>>) -> Result<
             .context("Version must begin with v")?
             .strip_suffix('\n')
             .context("Version must end with \\n")?
-            .to_owned(),
+            .into(),
     ))
 }

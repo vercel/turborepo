@@ -16,7 +16,7 @@ pub struct EcmascriptChunkType {}
 #[turbo_tasks::value_impl]
 impl ValueToString for EcmascriptChunkType {
     #[turbo_tasks::function]
-    fn to_string(&self) -> Vc<String> {
+    fn to_string(&self) -> Vc<RcStr> {
         Vc::cell("ecmascript".to_string())
     }
 }
