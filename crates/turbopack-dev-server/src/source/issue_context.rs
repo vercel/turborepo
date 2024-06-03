@@ -134,7 +134,7 @@ impl Introspectable for IssueFilePathContentSource {
             {
                 source.ty()
             } else {
-                Vc::cell("IssueContextContentSource".to_string())
+                Vc::cell("IssueContextContentSource".into())
             },
         )
     }
@@ -146,9 +146,9 @@ impl Introspectable for IssueFilePathContentSource {
                 Vc::try_resolve_sidecast::<Box<dyn Introspectable>>(self.source).await?
             {
                 let title = source.title().await?;
-                Vc::cell(format!("{}: {}", self.description, title))
+                Vc::cell(format!("{}: {}", self.description, title).into())
             } else {
-                Vc::cell(self.description.to_string())
+                Vc::cell(self.description.clone())
             },
         )
     }
@@ -161,7 +161,7 @@ impl Introspectable for IssueFilePathContentSource {
             {
                 source.details()
             } else {
-                Vc::cell(String::new())
+                Vc::cell(RcStr::default())
             },
         )
     }

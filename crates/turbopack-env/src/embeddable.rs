@@ -35,7 +35,10 @@ impl ProcessEnv for EmbeddableProcessEnv {
     #[turbo_tasks::function]
     async fn read(&self, name: RcStr) -> Result<Vc<Option<RcStr>>> {
         let prior = self.prior.read(name).await?;
-        let encoded = prior.as_deref().map(|s| StringifyJs(s).to_string());
+        let encoded = prior
+            .as_deref()
+            .map(|s| StringifyJs(s).to_string())
+            .map(RcStr::from);
         Ok(Vc::cell(encoded))
     }
 }
