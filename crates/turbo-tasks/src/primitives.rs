@@ -14,14 +14,14 @@ __turbo_tasks_internal_primitive!(String);
 __turbo_tasks_internal_primitive!(RcStr);
 
 #[turbo_tasks::function]
-fn empty_string() -> Vc<RcStr> {
+fn empty_string() -> Vc<String> {
     Vc::cell(String::new())
 }
 
-impl Vc<RcStr> {
+impl Vc<String> {
     #[deprecated(note = "use Default::default() instead")]
     #[inline(always)]
-    pub fn empty() -> Vc<RcStr> {
+    pub fn empty() -> Vc<String> {
         empty_string()
     }
 }
@@ -45,11 +45,11 @@ impl Vc<Vec<String>> {
 __turbo_tasks_internal_primitive!(Option<u16>);
 
 #[turbo_tasks::function]
-fn option_string_none() -> Vc<Option<RcStr>> {
+fn option_string_none() -> Vc<Option<String>> {
     Vc::cell(None)
 }
 
-impl Vc<Option<RcStr>> {
+impl Vc<Option<String>> {
     #[deprecated(note = "use Default::default() instead")]
     pub fn none() -> Self {
         option_string_none()

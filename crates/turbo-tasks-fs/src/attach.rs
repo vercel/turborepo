@@ -185,7 +185,7 @@ impl FileSystem for AttachedFileSystem {
 #[turbo_tasks::value_impl]
 impl ValueToString for AttachedFileSystem {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<RcStr>> {
+    async fn to_string(&self) -> Result<Vc<String>> {
         let root_fs_str = self.root_fs.to_string().await?;
         let child_fs_str = self.child_fs.to_string().await?;
         Ok(Vc::cell(format!("{}-with-{}", root_fs_str, child_fs_str)))

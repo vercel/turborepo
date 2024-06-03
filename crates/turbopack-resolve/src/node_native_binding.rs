@@ -69,7 +69,7 @@ impl ModuleReference for NodePreGypConfigReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for NodePreGypConfigReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<RcStr>> {
+    async fn to_string(&self) -> Result<Vc<String>> {
         let context_dir = self.context_dir.to_string().await?;
         let config_file_pattern = self.config_file_pattern.to_string().await?;
         let compile_target = self.compile_target.await?;
@@ -237,7 +237,7 @@ impl ModuleReference for NodeGypBuildReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for NodeGypBuildReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<RcStr>> {
+    async fn to_string(&self) -> Result<Vc<String>> {
         let context_dir = self.context_dir.to_string().await?;
         let compile_target = self.compile_target.await?;
         Ok(Vc::cell(format!(
@@ -348,7 +348,7 @@ impl ModuleReference for NodeBindingsReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for NodeBindingsReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<RcStr>> {
+    async fn to_string(&self) -> Result<Vc<String>> {
         Ok(Vc::cell(format!(
             "bindings in {}",
             self.context_dir.to_string().await?,

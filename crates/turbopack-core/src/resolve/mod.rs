@@ -480,7 +480,7 @@ impl Default for ResolveResult {
 #[turbo_tasks::value_impl]
 impl ValueToString for ResolveResult {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<RcStr>> {
+    async fn to_string(&self) -> Result<Vc<String>> {
         let mut result = String::new();
         for (i, (request, item)) in self.primary.iter().enumerate() {
             if i > 0 {
@@ -2690,7 +2690,7 @@ impl ModulePart {
 #[turbo_tasks::value_impl]
 impl ValueToString for ModulePart {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<RcStr>> {
+    async fn to_string(&self) -> Result<Vc<String>> {
         Ok(Vc::cell(match self {
             ModulePart::Evaluation => "module evaluation".to_string(),
             ModulePart::Export(export) => format!("export {}", export.await?),

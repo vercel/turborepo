@@ -49,7 +49,7 @@ impl AssetIdent {
 #[turbo_tasks::value_impl]
 impl ValueToString for AssetIdent {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<RcStr>> {
+    async fn to_string(&self) -> Result<Vc<String>> {
         let mut s = self.path.to_string().await?.clone_value();
 
         let query = self.query.await?;

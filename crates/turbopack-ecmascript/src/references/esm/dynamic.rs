@@ -72,7 +72,7 @@ impl ModuleReference for EsmAsyncAssetReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for EsmAsyncAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<RcStr>> {
+    async fn to_string(&self) -> Result<Vc<String>> {
         Ok(Vc::cell(format!(
             "dynamic import {}",
             self.request.to_string().await?,

@@ -208,7 +208,7 @@ pub struct IssueProcessingPathItem {
 #[turbo_tasks::value_impl]
 impl ValueToString for IssueProcessingPathItem {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<RcStr>> {
+    async fn to_string(&self) -> Result<Vc<String>> {
         if let Some(context) = self.file_path {
             let description_str = self.description.await?;
             Ok(Vc::cell(format!(

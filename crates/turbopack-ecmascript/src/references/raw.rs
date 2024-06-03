@@ -34,7 +34,7 @@ impl ModuleReference for FileSourceReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for FileSourceReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<RcStr>> {
+    async fn to_string(&self) -> Result<Vc<String>> {
         Ok(Vc::cell(format!(
             "raw asset {}",
             self.path.to_string().await?,

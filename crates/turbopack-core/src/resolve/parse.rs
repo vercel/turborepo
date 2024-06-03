@@ -617,7 +617,7 @@ impl Request {
 #[turbo_tasks::value_impl]
 impl ValueToString for Request {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<RcStr>> {
+    async fn to_string(&self) -> Result<Vc<String>> {
         Ok(Vc::cell(match self {
             Request::Raw {
                 path,

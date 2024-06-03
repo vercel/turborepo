@@ -309,7 +309,7 @@ async fn import_mapping_to_result(
 #[turbo_tasks::value_impl]
 impl ValueToString for ImportMapResult {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<RcStr>> {
+    async fn to_string(&self) -> Result<Vc<String>> {
         match self {
             ImportMapResult::Result(_) => Ok(Vc::cell("Resolved by import map".to_string())),
             ImportMapResult::Alias(request, context) => {

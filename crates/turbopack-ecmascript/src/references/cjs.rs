@@ -63,7 +63,7 @@ impl ModuleReference for CjsAssetReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for CjsAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<RcStr>> {
+    async fn to_string(&self) -> Result<Vc<String>> {
         Ok(Vc::cell(format!(
             "generic commonjs {}",
             self.request.to_string().await?,
@@ -120,7 +120,7 @@ impl ModuleReference for CjsRequireAssetReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for CjsRequireAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<RcStr>> {
+    async fn to_string(&self) -> Result<Vc<String>> {
         Ok(Vc::cell(format!(
             "require {}",
             self.request.to_string().await?,
@@ -228,7 +228,7 @@ impl ModuleReference for CjsRequireResolveAssetReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for CjsRequireResolveAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<RcStr>> {
+    async fn to_string(&self) -> Result<Vc<String>> {
         Ok(Vc::cell(format!(
             "require.resolve {}",
             self.request.to_string().await?,
