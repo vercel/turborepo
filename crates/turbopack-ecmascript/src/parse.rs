@@ -157,8 +157,8 @@ pub async fn parse(
     ty: Value<EcmascriptModuleAssetType>,
     transforms: Vc<EcmascriptInputTransforms>,
 ) -> Result<Vc<ParseResult>> {
-    let name = source.ident().to_string().await?;
-    let span = tracing::info_span!("parse ecmascript", name = *name, ty = display(&*ty));
+    let name = source.ident().to_string().await?.to_string();
+    let span = tracing::info_span!("parse ecmascript", name = name, ty = display(&*ty));
     match parse_internal(source, ty, transforms)
         .instrument(span)
         .await
@@ -262,14 +262,14 @@ async fn parse_content(
         Box::new(IssueEmitter::new(
             source,
             source_map.clone(),
-            Some("Ecmascript file had an error".to_string()),
+            Some("Ecmascript file had an error".into()),
         )),
     );
 
     let emitter = Box::new(IssueEmitter::new(
         source,
         source_map.clone(),
-        Some("Parsing ecmascript source code failed".to_string()),
+        Some("Parsing ecmascript source code failed".into()),
     ));
     let parser_handler = Handler::with_emitter(true, false, emitter.clone());
     let globals = Arc::new(Globals::new());
