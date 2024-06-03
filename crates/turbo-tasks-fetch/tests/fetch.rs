@@ -47,7 +47,7 @@ async fn sends_user_agent() {
                 .body("responsebody");
         });
 
-        let result = &*fetch(Vc::cell(server.url("/foo.woff")), Vc::cell(Some("foo".to_owned())), Vc::cell(None)).await?;
+        let result = &*fetch(Vc::cell(server.url("/foo.woff").into()), Vc::cell(Some("foo".into())), Vc::cell(None)).await?;
         resource_mock.assert();
 
         let Ok(response) = result else {
@@ -74,8 +74,8 @@ async fn invalidation_does_not_invalidate() {
                 .body("responsebody");
         });
 
-        let url = Vc::cell(server.url("/foo.woff"));
-        let user_agent = Vc::cell(Some("foo".to_owned()));
+        let url = Vc::cell(server.url("/foo.woff").into());
+        let user_agent = Vc::cell(Some("foo".into()));
         let proxy = Vc::cell(None);
         let result = &*fetch(url, user_agent, proxy).await?;
         resource_mock.assert();

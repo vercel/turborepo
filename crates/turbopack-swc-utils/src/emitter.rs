@@ -23,7 +23,7 @@ impl IssueEmitter {
     pub fn new(
         source: Vc<Box<dyn Source>>,
         source_map: Arc<SourceMap>,
-        title: Option<String>,
+        title: Option<RcStr>,
     ) -> Self {
         Self {
             source,
@@ -53,7 +53,7 @@ impl Emitter for IssueEmitter {
             title = t.clone();
         } else {
             let mut message_split = message.split('\n');
-            title = message_split.next().unwrap().to_string();
+            title = message_split.next().unwrap().to_string().into();
             message = message_split.remainder().unwrap_or("").to_string();
         }
 
