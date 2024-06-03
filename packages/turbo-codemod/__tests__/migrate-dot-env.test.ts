@@ -16,7 +16,7 @@ describe("migrate-dot-env", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -54,7 +54,7 @@ describe("migrate-dot-env", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(readJson("turbo.json") || "{}").toStrictEqual({
@@ -136,7 +136,7 @@ describe("migrate-dot-env", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: true, print: false },
+      options: { force: false, dryRun: true, print: false },
     });
 
     // make sure it didn't change
@@ -163,7 +163,7 @@ describe("migrate-dot-env", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: true },
+      options: { force: false, dryRun: false, print: true },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -203,7 +203,7 @@ describe("migrate-dot-env", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: true, print: false },
+      options: { force: false, dryRun: true, print: false },
     });
 
     // make sure it didn't change
@@ -230,7 +230,7 @@ describe("migrate-dot-env", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -260,7 +260,7 @@ describe("migrate-dot-env", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -301,7 +301,7 @@ describe("migrate-dot-env", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(read("turbo.json")).toBeUndefined();

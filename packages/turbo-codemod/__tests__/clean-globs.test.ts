@@ -16,7 +16,7 @@ describe("clean-globs", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     // result should be correct

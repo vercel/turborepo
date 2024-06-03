@@ -61,7 +61,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
       install: false,
     });
@@ -151,7 +151,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: true,
+      dryRun: true,
       print: false,
       install: true,
     });
@@ -217,7 +217,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
       install: false,
       to: "1.7.0",
@@ -302,7 +302,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
       install: false,
       from: "1.0.0",
@@ -376,7 +376,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
       install: false,
     });
@@ -429,7 +429,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
       install: true,
     });
@@ -509,7 +509,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
       install: true,
     });
@@ -617,7 +617,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
       install: true,
     });
@@ -701,7 +701,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
       install: false,
     });
@@ -747,7 +747,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
       install: false,
     });
@@ -794,7 +794,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
       install: false,
     });
@@ -851,7 +851,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: true,
+      dryRun: true,
       print: false,
       install: true,
     });
@@ -885,7 +885,7 @@ describe("migrate", () => {
 
     await migrate("~/path/that/does/not/exist", {
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
       install: false,
     });
@@ -911,7 +911,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
       install: false,
     });
@@ -965,7 +965,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
       install: false,
     });
