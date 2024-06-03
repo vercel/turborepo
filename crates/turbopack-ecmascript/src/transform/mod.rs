@@ -175,7 +175,7 @@ impl EcmascriptInputTransform {
                 let config = Options {
                     runtime: Some(runtime),
                     development: Some(*development),
-                    import_source: import_source.await?.clone_value(),
+                    import_source: import_source.await?.as_deref().map(ToString::to_string),
                     refresh: if *refresh {
                         Some(swc_core::ecma::transforms::react::RefreshOptions {
                             refresh_reg: "__turbopack_refresh__.register".to_string(),

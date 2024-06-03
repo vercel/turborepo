@@ -134,7 +134,7 @@ impl CodeGenerateable for EcmascriptModulePartReference {
                 "var $name = __turbopack_import__($id);" as Stmt,
                 name = Ident::new(ident.clone().into(), DUMMY_SP),
                 id: Expr = Expr::Lit(match &*id {
-                    ModuleId::String(s) => s.clone().into(),
+                    ModuleId::String(s) => s.as_str().into(),
                     ModuleId::Number(n) => (*n as f64).into(),
                 })
             );

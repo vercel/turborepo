@@ -11,7 +11,7 @@ use crate::utils::StringifyJs;
 
 #[turbo_tasks::function]
 fn modifier() -> Vc<RcStr> {
-    Vc::cell("text content".to_string())
+    Vc::cell("text content".into())
 }
 
 /// A source asset that exports the string content of an asset as the default

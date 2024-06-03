@@ -338,11 +338,14 @@ pub struct RequireContextAsset {
 
 #[turbo_tasks::function]
 fn modifier(dir: RcStr, include_subdirs: bool) -> Vc<RcStr> {
-    Vc::cell(format!(
-        "require.context {}/{}",
-        dir,
-        if include_subdirs { "**" } else { "*" },
-    ))
+    Vc::cell(
+        format!(
+            "require.context {}/{}",
+            dir,
+            if include_subdirs { "**" } else { "*" },
+        )
+        .into(),
+    )
 }
 
 #[turbo_tasks::value_impl]
