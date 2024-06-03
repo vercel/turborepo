@@ -104,8 +104,8 @@ impl ValueDefault for TypescriptTransformOptions {
 pub struct JsxTransformOptions {
     pub development: bool,
     pub react_refresh: bool,
-    pub import_source: Option<String>,
-    pub runtime: Option<String>,
+    pub import_source: Option<RcStr>,
+    pub runtime: Option<RcStr>,
 }
 
 #[turbo_tasks::value(shared)]

@@ -48,12 +48,12 @@ pub enum MdxParseConstructs {
 pub struct MdxTransformOptions {
     pub development: Option<bool>,
     pub jsx: Option<bool>,
-    pub jsx_runtime: Option<String>,
-    pub jsx_import_source: Option<String>,
+    pub jsx_runtime: Option<RcStr>,
+    pub jsx_import_source: Option<RcStr>,
     /// The path to a module providing Components to mdx modules.
     /// The provider must export a useMDXComponents, which is called to access
     /// an object of components.
-    pub provider_import_source: Option<String>,
+    pub provider_import_source: Option<RcStr>,
     /// Determines how to parse mdx contents.
     pub mdx_type: Option<MdxParseConstructs>,
 }

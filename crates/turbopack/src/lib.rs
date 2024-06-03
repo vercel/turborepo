@@ -440,7 +440,7 @@ async fn process_default(
 ) -> Result<Vc<ProcessResult>> {
     let span = tracing::info_span!(
         "process module",
-        name = *source.ident().to_string().await?,
+        name = source.ident().to_string().await?.to_string(),
         reference_type = display(&*reference_type)
     );
     process_default_internal(
