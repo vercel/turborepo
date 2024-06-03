@@ -22,13 +22,31 @@ pub struct ModuleScope {
 
 struct Workspace {
     dep_graph: Vc<Box<dyn DepGraph>>,
+
+    scopes: Vec<Vc<ModuleScope>>,
 }
 
 impl Workspace {
     async fn start_scope(&mut self, entry: Vc<Box<dyn Module>>) -> Result<()> {
         let deps = self.dep_graph.deps(entry);
+        let mut modules = vec![entry];
 
-        for dep in deps.await?.iter() {}
+        for &dep in deps.await?.iter() {
+            let dependants = self.dep_graph.depandants(dep);
+
+            if dependants.await?.len() == 1 {
+                modules.push(dep);
+            } else {
+                self.start_scope(dep).await?;
+            }
+        }
+
+        let module_scope = ModuleScope {
+            modules: Vc::cell(modules),
+        }
+        .cell();
+
+        self.scopes.push(module_scope);
 
         Ok(())
     }
@@ -41,7 +59,10 @@ pub async fn split_scopes(
 ) -> Result<Vc<Vec<Vc<ModuleScopeGroup>>>> {
     // If a module is imported only as lazy, it should be in a separate scope
 
-    let mut workspace = Workspace { dep_graph };
+    let mut workspace = Workspace {
+        dep_graph,
+        scopes: Default::default(),
+    };
 
     workspace.start_scope(entry).await?;
 
