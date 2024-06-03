@@ -11,7 +11,7 @@
 use std::fmt::Write;
 
 use anyhow::{bail, Error, Result};
-use turbo_tasks::{ValueToString, Vc};
+use turbo_tasks::{RcStr, ValueToString, Vc};
 use turbo_tasks_fs::{FileContent, FileJsonContent};
 use turbopack_core::{
     asset::{Asset, AssetContent},
@@ -28,7 +28,7 @@ use turbopack_ecmascript::chunk::{
 
 #[turbo_tasks::function]
 fn modifier() -> Vc<RcStr> {
-    Vc::cell("json".to_string())
+    Vc::cell("json".into())
 }
 
 #[turbo_tasks::value]
@@ -144,7 +144,7 @@ impl EcmascriptChunkItem for JsonChunkItem {
                 .into())
             }
             FileJsonContent::Unparseable(e) => {
-                let mut message = "Unable to make a module from invalid JSON: ".to_string();
+                let mut message = "Unable to make a module from invalid JSON: ".into();
                 if let FileContent::Content(content) = &*content.await? {
                     let text = content.content().to_str()?;
                     e.write_with_content(&mut message, text.as_ref())?;
