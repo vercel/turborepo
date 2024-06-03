@@ -32,7 +32,7 @@ pub struct BrowserChunkingContextBuilder {
 }
 
 impl BrowserChunkingContextBuilder {
-    pub fn name(mut self, name: String) -> Self {
+    pub fn name(mut self, name: RcStr) -> Self {
         self.chunking_context.name = Some(name);
         self
     }
@@ -281,15 +281,18 @@ impl ChunkingContext for BrowserChunkingContext {
             .strip_prefix(&format!("{}/", this.client_root.await?.path))
             .context("expected asset_path to contain client_root")?;
 
-        Ok(Vc::cell(format!(
-            "{}{}",
-            this.asset_base_path
-                .await?
-                .as_ref()
-                .map(|s| s.as_str())
-                .unwrap_or("/"),
-            asset_path
-        )))
+        Ok(Vc::cell(
+            format!(
+                "{}{}",
+                this.asset_base_path
+                    .await?
+                    .as_ref()
+                    .map(|s| s.as_str())
+                    .unwrap_or("/"),
+                asset_path
+            )
+            .into(),
+        ))
     }
 
     #[turbo_tasks::function]
@@ -343,7 +346,10 @@ impl ChunkingContext for BrowserChunkingContext {
         module: Vc<Box<dyn ChunkableModule>>,
         availability_info: Value<AvailabilityInfo>,
     ) -> Result<Vc<ChunkGroupResult>> {
-        let span = tracing::info_span!("chunking", module = *module.ident().to_string().await?);
+        let span = tracing::info_span!(
+            "chunking",
+            module = module.ident().to_string().await?.to_string()
+        );
         async move {
             let this = self.await?;
             let input_availability_info = availability_info.into_value();

@@ -3,7 +3,7 @@ use std::io::Write;
 use anyhow::{bail, Result};
 use indoc::writedoc;
 use serde::Serialize;
-use turbo_tasks::{ReadRef, TryJoinIterExt, Value, ValueToString, Vc};
+use turbo_tasks::{RcStr, ReadRef, TryJoinIterExt, Value, ValueToString, Vc};
 use turbo_tasks_fs::File;
 use turbopack_core::{
     asset::{Asset, AssetContent},
@@ -191,13 +191,13 @@ impl EcmascriptDevEvaluateChunk {
 impl ValueToString for EcmascriptDevEvaluateChunk {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<Vc<RcStr>> {
-        Ok(Vc::cell("Ecmascript Dev Evaluate Chunk".to_string()))
+        Ok(Vc::cell("Ecmascript Dev Evaluate Chunk".into()))
     }
 }
 
 #[turbo_tasks::function]
 fn modifier() -> Vc<RcStr> {
-    Vc::cell("ecmascript dev evaluate chunk".to_string())
+    Vc::cell("ecmascript dev evaluate chunk".into())
 }
 
 #[turbo_tasks::value_impl]
