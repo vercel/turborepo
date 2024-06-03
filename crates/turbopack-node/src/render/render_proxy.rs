@@ -6,7 +6,7 @@ use futures::{
 };
 use parking_lot::Mutex;
 use turbo_tasks::{
-    duration_span, mark_finished, prevent_gc, util::SharedError, RawVc, ValueToString, Vc,
+    duration_span, mark_finished, prevent_gc, util::SharedError, RawVc, RcStr, ValueToString, Vc,
 };
 use turbo_tasks_bytes::{Bytes, Stream};
 use turbo_tasks_env::ProcessEnv;
@@ -95,7 +95,7 @@ async fn proxy_error(
     path: Vc<FileSystemPath>,
     error: anyhow::Error,
     operation: Option<NodeJsOperation>,
-) -> Result<(u16, String)> {
+) -> Result<(u16, RcStr)> {
     let message = format!("{}", PrettyPrintError(&error));
 
     let status = match operation {
