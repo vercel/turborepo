@@ -2,7 +2,7 @@
 #![feature(arbitrary_self_types)]
 
 use anyhow::Result;
-use turbo_tasks::Vc;
+use turbo_tasks::{RcStr, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::issue::{Issue, IssueSeverity, IssueStage, OptionStyledString, StyledString};
 
@@ -32,7 +32,7 @@ impl HttpResponseBody {
     #[turbo_tasks::function]
     pub async fn to_string(self: Vc<Self>) -> Result<Vc<RcStr>> {
         let this = &*self.await?;
-        Ok(Vc::cell(std::str::from_utf8(&this.0)?.to_owned()))
+        Ok(Vc::cell(std::str::from_utf8(&this.0)?.into()))
     }
 }
 

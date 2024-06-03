@@ -73,10 +73,13 @@ impl ValueToString for NodePreGypConfigReference {
         let context_dir = self.context_dir.to_string().await?;
         let config_file_pattern = self.config_file_pattern.to_string().await?;
         let compile_target = self.compile_target.await?;
-        Ok(Vc::cell(format!(
-            "node-gyp in {} with {} for {}",
-            context_dir, config_file_pattern, compile_target
-        )))
+        Ok(Vc::cell(
+            format!(
+                "node-gyp in {} with {} for {}",
+                context_dir, config_file_pattern, compile_target
+            )
+            .into(),
+        ))
     }
 }
 
