@@ -122,7 +122,7 @@ async fn lookup_import_map(
     import_map: Vc<ImportMap>,
     file_path: Vc<FileSystemPath>,
     request: Vc<Request>,
-) -> Result<Option<ReadRef<String>>> {
+) -> Result<Option<ReadRef<RcStr>>> {
     let result = import_map.await?.lookup(file_path, request).await?;
 
     if matches!(result, ImportMapResult::NoEntry) {

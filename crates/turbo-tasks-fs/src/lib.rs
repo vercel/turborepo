@@ -1499,8 +1499,8 @@ impl From<String> for File {
     }
 }
 
-impl From<ReadRef<String>> for File {
-    fn from(s: ReadRef<String>) -> Self {
+impl From<ReadRef<RcStr>> for File {
+    fn from(s: ReadRef<RcStr>) -> Self {
         File::from_bytes(s.as_bytes().to_vec())
     }
 }

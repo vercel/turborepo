@@ -105,7 +105,7 @@ impl GetContentSourceContent for IntrospectionSource {
             parse_json_with_source_context(path)?
         };
         let internal_ty = Vc::debug_identifier(introspectable).await?;
-        fn str_or_err(s: &Result<ReadRef<String>>) -> Cow<'_, str> {
+        fn str_or_err(s: &Result<ReadRef<RcStr>>) -> Cow<'_, str> {
             s.as_ref().map_or_else(
                 |e| Cow::<'_, str>::Owned(format!("ERROR: {:?}", e)),
                 |d| Cow::Borrowed(&**d),
