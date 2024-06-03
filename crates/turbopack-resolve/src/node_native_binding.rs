@@ -243,10 +243,9 @@ impl ValueToString for NodeGypBuildReference {
     async fn to_string(&self) -> Result<Vc<RcStr>> {
         let context_dir = self.context_dir.to_string().await?;
         let compile_target = self.compile_target.await?;
-        Ok(Vc::cell(format!(
-            "node-gyp in {} for {}",
-            context_dir, compile_target
-        )))
+        Ok(Vc::cell(
+            format!("node-gyp in {} for {}", context_dir, compile_target).into(),
+        ))
     }
 }
 
@@ -352,10 +351,9 @@ impl ModuleReference for NodeBindingsReference {
 impl ValueToString for NodeBindingsReference {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<Vc<RcStr>> {
-        Ok(Vc::cell(format!(
-            "bindings in {}",
-            self.context_dir.to_string().await?,
-        )))
+        Ok(Vc::cell(
+            format!("bindings in {}", self.context_dir.to_string().await?,).into(),
+        ))
     }
 }
 

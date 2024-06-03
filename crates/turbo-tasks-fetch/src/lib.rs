@@ -65,9 +65,9 @@ pub async fn fetch(
 
     let client = client_builder.build()?;
 
-    let mut builder = client.get(url);
+    let mut builder = client.get(url.as_str());
     if let Some(user_agent) = user_agent {
-        builder = builder.header("User-Agent", user_agent);
+        builder = builder.header("User-Agent", user_agent.as_str());
     }
 
     let response = builder.send().await.and_then(|r| r.error_for_status());
@@ -118,7 +118,7 @@ impl FetchError {
 
         FetchError {
             detail: StyledString::Text(error.to_string().into()).cell(),
-            url: Vc::cell(url.to_owned()),
+            url: Vc::cell(url.into()),
             kind: kind.into(),
         }
     }

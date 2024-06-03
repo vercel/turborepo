@@ -5,7 +5,7 @@ use swc_core::common::{
     source_map::Pos,
     SourceMap,
 };
-use turbo_tasks::Vc;
+use turbo_tasks::{RcStr, Vc};
 use turbopack_core::{
     issue::{analyze::AnalyzeIssue, IssueExt, IssueSeverity, IssueSource, StyledString},
     source::Source,
@@ -15,7 +15,7 @@ use turbopack_core::{
 pub struct IssueEmitter {
     pub source: Vc<Box<dyn Source>>,
     pub source_map: Arc<SourceMap>,
-    pub title: Option<String>,
+    pub title: Option<RcStr>,
     pub emitted_issues: Vec<Vc<AnalyzeIssue>>,
 }
 

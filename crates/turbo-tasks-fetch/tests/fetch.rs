@@ -21,7 +21,7 @@ async fn basic_get() {
         });
 
 
-        let result = &*fetch(Vc::cell(server.url("/foo.woff")), Vc::cell(None), Vc::cell(None)).await?;
+        let result = &*fetch(Vc::cell(server.url("/foo.woff").into()), Vc::cell(None), Vc::cell(None)).await?;
         resource_mock.assert();
 
         match result {
