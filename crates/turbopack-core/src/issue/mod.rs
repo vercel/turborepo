@@ -809,7 +809,7 @@ where
                     ItemIssueProcessingPath::cell(ItemIssueProcessingPath(
                         Some(IssueProcessingPathItem::cell(IssueProcessingPathItem {
                             file_path: file_path.into(),
-                            description: Vc::cell(description.into()),
+                            description: Vc::cell(RcStr::from(description.into())),
                         })),
                         children,
                     )),
@@ -837,7 +837,7 @@ where
                     ItemIssueProcessingPath::cell(ItemIssueProcessingPath(
                         Some(IssueProcessingPathItem::cell(IssueProcessingPathItem {
                             file_path: file_path.into(),
-                            description: Vc::cell(description.into()),
+                            description: Vc::cell(RcStr::from(description.into())),
                         })),
                         children,
                     )),

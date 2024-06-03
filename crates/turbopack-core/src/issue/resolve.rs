@@ -1,7 +1,7 @@
 use std::fmt::Write;
 
 use anyhow::Result;
-use turbo_tasks::{ReadRef, ValueToString, Vc};
+use turbo_tasks::{RcStr, ReadRef, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 
 use super::{Issue, IssueSource, IssueStage, OptionIssueSource, OptionStyledString, StyledString};
