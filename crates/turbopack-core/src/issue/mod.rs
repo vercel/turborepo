@@ -567,14 +567,14 @@ impl Display for IssueStage {
 #[derive(Clone, Debug)]
 pub struct PlainIssue {
     pub severity: IssueSeverity,
-    pub file_path: String,
+    pub file_path: RcStr,
 
     pub stage: IssueStage,
 
     pub title: StyledString,
     pub description: Option<StyledString>,
     pub detail: Option<StyledString>,
-    pub documentation_link: String,
+    pub documentation_link: RcStr,
 
     pub source: Option<ReadRef<PlainIssueSource>>,
     pub sub_issues: Vec<ReadRef<PlainIssue>>,

@@ -45,14 +45,14 @@ pub async fn content_to_details(content: Vc<AssetContent>) -> Result<Vc<RcStr>> 
             FileContent::Content(file) => {
                 let content = file.content();
                 match content.to_str() {
-                    Ok(str) => Vc::cell(str.into_owned()),
-                    Err(_) => Vc::cell(format!("{} binary bytes", content.len())),
+                    Ok(str) => Vc::cell(str.into()),
+                    Err(_) => Vc::cell(format!("{} binary bytes", content.len()).into()),
                 }
             }
             FileContent::NotFound => Vc::cell("not found".into()),
         },
         AssetContent::Redirect { target, link_type } => {
-            Vc::cell(format!("redirect to {target} with type {link_type:?}"))
+            Vc::cell(format!("redirect to {target} with type {link_type:?}").into())
         }
     })
 }
