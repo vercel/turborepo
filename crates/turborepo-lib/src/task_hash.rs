@@ -522,7 +522,7 @@ pub fn get_external_deps_hash(
 pub fn get_internal_deps_hash(
     scm: &SCM,
     root: &AbsoluteSystemPath,
-    package_dirs: HashSet<&AnchoredSystemPath>,
+    package_dirs: Vec<&AnchoredSystemPath>,
 ) -> Result<String, Error> {
     if package_dirs.is_empty() {
         return Ok("".into());
@@ -540,6 +540,7 @@ pub fn get_internal_deps_hash(
                 Ok(acc)
             },
         )?;
+
     Ok(FileHashes(file_hashes).hash())
 }
 
