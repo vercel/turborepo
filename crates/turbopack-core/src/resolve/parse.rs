@@ -61,7 +61,7 @@ fn split_off_query_fragment(raw: RcStr) -> (Pattern, Vc<RcStr>, Vc<RcStr>) {
             return (
                 Pattern::Constant(raw.into()),
                 Vc::<RcStr>::default(),
-                Vc::cell(fragment.to_string()),
+                Vc::cell(fragment.into()),
             );
         }
 
@@ -76,8 +76,8 @@ fn split_off_query_fragment(raw: RcStr) -> (Pattern, Vc<RcStr>, Vc<RcStr>) {
 
     (
         Pattern::Constant(raw.into()),
-        Vc::cell(format!("?{}", query)),
-        Vc::cell(format!("#{}", fragment)),
+        Vc::cell(format!("?{}", query).into()),
+        Vc::cell(format!("#{}", fragment).into()),
     )
 }
 
@@ -625,9 +625,9 @@ impl ValueToString for Request {
                 ..
             } => {
                 if *force_in_lookup_dir {
-                    format!("in-lookup-dir {path}")
+                    format!("in-lookup-dir {path}").into()
                 } else {
-                    format!("{path}")
+                    format!("{path}").into()
                 }
             }
             Request::Relative {
@@ -636,35 +636,36 @@ impl ValueToString for Request {
                 ..
             } => {
                 if *force_in_lookup_dir {
-                    format!("relative-in-lookup-dir {path}")
+                    format!("relative-in-lookup-dir {path}").into()
                 } else {
-                    format!("relative {path}")
+                    format!("relative {path}").into()
                 }
             }
             Request::Module { module, path, .. } => {
                 if path.could_match_others("") {
-                    format!("module \"{module}\" with subpath {path}")
+                    format!("module \"{module}\" with subpath {path}").into()
                 } else {
-                    format!("module \"{module}\"")
+                    format!("module \"{module}\"").into()
                 }
             }
-            Request::ServerRelative { path, .. } => format!("server relative {path}"),
-            Request::Windows { path, .. } => format!("windows {path}"),
-            Request::Empty => "empty".to_string(),
-            Request::PackageInternal { path } => format!("package internal {path}"),
+            Request::ServerRelative { path, .. } => format!("server relative {path}").into(),
+            Request::Windows { path, .. } => format!("windows {path}").into(),
+            Request::Empty => "empty".into(),
+            Request::PackageInternal { path } => format!("package internal {path}").into(),
             Request::Uri {
                 protocol,
                 remainder,
                 ..
-            } => format!("uri \"{protocol}\" \"{remainder}\""),
-            Request::Unknown { path } => format!("unknown {path}"),
-            Request::Dynamic => "dynamic".to_string(),
+            } => format!("uri \"{protocol}\" \"{remainder}\"").into(),
+            Request::Unknown { path } => format!("unknown {path}").into(),
+            Request::Dynamic => "dynamic".into(),
             Request::Alternatives { requests } => {
                 let vec = requests.iter().map(|i| i.to_string()).try_join().await?;
                 vec.iter()
                     .map(|r| r.as_str())
                     .collect::<Vec<_>>()
                     .join(" or ")
+                    .into()
             }
         }))
     }
