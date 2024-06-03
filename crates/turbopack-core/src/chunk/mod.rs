@@ -226,7 +226,7 @@ enum ChunkContentGraphNode {
     // Chunk items that are placed into the current chunk group
     ChunkItem {
         item: Vc<Box<dyn ChunkItem>>,
-        ident: ReadRef<String>,
+        ident: ReadRef<RcStr>,
     },
     // Async module that is referenced from the chunk group
     AsyncModule {

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use turbo_tasks::{ValueToString, Vc};
+use turbo_tasks::{RcStr, ValueToString, Vc};
 
 use super::{utils::content_to_details, Introspectable};
 use crate::{asset::Asset, source::Source};

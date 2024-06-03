@@ -1,6 +1,6 @@
 use anyhow::Result;
 use indexmap::IndexSet;
-use turbo_tasks::Vc;
+use turbo_tasks::{RcStr, Vc};
 use turbo_tasks_fs::FileContent;
 
 use super::{
@@ -15,27 +15,27 @@ use crate::{
 
 #[turbo_tasks::function]
 fn reference_ty() -> Vc<RcStr> {
-    Vc::cell("reference".to_string())
+    Vc::cell("reference".into())
 }
 
 #[turbo_tasks::function]
 fn parallel_reference_ty() -> Vc<RcStr> {
-    Vc::cell("parallel reference".to_string())
+    Vc::cell("parallel reference".into())
 }
 
 #[turbo_tasks::function]
 fn parallel_inherit_async_reference_ty() -> Vc<RcStr> {
-    Vc::cell("parallel reference (inherit async module)".to_string())
+    Vc::cell("parallel reference (inherit async module)".into())
 }
 
 #[turbo_tasks::function]
 fn async_reference_ty() -> Vc<RcStr> {
-    Vc::cell("async reference".to_string())
+    Vc::cell("async reference".into())
 }
 
 #[turbo_tasks::function]
 fn passthrough_reference_ty() -> Vc<RcStr> {
-    Vc::cell("passthrough reference".to_string())
+    Vc::cell("passthrough reference".into())
 }
 
 #[turbo_tasks::function]
@@ -49,7 +49,7 @@ pub async fn content_to_details(content: Vc<AssetContent>) -> Result<Vc<RcStr>> 
                     Err(_) => Vc::cell(format!("{} binary bytes", content.len())),
                 }
             }
-            FileContent::NotFound => Vc::cell("not found".to_string()),
+            FileContent::NotFound => Vc::cell("not found".into()),
         },
         AssetContent::Redirect { target, link_type } => {
             Vc::cell(format!("redirect to {target} with type {link_type:?}"))
