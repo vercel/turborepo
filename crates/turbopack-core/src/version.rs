@@ -205,7 +205,7 @@ pub struct PartialUpdate {
 #[turbo_tasks::value]
 #[derive(Clone)]
 pub struct FileHashVersion {
-    hash: String,
+    hash: RcStr,
 }
 
 impl FileHashVersion {
@@ -216,7 +216,9 @@ impl FileHashVersion {
                 FileContent::Content(file) => {
                     let hash = hash_xxh3_hash64(file.content());
                     let hex_hash = encode_hex(hash);
-                    Ok(Self::cell(FileHashVersion { hash: hex_hash }))
+                    Ok(Self::cell(FileHashVersion {
+                        hash: hex_hash.into(),
+                    }))
                 }
                 FileContent::NotFound => Err(anyhow!("file not found")),
             },
