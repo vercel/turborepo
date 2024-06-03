@@ -11,7 +11,7 @@ use swc_core::{
         CodeGenerator, CodegenConfig, Emit,
     },
 };
-use turbo_tasks::{Value, ValueToString, Vc};
+use turbo_tasks::{RcStr, Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::{ChunkableModuleReference, ChunkingContext},
     issue::IssueSource,

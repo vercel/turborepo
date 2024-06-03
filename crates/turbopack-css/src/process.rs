@@ -749,7 +749,7 @@ impl CssError {
             CssError::SwcSelectorInModuleNotPure { span } => {
                 ParsingIssue {
                     file,
-                    msg: Vc::cell(CSS_MODULE_ERROR.to_string()),
+                    msg: Vc::cell(CSS_MODULE_ERROR.into()),
                     source: Vc::cell(Some(IssueSource::from_swc_offsets(
                         source,
                         span.lo.0 as _,
@@ -762,7 +762,7 @@ impl CssError {
             CssError::LightningCssSelectorInModuleNotPure { selector } => {
                 ParsingIssue {
                     file,
-                    msg: Vc::cell(format!("{CSS_MODULE_ERROR}, (lightningcss, {selector})")),
+                    msg: Vc::cell(format!("{CSS_MODULE_ERROR}, (lightningcss, {selector})").into()),
                     source: Vc::cell(None),
                 }
                 .cell()
