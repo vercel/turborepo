@@ -1,7 +1,7 @@
 use std::fmt::Write;
 
 use anyhow::Result;
-use turbo_tasks::{ValueToString, Vc};
+use turbo_tasks::{RcStr, ValueToString, Vc};
 use turbo_tasks_fs::File;
 use turbopack_core::{
     asset::{Asset, AssetContent},
@@ -94,7 +94,7 @@ impl Chunk for SingleItemCssChunk {
 
 #[turbo_tasks::function]
 fn single_item_modifier() -> Vc<RcStr> {
-    Vc::cell("single item css chunk".to_string())
+    Vc::cell("single item css chunk".into())
 }
 
 #[turbo_tasks::value_impl]
