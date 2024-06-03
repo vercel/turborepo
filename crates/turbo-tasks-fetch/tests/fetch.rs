@@ -105,7 +105,7 @@ async fn errors_on_failed_connection() {
         register();
 
         let url = "https://doesnotexist/foo.woff";
-        let result = &*fetch(Vc::cell(url.to_owned()), Vc::cell(None), Vc::cell(None)).await?;
+        let result = &*fetch(Vc::cell(url.into()), Vc::cell(None), Vc::cell(None)).await?;
         let Err(err_vc) = result else {
             panic!()
         };
@@ -126,7 +126,7 @@ async fn errors_on_404() {
 
         let server = httpmock::MockServer::start();
         let resource_url = server.url("/");
-        let result = &*fetch(Vc::cell(resource_url.clone()), Vc::cell(None), Vc::cell(None)).await?;
+        let result = &*fetch(Vc::cell(resource_url.clone().into()), Vc::cell(None), Vc::cell(None)).await?;
         let Err(err_vc) = result else {
             panic!()
         };
