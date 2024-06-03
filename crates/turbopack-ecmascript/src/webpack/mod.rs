@@ -120,7 +120,7 @@ impl ValueToString for WebpackChunkAssetReference {
             Lit::Num(num) => format!("{num}"),
             _ => todo!(),
         };
-        Ok(Vc::cell(format!("webpack chunk {}", chunk_id)))
+        Ok(Vc::cell(format!("webpack chunk {}", chunk_id).into()))
     }
 }
 
