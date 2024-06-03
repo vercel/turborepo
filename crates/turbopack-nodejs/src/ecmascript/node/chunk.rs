@@ -1,6 +1,6 @@
 use anyhow::Result;
 use indexmap::IndexSet;
-use turbo_tasks::{ValueToString, Vc};
+use turbo_tasks::{RcStr, ValueToString, Vc};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{Chunk, ChunkingContext},
@@ -42,13 +42,13 @@ impl EcmascriptBuildNodeChunk {
 impl ValueToString for EcmascriptBuildNodeChunk {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<Vc<RcStr>> {
-        Ok(Vc::cell("Ecmascript Build Node Chunk".to_string()))
+        Ok(Vc::cell("Ecmascript Build Node Chunk".into()))
     }
 }
 
 #[turbo_tasks::function]
 fn modifier() -> Vc<RcStr> {
-    Vc::cell("ecmascript build node chunk".to_string())
+    Vc::cell("ecmascript build node chunk".into())
 }
 
 #[turbo_tasks::value_impl]

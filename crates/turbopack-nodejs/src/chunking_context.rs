@@ -253,8 +253,8 @@ impl ChunkingContext for NodeJsChunkingContext {
                 this.asset_prefix
                     .await?
                     .as_ref()
-                    .map(|s| s.to_owned())
-                    .unwrap_or_else(|| "/".to_owned()),
+                    .map(|s| s.clone())
+                    .unwrap_or_else(|| "/".into()),
                 asset_path
             )
             .into(),
@@ -305,7 +305,10 @@ impl ChunkingContext for NodeJsChunkingContext {
         module: Vc<Box<dyn ChunkableModule>>,
         availability_info: Value<AvailabilityInfo>,
     ) -> Result<Vc<ChunkGroupResult>> {
-        let span = tracing::info_span!("chunking", module = *module.ident().to_string().await?);
+        let span = tracing::info_span!(
+            "chunking",
+            module = module.ident().to_string().await?.to_string()
+        );
         async move {
             let MakeChunkGroupResult {
                 chunks,
