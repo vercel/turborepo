@@ -25,8 +25,12 @@ struct Workspace {
 }
 
 impl Workspace {
-    async fn start_scope(&mut self, entry: Vc<Box<dyn Module>>) {
+    async fn start_scope(&mut self, entry: Vc<Box<dyn Module>>) -> Result<()> {
         let deps = self.dep_graph.deps(entry);
+
+        for dep in deps.await?.iter() {}
+
+        Ok(())
     }
 }
 
@@ -39,7 +43,7 @@ pub async fn split_scopes(
 
     let mut workspace = Workspace { dep_graph };
 
-    workspace.start_scope(entry).await;
+    workspace.start_scope(entry).await?;
 
     todo!()
 }
@@ -47,6 +51,8 @@ pub async fn split_scopes(
 #[turbo_tasks::value_trait]
 pub trait DepGraph {
     fn deps(&self, id: Vc<Box<dyn Module>>) -> Vc<Vec<Vc<Box<dyn Module>>>>;
+
+    fn depandants(&self, id: Vc<Box<dyn Module>>) -> Vc<Vec<Vc<Box<dyn Module>>>>;
 
     fn get_edge(&self, from: Vc<Box<dyn Module>>, to: Vc<Box<dyn Module>>) -> Vc<Option<EdgeData>>;
 }
