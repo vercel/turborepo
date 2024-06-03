@@ -312,7 +312,7 @@ impl IssueProcessingPath for ItemIssueProcessingPath {
                         let (mut a, mut b) = (old.iter(), path.iter());
                         while let (Some(a), Some(b)) = (a.next(), b.next()) {
                             let (a, b) = (a.to_string().await?, b.to_string().await?);
-                            match String::cmp(&*a, &*b) {
+                            match RcStr::cmp(&*a, &*b) {
                                 Ordering::Less => break,
                                 Ordering::Greater => {
                                     shortest = Some(path);
@@ -734,8 +734,8 @@ pub struct PlainIssueProcessingPath(Option<Vec<ReadRef<PlainIssueProcessingPathI
 #[turbo_tasks::value(serialization = "none")]
 #[derive(Clone, Debug, DeterministicHash)]
 pub struct PlainIssueProcessingPathItem {
-    pub file_path: Option<ReadRef<String>>,
-    pub description: ReadRef<String>,
+    pub file_path: Option<ReadRef<RcStr>>,
+    pub description: ReadRef<RcStr>,
 }
 
 #[turbo_tasks::value_trait]

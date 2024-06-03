@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 use indexmap::IndexSet;
-use turbo_tasks::{ValueToString, Vc};
+use turbo_tasks::{RcStr, ValueToString, Vc};
 use turbo_tasks_fs::File;
 
 use crate::{
