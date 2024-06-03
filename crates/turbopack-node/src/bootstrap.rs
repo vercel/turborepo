@@ -56,7 +56,7 @@ impl Asset for NodeJsBootstrapAsset {
 
         // TODO(sokra) We need to have a chunk format for node.js
         // but until then this is a simple hack to make it work for now
-        let mut output = "Error.stackTraceLimit = 100;\nglobal.self = global;\n".into();
+        let mut output = "Error.stackTraceLimit = 100;\nglobal.self = global;\n".to_string();
 
         for chunk in self.chunks().await?.iter() {
             let path = &*chunk.ident().path().await?;

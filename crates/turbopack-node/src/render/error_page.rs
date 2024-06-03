@@ -10,7 +10,7 @@ pub(super) async fn error_html(
 ) -> Result<Vc<RcStr>> {
     let html = create_html(status_code, title, details).await?;
 
-    Ok(Vc::cell(html))
+    Ok(Vc::cell(html.into()))
 }
 
 #[turbo_tasks::function]
@@ -24,7 +24,7 @@ pub(super) async fn error_html_body(
     let (_, body) = html.split_once("<body>").context("no body in html")?;
     let (body, _) = body.split_once("</body>").context("no body in html")?;
 
-    Ok(Vc::cell(body.to_string()))
+    Ok(Vc::cell(body.into()))
 }
 
 async fn create_html(status_code: u16, title: RcStr, details: RcStr) -> Result<String> {
