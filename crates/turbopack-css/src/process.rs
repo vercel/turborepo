@@ -624,7 +624,7 @@ async fn process_content(
 
                     ParsingIssue {
                         file: fs_path_vc,
-                        msg: Vc::cell(e.to_string()),
+                        msg: Vc::cell(e.to_string().into()),
                         source: Vc::cell(source),
                     }
                     .cell()

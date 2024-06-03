@@ -1,5 +1,5 @@
 use anyhow::Result;
-use turbo_tasks::{Value, ValueToString, Vc};
+use turbo_tasks::{RcStr, Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::ChunkableModuleReference,
     reference::ModuleReference,
@@ -46,10 +46,9 @@ impl ModuleReference for CssModuleComposeReference {
 impl ValueToString for CssModuleComposeReference {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<Vc<RcStr>> {
-        Ok(Vc::cell(format!(
-            "compose(url) {}",
-            self.request.to_string().await?,
-        )))
+        Ok(Vc::cell(
+            format!("compose(url) {}", self.request.to_string().await?,).into(),
+        ))
     }
 }
 
