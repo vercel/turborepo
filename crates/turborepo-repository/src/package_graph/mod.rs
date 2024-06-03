@@ -3,6 +3,7 @@ use std::{
     fmt,
 };
 
+use itertools::Itertools;
 use petgraph::visit::{depth_first_search, Reversed};
 use serde::Serialize;
 use turbopath::{
@@ -278,7 +279,7 @@ impl PackageGraph {
         dependents
     }
 
-    pub fn root_internal_package_dependencies(&self) -> HashSet<&AnchoredSystemPath> {
+    pub fn root_internal_package_dependencies(&self) -> Vec<&AnchoredSystemPath> {
         let dependencies = self.dependencies(&PackageNode::Workspace(PackageName::Root));
         dependencies
             .into_iter()
@@ -289,6 +290,7 @@ impl PackageGraph {
                 ),
                 PackageNode::Root => None,
             })
+            .sorted()
             .collect()
     }
 
