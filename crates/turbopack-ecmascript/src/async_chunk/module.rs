@@ -47,7 +47,7 @@ impl AsyncLoaderModule {
 
 #[turbo_tasks::function]
 fn inner_module_reference_description() -> Vc<RcStr> {
-    Vc::cell("async module".to_string())
+    Vc::cell("async module".into())
 }
 
 #[turbo_tasks::value_impl]

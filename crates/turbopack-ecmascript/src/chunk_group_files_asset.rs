@@ -46,12 +46,12 @@ pub struct ChunkGroupFilesAsset {
 
 #[turbo_tasks::function]
 fn module_description() -> Vc<RcStr> {
-    Vc::cell("module".to_string())
+    Vc::cell("module".into())
 }
 
 #[turbo_tasks::function]
 fn runtime_entry_description() -> Vc<RcStr> {
-    Vc::cell("runtime entry".to_string())
+    Vc::cell("runtime entry".into())
 }
 
 #[turbo_tasks::value_impl]
@@ -185,7 +185,7 @@ impl EcmascriptChunkItem for ChunkGroupFilesChunkItem {
 
 #[turbo_tasks::function]
 fn chunk_group_chunk_reference_description() -> Vc<RcStr> {
-    Vc::cell("chunk group chunk".to_string())
+    Vc::cell("chunk group chunk".into())
 }
 
 #[turbo_tasks::value_impl]
@@ -237,7 +237,7 @@ impl ChunkItem for ChunkGroupFilesChunkItem {
 impl Introspectable for ChunkGroupFilesAsset {
     #[turbo_tasks::function]
     fn ty(&self) -> Vc<RcStr> {
-        Vc::cell("chunk group files asset".to_string())
+        Vc::cell("chunk group files asset".into())
     }
 
     #[turbo_tasks::function]
@@ -254,7 +254,7 @@ impl Introspectable for ChunkGroupFilesAsset {
     async fn children(self: Vc<Self>) -> Result<Vc<IntrospectableChildren>> {
         let mut children = IndexSet::new();
         children.insert((
-            Vc::cell("inner asset".to_string()),
+            Vc::cell("inner asset".into()),
             IntrospectableModule::new(Vc::upcast(self.await?.module)),
         ));
         Ok(Vc::cell(children))
