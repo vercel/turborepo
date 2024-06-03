@@ -229,7 +229,7 @@ impl ValueToString for RouteTree {
             result.truncate(result.len() - 2);
         }
         result.push(')');
-        Ok(Vc::cell(result))
+        Ok(Vc::cell(result.into()))
     }
 }
 

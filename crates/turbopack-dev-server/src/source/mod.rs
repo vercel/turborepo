@@ -55,7 +55,7 @@ impl Version for ProxyResult {
         while let Some(chunk) = read.try_next().await? {
             hash.write_bytes(&chunk);
         }
-        Ok(Vc::cell(hash.finish().to_string()))
+        Ok(Vc::cell(hash.finish().to_string().into()))
     }
 }
 
