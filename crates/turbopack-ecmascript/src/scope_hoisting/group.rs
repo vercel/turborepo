@@ -68,7 +68,9 @@ pub async fn split_scopes(
 
     workspace.start_scope(entry).await?;
 
-    todo!()
+    Ok(ModuleScopeGroup {
+        scopes: Vc::cell(workspace.scopes),
+    })
 }
 
 #[turbo_tasks::value_trait]
