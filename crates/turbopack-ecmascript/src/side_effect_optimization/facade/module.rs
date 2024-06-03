@@ -229,17 +229,17 @@ impl EcmascriptChunkPlaceable for EcmascriptModuleFacadeModule {
             } => {
                 let original_export = original_export.await?;
                 exports.insert(
-                    export.await?.clone_value().into(),
+                    export.await?.clone_value(),
                     EsmExport::ImportedBinding(
                         Vc::upcast(EcmascriptModulePartReference::new(self.module)),
-                        original_export.clone_value().into(),
+                        original_export.clone_value(),
                         false,
                     ),
                 );
             }
             ModulePart::RenamedNamespace { export } => {
                 exports.insert(
-                    export.await?.clone_value().into(),
+                    export.await?.clone_value(),
                     EsmExport::ImportedNamespace(Vc::upcast(EcmascriptModulePartReference::new(
                         self.module,
                     ))),
