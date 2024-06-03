@@ -136,13 +136,16 @@ async fn into_ecmascript_module_asset(
     let options = Options {
         parse: parse_options,
         development: transform_options.development.unwrap_or(false),
-        provider_import_source: transform_options.provider_import_source.clone(),
+        provider_import_source: transform_options
+            .provider_import_source
+            .clone()
+            .map(RcStr::into_owned),
         jsx: transform_options.jsx.unwrap_or(false), // true means 'preserve' jsx syntax.
         jsx_runtime,
         jsx_import_source: transform_options
             .jsx_import_source
-            .as_ref()
-            .map(|s| s.into()),
+            .clone()
+            .map(RcStr::into_owned),
         filepath: Some(this.source.ident().path().await?.to_string()),
         ..Default::default()
     };
