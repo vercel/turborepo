@@ -9,7 +9,7 @@ use std::{
 
 use anyhow::Result;
 use sha2::{Digest, Sha256};
-use turbo_tasks::{util::FormatDuration, TurboTasks, UpdateInfo, Vc};
+use turbo_tasks::{util::FormatDuration, RcStr, TurboTasks, UpdateInfo, Vc};
 use turbo_tasks_fs::{
     register, DirectoryContent, DirectoryEntry, DiskFileSystem, FileContent, FileSystem,
     FileSystemPath,
@@ -92,7 +92,7 @@ async fn hash_directory(directory: Vc<FileSystemPath>) -> Result<Vc<RcStr>> {
     let hash = hash_content(
         &mut hashes
             .into_values()
-            .collect::<Vec<String>>()
+            .collect::<Vec<RcStr>>()
             .join(",")
             .as_bytes(),
     );

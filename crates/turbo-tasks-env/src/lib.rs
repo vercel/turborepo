@@ -70,8 +70,7 @@ pub async fn case_insensitive_read(map: Vc<EnvMap>, name: RcStr) -> Result<Vc<Op
         to_uppercase_map(map)
             .await?
             .get(&RcStr::from(name.to_uppercase()))
-            .cloned()
-            .map(|v| v.into_owned()),
+            .cloned(),
     ))
 }
 
