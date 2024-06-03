@@ -286,7 +286,7 @@ pub enum NodeJsVersion {
 
 impl Default for NodeJsVersion {
     fn default() -> Self {
-        NodeJsVersion::Static(Vc::cell(DEFAULT_NODEJS_VERSION.to_owned()))
+        NodeJsVersion::Static(Vc::cell(DEFAULT_NODEJS_VERSION.into()))
     }
 }
 
