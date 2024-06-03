@@ -90,7 +90,7 @@ impl BrowserChunkingContextBuilder {
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(Debug, Clone, Hash, PartialOrd, Ord)]
 pub struct BrowserChunkingContext {
-    name: Option<String>,
+    name: Option<RcStr>,
     /// This path get stripped off of chunk paths before generating output asset
     /// paths.
     context_path: Vc<FileSystemPath>,
@@ -243,7 +243,7 @@ impl ChunkingContext for BrowserChunkingContext {
         if let Some(name) = &self.name {
             Vc::cell(name.clone())
         } else {
-            Vc::cell("unknown".to_string())
+            Vc::cell("unknown".into())
         }
     }
 
@@ -408,8 +408,8 @@ impl ChunkingContext for BrowserChunkingContext {
         availability_info: Value<AvailabilityInfo>,
     ) -> Result<Vc<ChunkGroupResult>> {
         let span = {
-            let ident = ident.to_string().await?;
-            tracing::info_span!("chunking", chunking_type = "evaluated", ident = *ident)
+            let ident = ident.to_string().await?.to_string();
+            tracing::info_span!("chunking", chunking_type = "evaluated", ident = ident)
         };
         async move {
             let this = self.await?;

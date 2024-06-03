@@ -41,7 +41,7 @@ impl EcmascriptDevChunk {
 impl ValueToString for EcmascriptDevChunk {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<Vc<RcStr>> {
-        Ok(Vc::cell("Ecmascript Dev Chunk".to_string()))
+        Ok(Vc::cell("Ecmascript Dev Chunk".into()))
     }
 }
 
