@@ -1,5 +1,5 @@
 use anyhow::{bail, Result};
-use turbo_tasks::{ReadRef, Vc};
+use turbo_tasks::{RcStr, ReadRef, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbo_tasks_hash::{encode_hex, Xxh3Hash64Hasher};
 use turbopack_core::{
@@ -61,6 +61,6 @@ impl Version for EcmascriptBuildNodeChunkVersion {
         }
         let hash = hasher.finish();
         let hex_hash = encode_hex(hash);
-        Vc::cell(hex_hash)
+        Vc::cell(hex_hash.into())
     }
 }

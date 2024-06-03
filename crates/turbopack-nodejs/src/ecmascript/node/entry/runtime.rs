@@ -2,7 +2,7 @@ use std::io::Write;
 
 use anyhow::{bail, Result};
 use indoc::writedoc;
-use turbo_tasks::{ValueToString, Vc};
+use turbo_tasks::{RcStr, ValueToString, Vc};
 use turbo_tasks_fs::{File, FileSystem};
 use turbopack_core::{
     asset::{Asset, AssetContent},
@@ -92,7 +92,7 @@ impl EcmascriptBuildNodeRuntimeChunk {
 impl ValueToString for EcmascriptBuildNodeRuntimeChunk {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<Vc<RcStr>> {
-        Ok(Vc::cell("Ecmascript Build Node Runtime Chunk".to_string()))
+        Ok(Vc::cell("Ecmascript Build Node Runtime Chunk".into()))
     }
 }
 
