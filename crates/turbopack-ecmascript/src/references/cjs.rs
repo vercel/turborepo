@@ -121,10 +121,9 @@ impl ModuleReference for CjsRequireAssetReference {
 impl ValueToString for CjsRequireAssetReference {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<Vc<RcStr>> {
-        Ok(Vc::cell(format!(
-            "require {}",
-            self.request.to_string().await?,
-        )))
+        Ok(Vc::cell(
+            format!("require {}", self.request.to_string().await?,).into(),
+        ))
     }
 }
 
