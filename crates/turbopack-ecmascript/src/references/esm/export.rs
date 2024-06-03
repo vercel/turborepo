@@ -346,7 +346,7 @@ fn emit_star_exports_issue(source_ident: Vc<AssetIdent>, message: RcStr) {
         source_ident,
         severity: IssueSeverity::Warning.into(),
         source: None,
-        title: Vc::cell("unexpected export *".to_string()),
+        title: Vc::cell("unexpected export *".into()),
     }
     .cell()
     .emit();
