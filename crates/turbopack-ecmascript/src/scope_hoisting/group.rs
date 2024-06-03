@@ -20,12 +20,26 @@ pub struct ModuleScope {
     pub modules: Vc<Vec<Vc<Box<dyn Module>>>>,
 }
 
+struct Workspace {
+    dep_graph: Vc<Box<dyn DepGraph>>,
+}
+
+impl Workspace {
+    fn start_scope(&mut self, entry: Vc<Box<dyn Module>>) {}
+}
+
 #[turbo_tasks::function]
 pub async fn split_scopes(
-    entry: Vc<ModuleId>,
+    entry: Vc<Box<dyn Module>>,
     dep_graph: Vc<Box<dyn DepGraph>>,
 ) -> Result<Vc<Vec<Vc<ModuleScopeGroup>>>> {
     // If a module is imported only as lazy, it should be in a separate scope
+
+    let mut workspace = Workspace { dep_graph };
+
+    workspace.start_scope(entry);
+
+    todo!()
 }
 
 #[turbo_tasks::value_trait]
