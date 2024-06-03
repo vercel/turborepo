@@ -7,7 +7,7 @@ pub(crate) mod placeable;
 use std::fmt::Write;
 
 use anyhow::{bail, Result};
-use turbo_tasks::{Value, ValueToString, Vc};
+use turbo_tasks::{RcStr, Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystem;
 use turbopack_core::{
     asset::{Asset, AssetContent},
@@ -146,10 +146,9 @@ impl Chunk for EcmascriptChunk {
 impl ValueToString for EcmascriptChunk {
     #[turbo_tasks::function]
     async fn to_string(self: Vc<Self>) -> Result<Vc<RcStr>> {
-        Ok(Vc::cell(format!(
-            "chunk {}",
-            self.ident().to_string().await?
-        )))
+        Ok(Vc::cell(
+            format!("chunk {}", self.ident().to_string().await?).into(),
+        ))
     }
 }
 
@@ -208,7 +207,7 @@ impl Introspectable for EcmascriptChunk {
         }
         details += "\nContent:\n\n";
         write!(details, "{}", content.await?)?;
-        Ok(Vc::cell(details))
+        Ok(Vc::cell(details.into()))
     }
 
     #[turbo_tasks::function]

@@ -31,7 +31,7 @@ use crate::{
 
 #[turbo_tasks::function]
 fn modifier() -> Vc<RcStr> {
-    Vc::cell("chunk group files".to_string())
+    Vc::cell("chunk group files".into())
 }
 
 /// An asset that exports a list of chunk URLs by putting the [asset] into a
