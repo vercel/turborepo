@@ -2692,23 +2692,23 @@ impl ValueToString for ModulePart {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<Vc<RcStr>> {
         Ok(Vc::cell(match self {
-            ModulePart::Evaluation => "module evaluation".to_string(),
-            ModulePart::Export(export) => format!("export {}", export.await?),
+            ModulePart::Evaluation => "module evaluation".into(),
+            ModulePart::Export(export) => format!("export {}", export.await?).into(),
             ModulePart::RenamedExport {
                 original_export,
                 export,
             } => {
                 let original_export = original_export.await?;
                 let export = export.await?;
-                format!("export {} as {}", original_export, export)
+                format!("export {} as {}", original_export, export).into()
             }
             ModulePart::RenamedNamespace { export } => {
-                format!("export * as {}", export.await?)
+                format!("export * as {}", export.await?).into()
             }
-            ModulePart::Internal(id) => format!("internal part {}", id),
-            ModulePart::Locals => "locals".to_string(),
-            ModulePart::Exports => "exports".to_string(),
-            ModulePart::Facade => "facade".to_string(),
+            ModulePart::Internal(id) => format!("internal part {}", id).into(),
+            ModulePart::Locals => "locals".into(),
+            ModulePart::Exports => "exports".into(),
+            ModulePart::Facade => "facade".into(),
         }))
     }
 }
