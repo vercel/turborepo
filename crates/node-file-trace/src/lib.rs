@@ -630,7 +630,7 @@ async fn create_module_asset(
 ) -> Result<Vc<ModuleAssetContext>> {
     let env = Environment::new(Value::new(ExecutionEnvironment::NodeJsLambda(
         NodeJsEnvironment {
-            cwd: Vc::cell(process_cwd.map(|v| v.into_owned())),
+            cwd: Vc::cell(process_cwd),
             ..Default::default()
         }
         .into(),
@@ -666,7 +666,7 @@ async fn create_module_asset(
         compile_time_info,
         ModuleOptionsContext::clone(&*module_options).cell(),
         resolve_options.cell(),
-        Vc::cell("node_file_trace".to_string()),
+        Vc::cell("node_file_trace".into()),
     ))
 }
 
