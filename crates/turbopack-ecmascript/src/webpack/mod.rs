@@ -148,7 +148,7 @@ impl ModuleReference for WebpackEntryAssetReference {
 impl ValueToString for WebpackEntryAssetReference {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<Vc<RcStr>> {
-        Ok(Vc::cell("webpack entry".to_string()))
+        Ok(Vc::cell("webpack entry".into()))
     }
 }
 
@@ -192,9 +192,8 @@ impl ModuleReference for WebpackRuntimeAssetReference {
 impl ValueToString for WebpackRuntimeAssetReference {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<Vc<RcStr>> {
-        Ok(Vc::cell(format!(
-            "webpack {}",
-            self.request.to_string().await?,
-        )))
+        Ok(Vc::cell(
+            format!("webpack {}", self.request.to_string().await?,).into(),
+        ))
     }
 }
