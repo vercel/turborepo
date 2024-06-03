@@ -313,13 +313,13 @@ async fn apply_reexport_tree_shaking(
             } else {
                 Vc::upcast(EcmascriptModuleFacadeModule::new(
                     *final_module,
-                    ModulePart::renamed_export(new_export.clone(), export.clone_value().into()),
+                    ModulePart::renamed_export(new_export.clone(), export.clone_value()),
                 ))
             }
         } else {
             Vc::upcast(EcmascriptModuleFacadeModule::new(
                 *final_module,
-                ModulePart::renamed_namespace(export.clone_value().into()),
+                ModulePart::renamed_namespace(export.clone_value()),
             ))
         };
         return Ok(module);
