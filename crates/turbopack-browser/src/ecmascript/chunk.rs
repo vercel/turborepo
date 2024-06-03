@@ -59,7 +59,7 @@ impl OutputChunk for EcmascriptDevChunk {
 
 #[turbo_tasks::function]
 fn modifier() -> Vc<RcStr> {
-    Vc::cell("ecmascript dev chunk".to_string())
+    Vc::cell("ecmascript dev chunk".into())
 }
 
 #[turbo_tasks::value_impl]
@@ -132,12 +132,12 @@ impl GenerateSourceMap for EcmascriptDevChunk {
 
 #[turbo_tasks::function]
 fn introspectable_type() -> Vc<RcStr> {
-    Vc::cell("dev ecmascript chunk".to_string())
+    Vc::cell("dev ecmascript chunk".into())
 }
 
 #[turbo_tasks::function]
 fn introspectable_details() -> Vc<RcStr> {
-    Vc::cell("generates a development ecmascript chunk".to_string())
+    Vc::cell("generates a development ecmascript chunk".into())
 }
 
 #[turbo_tasks::value_impl]
@@ -163,7 +163,7 @@ impl Introspectable for EcmascriptDevChunk {
         let chunk = Vc::upcast::<Box<dyn Introspectable>>(self.chunk)
             .resolve()
             .await?;
-        children.insert((Vc::cell("chunk".to_string()), chunk));
+        children.insert((Vc::cell("chunk".into()), chunk));
         Ok(Vc::cell(children))
     }
 }
