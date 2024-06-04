@@ -8,9 +8,16 @@ use turbopack_core::{
 
 use super::group::DepGraph;
 
+#[test]
+fn test_1() {}
+
+fn test_dep_graph(deps: Vec<(usize, Vec<usize>)>) -> Vc<TestDepGraph> {
+    TestDepGraph { deps }.cell()
+}
+
 #[turbo_tasks::value]
 pub struct TestDepGraph {
-    deps: Vec<()>,
+    deps: Vec<(usize, Vec<usize>)>,
 }
 
 #[turbo_tasks::value_impl]
