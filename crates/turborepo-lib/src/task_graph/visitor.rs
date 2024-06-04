@@ -402,17 +402,17 @@ impl<'a> Visitor<'a> {
             } else {
                 format!("{}:{}", task_id.package(), task_id.task())
             };
-            let (header, footer) = (
-                (vendor_behavior.group_prefix)(&group_name),
-                (vendor_behavior.group_suffix)(&group_name),
-            );
-            logger.with_header_footer(Some(header), Some(footer));
 
-            let (error_header, error_footer) = (
-                vendor_behavior.error_group_prefix.map(|f| f(&group_name)),
-                vendor_behavior.error_group_suffix.map(|f| f(&group_name)),
+            logger.with_header_footer(
+                Some(vendor_behavior.group_prefix),
+                Some(vendor_behavior.group_suffix),
             );
-            logger.with_error_header_footer(error_header, error_footer);
+
+            // let (error_header, error_footer) = (
+            //     vendor_behavior.error_group_prefix.map(|f| f(&group_name)),
+            //     vendor_behavior.error_group_suffix.map(|f| f(&group_name)),
+            // );
+            // logger.with_error_header_footer(error_header, error_footer);
         }
         logger
     }
