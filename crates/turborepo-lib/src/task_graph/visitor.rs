@@ -408,11 +408,15 @@ impl<'a> Visitor<'a> {
 
             logger.with_header_footer(Some(header_factory), Some(footer_factory));
 
-            // let (error_header, error_footer) = (
-            //     vendor_behavior.error_group_prefix.map(|f| f(&group_name)),
-            //     vendor_behavior.error_group_suffix.map(|f| f(&group_name)),
-            // );
-            // logger.with_error_header_footer(error_header, error_footer);
+            let (error_header, error_footer) = (
+                vendor_behavior
+                    .error_group_prefix
+                    .map(|f| f(group_name.to_owned())),
+                vendor_behavior
+                    .error_group_suffix
+                    .map(|f| f(group_name.to_owned())),
+            );
+            logger.with_error_header_footer(error_header, error_footer);
         }
         logger
     }
