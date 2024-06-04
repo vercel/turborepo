@@ -162,9 +162,6 @@ pub struct Args {
     /// Force color usage in the terminal
     #[clap(long, global = true)]
     pub color: bool,
-    /// Specify a file to save a cpu profile
-    #[clap(long = "cpuprofile", global = true, value_parser)]
-    pub cpu_profile: Option<String>,
     /// The directory in which to run turbo
     #[clap(long, global = true, value_parser)]
     pub cwd: Option<Utf8PathBuf>,
@@ -396,7 +393,6 @@ impl Args {
         track_usage!(tel, &self.login, Option::is_some);
         track_usage!(tel, &self.cwd, Option::is_some);
         track_usage!(tel, &self.heap, Option::is_some);
-        track_usage!(tel, &self.cpu_profile, Option::is_some);
         track_usage!(tel, &self.team, Option::is_some);
         track_usage!(tel, &self.token, Option::is_some);
         track_usage!(tel, &self.trace, Option::is_some);
