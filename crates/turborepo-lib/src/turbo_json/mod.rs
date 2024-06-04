@@ -794,7 +794,7 @@ mod tests {
     #[test_case(
         None,
         PackageJson {
-             scripts: [("build".to_string(), "echo build".to_string())].into_iter().collect(),
+             scripts: [("build".to_string(), Spanned::new("echo build".to_string()))].into_iter().collect(),
              ..PackageJson::default()
         },
         TurboJson {
@@ -818,7 +818,7 @@ mod tests {
             }
         }"#),
         PackageJson {
-             scripts: [("test".to_string(), "echo test".to_string())].into_iter().collect(),
+             scripts: [("test".to_string(), Spanned::new("echo test".to_string()))].into_iter().collect(),
              ..PackageJson::default()
         },
         TurboJson {

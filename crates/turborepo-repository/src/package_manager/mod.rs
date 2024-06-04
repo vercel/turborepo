@@ -15,11 +15,13 @@ use bun::BunDetector;
 use globwalk::{fix_glob_pattern, ValidatedGlob};
 use itertools::{Either, Itertools};
 use lazy_regex::{lazy_regex, Lazy};
+use miette::{Diagnostic, NamedSource, SourceSpan};
 use npm::NpmDetector;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPath};
+use turborepo_errors::Spanned;
 use turborepo_lockfiles::Lockfile;
 use wax::{Any, Glob, Program};
 use which::which;
@@ -262,7 +264,7 @@ impl From<wax::BuildError> for Error {
     }
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum Error {
     #[error("io error: {0}")]
     Io(#[from] std::io::Error, #[backtrace] backtrace::Backtrace),
@@ -293,9 +295,16 @@ pub enum Error {
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
     #[error(
-        "We could not parse the packageManager field in package.json, expected: {0}, received: {1}"
+        "could not parse the packageManager field in package.json,\nexpected to match regular \
+         expression {pattern}"
     )]
-    InvalidPackageManager(String, String),
+    InvalidPackageManager {
+        pattern: String,
+        #[label("invalid `packageManager` field")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+    },
     #[error(transparent)]
     WalkError(#[from] globwalk::WalkError),
     #[error("invalid workspace glob {0}: {1}")]
@@ -309,8 +318,6 @@ pub enum Error {
     WorkspaceDiscovery(#[from] discovery::Error),
     #[error("missing packageManager field in package.json")]
     MissingPackageManager,
-    #[error("{0} set in packageManager is not a supported package manager")]
-    UnsupportedPackageManager(String),
 }
 
 impl From<std::convert::Infallible> for Error {
@@ -447,7 +454,9 @@ impl PackageManager {
             "bun" => Ok(PackageManager::Bun),
             "yarn" => Ok(YarnDetector::detect_berry_or_yarn(&version)?),
             "pnpm" => Ok(PnpmDetector::detect_pnpm6_or_pnpm(&version)?),
-            _ => Err(Error::UnsupportedPackageManager(manager.to_owned())),
+            _ => unreachable!(
+                "found invalid package manager even though regex should have caught it"
+            ),
         }
     }
 
@@ -482,16 +491,20 @@ impl PackageManager {
         Self::get_package_manager(package_json).or_else(|_| Self::detect_package_manager(repo_root))
     }
 
-    pub(crate) fn parse_package_manager_string(manager: &str) -> Result<(&str, &str), Error> {
+    pub(crate) fn parse_package_manager_string(
+        manager: &Spanned<String>,
+    ) -> Result<(&str, &str), Error> {
         if let Some(captures) = PACKAGE_MANAGER_PATTERN.captures(manager) {
             let manager = captures.name("manager").unwrap().as_str();
             let version = captures.name("version").unwrap().as_str();
             Ok((manager, version))
         } else {
-            Err(Error::InvalidPackageManager(
-                PACKAGE_MANAGER_PATTERN.to_string(),
-                manager.to_string(),
-            ))
+            let (span, text) = manager.span_and_text("package.json");
+            Err(Error::InvalidPackageManager {
+                pattern: PACKAGE_MANAGER_PATTERN.to_string(),
+                span,
+                text,
+            })
         }
     }
 
@@ -800,7 +813,8 @@ mod tests {
         ];
 
         for case in tests {
-            let result = PackageManager::parse_package_manager_string(&case.package_manager);
+            let result =
+                PackageManager::parse_package_manager_string(&Spanned::new(case.package_manager));
             let Ok((received_manager, received_version)) = result else {
                 assert!(case.expected_error, "{}: received error", case.name);
                 continue;
