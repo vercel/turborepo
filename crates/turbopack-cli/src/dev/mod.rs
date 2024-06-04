@@ -190,12 +190,12 @@ impl TurbopackDevServerBuilder {
         let server = self.find_port(host, port, 10)?;
 
         let turbo_tasks = self.turbo_tasks;
-        let project_dir: RcStr = self.project_dir.into();
-        let root_dir: RcStr = self.root_dir.into();
+        let project_dir: RcStr = self.project_dir;
+        let root_dir: RcStr = self.root_dir;
         let eager_compile = self.eager_compile;
         let show_all = self.show_all;
         let log_detail: bool = self.log_detail;
-        let browserslist_query: RcStr = self.browserslist_query.into();
+        let browserslist_query: RcStr = self.browserslist_query;
         let log_args = Arc::new(LogOptions {
             current_dir: current_dir().unwrap(),
             project_dir: PathBuf::from(project_dir.clone()),
