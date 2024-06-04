@@ -58,8 +58,6 @@ pub struct RawPackageJson {
     pub dev_dependencies: Option<BTreeMap<String, UnescapedString>>,
     pub optional_dependencies: Option<BTreeMap<String, UnescapedString>>,
     pub peer_dependencies: Option<BTreeMap<String, UnescapedString>>,
-    #[deserializable(rename = "turbo")]
-    pub legacy_turbo_config: Option<serde_json::Value>,
     pub scripts: BTreeMap<String, UnescapedString>,
     pub resolutions: Option<BTreeMap<String, UnescapedString>>,
     pub pnpm: Option<RawPnpmConfig>,
@@ -211,6 +209,14 @@ mod test {
     #[test_case(json!({"name": "foo", "resolutions": {"foo": "1.0.0"}}) ; "berry resolutions")]
     #[test_case(json!({"name": "foo", "pnpm": {"patchedDependencies": {"some-pkg": "./patchfile"}, "another-field": 1}}) ; "pnpm")]
     #[test_case(json!({"name": "foo", "pnpm": {"another-field": 1}}) ; "pnpm without patches")]
+    #[test_case(json!({"version": "1.2", "foo": "bar" }) ; "version")]
+    #[test_case(json!({"packageManager": "npm@9", "foo": "bar"}) ; "package manager")]
+    #[test_case(json!({"dependencies": { "turbo": "latest" }, "foo": "bar"}) ; "dependencies")]
+    #[test_case(json!({"devDependencies": { "turbo": "latest" }, "foo": "bar"}) ; "dev dependencies")]
+    #[test_case(json!({"optionalDependencies": { "turbo": "latest" }, "foo": "bar"}) ; "optional dependencies")]
+    #[test_case(json!({"peerDependencies": { "turbo": "latest" }, "foo": "bar"}) ; "peer dependencies")]
+    #[test_case(json!({"scripts": { "build": "turbo build" }, "foo": "bar"}) ; "scripts")]
+    #[test_case(json!({"resolutions": { "turbo": "latest" }, "foo": "bar"}) ; "resolutions")]
     fn test_roundtrip(json: serde_json::Value) {
         let package_json: PackageJson = PackageJson::from_value(json.clone()).unwrap();
         let actual = serde_json::to_value(package_json).unwrap();
