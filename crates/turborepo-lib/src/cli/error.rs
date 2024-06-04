@@ -39,6 +39,9 @@ pub enum Error {
     Generate(#[from] generate::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
+    Info(#[from] crate::info::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
     Prune(#[from] prune::Error),
     #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
@@ -47,8 +50,6 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Run(#[from] run::Error),
-    #[error(transparent)]
-    Scip(#[from] run::scip::Error),
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
     #[error(transparent)]

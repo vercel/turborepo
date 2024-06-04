@@ -8,25 +8,23 @@ use thiserror::Error;
 use turbopath::AbsoluteSystemPath;
 use turborepo_repository::package_graph::PackageNode;
 
-use crate::{get_version, run::Run};
+use crate::{get_version, info::RepositoryState};
 
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Failed to write SCIP message to file: {0}")]
     ScipWriteError(String),
     #[error(transparent)]
-    Run(#[from] crate::run::error::Error),
+    Run(#[from] crate::run::Error),
 }
 
-impl Run {
+impl RepositoryState {
     pub fn emit_scip(&self, path: &AbsoluteSystemPath) -> Result<(), Error> {
         let index: Index = self.into();
 
         scip::write_message_to_file(path, index).map_err(|e| Error::ScipWriteError(e.to_string()))
     }
-}
 
-impl Run {
     /// This follows a specific grammar. We can look into defining
     /// a more correct format later: https://sourcegraph.com/github.com/sourcegraph/scip@6495bfbd33671ccd4a2358505fdf30058140ff32/-/blob/scip.proto?L147
     fn create_symbol_for_package(&self, package_node: &PackageNode) -> String {
@@ -45,7 +43,7 @@ impl Run {
     }
 }
 
-impl<'a> Into<Index> for &'a Run {
+impl<'a> Into<Index> for &'a RepositoryState {
     fn into(self) -> Index {
         let documents = self
             .pkg_dep_graph

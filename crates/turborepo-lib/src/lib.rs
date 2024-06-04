@@ -24,6 +24,7 @@ mod gitignore;
 mod global_deps_package_change_mapper;
 pub(crate) mod globwatcher;
 mod hash;
+mod info;
 mod opts;
 mod package_changes_watcher;
 mod process;

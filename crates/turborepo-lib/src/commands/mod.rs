@@ -21,7 +21,6 @@ pub(crate) mod logout;
 pub(crate) mod prune;
 pub(crate) mod run;
 pub(crate) mod scan;
-pub(crate) mod scip;
 pub(crate) mod telemetry;
 pub(crate) mod unlink;
 

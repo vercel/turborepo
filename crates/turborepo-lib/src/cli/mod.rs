@@ -481,9 +481,10 @@ pub enum Command {
     #[clap(hide = true)]
     Info {
         workspace: Option<String>,
-        // We output turbo info as json. Currently just for internal testing
+        #[clap(long, value_enum, default_value_t = InfoFormat::Text)]
+        format: InfoFormat,
         #[clap(long)]
-        json: bool,
+        out: Option<Utf8PathBuf>,
     },
     /// Link your local directory to a Vercel organization and enable remote
     /// caching.
@@ -543,10 +544,6 @@ pub enum Command {
         #[clap(flatten)]
         execution_args: Box<ExecutionArgs>,
     },
-    Scip {
-        #[clap(long)]
-        out: Option<Utf8PathBuf>,
-    },
     Watch(Box<ExecutionArgs>),
     /// Unlink the current directory from your Vercel organization and disable
     /// Remote Caching
@@ -555,6 +552,23 @@ pub enum Command {
         #[clap(long, value_enum, default_value_t = LinkTarget::RemoteCache)]
         target: LinkTarget,
     },
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
+pub enum InfoFormat {
+    Text,
+    Json,
+    Scip,
+}
+
+impl InfoFormat {
+    fn ext(&self) -> &'static str {
+        match self {
+            InfoFormat::Text => "txt",
+            InfoFormat::Json => "json",
+            InfoFormat::Scip => "scip",
+        }
+    }
 }
 
 #[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
@@ -1122,14 +1136,22 @@ pub async fn run(
                 Ok(1)
             }
         }
-        Command::Info { workspace, json } => {
+        Command::Info {
+            workspace,
+            format,
+            out,
+        } => {
             CommandEventBuilder::new("info")
                 .with_parent(&root_telemetry)
                 .track_call();
-            let json = *json;
+
+            let out = out
+                .as_ref()
+                .map(|out| AbsoluteSystemPathBuf::from_unknown(&repo_root, out));
             let workspace = workspace.clone();
+            let format = *format;
             let mut base = CommandBase::new(cli_args, repo_root, version, ui);
-            info::run(&mut base, workspace.as_deref(), json).await?;
+            info::run(&mut base, workspace.as_deref(), format, out).await?;
 
             Ok(0)
         }
@@ -1230,17 +1252,6 @@ pub async fn run(
                 }
             })?;
             Ok(exit_code)
-        }
-        Command::Scip { out } => {
-            let event = CommandEventBuilder::new("scip").with_parent(&root_telemetry);
-
-            event.track_call();
-
-            let out = out.clone();
-            let base = CommandBase::new(cli_args, repo_root, version, ui);
-            crate::commands::scip::run(base, event, out).await?;
-
-            Ok(0)
         }
         Command::Watch(_) => {
             let event = CommandEventBuilder::new("watch").with_parent(&root_telemetry);

@@ -6,7 +6,6 @@ mod error;
 pub(crate) mod global_hash;
 mod graph_visualizer;
 pub(crate) mod package_discovery;
-pub(crate) mod scip;
 mod scope;
 pub(crate) mod summary;
 pub mod task_access;
