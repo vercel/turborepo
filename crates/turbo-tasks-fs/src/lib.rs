@@ -1054,7 +1054,7 @@ impl FileSystemPath {
         if file_stem.is_empty() {
             return Ok(Vc::cell(None));
         }
-        Ok(Vc::cell(Some(file_stem.to_string())))
+        Ok(Vc::cell(Some(file_stem.into())))
     }
 }
 
