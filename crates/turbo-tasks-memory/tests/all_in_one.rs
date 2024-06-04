@@ -137,7 +137,7 @@ impl ValueToString for MyEnumValue {
         match self {
             MyEnumValue::Yeah(value) => Vc::cell(value.to_string().into()),
             MyEnumValue::Nah => Vc::cell("nah".into()),
-            MyEnumValue::More(more) => more.to_string().into(),
+            MyEnumValue::More(more) => more.to_string(),
         }
     }
 }
