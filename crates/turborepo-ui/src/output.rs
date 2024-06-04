@@ -99,8 +99,8 @@ impl<W: Write> OutputSink<W> {
 impl<W: Write> OutputClient<W> {
     pub fn with_header_footer(
         &mut self,
-        header: Option<fn(&str) -> String>,
-        footer: Option<fn(&str) -> String>,
+        header: Option<GroupPrefixFn>,
+        footer: Option<GroupPrefixFn>,
     ) {
         self.primary = Marginals { header, footer };
     }
@@ -161,7 +161,7 @@ impl<W: Write> OutputClient<W> {
             // to ensure that the bytes aren't interspersed.
             let mut writers = writers.lock().expect("lock poisoned");
             if let Some(prefix) = header {
-                writers.out.write_all(prefix("name").as_bytes())?;
+                writers.out.write_all(prefix().as_bytes())?;
             }
             for SinkBytes {
                 buffer,
@@ -175,7 +175,7 @@ impl<W: Write> OutputClient<W> {
                 writer.write_all(buffer)?;
             }
             if let Some(suffix) = footer {
-                writers.out.write_all(suffix("name").as_bytes())?;
+                writers.out.write_all(suffix().as_bytes())?;
             }
         }
 
@@ -392,17 +392,17 @@ mod test {
         let sink = OutputSink::new(Vec::new(), Vec::new());
         let mut group1_logger = sink.logger(OutputClientBehavior::Grouped);
         group1_logger.with_header_footer(
-            Some(|_name| "good header\n".into()),
-            Some(|_name| "good footer\n".into()),
+            Some(Arc::new(|| "good header\n".into())),
+            Some(Arc::new(|| "good footer\n".into())),
         );
         group1_logger.with_error_header_footer(
-            Some(|_name| "bad header\n".into()),
-            Some(|_name| "bad footer\n".into()),
+            Some(Arc::new(|| "bad header\n".into())),
+            Some(Arc::new(|| "bad footer\n".into())),
         );
         let mut group2_logger = sink.logger(OutputClientBehavior::Grouped);
         group2_logger.with_header_footer(
-            Some(|_name| "good header\n".into()),
-            Some(|_name| "good footer\n".into()),
+            Some(Arc::new(|| "good header\n".into())),
+            Some(Arc::new(|| "good footer\n".into())),
         );
 
         let mut group1_out = group1_logger.stdout();

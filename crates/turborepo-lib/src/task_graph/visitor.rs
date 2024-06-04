@@ -403,10 +403,10 @@ impl<'a> Visitor<'a> {
                 format!("{}:{}", task_id.package(), task_id.task())
             };
 
-            logger.with_header_footer(
-                Some(vendor_behavior.group_prefix),
-                Some(vendor_behavior.group_suffix),
-            );
+            let header_factory = (vendor_behavior.group_prefix)(group_name.to_owned());
+            let footer_factory = (vendor_behavior.group_suffix)(group_name.to_owned());
+
+            logger.with_header_footer(Some(header_factory), Some(footer_factory));
 
             // let (error_header, error_footer) = (
             //     vendor_behavior.error_group_prefix.map(|f| f(&group_name)),

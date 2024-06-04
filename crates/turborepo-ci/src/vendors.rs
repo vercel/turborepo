@@ -1,4 +1,8 @@
-use std::{collections::HashMap, fmt::Debug, sync::OnceLock};
+use std::{
+    collections::HashMap,
+    fmt::Debug,
+    sync::{Arc, OnceLock},
+};
 
 use crate::vendor_behavior::VendorBehavior;
 
@@ -78,8 +82,8 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     branch_env_var: None,
                     username_env_var: None,
                     behavior: Some(VendorBehavior::new(
-                        |group_name| format!("##[group]{group_name}\r\n"),
-                        |_| String::from("##[endgroup]\r\n"),
+                        |group_name| Arc::new(move || format!("##[group]{group_name}\r\n")),
+                        |_| Arc::new(|| String::from("##[endgroup]\r\n")),
                     )),
                 },
                 Vendor {
@@ -268,12 +272,14 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     username_env_var: Some("GITHUB_ACTOR"),
                     behavior: Some(
                         VendorBehavior::new(
-                            |group_name| format!("::group::{group_name}\n"),
-                            |_| String::from("::endgroup::\n"),
+                            |group_name| Arc::new(move || format!("::group::{group_name}\n")),
+                            |_| Arc::new(|| String::from("::endgroup::\n")),
                         )
                         .with_error(
-                            |group_name| format!("\x1B[;31m{group_name}\x1B[;0m\n"),
-                            |_| String::new(),
+                            |group_name| {
+                                Arc::new(move || format!("\x1B[;31m{group_name}\x1B[;0m\n"))
+                            },
+                            |_| Arc::new(|| String::new()),
                         ),
                     ),
                 },
@@ -553,8 +559,12 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     branch_env_var: None,
                     username_env_var: None,
                     behavior: Some(VendorBehavior::new(
-                        |group_name| format!("##teamcity[blockOpened name='{group_name}']"),
-                        |group_name| format!("##teamcity[blockClosed name='{group_name}']"),
+                        |group_name| {
+                            Arc::new(move || format!("##teamcity[blockOpened name='{group_name}']"))
+                        },
+                        |group_name| {
+                            Arc::new(move || format!("##teamcity[blockClosed name='{group_name}']"))
+                        },
                     )),
                 },
                 Vendor {
@@ -569,8 +579,10 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     branch_env_var: None,
                     username_env_var: None,
                     behavior: Some(VendorBehavior::new(
-                        |group_name| format!("travis_fold:start:{group_name}\r\n"),
-                        |group_name| format!("travis_fold:end:{group_name}\r\n"),
+                        |group_name| {
+                            Arc::new(move || format!("travis_fold:start:{group_name}\r\n"))
+                        },
+                        |group_name| Arc::new(move || format!("travis_fold:end:{group_name}\r\n")),
                     )),
                 },
                 Vendor {

@@ -7,7 +7,7 @@ use std::{env, sync::OnceLock};
 
 use crate::vendors::get_vendors;
 pub use crate::{
-    vendor_behavior::{GroupPrefixFn, VendorBehavior},
+    vendor_behavior::{GroupPrefixFn, GroupPrefixFnFactory, VendorBehavior},
     vendors::Vendor,
 };
 
