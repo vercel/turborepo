@@ -24,10 +24,8 @@ pub async fn run(
     let package_graph = PackageGraph::builder(&base.repo_root, root_package_json)
         .build()
         .await?;
-    println!("2");
+
     let repo_state = RepositoryState::new(package_graph, base.config()?, base.repo_root.clone());
-    println!("1");
-    println!("format: {:?}", format);
     if matches!(format, InfoFormat::Scip) {
         if workspace.is_some() {
             return Err(Error::ScipForPackage);
