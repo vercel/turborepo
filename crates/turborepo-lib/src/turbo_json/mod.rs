@@ -124,7 +124,7 @@ pub struct RawTurboJson {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) remote_cache: Option<RawRemoteCacheOptions>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "ui")]
-    pub ui: Option<bool>,
+    pub ui: Option<UI>,
 
     #[deserializable(rename = "//")]
     #[serde(skip)]
@@ -156,6 +156,24 @@ impl Deref for Pipeline {
 impl DerefMut for Pipeline {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+#[derive(Serialize, Debug, Copy, Clone, Deserializable, PartialEq, Eq)]
+pub enum UI {
+    Tui,
+    Stream,
+}
+
+impl Default for UI {
+    fn default() -> Self {
+        Self::Tui
+    }
+}
+
+impl UI {
+    pub fn use_tui(&self) -> bool {
+        matches!(self, Self::Tui)
     }
 }
 
@@ -717,7 +735,7 @@ mod tests {
     use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
     use turborepo_repository::package_json::PackageJson;
 
-    use super::{Pipeline, RawTurboJson, Spanned};
+    use super::{Pipeline, RawTurboJson, Spanned, UI};
     use crate::{
         cli::OutputLogsMode,
         run::task_id::TaskName,
@@ -1048,10 +1066,10 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
-    #[test_case(r#"{ "ui": false }"#, Some(false) ; "f")]
-    #[test_case(r#"{ "ui": true }"#, Some(true) ; "t")]
+    #[test_case(r#"{ "ui": "tui" }"#, Some(UI::Tui) ; "tui")]
+    #[test_case(r#"{ "ui": "stream" }"#, Some(UI::Stream) ; "stream")]
     #[test_case(r#"{}"#, None ; "missing")]
-    fn test_ui(json: &str, expected: Option<bool>) {
+    fn test_ui(json: &str, expected: Option<UI>) {
         let json = RawTurboJson::parse(json, AnchoredSystemPath::new("").unwrap()).unwrap();
         assert_eq!(json.ui, expected);
     }

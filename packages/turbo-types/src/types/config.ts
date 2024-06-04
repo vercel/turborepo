@@ -135,9 +135,9 @@ export interface RootSchema extends BaseSchema {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#experimentalui
    *
-   * @defaultValue `true`
+   * @defaultValue `"tui"`
    */
-  ui?: boolean;
+  ui?: UI;
 }
 
 export type LegacyRootSchema = RootSchema & LegacyBaseSchema;
@@ -319,6 +319,8 @@ export type OutputMode =
   | "new-only"
   | "errors-only"
   | "none";
+
+export type UI = "tui" | "stream";
 
 export type AnchoredUnixPath = string;
 export type EnvWildcard = string;

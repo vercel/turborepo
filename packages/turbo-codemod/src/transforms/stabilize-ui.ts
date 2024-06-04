@@ -20,7 +20,7 @@ function migrateConfig(config: ExperimentalSchema): RootSchema {
   delete config.experimentalUI;
   // If UI is enabled we can just remove the config now that it's enabled by default
   if (ui !== undefined && !ui) {
-    config.ui = ui;
+    config.ui = "stream";
   }
   return config;
 }

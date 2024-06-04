@@ -294,7 +294,7 @@ impl ResolvedConfigurationOptions for RawTurboJson {
             .experimental_spaces
             .and_then(|spaces| spaces.id)
             .map(|spaces_id| spaces_id.into());
-        opts.ui = self.ui;
+        opts.ui = self.ui.map(|ui| ui.use_tui());
         Ok(opts)
     }
 }
