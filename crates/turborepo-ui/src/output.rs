@@ -161,7 +161,8 @@ impl<W: Write> OutputClient<W> {
             // to ensure that the bytes aren't interspersed.
             let mut writers = writers.lock().expect("lock poisoned");
             if let Some(prefix) = header {
-                writers.out.write_all(prefix().as_bytes())?;
+                let start_time = chrono::Utc::now();
+                writers.out.write_all(prefix(start_time).as_bytes())?;
             }
             for SinkBytes {
                 buffer,
@@ -175,7 +176,8 @@ impl<W: Write> OutputClient<W> {
                 writer.write_all(buffer)?;
             }
             if let Some(suffix) = footer {
-                writers.out.write_all(suffix().as_bytes())?;
+                let end_time = chrono::Utc::now();
+                writers.out.write_all(suffix(end_time).as_bytes())?;
             }
         }
 
@@ -392,17 +394,17 @@ mod test {
         let sink = OutputSink::new(Vec::new(), Vec::new());
         let mut group1_logger = sink.logger(OutputClientBehavior::Grouped);
         group1_logger.with_header_footer(
-            Some(Arc::new(|| "good header\n".into())),
-            Some(Arc::new(|| "good footer\n".into())),
+            Some(Arc::new(|_| "good header\n".into())),
+            Some(Arc::new(|_| "good footer\n".into())),
         );
         group1_logger.with_error_header_footer(
-            Some(Arc::new(|| "bad header\n".into())),
-            Some(Arc::new(|| "bad footer\n".into())),
+            Some(Arc::new(|_| "bad header\n".into())),
+            Some(Arc::new(|_| "bad footer\n".into())),
         );
         let mut group2_logger = sink.logger(OutputClientBehavior::Grouped);
         group2_logger.with_header_footer(
-            Some(Arc::new(|| "good header\n".into())),
-            Some(Arc::new(|| "good footer\n".into())),
+            Some(Arc::new(|_| "good header\n".into())),
+            Some(Arc::new(|_| "good footer\n".into())),
         );
 
         let mut group1_out = group1_logger.stdout();

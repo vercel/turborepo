@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-pub type GroupPrefixFn = Arc<dyn Fn() -> String + Send + Sync>;
+use chrono::{DateTime, Utc};
+
+pub type GroupPrefixFn = Arc<dyn Fn(DateTime<Utc>) -> String + Send + Sync>;
 pub type GroupPrefixFnFactory = fn(group_name: String) -> GroupPrefixFn;
 
 #[derive(Clone, Debug, PartialEq)]
