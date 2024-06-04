@@ -1048,7 +1048,7 @@ impl FileSystemPath {
     ///   `.`s within;
     /// * Otherwise, the portion of the file name before the final `.`
     #[turbo_tasks::function]
-    pub async fn file_stem(self: Vc<Self>) -> Result<Vc<Option<String>>> {
+    pub async fn file_stem(self: Vc<Self>) -> Result<Vc<Option<RcStr>>> {
         let this = self.await?;
         let (_, file_stem, _) = this.split_file_stem_extension();
         if file_stem.is_empty() {
