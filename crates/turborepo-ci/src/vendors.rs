@@ -294,7 +294,26 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
-                    behavior: None,
+                    // https://docs.gitlab.com/ee/ci/jobs/#custom-collapsible-sections
+                    behavior: Some(VendorBehavior::new(
+                        |group_name| {
+                            Arc::new(move |start_time| {
+                                let timestamp = start_time.timestamp();
+                                format!(
+                                    "\\e[0Ksection_start:{timestamp}:{group_name}\\r\\
+                                     e[0K{group_name}"
+                                )
+                            })
+                        },
+                        |group_name| {
+                            Arc::new(move |end_time| {
+                                let timestamp = end_time.timestamp();
+                                String::from(format!(
+                                    "\\e[0Ksection_end:{timestamp}:{group_name}\\r\\e[0K"
+                                ))
+                            })
+                        },
+                    )),
                 },
                 Vendor {
                     name: "GoCD",
