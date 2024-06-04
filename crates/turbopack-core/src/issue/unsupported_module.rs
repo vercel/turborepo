@@ -1,5 +1,5 @@
 use anyhow::Result;
-use turbo_tasks::Vc;
+use turbo_tasks::{RcStr, Vc};
 use turbo_tasks_fs::FileSystemPath;
 
 use super::{Issue, IssueSeverity, IssueStage, OptionStyledString, StyledString};
@@ -7,8 +7,8 @@ use super::{Issue, IssueSeverity, IssueStage, OptionStyledString, StyledString};
 #[turbo_tasks::value(shared)]
 pub struct UnsupportedModuleIssue {
     pub file_path: Vc<FileSystemPath>,
-    pub package: String,
-    pub package_path: Option<String>,
+    pub package: RcStr,
+    pub package_path: Option<RcStr>,
 }
 
 #[turbo_tasks::value_impl]
