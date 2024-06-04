@@ -285,8 +285,16 @@ pub enum Error {
     #[error("We detected multiple package managers in your repository: {}. Please remove one \
     of them.", managers.join(", "))]
     MultiplePackageManagers { managers: Vec<String> },
-    #[error(transparent)]
-    Semver(#[from] node_semver::SemverError),
+    //#[error(transparent)]
+    //Semver(#[from] node_semver::SemverError),
+    #[error("invalid semantic version `{version}`")]
+    InvalidVersion {
+        version: String,
+        #[label("version found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+    },
     #[error("{0}: {1}")]
     // this will be something like "cannot find binary: <thing we tried to find>"
     Which(which::Error, String),
@@ -448,7 +456,15 @@ impl PackageManager {
         };
 
         let (manager, version) = Self::parse_package_manager_string(package_manager)?;
-        let version = version.parse()?;
+        let version = version.parse().map_err(|_| {
+            let (span, text) = package_manager.span_and_text("package.json");
+            Error::InvalidVersion {
+                version: version.to_string(),
+                span,
+                text,
+            }
+        })?;
+
         match manager {
             "npm" => Ok(PackageManager::Npm),
             "bun" => Ok(PackageManager::Bun),

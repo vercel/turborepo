@@ -36,7 +36,7 @@ impl<'a> YarnDetector<'a> {
     }
 
     pub fn detect_berry_or_yarn(version: &Version) -> Result<PackageManager, Error> {
-        let berry_constraint: Range = ">=2.0.0-0".parse()?;
+        let berry_constraint: Range = ">=2.0.0-0".parse().expect("valid version");
         if berry_constraint.satisfies(version) {
             Ok(PackageManager::Berry)
         } else {
