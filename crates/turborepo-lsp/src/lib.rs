@@ -216,7 +216,7 @@ impl LanguageServer for Backend {
                 .value
                 .as_ref()
                 .and_then(|v| v.as_object())
-                .and_then(|o| o.get_object("pipeline"))
+                .and_then(|o| o.get_object("tasks"))
                 .map(|p| p.properties.iter())
                 .into_iter()
                 .flatten()
@@ -388,7 +388,7 @@ impl LanguageServer for Backend {
             .value
             .as_ref()
             .and_then(|v| v.as_object())
-            .and_then(|o| o.get_object("pipeline"))
+            .and_then(|o| o.get_object("tasks"))
             .map(|p| p.properties.iter())
             .into_iter()
             .flatten();
@@ -736,7 +736,7 @@ impl Backend {
             );
 
             let pipeline = object
-                .and_then(|o| o.get_object("pipeline"))
+                .and_then(|o| o.get_object("tasks"))
                 .map(|p| p.properties.iter());
 
             for property in pipeline.into_iter().flatten() {

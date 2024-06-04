@@ -7,7 +7,7 @@ export class Logger {
 
   constructor(args: UtilityArgs) {
     this.transform = args.transformer;
-    this.dry = args.dry;
+    this.dry = args.dryRun;
   }
 
   _log(...args: Array<unknown>) {

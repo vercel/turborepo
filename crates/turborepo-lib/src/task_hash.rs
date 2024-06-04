@@ -9,7 +9,7 @@ use thiserror::Error;
 use tracing::{debug, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_cache::CacheHitMetadata;
-use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap, ResolvedEnvMode};
+use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap};
 use turborepo_repository::package_graph::{PackageInfo, PackageName};
 use turborepo_scm::SCM;
 use turborepo_telemetry::events::{
@@ -17,6 +17,7 @@ use turborepo_telemetry::events::{
 };
 
 use crate::{
+    cli::EnvMode,
     engine::TaskNode,
     framework::infer_framework,
     hash::{FileHashes, LockFilePackages, TaskHashable, TurboHash},
@@ -52,7 +53,7 @@ pub enum Error {
 
 impl TaskHashable<'_> {
     fn calculate_task_hash(mut self) -> String {
-        if matches!(self.env_mode, ResolvedEnvMode::Loose) {
+        if matches!(self.env_mode, EnvMode::Loose) {
             self.pass_through_env = &[];
         }
 
@@ -184,7 +185,7 @@ impl PackageInputsHashes {
                     None
                 };
 
-                let mut hash_object = match hash_object {
+                let hash_object = match hash_object {
                     Some(hash_object) => hash_object,
                     None => {
                         let local_hash_result = scm.get_package_file_hashes(
@@ -199,22 +200,6 @@ impl PackageInputsHashes {
                         }
                     }
                 };
-                if let Some(dot_env) = &task_definition.dot_env {
-                    if !dot_env.is_empty() {
-                        let absolute_package_path = repo_root.resolve(package_path);
-                        let dot_env_object = match scm.hash_existing_of(
-                            &absolute_package_path,
-                            dot_env.iter().map(|p| p.to_anchored_system_path_buf()),
-                        ) {
-                            Ok(dot_env_object) => dot_env_object,
-                            Err(err) => return Some(Err(err.into())),
-                        };
-
-                        for (key, value) in dot_env_object {
-                            hash_object.insert(key, value);
-                        }
-                    }
-                }
 
                 let file_hashes = FileHashes(hash_object);
                 let hash = file_hashes.clone().hash();
@@ -287,7 +272,7 @@ impl<'a> TaskHasher<'a> {
         &self,
         task_id: &TaskId<'static>,
         task_definition: &TaskDefinition,
-        task_env_mode: ResolvedEnvMode,
+        task_env_mode: EnvMode,
         workspace: &PackageInfo,
         dependency_set: HashSet<&TaskNode>,
         telemetry: PackageTaskEventBuilder,
@@ -410,7 +395,6 @@ impl<'a> TaskHasher<'a> {
                 .as_deref()
                 .unwrap_or_default(),
             env_mode: task_env_mode,
-            dot_env: task_definition.dot_env.as_deref().unwrap_or_default(),
         };
 
         let task_hash = task_hashable.calculate_task_hash();
@@ -471,22 +455,24 @@ impl<'a> TaskHasher<'a> {
     pub fn env(
         &self,
         task_id: &TaskId,
-        task_env_mode: ResolvedEnvMode,
+        task_env_mode: EnvMode,
         task_definition: &TaskDefinition,
         global_env: &EnvironmentVariableMap,
     ) -> Result<EnvironmentVariableMap, Error> {
         match task_env_mode {
-            ResolvedEnvMode::Strict => {
+            EnvMode::Strict => {
                 let mut pass_through_env = EnvironmentVariableMap::default();
                 let default_env_var_pass_through_map =
                     self.env_at_execution_start.from_wildcards(&[
                         "SHELL",
                         // Command Prompt casing of env variables
+                        "APPDATA",
                         "PATH",
                         "SYSTEMROOT",
                         // Powershell casing of env variables
                         "Path",
                         "SystemRoot",
+                        "AppData",
                     ])?;
                 let tracker_env = self
                     .task_hash_tracker
@@ -507,7 +493,7 @@ impl<'a> TaskHasher<'a> {
 
                 Ok(pass_through_env)
             }
-            ResolvedEnvMode::Loose => Ok(self.env_at_execution_start.clone()),
+            EnvMode::Loose => Ok(self.env_at_execution_start.clone()),
         }
     }
 }
@@ -531,6 +517,31 @@ pub fn get_external_deps_hash(
     });
 
     LockFilePackages(transitive_deps).hash()
+}
+
+pub fn get_internal_deps_hash(
+    scm: &SCM,
+    root: &AbsoluteSystemPath,
+    package_dirs: Vec<&AnchoredSystemPath>,
+) -> Result<String, Error> {
+    if package_dirs.is_empty() {
+        return Ok("".into());
+    }
+
+    let file_hashes = package_dirs
+        .into_par_iter()
+        .map(|package_dir| scm.get_package_file_hashes::<&str>(root, package_dir, &[], None))
+        .reduce(
+            || Ok(HashMap::new()),
+            |acc, hashes| {
+                let mut acc = acc?;
+                let hashes = hashes?;
+                acc.extend(hashes.into_iter());
+                Ok(acc)
+            },
+        )?;
+
+    Ok(FileHashes(file_hashes).hash())
 }
 
 impl TaskHashTracker {

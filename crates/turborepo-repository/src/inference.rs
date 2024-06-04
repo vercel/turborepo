@@ -77,8 +77,7 @@ impl RepoState {
                     .ok()
                     .map(|package_json| {
                         // FIXME: We should save this package manager that we detected
-                        let package_manager =
-                            PackageManager::get_package_manager(path, Some(&package_json));
+                        let package_manager = PackageManager::get_package_manager(&package_json);
                         let workspace_globs = package_manager
                             .as_ref()
                             .ok()
@@ -152,7 +151,9 @@ mod test {
         let monorepo_pkg_json = monorepo_root.join_component("package.json");
         monorepo_pkg_json.ensure_dir().unwrap();
         monorepo_pkg_json
-            .create_with_contents("{\"workspaces\": [\"packages/*\"]}")
+            .create_with_contents(
+                "{\"workspaces\": [\"packages/*\"], \"packageManager\": \"npm@7.0.0\"}",
+            )
             .unwrap();
         monorepo_root
             .join_component("package-lock.json")
@@ -188,7 +189,9 @@ mod test {
             .unwrap();
         standalone_monorepo
             .join_component("package.json")
-            .create_with_contents("{\"workspaces\": [\"packages/*\"]}")
+            .create_with_contents(
+                "{\"workspaces\": [\"packages/*\"], \"packageManager\": \"npm@7.0.0\"}",
+            )
             .unwrap();
         standalone_monorepo
             .join_component("package-lock.json")

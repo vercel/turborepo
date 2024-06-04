@@ -49,8 +49,6 @@ pub struct TaskDefinition {
 
     pub(crate) pass_through_env: Option<Vec<String>>,
 
-    pub(crate) dot_env: Option<Vec<RelativeUnixPathBuf>>,
-
     // TopologicalDependencies are tasks from package dependencies.
     // E.g. "build" is a topological dependency in:
     // dependsOn: ['^build'].
@@ -68,7 +66,7 @@ pub struct TaskDefinition {
     pub(crate) inputs: Vec<String>,
 
     // OutputMode determines how we should log the output.
-    pub(crate) output_mode: OutputLogsMode,
+    pub(crate) output_logs: OutputLogsMode,
 
     // Persistent indicates whether the Task is expected to exit or not
     // Tasks marked Persistent do not exit (e.g. --watch mode or dev servers)
@@ -90,9 +88,8 @@ impl Default for TaskDefinition {
             topological_dependencies: Default::default(),
             task_dependencies: Default::default(),
             inputs: Default::default(),
-            output_mode: Default::default(),
+            output_logs: Default::default(),
             persistent: Default::default(),
-            dot_env: Default::default(),
             interactive: Default::default(),
         }
     }
