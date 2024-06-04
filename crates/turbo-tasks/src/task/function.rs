@@ -123,7 +123,7 @@ macro_rules! task_fn_impl {
                 let mut iter = inputs.iter();
 
                 $(
-                    let $arg = iter.next().context(format!("task is missing argument {}", stringify!($arg)))?;
+                    let $arg = iter.next().context(concat!("task is missing argument ", stringify!($arg)))?;
                 )*
 
                 if iter.next().is_some() {
@@ -160,7 +160,7 @@ macro_rules! task_fn_impl {
                 let mut iter = inputs.iter();
 
                 $(
-                    let $arg = iter.next().context(format!("task is missing argument {}", stringify!($arg)))?;
+                    let $arg = iter.next().context(concat!("task is missing argument ", stringify!($arg)))?;
                 )*
 
                 if iter.next().is_some() {
@@ -198,7 +198,7 @@ macro_rules! task_fn_impl {
 
                 let recv = iter.next().context("task is missing receiver")?;
                 $(
-                    let $arg = iter.next().context(format!("task is missing argument {}", stringify!($arg)))?;
+                    let $arg = iter.next().context(concat!("task is missing argument ", stringify!($arg)))?;
                 )*
 
                 if iter.next().is_some() {
@@ -254,7 +254,7 @@ macro_rules! task_fn_impl {
 
                 let recv = iter.next().context("task is missing receiver")?;
                 $(
-                    let $arg = iter.next().context(format!("task is missing argument {}", stringify!($arg)))?;
+                    let $arg = iter.next().context(concat!("task is missing argument ", stringify!($arg)))?;
                 )*
 
                 if iter.next().is_some() {
