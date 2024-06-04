@@ -3,7 +3,7 @@ use std::sync::Arc;
 use chrono::{DateTime, Utc};
 
 pub type GroupPrefixFn = Arc<dyn Fn(DateTime<Utc>) -> String + Send + Sync>;
-pub type GroupPrefixFnFactory = fn(group_name: String) -> GroupPrefixFn;
+type GroupPrefixFnFactory = fn(group_name: String) -> GroupPrefixFn;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct VendorBehavior {
