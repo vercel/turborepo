@@ -15,8 +15,10 @@ use turbo_tasks_hash::{DeterministicHash, DeterministicHasher};
 
 use super::concrete_task_input::TransientSharedValue;
 use crate::{
-    magic_any::MagicAny, ConcreteTaskInput, RawVc, SharedValue, TaskId, TransientInstance,
-    TransientValue, TypedForInput, Value, ValueTypeId, Vc, VcValueType,
+    debug::{ValueDebugFormat, ValueDebugFormatString},
+    magic_any::MagicAny,
+    ConcreteTaskInput, RawVc, SharedValue, TaskId, TransientInstance, TransientValue,
+    TypedForInput, Value, ValueTypeId, Vc, VcValueType,
 };
 
 /// Trait to implement in order for a type to be accepted as a
@@ -169,6 +171,12 @@ impl From<RcStr> for String {
 impl From<RcStr> for PathBuf {
     fn from(s: RcStr) -> Self {
         String::from(s).into()
+    }
+}
+
+impl ValueDebugFormat for RcStr {
+    fn value_debug_format(&self, _: usize) -> ValueDebugFormatString {
+        ValueDebugFormatString::Sync(self.to_string())
     }
 }
 
