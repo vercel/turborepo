@@ -92,7 +92,7 @@ describe("stabilize-ui", () => {
           outputs: ["dist"],
         },
       },
-      ui: false,
+      ui: "stream",
     });
 
     expect(result.fatalError).toBeUndefined();
