@@ -123,7 +123,7 @@ macro_rules! task_fn_impl {
                 let mut iter = inputs.iter();
 
                 $(
-                    let $arg = iter.next().context(concat!("task is missing argument ", stringify!($arg)))?;
+                    let $arg = next_arg(&mut iter, stringify!($arg))?;
                 )*
 
                 if iter.next().is_some() {
@@ -160,7 +160,7 @@ macro_rules! task_fn_impl {
                 let mut iter = inputs.iter();
 
                 $(
-                    let $arg = iter.next().context(concat!("task is missing argument ", stringify!($arg)))?;
+                    let $arg = next_arg(&mut iter, stringify!($arg))?;
                 )*
 
                 if iter.next().is_some() {
@@ -198,7 +198,7 @@ macro_rules! task_fn_impl {
 
                 let recv = iter.next().context("task is missing receiver")?;
                 $(
-                    let $arg = iter.next().context(concat!("task is missing argument ", stringify!($arg)))?;
+                    let $arg = next_arg(&mut iter, stringify!($arg))?;
                 )*
 
                 if iter.next().is_some() {
@@ -254,7 +254,7 @@ macro_rules! task_fn_impl {
 
                 let recv = iter.next().context("task is missing receiver")?;
                 $(
-                    let $arg = iter.next().context(concat!("task is missing argument ", stringify!($arg)))?;
+                    let $arg = next_arg(&mut iter, stringify!($arg))?;
                 )*
 
                 if iter.next().is_some() {
@@ -322,6 +322,14 @@ task_inputs_impl! { A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 A14 }
 task_inputs_impl! { A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 A14 A15 }
 task_inputs_impl! { A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 A14 A15 A16 }
 task_inputs_impl! { A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 A14 A15 A16 A17 }
+
+fn next_arg<'a>(
+    iter: &mut std::slice::Iter<'a, ConcreteTaskInput>,
+    arg_name: &'static str,
+) -> Result<&'a ConcreteTaskInput> {
+    iter.next()
+        .with_context(move || format!("task is missing argument {}", arg_name))
+}
 
 #[cfg(test)]
 mod tests {
