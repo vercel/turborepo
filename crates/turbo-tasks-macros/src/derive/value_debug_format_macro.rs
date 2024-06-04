@@ -116,14 +116,11 @@ fn format_unnamed(ident: &Ident, fields: &FieldsUnnamed) -> (TokenStream2, Token
 }
 
 /// Formats a unit struct or enum variant (e.g. `struct Foo;`, `Foo::Bar`).
-fn format_unit(ident: &Ident) -> (TokenStream2, TokenStream2) {
-    (
-        quote! {},
-        quote! {
-            FormattingStruct::new_unnamed(
-                stringify!(#ident),
-                vec![],
-            )
-        },
-    )
+fn format_unit(ident: &Ident) -> TokenStream2 {
+    quote! {
+        FormattingStruct::new_unnamed(
+            stringify!(#ident),
+            vec![],
+        )
+    }
 }
