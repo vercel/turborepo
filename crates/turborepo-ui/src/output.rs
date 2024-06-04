@@ -4,7 +4,8 @@ use std::{
     sync::{Arc, Mutex, RwLock},
 };
 
-type GroupPrefixFn = fn(group_name: &str) -> String;
+use turborepo_ci::GroupPrefixFn;
+
 /// OutputSink represent a sink for outputs that can be written to from multiple
 /// threads through the use of Loggers.
 pub struct OutputSink<W> {

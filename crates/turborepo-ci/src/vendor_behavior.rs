@@ -1,4 +1,4 @@
-type GroupPrefixFn = fn(group_name: &str) -> String;
+pub type GroupPrefixFn = fn(group_name: &str) -> String;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct VendorBehavior {
