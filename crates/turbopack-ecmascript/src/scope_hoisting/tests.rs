@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use turbo_tasks::Vc;
+use turbo_tasks::{TurboTasks, Vc};
 use turbo_tasks_fs::{DiskFileSystem, FileContent, FileSystem, FileSystemPath};
+use turbo_tasks_memory::MemoryBackend;
 use turbopack_core::{
     asset::{Asset, AssetContent},
     ident::AssetIdent,
@@ -10,13 +11,35 @@ use turbopack_core::{
 };
 
 use super::group::{DepGraph, EdgeData};
+use crate::scope_hoisting::group::split_scopes;
 
-#[test]
-fn test_1() {}
+fn register() {
+    turbo_tasks::register();
+    turbo_tasks_fs::register();
+    crate::register();
+}
 
-fn test_dep_graph(deps: Vec<(usize, Vec<usize>)>) -> Vc<TestDepGraph> {
-    let fs = DiskFileSystem::new("test".to_owned(), "test".to_owned(), Default::default());
+#[tokio::test]
+async fn test_1() -> Result<()> {
+    register();
 
+    let tt = TurboTasks::new(MemoryBackend::default());
+    tt.run_once(async move {
+        let fs = DiskFileSystem::new("test".to_owned(), "test".to_owned(), Default::default());
+
+        let graph = test_dep_graph(
+            fs,
+            vec![(0, vec![1, 2]), (1, vec![3]), (2, vec![3]), (3, vec![])],
+        );
+
+        let group = split_scopes(to_module(fs, 0), graph);
+
+        Ok(())
+    })
+    .await
+}
+
+fn test_dep_graph(fs: Vc<DiskFileSystem>, deps: Vec<(usize, Vec<usize>)>) -> Vc<Box<dyn DepGraph>> {
     let mut dependants = HashMap::new();
 
     for (from, to) in &deps {
