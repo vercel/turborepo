@@ -1,5 +1,6 @@
 use anyhow::Result;
 use async_recursion::async_recursion;
+use rustc_hash::FxHashSet;
 use turbo_tasks::Vc;
 use turbopack_core::module::Module;
 
@@ -20,11 +21,16 @@ struct Workspace {
     dep_graph: Vc<Box<dyn DepGraph>>,
 
     scopes: Vec<Vc<ModuleScope>>,
+    done: FxHashSet<Vc<Box<dyn Module>>>,
 }
 
 impl Workspace {
     #[async_recursion]
     async fn start_scope(&mut self, entry: Vc<Box<dyn Module>>) -> Result<()> {
+        if !self.done.insert(entry) {
+            return Ok(());
+        }
+
         let modules = self.walk(entry).await?;
 
         let module_scope = ModuleScope {
@@ -66,6 +72,7 @@ pub async fn split_scopes(
     let mut workspace = Workspace {
         dep_graph,
         scopes: Default::default(),
+        done: Default::default(),
     };
 
     workspace.start_scope(entry).await?;
