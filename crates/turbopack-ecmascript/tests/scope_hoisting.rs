@@ -1,6 +1,6 @@
 #![feature(arbitrary_self_types)]
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::Result;
 use indexmap::IndexSet;
@@ -23,7 +23,7 @@ fn register() {
     include!(concat!(env!("OUT_DIR"), "/register_test_scope_hoisting.rs"));
 }
 
-fn to_num_deps(deps: Vec<(&str, Vec<&str>)>) -> Deps {
+fn to_num_deps(deps: Vec<(&str, Vec<(&str, bool)>)>) -> Deps {
     let mut map = IndexSet::new();
 
     for (from, to) in deps.iter() {
@@ -31,7 +31,7 @@ fn to_num_deps(deps: Vec<(&str, Vec<&str>)>) -> Deps {
             eprintln!("Inserted {from} as {}", map.get_full(from).unwrap().0);
         }
 
-        for &to in to {
+        for (to, is_lazy) in to {
             if map.insert(to) {
                 eprintln!("Inserted {to} as {}", map.get_full(to).unwrap().0);
             }
@@ -43,7 +43,7 @@ fn to_num_deps(deps: Vec<(&str, Vec<&str>)>) -> Deps {
             (
                 map.get_full(from).unwrap().0,
                 to.into_iter()
-                    .map(|to| map.get_full(to).unwrap().0)
+                    .map(|(to, is_lazy)| (map.get_full(to).unwrap().0, is_lazy))
                     .collect(),
             )
         })
@@ -53,11 +53,11 @@ fn to_num_deps(deps: Vec<(&str, Vec<&str>)>) -> Deps {
 #[tokio::test]
 async fn test_1() -> Result<()> {
     let result = split(to_num_deps(vec![
-        ("example", vec!["a", "b", "lazy"]),
-        ("lazy", vec!["c", "d"]),
-        ("a", vec!["shared"]),
-        ("c", vec!["shared", "cjs"]),
-        ("shared", vec!["shared2"]),
+        ("example", vec![("a", false), ("b", false), ("lazy", true)]),
+        ("lazy", vec![("c", false), ("d", false)]),
+        ("a", vec![("shared", false)]),
+        ("c", vec![("shared", false), ("cjs", false)]),
+        ("shared", vec![("shared2", false)]),
     ]))
     .await?;
 
@@ -66,7 +66,7 @@ async fn test_1() -> Result<()> {
     Ok(())
 }
 
-type Deps = Vec<(usize, Vec<usize>)>;
+type Deps = Vec<(usize, Vec<(usize, bool)>)>;
 
 async fn split(deps: Deps) -> Result<Vec<Vec<usize>>> {
     register();
@@ -101,10 +101,15 @@ async fn split(deps: Deps) -> Result<Vec<Vec<usize>>> {
 
 fn test_dep_graph(fs: Vc<DiskFileSystem>, deps: Deps) -> Vc<Box<dyn DepGraph>> {
     let mut dependants = HashMap::new();
+    let mut lazy = HashSet::new();
 
     for (from, to) in &deps {
-        for &to in to {
+        for &(to, is_lazy) in to {
             dependants.entry(to).or_insert_with(Vec::new).push(*from);
+
+            if is_lazy {
+                lazy.insert((*from, to));
+            }
         }
     }
 
@@ -113,6 +118,7 @@ fn test_dep_graph(fs: Vc<DiskFileSystem>, deps: Deps) -> Vc<Box<dyn DepGraph>> {
             fs,
             deps: deps.into_iter().collect(),
             dependants,
+            lazy,
         }
         .cell(),
     )
@@ -121,8 +127,9 @@ fn test_dep_graph(fs: Vc<DiskFileSystem>, deps: Deps) -> Vc<Box<dyn DepGraph>> {
 #[turbo_tasks::value]
 pub struct TestDepGraph {
     fs: Vc<DiskFileSystem>,
-    deps: HashMap<usize, Vec<usize>>,
+    deps: HashMap<usize, Vec<(usize, bool)>>,
     dependants: HashMap<usize, Vec<usize>>,
+    lazy: HashSet<(usize, usize)>,
 }
 
 fn to_module(fs: Vc<DiskFileSystem>, id: usize) -> Vc<Box<dyn Module>> {
@@ -156,7 +163,7 @@ impl DepGraph for TestDepGraph {
                 .get(&module)
                 .map(|deps| {
                     deps.iter()
-                        .map(|&id| Vc::upcast(to_module(self.fs, id)))
+                        .map(|(id, _)| Vc::upcast(to_module(self.fs, *id)))
                         .collect()
                 })
                 .unwrap_or_default(),
@@ -187,8 +194,13 @@ impl DepGraph for TestDepGraph {
         &self,
         from: Vc<Box<dyn Module>>,
         to: Vc<Box<dyn Module>>,
-    ) -> Result<Vc<Option<EdgeData>>> {
-        todo!()
+    ) -> Result<Vc<EdgeData>> {
+        let from = from_module(from).await?;
+        let to = from_module(to).await?;
+
+        let is_lazy = self.lazy.contains(&(from, to));
+
+        Ok(EdgeData { is_lazy }.cell())
     }
 }
 

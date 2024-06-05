@@ -75,10 +75,10 @@ pub trait DepGraph {
 
     fn depandants(&self, module: Vc<Box<dyn Module>>) -> Vc<Vec<Vc<Box<dyn Module>>>>;
 
-    fn get_edge(&self, from: Vc<Box<dyn Module>>, to: Vc<Box<dyn Module>>) -> Vc<Option<EdgeData>>;
+    fn get_edge(&self, from: Vc<Box<dyn Module>>, to: Vc<Box<dyn Module>>) -> Vc<EdgeData>;
 }
 
-#[turbo_tasks::value]
+#[turbo_tasks::value(shared)]
 pub struct EdgeData {
     pub is_lazy: bool,
 }
