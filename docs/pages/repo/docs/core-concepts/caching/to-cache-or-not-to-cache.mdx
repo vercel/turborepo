@@ -1,0 +1,51 @@
+---
+title: To Cache or Not to Cache
+description: Whether 'tis more performant to cache.
+---
+
+import { Callout } from "../../../../../components/Callout";
+
+# To Cache or Not To Cache
+
+In building a monorepo you need to decide on a per-task basis if you are able to skip the task based upon having run it previously. This behavior is controlled via [`pipeline.<task>.cache`](/repo/docs/reference/configuration#cache) inside of `turbo.json`:
+
+```jsonc filename="/turbo.json"
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "lint": {
+      "cache": true
+    }
+  }
+}
+```
+
+Turborepo defaults to `"cache": true`, so you don't need to specify this value, meaning that this is an identical configuration:
+
+```jsonc filename="/turbo.json"
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "lint": {}
+  }
+}
+```
+
+In these examples we have told Turborepo to cache the `lint` tasks. But, since we've only specified the `cache` key, the only thing that is being cached is the terminal output. For some types of tasks, such as `lint` or `test` this type of minimal configuration is likely correct!
+
+However, for most tasks you will also need to specify [_what_ to cache](./what-to-cache), as well as the [files](./file-inputs) and [environment variables](./environment-variable-inputs) that must match in order for the cache to be valid.
+
+## When Not To Cache
+
+<Callout type="info">
+  `"cache": false` does not mean "always run!" It means "if this task is to be executed it will not be restored from cache." Do not rely on `"cache": false` to trigger side effects like deployments.
+</Callout>
+
+Since caching is the default behavior, and is ideal for _most_ situations, knowing when to opt out of that behavior is important.
+
+1. **Tasks that execute extremely fast.** If you intend to use the remote cache and the task can be executed in less than the time of a network round trip, say, 100 milliseconds, you should consider not caching the task.
+2. **Tasks whose output assets are enormous.** If the consequence of running a task is the production of Docker Container it is possible that the time spent creating a cache artifact, uploading it, and downloading it, will exceed the amount of time to regenerate it.
+3. **Non-transformative file system operations.** If a task is "move a whole bunch of images from one directory to another" the task may take a while but the process of doing that locally will always be faster than caching and restoring the moved assets.
+4. **Tasks which implement their own application-behavior-aware cache.** Some tasks have their own internal caching behavior, for example, something like Docker's Layer Cache. In most cases these secondary caches work hand-in-hand with Turborepo, but in some cases that configuration becomes extremely complicated.
+
+As you become more-familiar with Turborepo you'll discover that some of these guidelines have unexpected tradeoffs when executing in different environments. For example, sometimes disk reads on continuous integration services are significantly slower than network reads. Be sure to test the behavior in your own projects to determine if not caching provides a performance benefit.
