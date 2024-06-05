@@ -111,9 +111,11 @@ impl Pattern {
                 concatenation_push_front_or_merge_item(&mut list, take(this));
                 *this = Pattern::Concatenation(list);
             }
-            (Pattern::Constant(str), Pattern::Constant(other)) => str.mutate(|str| {
-                str.push_str(&other);
-            }),
+            (Pattern::Constant(str), Pattern::Constant(other)) => {
+                let mut buf = str.to_string();
+                buf.push_str(&other);
+                *str = buf.into();
+            }
             (this, pat) => {
                 *this = Pattern::Concatenation(vec![take(this), pat]);
             }
