@@ -46,6 +46,7 @@ impl TaskInput for ConcreteTaskInput {
 // perforamnce. The current implementation offers very cheap `String -> RcStr -> String`, meaning we
 // only pay for the allocation for `Arc` when we pass `format!("").into()` to a function.
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct RcStr(Arc<String>);
 
 impl RcStr {
