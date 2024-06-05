@@ -83,6 +83,18 @@ impl DepGraph for TestDepGraph {
         &self,
         module: Vc<Box<dyn Module>>,
     ) -> Result<Vc<Vec<Vc<Box<dyn Module>>>>> {
+        let module = from_module(module).await?;
+
+        Ok(Vc::cell(
+            self.dependants
+                .get(&module)
+                .map(|deps| {
+                    deps.iter()
+                        .map(|&id| Vc::upcast(to_module(self.fs, id)))
+                        .collect()
+                })
+                .unwrap_or_default(),
+        ))
     }
 
     #[turbo_tasks::function]
