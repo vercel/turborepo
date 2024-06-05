@@ -21,6 +21,6 @@ tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-std"] }
 tokio-retry = "0.3.0"
 tower-lsp = "0.20.0"
 turbopath = { version = "0.1.0", path = "../turborepo-paths" }
-turborepo-lib = { version = "0.1.0", path = "../turborepo-lib" }
+turborepo-lib = { path = "../turborepo-lib" }
 turborepo-repository = { version = "0.1.0", path = "../turborepo-repository" }
 wax.workspace = true

@@ -9,6 +9,7 @@ members = [
   "crates/turbo-prehash",
   "crates/turbopack*",
   "crates/turborepo*",
+  "crates/update-informer",
   "packages/turbo-repository/rust",
   "xtask",
 ]
@@ -76,6 +77,48 @@ turbopack-wasi = [
   "path:crates/turbo-tasks-build",
 ]
 
+# Config for 'cargo dist'
+[workspace.metadata.dist]
+# Whether to consider the binaries in a package for distribution (defaults true)
+dist = false
+# Build only the required packages, and individually
+precise-builds = true
+# The preferred cargo-dist version to use in CI (Cargo.toml SemVer syntax)
+cargo-dist-version = "0.15.1"
+# CI backends to support
+ci = "github"
+# The installers to generate for each app
+installers = ["npm"]
+# Target platforms to build apps for (Rust target-triple syntax)
+targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-musl", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-unknown-linux-musl", "x86_64-pc-windows-msvc"]
+# The archive format to use for windows builds (defaults .zip)
+windows-archive = ".tar.gz"
+# The archive format to use for non-windows builds (defaults .tar.xz)
+unix-archive = ".tar.gz"
+# Publish jobs to run in CI
+pr-run-mode = "plan"
+# Whether CI should trigger releases with dispatches instead of tag pushes
+dispatch-releases = true
+
+[workspace.metadata.dist.dependencies.homebrew]
+protobuf = "*"
+capnp = "*"
+
+[workspace.metadata.dist.dependencies.chocolatey]
+protoc = "27.1.0"
+capnproto = "*"
+
+[workspace.metadata.dist.dependencies.apt]
+build-essential = "*"
+musl-tools = "*"
+musl-dev = "*"
+clang = "*"
+llvm = "*"
+capnproto = "*"
+gcc-aarch64-linux-gnu = { version = "*", targets = ["aarch64-unknown-linux-musl"] }
+binutils-aarch64-linux-gnu = { version = "*", targets = ["aarch64-unknown-linux-musl"] }
+protobuf-compiler = "2"
+
 [workspace.lints.clippy]
 too_many_arguments = "allow"
 
@@ -102,6 +145,11 @@ opt-level = "z"
 [profile.release-turborepo]
 inherits = "release"
 strip = true
+
+# The profile that 'cargo dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
 
 # Declare dependencies used across workspace packages requires single version bump.
 # ref: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#inheriting-a-dependency-from-a-workspace
@@ -190,12 +238,13 @@ wax = { path = "crates/turborepo-wax" }
 turborepo-vercel-api = { path = "crates/turborepo-vercel-api" }
 turborepo-vercel-api-mock = { path = "crates/turborepo-vercel-api-mock" }
 turborepo-vt100 = { path = "crates/turborepo-vt100" }
+update-informer = { path = "crates/update-informer", default-features = false, features = ["reqwest"] }
 
 # Be careful when selecting tls backend, including change default tls backend.
 # If you changed, must verify with ALL build targets with next-swc to ensure
 # it works. next-swc have various platforms, some doesn't support native (using openssl-sys)
 # and some aren't buildable with rustls.
-reqwest = { version = "=0.11.17", default-features = false }
+reqwest = { version = "0.12.4", default-features = false }
 
 chromiumoxide = { version = "0.5.0", features = [
   "tokio-runtime",
@@ -304,6 +353,7 @@ urlencoding = "2.1.2"
 webbrowser = "0.8.7"
 which = "4.4.0"
 unicode-segmentation = "1.10.1"
+
 
 [patch.crates-io]
 # TODO: Use upstream when https://github.com/servo/pathfinder/pull/566 lands

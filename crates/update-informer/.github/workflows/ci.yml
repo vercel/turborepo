@@ -1,0 +1,89 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check-all:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        registry:
+          - crates
+          - github
+          - npm
+          - pypi
+        http_client:
+          - ureq
+          - reqwest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2.7.3
+      - run: cargo check --no-default-features --features ${{ matrix.registry }},${{ matrix.http_client }}
+      - run: cargo fmt --all --check
+      - run: cargo clippy --no-default-features --features ${{ matrix.registry }},${{ matrix.http_client }} -- -D warnings
+      - run: cargo build --release --no-default-features --features ${{ matrix.registry }},${{ matrix.http_client }}
+
+  test-coverage:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        all_registries: ["crates,github,npm,pypi"]
+        http_client:
+          - ureq
+          - reqwest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      # https://github.com/dtolnay/rust-toolchain/issues/29
+      - run: rustup override set nightly
+      - name: Set grcov version
+        run: echo "GRCOV_VERSION=$(cargo search --limit 1 grcov | head -n1 | cut -d '"' -f2)" >> $GITHUB_ENV
+      - run: cargo install --version $GRCOV_VERSION grcov
+      - name: Clean coverage
+        run: |
+          rm -f target/debug/deps/*.gcda
+          rm -f target/debug/deps/*.gcno
+      - uses: Swatinem/rust-cache@v2.7.3
+        with:
+          key: ${{ env.GRCOV_VERSION }}
+      - run: cargo test --no-fail-fast --no-default-features --features ${{ matrix.all_registries }},${{ matrix.http_client }}
+        env:
+          CARGO_INCREMENTAL: "0"
+          RUSTFLAGS: |
+            -Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off
+          RUSTDOCFLAGS: |
+            -Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off
+      - uses: actions-rs/grcov@v0.1
+      - uses: codecov/codecov-action@v4
+        with:
+          file: ./lcov.info
+
+  cargo-sort:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2.7.3
+      - run: cargo install cargo-sort
+      - run: cargo-sort --check
+
+  links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: lycheeverse/lychee-action@v1.9.3
+        with:
+          args: . --verbose --exclude "pkg_name|your_own_registry"
+          fail: true
+
+  style:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dprint/check@v2.2

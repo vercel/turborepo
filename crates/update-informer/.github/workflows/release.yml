@@ -1,0 +1,27 @@
+name: Release
+on:
+  push:
+    tags:
+      - "*.*.*"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release-crate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build and publish to crates.io
+        run: |
+          cargo login ${{ secrets.CRATES_TOKEN }}
+          cargo publish
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          body_path: CHANGELOG.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
