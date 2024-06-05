@@ -25,18 +25,7 @@ struct Workspace {
 impl Workspace {
     #[async_recursion]
     async fn start_scope(&mut self, entry: Vc<Box<dyn Module>>) -> Result<()> {
-        let deps = self.dep_graph.deps(entry);
-        let mut modules = vec![entry];
-
-        for &dep in deps.await?.iter() {
-            let dependants = self.dep_graph.depandants(dep);
-
-            if dependants.await?.len() == 1 {
-                modules.push(dep);
-            } else {
-                self.start_scope(dep).await?;
-            }
-        }
+        let modules = self.walk(entry).await?;
 
         let module_scope = ModuleScope {
             modules: Vc::cell(modules),
@@ -46,6 +35,24 @@ impl Workspace {
         self.scopes.push(module_scope);
 
         Ok(())
+    }
+
+    #[async_recursion]
+    async fn walk(&mut self, from: Vc<Box<dyn Module>>) -> Result<Vec<Vc<Box<dyn Module>>>> {
+        let deps = self.dep_graph.deps(from);
+        let mut modules = vec![from];
+
+        for &dep in deps.await?.iter() {
+            let dependants = self.dep_graph.depandants(dep);
+
+            if dependants.await?.len() == 1 {
+                modules.extend(self.walk(dep).await?);
+            } else {
+                self.start_scope(dep).await?;
+            }
+        }
+
+        Ok(modules)
     }
 }
 
