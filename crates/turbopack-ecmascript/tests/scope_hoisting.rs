@@ -23,16 +23,25 @@ fn register() {
 
 #[tokio::test]
 async fn test_1() -> Result<()> {
+    let result = split(vec![
+        (0, vec![1, 2]),
+        (1, vec![3]),
+        (2, vec![3]),
+        (3, vec![]),
+    ])
+    .await?;
+}
+
+type Deps = Vec<(usize, Vec<usize>)>;
+
+async fn split(deps: Deps) -> Result<()> {
     register();
 
     let tt = TurboTasks::new(MemoryBackend::default());
     tt.run_once(async move {
         let fs = DiskFileSystem::new("test".to_owned(), "test".to_owned(), Default::default());
 
-        let graph = test_dep_graph(
-            fs,
-            vec![(0, vec![1, 2]), (1, vec![3]), (2, vec![3]), (3, vec![])],
-        );
+        let graph = test_dep_graph(fs, deps);
 
         let group = split_scopes(to_module(fs, 0), graph);
 
@@ -41,7 +50,7 @@ async fn test_1() -> Result<()> {
     .await
 }
 
-fn test_dep_graph(fs: Vc<DiskFileSystem>, deps: Vec<(usize, Vec<usize>)>) -> Vc<Box<dyn DepGraph>> {
+fn test_dep_graph(fs: Vc<DiskFileSystem>, deps: Deps) -> Vc<Box<dyn DepGraph>> {
     let mut dependants = HashMap::new();
 
     for (from, to) in &deps {
