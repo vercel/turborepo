@@ -1,7 +1,7 @@
 use std::{
     borrow::{Borrow, Cow},
     ffi::OsStr,
-    fmt::Display,
+    fmt::{Debug, Display},
     ops::Deref,
     path::{Path, PathBuf},
     sync::Arc,
@@ -17,7 +17,7 @@ use crate::debug::{ValueDebugFormat, ValueDebugFormatString};
 // If you want to change the underlying string type to `Arc<str>`, please ensure that you profile
 // perforamnce. The current implementation offers very cheap `String -> RcStr -> String`, meaning we
 // only pay for the allocation for `Arc` when we pass `format!("").into()` to a function.
-#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct RcStr(Arc<String>);
 
@@ -120,6 +120,12 @@ impl PartialEq<&'_ str> for RcStr {
 impl PartialEq<String> for RcStr {
     fn eq(&self, other: &String) -> bool {
         self.as_str() == other.as_str()
+    }
+}
+
+impl Debug for RcStr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(&self.0, f)
     }
 }
 
