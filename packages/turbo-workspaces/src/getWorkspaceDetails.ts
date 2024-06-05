@@ -1,4 +1,3 @@
-import { Workspace } from "@turbo/repository";
 import { ConvertError } from "./errors";
 import { MANAGERS } from "./managers";
 import { directoryInfo } from "./utils";
