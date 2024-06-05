@@ -1,3 +1,5 @@
+#![feature(arbitrary_self_types)]
+
 use std::collections::HashMap;
 
 use anyhow::Result;
@@ -9,14 +11,14 @@ use turbopack_core::{
     ident::AssetIdent,
     module::Module,
 };
-
-use super::group::{DepGraph, EdgeData};
-use crate::scope_hoisting::group::split_scopes;
+use turbopack_ecmascript::scope_hoisting::group::{split_scopes, DepGraph, EdgeData};
 
 fn register() {
     turbo_tasks::register();
     turbo_tasks_fs::register();
-    crate::register();
+    turbopack_ecmascript::register();
+
+    include!(concat!(env!("OUT_DIR"), "/register_test_scope_hoisting.rs"));
 }
 
 #[tokio::test]
