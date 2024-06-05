@@ -30,6 +30,8 @@ async fn test_1() -> Result<()> {
         (3, vec![]),
     ])
     .await?;
+
+    Ok(())
 }
 
 type Deps = Vec<(usize, Vec<usize>)>;
