@@ -160,6 +160,7 @@ impl DerefMut for Pipeline {
 }
 
 #[derive(Serialize, Debug, Copy, Clone, Deserializable, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub enum UI {
     Tui,
     Stream,
@@ -1072,5 +1073,13 @@ mod tests {
     fn test_ui(json: &str, expected: Option<UI>) {
         let json = RawTurboJson::parse(json, AnchoredSystemPath::new("").unwrap()).unwrap();
         assert_eq!(json.ui, expected);
+    }
+
+    #[test_case(r#"{ "ui": "tui" }"#, r#"{"ui":"tui"}"# ; "tui")]
+    #[test_case(r#"{ "ui": "stream" }"#, r#"{"ui":"stream"}"# ; "stream")]
+    fn test_ui_serialization(input: &str, expected: &str) {
+        let parsed = RawTurboJson::parse(input, AnchoredSystemPath::new("").unwrap()).unwrap();
+        let actual = serde_json::to_string(&parsed).unwrap();
+        assert_eq!(actual, expected);
     }
 }
