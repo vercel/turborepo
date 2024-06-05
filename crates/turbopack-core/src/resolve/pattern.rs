@@ -138,7 +138,7 @@ impl Pattern {
             (Pattern::Constant(str), Pattern::Constant(other)) => {
                 let mut buf = other.into_owned();
 
-                buf.push_str(&str);
+                buf.push_str(str);
                 *str = buf.into();
             }
             (this, pat) => {
