@@ -270,9 +270,9 @@ impl SourceMap {
                 // in Node.js that requires sectioned source maps to have a `sources` array.
                 let mut rope = RopeBuilder::from(
                     r#"{
-      "version": 3,
-      "sources": [],
-      "sections": ["#,
+  "version": 3,
+  "sources": [],
+  "sections": ["#,
                 );
 
                 let sections = s
@@ -302,7 +302,7 @@ impl SourceMap {
                 }
 
                 rope += "]
-    }";
+}";
 
                 rope.build()
             }
