@@ -1,8 +1,11 @@
 [package]
 name = "turbo"
-version = "0.1.0"
+version = "2.0.2-canary.1"
 edition = "2021"
 license = "MIT"
+
+[package.metadata.dist]
+dist = true
 
 [features]
 # By default, we enable rustls-tls for reqwest via downstream transitive features.
