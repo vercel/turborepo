@@ -35,7 +35,7 @@ fn empty_string_vec() -> Vc<Vec<RcStr>> {
     Vc::cell(Vec::new())
 }
 
-impl Vc<Vec<String>> {
+impl Vc<Vec<RcStr>> {
     #[deprecated(note = "use Default::default() instead")]
     #[inline(always)]
     pub fn empty() -> Vc<Vec<RcStr>> {
