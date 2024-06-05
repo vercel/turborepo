@@ -339,7 +339,7 @@ async fn run_test(prepared_test: Vc<PreparedTest>) -> Result<Vc<RunTestResult>> 
         .process(
             Vc::upcast(jest_entry_source),
             Value::new(ReferenceType::Internal(Vc::cell(indexmap! {
-                "TESTS".to_string() => test_asset,
+                "TESTS".into() => test_asset,
             }))),
         )
         .module();

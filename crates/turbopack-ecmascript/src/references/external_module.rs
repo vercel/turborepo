@@ -2,7 +2,7 @@ use std::{fmt::Display, io::Write};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use turbo_tasks::{trace::TraceRawVcs, TaskInput, Vc};
+use turbo_tasks::{trace::TraceRawVcs, RcStr, TaskInput, Vc};
 use turbo_tasks_fs::{glob::Glob, rope::RopeBuilder, FileContent, FileSystem, VirtualFileSystem};
 use turbopack_core::{
     asset::{Asset, AssetContent},
@@ -23,8 +23,8 @@ use crate::{
 };
 
 #[turbo_tasks::function]
-fn layer() -> Vc<String> {
-    Vc::cell("external".to_string())
+fn layer() -> Vc<RcStr> {
+    Vc::cell("external".into())
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, TraceRawVcs, TaskInput)]
@@ -46,14 +46,14 @@ impl Display for CachedExternalType {
 
 #[turbo_tasks::value]
 pub struct CachedExternalModule {
-    pub request: String,
+    pub request: RcStr,
     pub external_type: CachedExternalType,
 }
 
 #[turbo_tasks::value_impl]
 impl CachedExternalModule {
     #[turbo_tasks::function]
-    pub fn new(request: String, external_type: CachedExternalType) -> Vc<Self> {
+    pub fn new(request: RcStr, external_type: CachedExternalType) -> Vc<Self> {
         Self::cell(CachedExternalModule {
             request,
             external_type,
@@ -99,12 +99,12 @@ impl CachedExternalModule {
 impl Module for CachedExternalModule {
     #[turbo_tasks::function]
     fn ident(&self) -> Vc<AssetIdent> {
-        let fs = VirtualFileSystem::new_with_name("externals".to_string());
+        let fs = VirtualFileSystem::new_with_name("externals".into());
 
         AssetIdent::from_path(fs.root())
             .with_layer(layer())
             .with_modifier(Vc::cell(self.request.clone()))
-            .with_modifier(Vc::cell(self.external_type.to_string()))
+            .with_modifier(Vc::cell(self.external_type.to_string().into()))
     }
 }
 
