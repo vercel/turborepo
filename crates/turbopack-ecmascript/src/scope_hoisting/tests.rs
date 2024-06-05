@@ -103,7 +103,7 @@ impl DepGraph for TestDepGraph {
         from: Vc<Box<dyn Module>>,
         to: Vc<Box<dyn Module>>,
     ) -> Result<Vc<Option<EdgeData>>> {
-        Ok(Vc::cell(None))
+        todo!()
     }
 }
 
