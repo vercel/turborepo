@@ -160,7 +160,7 @@ impl NotFoundVersion {
 impl Version for NotFoundVersion {
     #[turbo_tasks::function]
     fn id(&self) -> Vc<RcStr> {
-        Vc::cell("".into())
+        Vc::cell(Default::default())
     }
 }
 

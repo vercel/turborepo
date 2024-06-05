@@ -107,7 +107,7 @@ async fn hash_file(file_path: Vc<FileSystemPath>) -> Result<Vc<RcStr>> {
         FileContent::Content(file) => hash_content(&mut file.read()),
         FileContent::NotFound => {
             // report error
-            Vc::cell("".into())
+            Vc::cell(Default::default())
         }
     })
 }
