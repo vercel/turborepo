@@ -53,6 +53,9 @@ fn translate_key_event(interact: bool, key_event: KeyEvent) -> Option<Event> {
         }
         KeyCode::Up => Some(Event::Up),
         KeyCode::Down => Some(Event::Down),
+        // For VIM-like navigation
+        KeyCode::Char('k') => Some(Event::Up),
+        KeyCode::Char('j') => Some(Event::Down),
         KeyCode::Enter => Some(Event::EnterInteractive),
         _ => None,
     }
