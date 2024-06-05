@@ -3,6 +3,8 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
+use indexmap::IndexSet;
+use rustc_hash::FxHashMap;
 use turbo_tasks::{TurboTasks, Vc};
 use turbo_tasks_fs::{DiskFileSystem, FileContent, FileSystem, FileSystemPath};
 use turbo_tasks_memory::MemoryBackend;
@@ -21,15 +23,41 @@ fn register() {
     include!(concat!(env!("OUT_DIR"), "/register_test_scope_hoisting.rs"));
 }
 
+fn to_num_deps(deps: Vec<(&str, Vec<&str>)>) -> Deps {
+    let mut map = IndexSet::new();
+
+    for (from, to) in deps.iter() {
+        map.insert(*from);
+
+        for &to in to {
+            map.insert(to);
+        }
+    }
+
+    deps.into_iter()
+        .map(|(from, to)| {
+            (
+                map.get_full(from).unwrap().0,
+                to.into_iter()
+                    .map(|to| map.get_full(to).unwrap().0)
+                    .collect(),
+            )
+        })
+        .collect()
+}
+
 #[tokio::test]
 async fn test_1() -> Result<()> {
-    let result = split(vec![
-        (0, vec![1, 2]),
-        (1, vec![3]),
-        (2, vec![3]),
-        (3, vec![]),
-    ])
+    let result = split(to_num_deps(vec![
+        ("example", vec!["a", "b", "lazy"]),
+        ("lazy", vec!["c", "d"]),
+        ("a", vec!["shared"]),
+        ("c", vec!["shared", "cjs"]),
+        ("shared", vec!["shared2"]),
+    ]))
     .await?;
+
+    assert_eq!(result, vec![vec![3], vec![1, 2], vec![0]]);
 
     Ok(())
 }
