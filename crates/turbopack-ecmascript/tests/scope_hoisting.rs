@@ -27,13 +27,14 @@ fn to_num_deps(deps: Vec<(&str, Vec<&str>)>) -> Deps {
     let mut map = IndexSet::new();
 
     for (from, to) in deps.iter() {
-        map.insert(*from);
-        eprintln!("Inserted {from} as {}", map.get_full(from).unwrap().0);
+        if map.insert(*from) {
+            eprintln!("Inserted {from} as {}", map.get_full(from).unwrap().0);
+        }
 
         for &to in to {
-            map.insert(to);
-
-            eprintln!("Inserted {to} as {}", map.get_full(to).unwrap().0);
+            if map.insert(to) {
+                eprintln!("Inserted {to} as {}", map.get_full(to).unwrap().0);
+            }
         }
     }
 
