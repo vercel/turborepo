@@ -1,0 +1,33 @@
+# Roadmap
+
+We've got big plans for Turbopack. Here's what we're aiming for in the future:
+
+## Next.js
+
+Right now, Turbopack is being used as an opt-in feature in Next.js's dev server. This is helping to create an extremely fast experience in local development that scales to big projects.
+
+Next, we want to use Turbopack to power production builds with Next.js. We think that this will result in a big boost in performance, especially when integrated with remote caching.
+
+## Svelte
+
+We're planning to build a first-class integration with Svelte to let Turbopack power the next generation of SvelteKit applications.
+
+## Other Frameworks
+
+We are in active discussions with other frameworks to bring Turbopack to their users. We're excited to see what we can build together!
+
+## Remote Caching and Replication
+
+Turbopack is built from the ground up to take advantage of [caching](/pack/docs/core-concepts#the-turbo-engine). Currently, this cache is stored in-memory only. This lets us optimize for our current use case - making the Next.js dev server fast.
+
+In the future, we plan to persist this cache to the file system, to speed up Turbopack between runs. This will work similarly to [Turborepo's cache](/repo/docs/core-concepts/caching) - but at a much more granular level. Turborepo can currently only cache the results of entire builds. Turbopack, however, can cache the results of individual functions within those builds - saving much more time over subsequent runs.
+
+Once persisting to the file system is working, we can build the next logical step: persisting to a remote cache. With Turborepo, we've already built [remote caching](/repo/docs/core-concepts/remote-caching) on Vercel. In the future, you'll be able to _share_ Turbopack's hyper-granular cache across your whole team, using the Vercel Remote Cache.
+
+## Migration for webpack users
+
+To learn more about our future plans for webpack integration, check out our [Migrating from webpack](/pack/docs/migrating-from-webpack) page.
+
+## Fusion with Turborepo
+
+We are currently migrating/rewriting Turborepo in Rust. In the future, Turborepo and Turbopack will merge into a single toolchain--Turbo--that can be used as either a bundler or a build system or both.

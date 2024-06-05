@@ -1,0 +1,83 @@
+---
+title: What to Cache?
+description: The configuration of Turborepo `outputs`
+---
+
+import { Callout } from "../../../../../components/Callout";
+
+# What to Cache?
+
+By default, the console output from all tasks is _always_ captured by Turborepo. If your task does not emit any files (e.g. unit tests with Jest) you can omit `outputs`. Beyond that, you will generally need to specify which files on disk you need to capture (and restore!) in order to be able to run subsequent dependent tasks.
+
+## Configuring Cache Outputs
+
+You configure cache outputs in Turborepo by specifying an array of globs inside [`pipeline.<task>.outputs`](/repo/docs/reference/configuration#outputs) as seen in this example:
+
+```jsonc filename="/turbo.json"
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      "outputs": ["dist/**"]
+    }
+  }
+}
+```
+
+### Inclusions
+
+In the above task definition for `build` it should be noted that it applies to _all_ of the `build` tasks in the entire Turborepo. It's quite likely that each of those individual tasks have slight differences in where their outputs are located, especially as the repository grows.
+
+For example, you may have a utility workspace whose artifacts produced during build appear in `lib` instead of `dist`, meaning that the definition that you had previously would not work for both of the utility and your application whose output artifacts appear in `dist`.
+
+There are two ways to address this. The first option is to include the `lib` directory into the outputs:
+
+```jsonc filename="/turbo.json"
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      "outputs": ["dist/**", "lib/**"]
+    }
+  }
+}
+```
+
+This pattern will work well as long as the `dist` and `lib` folders start empty for all of the workspaces in the turborepo. `turbo` will capture all of the files that appear in those folders.
+
+However, if the pattern isn't consistent enough across all of the workspaces, you can define those per-workspace, or use [workspace configurations](../monorepos/configuring-workspaces).
+
+```jsonc filename="/turbo.json"
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "app#build": {
+      "outputs": ["dist/**"]
+    },
+    "util#build": {
+      "outputs": ["lib/**"]
+    }
+  }
+}
+```
+
+You'll notice that you must specify all of the files inside of a directory using the `/**` operator. Simply specifying a directory name (e.g. `lib`) will include _just_ the directory itself, not its contents.
+
+### Exclusions
+
+Sometimes the easiest way to specify which files need to be cached is to specify a combination of files to include, and which files in the included set should be excluded.
+
+For example, the simplest configuration for a Next.js application with the default settings looks like this:
+
+```jsonc filename="/turbo.json"
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "app#build": {
+      "outputs": [".next/**", "!.next/cache/**"],
+    }
+  }
+}
+```
+
+To exclude files you may specify a glob pattern with a leading `!` to exclude anything that matches.

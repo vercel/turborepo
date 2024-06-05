@@ -1,0 +1,32 @@
+---
+title: "turbo login"
+description: Turborepo CLI Reference for login command
+---
+
+# `turbo login`
+
+Connect machine to your Remote Cache provider. The default provider is [Vercel](https://vercel.com/).
+
+### Options
+
+#### `--url`
+
+`type: string`
+
+Defaults to `https://vercel.com/`.
+
+#### `--api`
+
+`type: string`
+
+Defaults to `https://vercel.com/api`.
+
+#### `--sso-team`
+
+`type: string`
+
+Connect to an sso-enabled Vercel team by providing your Team slug.
+
+```
+turbo login --sso-team=<team-slug>
+```

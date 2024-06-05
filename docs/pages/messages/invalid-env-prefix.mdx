@@ -1,0 +1,32 @@
+---
+title: Invalid environment variable prefix
+description: Invalid environment variable prefix error
+---
+
+# Invalid environment variable prefix
+
+## Why This Error Occurred
+
+When declaring environment variables in your `turbo.json`, you cannot prefix them with `$`. This
+was an old syntax for declaring a dependency on an environment variable that was deprecated in Turbo 1.5.
+
+```json
+{
+  "globalEnv": ["$MY_ENV_VAR"]
+}
+```
+
+The environment variable declared above has the `$` prefix.
+
+## Solution
+
+Remove the `$` prefix from your environment variable declaration.
+
+```json
+{
+  "globalEnv": ["MY_ENV_VAR"]
+}
+```
+
+You can migrate to the env and globalEnv keys using `npx @turbo/codemod migrate-env-var-dependencies`.
+Check out [the codemod's documentation for more details](/repo/docs/reference/codemods#migrate-env-var-dependencies).
