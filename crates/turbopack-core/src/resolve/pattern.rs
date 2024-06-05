@@ -23,9 +23,9 @@ pub enum Pattern {
 fn concatenation_push_or_merge_item(list: &mut Vec<Pattern>, pat: Pattern) {
     if let Pattern::Constant(ref s) = pat {
         if let Some(Pattern::Constant(ref mut last)) = list.last_mut() {
-            last.mutate(|last| {
-                last.push_str(s);
-            });
+            let mut buf = last.to_string();
+            buf.push_str(s);
+            *last = buf.into();
             return;
         }
     }
@@ -33,12 +33,12 @@ fn concatenation_push_or_merge_item(list: &mut Vec<Pattern>, pat: Pattern) {
 }
 
 fn concatenation_push_front_or_merge_item(list: &mut Vec<Pattern>, pat: Pattern) {
-    if let Pattern::Constant(mut s) = pat {
+    if let Pattern::Constant(s) = pat {
         if let Some(Pattern::Constant(ref mut first)) = list.iter_mut().next() {
-            s.mutate(|s| {
-                s.push_str(first);
-            });
-            *first = s;
+            let mut buf = s.into_owned();
+            buf.push_str(first);
+
+            *first = buf.into();
             return;
         }
         list.insert(0, Pattern::Constant(s));
