@@ -21,6 +21,7 @@ struct Workspace {
     dep_graph: Vc<Box<dyn DepGraph>>,
 
     scopes: Vec<Vc<ModuleScope>>,
+    // TODO: Vc does not work here
     done: FxHashSet<Vc<Box<dyn Module>>>,
 }
 
