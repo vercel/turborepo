@@ -15,8 +15,20 @@ use super::group::{DepGraph, EdgeData};
 fn test_1() {}
 
 fn test_dep_graph(deps: Vec<(usize, Vec<usize>)>) -> Vc<TestDepGraph> {
+    let fs = DiskFileSystem::new("test".to_owned(), "test".to_owned(), Default::default());
+
+    let mut dependants = HashMap::new();
+
+    for (from, to) in &deps {
+        for &to in to {
+            dependants.entry(to).or_insert_with(Vec::new).push(*from);
+        }
+    }
+
     TestDepGraph {
+        fs,
         deps: deps.into_iter().collect(),
+        dependants,
     }
     .cell()
 }
@@ -25,6 +37,7 @@ fn test_dep_graph(deps: Vec<(usize, Vec<usize>)>) -> Vc<TestDepGraph> {
 pub struct TestDepGraph {
     fs: Vc<DiskFileSystem>,
     deps: HashMap<usize, Vec<usize>>,
+    dependants: HashMap<usize, Vec<usize>>,
 }
 
 fn to_module(fs: Vc<DiskFileSystem>, id: usize) -> Vc<Box<dyn Module>> {
