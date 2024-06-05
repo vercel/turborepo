@@ -10,7 +10,7 @@ mod task;
 pub use app::run_app;
 use event::{Event, TaskResult};
 pub use handle::{AppReceiver, AppSender, TuiTask};
-use input::input;
+use input::{input, InputOptions};
 pub use pane::TerminalPane;
 pub use table::TaskTable;
 
