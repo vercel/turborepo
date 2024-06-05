@@ -262,9 +262,9 @@ impl Pattern {
                                     if !c.is_empty() {
                                         if let Some(Pattern::Constant(last)) = new_parts.last_mut()
                                         {
-                                            last.mutate(|last| {
-                                                last.push_str(&c);
-                                            });
+                                            let mut buf = last.to_string();
+                                            buf.push_str(&c);
+                                            *last = buf.into();
                                         } else {
                                             new_parts.push(Pattern::Constant(c));
                                         }
