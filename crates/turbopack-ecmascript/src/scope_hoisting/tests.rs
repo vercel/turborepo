@@ -48,12 +48,14 @@ fn test_dep_graph(fs: Vc<DiskFileSystem>, deps: Vec<(usize, Vec<usize>)>) -> Vc<
         }
     }
 
-    TestDepGraph {
-        fs,
-        deps: deps.into_iter().collect(),
-        dependants,
-    }
-    .cell()
+    Vc::upcast(
+        TestDepGraph {
+            fs,
+            deps: deps.into_iter().collect(),
+            dependants,
+        }
+        .cell(),
+    )
 }
 
 #[turbo_tasks::value]
