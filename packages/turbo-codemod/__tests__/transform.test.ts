@@ -51,7 +51,7 @@ describe("transform", () => {
     await transform("add-package-manager", root as MigrateCommandArgument, {
       list: false,
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
     });
 
@@ -109,7 +109,7 @@ describe("transform", () => {
     await transform("add-package-manager", root, {
       list: false,
       force: false,
-      dry: true,
+      dryRun: true,
       print: true,
     });
 
@@ -141,7 +141,7 @@ describe("transform", () => {
     await transform("add-package-manager", root, {
       list: true,
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
     });
 
@@ -156,7 +156,7 @@ describe("transform", () => {
     await transform("not-a-real-option", root, {
       list: false,
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
     });
 
@@ -171,7 +171,7 @@ describe("transform", () => {
     await transform("add-package-manager", "~/path/that/does/not/exist", {
       list: false,
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
     });
 

@@ -2,7 +2,7 @@
 name = "turbo"
 version = "0.1.0"
 edition = "2021"
-license = "MPL-2.0"
+license = "MIT"
 
 [features]
 # By default, we enable rustls-tls for reqwest via downstream transitive features.
@@ -12,7 +12,6 @@ license = "MPL-2.0"
 default = ["rustls-tls", "turborepo-lib/daemon-package-discovery"]
 native-tls = ["turborepo-lib/native-tls"]
 rustls-tls = ["turborepo-lib/rustls-tls"]
-go-daemon = ["turborepo-lib/go-daemon"]
 pprof = ["turborepo-lib/pprof"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

@@ -600,7 +600,9 @@ mod test {
         // write workspaces to root
         repo_root
             .join_component("package.json")
-            .create_with_contents(r#"{"workspaces":["packages/*"]}"#)
+            .create_with_contents(
+                r#"{"workspaces":["packages/*"], "packageManager": "npm@10.0.0"}"#,
+            )
             .unwrap();
 
         let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
@@ -703,7 +705,9 @@ mod test {
         // write workspaces to root
         repo_root
             .join_component("package.json")
-            .create_with_contents(r#"{"workspaces":["packages/*", "packages2/*"]}"#)
+            .create_with_contents(
+                r#"{"workspaces":["packages/*", "packages2/*"], "packageManager": "npm@10.0.0"}"#,
+            )
             .unwrap();
 
         let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
@@ -743,7 +747,9 @@ mod test {
         // update workspaces to no longer cover packages2
         repo_root
             .join_component("package.json")
-            .create_with_contents(r#"{"workspaces":["packages/*"]}"#)
+            .create_with_contents(
+                r#"{"workspaces":["packages/*"], "packageManager": "npm@10.0.0"}"#,
+            )
             .unwrap();
 
         let mut data = package_watcher.discover_packages_blocking().await.unwrap();
@@ -804,7 +810,7 @@ mod test {
         let root_package_json_path = repo_root.join_component("package.json");
         // Start with no workspace glob
         root_package_json_path
-            .create_with_contents(r#"{"packageManager": "pnpm@7.0"}"#)
+            .create_with_contents(r#"{"packageManager": "pnpm@7.0.0"}"#)
             .unwrap();
         repo_root
             .join_component("pnpm-lock.yaml")
@@ -873,7 +879,7 @@ mod test {
         let root_package_json_path = repo_root.join_component("package.json");
         // Start with no workspace glob
         root_package_json_path
-            .create_with_contents(r#"{"packageManager": "npm@7.0"}"#)
+            .create_with_contents(r#"{"packageManager": "npm@7.0.0"}"#)
             .unwrap();
         repo_root
             .join_component("package-lock.json")
@@ -896,7 +902,7 @@ mod test {
             .unwrap_err();
 
         root_package_json_path
-            .create_with_contents(r#"{"packageManager": "pnpm@7.0", "workspaces": ["foo/*"]}"#)
+            .create_with_contents(r#"{"packageManager": "npm@7.0.0", "workspaces": ["foo/*"]}"#)
             .unwrap();
 
         let resp = package_watcher.discover_packages_blocking().await.unwrap();
@@ -911,7 +917,7 @@ mod test {
 
         // Create an invalid workspace glob
         root_package_json_path
-            .create_with_contents(r#"{"packageManager": "pnpm@7.0", "workspaces": ["foo/***"]}"#)
+            .create_with_contents(r#"{"packageManager": "npm@7.0.0", "workspaces": ["foo/***"]}"#)
             .unwrap();
 
         // We expect an error due to invalid workspace glob
@@ -922,7 +928,7 @@ mod test {
 
         // Set it back to valid, ensure we recover
         root_package_json_path
-            .create_with_contents(r#"{"packageManager": "pnpm@7.0", "workspaces": ["foo/*"]}"#)
+            .create_with_contents(r#"{"packageManager": "npm@7.0.0", "workspaces": ["foo/*"]}"#)
             .unwrap();
         let resp = package_watcher.discover_packages_blocking().await.unwrap();
         assert_eq!(resp.package_manager, PackageManager::Npm);
@@ -945,7 +951,7 @@ mod test {
         let root_package_json_path = repo_root.join_component("package.json");
         // Start with no workspace glob
         root_package_json_path
-            .create_with_contents(r#"{"packageManager": "pnpm@7.0"}"#)
+            .create_with_contents(r#"{"packageManager": "pnpm@7.0.0"}"#)
             .unwrap();
         let pnpm_lock_file = repo_root.join_component("pnpm-lock.yaml");
         pnpm_lock_file.create_with_contents("").unwrap();
@@ -963,8 +969,8 @@ mod test {
         let resp = package_watcher.discover_packages_blocking().await.unwrap();
         assert_eq!(resp.package_manager, PackageManager::Pnpm);
 
-        pnpm_lock_file.remove_file().unwrap();
-        // No more lock file, verify we're in an invalid state
+        workspaces_path.remove_file().unwrap();
+        // No more workspaces file, verify we're in an invalid state
         package_watcher
             .discover_packages_blocking()
             .await
@@ -980,7 +986,7 @@ mod test {
 
         // update package.json to complete the transition
         root_package_json_path
-            .create_with_contents(r#"{"packageManager": "npm@7.0", "workspaces": ["foo/*"]}"#)
+            .create_with_contents(r#"{"packageManager": "npm@7.0.0", "workspaces": ["foo/*"]}"#)
             .unwrap();
         let resp = package_watcher.discover_packages_blocking().await.unwrap();
         assert_eq!(resp.package_manager, PackageManager::Npm);

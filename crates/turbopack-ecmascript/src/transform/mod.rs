@@ -8,9 +8,7 @@ use swc_core::{
     common::{chain, collections::AHashMap, comments::Comments, util::take::Take, Mark, SourceMap},
     ecma::{
         ast::{Module, ModuleItem, Program, Script},
-        preset_env::{
-            Targets, {self},
-        },
+        preset_env::{self, Targets},
         transforms::{
             base::{feature::FeatureFlag, helpers::inject_helpers, Assumptions},
             optimization::inline_globals2,
@@ -18,8 +16,9 @@ use swc_core::{
         },
         visit::{FoldWith, VisitMutWith},
     },
+    quote,
 };
-use turbo_tasks::{ValueDefault, Vc};
+use turbo_tasks::{RcStr, ValueDefault, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     environment::Environment,
@@ -38,9 +37,9 @@ pub enum EcmascriptInputTransform {
         #[serde(default)]
         refresh: bool,
         // swc.jsc.transform.react.importSource
-        import_source: Vc<Option<String>>,
+        import_source: Vc<Option<RcStr>>,
         // swc.jsc.transform.react.runtime,
-        runtime: Vc<Option<String>>,
+        runtime: Vc<Option<RcStr>>,
     },
     GlobalTypeofs {
         window_value: String,
@@ -176,7 +175,7 @@ impl EcmascriptInputTransform {
                 let config = Options {
                     runtime: Some(runtime),
                     development: Some(*development),
-                    import_source: import_source.await?.clone_value(),
+                    import_source: import_source.await?.as_deref().map(ToString::to_string),
                     refresh: if *refresh {
                         Some(swc_core::ecma::transforms::react::RefreshOptions {
                             refresh_reg: "__turbopack_refresh__.register".to_string(),
@@ -198,6 +197,25 @@ impl EcmascriptInputTransform {
                     top_level_mark,
                     unresolved_mark,
                 ));
+
+                if *refresh {
+                    let stmt = quote!(
+                        // AMP / No-JS mode does not inject these helpers
+                        "\nif (typeof globalThis.$RefreshHelpers$ === 'object' && \
+                         globalThis.$RefreshHelpers !== null) { \
+                         __turbopack_refresh__.registerExports(module, \
+                         globalThis.$RefreshHelpers$); }\n" as Stmt
+                    );
+
+                    match program {
+                        Program::Module(module) => {
+                            module.body.push(ModuleItem::Stmt(stmt));
+                        }
+                        Program::Script(script) => {
+                            script.body.push(stmt);
+                        }
+                    }
+                }
             }
             EcmascriptInputTransform::CommonJs => {
                 // Explicit type annotation to ensure that we don't duplicate transforms in the

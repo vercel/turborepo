@@ -85,15 +85,12 @@ describe("create-turbo", () => {
           return "success";
         });
 
-      await create(
-        root as CreateCommandArgument,
-        packageManager as CreateCommandArgument,
-        {
-          skipInstall: true,
-          example: "default",
-          telemetry,
-        }
-      );
+      await create(root as CreateCommandArgument, {
+        packageManager,
+        skipInstall: true,
+        example: "default",
+        telemetry,
+      });
 
       const expected = `${chalk.bold(
         logger.turboGradient(">>> Success!")
@@ -161,7 +158,7 @@ describe("create-turbo", () => {
           return "success";
         });
 
-      await create(root as CreateCommandArgument, undefined, {
+      await create(root as CreateCommandArgument, {
         packageManager,
         skipInstall: true,
         example: "default",
@@ -221,15 +218,12 @@ describe("create-turbo", () => {
         return "success";
       });
 
-    await create(
-      root as CreateCommandArgument,
-      packageManager as CreateCommandArgument,
-      {
-        skipInstall: true,
-        example: "default",
-        telemetry,
-      }
-    );
+    await create(root as CreateCommandArgument, {
+      packageManager,
+      skipInstall: true,
+      example: "default",
+      telemetry,
+    });
 
     expect(mockConsole.error).toHaveBeenCalledTimes(2);
     expect(mockConsole.error).toHaveBeenNthCalledWith(

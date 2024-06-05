@@ -28,6 +28,7 @@ rustc-hash = { workspace = true }
 smallvec = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+turbo-prehash = { workspace = true }
 turbo-tasks = { workspace = true }
 turbo-tasks-hash = { workspace = true }
 turbo-tasks-malloc = { workspace = true, default-features = false }
@@ -47,6 +48,7 @@ turbo-tasks-build = { workspace = true }
 
 [features]
 track_unfinished = []
+track_wait_dependencies = []
 unsafe_once_map = []
 log_running_tasks = []
 log_scheduled_tasks = []

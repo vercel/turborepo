@@ -301,12 +301,8 @@ mod tests {
         // Wait for async cache to process
         async_cache.wait().await.unwrap();
 
-        let fs_cache_path = repo_root_path.join_components(&[
-            "node_modules",
-            ".cache",
-            "turbo",
-            &format!("{}.tar.zst", hash),
-        ]);
+        let fs_cache_path =
+            repo_root_path.join_components(&[".turbo", "cache", &format!("{}.tar.zst", hash)]);
 
         // Confirm that fs cache file does *not* exist
         assert!(!fs_cache_path.exists());
@@ -389,12 +385,8 @@ mod tests {
         // Wait for async cache to process
         async_cache.wait().await.unwrap();
 
-        let fs_cache_path = repo_root_path.join_components(&[
-            "node_modules",
-            ".cache",
-            "turbo",
-            &format!("{}.tar.zst", hash),
-        ]);
+        let fs_cache_path =
+            repo_root_path.join_components(&[".turbo", "cache", &format!("{}.tar.zst", hash)]);
 
         // Confirm that fs cache file exists
         assert!(fs_cache_path.exists());
@@ -483,12 +475,8 @@ mod tests {
         // Wait for async cache to process
         async_cache.wait().await.unwrap();
 
-        let fs_cache_path = repo_root_path.join_components(&[
-            "node_modules",
-            ".cache",
-            "turbo",
-            &format!("{}.tar.zst", hash),
-        ]);
+        let fs_cache_path =
+            repo_root_path.join_components(&[".turbo", "cache", &format!("{}.tar.zst", hash)]);
 
         // Confirm that fs cache file exists
         assert!(fs_cache_path.exists());

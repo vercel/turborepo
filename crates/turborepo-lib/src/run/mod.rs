@@ -37,7 +37,7 @@ use crate::{
     run::{global_hash::get_global_hash_inputs, summary::RunTracker, task_access::TaskAccess},
     signal::SignalHandler,
     task_graph::Visitor,
-    task_hash::{get_external_deps_hash, PackageInputsHashes},
+    task_hash::{get_external_deps_hash, get_internal_deps_hash, PackageInputsHashes},
     turbo_json::TurboJson,
     DaemonClient, DaemonConnector,
 };
@@ -141,7 +141,12 @@ impl Run {
     }
 
     pub fn start_experimental_ui(&self) -> Option<(AppSender, JoinHandle<Result<(), tui::Error>>)> {
-        if !self.experimental_ui {
+        // Print prelude here as this needs to happen before the UI is started
+        if self.should_print_prelude {
+            self.print_run_prelude();
+        }
+        // Don't start UI if doing a dry run
+        if !self.experimental_ui || self.opts.run_opts.dry_run.is_some() {
             return None;
         }
 
@@ -153,9 +158,6 @@ impl Run {
     }
 
     pub async fn run(&mut self, experimental_ui_sender: Option<AppSender>) -> Result<i32, Error> {
-        if self.should_print_prelude {
-            self.print_run_prelude();
-        }
         if let Some(subscriber) = self.signal_handler.subscribe() {
             let run_cache = self.run_cache.clone();
             tokio::spawn(async move {
@@ -259,27 +261,30 @@ impl Run {
         let root_external_dependencies_hash =
             is_monorepo.then(|| get_external_deps_hash(&root_workspace.transitive_dependencies));
 
+        let root_internal_dependencies_hash = is_monorepo
+            .then(|| {
+                get_internal_deps_hash(
+                    &self.scm,
+                    &self.repo_root,
+                    self.pkg_dep_graph.root_internal_package_dependencies(),
+                )
+            })
+            .transpose()?;
+
         let global_hash_inputs = {
-            let (env_mode, pass_through_env) = match self.opts.run_opts.env_mode {
-                // In infer mode, if there is any pass_through config (even if it is an empty array)
-                // we'll hash the whole object, so we can detect changes to that config
-                // Further, resolve the envMode to the concrete value.
-                EnvMode::Infer if self.root_turbo_json.global_pass_through_env.is_some() => (
-                    EnvMode::Strict,
-                    self.root_turbo_json.global_pass_through_env.as_deref(),
-                ),
+            let env_mode = self.opts.run_opts.env_mode;
+            let pass_through_env = match env_mode {
                 EnvMode::Loose => {
                     // Remove the passthroughs from hash consideration if we're explicitly loose.
-                    (EnvMode::Loose, None)
+                    None
                 }
-                env_mode => (
-                    env_mode,
-                    self.root_turbo_json.global_pass_through_env.as_deref(),
-                ),
+                EnvMode::Strict => self.root_turbo_json.global_pass_through_env.as_deref(),
             };
 
             get_global_hash_inputs(
                 root_external_dependencies_hash.as_deref(),
+                root_internal_dependencies_hash.as_deref(),
+                root_workspace,
                 &self.repo_root,
                 self.pkg_dep_graph.package_manager(),
                 self.pkg_dep_graph.lockfile(),
@@ -289,7 +294,6 @@ impl Run {
                 pass_through_env,
                 env_mode,
                 self.opts.run_opts.framework_inference,
-                self.root_turbo_json.global_dot_env.as_deref(),
                 &self.scm,
             )?
         };

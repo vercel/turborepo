@@ -1,7 +1,7 @@
 import { setupTestFixtures } from "@turbo/test-utils";
 import { transformer } from "../src/transforms/stabilize-env-mode";
 
-describe.only("stabilize-env-mode", () => {
+describe("stabilize-env-mode", () => {
   const { useFixture } = setupTestFixtures({
     directory: __dirname,
     test: "stabilize-env-mode",
@@ -16,7 +16,7 @@ describe.only("stabilize-env-mode", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -53,7 +53,7 @@ describe.only("stabilize-env-mode", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -95,7 +95,7 @@ describe.only("stabilize-env-mode", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -129,7 +129,7 @@ describe.only("stabilize-env-mode", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -160,7 +160,7 @@ describe.only("stabilize-env-mode", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -194,7 +194,7 @@ describe.only("stabilize-env-mode", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -228,7 +228,7 @@ describe.only("stabilize-env-mode", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -301,7 +301,7 @@ describe.only("stabilize-env-mode", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(read("turbo.json")).toBeUndefined();
@@ -320,7 +320,7 @@ describe.only("stabilize-env-mode", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(result.fatalError).toBeDefined();

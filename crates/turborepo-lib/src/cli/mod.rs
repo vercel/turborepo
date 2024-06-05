@@ -9,7 +9,7 @@ use clap::{
 use clap_complete::{generate, Shell};
 pub use error::Error;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, error, warn};
+use tracing::{debug, error};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::AnonAPIClient;
 use turborepo_repository::inference::{RepoMode, RepoState};
@@ -121,17 +121,16 @@ impl Display for DryRunMode {
 }
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Serialize, ValueEnum)]
+#[serde(rename_all = "lowercase")]
 pub enum EnvMode {
-    #[default]
-    Infer,
     Loose,
+    #[default]
     Strict,
 }
 
 impl fmt::Display for EnvMode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            EnvMode::Infer => "infer",
             EnvMode::Loose => "loose",
             EnvMode::Strict => "strict",
         })
@@ -163,9 +162,6 @@ pub struct Args {
     /// Force color usage in the terminal
     #[clap(long, global = true)]
     pub color: bool,
-    /// Specify a file to save a cpu profile
-    #[clap(long = "cpuprofile", global = true, value_parser)]
-    pub cpu_profile: Option<String>,
     /// The directory in which to run turbo
     #[clap(long, global = true, value_parser)]
     pub cwd: Option<Utf8PathBuf>,
@@ -203,9 +199,6 @@ pub struct Args {
     pub check_for_update: bool,
     #[clap(long = "__test-run", global = true, hide = true)]
     pub test_run: bool,
-    /// Enable the experimental UI
-    #[clap(long, hide = true, global = true)]
-    pub experimental_ui: bool,
     #[clap(flatten, next_help_heading = "Run Arguments")]
     #[serde(skip)]
     pub run_args: Option<RunArgs>,
@@ -400,7 +393,6 @@ impl Args {
         track_usage!(tel, &self.login, Option::is_some);
         track_usage!(tel, &self.cwd, Option::is_some);
         track_usage!(tel, &self.heap, Option::is_some);
-        track_usage!(tel, &self.cpu_profile, Option::is_some);
         track_usage!(tel, &self.team, Option::is_some);
         track_usage!(tel, &self.token, Option::is_some);
         track_usage!(tel, &self.trace, Option::is_some);
@@ -677,9 +669,7 @@ pub struct ExecutionArgs {
     /// Environment variable mode.
     /// Use "loose" to pass the entire existing environment.
     /// Use "strict" to use an allowlist specified in turbo.json.
-    /// Use "infer" to defer to existence of "passThroughEnv" or
-    /// "globalPassThroughEnv" in turbo.json. (default infer)
-    #[clap(long = "env-mode", default_value = "infer", num_args = 0..=1, default_missing_value = "infer")]
+    #[clap(long = "env-mode", default_value = "strict", num_args = 0..=1, default_missing_value = "strict")]
     pub env_mode: EnvMode,
     /// Use the given selector to specify package(s) to act as
     /// entry points. The syntax mirrors pnpm's syntax, and
@@ -687,38 +677,6 @@ pub struct ExecutionArgs {
     /// turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
     #[clap(short = 'F', long, group = "scope-filter-group")]
     pub filter: Vec<String>,
-
-    /// DEPRECATED: Specify package(s) to act as entry
-    /// points for task execution. Supports globs.
-    #[clap(long, group = "scope-filter-group")]
-    pub scope: Vec<String>,
-
-    //  ignore filters out files from scope and filter, so we require it here
-    // -----------------------
-    /// Files to ignore when calculating changed files from '--filter'.
-    /// Supports globs.
-    #[clap(long, requires = "scope-filter-group")]
-    pub ignore: Vec<String>,
-
-    //  since only works with scope, so we require it here
-    // -----------------------
-    /// DEPRECATED: Limit/Set scope to changed packages
-    /// since a mergebase. This uses the git diff ${target_branch}...
-    /// mechanism to identify which packages have changed.
-    #[clap(long, requires = "scope")]
-    pub since: Option<String>,
-
-    //  include_dependencies only works with scope, so we require it here
-    // -----------------------
-    /// DEPRECATED: Include the dependencies of tasks in execution.
-    #[clap(long, requires = "scope")]
-    pub include_dependencies: bool,
-
-    //  no_deps only works with scope, so we require it here
-    // -----------------------
-    /// DEPRECATED: Exclude dependent task consumers from execution.
-    #[clap(long, requires = "scope")]
-    pub no_deps: bool,
 
     /// Set type of process output logging. Use "full" to show
     /// all output. Use "hash-only" to show only turbo-computed
@@ -765,14 +723,11 @@ impl ExecutionArgs {
         track_usage!(telemetry, self.framework_inference, |val: bool| !val);
 
         track_usage!(telemetry, self.continue_execution, |val| val);
-        track_usage!(telemetry, self.include_dependencies, |val| { val });
         track_usage!(telemetry, self.single_package, |val| val);
-        track_usage!(telemetry, self.no_deps, |val| val);
         track_usage!(telemetry, self.only, |val| val);
         track_usage!(telemetry, self.remote_only, |val| val);
         track_usage!(telemetry, &self.cache_dir, Option::is_some);
         track_usage!(telemetry, &self.force, Option::is_some);
-        track_usage!(telemetry, &self.since, Option::is_some);
         track_usage!(telemetry, &self.pkg_inference_root, Option::is_some);
 
         if let Some(concurrency) = &self.concurrency {
@@ -806,14 +761,6 @@ impl ExecutionArgs {
         // track sizes
         if !self.filter.is_empty() {
             telemetry.track_arg_value("filter:length", self.filter.len(), EventType::NonSensitive);
-        }
-
-        if !self.scope.is_empty() {
-            telemetry.track_arg_value("scope:length", self.scope.len(), EventType::NonSensitive);
-        }
-
-        if !self.ignore.is_empty() {
-            telemetry.track_arg_value("ignore:length", self.ignore.len(), EventType::NonSensitive);
         }
     }
 }
@@ -1110,7 +1057,6 @@ pub async fn run(
     root_telemetry.track_cpus(num_cpus::get());
     // track args
     cli_args.track(&root_telemetry);
-    warn_all_deprecated_flags(&cli_args);
 
     let cli_result = match cli_args.command.as_ref().unwrap() {
         Command::Bin { .. } => {
@@ -1334,39 +1280,6 @@ pub async fn run(
     cli_result
 }
 
-fn warn_all_deprecated_flags(args: &Args) {
-    if args.trace.is_some() {
-        warn_flag_removal("--trace");
-    }
-
-    if args.heap.is_some() {
-        warn_flag_removal("--heap");
-    }
-
-    if args.cpu_profile.is_some() {
-        warn_flag_removal("--cpuprofile");
-    }
-
-    if let Some(Command::Run { execution_args, .. }) = args.command.as_ref() {
-        if execution_args.since.is_some() {
-            warn_flag_removal("--since");
-        }
-        if !execution_args.scope.is_empty() {
-            warn_flag_removal("--scope");
-        }
-        if execution_args.include_dependencies {
-            warn_flag_removal("--include-dependencies");
-        }
-        if execution_args.no_deps {
-            warn_flag_removal("--no-deps");
-        }
-    }
-}
-
-fn warn_flag_removal(flag: &str) {
-    warn!("{flag} is deprecated and will be removed in 2.0");
-}
-
 #[cfg(test)]
 mod test {
     use std::assert_matches::assert_matches;
@@ -1515,49 +1428,34 @@ mod test {
         "framework_inference: flag set to false"
 	)]
     #[test_case::test_case(
+        &["turbo", "run", "build", "--env-mode"],
+        Args {
+            command: Some(Command::Run {
+                execution_args: Box::new(ExecutionArgs {
+                    tasks: vec!["build".to_string()],
+                    env_mode: EnvMode::Strict,
+                    ..get_default_execution_args()
+                }),
+                run_args: Box::new(get_default_run_args())
+            }),
+            ..Args::default()
+        } ;
+        "env_mode: not fully-specified"
+    )]
+    #[test_case::test_case(
 		&["turbo", "run", "build"],
         Args {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    env_mode: EnvMode::Infer,
+                    env_mode: EnvMode::Strict,
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
             }),
             ..Args::default()
 		} ;
-        "env_mode: default infer"
-	)]
-    #[test_case::test_case(
-		&["turbo", "run", "build", "--env-mode"],
-        Args {
-            command: Some(Command::Run {
-                execution_args: Box::new(ExecutionArgs {
-                    tasks: vec!["build".to_string()],
-                    env_mode: EnvMode::Infer,
-                    ..get_default_execution_args()
-                }),
-                run_args: Box::new(get_default_run_args())
-            }),
-            ..Args::default()
-		} ;
-        "env_mode: not fully-specified"
-	)]
-    #[test_case::test_case(
-		&["turbo", "run", "build", "--env-mode", "infer"],
-        Args {
-            command: Some(Command::Run {
-                execution_args: Box::new(ExecutionArgs {
-                    tasks: vec!["build".to_string()],
-                    env_mode: EnvMode::Infer,
-                    ..get_default_execution_args()
-                }),
-                run_args: Box::new(get_default_run_args())
-            }),
-            ..Args::default()
-		} ;
-        "env_mode: specified infer"
+        "env_mode: default strict"
 	)]
     #[test_case::test_case(
 		&["turbo", "run", "build", "--env-mode", "loose"],
@@ -1839,54 +1737,6 @@ mod test {
         "graph with output"
 	)]
     #[test_case::test_case(
-		&["turbo", "run", "build", "--filter", "[main]", "--ignore", "foo.js"],
-        Args {
-            command: Some(Command::Run {
-                execution_args: Box::new(ExecutionArgs {
-                    tasks: vec!["build".to_string()],
-                    ignore: vec!["foo.js".to_string()],
-                    filter: vec![String::from("[main]")],
-                    ..get_default_execution_args()
-                }),
-                run_args: Box::new(get_default_run_args())
-            }),
-            ..Args::default()
-        } ;
-        "single ignore"
-	)]
-    #[test_case::test_case(
-		&["turbo", "run", "build", "--filter", "[main]", "--ignore", "foo.js", "--ignore", "bar.js"],
-        Args {
-            command: Some(Command::Run {
-                execution_args: Box::new(ExecutionArgs {
-                    tasks: vec!["build".to_string()],
-                    ignore: vec!["foo.js".to_string(), "bar.js".to_string()],
-                    filter: vec![String::from("[main]")],
-                    ..get_default_execution_args()
-                }),
-                run_args: Box::new(get_default_run_args())
-            }),
-            ..Args::default()
-        } ;
-        "multiple ignores"
-	)]
-    #[test_case::test_case(
-		&["turbo", "run", "build", "--scope", "test", "--include-dependencies"],
-        Args {
-            command: Some(Command::Run {
-                execution_args: Box::new(ExecutionArgs {
-                   tasks: vec!["build".to_string()],
-                   include_dependencies: true,
-                   scope: vec!["test".to_string()],
-                   ..get_default_execution_args()
-                }),
-                run_args: Box::new(get_default_run_args())
-            }),
-            ..Args::default()
-        } ;
-        "include dependencies"
-	)]
-    #[test_case::test_case(
 		&["turbo", "run", "build", "--no-cache"],
         Args {
             command: Some(Command::Run {
@@ -1936,22 +1786,6 @@ mod test {
             ..Args::default()
         } ;
         "daemon"
-	)]
-    #[test_case::test_case(
-		&["turbo", "run", "build", "--scope", "test", "--no-deps"],
-        Args {
-            command: Some(Command::Run {
-                execution_args: Box::new(ExecutionArgs {
-                     tasks: vec!["build".to_string()],
-                     scope: vec!["test".to_string()],
-                     no_deps: true,
-                     ..get_default_execution_args()
-                }),
-                run_args: Box::new(get_default_run_args())
-            }),
-            ..Args::default()
-        } ;
-        "no deps"
 	)]
     #[test_case::test_case(
 		&["turbo", "run", "build", "--output-logs", "full"],
@@ -2184,38 +2018,7 @@ mod test {
         "remote_only=false works"
 	)]
     #[test_case::test_case(
-		&["turbo", "run", "build", "--scope", "foo", "--scope", "bar"],
-        Args {
-            command: Some(Command::Run {
-                execution_args: Box::new(ExecutionArgs {
-                    tasks: vec!["build".to_string()],
-                    scope: vec!["foo".to_string(), "bar".to_string()],
-                    ..get_default_execution_args()
-                }),
-                run_args: Box::new(get_default_run_args())
-            }),
-            ..Args::default()
-        } ;
-        "scope"
-	)]
-    #[test_case::test_case(
-		&["turbo", "run", "build", "--scope", "test", "--since", "foo"],
-        Args {
-            command: Some(Command::Run {
-                run_args: Box::new(get_default_run_args()),
-                execution_args: Box::new(ExecutionArgs {
-                    tasks: vec!["build".to_string()],
-                    scope: vec!["test".to_string()],
-                    since: Some("foo".to_string()),
-                    ..get_default_execution_args()
-                })
-            }),
-            ..Args::default()
-        } ;
-        "scope and since"
-	)]
-    #[test_case::test_case(
-    	&["turbo", "build"],
+		&["turbo", "build"],
         Args {
             execution_args: Some(ExecutionArgs {
                 tasks: vec!["build".to_string()],
@@ -2293,23 +2096,18 @@ mod test {
         "daemon and no-daemon at the same time"
     )]
     #[test_case::test_case(
-        &["turbo", "run", "build", "--ignore", "foo/**"],
-        "the following required arguments were not provided" ;
-        "ignore without filter or scope"
-    )]
-    #[test_case::test_case(
         &["turbo", "run", "build", "--since", "foo"],
-        "the following required arguments were not provided" ;
+        "unexpected argument '--since' found" ;
         "since without filter or scope"
     )]
     #[test_case::test_case(
         &["turbo", "run", "build", "--include-dependencies"],
-        "the following required arguments were not provided" ;
+        "unexpected argument '--include-dependencies' found" ;
         "include-dependencies without filter or scope"
     )]
     #[test_case::test_case(
         &["turbo", "run", "build", "--no-deps"],
-        "the following required arguments were not provided" ;
+        "unexpected argument '--no-deps' found" ;
         "no-deps without filter or scope"
     )]
     fn test_parse_run_failures(args: &[&str], expected: &str) {
