@@ -60,6 +60,7 @@ pub mod persisted_graph;
 pub mod primitives;
 mod raw_vc;
 mod raw_vc_set;
+mod rcstr;
 mod read_ref;
 pub mod registry;
 pub mod small_duration;
@@ -99,7 +100,7 @@ pub use read_ref::ReadRef;
 pub use state::State;
 pub use task::{
     concrete_task_input::{ConcreteTaskInput, SharedReference, SharedValue},
-    task_input::{RcStr, TaskInput},
+    task_input::TaskInput,
 };
 pub use trait_ref::{IntoTraitRef, TraitRef};
 pub use turbo_tasks_macros::{function, value, value_impl, value_trait, TaskInput};
@@ -109,6 +110,8 @@ pub use vc::{
     Dynamic, TypedForInput, Upcast, ValueDefault, Vc, VcCellNewMode, VcCellSharedMode,
     VcDefaultRead, VcRead, VcTransparentRead, VcValueTrait, VcValueType,
 };
+
+pub use crate::rcstr::RcStr;
 
 pub type TaskIdSet = AutoSet<TaskId, BuildNoHashHasher<TaskId>, 2>;
 
