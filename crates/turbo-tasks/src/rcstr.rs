@@ -37,12 +37,6 @@ impl RcStr {
     pub fn map(self, f: impl FnOnce(String) -> String) -> Self {
         RcStr(Arc::new(f(self.into_owned())))
     }
-
-    pub fn mutate(&mut self, f: impl FnOnce(&mut String)) {
-        let mut s = self.0.as_ref().clone();
-        f(&mut s);
-        self.0 = Arc::new(s);
-    }
 }
 
 impl DeterministicHash for RcStr {
