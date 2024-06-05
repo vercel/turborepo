@@ -36,7 +36,7 @@ async fn test_1() -> Result<()> {
 
 type Deps = Vec<(usize, Vec<usize>)>;
 
-async fn split(deps: Deps) -> Result<()> {
+async fn split(deps: Deps) -> Result<Vec<Vec<usize>>> {
     register();
 
     let tt = TurboTasks::new(MemoryBackend::default());
@@ -47,7 +47,22 @@ async fn split(deps: Deps) -> Result<()> {
 
         let group = split_scopes(to_module(fs, 0), graph);
 
-        Ok(())
+        let group = group.await?;
+
+        let mut data = vec![];
+
+        for scope in group.scopes.await?.iter() {
+            let mut scope_data = vec![];
+
+            for &module in scope.await?.modules.await?.iter() {
+                let module = from_module(module).await?;
+                scope_data.push(module);
+            }
+
+            data.push(scope_data);
+        }
+
+        Ok(data)
     })
     .await
 }
