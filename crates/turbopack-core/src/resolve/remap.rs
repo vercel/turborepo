@@ -379,9 +379,9 @@ fn expand_folder_shorthand(key: &str, value: &mut SubpathValue) -> Result<AliasP
     for result in value.results_mut() {
         if result.ends_with('/') {
             if result.find('*').is_none() {
-                result.mutate(|result| {
-                    result.push('*');
-                });
+                let mut buf = result.to_string();
+                buf.push('*');
+                *result = buf.into();
             } else {
                 bail!(
                     "invalid exports field value \"{}\" for key \"{}\": \"*\" is not allowed in \
