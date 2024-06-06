@@ -36,7 +36,8 @@ export function getTurboVersion(
   const turboJSONPath = path.join(root, "turbo.json");
   try {
     const rawTurboJson = fs.readFileSync(turboJSONPath, "utf8");
-    const turboJson = JSON5Parse(rawTurboJson);
+    const turboJson: { tasks?: unknown; pipeline?: unknown } =
+      JSON5Parse(rawTurboJson);
     if ("tasks" in turboJson) {
       info(`Inferred turbo version ^2 based on "tasks" in "turbo.json"`);
       return "^2";
