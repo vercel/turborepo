@@ -620,6 +620,10 @@ importers:
         version: 5.3.3
 
   packages/turbo-ignore:
+    dependencies:
+      json5:
+        specifier: ^2.2.3
+        version: 2.2.3
     devDependencies:
       '@turbo/eslint-config':
         specifier: workspace:*

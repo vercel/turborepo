@@ -25,6 +25,9 @@
     "check-types": "tsc --noEmit",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
   },
+  "dependencies": {
+    "json5": "^2.2.3"
+  },
   "devDependencies": {
     "@turbo/eslint-config": "workspace:*",
     "@turbo/telemetry": "workspace:*",
