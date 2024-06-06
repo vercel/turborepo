@@ -595,7 +595,8 @@ fn run_correct_turbo(
             spawn_local_turbo(&repo_state, turbo_state, shim_args)
         }
     } else {
-        try_check_for_updates(&shim_args, get_version());
+        let version = get_version();
+        try_check_for_updates(&shim_args, version);
         // cli::run checks for this env var, rather than an arg, so that we can support
         // calling old versions without passing unknown flags.
         env::set_var(
@@ -603,6 +604,7 @@ fn run_correct_turbo(
             shim_args.invocation_dir.as_path(),
         );
         debug!("Running command as global turbo");
+        eprintln!("No local turbo found. Using global turbo version {version}");
         Ok(cli::run(Some(repo_state), subscriber, ui)?)
     }
 }
