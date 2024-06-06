@@ -614,7 +614,7 @@ fn run_correct_turbo(
                 }
             });
         if should_warn_on_global {
-            eprintln!("No local turbo found. Using version {version}");
+            eprintln!("No locally installed `turbo` found. Using version: {version}.");
         }
         Ok(cli::run(Some(repo_state), subscriber, ui)?)
     }
