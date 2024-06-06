@@ -59,7 +59,7 @@ describe("turboIgnore()", () => {
     turboIgnore("test-workspace", { telemetry });
 
     expect(mockExec).toHaveBeenCalledWith(
-      `npx turbo run build --filter="test-workspace...[HEAD^]" --dry=json`,
+      `npx -y turbo@^2 run build --filter="test-workspace...[HEAD^]" --dry=json`,
       expect.anything(),
       expect.anything()
     );
@@ -92,7 +92,7 @@ describe("turboIgnore()", () => {
     turboIgnore("test-workspace", {});
 
     expect(mockExec).toHaveBeenCalledWith(
-      `npx turbo run build --filter="test-workspace...[HEAD^]" --dry=json`,
+      `npx -y turbo@^2 run build --filter="test-workspace...[HEAD^]" --dry=json`,
       expect.anything(),
       expect.anything()
     );
@@ -137,7 +137,7 @@ describe("turboIgnore()", () => {
     turboIgnore("test-workspace", { telemetry });
 
     expect(mockExec).toHaveBeenCalledWith(
-      `npx turbo run build --filter="test-workspace...[too-far-back]" --dry=json`,
+      `npx -y turbo@^2 run build --filter="test-workspace...[too-far-back]" --dry=json`,
       expect.anything(),
       expect.anything()
     );
@@ -175,7 +175,7 @@ describe("turboIgnore()", () => {
     turboIgnore("test-workspace", { fallback: "HEAD^" });
 
     expect(mockExec).toHaveBeenCalledWith(
-      `npx turbo run build --filter="test-workspace...[HEAD^]" --dry=json`,
+      `npx -y turbo@^2 run build --filter="test-workspace...[HEAD^]" --dry=json`,
       expect.anything(),
       expect.anything()
     );
@@ -250,7 +250,7 @@ describe("turboIgnore()", () => {
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
     turboIgnore("test-app", { directory: "__fixtures__/app" });
     expect(mockConsole.log).toHaveBeenNthCalledWith(
-      4,
+      5,
       "≫  ",
       'No previous deployments found for "test-app" on branch "my-branch"'
     );
@@ -283,9 +283,10 @@ describe("turboIgnore()", () => {
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
         'Inferred "test-app" as workspace from "package.json"',
+        'Inferred turbo version ^2 based on "tasks" in "turbo.json"',
         'Using "build" as the task as it was unspecified',
         `Found previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch"`,
-        'Analyzing results of `npx turbo run build --filter="test-app...[last-deployed-sha]" --dry=json`',
+        'Analyzing results of `npx -y turbo@^2 run build --filter="test-app...[last-deployed-sha]" --dry=json`',
         "This project and its dependencies are not affected",
         () => expect.stringContaining("⏭ Ignoring the change"),
       ],
@@ -327,9 +328,10 @@ describe("turboIgnore()", () => {
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
         'Inferred "test-app" as workspace from "package.json"',
+        'Inferred turbo version ^2 based on "tasks" in "turbo.json"',
         'Using "workspace#build" as the task from the arguments',
         'Found previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch"',
-        'Analyzing results of `npx turbo run "workspace#build" --filter="test-app...[last-deployed-sha]" --dry=json`',
+        'Analyzing results of `npx -y turbo@^2 run "workspace#build" --filter="test-app...[last-deployed-sha]" --dry=json`',
         'This commit affects "test-app"',
         () => expect.stringContaining("✓ Proceeding with deployment"),
       ],
@@ -368,9 +370,10 @@ describe("turboIgnore()", () => {
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
         'Inferred "test-app" as workspace from "package.json"',
+        'Inferred turbo version ^2 based on "tasks" in "turbo.json"',
         'Using "build" as the task as it was unspecified',
         'Found previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch"',
-        'Analyzing results of `npx turbo run build --filter="test-app...[last-deployed-sha]" --dry=json`',
+        'Analyzing results of `npx -y turbo@^2 run build --filter="test-app...[last-deployed-sha]" --dry=json`',
         'This commit affects "test-app" and 1 dependency (ui)',
         () => expect.stringContaining("✓ Proceeding with deployment"),
       ],
@@ -409,9 +412,10 @@ describe("turboIgnore()", () => {
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
         'Inferred "test-app" as workspace from "package.json"',
+        'Inferred turbo version ^2 based on "tasks" in "turbo.json"',
         'Using "build" as the task as it was unspecified',
         'Found previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch"',
-        'Analyzing results of `npx turbo run build --filter="test-app...[last-deployed-sha]" --dry=json`',
+        'Analyzing results of `npx -y turbo@^2 run build --filter="test-app...[last-deployed-sha]" --dry=json`',
         'This commit affects "test-app" and 2 dependencies (ui, tsconfig)',
         () => expect.stringContaining("✓ Proceeding with deployment"),
       ],
@@ -459,10 +463,11 @@ describe("turboIgnore()", () => {
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
         'Inferred "test-app" as workspace from "package.json"',
+        'Inferred turbo version ^2 based on "tasks" in "turbo.json"',
         'Using "workspace#build" as the task from the arguments',
         'Previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch" is unreachable.',
         "Falling back to ref HEAD^2",
-        'Analyzing results of `npx turbo run "workspace#build" --filter="test-app...[HEAD^2]" --dry=json`',
+        'Analyzing results of `npx -y turbo@^2 run "workspace#build" --filter="test-app...[HEAD^2]" --dry=json`',
         'This commit affects "test-app"',
         () => expect.stringContaining("✓ Proceeding with deployment"),
       ],
@@ -488,13 +493,13 @@ describe("turboIgnore()", () => {
     turboIgnore(undefined, { directory: "__fixtures__/app" });
 
     expect(mockExec).toHaveBeenCalledWith(
-      `npx turbo run build --filter="test-app...[HEAD^]" --dry=json`,
+      `npx -y turbo@^2 run build --filter="test-app...[HEAD^]" --dry=json`,
       expect.anything(),
       expect.anything()
     );
     validateLogs(
       [
-        'Failed to parse JSON output from `npx turbo run build --filter="test-app...[HEAD^]" --dry=json`.',
+        'Failed to parse JSON output from `npx -y turbo@^2 run build --filter="test-app...[HEAD^]" --dry=json`.',
       ],
       mockConsole.error,
       { prefix: "≫  " }
@@ -521,13 +526,13 @@ describe("turboIgnore()", () => {
     turboIgnore(undefined, { directory: "__fixtures__/app" });
 
     expect(mockExec).toHaveBeenCalledWith(
-      `npx turbo run build --filter="test-app...[HEAD^]" --dry=json`,
+      `npx -y turbo@^2 run build --filter="test-app...[HEAD^]" --dry=json`,
       expect.anything(),
       expect.anything()
     );
     validateLogs(
       [
-        'Failed to parse JSON output from `npx turbo run build --filter="test-app...[HEAD^]" --dry=json`.',
+        'Failed to parse JSON output from `npx -y turbo@^2 run build --filter="test-app...[HEAD^]" --dry=json`.',
       ],
       mockConsole.error,
       { prefix: "≫  " }
@@ -547,6 +552,7 @@ describe("turboIgnore()", () => {
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
         'Inferred "test-app" as workspace from "package.json"',
+        'Inferred turbo version ^2 based on "tasks" in "turbo.json"',
         'Using "build" as the task as it was unspecified',
         "Found commit message: [vercel skip]",
         () => expect.stringContaining("⏭ Ignoring the change"),
@@ -568,6 +574,7 @@ describe("turboIgnore()", () => {
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
         'Inferred "test-app" as workspace from "package.json"',
+        'Inferred turbo version ^2 based on "tasks" in "turbo.json"',
         'Using "build" as the task as it was unspecified',
         "Found commit message: [vercel deploy]",
         () => expect.stringContaining("✓ Proceeding with deployment"),
@@ -608,10 +615,11 @@ describe("turboIgnore()", () => {
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
         'Inferred "test-app" as workspace from "package.json"',
+        'Inferred turbo version ^2 based on "tasks" in "turbo.json"',
         'Using "build" as the task as it was unspecified',
         "Conflicting commit messages found: [vercel deploy] and [vercel skip]",
         `Found previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch"`,
-        'Analyzing results of `npx turbo run build --filter="test-app...[last-deployed-sha]" --dry=json`',
+        'Analyzing results of `npx -y turbo@^2 run build --filter="test-app...[last-deployed-sha]" --dry=json`',
         "This project and its dependencies are not affected",
         () => expect.stringContaining("⏭ Ignoring the change"),
       ],
@@ -641,7 +649,7 @@ describe("turboIgnore()", () => {
     turboIgnore(undefined, { directory: "__fixtures__/app", maxBuffer: 1024 });
 
     expect(mockExec).toHaveBeenCalledWith(
-      `npx turbo run build --filter="test-app...[HEAD^]" --dry=json`,
+      `npx -y turbo@^2 run build --filter="test-app...[HEAD^]" --dry=json`,
       expect.objectContaining({ maxBuffer: 1024 }),
       expect.anything()
     );
@@ -670,7 +678,7 @@ describe("turboIgnore()", () => {
     });
 
     expect(mockExec).toHaveBeenCalledWith(
-      `npx turbo run build --filter="test-app...[HEAD^]" --dry=json`,
+      `npx -y turbo@^2 run build --filter="test-app...[HEAD^]" --dry=json`,
       expect.objectContaining({ maxBuffer: 1024 }),
       expect.anything()
     );
@@ -697,6 +705,31 @@ describe("turboIgnore()", () => {
     });
 
     expectBuild(mockExit);
+    mockExec.mockRestore();
+  });
+
+  it("defaults to latest turbo if no hints for version", () => {
+    const mockExec = jest
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
+        if (callback) {
+          return callback(
+            null,
+            '{"packages": [],"tasks":[]}',
+            "stderr"
+          ) as unknown as ChildProcess;
+        }
+        return {} as unknown as ChildProcess;
+      });
+
+    turboIgnore(undefined, { directory: "__fixtures__/invalid_turbo_json" });
+
+    expect(mockExec).toHaveBeenCalledWith(
+      `npx -y turbo run build --filter="test-app...[HEAD^]" --dry=json`,
+      expect.anything(),
+      expect.anything()
+    );
+
     mockExec.mockRestore();
   });
 });
