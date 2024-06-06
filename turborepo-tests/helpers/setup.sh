@@ -11,4 +11,5 @@ fi
 
 # disable the first-run telemetry message
 export TURBO_TELEMETRY_MESSAGE_DISABLED=1
+export TURBO_GLOBAL_WARNING_DISABLED=1
 TURBO=${MONOREPO_ROOT_DIR}/target/debug/turbo${EXT}
