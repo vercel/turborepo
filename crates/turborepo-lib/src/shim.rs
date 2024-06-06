@@ -28,6 +28,8 @@ use turborepo_ui::UI;
 
 use crate::{cli, get_version, spawn_child, tracing::TurboSubscriber};
 
+const TURBO_GLOBAL_WARNING_DISABLED: &str = "TURBO_GLOBAL_WARNING_DISABLED";
+
 #[derive(Debug, Error, Diagnostic)]
 #[error("cannot have multiple `--cwd` flags in command")]
 #[diagnostic(code(turbo::shim::multiple_cwd))]
@@ -604,7 +606,16 @@ fn run_correct_turbo(
             shim_args.invocation_dir.as_path(),
         );
         debug!("Running command as global turbo");
-        eprintln!("No local turbo found. Using global turbo version {version}");
+        let should_warn_on_global =
+            env::var(TURBO_GLOBAL_WARNING_DISABLED).map_or(true, |disable| {
+                match disable.as_str() {
+                    "1" | "true" => false,
+                    _ => true,
+                }
+            });
+        if should_warn_on_global {
+            eprintln!("No local turbo found. Using version {version}");
+        }
         Ok(cli::run(Some(repo_state), subscriber, ui)?)
     }
 }
