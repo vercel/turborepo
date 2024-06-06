@@ -46,7 +46,7 @@ Dependencies
 
 Building
 
-- Building `turbo` CLI: In `cli` run `make build`
+- Building `turbo` CLI: `cargo build -p turbo`
 - Using `turbo` to build `turbo` CLI: `./turbow.js`
 
 ### TLS Implementation
