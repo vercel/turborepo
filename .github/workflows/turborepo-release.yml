@@ -101,7 +101,7 @@ jobs:
 
   create-release-pr:
     name: "Open Release Branch PR"
-    needs: [stage, npm-publish]
+    needs: [stage, js-smoke-test, rust-smoke-test]
     runs-on: ubuntu-latest
     steps:
       - name: Show Stage Commit
