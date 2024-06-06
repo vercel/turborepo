@@ -105,6 +105,14 @@ impl Display for LogOrder {
     }
 }
 
+impl LogOrder {
+    pub fn compatible_with_tui(&self) -> bool {
+        // If the user requested a specific order to the logs, then this isn't
+        // compatible with the TUI and means we cannot use it.
+        matches!(self, Self::Auto)
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
 pub enum DryRunMode {
     Text,
@@ -949,6 +957,7 @@ pub async fn run(
     #[allow(unused_variables)] logger: &TurboSubscriber,
     ui: UI,
 ) -> Result<i32, Error> {
+    // TODO: remove mutability from this function
     let mut cli_args = Args::new();
     let version = get_version();
 
@@ -979,7 +988,9 @@ pub async fn run(
         let run_args = cli_args.run_args.take().unwrap_or_default();
         let execution_args = cli_args
             .execution_args
-            .take()
+            // We clone instead of take as take would leave the command base a copy of cli_args
+            // missing any execution args.
+            .clone()
             .ok_or_else(|| Error::NoCommand(Backtrace::capture()))?;
         if execution_args.tasks.is_empty() {
             let mut cmd = <Args as CommandFactory>::command();
@@ -2553,5 +2564,12 @@ mod test {
                 .preflight
         );
         assert!(Args::try_parse_from(["turbo", "build", "--preflight=true"]).is_err());
+    }
+
+    #[test]
+    fn test_log_stream_tui_compatibility() {
+        assert!(LogOrder::Auto.compatible_with_tui());
+        assert!(!LogOrder::Stream.compatible_with_tui());
+        assert!(!LogOrder::Grouped.compatible_with_tui());
     }
 }
