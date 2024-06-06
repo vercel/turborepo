@@ -606,13 +606,8 @@ fn run_correct_turbo(
             shim_args.invocation_dir.as_path(),
         );
         debug!("Running command as global turbo");
-        let should_warn_on_global =
-            env::var(TURBO_GLOBAL_WARNING_DISABLED).map_or(true, |disable| {
-                match disable.as_str() {
-                    "1" | "true" => false,
-                    _ => true,
-                }
-            });
+        let should_warn_on_global = env::var(TURBO_GLOBAL_WARNING_DISABLED)
+            .map_or(true, |disable| !matches!(disable.as_str(), "1" | "true"));
         if should_warn_on_global {
             eprintln!("No locally installed `turbo` found. Using version: {version}.");
         }
