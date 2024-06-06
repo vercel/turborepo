@@ -465,6 +465,7 @@ impl<'a> TaskHasher<'a> {
                 let default_env_var_pass_through_map =
                     self.env_at_execution_start.from_wildcards(&[
                         "SHELL",
+                        "NODE_OPTIONS",
                         // Command Prompt casing of env variables
                         "APPDATA",
                         "PATH",
