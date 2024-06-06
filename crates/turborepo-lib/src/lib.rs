@@ -45,12 +45,7 @@ pub use crate::{
 };
 
 pub fn get_version() -> &'static str {
-    include_str!("../../../version.txt")
-        .split_once('\n')
-        .expect("Failed to read version from version.txt")
-        .0
-        // On windows we still have a trailing \r
-        .trim_end()
+    env!("CARGO_PKG_VERSION")
 }
 
 pub fn main() -> Result<i32, shim::Error> {
