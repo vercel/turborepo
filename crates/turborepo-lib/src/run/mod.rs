@@ -266,7 +266,8 @@ impl Run {
                 get_internal_deps_hash(
                     &self.scm,
                     &self.repo_root,
-                    self.pkg_dep_graph.root_internal_package_dependencies(),
+                    self.pkg_dep_graph
+                        .root_internal_package_dependencies_paths(),
                 )
             })
             .transpose()?;
