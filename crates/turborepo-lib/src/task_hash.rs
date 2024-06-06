@@ -464,8 +464,17 @@ impl<'a> TaskHasher<'a> {
                 let mut pass_through_env = EnvironmentVariableMap::default();
                 let default_env_var_pass_through_map =
                     self.env_at_execution_start.from_wildcards(&[
+                        "HOME",
+                        "TZ",
+                        "LANG",
                         "SHELL",
+                        "PWD",
                         "NODE_OPTIONS",
+                        // Vercel specific
+                        "VERCEL_*",
+                        "NEXT_*",
+                        "USE_OUTPUT_FOR_EDGE_FUNCTIONS",
+                        "NOW_BUILDER",
                         // Command Prompt casing of env variables
                         "APPDATA",
                         "PATH",
