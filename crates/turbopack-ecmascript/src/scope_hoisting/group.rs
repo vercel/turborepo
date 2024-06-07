@@ -32,6 +32,7 @@ impl Workspace {
         if !self.done.insert(entry) {
             return Ok(());
         }
+        dbg!(entry);
         vdbg!(entry);
 
         let modules = self.walk(entry).await?;

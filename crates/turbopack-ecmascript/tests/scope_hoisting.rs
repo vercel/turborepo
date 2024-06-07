@@ -133,10 +133,7 @@ pub struct TestDepGraph {
 }
 
 fn to_module(fs: Vc<DiskFileSystem>, id: usize) -> Vc<Box<dyn Module>> {
-    let vc = TestModule {
-        path: fs.root().join(format!("{}", id)),
-    }
-    .cell();
+    let vc = TestModule::new(fs.root().join(format!("{}", id)));
 
     Vc::upcast(vc)
 }
@@ -207,6 +204,14 @@ impl DepGraph for TestDepGraph {
 #[turbo_tasks::value]
 struct TestModule {
     path: Vc<FileSystemPath>,
+}
+
+#[turbo_tasks::value_impl]
+impl TestModule {
+    #[turbo_tasks::function]
+    fn new(path: Vc<FileSystemPath>) -> Vc<Self> {
+        Self { path }.cell()
+    }
 }
 
 #[turbo_tasks::value_impl]
