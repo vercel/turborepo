@@ -53,14 +53,21 @@ impl Workspace {
         for &dep in deps.await?.iter() {
             let dependants = self.dep_graph.depandants(dep);
 
-            if dependants.await?.len() == 1 {
+            let should_start_scope = if dependants.await?.len() == 1 {
                 if self.dep_graph.get_edge(from, dep).await?.is_lazy {
-                    self.start_scope(dep).await?;
+                    true
                 } else {
-                    modules.extend(self.walk(dep).await?);
+                    false
                 }
             } else {
+                // TODO: If all dependants start from the same scope, we can merge them
+                true
+            };
+
+            if should_start_scope {
                 self.start_scope(dep).await?;
+            } else {
+                modules.extend(self.walk(dep).await?);
             }
         }
 
