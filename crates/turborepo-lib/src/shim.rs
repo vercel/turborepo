@@ -17,7 +17,7 @@ use semver::Version;
 use serde::Deserialize;
 use thiserror::Error;
 use tiny_gradient::{GradientStr, RGB};
-use tracing::debug;
+use tracing::{debug, warn};
 use turbo_updater::display_update_check;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_repository::{
