@@ -1,26 +1,9 @@
-use std::{env, path::PathBuf};
-
 use const_format::formatcp;
-use turborepo_repository::inference::RepoState;
 
-use crate::get_version;
-
+/// Struct containing helper methods for querying information about the
+/// currently running turbo binary.
 #[derive(Debug)]
-pub struct TurboState {
-    bin_path: Option<PathBuf>,
-    version: &'static str,
-    repo_state: Option<RepoState>,
-}
-
-impl Default for TurboState {
-    fn default() -> Self {
-        Self {
-            bin_path: env::current_exe().ok(),
-            version: get_version(),
-            repo_state: None,
-        }
-    }
-}
+pub struct TurboState;
 
 impl TurboState {
     pub const fn platform_name() -> &'static str {
@@ -78,7 +61,6 @@ impl TurboState {
         }
     }
 
-    #[allow(dead_code)]
     pub fn version() -> &'static str {
         include_str!("../../../../version.txt")
             .lines()

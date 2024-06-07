@@ -13,6 +13,7 @@ use turborepo_repository::package_json::PackageJson;
 
 use super::TurboState;
 
+/// Structure that holds information on an existing local turbo install
 #[derive(Debug)]
 pub struct LocalTurboState {
     bin_path: PathBuf,
