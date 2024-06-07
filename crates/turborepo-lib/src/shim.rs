@@ -609,7 +609,7 @@ fn run_correct_turbo(
         let should_warn_on_global = env::var(TURBO_GLOBAL_WARNING_DISABLED)
             .map_or(true, |disable| !matches!(disable.as_str(), "1" | "true"));
         if should_warn_on_global {
-            eprintln!("No locally installed `turbo` found. Using version: {version}.");
+            warn!("No locally installed `turbo` found. Using version: {version}.");
         }
         Ok(cli::run(Some(repo_state), subscriber, ui)?)
     }
