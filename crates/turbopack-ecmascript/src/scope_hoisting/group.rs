@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_recursion::async_recursion;
 use rustc_hash::FxHashSet;
-use turbo_tasks::Vc;
+use turbo_tasks::{vdbg, Vc};
 use turbopack_core::module::Module;
 
 /// Counterpart of `Chunk` in webpack scope hoisting
@@ -28,6 +28,7 @@ struct Workspace {
 impl Workspace {
     #[async_recursion]
     async fn start_scope(&mut self, entry: Vc<Box<dyn Module>>) -> Result<()> {
+        let entry = entry.resolve().await?;
         if !self.done.insert(entry) {
             return Ok(());
         }
