@@ -407,7 +407,7 @@ impl TurboState {
 
     #[allow(dead_code)]
     pub fn version() -> &'static str {
-        include_str!("../../../version.txt")
+        include_str!("../../../../version.txt")
             .lines()
             .next()
             .expect("Failed to read version from version.txt")
