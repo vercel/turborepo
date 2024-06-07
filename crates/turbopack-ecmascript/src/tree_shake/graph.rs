@@ -607,7 +607,7 @@ impl DepGraph {
                             let (orig, mut local, exported) = match s {
                                 ExportSpecifier::Named(s) => (
                                     Some(s.orig.clone()),
-                                    match s.exported.as_ref().unwrap_or(&s.orig) {
+                                    match &s.orig {
                                         ModuleExportName::Ident(i) => i.clone(),
                                         ModuleExportName::Str(..) => quote_ident!("_tmp"),
                                     },
