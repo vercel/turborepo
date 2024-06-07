@@ -1006,7 +1006,7 @@ impl DepGraph {
                 ModuleItem::ModuleDecl(
                     ModuleDecl::ExportDefaultDecl(..)
                     | ModuleDecl::ExportDefaultExpr(..)
-                    | ModuleDecl::ExportNamed(NamedExport { src: Some(..), .. }),
+                    | ModuleDecl::ExportNamed(NamedExport { .. }),
                 ) => {}
 
                 _ => {
