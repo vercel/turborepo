@@ -221,7 +221,7 @@ impl Environment {
             }
             ExecutionEnvironment::EdgeWorker(_) => ChunkLoading::Edge.cell(),
             ExecutionEnvironment::Browser(_) => ChunkLoading::Dom.cell(),
-            _ => ChunkLoading::Edge.cell(),
+            ExecutionEnvironment::Custom(_) => todo!(),
         })
     }
 }
