@@ -53,7 +53,11 @@ impl Workspace {
             let dependants = self.dep_graph.depandants(dep);
 
             if dependants.await?.len() == 1 {
-                modules.extend(self.walk(dep).await?);
+                if self.dep_graph.get_edge(from, dep).await?.is_lazy {
+                    self.start_scope(dep).await?;
+                } else {
+                    modules.extend(self.walk(dep).await?);
+                }
             } else {
                 self.start_scope(dep).await?;
             }
