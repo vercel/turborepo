@@ -55,11 +55,7 @@ impl Workspace {
             let dependants = self.dep_graph.depandants(dep);
 
             let should_start_scope = if dependants.await?.len() == 1 {
-                if self.dep_graph.get_edge(from, dep).await?.is_lazy {
-                    true
-                } else {
-                    false
-                }
+                self.dep_graph.get_edge(from, dep).await?.is_lazy
             } else {
                 // TODO: If all dependants start from the same scope, we can merge them
                 true
