@@ -1,6 +1,6 @@
 # Items
 
-Count: 11
+Count: 12
 
 ## Item 1: Stmt 0, `Normal`
 
@@ -47,18 +47,30 @@ externalObject.propertyWithSetter = 42;
 ## Item 5: Stmt 4, `VarDeclarator(0)`
 
 ```js
+const value3 = externalFunction();
+
+```
+
+- Declares: `value3`
+- Reads: `externalFunction`
+- Write: `value3`
+
+## Item 6: Stmt 5, `VarDeclarator(0)`
+
+```js
 const shared = {
     value,
-    value2
+    value2,
+    value3
 };
 
 ```
 
 - Declares: `shared`
-- Reads: `value`, `value2`
+- Reads: `value`, `value2`, `value3`
 - Write: `shared`
 
-## Item 6: Stmt 5, `Normal`
+## Item 7: Stmt 6, `Normal`
 
 ```js
 console.log(shared);
@@ -68,7 +80,7 @@ console.log(shared);
 - Side effects
 - Reads: `console`, `shared`
 
-## Item 7: Stmt 6, `VarDeclarator(0)`
+## Item 8: Stmt 7, `VarDeclarator(0)`
 
 ```js
 export const a = {
@@ -82,7 +94,7 @@ export const a = {
 - Reads: `shared`
 - Write: `a`
 
-## Item 8: Stmt 7, `VarDeclarator(0)`
+## Item 9: Stmt 8, `VarDeclarator(0)`
 
 ```js
 export const b = {
@@ -108,11 +120,12 @@ graph TD
     Item7;
     Item8;
     Item9;
-    Item9["ModuleEvaluation"];
     Item10;
-    Item10["export a"];
+    Item10["ModuleEvaluation"];
     Item11;
-    Item11["export b"];
+    Item11["export a"];
+    Item12;
+    Item12["export b"];
 ```
 # Phase 2
 ```mermaid
@@ -126,19 +139,21 @@ graph TD
     Item7;
     Item8;
     Item9;
-    Item9["ModuleEvaluation"];
     Item10;
-    Item10["export a"];
+    Item10["ModuleEvaluation"];
     Item11;
-    Item11["export b"];
+    Item11["export a"];
+    Item12;
+    Item12["export b"];
     Item4 --> Item1;
-    Item5 --> Item2;
-    Item5 --> Item3;
+    Item6 --> Item2;
+    Item6 --> Item3;
     Item6 --> Item5;
-    Item6 --> Item1;
-    Item6 --> Item4;
-    Item7 --> Item5;
-    Item8 --> Item5;
+    Item7 --> Item6;
+    Item7 --> Item1;
+    Item7 --> Item4;
+    Item8 --> Item6;
+    Item9 --> Item6;
 ```
 # Phase 3
 ```mermaid
@@ -152,19 +167,21 @@ graph TD
     Item7;
     Item8;
     Item9;
-    Item9["ModuleEvaluation"];
     Item10;
-    Item10["export a"];
+    Item10["ModuleEvaluation"];
     Item11;
-    Item11["export b"];
+    Item11["export a"];
+    Item12;
+    Item12["export b"];
     Item4 --> Item1;
-    Item5 --> Item2;
-    Item5 --> Item3;
+    Item6 --> Item2;
+    Item6 --> Item3;
     Item6 --> Item5;
-    Item6 --> Item1;
-    Item6 --> Item4;
-    Item7 --> Item5;
-    Item8 --> Item5;
+    Item7 --> Item6;
+    Item7 --> Item1;
+    Item7 --> Item4;
+    Item8 --> Item6;
+    Item9 --> Item6;
 ```
 # Phase 4
 ```mermaid
@@ -178,39 +195,43 @@ graph TD
     Item7;
     Item8;
     Item9;
-    Item9["ModuleEvaluation"];
     Item10;
-    Item10["export a"];
+    Item10["ModuleEvaluation"];
     Item11;
-    Item11["export b"];
+    Item11["export a"];
+    Item12;
+    Item12["export b"];
     Item4 --> Item1;
-    Item5 --> Item2;
-    Item5 --> Item3;
+    Item6 --> Item2;
+    Item6 --> Item3;
     Item6 --> Item5;
-    Item6 --> Item1;
-    Item6 --> Item4;
-    Item7 --> Item5;
-    Item8 --> Item5;
-    Item9 --> Item1;
-    Item9 --> Item4;
+    Item7 --> Item6;
+    Item7 --> Item1;
+    Item7 --> Item4;
+    Item8 --> Item6;
     Item9 --> Item6;
+    Item10 --> Item1;
+    Item10 --> Item4;
     Item10 --> Item7;
     Item11 --> Item8;
+    Item12 --> Item9;
 ```
 # Final
 ```mermaid
 graph TD
-    N0["Items: [ItemId(ModuleEvaluation), ItemId(0, Normal), ItemId(3, Normal), ItemId(5, Normal)]"];
-    N1["Items: [ItemId(Export((&quot;a&quot;, #2), &quot;a&quot;)), ItemId(6, VarDeclarator(0))]"];
-    N2["Items: [ItemId(Export((&quot;b&quot;, #2), &quot;b&quot;)), ItemId(7, VarDeclarator(0))]"];
+    N0["Items: [ItemId(ModuleEvaluation), ItemId(0, Normal), ItemId(3, Normal), ItemId(6, Normal)]"];
+    N1["Items: [ItemId(Export((&quot;a&quot;, #2), &quot;a&quot;)), ItemId(7, VarDeclarator(0))]"];
+    N2["Items: [ItemId(Export((&quot;b&quot;, #2), &quot;b&quot;)), ItemId(8, VarDeclarator(0))]"];
     N3["Items: [ItemId(1, VarDeclarator(0))]"];
     N4["Items: [ItemId(2, VarDeclarator(0))]"];
     N5["Items: [ItemId(4, VarDeclarator(0))]"];
-    N0 --> N5;
-    N1 --> N5;
-    N2 --> N5;
-    N5 --> N3;
-    N5 --> N4;
+    N6["Items: [ItemId(5, VarDeclarator(0))]"];
+    N0 --> N6;
+    N1 --> N6;
+    N2 --> N6;
+    N6 --> N3;
+    N6 --> N4;
+    N6 --> N5;
 ```
 # Entrypoints
 
@@ -231,7 +252,7 @@ graph TD
 ## Part 0
 ```js
 import { shared } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
+    __turbopack_part__: 6
 };
 "module evaluation";
 console.log("Hello");
@@ -242,7 +263,7 @@ console.log(shared);
 ## Part 1
 ```js
 import { shared } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
+    __turbopack_part__: 6
 };
 export { a };
 const a = {
@@ -257,7 +278,7 @@ export { a } from "__TURBOPACK_VAR__" assert {
 ## Part 2
 ```js
 import { shared } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
+    __turbopack_part__: 6
 };
 export { b };
 const b = {
@@ -287,15 +308,27 @@ export { value2 } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 5
 ```js
+const value3 = externalFunction();
+export { value3 } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+
+```
+## Part 6
+```js
 import { value } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
 import { value2 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
+import { value3 } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
 const shared = {
     value,
-    value2
+    value2,
+    value3
 };
 export { shared } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
@@ -305,7 +338,7 @@ export { shared } from "__TURBOPACK_VAR__" assert {
 ## Merged (module eval)
 ```js
 import { shared } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
+    __turbopack_part__: 6
 };
 "module evaluation";
 console.log("Hello");
@@ -332,7 +365,7 @@ console.log(shared);
 ## Part 0
 ```js
 import { shared } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
+    __turbopack_part__: 6
 };
 "module evaluation";
 console.log("Hello");
@@ -343,7 +376,7 @@ console.log(shared);
 ## Part 1
 ```js
 import { shared } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
+    __turbopack_part__: 6
 };
 export { a };
 const a = {
@@ -358,7 +391,7 @@ export { a } from "__TURBOPACK_VAR__" assert {
 ## Part 2
 ```js
 import { shared } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
+    __turbopack_part__: 6
 };
 export { b };
 const b = {
@@ -388,15 +421,27 @@ export { value2 } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 5
 ```js
+const value3 = externalFunction();
+export { value3 } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+
+```
+## Part 6
+```js
 import { value } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
 import { value2 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
+import { value3 } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
 const shared = {
     value,
-    value2
+    value2,
+    value3
 };
 export { shared } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
@@ -406,7 +451,7 @@ export { shared } from "__TURBOPACK_VAR__" assert {
 ## Merged (module eval)
 ```js
 import { shared } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
+    __turbopack_part__: 6
 };
 "module evaluation";
 console.log("Hello");
