@@ -1,29 +1,19 @@
-use std::{
-    backtrace::Backtrace,
-    env,
-    fs::{self},
-    path::PathBuf,
-    process,
-    process::Stdio,
-    time::Duration,
-};
+mod local_turbo_state;
+mod turbo_state;
 
-use camino::Utf8PathBuf;
-use const_format::formatcp;
+use std::{backtrace::Backtrace, env, process, process::Stdio, time::Duration};
+
 use dunce::canonicalize as fs_canonicalize;
 use itertools::Itertools;
+use local_turbo_state::LocalTurboState;
 use miette::{Diagnostic, SourceSpan};
-use semver::Version;
-use serde::Deserialize;
 use thiserror::Error;
 use tiny_gradient::{GradientStr, RGB};
 use tracing::{debug, warn};
+pub use turbo_state::TurboState;
 use turbo_updater::display_update_check;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_repository::{
-    inference::{RepoMode, RepoState},
-    package_json::PackageJson,
-};
+use turbopath::AbsoluteSystemPathBuf;
+use turborepo_repository::inference::{RepoMode, RepoState};
 use turborepo_ui::UI;
 
 use crate::{cli, get_version, spawn_child, tracing::TurboSubscriber};
@@ -93,16 +83,6 @@ static TURBO_PURE_OUTPUT_ARGS: [&str; 6] = [
 
 static TURBO_SKIP_NOTIFIER_ARGS: [&str; 5] =
     ["--help", "--h", "--version", "--v", "--no-update-notifier"];
-
-fn turbo_version_has_shim(version: &str) -> bool {
-    let version = Version::parse(version).unwrap();
-    // only need to check major and minor (this will include canaries)
-    if version.major == 1 {
-        return version.minor >= 7;
-    }
-
-    version.major > 1
-}
 
 #[derive(Debug)]
 struct ShimArgs {
@@ -318,255 +298,6 @@ impl ShimArgs {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct YarnRc {
-    pnp_unplugged_folder: Utf8PathBuf,
-}
-
-impl Default for YarnRc {
-    fn default() -> Self {
-        Self {
-            pnp_unplugged_folder: [".yarn", "unplugged"].iter().collect(),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct TurboState {
-    bin_path: Option<PathBuf>,
-    version: &'static str,
-    repo_state: Option<RepoState>,
-}
-
-impl Default for TurboState {
-    fn default() -> Self {
-        Self {
-            bin_path: env::current_exe().ok(),
-            version: get_version(),
-            repo_state: None,
-        }
-    }
-}
-
-impl TurboState {
-    pub const fn platform_name() -> &'static str {
-        const ARCH: &str = {
-            #[cfg(target_arch = "x86_64")]
-            {
-                "64"
-            }
-            #[cfg(target_arch = "aarch64")]
-            {
-                "arm64"
-            }
-            #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
-            {
-                "unknown"
-            }
-        };
-
-        const OS: &str = {
-            #[cfg(target_os = "macos")]
-            {
-                "darwin"
-            }
-            #[cfg(target_os = "windows")]
-            {
-                "windows"
-            }
-            #[cfg(target_os = "linux")]
-            {
-                "linux"
-            }
-            #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
-            {
-                "unknown"
-            }
-        };
-
-        formatcp!("{}-{}", OS, ARCH)
-    }
-
-    pub const fn platform_package_name() -> &'static str {
-        formatcp!("turbo-{}", TurboState::platform_name())
-    }
-
-    pub const fn binary_name() -> &'static str {
-        {
-            #[cfg(windows)]
-            {
-                "turbo.exe"
-            }
-            #[cfg(not(windows))]
-            {
-                "turbo"
-            }
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn version() -> &'static str {
-        include_str!("../../../../version.txt")
-            .lines()
-            .next()
-            .expect("Failed to read version from version.txt")
-    }
-}
-
-#[derive(Debug)]
-pub struct LocalTurboState {
-    bin_path: PathBuf,
-    version: String,
-}
-
-impl LocalTurboState {
-    // Hoisted strategy:
-    // - `bun install`
-    // - `npm install`
-    // - `yarn`
-    // - `yarn install --flat`
-    // - berry (nodeLinker: "node-modules")
-    //
-    // This also supports people directly depending upon the platform version.
-    fn generate_hoisted_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
-        Some(root_path.join_component("node_modules"))
-    }
-
-    // Nested strategy:
-    // - `npm install --install-strategy=shallow` (`npm install --global-style`)
-    // - `npm install --install-strategy=nested` (`npm install --legacy-bundling`)
-    // - berry (nodeLinker: "pnpm")
-    fn generate_nested_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
-        Some(root_path.join_components(&["node_modules", "turbo", "node_modules"]))
-    }
-
-    // Linked strategy:
-    // - `pnpm install`
-    // - `npm install --install-strategy=linked`
-    fn generate_linked_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
-        // root_path/node_modules/turbo is a symlink. Canonicalize the symlink to what
-        // it points to. We do this _before_ traversing up to the parent,
-        // because on Windows, if you canonicalize a path that ends with `/..`
-        // it traverses to the parent directory before it follows the symlink,
-        // leading to the wrong place. We could separate the Windows
-        // implementation, but this workaround works for other platforms as
-        // well.
-        let canonical_path =
-            fs_canonicalize(root_path.as_path().join("node_modules").join("turbo")).ok()?;
-
-        AbsoluteSystemPathBuf::try_from(canonical_path.parent()?).ok()
-    }
-
-    // The unplugged directory doesn't have a fixed path.
-    fn get_unplugged_base_path(root_path: &AbsoluteSystemPath) -> Utf8PathBuf {
-        let yarn_rc_filename =
-            env::var("YARN_RC_FILENAME").unwrap_or_else(|_| String::from(".yarnrc.yml"));
-        let yarn_rc_filepath = root_path.as_path().join(yarn_rc_filename);
-
-        let yarn_rc_yaml_string = fs::read_to_string(yarn_rc_filepath).unwrap_or_default();
-        let yarn_rc: YarnRc = serde_yaml::from_str(&yarn_rc_yaml_string).unwrap_or_default();
-
-        root_path.as_path().join(yarn_rc.pnp_unplugged_folder)
-    }
-
-    // Unplugged strategy:
-    // - berry 2.1+
-    fn generate_unplugged_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
-        let platform_package_name = TurboState::platform_package_name();
-        let unplugged_base_path = Self::get_unplugged_base_path(root_path);
-
-        unplugged_base_path
-            .read_dir_utf8()
-            .ok()
-            .and_then(|mut read_dir| {
-                // berry includes additional metadata in the filename.
-                // We actually have to find the platform package.
-                read_dir.find_map(|item| match item {
-                    Ok(entry) => {
-                        let file_name = entry.file_name();
-                        if file_name.starts_with(platform_package_name) {
-                            AbsoluteSystemPathBuf::new(
-                                unplugged_base_path.join(file_name).join("node_modules"),
-                            )
-                            .ok()
-                        } else {
-                            None
-                        }
-                    }
-                    Err(_) => None,
-                })
-            })
-    }
-
-    // We support six per-platform packages and one `turbo` package which handles
-    // indirection. We identify the per-platform package and execute the appropriate
-    // binary directly. We can choose to operate this aggressively because the
-    // _worst_ outcome is that we run global `turbo`.
-    //
-    // In spite of that, the only known unsupported local invocation is Yarn/Berry <
-    // 2.1 PnP
-    pub fn infer(root_path: &AbsoluteSystemPath) -> Option<Self> {
-        let platform_package_name = TurboState::platform_package_name();
-        let binary_name = TurboState::binary_name();
-
-        let platform_package_json_path_components = [platform_package_name, "package.json"];
-        let platform_package_executable_path_components =
-            [platform_package_name, "bin", binary_name];
-
-        // These are lazy because the last two are more expensive.
-        let search_functions = [
-            Self::generate_hoisted_path,
-            Self::generate_nested_path,
-            Self::generate_linked_path,
-            Self::generate_unplugged_path,
-        ];
-
-        // Detecting the package manager is more expensive than just doing an exhaustive
-        // search.
-        for root in search_functions
-            .iter()
-            .filter_map(|search_function| search_function(root_path))
-        {
-            // Needs borrow because of the loop.
-            #[allow(clippy::needless_borrow)]
-            let bin_path = root.join_components(&platform_package_executable_path_components);
-            match fs_canonicalize(&bin_path) {
-                Ok(bin_path) => {
-                    let resolved_package_json_path =
-                        root.join_components(&platform_package_json_path_components);
-                    let platform_package_json =
-                        PackageJson::load(&resolved_package_json_path).ok()?;
-                    let local_version = platform_package_json.version?;
-
-                    debug!("Local turbo path: {}", bin_path.display());
-                    debug!("Local turbo version: {}", &local_version);
-                    return Some(Self {
-                        bin_path,
-                        version: local_version,
-                    });
-                }
-                Err(_) => debug!("No local turbo binary found at: {}", bin_path),
-            }
-        }
-
-        None
-    }
-
-    fn supports_skip_infer_and_single_package(&self) -> bool {
-        turbo_version_has_shim(&self.version)
-    }
-
-    /// Check to see if the detected local executable is the one currently
-    /// running.
-    fn local_is_self(&self) -> bool {
-        std::env::current_exe().is_ok_and(|current_exe| {
-            fs_canonicalize(current_exe)
-                .is_ok_and(|canonical_current_exe| canonical_current_exe == self.bin_path)
-        })
-    }
-}
-
 /// Attempts to run correct turbo by finding nearest package.json,
 /// then finding local turbo installation. If the current binary is the
 /// local turbo installation, then we run current turbo. Otherwise we
@@ -584,7 +315,7 @@ fn run_correct_turbo(
     ui: UI,
 ) -> Result<i32, Error> {
     if let Some(turbo_state) = LocalTurboState::infer(&repo_state.root) {
-        try_check_for_updates(&shim_args, &turbo_state.version);
+        try_check_for_updates(&shim_args, turbo_state.version());
 
         if turbo_state.local_is_self() {
             env::set_var(
@@ -620,8 +351,8 @@ fn spawn_local_turbo(
     local_turbo_state: LocalTurboState,
     mut shim_args: ShimArgs,
 ) -> Result<i32, Error> {
-    let local_turbo_path = fs_canonicalize(&local_turbo_state.bin_path).map_err(|_| {
-        Error::LocalTurboPath(local_turbo_state.bin_path.to_string_lossy().to_string())
+    let local_turbo_path = fs_canonicalize(local_turbo_state.binary()).map_err(|_| {
+        Error::LocalTurboPath(local_turbo_state.binary().to_string_lossy().to_string())
     })?;
     debug!(
         "Running local turbo binary in {}\n",
@@ -790,29 +521,7 @@ mod test {
     use miette::SourceSpan;
     use test_case::test_case;
 
-    use super::turbo_version_has_shim;
     use crate::shim::ShimArgs;
-
-    #[test]
-    fn test_skip_infer_version_constraint() {
-        let canary = "1.7.0-canary.0";
-        let newer_canary = "1.7.0-canary.1";
-        let newer_minor_canary = "1.7.1-canary.6";
-        let release = "1.7.0";
-        let old = "1.6.3";
-        let old_canary = "1.6.2-canary.1";
-        let new = "1.8.0";
-        let new_major = "2.1.0";
-
-        assert!(turbo_version_has_shim(release));
-        assert!(turbo_version_has_shim(canary));
-        assert!(turbo_version_has_shim(newer_canary));
-        assert!(turbo_version_has_shim(newer_minor_canary));
-        assert!(turbo_version_has_shim(new));
-        assert!(turbo_version_has_shim(new_major));
-        assert!(!turbo_version_has_shim(old));
-        assert!(!turbo_version_has_shim(old_canary));
-    }
 
     #[test_case(vec![3], vec!["--graph", "foo", "--cwd", "apple"], vec![(18, 5).into()])]
     #[test_case(vec![0], vec!["--graph", "foo", "--cwd"], vec![(0, 7).into()])]
