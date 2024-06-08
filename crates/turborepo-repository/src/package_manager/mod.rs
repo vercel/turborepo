@@ -321,6 +321,19 @@ static PACKAGE_MANAGER_PATTERN: Lazy<Regex> =
     lazy_regex!(r"(?P<manager>bun|npm|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(-.+)?)");
 
 impl PackageManager {
+    pub fn supported_managers() -> &'static [Self] {
+        [
+            Self::Npm,
+            Self::Pnpm9,
+            Self::Pnpm,
+            Self::Pnpm6,
+            Self::Yarn,
+            Self::Berry,
+            Self::Bun,
+        ]
+        .as_slice()
+    }
+
     pub fn command(&self) -> &'static str {
         match self {
             PackageManager::Npm => "npm",

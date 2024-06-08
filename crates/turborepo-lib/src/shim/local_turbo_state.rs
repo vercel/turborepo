@@ -160,10 +160,6 @@ impl LocalTurboState {
         None
     }
 
-    pub fn supports_skip_infer_and_single_package(&self) -> bool {
-        turbo_version_has_shim(&self.version)
-    }
-
     /// Check to see if the detected local executable is the one currently
     /// running.
     pub fn local_is_self(&self) -> bool {
@@ -188,7 +184,7 @@ impl Default for YarnRc {
     }
 }
 
-fn turbo_version_has_shim(version: &str) -> bool {
+pub fn turbo_version_has_shim(version: &str) -> bool {
     let version = Version::parse(version).unwrap();
     // only need to check major and minor (this will include canaries)
     if version.major == 1 {
