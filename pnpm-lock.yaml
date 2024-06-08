@@ -524,7 +524,7 @@ importers:
         version: 4.2.2
       jest:
         specifier: ^27.4.3
-        version: 27.5.1
+        version: 27.5.1(ts-node@10.9.1)
       plop:
         specifier: ^3.1.1
         version: 3.1.1
@@ -533,7 +533,7 @@ importers:
         version: 27.1.5(@babel/core@7.23.6)(@types/jest@27.5.2)(esbuild@0.17.18)(jest@27.5.1)(typescript@5.3.3)
       tsup:
         specifier: ^6.7.0
-        version: 6.7.0(typescript@5.3.3)
+        version: 6.7.0(ts-node@10.9.1)(typescript@5.3.3)
       typescript:
         specifier: 5.3.3
         version: 5.3.3
@@ -730,7 +730,7 @@ importers:
         version: 27.5.1(ts-node@10.9.1)
       ts-jest:
         specifier: ^27.1.1
-        version: 27.1.5(@babel/core@7.23.6)(@types/jest@27.5.2)(esbuild@0.14.49)(jest@27.5.1)(typescript@5.3.3)
+        version: 27.1.5(@babel/core@7.23.6)(@types/jest@27.5.2)(esbuild@0.17.18)(jest@27.5.1)(typescript@5.3.3)
       tsx:
         specifier: ^4.7.2
         version: 4.7.2
@@ -782,7 +782,7 @@ importers:
         version: 27.5.1(ts-node@10.9.1)
       ts-jest:
         specifier: ^27.1.1
-        version: 27.1.5(@babel/core@7.23.6)(@types/jest@27.5.2)(esbuild@0.14.49)(jest@27.5.1)(typescript@5.3.3)
+        version: 27.1.5(@babel/core@7.23.6)(@types/jest@27.5.2)(esbuild@0.17.18)(jest@27.5.1)(typescript@5.3.3)
       typescript:
         specifier: 5.3.3
         version: 5.3.3
@@ -914,7 +914,7 @@ importers:
         version: 6.1.13
       ts-jest:
         specifier: ^27.1.1
-        version: 27.1.5(@babel/core@7.23.6)(@types/jest@27.5.2)(esbuild@0.14.49)(jest@27.5.1)(typescript@5.3.3)
+        version: 27.1.5(@babel/core@7.23.6)(@types/jest@27.5.2)(esbuild@0.17.18)(jest@27.5.1)(typescript@5.3.3)
       typescript:
         specifier: 5.3.3
         version: 5.3.3
@@ -943,9 +943,6 @@ importers:
 
   packages/turbo-workspaces:
     dependencies:
-      chalk:
-        specifier: 2.4.2
-        version: 2.4.2
       commander:
         specifier: ^10.0.0
         version: 10.0.0
@@ -970,6 +967,9 @@ importers:
       ora:
         specifier: 4.1.1
         version: 4.1.1
+      picocolors:
+        specifier: 1.0.1
+        version: 1.0.1
       rimraf:
         specifier: ^3.0.2
         version: 3.0.2
@@ -992,9 +992,6 @@ importers:
       '@turbo/utils':
         specifier: workspace:*
         version: link:../turbo-utils
-      '@types/chalk-animation':
-        specifier: ^1.6.0
-        version: 1.6.1
       '@types/fs-extra':
         specifier: ^9.0.13
         version: 9.0.13
@@ -1021,7 +1018,7 @@ importers:
         version: 7.3.12
       jest:
         specifier: ^27.4.3
-        version: 27.5.1(ts-node@10.9.1)
+        version: 27.5.1
       strip-ansi:
         specifier: ^6.0.1
         version: 6.0.1
@@ -3362,10 +3359,6 @@ packages:
       '@types/keyv': 3.1.4
       '@types/node': 18.17.4
       '@types/responselike': 1.0.0
-
-  /@types/chalk-animation@1.6.1:
-    resolution: {integrity: sha512-MSuZqFkBeKcik4oMzd/BjaTRYkLpNftRSYkI/oszmckHAZOTSKslWR1CRdURwsxXBgYHPRlb5JM6Cx+tkyXUAg==}
-    dev: true
 
   /@types/diff@5.0.2:
     resolution: {integrity: sha512-uw8eYMIReOwstQ0QKF0sICefSy8cNO/v7gOTiIy9SbwuHyEecJUm7qlgueOO5S1udZ5I/irVydHVwMchgzbKTg==}
@@ -12124,7 +12117,7 @@ packages:
       bs-logger: 0.2.6
       esbuild: 0.14.49
       fast-json-stable-stringify: 2.1.0
-      jest: 27.5.1(ts-node@10.9.1)
+      jest: 27.5.1
       jest-util: 27.5.1
       json5: 2.2.3
       lodash.memoize: 4.1.2
@@ -12196,7 +12189,7 @@ packages:
       bs-logger: 0.2.6
       esbuild: 0.17.18
       fast-json-stable-stringify: 2.1.0
-      jest: 27.5.1
+      jest: 27.5.1(ts-node@10.9.1)
       jest-util: 27.5.1
       json5: 2.2.3
       lodash.memoize: 4.1.2
@@ -12289,7 +12282,7 @@ packages:
       execa: 5.1.1
       globby: 11.1.0
       joycon: 3.1.1
-      postcss-load-config: 3.1.4(ts-node@10.9.1)
+      postcss-load-config: 3.1.4
       resolve-from: 5.0.0
       rollup: 2.78.0
       source-map: 0.8.0-beta.0
@@ -12368,42 +12361,6 @@ packages:
       sucrase: 3.24.0
       tree-kill: 1.2.2
       typescript: 5.2.2
-    transitivePeerDependencies:
-      - supports-color
-      - ts-node
-    dev: true
-
-  /tsup@6.7.0(typescript@5.3.3):
-    resolution: {integrity: sha512-L3o8hGkaHnu5TdJns+mCqFsDBo83bJ44rlK7e6VdanIvpea4ArPcU3swWGsLVbXak1PqQx/V+SSmFPujBK+zEQ==}
-    engines: {node: '>=14.18'}
-    hasBin: true
-    peerDependencies:
-      '@swc/core': ^1
-      postcss: ^8.4.12
-      typescript: '>=4.1.0'
-    peerDependenciesMeta:
-      '@swc/core':
-        optional: true
-      postcss:
-        optional: true
-      typescript:
-        optional: true
-    dependencies:
-      bundle-require: 4.0.1(esbuild@0.17.18)
-      cac: 6.7.12
-      chokidar: 3.5.3
-      debug: 4.3.4
-      esbuild: 0.17.18
-      execa: 5.1.1
-      globby: 11.1.0
-      joycon: 3.1.1
-      postcss-load-config: 3.1.4
-      resolve-from: 5.0.0
-      rollup: 3.21.5
-      source-map: 0.8.0-beta.0
-      sucrase: 3.24.0
-      tree-kill: 1.2.2
-      typescript: 5.3.3
     transitivePeerDependencies:
       - supports-color
       - ts-node
