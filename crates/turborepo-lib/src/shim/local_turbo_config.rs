@@ -1,8 +1,12 @@
+use std::env;
+
 use jsonc_parser::{
     ast::{ObjectPropName, Value},
     parse_to_ast,
 };
 use turborepo_repository::{inference::RepoState, package_manager::PackageManager};
+
+const TURBO_DOWNLOAD_LOCAL_DISABLED: &str = "TURBO_DOWNLOAD_LOCAL_DISABLED";
 
 /// Struct containing information about the desired local turbo version
 /// according to lockfiles, package.jsons, and if all else fails turbo.json
@@ -12,6 +16,12 @@ pub struct LocalTurboConfig {
 
 impl LocalTurboConfig {
     pub fn infer(repo_state: &RepoState) -> Option<Self> {
+        // Don't attempt a download if user has opted out
+        if env::var(TURBO_DOWNLOAD_LOCAL_DISABLED)
+            .map_or(false, |disable| matches!(disable.as_str(), "1" | "true"))
+        {
+            return None;
+        }
         let turbo_version = Self::turbo_version_from_lockfile(repo_state)
             .or_else(|| Self::turbo_version_from_package_json(repo_state))
             .or_else(|| Self::turbo_version_from_turbo_json_schema(repo_state))?;
