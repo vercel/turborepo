@@ -9,6 +9,7 @@ process.turbopack = {};
 
 ```
 
+- Side effects
 
 # Phase 1
 ```mermaid
@@ -37,11 +38,12 @@ graph TD
     Item1;
     Item2;
     Item2["ModuleEvaluation"];
+    Item2 --> Item1;
 ```
 # Final
 ```mermaid
 graph TD
-    N0["Items: [ItemId(ModuleEvaluation)]"];
+    N0["Items: [ItemId(ModuleEvaluation), ItemId(0, Normal)]"];
 ```
 # Entrypoints
 
@@ -56,11 +58,13 @@ graph TD
 ## Part 0
 ```js
 "module evaluation";
+process.turbopack = {};
 
 ```
 ## Merged (module eval)
 ```js
 "module evaluation";
+process.turbopack = {};
 
 ```
 # Entrypoints
@@ -76,10 +80,12 @@ graph TD
 ## Part 0
 ```js
 "module evaluation";
+process.turbopack = {};
 
 ```
 ## Merged (module eval)
 ```js
 "module evaluation";
+process.turbopack = {};
 
 ```
