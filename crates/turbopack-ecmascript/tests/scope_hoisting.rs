@@ -61,7 +61,7 @@ async fn test_1() -> Result<()> {
     ]))
     .await?;
 
-    assert_eq!(result, vec![vec![3], vec![1, 2], vec![0]]);
+    assert_eq!(result, vec![vec![6, 8], vec![3, 4, 7, 5], vec![0, 1, 2]]);
 
     Ok(())
 }
