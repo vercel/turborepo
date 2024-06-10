@@ -104,7 +104,7 @@ impl Visit for IdentUsageCollector {
             return;
         }
 
-        if n.span.ctxt == self.unresolved && matches!(self.mode, Some(Mode::Read)) {
+        if n.span.ctxt == self.unresolved {
             self.vars.found_unresolved = true;
             return;
         }
