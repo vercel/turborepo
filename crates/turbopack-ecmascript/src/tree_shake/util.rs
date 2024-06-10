@@ -9,7 +9,7 @@ use swc_core::{
             AssignTarget, BlockStmtOrExpr, Constructor, ExportNamedSpecifier, ExportSpecifier,
             Expr, Function, Id, Ident, MemberExpr, MemberProp, NamedExport, Pat, PropName,
         },
-        visit::{noop_visit_type, visit_obj_and_computed, Visit, VisitWith},
+        visit::{noop_visit_type, Visit, VisitWith},
     },
 };
 
@@ -26,11 +26,12 @@ pub(crate) struct IdentUsageCollector {
     only: [SyntaxContext; 2],
     vars: Vars,
     ignore_nested: bool,
-    mode: Mode,
+    /// None means both read and write
+    mode: Option<Mode>,
 }
 
 impl IdentUsageCollector {
-    fn with_mode(&mut self, mode: Mode, f: impl FnOnce(&mut Self)) {
+    fn with_mode(&mut self, mode: Option<Mode>, f: impl FnOnce(&mut Self)) {
         let old = self.mode;
         self.mode = mode;
         f(self);
@@ -40,7 +41,7 @@ impl IdentUsageCollector {
 
 impl Visit for IdentUsageCollector {
     fn visit_assign_target(&mut self, n: &AssignTarget) {
-        self.with_mode(Mode::Write, |this| {
+        self.with_mode(Some(Mode::Write), |this| {
             n.visit_children_with(this);
         })
     }
@@ -66,13 +67,13 @@ impl Visit for IdentUsageCollector {
     }
 
     fn visit_export_specifier(&mut self, n: &ExportSpecifier) {
-        self.with_mode(Mode::Read, |this| {
+        self.with_mode(Some(Mode::Read), |this| {
             n.visit_children_with(this);
         })
     }
 
     fn visit_expr(&mut self, e: &Expr) {
-        self.with_mode(Mode::Read, |this| {
+        self.with_mode(Some(Mode::Read), |this| {
             e.visit_children_with(this);
         })
     }
@@ -93,17 +94,21 @@ impl Visit for IdentUsageCollector {
         }
 
         match self.mode {
-            Mode::Read => {
+            Some(Mode::Read) => {
                 self.vars.read.insert(n.to_id());
             }
-            Mode::Write => {
+            Some(Mode::Write) => {
+                self.vars.write.insert(n.to_id());
+            }
+            None => {
+                self.vars.read.insert(n.to_id());
                 self.vars.write.insert(n.to_id());
             }
         }
     }
 
     fn visit_member_expr(&mut self, e: &MemberExpr) {
-        self.with_mode(Mode::Write, |this| {
+        self.with_mode(None, |this| {
             // Skip visit_expr
             e.obj.visit_children_with(this);
         });
@@ -126,7 +131,7 @@ impl Visit for IdentUsageCollector {
     }
 
     fn visit_pat(&mut self, p: &Pat) {
-        self.with_mode(Mode::Write, |this| {
+        self.with_mode(Some(Mode::Write), |this| {
             p.visit_children_with(this);
         })
     }
@@ -147,7 +152,8 @@ pub(crate) struct CapturedIdCollector {
     only: [SyntaxContext; 2],
     vars: Vars,
     is_nested: bool,
-    mode: Mode,
+    /// None means both read and write
+    mode: Option<Mode>,
 }
 
 impl CapturedIdCollector {
@@ -158,7 +164,7 @@ impl CapturedIdCollector {
         self.is_nested = old;
     }
 
-    fn with_mode(&mut self, mode: Mode, f: impl FnOnce(&mut Self)) {
+    fn with_mode(&mut self, mode: Option<Mode>, f: impl FnOnce(&mut Self)) {
         let old = self.mode;
         self.mode = mode;
         f(self);
@@ -168,7 +174,7 @@ impl CapturedIdCollector {
 
 impl Visit for CapturedIdCollector {
     fn visit_assign_target(&mut self, n: &AssignTarget) {
-        self.with_mode(Mode::Write, |this| {
+        self.with_mode(Some(Mode::Write), |this| {
             n.visit_children_with(this);
         })
     }
@@ -186,13 +192,13 @@ impl Visit for CapturedIdCollector {
     }
 
     fn visit_export_specifier(&mut self, n: &ExportSpecifier) {
-        self.with_mode(Mode::Read, |this| {
+        self.with_mode(Some(Mode::Read), |this| {
             n.visit_children_with(this);
         })
     }
 
     fn visit_expr(&mut self, e: &Expr) {
-        self.with_mode(Mode::Read, |this| {
+        self.with_mode(Some(Mode::Read), |this| {
             e.visit_children_with(this);
         })
     }
@@ -215,17 +221,30 @@ impl Visit for CapturedIdCollector {
         }
 
         match self.mode {
-            Mode::Read => {
+            Some(Mode::Read) => {
                 self.vars.read.insert(n.to_id());
             }
-            Mode::Write => {
+            Some(Mode::Write) => {
+                self.vars.write.insert(n.to_id());
+            }
+            None => {
+                self.vars.read.insert(n.to_id());
                 self.vars.write.insert(n.to_id());
             }
         }
     }
 
+    fn visit_member_expr(&mut self, e: &MemberExpr) {
+        self.with_mode(None, |this| {
+            // Skip visit_expr
+            e.obj.visit_children_with(this);
+        });
+
+        e.prop.visit_with(self);
+    }
+
     fn visit_pat(&mut self, p: &Pat) {
-        self.with_mode(Mode::Write, |this| {
+        self.with_mode(Some(Mode::Write), |this| {
             p.visit_children_with(this);
         })
     }
@@ -237,8 +256,6 @@ impl Visit for CapturedIdCollector {
     }
 
     noop_visit_type!();
-
-    visit_obj_and_computed!();
 }
 
 /// The list of variables which are read or written.
