@@ -88,6 +88,10 @@ fn run_correct_turbo(
             spawn_local_turbo(&repo_state, turbo_state, shim_args)
         }
     } else if let Some(local_config) = LocalTurboConfig::infer(&repo_state) {
+        debug!(
+            "Found configuration for turbo version {}",
+            local_config.turbo_version()
+        );
         spawn_npx_turbo(&repo_state, local_config.turbo_version(), shim_args)
     } else {
         let version = get_version();
