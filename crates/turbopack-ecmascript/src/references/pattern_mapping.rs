@@ -118,7 +118,7 @@ impl SinglePatternMapping {
                 callee: Callee::Expr(quote_expr!("__turbopack_external_require__")),
                 args: vec![ExprOrSpread {
                     spread: None,
-                    expr: Box::new(Expr::Lit(Lit::Str(request.as_str().into()))),
+                    expr: request.as_str().into(),
                 }],
                 span: DUMMY_SP,
                 type_args: None,
