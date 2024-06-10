@@ -469,6 +469,7 @@ impl<'a> TaskHasher<'a> {
                         "LANG",
                         "SHELL",
                         "PWD",
+                        "CI",
                         "NODE_OPTIONS",
                         // Vercel specific
                         "VERCEL_*",
