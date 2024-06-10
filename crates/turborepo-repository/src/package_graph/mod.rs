@@ -680,6 +680,10 @@ mod test {
         fn global_change(&self, _other: &dyn Lockfile) -> bool {
             unreachable!("global change detection not necessary for package graph construction")
         }
+
+        fn turbo_version(&self) -> Option<String> {
+            None
+        }
     }
 
     #[tokio::test]
