@@ -14,7 +14,7 @@ export interface BaseSchema {
    * these conventions to schedule, execute, and cache the outputs of tasks in
    * your project.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#pipeline
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#tasks
    *
    * @defaultValue `{}`
    */
@@ -94,7 +94,7 @@ export interface RootSchema extends BaseSchema {
    * An allowlist of environment variables that should be made to all tasks, but
    * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalPassThroughEnv
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalpassthroughenv
    *
    * @defaultValue null
    * @deprecated use `globalPassThroughEnv` instead
@@ -105,7 +105,7 @@ export interface RootSchema extends BaseSchema {
    * An allowlist of environment variables that should be made to all tasks, but
    * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalPassThroughEnv
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalpassthroughenv
    *
    * @defaultValue null
    */
@@ -133,7 +133,7 @@ export interface RootSchema extends BaseSchema {
   /**
    * Enable use of the UI for `turbo`.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#experimentalui
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#ui
    *
    * @defaultValue `"tui"`
    */
@@ -182,7 +182,7 @@ export interface Pipeline {
    * task's environment, but should not contribute to the task's cache key,
    * e.g. `AWS_SECRET_KEY`.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#passThroughEnv
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#passthroughenv
    *
    * @defaultValue null
    * @deprecated use `passThroughEnv` instead
@@ -194,7 +194,7 @@ export interface Pipeline {
    * task's environment, but should not contribute to the task's cache key,
    * e.g. `AWS_SECRET_KEY`.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#passThroughEnv
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#passthroughenv
    *
    * @defaultValue null
    */
@@ -264,7 +264,7 @@ export interface Pipeline {
    *
    * "none": Hides all task output
    *
-   * Documentation: https://turbo.build/repo/docs/reference/command-line-reference#--output-logs
+   * Documentation: https://turbo.build/repo/docs/reference/run#--output-logs-option
    *
    * @defaultValue full
    */
