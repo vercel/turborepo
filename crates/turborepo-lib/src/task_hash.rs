@@ -471,6 +471,7 @@ impl<'a> TaskHasher<'a> {
                         "PWD",
                         "CI",
                         "NODE_OPTIONS",
+                        "LD_LIBRARY_PATH",
                         // Vercel specific
                         "VERCEL_*",
                         "NEXT_*",
