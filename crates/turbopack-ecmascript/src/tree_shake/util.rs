@@ -260,6 +260,12 @@ impl Visit for CapturedIdCollector {
         e.prop.visit_with(self);
     }
 
+    fn visit_member_prop(&mut self, n: &MemberProp) {
+        if let MemberProp::Computed(..) = n {
+            n.visit_children_with(self);
+        }
+    }
+
     fn visit_pat(&mut self, p: &Pat) {
         self.with_mode(Some(Mode::Write), |this| {
             p.visit_children_with(this);
