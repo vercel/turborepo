@@ -164,7 +164,7 @@ export function trackDynamicDataAccessed(store, expression) {
 
 - Hoisted
 - Declares: `trackDynamicDataAccessed`
-- Reads (eventual): `getPathname`, `Error`, `StaticGenBailoutError`, `postponeWithTracking`, `DynamicServerError`
+- Reads (eventual): `getPathname`, `StaticGenBailoutError`, `postponeWithTracking`, `DynamicServerError`
 - Write: `trackDynamicDataAccessed`
 
 ## Item 13: Stmt 8, `Normal`
@@ -213,7 +213,7 @@ function postponeWithTracking(prerenderState, expression, pathname) {
 
 - Hoisted
 - Declares: `postponeWithTracking`
-- Reads (eventual): `assertPostpone`, `Error`, `undefined`, `React`
+- Reads (eventual): `assertPostpone`, `React`
 - Write: `postponeWithTracking`
 - Write (eventual): `React`
 
@@ -270,7 +270,7 @@ function assertPostpone() {
 
 - Hoisted
 - Declares: `assertPostpone`
-- Reads (eventual): `hasPostpone`, `Error`
+- Reads (eventual): `hasPostpone`
 - Write: `assertPostpone`
 
 ## Item 19: Stmt 14, `Normal`
@@ -291,7 +291,7 @@ export function createPostponedAbortSignal(reason) {
 
 - Hoisted
 - Declares: `createPostponedAbortSignal`
-- Reads (eventual): `assertPostpone`, `AbortController`, `React`
+- Reads (eventual): `assertPostpone`, `React`
 - Write: `createPostponedAbortSignal`
 - Write (eventual): `React`
 

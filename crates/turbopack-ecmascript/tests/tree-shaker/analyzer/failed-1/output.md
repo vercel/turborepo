@@ -37,7 +37,6 @@ function getSocketProtocol(assetPrefix) {
 
 - Hoisted
 - Declares: `getSocketProtocol`
-- Reads (eventual): `URL`
 - Write: `getSocketProtocol`
 
 ## Item 4: Stmt 3, `Normal`
@@ -120,7 +119,7 @@ export function connectHMR(options) {
 
 - Hoisted
 - Declares: `connectHMR`
-- Reads (eventual): `source`, `eventCallbacks`, `setTimeout`, `location`, `getSocketProtocol`
+- Reads (eventual): `source`, `eventCallbacks`, `getSocketProtocol`
 - Write: `connectHMR`
 - Write (eventual): `source`, `eventCallbacks`
 

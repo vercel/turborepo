@@ -102,7 +102,7 @@ const routeModule = new AppRouteRouteModule({
 
 - Side effects
 - Declares: `routeModule`
-- Reads: `AppRouteRouteModule`, `RouteKind`, `nextConfigOutput`, `userland`
+- Reads: `AppRouteRouteModule`, `RouteKind`, `userland`
 - Write: `routeModule`, `RouteKind`
 
 ## Item 10: Stmt 5, `VarDeclarator(0)`

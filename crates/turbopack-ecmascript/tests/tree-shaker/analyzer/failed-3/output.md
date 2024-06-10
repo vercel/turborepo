@@ -215,7 +215,7 @@ function createIpc(port) {
 
 - Hoisted
 - Declares: `createIpc`
-- Reads (eventual): `createConnection`, `loop`, `Promise`, `structuredError`
+- Reads (eventual): `createConnection`, `loop`, `structuredError`
 - Write: `createIpc`
 
 ## Item 9: Stmt 5, `VarDeclarator(0)`
@@ -225,6 +225,7 @@ const PORT = process.argv[2];
 
 ```
 
+- Side effects
 - Declares: `PORT`
 - Write: `PORT`
 
@@ -237,7 +238,7 @@ export const IPC = createIpc(parseInt(PORT, 10));
 
 - Side effects
 - Declares: `IPC`
-- Reads: `createIpc`, `parseInt`, `PORT`
+- Reads: `createIpc`, `PORT`
 - Write: `IPC`
 
 ## Item 11: Stmt 7, `Normal`
@@ -274,7 +275,6 @@ const improveConsole = (name, stream, addStack)=>{
 ```
 
 - Declares: `improveConsole`
-- Reads (eventual): `Error`
 - Write: `improveConsole`
 
 ## Item 13: Stmt 9, `Normal`
@@ -518,6 +518,13 @@ graph TD
     Item2 --> Item1;
     Item3 --> Item1;
     Item3 --> Item2;
+    Item9 --> Item1;
+    Item9 --> Item2;
+    Item9 --> Item3;
+    Item9 -.-> Item6;
+    Item9 -.-> Item5;
+    Item9 -.-> Item4;
+    Item9 -.-> Item7;
     Item10 --> Item8;
     Item10 --> Item9;
     Item10 --> Item1;
@@ -530,6 +537,7 @@ graph TD
     Item11 --> Item1;
     Item11 --> Item2;
     Item11 --> Item3;
+    Item11 --> Item9;
     Item11 --> Item10;
     Item11 -.-> Item6;
     Item11 -.-> Item5;
@@ -539,6 +547,7 @@ graph TD
     Item13 --> Item1;
     Item13 --> Item2;
     Item13 --> Item3;
+    Item13 --> Item9;
     Item13 --> Item10;
     Item13 --> Item11;
     Item13 -.-> Item6;
@@ -549,6 +558,7 @@ graph TD
     Item14 --> Item1;
     Item14 --> Item2;
     Item14 --> Item3;
+    Item14 --> Item9;
     Item14 --> Item10;
     Item14 --> Item11;
     Item14 --> Item13;
@@ -560,6 +570,7 @@ graph TD
     Item15 --> Item1;
     Item15 --> Item2;
     Item15 --> Item3;
+    Item15 --> Item9;
     Item15 --> Item10;
     Item15 --> Item11;
     Item15 --> Item13;
@@ -572,6 +583,7 @@ graph TD
     Item16 --> Item1;
     Item16 --> Item2;
     Item16 --> Item3;
+    Item16 --> Item9;
     Item16 --> Item10;
     Item16 --> Item11;
     Item16 --> Item13;
@@ -585,6 +597,7 @@ graph TD
     Item17 --> Item1;
     Item17 --> Item2;
     Item17 --> Item3;
+    Item17 --> Item9;
     Item17 --> Item10;
     Item17 --> Item11;
     Item17 --> Item13;
@@ -599,6 +612,7 @@ graph TD
     Item18 --> Item1;
     Item18 --> Item2;
     Item18 --> Item3;
+    Item18 --> Item9;
     Item18 --> Item10;
     Item18 --> Item11;
     Item18 --> Item13;
@@ -614,6 +628,7 @@ graph TD
     Item19 --> Item1;
     Item19 --> Item2;
     Item19 --> Item3;
+    Item19 --> Item9;
     Item19 --> Item10;
     Item19 --> Item11;
     Item19 --> Item13;
@@ -630,6 +645,7 @@ graph TD
     Item20 --> Item1;
     Item20 --> Item2;
     Item20 --> Item3;
+    Item20 --> Item9;
     Item20 --> Item10;
     Item20 --> Item11;
     Item20 --> Item13;
@@ -647,6 +663,7 @@ graph TD
     Item21 --> Item1;
     Item21 --> Item2;
     Item21 --> Item3;
+    Item21 --> Item9;
     Item21 --> Item10;
     Item21 --> Item11;
     Item21 --> Item13;
@@ -665,6 +682,7 @@ graph TD
     Item22 --> Item1;
     Item22 --> Item2;
     Item22 --> Item3;
+    Item22 --> Item9;
     Item22 --> Item10;
     Item22 --> Item11;
     Item22 --> Item13;
@@ -684,6 +702,7 @@ graph TD
     Item23 --> Item1;
     Item23 --> Item2;
     Item23 --> Item3;
+    Item23 --> Item9;
     Item23 --> Item10;
     Item23 --> Item11;
     Item23 --> Item13;
@@ -704,6 +723,7 @@ graph TD
     Item24 --> Item1;
     Item24 --> Item2;
     Item24 --> Item3;
+    Item24 --> Item9;
     Item24 --> Item10;
     Item24 --> Item11;
     Item24 --> Item13;
@@ -725,6 +745,7 @@ graph TD
     Item25 --> Item1;
     Item25 --> Item2;
     Item25 --> Item3;
+    Item25 --> Item9;
     Item25 --> Item10;
     Item25 --> Item11;
     Item25 --> Item13;
@@ -747,6 +768,7 @@ graph TD
     Item26 --> Item1;
     Item26 --> Item2;
     Item26 --> Item3;
+    Item26 --> Item9;
     Item26 --> Item10;
     Item26 --> Item11;
     Item26 --> Item13;
@@ -770,6 +792,7 @@ graph TD
     Item27 --> Item1;
     Item27 --> Item2;
     Item27 --> Item3;
+    Item27 --> Item9;
     Item27 --> Item10;
     Item27 --> Item11;
     Item27 --> Item13;
@@ -794,6 +817,7 @@ graph TD
     Item28 --> Item1;
     Item28 --> Item2;
     Item28 --> Item3;
+    Item28 --> Item9;
     Item28 --> Item10;
     Item28 --> Item11;
     Item28 --> Item13;
@@ -856,6 +880,13 @@ graph TD
     Item2 --> Item1;
     Item3 --> Item1;
     Item3 --> Item2;
+    Item9 --> Item1;
+    Item9 --> Item2;
+    Item9 --> Item3;
+    Item9 -.-> Item6;
+    Item9 -.-> Item5;
+    Item9 -.-> Item4;
+    Item9 -.-> Item7;
     Item10 --> Item8;
     Item10 --> Item9;
     Item10 --> Item1;
@@ -868,6 +899,7 @@ graph TD
     Item11 --> Item1;
     Item11 --> Item2;
     Item11 --> Item3;
+    Item11 --> Item9;
     Item11 --> Item10;
     Item11 -.-> Item6;
     Item11 -.-> Item5;
@@ -877,6 +909,7 @@ graph TD
     Item13 --> Item1;
     Item13 --> Item2;
     Item13 --> Item3;
+    Item13 --> Item9;
     Item13 --> Item10;
     Item13 --> Item11;
     Item13 -.-> Item6;
@@ -887,6 +920,7 @@ graph TD
     Item14 --> Item1;
     Item14 --> Item2;
     Item14 --> Item3;
+    Item14 --> Item9;
     Item14 --> Item10;
     Item14 --> Item11;
     Item14 --> Item13;
@@ -898,6 +932,7 @@ graph TD
     Item15 --> Item1;
     Item15 --> Item2;
     Item15 --> Item3;
+    Item15 --> Item9;
     Item15 --> Item10;
     Item15 --> Item11;
     Item15 --> Item13;
@@ -910,6 +945,7 @@ graph TD
     Item16 --> Item1;
     Item16 --> Item2;
     Item16 --> Item3;
+    Item16 --> Item9;
     Item16 --> Item10;
     Item16 --> Item11;
     Item16 --> Item13;
@@ -923,6 +959,7 @@ graph TD
     Item17 --> Item1;
     Item17 --> Item2;
     Item17 --> Item3;
+    Item17 --> Item9;
     Item17 --> Item10;
     Item17 --> Item11;
     Item17 --> Item13;
@@ -937,6 +974,7 @@ graph TD
     Item18 --> Item1;
     Item18 --> Item2;
     Item18 --> Item3;
+    Item18 --> Item9;
     Item18 --> Item10;
     Item18 --> Item11;
     Item18 --> Item13;
@@ -952,6 +990,7 @@ graph TD
     Item19 --> Item1;
     Item19 --> Item2;
     Item19 --> Item3;
+    Item19 --> Item9;
     Item19 --> Item10;
     Item19 --> Item11;
     Item19 --> Item13;
@@ -968,6 +1007,7 @@ graph TD
     Item20 --> Item1;
     Item20 --> Item2;
     Item20 --> Item3;
+    Item20 --> Item9;
     Item20 --> Item10;
     Item20 --> Item11;
     Item20 --> Item13;
@@ -985,6 +1025,7 @@ graph TD
     Item21 --> Item1;
     Item21 --> Item2;
     Item21 --> Item3;
+    Item21 --> Item9;
     Item21 --> Item10;
     Item21 --> Item11;
     Item21 --> Item13;
@@ -1003,6 +1044,7 @@ graph TD
     Item22 --> Item1;
     Item22 --> Item2;
     Item22 --> Item3;
+    Item22 --> Item9;
     Item22 --> Item10;
     Item22 --> Item11;
     Item22 --> Item13;
@@ -1022,6 +1064,7 @@ graph TD
     Item23 --> Item1;
     Item23 --> Item2;
     Item23 --> Item3;
+    Item23 --> Item9;
     Item23 --> Item10;
     Item23 --> Item11;
     Item23 --> Item13;
@@ -1042,6 +1085,7 @@ graph TD
     Item24 --> Item1;
     Item24 --> Item2;
     Item24 --> Item3;
+    Item24 --> Item9;
     Item24 --> Item10;
     Item24 --> Item11;
     Item24 --> Item13;
@@ -1063,6 +1107,7 @@ graph TD
     Item25 --> Item1;
     Item25 --> Item2;
     Item25 --> Item3;
+    Item25 --> Item9;
     Item25 --> Item10;
     Item25 --> Item11;
     Item25 --> Item13;
@@ -1085,6 +1130,7 @@ graph TD
     Item26 --> Item1;
     Item26 --> Item2;
     Item26 --> Item3;
+    Item26 --> Item9;
     Item26 --> Item10;
     Item26 --> Item11;
     Item26 --> Item13;
@@ -1108,6 +1154,7 @@ graph TD
     Item27 --> Item1;
     Item27 --> Item2;
     Item27 --> Item3;
+    Item27 --> Item9;
     Item27 --> Item10;
     Item27 --> Item11;
     Item27 --> Item13;
@@ -1132,6 +1179,7 @@ graph TD
     Item28 --> Item1;
     Item28 --> Item2;
     Item28 --> Item3;
+    Item28 --> Item9;
     Item28 --> Item10;
     Item28 --> Item11;
     Item28 --> Item13;
@@ -1198,6 +1246,13 @@ graph TD
     Item2 --> Item1;
     Item3 --> Item1;
     Item3 --> Item2;
+    Item9 --> Item1;
+    Item9 --> Item2;
+    Item9 --> Item3;
+    Item9 -.-> Item6;
+    Item9 -.-> Item5;
+    Item9 -.-> Item4;
+    Item9 -.-> Item7;
     Item10 --> Item8;
     Item10 --> Item9;
     Item10 --> Item1;
@@ -1210,6 +1265,7 @@ graph TD
     Item11 --> Item1;
     Item11 --> Item2;
     Item11 --> Item3;
+    Item11 --> Item9;
     Item11 --> Item10;
     Item11 -.-> Item6;
     Item11 -.-> Item5;
@@ -1219,6 +1275,7 @@ graph TD
     Item13 --> Item1;
     Item13 --> Item2;
     Item13 --> Item3;
+    Item13 --> Item9;
     Item13 --> Item10;
     Item13 --> Item11;
     Item13 -.-> Item6;
@@ -1229,6 +1286,7 @@ graph TD
     Item14 --> Item1;
     Item14 --> Item2;
     Item14 --> Item3;
+    Item14 --> Item9;
     Item14 --> Item10;
     Item14 --> Item11;
     Item14 --> Item13;
@@ -1240,6 +1298,7 @@ graph TD
     Item15 --> Item1;
     Item15 --> Item2;
     Item15 --> Item3;
+    Item15 --> Item9;
     Item15 --> Item10;
     Item15 --> Item11;
     Item15 --> Item13;
@@ -1252,6 +1311,7 @@ graph TD
     Item16 --> Item1;
     Item16 --> Item2;
     Item16 --> Item3;
+    Item16 --> Item9;
     Item16 --> Item10;
     Item16 --> Item11;
     Item16 --> Item13;
@@ -1265,6 +1325,7 @@ graph TD
     Item17 --> Item1;
     Item17 --> Item2;
     Item17 --> Item3;
+    Item17 --> Item9;
     Item17 --> Item10;
     Item17 --> Item11;
     Item17 --> Item13;
@@ -1279,6 +1340,7 @@ graph TD
     Item18 --> Item1;
     Item18 --> Item2;
     Item18 --> Item3;
+    Item18 --> Item9;
     Item18 --> Item10;
     Item18 --> Item11;
     Item18 --> Item13;
@@ -1294,6 +1356,7 @@ graph TD
     Item19 --> Item1;
     Item19 --> Item2;
     Item19 --> Item3;
+    Item19 --> Item9;
     Item19 --> Item10;
     Item19 --> Item11;
     Item19 --> Item13;
@@ -1310,6 +1373,7 @@ graph TD
     Item20 --> Item1;
     Item20 --> Item2;
     Item20 --> Item3;
+    Item20 --> Item9;
     Item20 --> Item10;
     Item20 --> Item11;
     Item20 --> Item13;
@@ -1327,6 +1391,7 @@ graph TD
     Item21 --> Item1;
     Item21 --> Item2;
     Item21 --> Item3;
+    Item21 --> Item9;
     Item21 --> Item10;
     Item21 --> Item11;
     Item21 --> Item13;
@@ -1345,6 +1410,7 @@ graph TD
     Item22 --> Item1;
     Item22 --> Item2;
     Item22 --> Item3;
+    Item22 --> Item9;
     Item22 --> Item10;
     Item22 --> Item11;
     Item22 --> Item13;
@@ -1364,6 +1430,7 @@ graph TD
     Item23 --> Item1;
     Item23 --> Item2;
     Item23 --> Item3;
+    Item23 --> Item9;
     Item23 --> Item10;
     Item23 --> Item11;
     Item23 --> Item13;
@@ -1384,6 +1451,7 @@ graph TD
     Item24 --> Item1;
     Item24 --> Item2;
     Item24 --> Item3;
+    Item24 --> Item9;
     Item24 --> Item10;
     Item24 --> Item11;
     Item24 --> Item13;
@@ -1405,6 +1473,7 @@ graph TD
     Item25 --> Item1;
     Item25 --> Item2;
     Item25 --> Item3;
+    Item25 --> Item9;
     Item25 --> Item10;
     Item25 --> Item11;
     Item25 --> Item13;
@@ -1427,6 +1496,7 @@ graph TD
     Item26 --> Item1;
     Item26 --> Item2;
     Item26 --> Item3;
+    Item26 --> Item9;
     Item26 --> Item10;
     Item26 --> Item11;
     Item26 --> Item13;
@@ -1450,6 +1520,7 @@ graph TD
     Item27 --> Item1;
     Item27 --> Item2;
     Item27 --> Item3;
+    Item27 --> Item9;
     Item27 --> Item10;
     Item27 --> Item11;
     Item27 --> Item13;
@@ -1474,6 +1545,7 @@ graph TD
     Item28 --> Item1;
     Item28 --> Item2;
     Item28 --> Item3;
+    Item28 --> Item9;
     Item28 --> Item10;
     Item28 --> Item11;
     Item28 --> Item13;
@@ -1502,6 +1574,7 @@ graph TD
     Item29 --> Item1;
     Item29 --> Item2;
     Item29 --> Item3;
+    Item29 --> Item9;
     Item29 --> Item10;
     Item29 --> Item11;
     Item29 --> Item13;
@@ -1534,11 +1607,12 @@ graph TD
     N5["Items: [ItemId(2, ImportOfModule)]"];
     N6["Items: [ItemId(1, ImportBinding(0)), ItemId(2, ImportBinding(0)), ItemId(3, Normal)]"];
     N7["Items: [ItemId(0, ImportBinding(0)), ItemId(4, Normal)]"];
-    N8["Items: [ItemId(5, VarDeclarator(0))]"];
+    N8["Items: [ItemId(0, ImportBinding(0)), ItemId(1, ImportBinding(0)), ItemId(2, ImportBinding(0)), ItemId(5, VarDeclarator(0))]"];
     N9["Items: [ItemId(0, ImportBinding(0)), ItemId(1, ImportBinding(0)), ItemId(2, ImportBinding(0)), ItemId(6, VarDeclarator(0))]"];
     N0 --> N3;
     N0 --> N4;
     N0 --> N5;
+    N0 --> N8;
     N0 --> N9;
     N0 --> N6;
     N1 --> N6;
@@ -1549,6 +1623,11 @@ graph TD
     N6 --> N9;
     N7 --> N9;
     N7 --> N6;
+    N8 --> N3;
+    N8 --> N4;
+    N8 --> N5;
+    N8 --> N9;
+    N8 --> N6;
     N9 --> N7;
     N9 --> N8;
     N9 --> N3;
@@ -1582,6 +1661,9 @@ import "__TURBOPACK_PART__" assert {
 };
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 8
 };
 import { IPC } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
@@ -1833,6 +1915,24 @@ export { createIpc } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 8
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 6
+};
+import { createConnection } from "node:net";
+import { parse as parseStackTrace } from "../compiled/stacktrace-parser";
+import { getProperError } from "./error";
 const PORT = process.argv[2];
 export { PORT } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
@@ -1878,6 +1978,9 @@ import "__TURBOPACK_PART__" assert {
 };
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 8
 };
 import { IPC } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
@@ -1954,6 +2057,9 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 8
+};
 import { IPC } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
 };
@@ -2192,6 +2298,15 @@ export { createIpc } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 8
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
 const PORT = process.argv[2];
 export { PORT } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
@@ -2231,6 +2346,9 @@ import "__TURBOPACK_PART__" assert {
 };
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 8
 };
 import { IPC } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9

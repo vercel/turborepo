@@ -47,7 +47,6 @@ const x1 = externalFunction();
 
 - Side effects
 - Declares: `x1`
-- Reads: `externalFunction`
 - Write: `x1`
 
 ## Item 5: Stmt 4, `VarDeclarator(0)`
@@ -59,7 +58,6 @@ const x2 = externalFunction();
 
 - Side effects
 - Declares: `x2`
-- Reads: `externalFunction`
 - Write: `x2`
 
 ## Item 6: Stmt 5, `VarDeclarator(0)`

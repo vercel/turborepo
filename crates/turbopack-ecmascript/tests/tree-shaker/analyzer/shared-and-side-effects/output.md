@@ -20,7 +20,6 @@ const value = externalFunction();
 
 - Side effects
 - Declares: `value`
-- Reads: `externalFunction`
 - Write: `value`
 
 ## Item 3: Stmt 2, `VarDeclarator(0)`
@@ -30,6 +29,7 @@ const value2 = externalObject.propertyWithGetter;
 
 ```
 
+- Side effects
 - Declares: `value2`
 - Write: `value2`
 
@@ -50,7 +50,6 @@ const value3 = externalFunction();
 
 - Side effects
 - Declares: `value3`
-- Reads: `externalFunction`
 - Write: `value3`
 
 ## Item 6: Stmt 5, `VarDeclarator(0)`
@@ -144,14 +143,18 @@ graph TD
     Item12;
     Item12["export b"];
     Item2 --> Item1;
+    Item3 --> Item1;
+    Item3 --> Item2;
     Item5 --> Item1;
     Item5 --> Item2;
+    Item5 --> Item3;
     Item6 --> Item2;
     Item6 --> Item3;
     Item6 --> Item5;
     Item7 --> Item6;
     Item7 --> Item1;
     Item7 --> Item2;
+    Item7 --> Item3;
     Item7 --> Item5;
     Item8 --> Item6;
     Item9 --> Item6;
@@ -175,14 +178,18 @@ graph TD
     Item12;
     Item12["export b"];
     Item2 --> Item1;
+    Item3 --> Item1;
+    Item3 --> Item2;
     Item5 --> Item1;
     Item5 --> Item2;
+    Item5 --> Item3;
     Item6 --> Item2;
     Item6 --> Item3;
     Item6 --> Item5;
     Item7 --> Item6;
     Item7 --> Item1;
     Item7 --> Item2;
+    Item7 --> Item3;
     Item7 --> Item5;
     Item8 --> Item6;
     Item9 --> Item6;
@@ -206,19 +213,24 @@ graph TD
     Item12;
     Item12["export b"];
     Item2 --> Item1;
+    Item3 --> Item1;
+    Item3 --> Item2;
     Item5 --> Item1;
     Item5 --> Item2;
+    Item5 --> Item3;
     Item6 --> Item2;
     Item6 --> Item3;
     Item6 --> Item5;
     Item7 --> Item6;
     Item7 --> Item1;
     Item7 --> Item2;
+    Item7 --> Item3;
     Item7 --> Item5;
     Item8 --> Item6;
     Item9 --> Item6;
     Item10 --> Item1;
     Item10 --> Item2;
+    Item10 --> Item3;
     Item10 --> Item5;
     Item10 --> Item7;
     Item11 --> Item8;
@@ -237,13 +249,17 @@ graph TD
     N7["Items: [ItemId(5, VarDeclarator(0))]"];
     N0 --> N3;
     N0 --> N4;
+    N0 --> N5;
     N0 --> N6;
     N0 --> N7;
     N1 --> N7;
     N2 --> N7;
     N4 --> N3;
+    N5 --> N3;
+    N5 --> N4;
     N6 --> N3;
     N6 --> N4;
+    N6 --> N5;
     N7 --> N4;
     N7 --> N5;
     N7 --> N6;
@@ -271,6 +287,9 @@ import "__TURBOPACK_PART__" assert {
 };
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
 };
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
@@ -330,6 +349,12 @@ export { value } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 5
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
 const value2 = externalObject.propertyWithGetter;
 export { value2 } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
@@ -343,6 +368,9 @@ import "__TURBOPACK_PART__" assert {
 };
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
 };
 const value3 = externalFunction();
 export { value3 } from "__TURBOPACK_VAR__" assert {
@@ -378,6 +406,9 @@ import "__TURBOPACK_PART__" assert {
 };
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
 };
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
@@ -414,6 +445,9 @@ import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
 import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
 import { shared } from "__TURBOPACK_PART__" assert {
@@ -471,6 +505,12 @@ export { value } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 5
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
 const value2 = externalObject.propertyWithGetter;
 export { value2 } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
@@ -484,6 +524,9 @@ import "__TURBOPACK_PART__" assert {
 };
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
 };
 const value3 = externalFunction();
 export { value3 } from "__TURBOPACK_VAR__" assert {
@@ -519,6 +562,9 @@ import "__TURBOPACK_PART__" assert {
 };
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
 };
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6

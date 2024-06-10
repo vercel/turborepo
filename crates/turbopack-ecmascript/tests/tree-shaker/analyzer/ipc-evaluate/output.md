@@ -141,7 +141,7 @@ export const run = async (moduleFactory)=>{
 ```
 
 - Declares: `run`
-- Reads (eventual): `Map`, `ipc`, `Promise`, `queue`, `undefined`, `Error`
+- Reads (eventual): `ipc`, `queue`
 - Write: `run`
 - Write (eventual): `ipc`, `queue`
 
