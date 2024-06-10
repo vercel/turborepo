@@ -141,7 +141,7 @@ export const run = async (moduleFactory)=>{
 ```
 
 - Declares: `run`
-- Reads (eventual): `Map`, `ipc`, `send`, `Promise`, `set`, `then`, `sendError`, `init`, `default`, `sendReady`, `queue`, `length`, `shift`, `undefined`, `stringify`, `recv`, `type`, `push`, `args`, `get`, `id`, `delete`, `error`, `reject`, `Error`, `resolve`, `data`, `exit`
+- Reads (eventual): `Map`, `ipc`, `Promise`, `queue`, `undefined`, `Error`
 - Write: `run`
 - Write (eventual): `ipc`, `queue`
 

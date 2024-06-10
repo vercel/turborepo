@@ -250,7 +250,7 @@ process.on("uncaughtException", (err)=>{
 ```
 
 - Side effects
-- Reads (eventual): `IPC`, `sendError`
+- Reads (eventual): `IPC`
 - Write (eventual): `IPC`
 
 ## Item 12: Stmt 8, `VarDeclarator(0)`
@@ -274,9 +274,8 @@ const improveConsole = (name, stream, addStack)=>{
 ```
 
 - Declares: `improveConsole`
-- Reads (eventual): `write`, `Error`, `stack`, `replace`
+- Reads (eventual): `Error`
 - Write: `improveConsole`
-- Write (eventual): `stack`
 
 ## Item 13: Stmt 9, `Normal`
 
