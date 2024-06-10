@@ -7,7 +7,7 @@ use swc_core::{
     ecma::{
         ast::{
             AssignTarget, BlockStmtOrExpr, Constructor, ExportNamedSpecifier, ExportSpecifier,
-            Expr, Function, Id, Ident, MemberProp, NamedExport, Pat, PropName,
+            Expr, Function, Id, Ident, MemberExpr, MemberProp, NamedExport, Pat, PropName,
         },
         visit::{noop_visit_type, visit_obj_and_computed, Visit, VisitWith},
     },
@@ -102,6 +102,15 @@ impl Visit for IdentUsageCollector {
         }
     }
 
+    fn visit_member_expr(&mut self, e: &MemberExpr) {
+        self.with_mode(Mode::Write, |this| {
+            // Skip visit_expr
+            e.obj.visit_children_with(this);
+        });
+
+        e.prop.visit_with(self);
+    }
+
     fn visit_member_prop(&mut self, n: &MemberProp) {
         if let MemberProp::Computed(..) = n {
             n.visit_children_with(self);
@@ -129,8 +138,6 @@ impl Visit for IdentUsageCollector {
     }
 
     noop_visit_type!();
-
-    visit_obj_and_computed!();
 }
 
 /// A visitor which collects variables which are read or written, but not at the
