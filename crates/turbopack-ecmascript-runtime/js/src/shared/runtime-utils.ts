@@ -333,20 +333,12 @@ const turbopackQueues = Symbol("turbopack queues");
 const turbopackExports = Symbol("turbopack exports");
 const turbopackError = Symbol("turbopack error");
 
-const enum QueueStatus {
-  Unknown = -1,
-  Unresolved = 0,
-  Resolved = 1,
-}
-
 type AsyncQueueFn = (() => void) & { queueCount: number };
-type AsyncQueue = AsyncQueueFn[] & {
-  status: QueueStatus;
-};
+type AsyncQueue = AsyncQueueFn[] & { resolved: boolean };
 
 function resolveQueue(queue?: AsyncQueue) {
-  if (queue && queue.status !== QueueStatus.Resolved) {
-    queue.status = QueueStatus.Resolved;
+  if (queue && !queue.resolved) {
+    queue.resolved = true;
     queue.forEach((fn) => fn.queueCount--);
     queue.forEach((fn) => (fn.queueCount-- ? fn.queueCount++ : fn()));
   }
@@ -363,13 +355,11 @@ type AsyncModuleExt = {
 type AsyncModulePromise<T = Exports> = Promise<T> & AsyncModuleExt;
 
 function wrapDeps(deps: Dep[]): AsyncModuleExt[] {
-  return deps.map((dep) => {
+  return deps.map((dep): AsyncModuleExt => {
     if (dep !== null && typeof dep === "object") {
       if (isAsyncModuleExt(dep)) return dep;
       if (isPromise(dep)) {
-        const queue: AsyncQueue = Object.assign([], {
-          status: QueueStatus.Unresolved,
-        });
+        const queue: AsyncQueue = Object.assign([], { resolved: false });
 
         const obj: AsyncModuleExt = {
           [turbopackExports]: {},
@@ -391,12 +381,10 @@ function wrapDeps(deps: Dep[]): AsyncModuleExt[] {
       }
     }
 
-    const ret: AsyncModuleExt = {
+    return {
       [turbopackExports]: dep,
       [turbopackQueues]: () => {},
     };
-
-    return ret;
   });
 }
 
@@ -405,13 +393,12 @@ function asyncModule(
   body: (
     handleAsyncDependencies: (
       deps: Dep[]
-    ) => Exports[] | Promise<() => Exports[]>,
-    asyncResult: (err?: any) => void
+    ) => Exports[] | Promise<() => Exports[]>
   ) => Promise<void>,
   hasAwait: boolean
 ) {
   const queue: AsyncQueue | undefined = hasAwait
-    ? Object.assign([], { status: QueueStatus.Unknown })
+    ? Object.assign([], { resolved: true })
     : undefined;
 
   const depQueues: Set<AsyncQueue> = new Set();
@@ -460,7 +447,7 @@ function asyncModule(
     function fnQueue(q: AsyncQueue) {
       if (q !== queue && !depQueues.has(q)) {
         depQueues.add(q);
-        if (q && q.status !== QueueStatus.Resolved) {
+        if (q && !q.resolved) {
           fn.queueCount++;
           q.push(fn);
         }
@@ -472,20 +459,19 @@ function asyncModule(
     return fn.queueCount ? promise : getResult();
   }
 
-  function asyncResult(err?: any) {
-    if (err) {
-      reject((promise[turbopackError] = err));
-    } else {
+  Promise.resolve(body(handleAsyncDependencies)).then(
+    () => {
       resolve(promise[turbopackExports]);
+      resolveQueue(queue);
+    },
+    (err) => {
+      reject((promise[turbopackError] = err));
+      resolveQueue(queue);
     }
+  );
 
-    resolveQueue(queue);
-  }
-
-  body(handleAsyncDependencies, asyncResult);
-
-  if (queue && queue.status === QueueStatus.Unknown) {
-    queue.status = QueueStatus.Unresolved;
+  if (queue) {
+    queue.resolved = false;
   }
 }
 
