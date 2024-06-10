@@ -472,6 +472,8 @@ impl<'a> TaskHasher<'a> {
                         "CI",
                         "NODE_OPTIONS",
                         "LD_LIBRARY_PATH",
+                        "DYLD_FALLBACK_LIBRARY_PATH",
+                        "LIBPATH",
                         // Vercel specific
                         "VERCEL_*",
                         "NEXT_*",
