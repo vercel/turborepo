@@ -23,7 +23,8 @@ enum Mode {
 /// A visitor which collects variables which are read or written.
 #[derive(Default)]
 pub(crate) struct IdentUsageCollector {
-    only: [SyntaxContext; 2],
+    unresolved: SyntaxContext,
+    top_level: SyntaxContext,
     vars: Vars,
     ignore_nested: bool,
     /// None means both read and write
@@ -89,7 +90,10 @@ impl Visit for IdentUsageCollector {
     fn visit_ident(&mut self, n: &Ident) {
         // We allow SyntaxContext::empty() because Some built-in files do not go into
         // resolver()
-        if !self.only.contains(&n.span.ctxt) && n.span.ctxt != SyntaxContext::empty() {
+        if n.span.ctxt != self.unresolved
+            && n.span.ctxt != self.top_level
+            && n.span.ctxt != SyntaxContext::empty()
+        {
             return;
         }
 
@@ -101,6 +105,10 @@ impl Visit for IdentUsageCollector {
                 self.vars.write.insert(n.to_id());
             }
             None => {
+                // Ignore calls like console.log()
+                if n.span.ctxt == self.unresolved {
+                    return;
+                }
                 self.vars.read.insert(n.to_id());
                 self.vars.write.insert(n.to_id());
             }
@@ -149,7 +157,9 @@ impl Visit for IdentUsageCollector {
 /// evaluation time.
 #[derive(Default)]
 pub(crate) struct CapturedIdCollector {
-    only: [SyntaxContext; 2],
+    unresolved: SyntaxContext,
+    top_level: SyntaxContext,
+
     vars: Vars,
     is_nested: bool,
     /// None means both read and write
@@ -216,7 +226,10 @@ impl Visit for CapturedIdCollector {
 
         // We allow SyntaxContext::empty() because Some built-in files do not go into
         // resolver()
-        if !self.only.contains(&n.span.ctxt) && n.span.ctxt != SyntaxContext::empty() {
+        if n.span.ctxt != self.unresolved
+            && n.span.ctxt != self.top_level
+            && n.span.ctxt != SyntaxContext::empty()
+        {
             return;
         }
 
@@ -228,6 +241,10 @@ impl Visit for CapturedIdCollector {
                 self.vars.write.insert(n.to_id());
             }
             None => {
+                // Ignore calls like console.log()
+                if n.span.ctxt == self.unresolved {
+                    return;
+                }
                 self.vars.read.insert(n.to_id());
                 self.vars.write.insert(n.to_id());
             }
@@ -271,12 +288,13 @@ pub(crate) struct Vars {
 ///
 /// Note: This functions accept `SyntaxContext` to filter out variables which
 /// are not interesting. We only need to analyze top-level variables.
-pub(crate) fn ids_captured_by<N>(n: &N, only: [SyntaxContext; 2]) -> Vars
+pub(crate) fn ids_captured_by<N>(n: &N, unresolved: SyntaxContext, top_level: SyntaxContext) -> Vars
 where
     N: VisitWith<CapturedIdCollector>,
 {
     let mut v = CapturedIdCollector {
-        only,
+        unresolved,
+        top_level,
         is_nested: false,
         ..Default::default()
     };
@@ -288,12 +306,13 @@ where
 ///
 /// Note: This functions accept `SyntaxContext` to filter out variables which
 /// are not interesting. We only need to analyze top-level variables.
-pub(crate) fn ids_used_by<N>(n: &N, only: [SyntaxContext; 2]) -> Vars
+pub(crate) fn ids_used_by<N>(n: &N, unresolved: SyntaxContext, top_level: SyntaxContext) -> Vars
 where
     N: VisitWith<IdentUsageCollector>,
 {
     let mut v = IdentUsageCollector {
-        only,
+        unresolved,
+        top_level,
         ignore_nested: false,
         ..Default::default()
     };
@@ -305,12 +324,17 @@ where
 ///
 /// Note: This functions accept `SyntaxContext` to filter out variables which
 /// are not interesting. We only need to analyze top-level variables.
-pub(crate) fn ids_used_by_ignoring_nested<N>(n: &N, only: [SyntaxContext; 2]) -> Vars
+pub(crate) fn ids_used_by_ignoring_nested<N>(
+    n: &N,
+    unresolved: SyntaxContext,
+    top_level: SyntaxContext,
+) -> Vars
 where
     N: VisitWith<IdentUsageCollector>,
 {
     let mut v = IdentUsageCollector {
-        only,
+        unresolved,
+        top_level,
         ignore_nested: true,
         ..Default::default()
     };
