@@ -265,8 +265,8 @@ export const routeModule = new PagesRouteModule({
 ```
 
 - Declares: `routeModule`
-- Reads: `PagesRouteModule`, `RouteKind`, `App`, `Document`, `userland`
-- Write: `routeModule`
+- Reads: `PagesRouteModule`, `App`, `Document`, `userland`
+- Write: `routeModule`, `RouteKind`
 
 # Phase 1
 ```mermaid
@@ -434,7 +434,6 @@ graph TD
     Item23 --> Item9;
     Item23 --> Item12;
     Item24 --> Item7;
-    Item24 --> Item8;
     Item24 --> Item11;
     Item24 --> Item10;
     Item24 --> Item12;
@@ -536,7 +535,6 @@ graph TD
     Item23 --> Item9;
     Item23 --> Item12;
     Item24 --> Item7;
-    Item24 --> Item8;
     Item24 --> Item11;
     Item24 --> Item10;
     Item24 --> Item12;
@@ -638,7 +636,6 @@ graph TD
     Item23 --> Item9;
     Item23 --> Item12;
     Item24 --> Item7;
-    Item24 --> Item8;
     Item24 --> Item11;
     Item24 --> Item10;
     Item24 --> Item12;
@@ -677,7 +674,7 @@ graph TD
     N9["Items: [ItemId(Export((&quot;unstable_getStaticParams&quot;, #2), &quot;unstable_getStaticParams&quot;)), ItemId(2, ImportBinding(0)), ItemId(5, ImportBinding(0)), ItemId(14, VarDeclarator(0))]"];
     N10["Items: [ItemId(Export((&quot;unstable_getServerProps&quot;, #2), &quot;unstable_getServerProps&quot;)), ItemId(2, ImportBinding(0)), ItemId(5, ImportBinding(0)), ItemId(15, VarDeclarator(0))]"];
     N11["Items: [ItemId(Export((&quot;unstable_getServerSideProps&quot;, #2), &quot;unstable_getServerSideProps&quot;)), ItemId(2, ImportBinding(0)), ItemId(5, ImportBinding(0)), ItemId(16, VarDeclarator(0))]"];
-    N12["Items: [ItemId(Export((&quot;routeModule&quot;, #2), &quot;routeModule&quot;)), ItemId(0, ImportBinding(0)), ItemId(1, ImportBinding(0)), ItemId(3, ImportBinding(0)), ItemId(4, ImportBinding(0)), ItemId(5, ImportBinding(0)), ItemId(17, VarDeclarator(0))]"];
+    N12["Items: [ItemId(Export((&quot;routeModule&quot;, #2), &quot;routeModule&quot;)), ItemId(0, ImportBinding(0)), ItemId(3, ImportBinding(0)), ItemId(4, ImportBinding(0)), ItemId(5, ImportBinding(0)), ItemId(17, VarDeclarator(0))]"];
     N13["Items: [ItemId(0, ImportOfModule)]"];
     N14["Items: [ItemId(1, ImportOfModule)]"];
     N15["Items: [ItemId(2, ImportOfModule)]"];
@@ -953,7 +950,6 @@ import "__TURBOPACK_PART__" assert {
 };
 export { routeModule };
 import { PagesRouteModule } from '../../server/future/route-modules/pages/module.compiled';
-import { RouteKind } from '../../server/future/route-kind';
 import Document from 'VAR_MODULE_DOCUMENT';
 import App from 'VAR_MODULE_APP';
 import * as userland from 'VAR_USERLAND';
@@ -972,6 +968,9 @@ const routeModule = new PagesRouteModule({
     userland
 });
 export { routeModule } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { RouteKind } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 
@@ -1332,7 +1331,6 @@ import "__TURBOPACK_PART__" assert {
 };
 export { routeModule };
 import { PagesRouteModule } from '../../server/future/route-modules/pages/module.compiled';
-import { RouteKind } from '../../server/future/route-kind';
 import Document from 'VAR_MODULE_DOCUMENT';
 import App from 'VAR_MODULE_APP';
 import * as userland from 'VAR_USERLAND';
@@ -1351,6 +1349,9 @@ const routeModule = new PagesRouteModule({
     userland
 });
 export { routeModule } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { RouteKind } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 

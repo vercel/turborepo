@@ -10,7 +10,7 @@ process.turbopack = {};
 ```
 
 - Side effects
-- Reads: `process`
+- Write: `process`
 
 # Phase 1
 ```mermaid
@@ -60,12 +60,18 @@ graph TD
 ```js
 "module evaluation";
 process.turbopack = {};
+export { process } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Merged (module eval)
 ```js
 "module evaluation";
 process.turbopack = {};
+export { process } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 # Entrypoints
@@ -82,11 +88,17 @@ process.turbopack = {};
 ```js
 "module evaluation";
 process.turbopack = {};
+export { process } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Merged (module eval)
 ```js
 "module evaluation";
 process.turbopack = {};
+export { process } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
