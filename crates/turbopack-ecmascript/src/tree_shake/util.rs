@@ -108,7 +108,7 @@ impl Visit for IdentUsageCollector {
     }
 
     fn visit_member_expr(&mut self, e: &MemberExpr) {
-        self.with_mode(None, |this| {
+        self.with_mode(Some(Mode::Write), |this| {
             // Skip visit_expr
             e.obj.visit_children_with(this);
         });
@@ -235,7 +235,7 @@ impl Visit for CapturedIdCollector {
     }
 
     fn visit_member_expr(&mut self, e: &MemberExpr) {
-        self.with_mode(None, |this| {
+        self.with_mode(Some(Mode::Write), |this| {
             // Skip visit_expr
             e.obj.visit_children_with(this);
         });
