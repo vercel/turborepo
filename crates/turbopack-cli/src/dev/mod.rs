@@ -37,6 +37,7 @@ use turbopack_dev_server::{
 use turbopack_ecmascript_runtime::RuntimeType;
 use turbopack_env::dotenv::load_env;
 use turbopack_node::execution_context::ExecutionContext;
+use turbopack_nodejs::NodeJsChunkingContext;
 
 use self::web_entry_source::create_web_entry_source;
 use crate::{
@@ -247,7 +248,7 @@ async fn source(
     let env = load_env(project_path);
     let build_output_root = output_fs.root().join(".turbopack/build".into());
 
-    let build_chunking_context = BrowserChunkingContext::builder(
+    let build_chunking_context = NodeJsChunkingContext::builder(
         project_path,
         build_output_root,
         build_output_root,
