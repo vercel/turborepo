@@ -54,7 +54,8 @@ impl LocalTurboConfig {
 
         // If there isn't a package manager, just try to parse all known lockfiles
         // This isn't the most effecient, but since we'll be hitting network to download
-        // the correct binary the unnecessary file reads.
+        // the correct binary the unnecessary file reads aren't costly relative to the
+        // download.
         PackageManager::supported_managers().iter().find_map(|pm| {
             let lockfile = pm
                 .read_lockfile(&repo_state.root, &repo_state.root_package_json)
