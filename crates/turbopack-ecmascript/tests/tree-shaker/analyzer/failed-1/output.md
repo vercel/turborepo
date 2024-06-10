@@ -39,7 +39,6 @@ function getSocketProtocol(assetPrefix) {
 - Declares: `getSocketProtocol`
 - Reads (eventual): `URL`
 - Write: `getSocketProtocol`
-- Write (eventual): `location`
 
 ## Item 4: Stmt 3, `Normal`
 
@@ -52,6 +51,7 @@ export function addMessageListener(cb) {
 
 - Hoisted
 - Declares: `addMessageListener`
+- Reads (eventual): `eventCallbacks`
 - Write: `addMessageListener`
 - Write (eventual): `eventCallbacks`
 
@@ -120,9 +120,9 @@ export function connectHMR(options) {
 
 - Hoisted
 - Declares: `connectHMR`
-- Reads (eventual): `source`, `setTimeout`, `location`, `getSocketProtocol`
+- Reads (eventual): `source`, `eventCallbacks`, `setTimeout`, `location`, `getSocketProtocol`
 - Write: `connectHMR`
-- Write (eventual): `source`, `console`, `eventCallbacks`, `JSON`, `window`
+- Write (eventual): `source`, `eventCallbacks`
 
 # Phase 1
 ```mermaid
@@ -177,8 +177,10 @@ graph TD
     Item9["export sendMessage"];
     Item10;
     Item10["export connectHMR"];
+    Item4 --> Item2;
     Item5 --> Item1;
     Item6 --> Item1;
+    Item6 --> Item2;
     Item6 --> Item3;
 ```
 # Phase 4
@@ -198,8 +200,10 @@ graph TD
     Item9["export sendMessage"];
     Item10;
     Item10["export connectHMR"];
+    Item4 --> Item2;
     Item5 --> Item1;
     Item6 --> Item1;
+    Item6 --> Item2;
     Item6 --> Item3;
     Item8 --> Item4;
     Item9 --> Item5;
@@ -213,8 +217,11 @@ graph TD
     N2["Items: [ItemId(Export((&quot;sendMessage&quot;, #2), &quot;sendMessage&quot;)), ItemId(4, Normal)]"];
     N3["Items: [ItemId(Export((&quot;connectHMR&quot;, #2), &quot;connectHMR&quot;)), ItemId(2, Normal), ItemId(5, Normal)]"];
     N4["Items: [ItemId(0, VarDeclarator(0))]"];
+    N5["Items: [ItemId(1, VarDeclarator(0))]"];
+    N1 --> N5;
     N2 --> N4;
     N3 --> N4;
+    N3 --> N5;
 ```
 # Entrypoints
 
@@ -242,6 +249,9 @@ graph TD
 ```
 ## Part 1
 ```js
+import { eventCallbacks } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
 export { addMessageListener };
 function addMessageListener(cb) {
     eventCallbacks.push(cb);
@@ -270,6 +280,9 @@ export { sendMessage } from "__TURBOPACK_VAR__" assert {
 ```js
 import { source } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
+};
+import { eventCallbacks } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
 };
 export { connectHMR };
 function getSocketProtocol(assetPrefix) {
@@ -332,6 +345,14 @@ export { connectHMR } from "__TURBOPACK_VAR__" assert {
 ```js
 let source;
 export { source } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+
+```
+## Part 5
+```js
+const eventCallbacks = [];
+export { eventCallbacks } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 
@@ -367,6 +388,9 @@ export { source } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 1
 ```js
+import { eventCallbacks } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
 export { addMessageListener };
 function addMessageListener(cb) {
     eventCallbacks.push(cb);
@@ -395,6 +419,9 @@ export { sendMessage } from "__TURBOPACK_VAR__" assert {
 ```js
 import { source } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
+};
+import { eventCallbacks } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
 };
 export { connectHMR };
 function getSocketProtocol(assetPrefix) {
@@ -457,6 +484,14 @@ export { connectHMR } from "__TURBOPACK_VAR__" assert {
 ```js
 let source;
 export { source } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+
+```
+## Part 5
+```js
+const eventCallbacks = [];
+export { eventCallbacks } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 

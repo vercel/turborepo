@@ -90,6 +90,7 @@ const hasPostpone = typeof React.unstable_postpone === 'function';
 ```
 
 - Declares: `hasPostpone`
+- Reads: `React`
 - Write: `hasPostpone`, `React`
 
 ## Item 10: Stmt 5, `Normal`
@@ -212,7 +213,7 @@ function postponeWithTracking(prerenderState, expression, pathname) {
 
 - Hoisted
 - Declares: `postponeWithTracking`
-- Reads (eventual): `assertPostpone`, `Error`, `undefined`
+- Reads (eventual): `assertPostpone`, `Error`, `undefined`, `React`
 - Write: `postponeWithTracking`
 - Write (eventual): `React`
 
@@ -290,7 +291,7 @@ export function createPostponedAbortSignal(reason) {
 
 - Hoisted
 - Declares: `createPostponedAbortSignal`
-- Reads (eventual): `assertPostpone`, `AbortController`
+- Reads (eventual): `assertPostpone`, `AbortController`, `React`
 - Write: `createPostponedAbortSignal`
 - Write (eventual): `React`
 
@@ -387,6 +388,7 @@ graph TD
     Item4 --> Item1;
     Item4 --> Item2;
     Item4 --> Item3;
+    Item9 --> Item5;
 ```
 # Phase 3
 ```mermaid
@@ -434,6 +436,7 @@ graph TD
     Item4 --> Item1;
     Item4 --> Item2;
     Item4 --> Item3;
+    Item9 --> Item5;
     Item11 --> Item8;
     Item11 --> Item7;
     Item11 --> Item15;
@@ -445,8 +448,10 @@ graph TD
     Item13 --> Item15;
     Item14 --> Item15;
     Item15 --> Item18;
+    Item15 --> Item9;
     Item18 --> Item9;
     Item19 --> Item18;
+    Item19 --> Item9;
 ```
 # Phase 4
 ```mermaid
@@ -494,6 +499,7 @@ graph TD
     Item4 --> Item1;
     Item4 --> Item2;
     Item4 --> Item3;
+    Item9 --> Item5;
     Item11 --> Item8;
     Item11 --> Item7;
     Item11 --> Item15;
@@ -505,8 +511,10 @@ graph TD
     Item13 --> Item15;
     Item14 --> Item15;
     Item15 --> Item18;
+    Item15 --> Item9;
     Item18 --> Item9;
     Item19 --> Item18;
+    Item19 --> Item9;
     Item20 --> Item1;
     Item20 --> Item2;
     Item20 --> Item3;
@@ -532,7 +540,7 @@ graph TD
     N6["Items: [ItemId(Export((&quot;usedDynamicAPIs&quot;, #2), &quot;usedDynamicAPIs&quot;)), ItemId(11, Normal)]"];
     N7["Items: [ItemId(Export((&quot;formatDynamicAPIAccesses&quot;, #2), &quot;formatDynamicAPIAccesses&quot;)), ItemId(12, Normal)]"];
     N8["Items: [ItemId(Export((&quot;createPostponedAbortSignal&quot;, #2), &quot;createPostponedAbortSignal&quot;)), ItemId(14, Normal)]"];
-    N9["Items: [ItemId(4, VarDeclarator(0))]"];
+    N9["Items: [ItemId(0, ImportBinding(0)), ItemId(4, VarDeclarator(0))]"];
     N10["Items: [ItemId(10, Normal)]"];
     N11["Items: [ItemId(13, Normal)]"];
     N2 --> N3;
@@ -541,7 +549,9 @@ graph TD
     N4 --> N10;
     N5 --> N10;
     N8 --> N11;
+    N8 --> N9;
     N10 --> N11;
+    N10 --> N9;
     N11 --> N9;
 ```
 # Entrypoints
@@ -738,6 +748,9 @@ export { formatDynamicAPIAccesses } from "__TURBOPACK_VAR__" assert {
 import { assertPostpone } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
+import { React } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
+};
 export { createPostponedAbortSignal };
 function createPostponedAbortSignal(reason) {
     assertPostpone();
@@ -756,6 +769,7 @@ export { createPostponedAbortSignal } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 9
 ```js
+import React from 'react';
 const hasPostpone = typeof React.unstable_postpone === 'function';
 export { hasPostpone } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
@@ -769,6 +783,9 @@ export { React } from "__TURBOPACK_VAR__" assert {
 ```js
 import { assertPostpone } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
+};
+import { React } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
 };
 function postponeWithTracking(prerenderState, expression, pathname) {
     assertPostpone();
@@ -1002,6 +1019,9 @@ export { formatDynamicAPIAccesses } from "__TURBOPACK_VAR__" assert {
 import { assertPostpone } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
+import { React } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
+};
 export { createPostponedAbortSignal };
 function createPostponedAbortSignal(reason) {
     assertPostpone();
@@ -1020,6 +1040,7 @@ export { createPostponedAbortSignal } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 9
 ```js
+import React from 'react';
 const hasPostpone = typeof React.unstable_postpone === 'function';
 export { hasPostpone } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
@@ -1033,6 +1054,9 @@ export { React } from "__TURBOPACK_VAR__" assert {
 ```js
 import { assertPostpone } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
+};
+import { React } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
 };
 function postponeWithTracking(prerenderState, expression, pathname) {
     assertPostpone();

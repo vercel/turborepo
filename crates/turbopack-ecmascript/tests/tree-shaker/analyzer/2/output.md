@@ -107,7 +107,6 @@ console.log(foobarCopy);
 
 - Side effects
 - Reads: `foobarCopy`
-- Write: `console`
 
 ## Item 11: Stmt 9, `Normal`
 
@@ -422,9 +421,6 @@ import "module";
 import { upper } from "module";
 console.log(foobarCopy);
 import "other";
-export { console } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 1
@@ -585,9 +581,6 @@ import { upper } from "module";
 import "other";
 "module evaluation";
 console.log(foobarCopy);
-export { console } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 # Entrypoints
@@ -623,9 +616,6 @@ let foobarCopy = foobar;
 console.log(foobarCopy);
 import "other";
 export { foobarCopy } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { console } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 
@@ -734,9 +724,6 @@ import "other";
 let foobarCopy = foobar;
 console.log(foobarCopy);
 export { foobarCopy } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { console } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 

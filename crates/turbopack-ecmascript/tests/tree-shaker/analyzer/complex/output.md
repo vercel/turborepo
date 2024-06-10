@@ -31,7 +31,6 @@ console.log(dog);
 
 - Side effects
 - Reads: `dog`
-- Write: `console`
 
 ## Item 4: Stmt 3, `Normal`
 
@@ -66,7 +65,6 @@ console.log(dog);
 
 - Side effects
 - Reads: `dog`
-- Write: `console`
 
 ## Item 7: Stmt 6, `Normal`
 
@@ -101,7 +99,6 @@ console.log(dog);
 
 - Side effects
 - Reads: `dog`
-- Write: `console`
 
 ## Item 10: Stmt 9, `VarDeclarator(0)`
 
@@ -498,9 +495,6 @@ import { dog } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
 };
 console.log(dog);
-export { console } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 9
@@ -535,7 +529,7 @@ export { dog } from "__TURBOPACK_VAR__" assert {
 import { dog } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
 };
-import { console } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
 };
 console.log(dog);
@@ -560,7 +554,7 @@ export { dog } from "__TURBOPACK_VAR__" assert {
 import { dog } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 12
 };
-import { console } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
 };
 import "__TURBOPACK_PART__" assert {
@@ -628,9 +622,6 @@ import "__TURBOPACK_PART__" assert {
 console.log(dog);
 console.log(dog);
 console.log(dog);
-export { console } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 1
@@ -762,8 +753,5 @@ import "__TURBOPACK_PART__" assert {
 console.log(dog);
 console.log(dog);
 console.log(dog);
-export { console } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```

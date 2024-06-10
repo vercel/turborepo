@@ -141,9 +141,9 @@ export const run = async (moduleFactory)=>{
 ```
 
 - Declares: `run`
-- Reads (eventual): `Map`, `send`, `Promise`, `set`, `then`, `sendError`, `init`, `default`, `sendReady`, `length`, `shift`, `undefined`, `stringify`, `recv`, `type`, `push`, `args`, `get`, `id`, `delete`, `error`, `reject`, `Error`, `resolve`, `data`, `exit`
+- Reads (eventual): `Map`, `ipc`, `send`, `Promise`, `set`, `then`, `sendError`, `init`, `default`, `sendReady`, `queue`, `length`, `shift`, `undefined`, `stringify`, `recv`, `type`, `push`, `args`, `get`, `id`, `delete`, `error`, `reject`, `Error`, `resolve`, `data`, `exit`
 - Write: `run`
-- Write (eventual): `ipc`, `queue`, `JSON`, `console`, `process`
+- Write (eventual): `ipc`, `queue`
 
 # Phase 1
 ```mermaid
@@ -185,6 +185,8 @@ graph TD
     Item7;
     Item7["export run"];
     Item3 --> Item2;
+    Item5 --> Item3;
+    Item5 --> Item4;
 ```
 # Phase 4
 ```mermaid
@@ -199,6 +201,8 @@ graph TD
     Item7;
     Item7["export run"];
     Item3 --> Item2;
+    Item5 --> Item3;
+    Item5 --> Item4;
     Item6 --> Item1;
     Item7 --> Item5;
 ```
@@ -206,7 +210,7 @@ graph TD
 ```mermaid
 graph TD
     N0["Items: [ItemId(ModuleEvaluation), ItemId(0, ImportOfModule)]"];
-    N1["Items: [ItemId(Export((&quot;run&quot;, #2), &quot;run&quot;)), ItemId(3, VarDeclarator(0))]"];
+    N1["Items: [ItemId(Export((&quot;run&quot;, #2), &quot;run&quot;)), ItemId(0, ImportBinding(0)), ItemId(1, VarDeclarator(0)), ItemId(2, VarDeclarator(0)), ItemId(3, VarDeclarator(0))]"];
 ```
 # Entrypoints
 
@@ -230,6 +234,9 @@ import "./index";
 ## Part 1
 ```js
 export { run };
+import { IPC } from "./index";
+const ipc = IPC;
+const queue = [];
 const run = async (moduleFactory)=>{
     let nextId = 1;
     const requests = new Map();
@@ -320,6 +327,12 @@ const run = async (moduleFactory)=>{
                 }
         }
     }
+};
+export { ipc } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { queue } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
 };
 export { run } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
@@ -354,6 +367,9 @@ import "./index";
 ## Part 1
 ```js
 export { run };
+import { IPC } from "./index";
+const ipc = IPC;
+const queue = [];
 const run = async (moduleFactory)=>{
     let nextId = 1;
     const requests = new Map();
@@ -444,6 +460,12 @@ const run = async (moduleFactory)=>{
                 }
         }
     }
+};
+export { ipc } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { queue } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
 };
 export { run } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
