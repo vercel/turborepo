@@ -986,11 +986,7 @@ impl DepGraph {
                         used_ids.write.extend(extra_ids.write);
                     }
 
-                    let side_effects = used_ids
-                        .read
-                        .iter()
-                        .chain(used_ids.write.iter())
-                        .any(|id| id.1 == unresolved_ctxt);
+                    let side_effects = used_ids.found_unresolved;
 
                     let data = ItemData {
                         read_vars: used_ids.read,
