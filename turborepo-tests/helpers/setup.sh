@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# This is a bump to the file
 
 THIS_DIR=$(dirname "${BASH_SOURCE[0]}")
 MONOREPO_ROOT_DIR="${THIS_DIR}/../.."
