@@ -333,12 +333,20 @@ const turbopackQueues = Symbol("turbopack queues");
 const turbopackExports = Symbol("turbopack exports");
 const turbopackError = Symbol("turbopack error");
 
+const enum QueueStatus {
+  Unknown = -1,
+  Unresolved = 0,
+  Resolved = 1,
+}
+
 type AsyncQueueFn = (() => void) & { queueCount: number };
-type AsyncQueue = AsyncQueueFn[] & { resolved: boolean };
+type AsyncQueue = AsyncQueueFn[] & {
+  status: QueueStatus;
+};
 
 function resolveQueue(queue?: AsyncQueue) {
-  if (queue && !queue.resolved) {
-    queue.resolved = true;
+  if (queue && queue.status !== QueueStatus.Resolved) {
+    queue.status = QueueStatus.Resolved;
     queue.forEach((fn) => fn.queueCount--);
     queue.forEach((fn) => (fn.queueCount-- ? fn.queueCount++ : fn()));
   }
@@ -359,7 +367,9 @@ function wrapDeps(deps: Dep[]): AsyncModuleExt[] {
     if (dep !== null && typeof dep === "object") {
       if (isAsyncModuleExt(dep)) return dep;
       if (isPromise(dep)) {
-        const queue: AsyncQueue = Object.assign([], { resolved: false });
+        const queue: AsyncQueue = Object.assign([], {
+          status: QueueStatus.Unresolved,
+        });
 
         const obj: AsyncModuleExt = {
           [turbopackExports]: {},
@@ -397,11 +407,11 @@ function asyncModule(
       deps: Dep[]
     ) => Exports[] | Promise<() => Exports[]>,
     asyncResult: (err?: any) => void
-  ) => void,
+  ) => Promise<void>,
   hasAwait: boolean
 ) {
   const queue: AsyncQueue | undefined = hasAwait
-    ? Object.assign([], { resolved: true })
+    ? Object.assign([], { status: QueueStatus.Unknown })
     : undefined;
 
   const depQueues: Set<AsyncQueue> = new Set();
@@ -450,7 +460,7 @@ function asyncModule(
     function fnQueue(q: AsyncQueue) {
       if (q !== queue && !depQueues.has(q)) {
         depQueues.add(q);
-        if (q && !q.resolved) {
+        if (q && q.status !== QueueStatus.Resolved) {
           fn.queueCount++;
           q.push(fn);
         }
@@ -474,8 +484,8 @@ function asyncModule(
 
   body(handleAsyncDependencies, asyncResult);
 
-  if (queue) {
-    queue.resolved = false;
+  if (queue && queue.status === QueueStatus.Unknown) {
+    queue.status = QueueStatus.Unresolved;
   }
 }
 
