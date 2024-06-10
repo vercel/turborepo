@@ -1,9 +1,9 @@
-import { connect } from "@vercel/turbopack-ecmascript-runtime/browser/client/hmr-client";
+import { connect } from "@vercel/turbopack-ecmascript-runtime/browser/dev/hmr-client/hmr-client";
 import {
   connectHMR,
   addMessageListener,
   sendMessage,
-} from "@vercel/turbopack-ecmascript-runtime/browser/client/websocket";
+} from "@vercel/turbopack-ecmascript-runtime/browser/dev/hmr-client/websocket";
 
 export function initializeHMR(options: { assetPrefix: string }) {
   connect({
