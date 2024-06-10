@@ -88,12 +88,14 @@ impl Visit for IdentUsageCollector {
     }
 
     fn visit_ident(&mut self, n: &Ident) {
+        if n.span.ctxt == self.unresolved {
+            self.vars.found_unresolved = true;
+            return;
+        }
+
         // We allow SyntaxContext::empty() because Some built-in files do not go into
         // resolver()
-        if n.span.ctxt != self.unresolved
-            && n.span.ctxt != self.top_level
-            && n.span.ctxt != SyntaxContext::empty()
-        {
+        if n.span.ctxt != self.top_level && n.span.ctxt != SyntaxContext::empty() {
             return;
         }
 
@@ -224,12 +226,14 @@ impl Visit for CapturedIdCollector {
             return;
         }
 
+        if n.span.ctxt == self.unresolved {
+            self.vars.found_unresolved = true;
+            return;
+        }
+
         // We allow SyntaxContext::empty() because Some built-in files do not go into
         // resolver()
-        if n.span.ctxt != self.unresolved
-            && n.span.ctxt != self.top_level
-            && n.span.ctxt != SyntaxContext::empty()
-        {
+        if n.span.ctxt != self.top_level && n.span.ctxt != SyntaxContext::empty() {
             return;
         }
 
@@ -241,10 +245,6 @@ impl Visit for CapturedIdCollector {
                 self.vars.write.insert(n.to_id());
             }
             None => {
-                // Ignore calls like console.log()
-                if n.span.ctxt == self.unresolved {
-                    return;
-                }
                 self.vars.read.insert(n.to_id());
                 self.vars.write.insert(n.to_id());
             }
@@ -288,6 +288,8 @@ pub(crate) struct Vars {
     pub read: IndexSet<Id, BuildHasherDefault<FxHasher>>,
     /// Variables which are written.
     pub write: IndexSet<Id, BuildHasherDefault<FxHasher>>,
+
+    pub found_unresolved: bool,
 }
 
 /// Returns `(read, write)`
