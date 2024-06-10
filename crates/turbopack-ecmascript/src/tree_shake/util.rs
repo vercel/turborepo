@@ -104,14 +104,17 @@ impl Visit for IdentUsageCollector {
             return;
         }
 
-        if n.span.ctxt == self.unresolved {
+        if n.span.ctxt == self.unresolved && matches!(self.mode, Some(Mode::Read)) {
             self.vars.found_unresolved = true;
             return;
         }
 
         // We allow SyntaxContext::empty() because Some built-in files do not go into
         // resolver()
-        if n.span.ctxt != self.top_level && n.span.ctxt != SyntaxContext::empty() {
+        if n.span.ctxt != self.unresolved
+            && n.span.ctxt != self.top_level
+            && n.span.ctxt != SyntaxContext::empty()
+        {
             return;
         }
 
@@ -140,7 +143,9 @@ impl Visit for IdentUsageCollector {
 
     fn visit_member_prop(&mut self, n: &MemberProp) {
         if let MemberProp::Computed(..) = n {
-            n.visit_children_with(self);
+            self.with_mode(Some(Mode::Read), |v| {
+                n.visit_children_with(v);
+            })
         }
     }
     fn visit_named_export(&mut self, n: &NamedExport) {
