@@ -940,6 +940,12 @@ impl DepGraph {
                         let eventual_vars =
                             ids_captured_by(&decl.init, [unresolved_ctxt, top_level_ctxt]);
 
+                        let side_effects = vars
+                            .read
+                            .iter()
+                            .chain(vars.write.iter())
+                            .any(|id| id.1 == unresolved_ctxt);
+
                         let var_decl = Box::new(VarDecl {
                             decls: vec![decl.clone()],
                             ..*v.clone()
@@ -954,6 +960,7 @@ impl DepGraph {
                                 write_vars: decl_ids.into_iter().chain(vars.write).collect(),
                                 eventual_write_vars: eventual_vars.write,
                                 content,
+                                side_effects,
                                 ..Default::default()
                             },
                         );
