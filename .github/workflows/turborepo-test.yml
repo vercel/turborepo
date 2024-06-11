@@ -329,6 +329,7 @@ jobs:
         uses: wbinnssmith/action@wbinnssmith/paths-schema
         with:
           paths: crates
+          config: sgconfig.yml
           version: 0.23.0
 
   rust_clippy:
