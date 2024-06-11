@@ -3,10 +3,10 @@ title: ESLint
 description: Learn how to use ESLint in a monorepo.
 ---
 
-import { PackageManagerTabs, Tabs, Tab } from "#/components/tabs";
-import { Callout } from "#/components/callout";
-import { Files, Folder, File } from "#/components/files";
-import { CreateTurboCallout } from "./create-turbo-callout.tsx";
+import { PackageManagerTabs, Tabs, Tab } from '#/components/tabs';
+import { Callout } from '#/components/callout';
+import { Files, Folder, File } from '#/components/files';
+import { CreateTurboCallout } from './create-turbo-callout.tsx';
 
 ESLint is a static analysis tool for quickly finding and fixing problems in your JavaScript code.
 
@@ -90,9 +90,9 @@ Our `@repo/eslint-config` file contains two files, `next.js`, and `library.js`. 
 Let's investigate the `next.js` lint configuration:
 
 ```js title="./packages/eslint-config/next.js"
-const { resolve } = require("node:path");
+const { resolve } = require('node:path');
 
-const project = resolve(process.cwd(), "tsconfig.json");
+const project = resolve(process.cwd(), 'tsconfig.json');
 
 /*
  * This is a custom ESLint configuration for use with
@@ -105,14 +105,14 @@ const project = resolve(process.cwd(), "tsconfig.json");
 
 module.exports = {
   extends: [
-    "@vercel/style-guide/eslint/node",
-    "@vercel/style-guide/eslint/typescript",
-    "@vercel/style-guide/eslint/browser",
-    "@vercel/style-guide/eslint/react",
-    "@vercel/style-guide/eslint/next",
+    '@vercel/style-guide/eslint/node',
+    '@vercel/style-guide/eslint/typescript',
+    '@vercel/style-guide/eslint/browser',
+    '@vercel/style-guide/eslint/react',
+    '@vercel/style-guide/eslint/next',
     // Turborepo custom eslint configuration configures the following rules:
     //  - https://github.com/vercel/turbo/blob/main/packages/eslint-plugin-turbo/docs/rules/no-undeclared-env-vars.md
-    "eslint-config-turbo",
+    'eslint-config-turbo',
   ].map(require.resolve),
   parserOptions: {
     project,
@@ -122,16 +122,16 @@ module.exports = {
     JSX: true,
   },
   settings: {
-    "import/resolver": {
+    'import/resolver': {
       typescript: {
         project,
       },
     },
   },
-  ignorePatterns: ["node_modules/", "dist/"],
+  ignorePatterns: ['node_modules/', 'dist/'],
   // add rules configurations here
   rules: {
-    "import/no-default-export": "off",
+    'import/no-default-export': 'off',
   },
 };
 ```
@@ -193,7 +193,7 @@ We can then import the config like this:
 ```js title="./apps/web/.eslintrc.js"
 module.exports = {
   root: true,
-  extends: ["@repo/eslint-config/next.js"],
+  extends: ['@repo/eslint-config/next.js'],
 };
 ```
 

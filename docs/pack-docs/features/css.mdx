@@ -3,7 +3,7 @@ title: CSS
 description: Learn more about CSS in Turbopack.
 ---
 
-import { Callout } from "#/components/callout";
+import { Callout } from '#/components/callout';
 
 CSS parsing and transformation is handled by [Lightning CSS](https://lightningcss.dev/).
 
@@ -12,7 +12,7 @@ CSS parsing and transformation is handled by [Lightning CSS](https://lightningcs
 Importing CSS into global scope is built-in in Turbopack.
 
 ```tsx title="my-file.tsx"
-import "./globals.css";
+import './globals.css';
 ```
 
 ## CSS Modules
@@ -20,7 +20,7 @@ import "./globals.css";
 Turbopack handles CSS Modules. Any file with a `.module.css` extension will be considered a CSS module, and you can import it into a JavaScript or TypeScript file:
 
 ```tsx title="component.tsx"
-import cssExports from "./phone.module.css";
+import cssExports from './phone.module.css';
 ```
 
 This follows the same rules set out by [Next.js](https://nextjs.org/docs/basic-features/built-in-css-support#adding-component-level-css) - letting you easily distinguish between global and scoped CSS.
@@ -51,8 +51,8 @@ Turbopack handles [CSS Nesting](https://developer.mozilla.org/en-US/docs/Web/CSS
 Using the CSS `@import` syntax to import other CSS files is supported. This gives you the ability to combine several CSS files together into a single module:
 
 ```css title="globals.css"
-@import "./modal.css";
-@import "./dark.css";
+@import './modal.css';
+@import './dark.css';
 ```
 
 ## PostCSS

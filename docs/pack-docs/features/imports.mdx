@@ -12,7 +12,7 @@ Turbopack bundles your application, so imports won't be resolved to native brows
 Turbopack supports the `require` syntax out-of-the-box:
 
 ```ts title="my-file.ts"
-const { add } = require("./math");
+const { add } = require('./math');
 
 add(1, 2);
 ```
@@ -22,11 +22,11 @@ add(1, 2);
 Importing via the `import` syntax is also supported out-of-the-box. This includes static assets, and `import type`:
 
 ```ts title="my-file.ts"
-import img from "./img.png";
+import img from './img.png';
 
-import type { User } from "../server/types";
+import type { User } from '../server/types';
 
-import { z } from "zod";
+import { z } from 'zod';
 ```
 
 ## Dynamic Imports
@@ -35,7 +35,7 @@ Turbopack supports dynamic imports via `import()`:
 
 ```ts title="my-file.ts"
 const getFeatureFlags = () => {
-  return import("/featureFlags").then((mod) => {
+  return import('/featureFlags').then((mod) => {
     return mod.featureFlags;
   });
 };
