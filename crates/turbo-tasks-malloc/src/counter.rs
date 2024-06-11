@@ -54,22 +54,26 @@ impl ThreadLocalCounter {
         self.allocation_counters.deallocation_count += 1;
         self.allocation_counters.allocations += new_size;
         self.allocation_counters.allocation_count += 1;
-        if old_size > new_size {
-            let size = old_size - new_size;
-            self.buffer += size;
-            if self.buffer > MAX_BUFFER {
-                let offset = self.buffer - TARGET_BUFFER;
-                self.buffer = TARGET_BUFFER;
-                ALLOCATED.fetch_sub(offset, Ordering::Relaxed);
+        match old_size.cmp(&new_size) {
+            std::cmp::Ordering::Equal => {}
+            std::cmp::Ordering::Less => {
+                let size = new_size - old_size;
+                if self.buffer >= size {
+                    self.buffer -= size;
+                } else {
+                    let offset = size - self.buffer + TARGET_BUFFER;
+                    self.buffer = TARGET_BUFFER;
+                    ALLOCATED.fetch_add(offset, Ordering::Relaxed);
+                }
             }
-        } else if new_size > old_size {
-            let size = new_size - old_size;
-            if self.buffer >= size {
-                self.buffer -= size;
-            } else {
-                let offset = size - self.buffer + TARGET_BUFFER;
-                self.buffer = TARGET_BUFFER;
-                ALLOCATED.fetch_add(offset, Ordering::Relaxed);
+            std::cmp::Ordering::Greater => {
+                let size = old_size - new_size;
+                self.buffer += size;
+                if self.buffer > MAX_BUFFER {
+                    let offset = self.buffer - TARGET_BUFFER;
+                    self.buffer = TARGET_BUFFER;
+                    ALLOCATED.fetch_sub(offset, Ordering::Relaxed);
+                }
             }
         }
     }
