@@ -323,6 +323,8 @@ jobs:
         run: echo "GITHUB_TURBOREPO_PATHS=$(cargo groups list turborepo | awk '{ print $2 }' | tr '\n' ' ')" >> $GITHUB_ENV
       - name: Checkout
         uses: actions/checkout@v4
+      - name: TEST
+        run: echo "$GITHUB_TURBOREPO_PATHS"
       - name: ast-grep lint step
         uses: wbinnssmith/action@wbinnssmith/paths-schema
         with:
