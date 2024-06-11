@@ -595,10 +595,9 @@ impl PackageManager {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashSet, fs::File};
+    use std::collections::HashSet;
 
     use pretty_assertions::assert_eq;
-    use tempfile::tempdir;
 
     use super::*;
 
