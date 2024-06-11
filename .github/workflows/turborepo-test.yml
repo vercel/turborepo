@@ -328,7 +328,7 @@ jobs:
       - name: ast-grep lint step
         uses: wbinnssmith/action@wbinnssmith/paths-schema
         with:
-          paths: ${{ env.GITHUB_TURBOREPO_PATHS }}
+          paths: crates
           version: 0.23.0
 
   rust_clippy:
