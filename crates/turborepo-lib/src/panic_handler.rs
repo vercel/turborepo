@@ -1,5 +1,6 @@
 use human_panic::report::{Method, Report};
-use turborepo_lib::get_version;
+
+use crate::get_version;
 
 pub fn panic_handler(panic_info: &std::panic::PanicInfo) {
     let cause = panic_info
