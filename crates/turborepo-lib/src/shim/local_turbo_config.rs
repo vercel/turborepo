@@ -1,9 +1,5 @@
 use std::env;
 
-use jsonc_parser::{
-    ast::{ObjectPropName, Value},
-    parse_to_ast,
-};
 use tracing::debug;
 use turborepo_repository::{inference::RepoState, package_manager::PackageManager};
 
@@ -25,18 +21,7 @@ impl LocalTurboConfig {
             debug!("downloading correct local version disabled");
             return None;
         }
-        let turbo_version = Self::turbo_version_from_lockfile(repo_state)
-            .or_else(|| {
-                debug!(
-                    "No turbo version found in a lockfile. Attempting to read version from root \
-                     package.json"
-                );
-                Self::turbo_version_from_package_json(repo_state)
-            })
-            .or_else(|| {
-                debug!("No turbo version found in package.json. Checking if turbo.json is for v1");
-                Self::turbo_version_from_turbo_json_schema(repo_state)
-            })?;
+        let turbo_version = Self::turbo_version_from_lockfile(repo_state)?;
         Some(Self { turbo_version })
     }
 
@@ -62,45 +47,6 @@ impl LocalTurboConfig {
                 .ok()?;
             lockfile.turbo_version()
         })
-    }
-
-    fn turbo_version_from_package_json(repo_state: &RepoState) -> Option<String> {
-        let package_json = &repo_state.root_package_json;
-        // Look for turbo as a root dependency
-        package_json
-            .all_dependencies()
-            .find_map(|(name, version)| (name == "turbo").then(|| version.clone()))
-    }
-
-    fn turbo_version_from_turbo_json_schema(repo_state: &RepoState) -> Option<String> {
-        let turbo_json_path = repo_state.root.join_component("turbo.json");
-        let turbo_json_contents = turbo_json_path.read_existing_to_string().ok().flatten()?;
-        // We explicitly do not use regular path for parsing turbo.json as that will
-        // fail if it sees unexpected keys. Future versions of turbo might add
-        // keys and we don't want to crash in that situation.
-        let turbo_json = parse_to_ast(
-            &turbo_json_contents,
-            &Default::default(),
-            &Default::default(),
-        )
-        .ok()?;
-
-        if let Value::Object(turbo_json) = turbo_json.value? {
-            let has_pipeline = turbo_json.properties.iter().any(|property| {
-                let ObjectPropName::String(name) = &property.name else {
-                    return false;
-                };
-                name.value == "pipeline"
-            });
-            if has_pipeline {
-                // All we can determine is that the turbo.json is meant for a turbo v1
-                return Some("^1".to_owned());
-            }
-        }
-        // We do not check for the existence of `tasks` as it provides us no beneficial
-        // information. We're already a turbo 2 binary so we'll continue
-        // execution.
-        None
     }
 }
 
@@ -182,12 +128,7 @@ mod test {
             package_manager: Err(Error::MissingPackageManager),
         };
 
-        assert_eq!(
-            LocalTurboConfig::infer(&repo),
-            Some(LocalTurboConfig {
-                turbo_version: "^2.0.0".into()
-            })
-        );
+        assert_eq!(LocalTurboConfig::infer(&repo), None,);
     }
 
     #[test]
@@ -208,12 +149,7 @@ mod test {
             package_manager: Err(Error::MissingPackageManager),
         };
 
-        assert_eq!(
-            LocalTurboConfig::infer(&repo),
-            Some(LocalTurboConfig {
-                turbo_version: "^2.0.0".into()
-            })
-        );
+        assert_eq!(LocalTurboConfig::infer(&repo), None);
     }
 
     #[test]
@@ -230,12 +166,7 @@ mod test {
         turbo_json
             .create_with_contents(include_bytes!("../../fixtures/local_config/turbo.v1.json"))
             .unwrap();
-        assert_eq!(
-            LocalTurboConfig::infer(&repo),
-            Some(LocalTurboConfig {
-                turbo_version: "^1".into()
-            })
-        );
+        assert_eq!(LocalTurboConfig::infer(&repo), None);
     }
 
     #[test]
