@@ -429,14 +429,9 @@ pub(super) async fn split(
             } = dep_graph.split_module(&items);
 
             assert_ne!(modules.len(), 0, "modules.len() == 0;\nModule: {module:?}",);
-            assert_eq!(
-                entrypoints.get(&Key::ModuleEvaluation),
-                Some(&0),
-                "ModuleEvaluation is not the first module"
-            );
 
             for &v in entrypoints.values() {
-                assert!(
+                debug_assert!(
                     v < modules.len() as u32,
                     "Invalid entrypoint '{}' while there are only '{}' modules",
                     v,
