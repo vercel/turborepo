@@ -334,7 +334,6 @@ jobs:
         uses: wbinnssmith/action@wbinnssmith/npm-build
         with:
           paths: ${{ env.GITHUB_TURBOPACK_PATHS }}
-          config: sgconfig.yml
           version: 0.23.0
 
   rust_clippy:
