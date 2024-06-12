@@ -69,7 +69,7 @@ impl TurboMalloc {
 
 #[cfg(all(
     feature = "custom_allocator",
-    not(all(target_os = "linux", target_arch = "aarch64"))
+    not(any(target_family = "wasm", target_env = "musl"))
 ))]
 unsafe impl GlobalAlloc for TurboMalloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
@@ -105,7 +105,7 @@ unsafe impl GlobalAlloc for TurboMalloc {
 
 #[cfg(any(
     not(feature = "custom_allocator"),
-    all(target_os = "linux", target_arch = "aarch64")
+    any(target_family = "wasm", target_env = "musl")
 ))]
 unsafe impl GlobalAlloc for TurboMalloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
