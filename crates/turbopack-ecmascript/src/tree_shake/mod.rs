@@ -195,7 +195,7 @@ impl Analyzer<'_> {
 
                     state
                         .last_writes
-                        .retain(|last_write| !self.g.has_strong_dep(item_id, last_write));
+                        .retain(|last_write| !self.g.has_dep(item_id, last_write, false));
 
                     // Drop all writes which are not reachable from this item.
                     //
