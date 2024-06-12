@@ -196,9 +196,6 @@ impl Analyzer<'_> {
                     state
                         .last_writes
                         .retain(|last_write| !self.g.has_dep(item_id, last_write, false));
-                    state
-                        .last_writes
-                        .retain(|last_write| self.g.has_path_connecting(item_id, last_write));
                 }
 
                 // For each var in READ_VARS:
