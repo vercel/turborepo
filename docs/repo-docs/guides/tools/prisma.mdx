@@ -29,7 +29,7 @@ If you don't have an existing project, use our [quickstart](/repo/docs/getting-s
 
 </Step>
 <Step>
-## Add a new database package
+## Add a new `database` package
 
 Create a new folder called `database` inside packages with a `package.json` inside:
 
@@ -50,7 +50,7 @@ Run your package manager's install step to install the new dependencies.
 
 </Step>
 <Step>
-## Run prisma init
+## Run `prisma init`
 
 `cd` into `packages/database`:
 
@@ -137,7 +137,7 @@ Following the [Just-in-Time packaging pattern](/repo/docs/core-concepts/internal
   need to adjust to a different strategy as if needed.
 </Callout>
 
-### Importing database
+### Importing `database`
 
 Import the database package into one of our apps.
 
@@ -215,7 +215,7 @@ So, let's make sure that `db:generate` is always run _before_ you run `dev`:
 
 Check out the section on [running tasks](/repo/docs/crafting-your-repository/running-tasks) to learn more about the `^db:generate` syntax.
 
-### Caching the results of prisma generate
+### Caching the results of `prisma generate`
 
 `prisma generate` outputs files to the filesystem, usually inside `node_modules`. In theory, it should be possible to cache the output of `prisma generate` with Turborepo to save a few seconds.
 

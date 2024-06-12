@@ -134,7 +134,7 @@ You then build your application using a value for `MY_API_URL` that targets your
 
 When you're using Loose Mode, `MY_API_URL` is available in the task runtime **even though it isn't accounted for in the task hash**. To make this task more likely to fail and protect you from this misconfiguration, we encourage you to opt for [Strict Mode](#strict-mode).
 
-## Handling .env files
+## Handling `.env` files
 
 `.env` files are great for working on an application locally. **Turborepo does not load .env files into your task's runtime**, leaving them to be handled by your framework, or tools like [`dotenv`](https://www.npmjs.com/package/dotenv).
 
@@ -163,13 +163,13 @@ To do this, add the files to the [`inputs`](/repo/docs/reference/configuration#i
 
 ## Best practices
 
-### Use .env files in packages
+### Use `.env` files in packages
 
 Using a `.env` file at the root of the repository is not recommended. Instead, we recommend placing your `.env` files into the packages where they're used.
 
 This practice more closely models the runtime behavior of your applications since environment variables exist in each application's runtime individually. Additionally, as your monorepo scales, this practice makes it easier to manage each application's environment, preventing environment variable leakage across applications.
 
-### Use eslint-config-turbo
+### Use `eslint-config-turbo`
 
 [The `eslint-config-turbo` package](/repo/docs/reference/eslint-config-turbo) helps you find environment variables that are used in your code that aren't listed in your `turbo.json`. This helps ensure that all your environment variables are accounted for in your configuration.
 
@@ -268,7 +268,7 @@ The `turbo.json` below expresses:
 
 ## Troubleshooting
 
-### Use --summarize
+### Use `--summarize`
 
 [The `--summarize` flag](/repo/docs/reference/run#--summarize) can be added to your `turbo run` command to produce a JSON file summarizing data about your task. Checking the diff for the `globalEnv` and `env` key can help you identify any environment variables that may be missing from your configuration.
 

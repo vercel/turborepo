@@ -19,7 +19,7 @@ Configure the behavior of `turbo` by adding a `turbo.json` file in your Workspac
 
 ## Global options
 
-### extends
+### `extends`
 
 ```jsonc title="./apps/web/turbo.json"
 {
@@ -32,7 +32,7 @@ Extend from the root `turbo.json` to create specific configuration for a package
 - The only valid value for `extends` is `["//"]` to inherit configuration from the root `turbo.json`.
 - If `extends` is used in the root `turbo.json`, it will be ignored.
 
-### globalDependencies
+### `globalDependencies`
 
 ```jsonc title="./turbo.json"
 {
@@ -49,7 +49,7 @@ By default, all files in source control in the Workspace root are included in th
   repository aren't supported.
 </Callout>
 
-### globalEnv
+### `globalEnv`
 
 ```jsonc title="./turbo.json"
 {
@@ -61,7 +61,7 @@ A list of environment variables that you want to impact the hash of all tasks. A
 
 For more on wildcard and negation syntax, [see the `env` section](#env).
 
-### globalPassThroughEnv
+### `globalPassThroughEnv`
 
 ```jsonc title="./turbo.json"
 {
@@ -97,7 +97,7 @@ Select a terminal UI for the repository.
 
 ## Defining tasks
 
-### tasks
+### `tasks`
 
 Each key in the `tasks` object is the name of a task that can be executed by [`turbo run`](/repo/docs/reference/run). Turborepo will search the packages described in your [Workspace's configuration](/repo/docs/crafting-your-repository/structuring-a-repository#specifying-packages-in-a-monorepo) for scripts in `package.json` with the name of the task.
 
@@ -129,7 +129,7 @@ In the example below, we've defined three tasks under the `tasks` key: `build`, 
 
 Using the options available in the tasks you define in `tasks`, you can describe how `turbo` will run your tasks.
 
-### dependsOn
+### `dependsOn`
 
 A list of tasks that are required to complete before the task begins running.
 
@@ -183,7 +183,7 @@ Specify a task dependency between specific package tasks.
 
 In this `turbo.json`, the `web#lint` task will wait for the `utils#build` task to complete.
 
-### env
+### `env`
 
 The list of environment variables a task depends on.
 
@@ -251,7 +251,7 @@ A leading `!` means that the entire pattern will be negated. For instance, the `
 | `"\\!FOO"` | Matches a single environment variable named `!FOO`.                            |
 | `"FOO!"`   | Matches a single environment variable named `FOO!`.                            |
 
-### passThroughEnv
+### `passThroughEnv`
 
 An allowlist of environment variables that should be made available to this task's runtime, even when in [Strict Environment Mode](/repo/docs/crafting-your-repository/using-environment-variables#strict-mode).
 
@@ -272,7 +272,7 @@ An allowlist of environment variables that should be made available to this task
   need to include them in [`env`](#env) or [`globalEnv`](#globalenv).
 </Callout>
 
-### outputs
+### `outputs`
 
 A list of file glob patterns relative to the package's `package.json` to cache when the task is successfully completed.
 
@@ -289,7 +289,7 @@ Omitting this key or passing an empty array tells `turbo` to cache nothing (exce
 }
 ```
 
-### cache
+### `cache`
 
 Default: `true`
 
@@ -309,7 +309,7 @@ Defines if task outputs should be cached. Setting `cache` to false is useful for
 }
 ```
 
-### inputs
+### `inputs`
 
 Default: `[]`, all files in the package that are checked into source control
 
@@ -333,7 +333,7 @@ Visit the [file glob specification](/repo/docs/reference/globs) for more informa
   desired or use `$TURBO_DEFAULT$` to build off of the default behavior.
 </Callout>
 
-#### $TURBO_DEFAULT$
+#### `$TURBO_DEFAULT$`
 
 Because specifying an `inputs` key immediately opts out of the default behavior, you may use
 the special string `$TURBO_DEFAULT$` within the `inputs` array to restore `turbo`'s default behavior. This allows you to tweak the default behavior for more granularity.
@@ -349,7 +349,7 @@ the special string `$TURBO_DEFAULT$` within the `inputs` array to restore `turbo
 }
 ```
 
-### outputLogs
+### `outputLogs`
 
 Default: `full`
 
@@ -373,7 +373,7 @@ Set output logging verbosity. Can be overridden by the [`--output-logs`](/repo/d
 }
 ```
 
-### persistent
+### `persistent`
 
 Default: `false`
 
@@ -395,7 +395,7 @@ This option is most useful for development servers or other "watch" tasks.
 
 Tasks marked with `persistent` are also `interactive` by default.
 
-### interactive
+### `interactive`
 
 Default: `false` (Defaults to `true` for tasks marked as `persistent`)
 

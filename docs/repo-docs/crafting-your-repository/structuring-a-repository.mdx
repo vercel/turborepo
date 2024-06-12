@@ -162,14 +162,14 @@ If you'd like to group packages by directory, you can do this using globs like `
 </Step>
 
 <Step>
-#### package.json in each package
+#### `package.json` in each package
 
 In the directory of the package, there must be a `package.json` to make the package discoverable to your package manager and `turbo`. The [requirements for the `package.json` of a package](#anatomy-of-a-package) are below.
 
 </Step>
 </Steps>
 
-### Root package.json
+### Root `package.json`
 
 The root `package.json` is the base for your workspace. Below is a common example of what you would find in a root `package.json`:
 
@@ -233,7 +233,7 @@ The root `package.json` is the base for your workspace. Below is a common exampl
 
 </PackageManagerTabs>
 
-### Root turbo.json
+### Root `turbo.json`
 
 `turbo.json` is used to configure the behavior of `turbo`. To learn more about how to configure your tasks, visit the [Configuring tasks](/repo/docs/crafting-your-repository/configuring-tasks) page.
 
@@ -252,9 +252,9 @@ It's often best to start thinking about designing a package as its own unit with
 
 Additionally, a package has specific entrypoints that other packages in your Workspace can use to access the package, specified by [`exports`](#exports).
 
-### package.json for a package
+### `package.json` for a package
 
-#### name
+#### `name`
 
 [The `name` field](https://nodejs.org/api/packages.html#name) is used to identify the package. It should be unique within your workspace.
 
@@ -265,11 +265,11 @@ We use `@repo` in our docs and examples because it is an unused, unclaimable nam
 
 </Callout>
 
-#### scripts
+#### `scripts`
 
 The `scripts` field is used to define scripts that can be run in the package's context. Turborepo will use the name of these scripts to identify what scripts to run (if any) in a package. We talk more about these scripts on the [Running Tasks](/repo/docs/crafting-your-repository/running-tasks) page.
 
-#### exports
+#### `exports`
 
 [The `exports` field](https://nodejs.org/api/packages.html#exports) is used to specify the entrypoints for other packages that want to use the package. When you want to use code from one package in another package, you'll import from that entrypoint.
 
@@ -311,7 +311,7 @@ Using exports this way provides three major benefits:
   guide](/repo/docs/guides/tools/typescript#package-entrypoint-wildcards).
 </Callout>
 
-#### imports (optional)
+#### `imports` (optional)
 
 [The `imports` field](https://nodejs.org/api/packages.html#imports) gives you a way to create subpaths to other modules within your package. You can think of these like "shortcuts" to get to other modules within your package.
 

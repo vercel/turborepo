@@ -101,7 +101,7 @@ You now have the build order you would expect, building _dependencies_ before _d
 
 **But be careful.** At this point, you haven't marked the build outputs for caching. To do so, jump to the [Specifying outputs](#specifying-options) section.
 
-#### Depending on tasks in dependencies with ^
+#### Depending on tasks in dependencies with `^`
 
 The `^` microsyntax tells Turborepo to run the task starting at the bottom of the dependency graph. If your application depends on a library named `ui` and the library has a `build` task, the `build` script in `ui` will run **first**. Once it has successfully completed, the `build` task in your application will run.
 
@@ -163,7 +163,7 @@ Some tasks may not have any dependencies. For example, a task for finding typos 
 }
 ```
 
-### Specifying outputs
+### Specifying `outputs`
 
 <Callout type="info">
   Turborepo caches the outputs of your tasks so that you never do the same work
@@ -215,7 +215,7 @@ Below are a few examples of outputs for common tools:
 
 For more on building globbing patterns for the `outputs` key, see [the globbing specification](/repo/docs/reference/globs).
 
-### Specifying inputs
+### Specifying `inputs`
 
 The `inputs` key is used to specify the files that you want to include in the task's hash for [caching](/repo/docs/crafting-your-repository/caching). By default, Turborepo will include all files in the package that are tracked by Git. However, you can be more specific about which files are included in the hash using the `inputs` key.
 
@@ -240,7 +240,7 @@ To restore the default behavior, use [the `$TURBO_DEFAULT$` microsyntax](#restor
 
 </Callout>
 
-#### Restoring defaults with $TURBO_DEFAULT$
+#### Restoring defaults with `$TURBO_DEFAULT$`
 
 [The default `inputs` behavior](/repo/docs/reference/configuration#inputs) is often what you will want for your tasks. However, you can increase your cache hit ratios for certain tasks by fine-tuning your `inputs` to ignore changes to files that are known to not affect the task's output.
 
