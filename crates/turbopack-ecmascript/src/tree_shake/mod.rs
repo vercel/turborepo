@@ -149,7 +149,7 @@ impl Analyzer<'_> {
                     self.g.add_strong_deps(item_id, state.last_writes.iter());
 
                     // A read also depends on the declaration.
-                    self.g.add_strong_deps(item_id, state.declarator.iter());
+                    // self.g.add_strong_deps(item_id, state.declarator.iter());
                 }
 
                 // For each var in WRITE_VARS:
@@ -164,7 +164,7 @@ impl Analyzer<'_> {
                     self.g.add_weak_deps(item_id, state.last_reads.iter());
 
                     // A write also depends on the declaration.
-                    self.g.add_weak_deps(item_id, state.declarator.iter());
+                    // self.g.add_weak_deps(item_id, state.declarator.iter());
                 }
 
                 if item.side_effects {
