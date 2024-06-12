@@ -71,9 +71,13 @@ graph TD
     Item6["export DOG"];
     Item7;
     Item7["export CHIMERA"];
+    Item1 -.-> Item1;
+    Item2 -.-> Item2;
     Item3 --> Item1;
+    Item3 -.-> Item3;
     Item4 --> Item2;
     Item4 --> Item1;
+    Item4 -.-> Item4;
 ```
 # Phase 3
 ```mermaid
@@ -88,9 +92,13 @@ graph TD
     Item6["export DOG"];
     Item7;
     Item7["export CHIMERA"];
+    Item1 -.-> Item1;
+    Item2 -.-> Item2;
     Item3 --> Item1;
+    Item3 -.-> Item3;
     Item4 --> Item2;
     Item4 --> Item1;
+    Item4 -.-> Item4;
 ```
 # Phase 4
 ```mermaid
@@ -105,9 +113,13 @@ graph TD
     Item6["export DOG"];
     Item7;
     Item7["export CHIMERA"];
+    Item1 -.-> Item1;
+    Item2 -.-> Item2;
     Item3 --> Item1;
+    Item3 -.-> Item3;
     Item4 --> Item2;
     Item4 --> Item1;
+    Item4 -.-> Item4;
     Item6 --> Item3;
     Item7 --> Item4;
 ```
@@ -162,9 +174,6 @@ import { dog } from "__TURBOPACK_PART__" assert {
 export { CHIMERA };
 const cat = "cat";
 const CHIMERA = cat + dog;
-export { cat } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 export { CHIMERA } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -173,9 +182,6 @@ export { CHIMERA } from "__TURBOPACK_VAR__" assert {
 ## Part 3
 ```js
 const dog = "dog";
-export { dog } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Merged (module eval)
@@ -224,9 +230,6 @@ import { dog } from "__TURBOPACK_PART__" assert {
 export { CHIMERA };
 const cat = "cat";
 const CHIMERA = cat + dog;
-export { cat } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 export { CHIMERA } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -235,9 +238,6 @@ export { CHIMERA } from "__TURBOPACK_VAR__" assert {
 ## Part 3
 ```js
 const dog = "dog";
-export { dog } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Merged (module eval)

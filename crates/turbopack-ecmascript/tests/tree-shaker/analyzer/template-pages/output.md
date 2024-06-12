@@ -407,6 +407,7 @@ graph TD
     Item6 --> Item5;
     Item13 --> Item9;
     Item13 --> Item12;
+    Item13 -.-> Item13;
     Item13 --> Item1;
     Item13 --> Item2;
     Item13 --> Item3;
@@ -415,29 +416,40 @@ graph TD
     Item13 --> Item6;
     Item14 --> Item9;
     Item14 --> Item12;
+    Item14 -.-> Item14;
     Item15 --> Item9;
     Item15 --> Item12;
+    Item15 -.-> Item15;
     Item16 --> Item9;
     Item16 --> Item12;
+    Item16 -.-> Item16;
     Item17 --> Item9;
     Item17 --> Item12;
+    Item17 -.-> Item17;
     Item18 --> Item9;
     Item18 --> Item12;
+    Item18 -.-> Item18;
     Item19 --> Item9;
     Item19 --> Item12;
+    Item19 -.-> Item19;
     Item20 --> Item9;
     Item20 --> Item12;
+    Item20 -.-> Item20;
     Item21 --> Item9;
     Item21 --> Item12;
+    Item21 -.-> Item21;
     Item22 --> Item9;
     Item22 --> Item12;
+    Item22 -.-> Item22;
     Item23 --> Item9;
     Item23 --> Item12;
+    Item23 -.-> Item23;
     Item24 --> Item7;
     Item24 --> Item8;
     Item24 --> Item11;
     Item24 --> Item10;
     Item24 --> Item12;
+    Item24 -.-> Item24;
 ```
 # Phase 3
 ```mermaid
@@ -509,6 +521,7 @@ graph TD
     Item6 --> Item5;
     Item13 --> Item9;
     Item13 --> Item12;
+    Item13 -.-> Item13;
     Item13 --> Item1;
     Item13 --> Item2;
     Item13 --> Item3;
@@ -517,29 +530,40 @@ graph TD
     Item13 --> Item6;
     Item14 --> Item9;
     Item14 --> Item12;
+    Item14 -.-> Item14;
     Item15 --> Item9;
     Item15 --> Item12;
+    Item15 -.-> Item15;
     Item16 --> Item9;
     Item16 --> Item12;
+    Item16 -.-> Item16;
     Item17 --> Item9;
     Item17 --> Item12;
+    Item17 -.-> Item17;
     Item18 --> Item9;
     Item18 --> Item12;
+    Item18 -.-> Item18;
     Item19 --> Item9;
     Item19 --> Item12;
+    Item19 -.-> Item19;
     Item20 --> Item9;
     Item20 --> Item12;
+    Item20 -.-> Item20;
     Item21 --> Item9;
     Item21 --> Item12;
+    Item21 -.-> Item21;
     Item22 --> Item9;
     Item22 --> Item12;
+    Item22 -.-> Item22;
     Item23 --> Item9;
     Item23 --> Item12;
+    Item23 -.-> Item23;
     Item24 --> Item7;
     Item24 --> Item8;
     Item24 --> Item11;
     Item24 --> Item10;
     Item24 --> Item12;
+    Item24 -.-> Item24;
 ```
 # Phase 4
 ```mermaid
@@ -611,6 +635,7 @@ graph TD
     Item6 --> Item5;
     Item13 --> Item9;
     Item13 --> Item12;
+    Item13 -.-> Item13;
     Item13 --> Item1;
     Item13 --> Item2;
     Item13 --> Item3;
@@ -619,29 +644,40 @@ graph TD
     Item13 --> Item6;
     Item14 --> Item9;
     Item14 --> Item12;
+    Item14 -.-> Item14;
     Item15 --> Item9;
     Item15 --> Item12;
+    Item15 -.-> Item15;
     Item16 --> Item9;
     Item16 --> Item12;
+    Item16 -.-> Item16;
     Item17 --> Item9;
     Item17 --> Item12;
+    Item17 -.-> Item17;
     Item18 --> Item9;
     Item18 --> Item12;
+    Item18 -.-> Item18;
     Item19 --> Item9;
     Item19 --> Item12;
+    Item19 -.-> Item19;
     Item20 --> Item9;
     Item20 --> Item12;
+    Item20 -.-> Item20;
     Item21 --> Item9;
     Item21 --> Item12;
+    Item21 -.-> Item21;
     Item22 --> Item9;
     Item22 --> Item12;
+    Item22 -.-> Item22;
     Item23 --> Item9;
     Item23 --> Item12;
+    Item23 -.-> Item23;
     Item24 --> Item7;
     Item24 --> Item8;
     Item24 --> Item11;
     Item24 --> Item10;
     Item24 --> Item12;
+    Item24 -.-> Item24;
     Item25 --> Item1;
     Item25 --> Item2;
     Item25 --> Item3;
@@ -974,9 +1010,6 @@ const routeModule = new PagesRouteModule({
 export { routeModule } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
-export { RouteKind } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 13
@@ -1077,9 +1110,6 @@ import "__TURBOPACK_PART__" assert {
 import { hoist } from './helpers';
 import * as userland from 'VAR_USERLAND';
 const __TURBOPACK__default__export__ = hoist(userland, 'default');
-export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Merged (module eval)
@@ -1356,9 +1386,6 @@ const routeModule = new PagesRouteModule({
 export { routeModule } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
-export { RouteKind } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 13
@@ -1459,9 +1486,6 @@ import "__TURBOPACK_PART__" assert {
 import { hoist } from './helpers';
 import * as userland from 'VAR_USERLAND';
 const __TURBOPACK__default__export__ = hoist(userland, 'default');
-export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Merged (module eval)
