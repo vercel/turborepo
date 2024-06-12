@@ -146,21 +146,24 @@ impl Run {
             && tui::terminal_big_enough()?)
     }
 
-    pub fn start_experimental_ui(&self) -> Option<(AppSender, JoinHandle<Result<(), tui::Error>>)> {
+    #[allow(clippy::type_complexity)]
+    pub fn start_experimental_ui(
+        &self,
+    ) -> Result<Option<(AppSender, JoinHandle<Result<(), tui::Error>>)>, Error> {
         // Print prelude here as this needs to happen before the UI is started
         if self.should_print_prelude {
             self.print_run_prelude();
         }
 
-        if !self.should_start_ui().ok()? {
-            return None;
+        if !self.should_start_ui()? {
+            return Ok(None);
         }
 
         let task_names = self.engine.tasks_with_command(&self.pkg_dep_graph);
         let (sender, receiver) = AppSender::new();
         let handle = tokio::task::spawn_blocking(move || tui::run_app(task_names, receiver));
 
-        Some((sender, handle))
+        Ok(Some((sender, handle)))
     }
 
     pub async fn run(&mut self, experimental_ui_sender: Option<AppSender>) -> Result<i32, Error> {
