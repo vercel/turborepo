@@ -42,6 +42,8 @@ pub struct Analyzer<'a> {
 
 #[derive(Debug, Default, Clone)]
 struct VarState {
+    declarator: Option<ItemId>,
+
     /// The module items that might trigger side effects on that variable.
     /// We also store if this is a `const` write, so no further change will
     /// happen to this var.
@@ -130,6 +132,13 @@ impl Analyzer<'_> {
                     continue;
                 }
 
+                for id in item.var_decls.iter() {
+                    let state = self.vars.entry(id.clone()).or_default();
+                    if state.declarator.is_none() {
+                        state.declarator = Some(item_id.clone());
+                    }
+                }
+
                 // For each var in READ_VARS:
                 for id in item.read_vars.iter() {
                     // Create a strong dependency to all module items listed in LAST_WRITES for that
@@ -137,8 +146,10 @@ impl Analyzer<'_> {
 
                     // (the writes need to be executed before this read)
                     let state = get_var(&self.vars, id);
-
                     self.g.add_strong_deps(item_id, state.last_writes.iter());
+
+                    // A read also depends on the declaration.
+                    self.g.add_strong_deps(item_id, state.declarator.iter());
                 }
 
                 // For each var in WRITE_VARS:
@@ -151,6 +162,9 @@ impl Analyzer<'_> {
 
                     let state = get_var(&self.vars, id);
                     self.g.add_weak_deps(item_id, state.last_reads.iter());
+
+                    // A write also depends on the declaration.
+                    self.g.add_weak_deps(item_id, state.declarator.iter());
                 }
 
                 if item.side_effects {
