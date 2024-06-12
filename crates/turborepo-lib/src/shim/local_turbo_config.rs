@@ -4,7 +4,6 @@ use tracing::debug;
 use turborepo_repository::{inference::RepoState, package_manager::PackageManager};
 
 const TURBO_DOWNLOAD_LOCAL_ENABLED: &str = "TURBO_DOWNLOAD_LOCAL_ENABLED";
-const TURBO_DOWNLOAD_LOCAL_DISABLED: &str = "TURBO_DOWNLOAD_LOCAL_DISABLED";
 
 /// Struct containing information about the desired local turbo version
 /// according to lockfiles, package.jsons, and if all else fails turbo.json
