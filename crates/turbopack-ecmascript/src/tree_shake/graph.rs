@@ -503,8 +503,8 @@ impl DepGraph {
             let mut changed = false;
 
             for (group, group_done) in &mut groups {
-                let start = group[0].clone();
-                let start_ix = self.g.get_node(&start);
+                let start = &group[0];
+                let start_ix = self.g.get_node(start);
                 changed |=
                     add_to_group(&self.g, data, group, start_ix, &mut global_done, group_done);
             }
