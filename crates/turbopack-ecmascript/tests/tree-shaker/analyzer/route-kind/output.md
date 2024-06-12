@@ -47,7 +47,6 @@ graph TD
     Item3["ModuleEvaluation"];
     Item4;
     Item4["export RouteKind"];
-    Item1 -.-> Item1;
     Item2 --> Item1;
 ```
 # Phase 3
@@ -59,7 +58,6 @@ graph TD
     Item3["ModuleEvaluation"];
     Item4;
     Item4["export RouteKind"];
-    Item1 -.-> Item1;
     Item2 --> Item1;
 ```
 # Phase 4
@@ -71,7 +69,6 @@ graph TD
     Item3["ModuleEvaluation"];
     Item4;
     Item4["export RouteKind"];
-    Item1 -.-> Item1;
     Item2 --> Item1;
     Item3 --> Item2;
     Item4 --> Item2;

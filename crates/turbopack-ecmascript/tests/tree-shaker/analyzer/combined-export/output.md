@@ -45,8 +45,6 @@ graph TD
     Item4["export a"];
     Item5;
     Item5["export b"];
-    Item1 -.-> Item1;
-    Item2 -.-> Item2;
 ```
 # Phase 3
 ```mermaid
@@ -59,8 +57,6 @@ graph TD
     Item4["export a"];
     Item5;
     Item5["export b"];
-    Item1 -.-> Item1;
-    Item2 -.-> Item2;
 ```
 # Phase 4
 ```mermaid
@@ -73,15 +69,15 @@ graph TD
     Item4["export a"];
     Item5;
     Item5["export b"];
-    Item1 -.-> Item1;
-    Item2 -.-> Item2;
+    Item4 --> Item1;
+    Item5 --> Item2;
 ```
 # Final
 ```mermaid
 graph TD
     N0["Items: [ItemId(ModuleEvaluation)]"];
-    N1["Items: [ItemId(Export((&quot;a&quot;, #2), &quot;a&quot;))]"];
-    N2["Items: [ItemId(Export((&quot;b&quot;, #2), &quot;b&quot;))]"];
+    N1["Items: [ItemId(Export((&quot;a&quot;, #2), &quot;a&quot;)), ItemId(0, VarDeclarator(0))]"];
+    N2["Items: [ItemId(Export((&quot;b&quot;, #2), &quot;b&quot;)), ItemId(1, VarDeclarator(0))]"];
 ```
 # Entrypoints
 
@@ -107,11 +103,19 @@ graph TD
 ## Part 1
 ```js
 export { a as a };
+const a = "a";
+export { a } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 2
 ```js
 export { b as b };
+const b = "b";
+export { b } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Merged (module eval)
@@ -143,11 +147,19 @@ export { b as b };
 ## Part 1
 ```js
 export { a as a };
+const a = "a";
+export { a } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 2
 ```js
 export { b as b };
+const b = "b";
+export { b } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Merged (module eval)

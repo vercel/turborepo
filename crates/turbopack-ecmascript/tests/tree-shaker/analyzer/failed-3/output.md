@@ -518,7 +518,6 @@ graph TD
     Item2 --> Item1;
     Item3 --> Item1;
     Item3 --> Item2;
-    Item9 -.-> Item9;
     Item9 --> Item1;
     Item9 --> Item2;
     Item9 --> Item3;
@@ -528,7 +527,6 @@ graph TD
     Item9 -.-> Item7;
     Item10 --> Item8;
     Item10 --> Item9;
-    Item10 -.-> Item10;
     Item10 --> Item1;
     Item10 --> Item2;
     Item10 --> Item3;
@@ -545,7 +543,6 @@ graph TD
     Item11 -.-> Item5;
     Item11 -.-> Item4;
     Item11 -.-> Item7;
-    Item12 -.-> Item12;
     Item13 --> Item12;
     Item13 --> Item1;
     Item13 --> Item2;
@@ -883,7 +880,6 @@ graph TD
     Item2 --> Item1;
     Item3 --> Item1;
     Item3 --> Item2;
-    Item9 -.-> Item9;
     Item9 --> Item1;
     Item9 --> Item2;
     Item9 --> Item3;
@@ -893,7 +889,6 @@ graph TD
     Item9 -.-> Item7;
     Item10 --> Item8;
     Item10 --> Item9;
-    Item10 -.-> Item10;
     Item10 --> Item1;
     Item10 --> Item2;
     Item10 --> Item3;
@@ -910,7 +905,6 @@ graph TD
     Item11 -.-> Item5;
     Item11 -.-> Item4;
     Item11 -.-> Item7;
-    Item12 -.-> Item12;
     Item13 --> Item12;
     Item13 --> Item1;
     Item13 --> Item2;
@@ -1252,7 +1246,6 @@ graph TD
     Item2 --> Item1;
     Item3 --> Item1;
     Item3 --> Item2;
-    Item9 -.-> Item9;
     Item9 --> Item1;
     Item9 --> Item2;
     Item9 --> Item3;
@@ -1262,7 +1255,6 @@ graph TD
     Item9 -.-> Item7;
     Item10 --> Item8;
     Item10 --> Item9;
-    Item10 -.-> Item10;
     Item10 --> Item1;
     Item10 --> Item2;
     Item10 --> Item3;
@@ -1279,7 +1271,6 @@ graph TD
     Item11 -.-> Item5;
     Item11 -.-> Item4;
     Item11 -.-> Item7;
-    Item12 -.-> Item12;
     Item13 --> Item12;
     Item13 --> Item1;
     Item13 --> Item2;
@@ -1603,16 +1594,46 @@ graph TD
     Item29 --> Item27;
     Item29 --> Item28;
     Item30 --> Item7;
+    Item31 --> Item10;
 ```
 # Final
 ```mermaid
 graph TD
-    N0["Items: [ItemId(ModuleEvaluation), ItemId(0, ImportOfModule), ItemId(0, ImportBinding(0)), ItemId(1, ImportOfModule), ItemId(1, ImportBinding(0)), ItemId(2, ImportOfModule), ItemId(2, ImportBinding(0)), ItemId(4, Normal), ItemId(5, VarDeclarator(0)), ItemId(6, VarDeclarator(0)), ItemId(7, Normal), ItemId(8, VarDeclarator(0)), ItemId(9, Normal), ItemId(10, Normal), ItemId(11, Normal), ItemId(12, Normal), ItemId(13, Normal), ItemId(14, Normal), ItemId(15, Normal), ItemId(16, Normal), ItemId(17, Normal), ItemId(18, Normal), ItemId(19, Normal), ItemId(20, Normal), ItemId(21, Normal), ItemId(22, Normal), ItemId(23, Normal), ItemId(24, Normal)]"];
+    N0["Items: [ItemId(ModuleEvaluation), ItemId(0, ImportBinding(0)), ItemId(1, ImportBinding(0)), ItemId(2, ImportBinding(0)), ItemId(7, Normal), ItemId(8, VarDeclarator(0)), ItemId(9, Normal), ItemId(10, Normal), ItemId(11, Normal), ItemId(12, Normal), ItemId(13, Normal), ItemId(14, Normal), ItemId(15, Normal), ItemId(16, Normal), ItemId(17, Normal), ItemId(18, Normal), ItemId(19, Normal), ItemId(20, Normal), ItemId(21, Normal), ItemId(22, Normal), ItemId(23, Normal), ItemId(24, Normal)]"];
     N1["Items: [ItemId(Export((&quot;structuredError&quot;, #2), &quot;structuredError&quot;))]"];
     N2["Items: [ItemId(Export((&quot;IPC&quot;, #2), &quot;IPC&quot;))]"];
-    N3["Items: [ItemId(1, ImportBinding(0)), ItemId(2, ImportBinding(0)), ItemId(3, Normal)]"];
+    N3["Items: [ItemId(0, ImportOfModule)]"];
+    N4["Items: [ItemId(1, ImportOfModule)]"];
+    N5["Items: [ItemId(2, ImportOfModule)]"];
+    N6["Items: [ItemId(1, ImportBinding(0)), ItemId(2, ImportBinding(0)), ItemId(3, Normal)]"];
+    N7["Items: [ItemId(0, ImportBinding(0)), ItemId(4, Normal)]"];
+    N8["Items: [ItemId(0, ImportBinding(0)), ItemId(1, ImportBinding(0)), ItemId(2, ImportBinding(0)), ItemId(5, VarDeclarator(0))]"];
+    N9["Items: [ItemId(0, ImportBinding(0)), ItemId(1, ImportBinding(0)), ItemId(2, ImportBinding(0)), ItemId(6, VarDeclarator(0))]"];
     N0 --> N3;
-    N1 --> N3;
+    N0 --> N4;
+    N0 --> N5;
+    N0 --> N8;
+    N0 --> N9;
+    N0 --> N6;
+    N1 --> N6;
+    N2 --> N9;
+    N4 --> N3;
+    N5 --> N3;
+    N5 --> N4;
+    N6 --> N9;
+    N7 --> N9;
+    N7 --> N6;
+    N8 --> N3;
+    N8 --> N4;
+    N8 --> N5;
+    N8 --> N9;
+    N8 --> N6;
+    N9 --> N7;
+    N9 --> N8;
+    N9 --> N3;
+    N9 --> N4;
+    N9 --> N5;
+    N9 --> N6;
 ```
 # Entrypoints
 
@@ -1632,144 +1653,28 @@ graph TD
 # Modules (dev)
 ## Part 0
 ```js
-import { structuredError } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 8
+};
+import { IPC } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 6
+};
 "module evaluation";
-import "node:net";
 import { createConnection } from "node:net";
-import "../compiled/stacktrace-parser";
 import { parse as parseStackTrace } from "../compiled/stacktrace-parser";
-import "./error";
 import { getProperError } from "./error";
-function createIpc(port) {
-    const socket = createConnection(port, "127.0.0.1");
-    const packetQueue = [];
-    const recvPromiseResolveQueue = [];
-    function pushPacket(packet) {
-        const recvPromiseResolve = recvPromiseResolveQueue.shift();
-        if (recvPromiseResolve != null) {
-            recvPromiseResolve(JSON.parse(packet.toString("utf8")));
-        } else {
-            packetQueue.push(packet);
-        }
-    }
-    let state = {
-        type: "waiting"
-    };
-    let buffer = Buffer.alloc(0);
-    socket.once("connect", ()=>{
-        socket.on("data", (chunk)=>{
-            buffer = Buffer.concat([
-                buffer,
-                chunk
-            ]);
-            loop: while(true){
-                switch(state.type){
-                    case "waiting":
-                        {
-                            if (buffer.length >= 4) {
-                                const length = buffer.readUInt32BE(0);
-                                buffer = buffer.subarray(4);
-                                state = {
-                                    type: "packet",
-                                    length
-                                };
-                            } else {
-                                break loop;
-                            }
-                            break;
-                        }
-                    case "packet":
-                        {
-                            if (buffer.length >= state.length) {
-                                const packet = buffer.subarray(0, state.length);
-                                buffer = buffer.subarray(state.length);
-                                state = {
-                                    type: "waiting"
-                                };
-                                pushPacket(packet);
-                            } else {
-                                break loop;
-                            }
-                            break;
-                        }
-                }
-            }
-        });
-    });
-    socket.once("close", ()=>{
-        process.exit(0);
-    });
-    function send(message) {
-        const packet = Buffer.from(JSON.stringify(message), "utf8");
-        const length = Buffer.alloc(4);
-        length.writeUInt32BE(packet.length);
-        socket.write(length);
-        return new Promise((resolve, reject)=>{
-            socket.write(packet, (err)=>{
-                process.stderr.write(`TURBOPACK_OUTPUT_D\n`);
-                process.stdout.write(`TURBOPACK_OUTPUT_D\n`);
-                if (err != null) {
-                    reject(err);
-                } else {
-                    resolve();
-                }
-            });
-        });
-    }
-    function sendReady() {
-        const length = Buffer.from([
-            0,
-            0,
-            0,
-            0
-        ]);
-        return new Promise((resolve, reject)=>{
-            socket.write(length, (err)=>{
-                process.stderr.write(`TURBOPACK_OUTPUT_D\n`);
-                process.stdout.write(`TURBOPACK_OUTPUT_D\n`);
-                if (err != null) {
-                    reject(err);
-                } else {
-                    resolve();
-                }
-            });
-        });
-    }
-    return {
-        async recv () {
-            const packet = packetQueue.shift();
-            if (packet != null) {
-                return JSON.parse(packet.toString("utf8"));
-            }
-            const result = await new Promise((resolve)=>{
-                recvPromiseResolveQueue.push((result)=>{
-                    resolve(result);
-                });
-            });
-            return result;
-        },
-        send (message) {
-            return send(message);
-        },
-        sendReady,
-        async sendError (error) {
-            try {
-                await send({
-                    type: "error",
-                    ...structuredError(error)
-                });
-            } catch (err) {
-                console.error("failed to send error back to rust:", err);
-                process.exit(1);
-            }
-            process.exit(0);
-        }
-    };
-}
-const PORT = process.argv[2];
-const IPC = createIpc(parseInt(PORT, 10));
 process.on("uncaughtException", (err)=>{
     IPC.sendError(err);
 });
@@ -1803,15 +1708,6 @@ improveConsole("timeEnd", "stdout", true);
 improveConsole("timeLog", "stdout", true);
 improveConsole("timeStamp", "stdout", true);
 improveConsole("assert", "stderr", true);
-export { createIpc } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { PORT } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { IPC } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 export { improveConsole } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -1820,18 +1716,48 @@ export { improveConsole } from "__TURBOPACK_VAR__" assert {
 ## Part 1
 ```js
 import { structuredError } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
+    __turbopack_part__: 6
 };
 export { structuredError };
 
 ```
 ## Part 2
 ```js
+import { IPC } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
+};
 export { IPC };
 
 ```
 ## Part 3
 ```js
+import "node:net";
+
+```
+## Part 4
+```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
+import "../compiled/stacktrace-parser";
+
+```
+## Part 5
+```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
+import "./error";
+
+```
+## Part 6
+```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
+};
 import { parse as parseStackTrace } from "../compiled/stacktrace-parser";
 import { getProperError } from "./error";
 function structuredError(e) {
@@ -1847,18 +1773,15 @@ export { structuredError } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
-## Merged (module eval)
+## Part 7
 ```js
-import { structuredError } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
 };
-import "node:net";
+import { structuredError } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 6
+};
 import { createConnection } from "node:net";
-import "../compiled/stacktrace-parser";
-import { parse as parseStackTrace } from "../compiled/stacktrace-parser";
-import "./error";
-import { getProperError } from "./error";
-"module evaluation";
 function createIpc(port) {
     const socket = createConnection(port, "127.0.0.1");
     const packetQueue = [];
@@ -1985,8 +1908,90 @@ function createIpc(port) {
         }
     };
 }
+export { createIpc } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+
+```
+## Part 8
+```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 6
+};
+import { createConnection } from "node:net";
+import { parse as parseStackTrace } from "../compiled/stacktrace-parser";
+import { getProperError } from "./error";
 const PORT = process.argv[2];
+export { PORT } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+
+```
+## Part 9
+```js
+import { createIpc } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
+};
+import { PORT } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 8
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 6
+};
+import { createConnection } from "node:net";
+import { parse as parseStackTrace } from "../compiled/stacktrace-parser";
+import { getProperError } from "./error";
 const IPC = createIpc(parseInt(PORT, 10));
+export { IPC } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+
+```
+## Merged (module eval)
+```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 8
+};
+import { IPC } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 6
+};
+import { createConnection } from "node:net";
+import { parse as parseStackTrace } from "../compiled/stacktrace-parser";
+import { getProperError } from "./error";
+"module evaluation";
 process.on("uncaughtException", (err)=>{
     IPC.sendError(err);
 });
@@ -2020,15 +2025,6 @@ improveConsole("timeEnd", "stdout", true);
 improveConsole("timeLog", "stdout", true);
 improveConsole("timeStamp", "stdout", true);
 improveConsole("assert", "stderr", true);
-export { createIpc } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { PORT } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { IPC } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 export { improveConsole } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -2052,142 +2048,22 @@ export { improveConsole } from "__TURBOPACK_VAR__" assert {
 # Modules (prod)
 ## Part 0
 ```js
-import { structuredError } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 8
+};
+import { IPC } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
+};
 "module evaluation";
-import "node:net";
-import { createConnection } from "node:net";
-import "../compiled/stacktrace-parser";
-import "./error";
-function createIpc(port) {
-    const socket = createConnection(port, "127.0.0.1");
-    const packetQueue = [];
-    const recvPromiseResolveQueue = [];
-    function pushPacket(packet) {
-        const recvPromiseResolve = recvPromiseResolveQueue.shift();
-        if (recvPromiseResolve != null) {
-            recvPromiseResolve(JSON.parse(packet.toString("utf8")));
-        } else {
-            packetQueue.push(packet);
-        }
-    }
-    let state = {
-        type: "waiting"
-    };
-    let buffer = Buffer.alloc(0);
-    socket.once("connect", ()=>{
-        socket.on("data", (chunk)=>{
-            buffer = Buffer.concat([
-                buffer,
-                chunk
-            ]);
-            loop: while(true){
-                switch(state.type){
-                    case "waiting":
-                        {
-                            if (buffer.length >= 4) {
-                                const length = buffer.readUInt32BE(0);
-                                buffer = buffer.subarray(4);
-                                state = {
-                                    type: "packet",
-                                    length
-                                };
-                            } else {
-                                break loop;
-                            }
-                            break;
-                        }
-                    case "packet":
-                        {
-                            if (buffer.length >= state.length) {
-                                const packet = buffer.subarray(0, state.length);
-                                buffer = buffer.subarray(state.length);
-                                state = {
-                                    type: "waiting"
-                                };
-                                pushPacket(packet);
-                            } else {
-                                break loop;
-                            }
-                            break;
-                        }
-                }
-            }
-        });
-    });
-    socket.once("close", ()=>{
-        process.exit(0);
-    });
-    function send(message) {
-        const packet = Buffer.from(JSON.stringify(message), "utf8");
-        const length = Buffer.alloc(4);
-        length.writeUInt32BE(packet.length);
-        socket.write(length);
-        return new Promise((resolve, reject)=>{
-            socket.write(packet, (err)=>{
-                process.stderr.write(`TURBOPACK_OUTPUT_D\n`);
-                process.stdout.write(`TURBOPACK_OUTPUT_D\n`);
-                if (err != null) {
-                    reject(err);
-                } else {
-                    resolve();
-                }
-            });
-        });
-    }
-    function sendReady() {
-        const length = Buffer.from([
-            0,
-            0,
-            0,
-            0
-        ]);
-        return new Promise((resolve, reject)=>{
-            socket.write(length, (err)=>{
-                process.stderr.write(`TURBOPACK_OUTPUT_D\n`);
-                process.stdout.write(`TURBOPACK_OUTPUT_D\n`);
-                if (err != null) {
-                    reject(err);
-                } else {
-                    resolve();
-                }
-            });
-        });
-    }
-    return {
-        async recv () {
-            const packet = packetQueue.shift();
-            if (packet != null) {
-                return JSON.parse(packet.toString("utf8"));
-            }
-            const result = await new Promise((resolve)=>{
-                recvPromiseResolveQueue.push((result)=>{
-                    resolve(result);
-                });
-            });
-            return result;
-        },
-        send (message) {
-            return send(message);
-        },
-        sendReady,
-        async sendError (error) {
-            try {
-                await send({
-                    type: "error",
-                    ...structuredError(error)
-                });
-            } catch (err) {
-                console.error("failed to send error back to rust:", err);
-                process.exit(1);
-            }
-            process.exit(0);
-        }
-    };
-}
-const PORT = process.argv[2];
-const IPC = createIpc(parseInt(PORT, 10));
 process.on("uncaughtException", (err)=>{
     IPC.sendError(err);
 });
@@ -2221,15 +2097,6 @@ improveConsole("timeEnd", "stdout", true);
 improveConsole("timeLog", "stdout", true);
 improveConsole("timeStamp", "stdout", true);
 improveConsole("assert", "stderr", true);
-export { createIpc } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { PORT } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { IPC } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 export { improveConsole } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -2238,17 +2105,44 @@ export { improveConsole } from "__TURBOPACK_VAR__" assert {
 ## Part 1
 ```js
 import { structuredError } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
+    __turbopack_part__: 6
 };
 export { structuredError };
 
 ```
 ## Part 2
 ```js
+import { IPC } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
+};
 export { IPC };
 
 ```
 ## Part 3
+```js
+import "node:net";
+
+```
+## Part 4
+```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
+import "../compiled/stacktrace-parser";
+
+```
+## Part 5
+```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
+import "./error";
+
+```
+## Part 6
 ```js
 import { parse as parseStackTrace } from "../compiled/stacktrace-parser";
 import { getProperError } from "./error";
@@ -2265,16 +2159,12 @@ export { structuredError } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
-## Merged (module eval)
+## Part 7
 ```js
 import { structuredError } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
+    __turbopack_part__: 6
 };
-import "node:net";
 import { createConnection } from "node:net";
-import "../compiled/stacktrace-parser";
-import "./error";
-"module evaluation";
 function createIpc(port) {
     const socket = createConnection(port, "127.0.0.1");
     const packetQueue = [];
@@ -2401,8 +2291,69 @@ function createIpc(port) {
         }
     };
 }
+export { createIpc } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+
+```
+## Part 8
+```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
 const PORT = process.argv[2];
+export { PORT } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+
+```
+## Part 9
+```js
+import { createIpc } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
+};
+import { PORT } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 8
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
 const IPC = createIpc(parseInt(PORT, 10));
+export { IPC } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+
+```
+## Merged (module eval)
+```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 8
+};
+import { IPC } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
+};
+"module evaluation";
 process.on("uncaughtException", (err)=>{
     IPC.sendError(err);
 });
@@ -2436,15 +2387,6 @@ improveConsole("timeEnd", "stdout", true);
 improveConsole("timeLog", "stdout", true);
 improveConsole("timeStamp", "stdout", true);
 improveConsole("assert", "stderr", true);
-export { createIpc } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { PORT } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { IPC } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 export { improveConsole } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };

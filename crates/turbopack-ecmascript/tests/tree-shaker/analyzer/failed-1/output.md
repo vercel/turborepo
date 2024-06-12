@@ -158,8 +158,6 @@ graph TD
     Item9["export sendMessage"];
     Item10;
     Item10["export connectHMR"];
-    Item1 -.-> Item1;
-    Item2 -.-> Item2;
 ```
 # Phase 3
 ```mermaid
@@ -178,8 +176,10 @@ graph TD
     Item9["export sendMessage"];
     Item10;
     Item10["export connectHMR"];
-    Item1 -.-> Item1;
-    Item2 -.-> Item2;
+    Item4 --> Item2;
+    Item5 --> Item1;
+    Item6 --> Item1;
+    Item6 --> Item2;
     Item6 --> Item3;
 ```
 # Phase 4
@@ -199,8 +199,10 @@ graph TD
     Item9["export sendMessage"];
     Item10;
     Item10["export connectHMR"];
-    Item1 -.-> Item1;
-    Item2 -.-> Item2;
+    Item4 --> Item2;
+    Item5 --> Item1;
+    Item6 --> Item1;
+    Item6 --> Item2;
     Item6 --> Item3;
     Item8 --> Item4;
     Item9 --> Item5;
@@ -213,6 +215,12 @@ graph TD
     N1["Items: [ItemId(Export((&quot;addMessageListener&quot;, #2), &quot;addMessageListener&quot;)), ItemId(3, Normal)]"];
     N2["Items: [ItemId(Export((&quot;sendMessage&quot;, #2), &quot;sendMessage&quot;)), ItemId(4, Normal)]"];
     N3["Items: [ItemId(Export((&quot;connectHMR&quot;, #2), &quot;connectHMR&quot;)), ItemId(2, Normal), ItemId(5, Normal)]"];
+    N4["Items: [ItemId(0, VarDeclarator(0))]"];
+    N5["Items: [ItemId(1, VarDeclarator(0))]"];
+    N1 --> N5;
+    N2 --> N4;
+    N3 --> N4;
+    N3 --> N5;
 ```
 # Entrypoints
 
@@ -240,6 +248,9 @@ graph TD
 ```
 ## Part 1
 ```js
+import { eventCallbacks } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
 export { addMessageListener };
 function addMessageListener(cb) {
     eventCallbacks.push(cb);
@@ -251,6 +262,9 @@ export { addMessageListener } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 2
 ```js
+import { source } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
 export { sendMessage };
 function sendMessage(data) {
     if (!source || source.readyState !== source.OPEN) return;
@@ -263,6 +277,12 @@ export { sendMessage } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
+import { source } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
+import { eventCallbacks } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
 export { connectHMR };
 function getSocketProtocol(assetPrefix) {
     let protocol = location.protocol;
@@ -316,6 +336,22 @@ export { getSocketProtocol } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 export { connectHMR } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+
+```
+## Part 4
+```js
+let source;
+export { source } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+
+```
+## Part 5
+```js
+const eventCallbacks = [];
+export { eventCallbacks } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 
@@ -351,6 +387,9 @@ export { connectHMR } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 1
 ```js
+import { eventCallbacks } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
 export { addMessageListener };
 function addMessageListener(cb) {
     eventCallbacks.push(cb);
@@ -362,6 +401,9 @@ export { addMessageListener } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 2
 ```js
+import { source } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
 export { sendMessage };
 function sendMessage(data) {
     if (!source || source.readyState !== source.OPEN) return;
@@ -374,6 +416,12 @@ export { sendMessage } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
+import { source } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
+import { eventCallbacks } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
 export { connectHMR };
 function getSocketProtocol(assetPrefix) {
     let protocol = location.protocol;
@@ -427,6 +475,22 @@ export { getSocketProtocol } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 export { connectHMR } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+
+```
+## Part 4
+```js
+let source;
+export { source } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+
+```
+## Part 5
+```js
+const eventCallbacks = [];
+export { eventCallbacks } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 
