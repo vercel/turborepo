@@ -342,41 +342,36 @@ impl DepGraph {
                 let data = data.get(g).unwrap();
 
                 // Emit `export { foo }`
-                for var in data.write_vars.iter() {
-                    if data.var_decls.contains(var) {
-                        dbg!("Exporting", var);
-                        let assertion_prop =
-                            PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
-                                key: quote_ident!("__turbopack_var__").into(),
-                                value: Box::new(true.into()),
-                            })));
+                for var in data.var_decls.iter() {
+                    let assertion_prop =
+                        PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
+                            key: quote_ident!("__turbopack_var__").into(),
+                            value: Box::new(true.into()),
+                        })));
 
-                        chunk
-                            .body
-                            .push(ModuleItem::ModuleDecl(ModuleDecl::ExportNamed(
-                                NamedExport {
+                    chunk
+                        .body
+                        .push(ModuleItem::ModuleDecl(ModuleDecl::ExportNamed(
+                            NamedExport {
+                                span: DUMMY_SP,
+                                specifiers: vec![ExportSpecifier::Named(ExportNamedSpecifier {
                                     span: DUMMY_SP,
-                                    specifiers: vec![ExportSpecifier::Named(
-                                        ExportNamedSpecifier {
-                                            span: DUMMY_SP,
-                                            orig: ModuleExportName::Ident(var.clone().into()),
-                                            exported: None,
-                                            is_type_only: false,
-                                        },
-                                    )],
-                                    src: if cfg!(test) {
-                                        Some(Box::new("__TURBOPACK_VAR__".into()))
-                                    } else {
-                                        None
-                                    },
-                                    type_only: false,
-                                    with: Some(Box::new(ObjectLit {
-                                        span: DUMMY_SP,
-                                        props: vec![assertion_prop],
-                                    })),
+                                    orig: ModuleExportName::Ident(var.clone().into()),
+                                    exported: None,
+                                    is_type_only: false,
+                                })],
+                                src: if cfg!(test) {
+                                    Some(Box::new("__TURBOPACK_VAR__".into()))
+                                } else {
+                                    None
                                 },
-                            )));
-                    }
+                                type_only: false,
+                                with: Some(Box::new(ObjectLit {
+                                    span: DUMMY_SP,
+                                    props: vec![assertion_prop],
+                                })),
+                            },
+                        )));
                 }
             }
 
