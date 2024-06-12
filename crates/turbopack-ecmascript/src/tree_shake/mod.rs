@@ -147,6 +147,14 @@ impl Analyzer<'_> {
                     // (the writes need to be executed before this read)
                     let state = get_var(&self.vars, id);
                     self.g.add_strong_deps(item_id, state.last_writes.iter());
+
+                    if let Some(declarator) = &state.declarator {
+                        if declarator != item_id {
+                            // A read also depends on the declaration.
+                            self.g
+                                .add_strong_deps(item_id, [declarator].iter().copied());
+                        }
+                    }
                 }
 
                 // For each var in WRITE_VARS:
