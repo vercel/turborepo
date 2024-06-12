@@ -210,6 +210,13 @@ jobs:
     runs-on: ubuntu-latest
     name: Turbopack ast-grep lint
     steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: wasm32-unknown-unknown
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
       - name: Set turbopack paths
         run: echo "GITHUB_TURBOPACK_PATHS=$(cargo groups list turbopack | awk '{ print $2 }' | tr '\n' ' ')" >> $GITHUB_ENV
       - name: Checkout
