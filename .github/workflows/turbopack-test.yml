@@ -206,6 +206,7 @@ jobs:
 
   # From https://github.com/ast-grep/action/tree/v1.5/?tab=readme-ov-file#inputs
   ast_grep_lint:
+    needs: [turbopack_rust_check]
     runs-on: ubuntu-latest
     name: Turbopack ast-grep lint
     steps:
@@ -214,7 +215,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: ast-grep lint step
-        uses: wbinnssmith/action@wbinnssmith/paths-schema
+        uses: wbinnssmith/action@wbinnssmith/npm-build
         with:
           paths: ${{ env.GITHUB_TURBOPACK_PATHS }}
           version: 0.23.0

@@ -316,6 +316,7 @@ jobs:
 
   # From https://github.com/ast-grep/action/tree/v1.5/?tab=readme-ov-file#inputs
   ast_grep_lint:
+    needs: [rust_check]
     runs-on: ubuntu-latest
     name: Turborepo ast-grep lint
     steps:
@@ -323,12 +324,10 @@ jobs:
         run: echo "GITHUB_TURBOREPO_PATHS=$(cargo groups list turborepo | awk '{ print $2 }' | tr '\n' ' ')" >> $GITHUB_ENV
       - name: Checkout
         uses: actions/checkout@v4
-      - name: TEST
-        run: echo "$GITHUB_TURBOREPO_PATHS"
       - name: ast-grep lint step
-        uses: wbinnssmith/action@wbinnssmith/paths-schema
+        uses: wbinnssmith/action@wbinnssmith/npm-build
         with:
-          paths: crates
+          paths: ${{ env.GITHUB_TURBOPACK_PATHS }}
           config: sgconfig.yml
           version: 0.23.0
 
