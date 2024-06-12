@@ -23,9 +23,14 @@ fn is_env_var_truthy(env_var: &str) -> Option<bool> {
 
 impl LocalTurboConfig {
     pub fn infer(repo_state: &RepoState) -> Option<Self> {
+        Self::infer_internal(repo_state, is_env_var_truthy(TURBO_DOWNLOAD_LOCAL_ENABLED))
+    }
+
+    // Used for testing when we want to manually set the controlling env var
+    fn infer_internal(repo_state: &RepoState, is_enabled: Option<bool>) -> Option<Self> {
         // TODO: once we have properly communicated this functionality we should make
         // this opt-out.
-        if !is_env_var_truthy(TURBO_DOWNLOAD_LOCAL_ENABLED).unwrap_or(false) {
+        if !is_enabled.unwrap_or(false) {
             debug!("downloading correct local version not enabled");
             return None;
         }
@@ -86,7 +91,7 @@ mod test {
             .unwrap();
 
         assert_eq!(
-            LocalTurboConfig::infer(&repo),
+            LocalTurboConfig::infer_internal(&repo, Some(true)),
             Some(LocalTurboConfig {
                 turbo_version: "2.0.3".into()
             })
@@ -111,7 +116,7 @@ mod test {
             .unwrap();
 
         assert_eq!(
-            LocalTurboConfig::infer(&repo),
+            LocalTurboConfig::infer_internal(&repo, Some(true)),
             Some(LocalTurboConfig {
                 turbo_version: "2.0.3".into()
             })
@@ -136,7 +141,7 @@ mod test {
             package_manager: Err(Error::MissingPackageManager),
         };
 
-        assert_eq!(LocalTurboConfig::infer(&repo), None,);
+        assert_eq!(LocalTurboConfig::infer_internal(&repo, Some(true)), None,);
     }
 
     #[test]
@@ -157,7 +162,7 @@ mod test {
             package_manager: Err(Error::MissingPackageManager),
         };
 
-        assert_eq!(LocalTurboConfig::infer(&repo), None);
+        assert_eq!(LocalTurboConfig::infer_internal(&repo, Some(true)), None);
     }
 
     #[test]
@@ -174,7 +179,7 @@ mod test {
         turbo_json
             .create_with_contents(include_bytes!("../../fixtures/local_config/turbo.v1.json"))
             .unwrap();
-        assert_eq!(LocalTurboConfig::infer(&repo), None);
+        assert_eq!(LocalTurboConfig::infer_internal(&repo, Some(true)), None);
     }
 
     #[test]
@@ -191,7 +196,7 @@ mod test {
         turbo_json
             .create_with_contents(include_bytes!("../../fixtures/local_config/turbo.v2.json"))
             .unwrap();
-        assert_eq!(LocalTurboConfig::infer(&repo), None,);
+        assert_eq!(LocalTurboConfig::infer_internal(&repo, Some(true)), None,);
     }
 
     #[test]
@@ -204,6 +209,6 @@ mod test {
             root_package_json: PackageJson::default(),
             package_manager: Err(Error::MissingPackageManager),
         };
-        assert_eq!(LocalTurboConfig::infer(&repo), None,);
+        assert_eq!(LocalTurboConfig::infer_internal(&repo, Some(true)), None,);
     }
 }
