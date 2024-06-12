@@ -1090,6 +1090,7 @@ impl DepGraph {
                         type_only: false,
                         with: None,
                     })),
+                    read_vars: [name.clone()].into_iter().collect(),
                     export: Some(name.0),
                     ..Default::default()
                 },
