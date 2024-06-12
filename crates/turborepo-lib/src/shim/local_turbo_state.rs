@@ -196,26 +196,19 @@ pub fn turbo_version_has_shim(version: &str) -> bool {
 
 #[cfg(test)]
 mod test {
+    use test_case::test_case;
+
     use super::*;
 
-    #[test]
-    fn test_skip_infer_version_constraint() {
-        let canary = "1.7.0-canary.0";
-        let newer_canary = "1.7.0-canary.1";
-        let newer_minor_canary = "1.7.1-canary.6";
-        let release = "1.7.0";
-        let old = "1.6.3";
-        let old_canary = "1.6.2-canary.1";
-        let new = "1.8.0";
-        let new_major = "2.1.0";
-
-        assert!(turbo_version_has_shim(release));
-        assert!(turbo_version_has_shim(canary));
-        assert!(turbo_version_has_shim(newer_canary));
-        assert!(turbo_version_has_shim(newer_minor_canary));
-        assert!(turbo_version_has_shim(new));
-        assert!(turbo_version_has_shim(new_major));
-        assert!(!turbo_version_has_shim(old));
-        assert!(!turbo_version_has_shim(old_canary));
+    #[test_case("1.7.0-canary.0", true; "canary")]
+    #[test_case("1.7.0-canary.1", true; "newer_canary")]
+    #[test_case("1.7.1-canary.6", true; "newer_minor_canary")]
+    #[test_case("1.7.0", true; "release")]
+    #[test_case("1.6.3", false; "old")]
+    #[test_case("1.6.2-canary.1", false; "old_canary")]
+    #[test_case("1.8.0", true; "new")]
+    #[test_case("2.1.0", true; "new major")]
+    fn test_skip_infer_version_constraint(version: &str, expected: bool) {
+        assert_eq!(turbo_version_has_shim(version), expected);
     }
 }
