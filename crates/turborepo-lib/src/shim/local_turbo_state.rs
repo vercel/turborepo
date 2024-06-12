@@ -5,7 +5,7 @@ use std::{
 
 use camino::Utf8PathBuf;
 use dunce::canonicalize as fs_canonicalize;
-use semver::Version;
+use semver::{Version, VersionReq};
 use serde::Deserialize;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
@@ -185,13 +185,18 @@ impl Default for YarnRc {
 }
 
 pub fn turbo_version_has_shim(version: &str) -> bool {
-    let version = Version::parse(version).unwrap();
-    // only need to check major and minor (this will include canaries)
-    if version.major == 1 {
-        return version.minor >= 7;
+    if let Ok(version) = Version::parse(version) {
+        // only need to check major and minor (this will include canaries)
+        if version.major == 1 {
+            return version.minor >= 7;
+        }
+        version.major > 1
+    } else {
+        // In the case that we don't get passed a valid semver we should avoid a panic.
+        // We shouldn't hit this we introduce back infering package version from schema
+        // or package.json.
+        true
     }
-
-    version.major > 1
 }
 
 #[cfg(test)]
@@ -208,6 +213,10 @@ mod test {
     #[test_case("1.6.2-canary.1", false; "old_canary")]
     #[test_case("1.8.0", true; "new")]
     #[test_case("2.1.0", true; "new major")]
+    #[test_case("*", true; "star")]
+    #[test_case("2.0", true; "version 2 0")]
+    #[test_case("latest", true; "latest")]
+    #[test_case("canary", true; "canary tag")]
     fn test_skip_infer_version_constraint(version: &str, expected: bool) {
         assert_eq!(turbo_version_has_shim(version), expected);
     }
