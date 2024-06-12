@@ -391,6 +391,9 @@ import "module";
 import { upper } from "module";
 let foobarCopy = foobar;
 console.log(foobarCopy);
+export { foobarCopy } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 1
@@ -440,11 +443,17 @@ export { external2 } from "__TURBOPACK_VAR__" assert {
 ## Part 5
 ```js
 let foobar = "foo";
+export { foobar } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 6
 ```js
 const bar = "bar";
+export { bar } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 7
@@ -456,6 +465,9 @@ import { foobar } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
 foobar += bar;
+export { foobar } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 8
@@ -467,6 +479,9 @@ import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
 foobar += "foo";
+export { foobar } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 9
@@ -478,6 +493,9 @@ import { upper } from "module";
 function internal() {
     return upper(foobar);
 }
+export { internal } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Merged (module eval)
@@ -499,6 +517,9 @@ import { upper } from "module";
 "module evaluation";
 let foobarCopy = foobar;
 console.log(foobarCopy);
+export { foobarCopy } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 # Entrypoints
@@ -535,6 +556,9 @@ import "__TURBOPACK_PART__" assert {
 import "module";
 let foobarCopy = foobar;
 console.log(foobarCopy);
+export { foobarCopy } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 1
@@ -563,6 +587,9 @@ function internal() {
 function external1() {
     return internal() + foobar;
 }
+export { internal } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { external1 } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -582,11 +609,17 @@ export { external2 } from "__TURBOPACK_VAR__" assert {
 ## Part 5
 ```js
 let foobar = "foo";
+export { foobar } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 6
 ```js
 const bar = "bar";
+export { bar } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 7
@@ -598,6 +631,9 @@ import { foobar } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
 foobar += bar;
+export { foobar } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 8
@@ -609,6 +645,9 @@ import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
 foobar += "foo";
+export { foobar } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Merged (module eval)
@@ -623,6 +662,9 @@ import "module";
 "module evaluation";
 let foobarCopy = foobar;
 console.log(foobarCopy);
+export { foobarCopy } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 # Entrypoints
@@ -659,6 +701,9 @@ function internal() {
 function external1() {
     return internal() + foobar;
 }
+export { internal } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { external1 } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -698,6 +743,9 @@ function internal() {
 function external1() {
     return internal() + foobar;
 }
+export { internal } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { external1 } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };

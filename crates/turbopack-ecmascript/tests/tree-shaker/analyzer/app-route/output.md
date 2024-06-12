@@ -397,6 +397,12 @@ const routeModule = new AppRouteRouteModule({
     nextConfigOutput,
     userland
 });
+export { routeModule } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { RouteKind } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 1
@@ -465,6 +471,12 @@ const routeModule = new AppRouteRouteModule({
     nextConfigOutput,
     userland
 });
+export { routeModule } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { RouteKind } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 # Entrypoints
@@ -517,6 +529,12 @@ const routeModule = new AppRouteRouteModule({
     nextConfigOutput,
     userland
 });
+export { routeModule } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { RouteKind } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 1
@@ -581,5 +599,11 @@ const routeModule = new AppRouteRouteModule({
     nextConfigOutput,
     userland
 });
+export { routeModule } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { RouteKind } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```

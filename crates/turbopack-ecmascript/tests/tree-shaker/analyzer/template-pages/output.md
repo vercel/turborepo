@@ -761,6 +761,9 @@ import 'VAR_MODULE_APP';
 import 'VAR_USERLAND';
 import * as userland from 'VAR_USERLAND';
 const __TURBOPACK__default__export__ = hoist(userland, 'default');
+export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 1
@@ -835,6 +838,9 @@ import 'VAR_USERLAND';
 import * as userland from 'VAR_USERLAND';
 "module evaluation";
 const __TURBOPACK__default__export__ = hoist(userland, 'default');
+export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 # Entrypoints
@@ -895,6 +901,9 @@ import 'VAR_MODULE_APP';
 import 'VAR_USERLAND';
 import * as userland from 'VAR_USERLAND';
 const __TURBOPACK__default__export__ = hoist(userland, 'default');
+export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 1
@@ -969,5 +978,8 @@ import 'VAR_USERLAND';
 import * as userland from 'VAR_USERLAND';
 "module evaluation";
 const __TURBOPACK__default__export__ = hoist(userland, 'default');
+export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```

@@ -312,6 +312,9 @@ function connectHMR(options) {
     }
     init();
 }
+export { getSocketProtocol } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { connectHMR } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -420,6 +423,9 @@ function connectHMR(options) {
     }
     init();
 }
+export { getSocketProtocol } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { connectHMR } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };

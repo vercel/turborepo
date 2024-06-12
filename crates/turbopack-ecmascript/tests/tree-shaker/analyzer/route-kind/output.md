@@ -119,6 +119,9 @@ export { RouteKind };
 ## Part 2
 ```js
 var RouteKind;
+export { RouteKind } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 3
@@ -132,6 +135,9 @@ import { RouteKind } from "__TURBOPACK_PART__" assert {
     RouteKind["APP_PAGE"] = "APP_PAGE";
     RouteKind["APP_ROUTE"] = "APP_ROUTE";
 })(RouteKind || (RouteKind = {}));
+export { RouteKind } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Merged (module eval)
@@ -174,6 +180,9 @@ export { RouteKind };
 ## Part 2
 ```js
 var RouteKind;
+export { RouteKind } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 3
@@ -187,6 +196,9 @@ import { RouteKind } from "__TURBOPACK_PART__" assert {
     RouteKind["APP_PAGE"] = "APP_PAGE";
     RouteKind["APP_ROUTE"] = "APP_ROUTE";
 })(RouteKind || (RouteKind = {}));
+export { RouteKind } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Merged (module eval)

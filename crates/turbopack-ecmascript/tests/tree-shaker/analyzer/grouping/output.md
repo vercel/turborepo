@@ -280,6 +280,18 @@ x += 9;
 export { x } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
+export { x } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { x } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { x } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { x } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 2
@@ -325,6 +337,18 @@ x += 6;
 x += 7;
 x += 8;
 x += 9;
+export { x } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { x } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { x } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { x } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { x } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };

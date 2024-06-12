@@ -287,6 +287,9 @@ export { b };
 ## Part 4
 ```js
 const order = [];
+export { order } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 5
@@ -295,6 +298,9 @@ import { order } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
 order.push("a");
+export { order } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 6
@@ -303,6 +309,9 @@ import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
 const random = Math.random();
+export { random } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 7
@@ -317,6 +326,9 @@ import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
 order.push("c");
+export { order } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Merged (module eval)
@@ -387,6 +399,9 @@ export { b };
 ## Part 4
 ```js
 const order = [];
+export { order } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 5
@@ -395,6 +410,9 @@ import { order } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
 order.push("a");
+export { order } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 6
@@ -403,6 +421,9 @@ import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
 const random = Math.random();
+export { random } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 7
@@ -417,6 +438,9 @@ import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
 order.push("c");
+export { order } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Merged (module eval)

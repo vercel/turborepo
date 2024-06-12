@@ -1803,6 +1803,18 @@ improveConsole("timeEnd", "stdout", true);
 improveConsole("timeLog", "stdout", true);
 improveConsole("timeStamp", "stdout", true);
 improveConsole("assert", "stderr", true);
+export { createIpc } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { PORT } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { IPC } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { improveConsole } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 1
@@ -1830,6 +1842,9 @@ function structuredError(e) {
         stack: typeof e.stack === "string" ? parseStackTrace(e.stack) : []
     };
 }
+export { structuredError } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Merged (module eval)
@@ -2005,6 +2020,18 @@ improveConsole("timeEnd", "stdout", true);
 improveConsole("timeLog", "stdout", true);
 improveConsole("timeStamp", "stdout", true);
 improveConsole("assert", "stderr", true);
+export { createIpc } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { PORT } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { IPC } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { improveConsole } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 # Entrypoints
@@ -2194,6 +2221,18 @@ improveConsole("timeEnd", "stdout", true);
 improveConsole("timeLog", "stdout", true);
 improveConsole("timeStamp", "stdout", true);
 improveConsole("assert", "stderr", true);
+export { createIpc } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { PORT } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { IPC } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { improveConsole } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 1
@@ -2221,6 +2260,9 @@ function structuredError(e) {
         stack: typeof e.stack === "string" ? parseStackTrace(e.stack) : []
     };
 }
+export { structuredError } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Merged (module eval)
@@ -2394,5 +2436,17 @@ improveConsole("timeEnd", "stdout", true);
 improveConsole("timeLog", "stdout", true);
 improveConsole("timeStamp", "stdout", true);
 improveConsole("assert", "stderr", true);
+export { createIpc } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { PORT } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { IPC } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { improveConsole } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```

@@ -306,6 +306,18 @@ const shared = {
     value3
 };
 console.log(shared);
+export { value } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { value2 } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { value3 } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { shared } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 1
@@ -332,6 +344,18 @@ const shared = {
     value3
 };
 console.log(shared);
+export { value } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { value2 } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { value3 } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { shared } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 # Entrypoints
@@ -364,6 +388,18 @@ const shared = {
     value3
 };
 console.log(shared);
+export { value } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { value2 } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { value3 } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { shared } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 1
@@ -390,5 +426,17 @@ const shared = {
     value3
 };
 console.log(shared);
+export { value } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { value2 } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { value3 } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { shared } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
