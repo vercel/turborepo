@@ -13,17 +13,20 @@ pub struct LocalTurboConfig {
     turbo_version: String,
 }
 
-fn is_env_var_truthy(env_var: &str) -> bool {
-    env::var(env_var).map_or(false, |value| matches!(value.as_str(), "1" | "true"))
+fn is_env_var_truthy(env_var: &str) -> Option<bool> {
+    let value = env::var(env_var).ok()?;
+    match value.as_str() {
+        "1" | "true" => Some(true),
+        "0" | "false" => Some(false),
+        _ => None,
+    }
 }
 
 impl LocalTurboConfig {
     pub fn infer(repo_state: &RepoState) -> Option<Self> {
         // TODO: once we have properly communicated this functionality we should make
         // this opt-out.
-        if !is_env_var_truthy(TURBO_DOWNLOAD_LOCAL_ENABLED)
-            || is_env_var_truthy(TURBO_DOWNLOAD_LOCAL_DISABLED)
-        {
+        if !is_env_var_truthy(TURBO_DOWNLOAD_LOCAL_ENABLED).unwrap_or(false) {
             debug!("downloading correct local version not enabled");
             return None;
         }
