@@ -265,6 +265,7 @@ impl DepGraph {
             for id in group {
                 dbg!(id);
                 let data = data.get(id).unwrap();
+                dbg!(&data.content);
 
                 for var in data.var_decls.iter() {
                     dbg!("Removing", var);
@@ -417,15 +418,15 @@ impl DepGraph {
                 .idx_graph
                 .neighbors_directed(start_ix, petgraph::Direction::Outgoing)
             {
-                let dep_id = graph.graph_ix.get_index(dep_ix as _).unwrap().clone();
+                let dep_id = graph.graph_ix.get_index(dep_ix as _).unwrap();
 
                 if global_done.insert(dep_ix)
-                    || (data.get(&dep_id).map_or(false, |data| data.pure)
+                    || (data.get(dep_id).map_or(false, |data| data.pure)
                         && group_done.insert(dep_ix))
                 {
                     changed = true;
 
-                    group.push(dep_id);
+                    group.push(dep_id.clone());
 
                     add_to_group(graph, data, group, dep_ix, global_done, group_done);
                 }
