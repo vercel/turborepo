@@ -4,7 +4,7 @@ use std::{
 };
 
 use itertools::Itertools;
-use petgraph::visit::{depth_first_search, Reversed};
+use petgraph::visit::{depth_first_search, IntoNodeIdentifiers, Reversed};
 use serde::Serialize;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
@@ -260,6 +260,9 @@ impl PackageGraph {
     pub fn dependencies<'a>(&'a self, node: &PackageNode) -> HashSet<&'a PackageNode> {
         let mut dependencies =
             self.transitive_closure_inner(Some(node), petgraph::Direction::Outgoing);
+        // Add in all root dependencies as they're implied dependencies for every
+        // package in the graph.
+        dependencies.extend(self.root_internal_dependencies().into_iter());
         dependencies.remove(node);
         dependencies
     }
@@ -273,14 +276,18 @@ impl PackageGraph {
     ///
     /// ancestors(c) = {a, b}
     pub fn ancestors(&self, node: &PackageNode) -> HashSet<&PackageNode> {
-        let mut dependents =
-            self.transitive_closure_inner(Some(node), petgraph::Direction::Incoming);
+        // If c is a root dep, then *every* package is an ancestor of this one
+        let mut dependents = if self.root_internal_dependencies().contains(node) {
+            return self.graph.node_weights().into_iter().collect();
+        } else {
+            self.transitive_closure_inner(Some(node), petgraph::Direction::Incoming)
+        };
         dependents.remove(node);
         dependents
     }
 
     pub fn root_internal_package_dependencies(&self) -> HashSet<WorkspacePackage> {
-        let dependencies = self.dependencies(&PackageNode::Workspace(PackageName::Root));
+        let dependencies = self.root_internal_dependencies();
         dependencies
             .into_iter()
             .filter_map(|package| match package {
@@ -299,7 +306,7 @@ impl PackageGraph {
     }
 
     pub fn root_internal_package_dependencies_paths(&self) -> Vec<&AnchoredSystemPath> {
-        let dependencies = self.dependencies(&PackageNode::Workspace(PackageName::Root));
+        let dependencies = self.root_internal_dependencies();
         dependencies
             .into_iter()
             .filter_map(|package| match package {
@@ -311,6 +318,16 @@ impl PackageGraph {
             })
             .sorted()
             .collect()
+    }
+
+    fn root_internal_dependencies(&self) -> HashSet<&PackageNode> {
+        let mut dependencies = self.transitive_closure_inner(
+            Some(&PackageNode::Workspace(PackageName::Root)),
+            petgraph::Direction::Outgoing,
+        );
+        dependencies.remove(&PackageNode::Workspace(PackageName::Root));
+        tracing::debug!("root deps: {dependencies:?}");
+        dependencies
     }
 
     /// Returns the transitive closure of the given nodes in the package
