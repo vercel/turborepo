@@ -204,7 +204,7 @@ impl Analyzer<'_> {
 
                     state
                         .last_writes
-                        .retain(|last_write| !self.g.has_dep(item_id, last_write, false));
+                        .retain(|last_write| !self.g.has_dep(item_id, last_write, true));
 
                     // Drop all writes which are not reachable from this item.
                     //
@@ -234,7 +234,7 @@ impl Analyzer<'_> {
 
                     state
                         .last_reads
-                        .retain(|last_read| !self.g.has_dep(item_id, last_read, false));
+                        .retain(|last_read| !self.g.has_dep(item_id, last_read, true));
                 }
 
                 if item.side_effects {
