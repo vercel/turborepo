@@ -26,7 +26,7 @@ turbo run [tasks] [options] [-- [args passed to tasks]]
 
 ## Options
 
-### --cache-dir \<path>
+### `--cache-dir <path>`
 
 Default: `.turbo/cache`
 
@@ -40,7 +40,7 @@ turbo run build --cache-dir="./my-cache"
   Ensure the directory is in your `.gitignore` when changing it.
 </Callout>
 
-### --concurrency \<number | percentage>
+### `--concurrency <number | percentage>`
 
 Default: `10`
 
@@ -55,7 +55,7 @@ turbo run build --concurrency=50%
 turbo run test --concurrency=5
 ```
 
-### --continue
+### `--continue`
 
 Default: `false`
 
@@ -72,7 +72,7 @@ When `--continue` is `true`, `turbo` will exit with the highest exit code value 
 turbo run build --continue
 ```
 
-### --cwd \<path>
+### `--cwd <path>`
 
 Default: Directory of root `turbo.json`
 
@@ -82,7 +82,7 @@ Set the working directory of the command.
 turbo run build --cwd=./somewhere/else/in/your/repo
 ```
 
-### --dry / --dry-run
+### `--dry / --dry-run`
 
 Instead of executing tasks, display details about the packages and tasks that would be run.
 
@@ -104,7 +104,7 @@ Task details include useful information like (list is non-exhaustive):
 | `dependents`                 | Tasks that must run **after** this task                                |
 | `environmentVariables`       | Lists of environment variables specified in `env` and `passThroughEnv` |
 
-### --env-mode \<option>
+### `--env-mode <option>`
 
 `type: string`
 
@@ -123,7 +123,7 @@ Controls the available environment variables in the task's runtime.
 turbo run build --env-mode=loose
 ```
 
-#### strict
+#### `strict`
 
 Only environment variables specified in the following keys are
 available to the task:
@@ -136,7 +136,7 @@ available to the task:
 If Strict Mode is specified or inferred, **all** tasks are run in `strict` mode,
 regardless of their configuration.
 
-#### loose
+#### `loose`
 
 All environment variables on the machine are made available to the task's runtime.
 
@@ -147,7 +147,7 @@ All environment variables on the machine are made available to the task's runtim
   in `loose` mode.
 </Callout>
 
-### --filter \<string>
+### `--filter <string>`
 
 Specify targets to execute from your repository's graph. Multiple filters can be combined to select distinct sets of targets.
 
@@ -201,7 +201,7 @@ turbo run build --filter=@acme/ui...[HEAD^1]
 turbo run test --filter=@acme/*{./packages/*}[HEAD^1]
 ```
 
-### --force
+### `--force`
 
 Ignore existing cached artifacts and re-execute all tasks.
 
@@ -215,7 +215,7 @@ turbo run build --force
 
 The same behavior can also be set via [the `TURBO_FORCE` environment variable](/repo/docs/reference/system-environment-variables).
 
-### --framework-inference
+### `--framework-inference`
 
 Default: `true`
 
@@ -227,7 +227,7 @@ When `false`, [automatic environment variable inclusion](/repo/docs/crafting-you
 turbo run build --framework-inference=false
 ```
 
-### --global-deps \<file glob>
+### `--global-deps <file glob>`
 
 Specify glob of global filesystem dependencies to be hashed. Useful for `.env` and files in the root directory that impact multiple packages.
 
@@ -242,7 +242,7 @@ turbo run build --global-deps=".env.*" --global-deps=".eslintrc" --global-deps="
   in `turbo.json` to make sure they are always accounted for.
 </Callout>
 
-### --graph \<file type>
+### `--graph <file type>`
 
 Default: `jpg`
 
@@ -262,7 +262,7 @@ turbo run build test lint --graph=my-graph.svg
   and tasks involved.
 </Callout>
 
-### --log-order \<option>
+### `--log-order <option>`
 
 Default: `auto`
 
@@ -280,7 +280,7 @@ turbo run build --log-order=stream
 | `grouped` | Group output by task                      |
 | `auto`    | Turbo decides based on its own heuristics |
 
-### --log-prefix \<option>
+### `--log-prefix <option>`
 
 Default: `auto`
 
@@ -296,7 +296,7 @@ turbo run dev --log-prefix=none
 | `none`   | No prefixes                                 |
 | `auto`   | `turbo` decides based on its own heuristics |
 
-### --no-cache
+### `--no-cache`
 
 Default `false`
 
@@ -306,7 +306,7 @@ Do not cache results of the task.
 turbo run dev --no-cache
 ```
 
-### --no-daemon
+### `--no-daemon`
 
 Default: `false`
 
@@ -314,7 +314,7 @@ Default: `false`
 
 Passing `--no-daemon` instructs `turbo` to avoid using or creating the standalone process.
 
-### --output-logs \<option>
+### `--output-logs <option>`
 
 Default: `full`
 
@@ -332,7 +332,7 @@ turbo run build --output-logs=errors-only
 | `errors-only` | Only show logs from task failures |
 | `none`        | Hides all task logs               |
 
-### --only
+### `--only`
 
 Default: `false`
 
@@ -364,7 +364,7 @@ The command will _only_ execute the `test` tasks in each package. It will not ru
 
 Additionally, `--only` will only run tasks in specified packages, excluding dependencies. For example, `turbo run build --filter=web --only`, will **only** run the `build` script in the `web` package.
 
-### --parallel
+### `--parallel`
 
 Default: `false`
 
@@ -382,7 +382,7 @@ turbo run dev --parallel
   instead.
 </Callout>
 
-### --preflight
+### `--preflight`
 
 Only applicable when Remote Caching is configured. Enables sending a preflight request before every cache artifact and analytics request. The follow-up upload and download will follow redirects.
 
@@ -392,7 +392,7 @@ turbo run build --preflight
 
 The same behavior can also be set via the `TURBO_PREFLIGHT=true` system variable.
 
-### --profile
+### `--profile`
 
 Generates a trace of the run in Chrome Tracing format that you can use to analyze performance.
 
@@ -404,7 +404,7 @@ turbo run build --profile=profile.json -vvv
 
 Profiles can be viewed in a tool like [Perfetto](https://ui.perfetto.dev/).
 
-### --remote-cache-timeout
+### `--remote-cache-timeout`
 
 Default: `30`
 
@@ -414,7 +414,7 @@ Set the timeout for Remote Cache operations in seconds.
 turbo run build --remote-cache-timeout=60
 ```
 
-### --remote-only
+### `--remote-only`
 
 Default: `false`
 
@@ -424,7 +424,7 @@ Ignore the local filesystem cache for all tasks, using Remote Cache for reading 
 turbo run build --remote-only
 ```
 
-### --summarize
+### `--summarize`
 
 Generates a JSON file in `.turbo/runs` containing metadata about the run, including:
 
@@ -442,7 +442,7 @@ This flag can be helpful for debugging to determine things like:
 - What inputs changed between two task runs to produce a cache miss
 - How task timings changed over time
 
-### --token
+### `--token`
 
 A bearer token for Remote Caching. Useful for running in non-interactive shells in combination with the `--team` flag.
 
@@ -459,7 +459,7 @@ This value can also be set using [the `TURBO_TOKEN` system variable](/repo/docs/
   automatically set for you.
 </Callout>
 
-### --team
+### `--team`
 
 The slug of the Remote Cache team. Useful for running in non-interactive shells in combination with the `--token` flag.
 
@@ -470,7 +470,7 @@ turbo run build --team=my-team --token=xxxxxxxxxxxxxxxxx
 
 This value can also be set using [the `TURBO_TEAM` system variable](/repo/docs/reference/system-environment-variables). If both are present, the flag value will override the system variable.
 
-### --verbosity
+### `--verbosity`
 
 To specify log level, use `--verbosity=<num>` or `-v, -vv, -vvv`.
 

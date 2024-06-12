@@ -20,7 +20,7 @@ TypeScript is an excellent tool in monorepos, allowing teams to safely add types
   guidance on this page if you are unable to features from those versions.
 </Callout>
 
-## Sharing tsconfig.json
+## Sharing `tsconfig.json`
 
 You want to build consistency into your TypeScript configurations so that your entire repo can use great defaults and your fellow developers can know what to expect when writing code in the Workspace.
 
@@ -54,7 +54,7 @@ pnpm dlx create-turbo@latest
 </Tab>
 </PackageManagerTabs>
 
-### Use a base tsconfig file
+### Use a base `tsconfig` file
 
 Inside `packages/tsconfig`, we have a few `json` files which represent different ways you might want to configure TypeScript in various packages. The `base.json` file is extended by every other `package.json` in the workspace and looks like this:
 
@@ -216,11 +216,11 @@ Then, run your task using `turbo check-types`.
 
 ## Best practices
 
-### Use tsc to compile your packages
+### Use `tsc` to compile your packages
 
 For [Internal Packages](/repo/docs/core-concepts/internal-packages), we recommend that you use `tsc` to compile your TypeScript libraries whenever possible. While you can use a bundler, it's not necessary and adds extra complexity to your build process. Additionally, bundling a library can mangle the code before it makes it to your applications' bundlers, causing hard to debug issues.
 
-### Use Node.js subpath imports instead of TypeScript compiler paths
+### Use Node.js subpath imports instead of TypeScript compiler `paths`
 
 It's possible to create absolute imports in your packages using [the TypeScript compiler's `paths` option](https://www.typescriptlang.org/tsconfig#paths). However, [as of TypeScript 5.4](https://devblogs.microsoft.com/typescript/announcing-typescript-5-4/#auto-import-support-for-subpath-imports), you can use [Node.js subpath imports](https://nodejs.org/api/packages.html#imports) instead.
 
@@ -228,7 +228,7 @@ Additionally, Node.js subpath imports are usable in [Just-in-Time Packages](/rep
 
 This strategy brings your Node.js and TypeScript configurations closer together, making your project's configuration simpler.
 
-### You likely don't need a tsconfig.json file in the root of your project
+### You likely don't need a `tsconfig.json` file in the root of your project
 
 As mentioned in the [Structuring your repository guide](/repo/docs/crafting-your-repository/structuring-a-repository#anatomy-of-a-package), you want to treat each package in your tooling as its own unit. This means each package should have its own `tsconfig.json` to use instead of referencing a `tsconfig.json` in the root of your project. Following this practice will make it easier for Turborepo to cache your type checking tasks, simplifying your configuration.
 

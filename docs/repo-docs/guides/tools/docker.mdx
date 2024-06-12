@@ -86,7 +86,7 @@ turbo prune api --docker
 
 Running this command creates a **pruned version of your monorepo** inside an `./out` directory. It only includes workspaces which `api` depends on. It also **prunes the lockfile** so that only the relevant `node_modules` will be downloaded.
 
-### The --docker flag
+### The `--docker` flag
 
 By default, `turbo prune` puts all relevant files inside `./out`. But to optimize caching with Docker, we ideally want to copy the files over in two stages.
 

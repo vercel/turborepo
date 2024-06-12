@@ -83,7 +83,7 @@ Sharing an ESLint config across packages makes their source code more consistent
 
 We've got a package called `@repo/eslint-config`, and two applications, each with their own `.eslintrc.js`.
 
-### Our @repo/eslint-config package
+### Our `@repo/eslint-config` package
 
 Our `@repo/eslint-config` file contains two files, `next.js`, and `library.js`. These are two different ESLint configs, which we can use in different workspaces, depending on our needs.
 
@@ -154,7 +154,7 @@ The `package.json` looks like this:
 
 Note that the ESLint dependencies are all listed here. This is useful, since it means we don't need to re-specify the dependencies inside the apps which import `@repo/eslint-config`.
 
-### How to use the @repo/eslint-config package
+### How to use the `@repo/eslint-config` package
 
 In our `web` app, we first need to add `@repo/eslint-config` as a dependency.
 
@@ -203,7 +203,7 @@ By adding `@repo/eslint-config/next.js` to our `extends` array, we're telling ES
 
 This setup ships by default when you [create a new monorepo](/repo/docs/getting-started/create-new) with `npx create-turbo@latest`. You can also look at [our basic example](https://github.com/vercel/turbo/tree/main/examples/basic) to see a working version.
 
-## Setting up a lint task
+## Setting up a `lint` task
 
 The `package.json` for each package where you'd like to run ESLint should look like this:
 

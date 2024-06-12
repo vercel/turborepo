@@ -71,7 +71,7 @@ Start by cloning your repository. Note that a clone with history to the cloning 
 
 </Step>
 <Step>
-### Run turbo-ignore for the package and task
+### Run `turbo-ignore` for the package and task
 
 By default, `turbo-ignore` will use the `build` task in the current working directory.
 
@@ -137,7 +137,7 @@ For example, your CI could run these two commands to quickly handle quality chec
 
 As your codebase scales, you may find more specific opportunities to optimize your CI - but relying on caching is a great place to start.
 
-### Global turbo in CI
+### Global `turbo` in CI
 
 Using global `turbo` is convenient in CI workflows, allowing you to easily run commands specific to your CI and take advantage of [Automatic Workspace Scoping](/repo/docs/crafting-your-repository/running-tasks#automatic-package-scoping).
 
@@ -145,7 +145,7 @@ However, in some cases, you may be running `turbo` commands or scripts that use 
 
 For this reason, we encourage you to **pin your global installation of `turbo` in CI to the major version in `package.json`** since breaking changes will not be introduced within a major version. You could additionally opt for added stability by pinning an exact version, trading off for maintenance burden to receive bug fixes in patch releases.
 
-### Use turbo run in CI
+### Use `turbo run` in CI
 
 `turbo run` is the most common command you will use when working in your Turborepo so it is aliased to `turbo` for convenience. While this is great for working locally, there are other subcommands for `turbo` like [`turbo prune`](/repo/docs/reference/prune) and [`turbo generate`](/repo/docs/reference/generate).
 
