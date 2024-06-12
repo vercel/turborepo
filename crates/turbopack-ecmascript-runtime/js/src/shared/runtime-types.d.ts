@@ -47,8 +47,9 @@ type AsyncModule = (
   body: (
     handleAsyncDependencies: (
       deps: Dep[]
-    ) => Exports[] | Promise<() => Exports[]>
-  ) => Promise<void>,
+    ) => Exports[] | Promise<() => Exports[]>,
+    asyncResult: (err?: any) => void
+  ) => void,
   hasAwait: boolean
 ) => void;
 
