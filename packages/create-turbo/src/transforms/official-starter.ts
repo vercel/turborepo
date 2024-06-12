@@ -60,13 +60,12 @@ export async function transform(args: TransformInput): TransformResult {
       }
 
       if (packageJsonContent.devDependencies?.turbo) {
-        const shouldUsePreRelease =
-          semverPrerelease(cliPkgJson.version) !== null;
         // if the user specified a turbo version, use that
         if (opts.turboVersion) {
           packageJsonContent.devDependencies.turbo = opts.turboVersion;
           // use the same version as the create-turbo invocation
         } else {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-var-requires, @typescript-eslint/no-unsafe-member-access
           const version = require("../../package.json").version;
           packageJsonContent.devDependencies.turbo = `^${version}`;
         }
