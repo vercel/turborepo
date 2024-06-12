@@ -378,9 +378,6 @@ export { y } from "__TURBOPACK_VAR__" assert {
 ## Part 3
 ```js
 let x = 1;
-export { x } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 4
@@ -400,9 +397,6 @@ import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
 x += 6;
-export { x } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 6
@@ -417,9 +411,6 @@ import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
 x += 7;
-export { x } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 7
@@ -437,9 +428,6 @@ import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
 x += 8;
-export { x } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 8
@@ -460,9 +448,6 @@ import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
 };
 x += 9;
-export { x } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Merged (module eval)
@@ -544,17 +529,11 @@ export { y } from "__TURBOPACK_VAR__" assert {
 ## Part 3
 ```js
 let x = 1;
-export { x } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 4
 ```js
 x = 5;
-export { x } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 5
@@ -566,9 +545,6 @@ import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
 x += 6;
-export { x } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 6
@@ -583,9 +559,6 @@ import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
 x += 7;
-export { x } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 7
@@ -603,9 +576,6 @@ import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
 x += 8;
-export { x } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 8
@@ -626,9 +596,6 @@ import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
 };
 x += 9;
-export { x } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Merged (module eval)
