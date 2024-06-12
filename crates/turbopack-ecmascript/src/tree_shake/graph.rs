@@ -245,8 +245,6 @@ impl DepGraph {
                 shebang: None,
             };
 
-            dbg!(ix);
-
             let mut required_vars = group
                 .iter()
                 .flat_map(|id| {
@@ -260,16 +258,10 @@ impl DepGraph {
                 })
                 .collect::<FxHashSet<_>>();
 
-            dbg!(&required_vars);
-
             for id in group {
-                dbg!(id);
                 let data = data.get(id).unwrap();
-                dbg!(&data.content);
 
                 for var in data.var_decls.iter() {
-                    dbg!("Removing", var);
-
                     required_vars.remove(var);
                 }
             }
@@ -295,7 +287,6 @@ impl DepGraph {
                 .idx_graph
                 .neighbors_directed(ix as u32, petgraph::Direction::Outgoing)
             {
-                dbg!(dep);
                 let mut specifiers = vec![];
 
                 let dep_items = groups.graph_ix.get_index(dep as usize).unwrap();
@@ -305,15 +296,12 @@ impl DepGraph {
 
                     for var in data.var_decls.iter() {
                         if required_vars.remove(var) {
-                            dbg!("Importing", var);
                             specifiers.push(ImportSpecifier::Named(ImportNamedSpecifier {
                                 span: DUMMY_SP,
                                 local: var.clone().into(),
                                 imported: None,
                                 is_type_only: false,
                             }));
-                        } else {
-                            dbg!("Skipping", var);
                         }
                     }
                 }
