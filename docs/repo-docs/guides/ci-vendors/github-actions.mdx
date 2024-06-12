@@ -252,15 +252,15 @@ The following steps exemplify how you could use [actions/cache](https://github.c
 
 <Steps>
 <Step>
-Supply the desired cache output location with the `--cache-dir` flag to your `turbo build` command
+Supply a package.json script that will run tasks using Turbo.
 
-Example `package.json` with `.turbo` as desired output directory:
+Example `package.json` with a `build` script:
 
 ```json title="./package.json"
 {
   "name": "my-turborepo",
   "scripts": {
-    "build": "turbo run build --cache-dir=.turbo"
+    "build": "turbo run build"
   },
   "devDependencies": {
     "turbo": "1.2.5"
