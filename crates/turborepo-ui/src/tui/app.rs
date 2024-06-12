@@ -108,7 +108,6 @@ impl<I: std::io::Write> App<I> {
 pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
     let mut terminal = startup()?;
     let size = terminal.size()?;
-
     // Figure out pane width?
     let task_width_hint = TaskTable::width_hint(tasks.iter().map(|s| s.as_str()));
     // Want to maximize pane width
@@ -158,6 +157,14 @@ fn poll(input_options: InputOptions, receiver: &AppReceiver, deadline: Instant) 
         // Unable to read from stdin, shut down and attempt to clean up
         Err(_) => Some(Event::Stop),
     }
+}
+
+const MIN_HEIGHT: u16 = 10;
+const MIN_WIDTH: u16 = 20;
+
+pub fn terminal_big_enough() -> Result<bool, Error> {
+    let (width, height) = crossterm::terminal::size()?;
+    Ok(width >= MIN_WIDTH && height >= MIN_HEIGHT)
 }
 
 /// Configures terminal for rendering App
