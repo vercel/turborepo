@@ -160,8 +160,12 @@ impl Analyzer<'_> {
                     let state = get_var(&self.vars, id);
                     self.g.add_weak_deps(item_id, state.last_reads.iter());
 
-                    // A write also depends on the declaration.
-                    self.g.add_weak_deps(item_id, state.declarator.iter());
+                    if let Some(declarator) = &state.declarator {
+                        if declarator != item_id {
+                            // A write also depends on the declaration.
+                            self.g.add_weak_deps(item_id, [declarator].iter().copied());
+                        }
+                    }
                 }
 
                 if item.side_effects {
