@@ -1136,13 +1136,13 @@ impl DepGraph {
         }
     }
 
-    pub(crate) fn has_strong_dep(&mut self, id: &ItemId, dep: &ItemId) -> bool {
+    pub(crate) fn has_dep(&mut self, id: &ItemId, dep: &ItemId, only_strong: bool) -> bool {
         let from = self.g.node(id);
         let to = self.g.node(dep);
         self.g
             .idx_graph
             .edge_weight(from, to)
-            .map(|d| matches!(d, Dependency::Strong))
+            .map(|d| matches!(d, Dependency::Strong) || !only_strong)
             .unwrap_or(false)
     }
 

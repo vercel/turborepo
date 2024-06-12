@@ -225,7 +225,7 @@ impl Analyzer<'_> {
 
                     state
                         .last_reads
-                        .retain(|last_read| !self.g.has_strong_dep(item_id, last_read));
+                        .retain(|last_read| !self.g.has_dep(item_id, last_read, false));
                 }
 
                 if item.side_effects {
