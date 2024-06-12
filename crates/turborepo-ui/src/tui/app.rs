@@ -160,6 +160,14 @@ fn poll(input_options: InputOptions, receiver: &AppReceiver, deadline: Instant) 
     }
 }
 
+const MIN_HEIGHT: u16 = 10;
+const MIN_WIDTH: u16 = 20;
+
+pub fn terminal_big_enough() -> Result<bool, Error> {
+    let (width, height) = crossterm::terminal::size()?;
+    Ok(width >= MIN_WIDTH && height >= MIN_HEIGHT)
+}
+
 /// Configures terminal for rendering App
 fn startup() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
     crossterm::terminal::enable_raw_mode()?;

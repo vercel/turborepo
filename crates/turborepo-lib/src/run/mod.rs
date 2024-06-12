@@ -140,13 +140,19 @@ impl Run {
         self.experimental_ui
     }
 
+    pub fn should_start_ui(&self) -> Result<bool, Error> {
+        Ok(self.experimental_ui
+            && self.opts.run_opts.dry_run.is_none()
+            && tui::terminal_big_enough()?)
+    }
+
     pub fn start_experimental_ui(&self) -> Option<(AppSender, JoinHandle<Result<(), tui::Error>>)> {
         // Print prelude here as this needs to happen before the UI is started
         if self.should_print_prelude {
             self.print_run_prelude();
         }
-        // Don't start UI if doing a dry run
-        if !self.experimental_ui || self.opts.run_opts.dry_run.is_some() {
+
+        if !self.should_start_ui().ok()? {
             return None;
         }
 
