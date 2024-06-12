@@ -108,7 +108,6 @@ impl<I: std::io::Write> App<I> {
 pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
     let mut terminal = startup()?;
     let size = terminal.size()?;
-
     // Figure out pane width?
     let task_width_hint = TaskTable::width_hint(tasks.iter().map(|s| s.as_str()));
     // Want to maximize pane width
