@@ -65,12 +65,10 @@ export async function transform(args: TransformInput): TransformResult {
         // if the user specified a turbo version, use that
         if (opts.turboVersion) {
           packageJsonContent.devDependencies.turbo = opts.turboVersion;
-          // if we're using a pre-release version of create-turbo, use turbo canary
-        } else if (shouldUsePreRelease) {
-          packageJsonContent.devDependencies.turbo = "canary";
-          // otherwise, use the latest stable version
+          // use the same version as the create-turbo invocation
         } else {
-          packageJsonContent.devDependencies.turbo = "latest";
+          const version = require("../../package.json").version;
+          packageJsonContent.devDependencies.turbo = `^${version}`;
         }
       }
 
