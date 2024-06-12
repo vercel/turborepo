@@ -65,8 +65,9 @@ export async function transform(args: TransformInput): TransformResult {
           packageJsonContent.devDependencies.turbo = opts.turboVersion;
           // use the same version as the create-turbo invocation
         } else {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-var-requires, @typescript-eslint/no-unsafe-member-access
-          const version = require("../../package.json").version;
+          // eslint-disable-next-line @typescript-eslint/no-var-requires -- Have to go get package.json
+          const version = (require("../../package.json") as { version: string })
+            .version;
           packageJsonContent.devDependencies.turbo = `^${version}`;
         }
       }
