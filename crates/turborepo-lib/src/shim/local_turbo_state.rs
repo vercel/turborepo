@@ -5,7 +5,7 @@ use std::{
 
 use camino::Utf8PathBuf;
 use dunce::canonicalize as fs_canonicalize;
-use semver::{Version, VersionReq};
+use semver::Version;
 use serde::Deserialize;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
