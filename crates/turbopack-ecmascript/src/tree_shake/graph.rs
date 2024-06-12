@@ -343,8 +343,9 @@ impl DepGraph {
 
                 // Emit `export { foo }`
                 for var in data.write_vars.iter() {
-                    if data.var_decls.contains(var)
-                        && (required_vars.remove(var) || data.read_vars.contains(var))
+                    if required_vars.remove(var)
+                        || data.read_vars.contains(var)
+                        || data.var_decls.contains(var)
                     {
                         dbg!("Exporting", var);
                         let assertion_prop =
