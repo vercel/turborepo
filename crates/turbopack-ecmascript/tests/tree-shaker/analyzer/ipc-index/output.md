@@ -1741,6 +1741,15 @@ improveConsole("timeEnd", "stdout", true);
 improveConsole("timeLog", "stdout", true);
 improveConsole("timeStamp", "stdout", true);
 improveConsole("assert", "stderr", true);
+export { createConnection } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { parseStackTrace } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { getProperError } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { createIpc } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -1777,6 +1786,12 @@ function structuredError(e) {
         stack: typeof e.stack === "string" ? parseStackTrace(e.stack) : []
     };
 }
+export { parseStackTrace } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { getProperError } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { structuredError } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -1941,6 +1956,15 @@ improveConsole("timeEnd", "stdout", true);
 improveConsole("timeLog", "stdout", true);
 improveConsole("timeStamp", "stdout", true);
 improveConsole("assert", "stderr", true);
+export { createConnection } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { parseStackTrace } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { getProperError } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { createIpc } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -2125,6 +2149,9 @@ improveConsole("timeEnd", "stdout", true);
 improveConsole("timeLog", "stdout", true);
 improveConsole("timeStamp", "stdout", true);
 improveConsole("assert", "stderr", true);
+export { createConnection } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { createIpc } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -2161,6 +2188,12 @@ function structuredError(e) {
         stack: typeof e.stack === "string" ? parseStackTrace(e.stack) : []
     };
 }
+export { parseStackTrace } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { getProperError } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { structuredError } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -2323,6 +2356,9 @@ improveConsole("timeEnd", "stdout", true);
 improveConsole("timeLog", "stdout", true);
 improveConsole("timeStamp", "stdout", true);
 improveConsole("assert", "stderr", true);
+export { createConnection } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { createIpc } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };

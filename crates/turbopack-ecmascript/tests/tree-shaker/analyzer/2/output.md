@@ -391,6 +391,9 @@ import "module";
 import { upper } from "module";
 console.log(foobarCopy);
 import "other";
+export { upper } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Part 1
@@ -473,6 +476,9 @@ import { upper } from "module";
 function internal() {
     return upper(foobar);
 }
+export { upper } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { internal } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -491,6 +497,9 @@ import { upper } from "module";
 import "other";
 "module evaluation";
 console.log(foobarCopy);
+export { upper } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 # Entrypoints
@@ -537,6 +546,9 @@ function internal() {
     return upper(foobar);
 }
 export { external1 } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { upper } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 export { internal } from "__TURBOPACK_VAR__" assert {

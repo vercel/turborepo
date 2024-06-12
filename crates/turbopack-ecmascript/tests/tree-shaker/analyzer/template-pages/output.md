@@ -761,6 +761,12 @@ import 'VAR_MODULE_APP';
 import 'VAR_USERLAND';
 import * as userland from 'VAR_USERLAND';
 const __TURBOPACK__default__export__ = hoist(userland, 'default');
+export { hoist } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { userland } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -838,6 +844,12 @@ import 'VAR_USERLAND';
 import * as userland from 'VAR_USERLAND';
 "module evaluation";
 const __TURBOPACK__default__export__ = hoist(userland, 'default');
+export { hoist } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { userland } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -901,6 +913,12 @@ import 'VAR_MODULE_APP';
 import 'VAR_USERLAND';
 import * as userland from 'VAR_USERLAND';
 const __TURBOPACK__default__export__ = hoist(userland, 'default');
+export { hoist } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { userland } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -978,6 +996,12 @@ import 'VAR_USERLAND';
 import * as userland from 'VAR_USERLAND';
 "module evaluation";
 const __TURBOPACK__default__export__ = hoist(userland, 'default');
+export { hoist } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { userland } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };

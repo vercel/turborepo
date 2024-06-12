@@ -394,6 +394,18 @@ const routeModule = new AppRouteRouteModule({
     nextConfigOutput,
     userland
 });
+export { AppRouteRouteModule } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { RouteKind } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { _patchFetch } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { userland } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { routeModule } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -434,6 +446,9 @@ function patchFetch() {
         staticGenerationAsyncStorage
     });
 }
+export { _patchFetch } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { patchFetch } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -465,6 +480,18 @@ const routeModule = new AppRouteRouteModule({
     nextConfigOutput,
     userland
 });
+export { AppRouteRouteModule } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { RouteKind } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { _patchFetch } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { userland } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { routeModule } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -520,6 +547,15 @@ const routeModule = new AppRouteRouteModule({
     nextConfigOutput,
     userland
 });
+export { AppRouteRouteModule } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { RouteKind } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { userland } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { routeModule } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -560,6 +596,9 @@ function patchFetch() {
         staticGenerationAsyncStorage
     });
 }
+export { _patchFetch } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { patchFetch } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -587,6 +626,15 @@ const routeModule = new AppRouteRouteModule({
     nextConfigOutput,
     userland
 });
+export { AppRouteRouteModule } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { RouteKind } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { userland } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { routeModule } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };

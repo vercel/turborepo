@@ -634,6 +634,15 @@ function markCurrentScopeAsDynamic(store, expression) {
         }
     }
 }
+export { DynamicServerError } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { StaticGenBailoutError } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { getPathname } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { markCurrentScopeAsDynamic } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -666,6 +675,15 @@ function trackDynamicDataAccessed(store, expression) {
         }
     }
 }
+export { DynamicServerError } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { StaticGenBailoutError } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { getPathname } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { trackDynamicDataAccessed } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -884,6 +902,15 @@ function markCurrentScopeAsDynamic(store, expression) {
         }
     }
 }
+export { DynamicServerError } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { StaticGenBailoutError } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { getPathname } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { markCurrentScopeAsDynamic } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
@@ -916,6 +943,15 @@ function trackDynamicDataAccessed(store, expression) {
         }
     }
 }
+export { DynamicServerError } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { StaticGenBailoutError } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { getPathname } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { trackDynamicDataAccessed } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
