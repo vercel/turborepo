@@ -3,6 +3,7 @@ use std::env;
 use tracing::debug;
 use turborepo_repository::{inference::RepoState, package_manager::PackageManager};
 
+const TURBO_DOWNLOAD_LOCAL_ENABLED: &str = "TURBO_DOWNLOAD_LOCAL_ENABLED";
 const TURBO_DOWNLOAD_LOCAL_DISABLED: &str = "TURBO_DOWNLOAD_LOCAL_DISABLED";
 
 /// Struct containing information about the desired local turbo version
@@ -12,13 +13,18 @@ pub struct LocalTurboConfig {
     turbo_version: String,
 }
 
+fn is_env_var_truthy(env_var: &str) -> bool {
+    env::var(env_var).map_or(false, |value| matches!(value.as_str(), "1" | "true"))
+}
+
 impl LocalTurboConfig {
     pub fn infer(repo_state: &RepoState) -> Option<Self> {
-        // Don't attempt a download if user has opted out
-        if env::var(TURBO_DOWNLOAD_LOCAL_DISABLED)
-            .map_or(false, |disable| matches!(disable.as_str(), "1" | "true"))
+        // TODO: once we have properly communicated this functionality we should make
+        // this opt-out.
+        if !is_env_var_truthy(TURBO_DOWNLOAD_LOCAL_ENABLED)
+            || is_env_var_truthy(TURBO_DOWNLOAD_LOCAL_DISABLED)
         {
-            debug!("downloading correct local version disabled");
+            debug!("downloading correct local version not enabled");
             return None;
         }
         let turbo_version = Self::turbo_version_from_lockfile(repo_state)?;
