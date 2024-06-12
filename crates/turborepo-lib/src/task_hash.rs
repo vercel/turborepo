@@ -474,6 +474,9 @@ impl<'a> TaskHasher<'a> {
                         "LD_LIBRARY_PATH",
                         "DYLD_FALLBACK_LIBRARY_PATH",
                         "LIBPATH",
+                        "COLORTERM",
+                        "TERM",
+                        "TERM_PROGRAM",
                         // Vercel specific
                         "VERCEL_*",
                         "NEXT_*",
