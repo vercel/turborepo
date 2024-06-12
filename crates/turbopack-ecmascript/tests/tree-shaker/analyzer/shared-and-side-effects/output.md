@@ -268,42 +268,13 @@ graph TD
     Item10 --> Item4;
     Item10 --> Item5;
     Item10 --> Item7;
-    Item11 --> Item8;
-    Item12 --> Item9;
 ```
 # Final
 ```mermaid
 graph TD
-    N0["Items: [ItemId(ModuleEvaluation), ItemId(6, Normal)]"];
-    N1["Items: [ItemId(Export((&quot;a&quot;, #2), &quot;a&quot;)), ItemId(7, VarDeclarator(0))]"];
-    N2["Items: [ItemId(Export((&quot;b&quot;, #2), &quot;b&quot;)), ItemId(8, VarDeclarator(0))]"];
-    N3["Items: [ItemId(0, Normal)]"];
-    N4["Items: [ItemId(1, VarDeclarator(0))]"];
-    N5["Items: [ItemId(2, VarDeclarator(0))]"];
-    N6["Items: [ItemId(3, Normal)]"];
-    N7["Items: [ItemId(4, VarDeclarator(0))]"];
-    N8["Items: [ItemId(5, VarDeclarator(0))]"];
-    N0 --> N3;
-    N0 --> N4;
-    N0 --> N5;
-    N0 --> N6;
-    N0 --> N7;
-    N0 --> N8;
-    N1 --> N8;
-    N2 --> N8;
-    N4 --> N3;
-    N5 --> N3;
-    N5 --> N4;
-    N6 --> N3;
-    N6 --> N4;
-    N6 --> N5;
-    N7 --> N3;
-    N7 --> N4;
-    N7 --> N5;
-    N7 --> N6;
-    N8 --> N4;
-    N8 --> N5;
-    N8 --> N7;
+    N0["Items: [ItemId(ModuleEvaluation), ItemId(0, Normal), ItemId(1, VarDeclarator(0)), ItemId(2, VarDeclarator(0)), ItemId(3, Normal), ItemId(4, VarDeclarator(0)), ItemId(5, VarDeclarator(0)), ItemId(6, Normal)]"];
+    N1["Items: [ItemId(Export((&quot;a&quot;, #2), &quot;a&quot;))]"];
+    N2["Items: [ItemId(Export((&quot;b&quot;, #2), &quot;b&quot;))]"];
 ```
 # Entrypoints
 
@@ -323,152 +294,43 @@ graph TD
 # Modules (dev)
 ## Part 0
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
-import { shared } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
 "module evaluation";
-console.log(shared);
-
-```
-## Part 1
-```js
-import { shared } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
-export { a };
-const a = {
-    shared,
-    a: "aaaaaaaaaaa"
-};
-export { a } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-
-```
-## Part 2
-```js
-import { shared } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
-export { b };
-const b = {
-    shared,
-    b: "bbbbbbbbbbb"
-};
-export { b } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-
-```
-## Part 3
-```js
 console.log("Hello");
-
-```
-## Part 4
-```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
 const value = externalFunction();
-
-```
-## Part 5
-```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
 const value2 = externalObject.propertyWithGetter;
-
-```
-## Part 6
-```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
 externalObject.propertyWithSetter = 42;
-
-```
-## Part 7
-```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
-};
 const value3 = externalFunction();
-
-```
-## Part 8
-```js
-import { value } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
-import { value2 } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
-import { value3 } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
 const shared = {
     value,
     value2,
     value3
 };
+console.log(shared);
+
+```
+## Part 1
+```js
+export { a };
+
+```
+## Part 2
+```js
+export { b };
 
 ```
 ## Merged (module eval)
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
-import { shared } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
 "module evaluation";
+console.log("Hello");
+const value = externalFunction();
+const value2 = externalObject.propertyWithGetter;
+externalObject.propertyWithSetter = 42;
+const value3 = externalFunction();
+const shared = {
+    value,
+    value2,
+    value3
+};
 console.log(shared);
 
 ```
@@ -490,152 +352,43 @@ console.log(shared);
 # Modules (prod)
 ## Part 0
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
-import { shared } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
 "module evaluation";
-console.log(shared);
-
-```
-## Part 1
-```js
-import { shared } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
-export { a };
-const a = {
-    shared,
-    a: "aaaaaaaaaaa"
-};
-export { a } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-
-```
-## Part 2
-```js
-import { shared } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
-export { b };
-const b = {
-    shared,
-    b: "bbbbbbbbbbb"
-};
-export { b } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-
-```
-## Part 3
-```js
 console.log("Hello");
-
-```
-## Part 4
-```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
 const value = externalFunction();
-
-```
-## Part 5
-```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
 const value2 = externalObject.propertyWithGetter;
-
-```
-## Part 6
-```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
 externalObject.propertyWithSetter = 42;
-
-```
-## Part 7
-```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
-};
 const value3 = externalFunction();
-
-```
-## Part 8
-```js
-import { value } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
-import { value2 } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
-import { value3 } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
 const shared = {
     value,
     value2,
     value3
 };
+console.log(shared);
+
+```
+## Part 1
+```js
+export { a };
+
+```
+## Part 2
+```js
+export { b };
 
 ```
 ## Merged (module eval)
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
-import { shared } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
 "module evaluation";
+console.log("Hello");
+const value = externalFunction();
+const value2 = externalObject.propertyWithGetter;
+externalObject.propertyWithSetter = 42;
+const value3 = externalFunction();
+const shared = {
+    value,
+    value2,
+    value3
+};
 console.log(shared);
 
 ```

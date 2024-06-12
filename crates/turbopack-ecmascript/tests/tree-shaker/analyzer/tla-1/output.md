@@ -76,7 +76,6 @@ graph TD
     Item6;
     Item6["export effect"];
     Item2 -.-> Item2;
-    Item3 --> Item2;
 ```
 # Phase 4
 ```mermaid
@@ -91,9 +90,7 @@ graph TD
     Item6;
     Item6["export effect"];
     Item2 -.-> Item2;
-    Item3 --> Item2;
     Item4 --> Item1;
-    Item5 --> Item2;
     Item6 --> Item3;
 ```
 # Final
@@ -102,9 +99,6 @@ graph TD
     N0["Items: [ItemId(ModuleEvaluation), ItemId(0, Normal)]"];
     N1["Items: [ItemId(Export((&quot;effects&quot;, #2), &quot;effects&quot;))]"];
     N2["Items: [ItemId(Export((&quot;effect&quot;, #2), &quot;effect&quot;)), ItemId(2, Normal)]"];
-    N3["Items: [ItemId(1, VarDeclarator(0))]"];
-    N1 --> N3;
-    N2 --> N3;
 ```
 # Entrypoints
 
@@ -130,17 +124,11 @@ await Promise.resolve();
 ```
 ## Part 1
 ```js
-import { effects } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
 export { effects };
 
 ```
 ## Part 2
 ```js
-import { effects } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
 export { effect };
 function effect(name) {
     effects.push(name);
@@ -148,11 +136,6 @@ function effect(name) {
 export { effect } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
-
-```
-## Part 3
-```js
-const effects = [];
 
 ```
 ## Merged (module eval)
@@ -185,17 +168,11 @@ await Promise.resolve();
 ```
 ## Part 1
 ```js
-import { effects } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
 export { effects };
 
 ```
 ## Part 2
 ```js
-import { effects } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
 export { effect };
 function effect(name) {
     effects.push(name);
@@ -203,11 +180,6 @@ function effect(name) {
 export { effect } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
-
-```
-## Part 3
-```js
-const effects = [];
 
 ```
 ## Merged (module eval)

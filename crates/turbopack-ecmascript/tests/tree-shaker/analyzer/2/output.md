@@ -219,17 +219,15 @@ graph TD
     Item7 -.-> Item7;
     Item8 --> Item7;
     Item8 --> Item5;
-    Item9 --> Item5;
     Item9 --> Item8;
+    Item9 --> Item5;
     Item9 -.-> Item9;
-    Item10 --> Item5;
     Item10 --> Item8;
+    Item10 --> Item5;
     Item11 --> Item9;
     Item11 --> Item1;
     Item11 --> Item2;
     Item11 -.-> Item13;
-    Item11 -.-> Item5;
-    Item11 -.-> Item8;
     Item11 -.-> Item10;
     Item11 -.-> Item4;
     Item12 --> Item9;
@@ -269,28 +267,22 @@ graph TD
     Item7 -.-> Item7;
     Item8 --> Item7;
     Item8 --> Item5;
-    Item9 --> Item5;
     Item9 --> Item8;
+    Item9 --> Item5;
     Item9 -.-> Item9;
-    Item10 --> Item5;
     Item10 --> Item8;
+    Item10 --> Item5;
     Item11 --> Item9;
     Item11 --> Item1;
     Item11 --> Item2;
     Item11 -.-> Item13;
-    Item11 -.-> Item5;
-    Item11 -.-> Item8;
     Item11 -.-> Item10;
     Item11 -.-> Item4;
     Item12 --> Item9;
     Item12 -.-> Item11;
     Item3 --> Item13;
-    Item3 --> Item5;
-    Item3 --> Item8;
     Item3 --> Item10;
     Item13 --> Item4;
-    Item13 --> Item5;
-    Item13 --> Item8;
     Item13 --> Item10;
     Item14 -.-> Item10;
 ```
@@ -328,38 +320,29 @@ graph TD
     Item7 -.-> Item7;
     Item8 --> Item7;
     Item8 --> Item5;
-    Item9 --> Item5;
     Item9 --> Item8;
+    Item9 --> Item5;
     Item9 -.-> Item9;
-    Item10 --> Item5;
     Item10 --> Item8;
+    Item10 --> Item5;
     Item11 --> Item9;
     Item11 --> Item1;
     Item11 --> Item2;
     Item11 -.-> Item13;
-    Item11 -.-> Item5;
-    Item11 -.-> Item8;
     Item11 -.-> Item10;
     Item11 -.-> Item4;
     Item12 --> Item9;
     Item12 -.-> Item11;
     Item3 --> Item13;
-    Item3 --> Item5;
-    Item3 --> Item8;
     Item3 --> Item10;
     Item13 --> Item4;
-    Item13 --> Item5;
-    Item13 --> Item8;
     Item13 --> Item10;
     Item14 -.-> Item10;
     Item15 --> Item1;
     Item15 --> Item2;
     Item15 --> Item11;
     Item16 --> Item3;
-    Item17 --> Item5;
-    Item17 --> Item8;
     Item17 --> Item10;
-    Item18 --> Item6;
     Item19 --> Item14;
 ```
 # Final
@@ -368,32 +351,25 @@ graph TD
     N0["Items: [ItemId(ModuleEvaluation), ItemId(1, ImportOfModule), ItemId(1, ImportBinding(0)), ItemId(6, VarDeclarator(0)), ItemId(8, Normal), ItemId(12, ImportOfModule)]"];
     N1["Items: [ItemId(Export((&quot;external1&quot;, #2), &quot;external1&quot;)), ItemId(0, Normal)]"];
     N2["Items: [ItemId(Export((&quot;foobar&quot;, #2), &quot;foobar&quot;))]"];
-    N3["Items: [ItemId(Export((&quot;foo&quot;, #2), &quot;foo&quot;)), ItemId(3, VarDeclarator(0))]"];
+    N3["Items: [ItemId(Export((&quot;foo&quot;, #2), &quot;foo&quot;))]"];
     N4["Items: [ItemId(Export((&quot;external2&quot;, #2), &quot;external2&quot;)), ItemId(11, Normal)]"];
     N5["Items: [ItemId(2, VarDeclarator(0))]"];
     N6["Items: [ItemId(4, VarDeclarator(0))]"];
     N7["Items: [ItemId(5, Normal)]"];
     N8["Items: [ItemId(7, Normal)]"];
     N9["Items: [ItemId(1, ImportBinding(0)), ItemId(10, Normal)]"];
-    N0 --> N5;
     N0 --> N7;
+    N0 --> N5;
     N0 --> N9;
     N0 --> N8;
     N1 --> N9;
-    N1 --> N5;
-    N1 --> N7;
     N1 --> N8;
-    N2 --> N5;
-    N2 --> N7;
     N2 --> N8;
-    N3 --> N5;
     N4 --> N8;
     N7 --> N6;
     N7 --> N5;
-    N8 --> N5;
     N8 --> N7;
-    N9 --> N5;
-    N9 --> N7;
+    N8 --> N5;
     N9 --> N8;
 ```
 # Entrypoints
@@ -421,10 +397,10 @@ graph TD
 ## Part 0
 ```js
 import { foobar } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
+    __turbopack_part__: 7
 };
 import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
+    __turbopack_part__: 5
 };
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
@@ -446,12 +422,6 @@ import { internal } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
 };
 import { foobar } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
-import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
 };
 export { external1 };
@@ -466,12 +436,6 @@ export { external1 } from "__TURBOPACK_VAR__" assert {
 ## Part 2
 ```js
 import { foobar } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
-import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
 };
 export { foobar };
@@ -479,14 +443,7 @@ export { foobar };
 ```
 ## Part 3
 ```js
-import { foobar } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
 export { foo };
-const foo = foobar;
-export { foo } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 4
@@ -527,10 +484,10 @@ foobar += bar;
 ## Part 8
 ```js
 import { foobar } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
+    __turbopack_part__: 7
 };
 import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
+    __turbopack_part__: 5
 };
 foobar += "foo";
 
@@ -538,12 +495,6 @@ foobar += "foo";
 ## Part 9
 ```js
 import { foobar } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
-import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
 };
 import { upper } from "module";
@@ -555,10 +506,10 @@ function internal() {
 ## Merged (module eval)
 ```js
 import { foobar } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
+    __turbopack_part__: 7
 };
 import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
+    __turbopack_part__: 5
 };
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
@@ -599,10 +550,10 @@ console.log(foobarCopy);
 ## Part 0
 ```js
 import { foobar } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
+    __turbopack_part__: 7
 };
 import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
+    __turbopack_part__: 5
 };
 "module evaluation";
 import "module";
@@ -614,12 +565,6 @@ import "other";
 ## Part 1
 ```js
 import { foobar } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
-import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
 };
 export { external1 };
@@ -638,12 +583,6 @@ export { external1 } from "__TURBOPACK_VAR__" assert {
 ## Part 2
 ```js
 import { foobar } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
-import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
 };
 export { foobar };
@@ -651,14 +590,7 @@ export { foobar };
 ```
 ## Part 3
 ```js
-import { foobar } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
 export { foo };
-const foo = foobar;
-export { foo } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Part 4
@@ -696,10 +628,10 @@ foobar += bar;
 ## Part 8
 ```js
 import { foobar } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
+    __turbopack_part__: 7
 };
 import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
+    __turbopack_part__: 5
 };
 foobar += "foo";
 
@@ -707,10 +639,10 @@ foobar += "foo";
 ## Merged (module eval)
 ```js
 import { foobar } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
+    __turbopack_part__: 7
 };
 import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
+    __turbopack_part__: 5
 };
 import "module";
 import "other";

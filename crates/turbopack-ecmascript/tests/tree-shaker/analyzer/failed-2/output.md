@@ -450,12 +450,7 @@ graph TD
     Item13 --> Item15;
     Item14 --> Item15;
     Item15 --> Item18;
-    Item15 --> Item5;
-    Item15 --> Item9;
-    Item18 --> Item9;
     Item19 --> Item18;
-    Item19 --> Item5;
-    Item19 --> Item9;
 ```
 # Phase 4
 ```mermaid
@@ -516,12 +511,7 @@ graph TD
     Item13 --> Item15;
     Item14 --> Item15;
     Item15 --> Item18;
-    Item15 --> Item5;
-    Item15 --> Item9;
-    Item18 --> Item9;
     Item19 --> Item18;
-    Item19 --> Item5;
-    Item19 --> Item9;
     Item20 --> Item1;
     Item20 --> Item2;
     Item20 --> Item3;
@@ -546,22 +536,16 @@ graph TD
     N5["Items: [ItemId(Export((&quot;trackDynamicFetch&quot;, #2), &quot;trackDynamicFetch&quot;)), ItemId(9, Normal)]"];
     N6["Items: [ItemId(Export((&quot;usedDynamicAPIs&quot;, #2), &quot;usedDynamicAPIs&quot;)), ItemId(11, Normal)]"];
     N7["Items: [ItemId(Export((&quot;formatDynamicAPIAccesses&quot;, #2), &quot;formatDynamicAPIAccesses&quot;)), ItemId(12, Normal)]"];
-    N8["Items: [ItemId(Export((&quot;createPostponedAbortSignal&quot;, #2), &quot;createPostponedAbortSignal&quot;)), ItemId(0, ImportBinding(0)), ItemId(14, Normal)]"];
-    N9["Items: [ItemId(0, ImportBinding(0)), ItemId(4, VarDeclarator(0))]"];
-    N10["Items: [ItemId(0, ImportBinding(0)), ItemId(10, Normal)]"];
-    N11["Items: [ItemId(13, Normal)]"];
+    N8["Items: [ItemId(Export((&quot;createPostponedAbortSignal&quot;, #2), &quot;createPostponedAbortSignal&quot;)), ItemId(14, Normal)]"];
+    N9["Items: [ItemId(10, Normal)]"];
+    N10["Items: [ItemId(13, Normal)]"];
     N2 --> N3;
-    N2 --> N10;
-    N3 --> N10;
-    N4 --> N10;
-    N5 --> N10;
-    N8 --> N11;
+    N2 --> N9;
+    N3 --> N9;
+    N4 --> N9;
+    N5 --> N9;
     N8 --> N10;
-    N8 --> N9;
     N9 --> N10;
-    N10 --> N11;
-    N10 --> N9;
-    N11 --> N9;
 ```
 # Entrypoints
 
@@ -626,7 +610,7 @@ import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
 import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 10
+    __turbopack_part__: 9
 };
 export { markCurrentScopeAsDynamic };
 import { DynamicServerError } from '../../client/components/hooks-server-context';
@@ -658,7 +642,7 @@ export { markCurrentScopeAsDynamic } from "__TURBOPACK_VAR__" assert {
 ## Part 3
 ```js
 import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 10
+    __turbopack_part__: 9
 };
 export { trackDynamicDataAccessed };
 import { DynamicServerError } from '../../client/components/hooks-server-context';
@@ -690,7 +674,7 @@ export { trackDynamicDataAccessed } from "__TURBOPACK_VAR__" assert {
 ## Part 4
 ```js
 import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 10
+    __turbopack_part__: 9
 };
 export { Postpone };
 function Postpone({ reason, prerenderState, pathname }) {
@@ -704,7 +688,7 @@ export { Postpone } from "__TURBOPACK_VAR__" assert {
 ## Part 5
 ```js
 import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 10
+    __turbopack_part__: 9
 };
 export { trackDynamicFetch };
 function trackDynamicFetch(store, expression) {
@@ -755,16 +739,9 @@ export { formatDynamicAPIAccesses } from "__TURBOPACK_VAR__" assert {
 ## Part 8
 ```js
 import { assertPostpone } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 11
-};
-import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
 };
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
 export { createPostponedAbortSignal };
-import React from 'react';
 function createPostponedAbortSignal(reason) {
     assertPostpone();
     const controller = new AbortController();
@@ -782,22 +759,9 @@ export { createPostponedAbortSignal } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 9
 ```js
-import "__TURBOPACK_PART__" assert {
+import { assertPostpone } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
 };
-import React from 'react';
-const hasPostpone = typeof React.unstable_postpone === 'function';
-
-```
-## Part 10
-```js
-import { assertPostpone } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 11
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
-import React from 'react';
 function postponeWithTracking(prerenderState, expression, pathname) {
     assertPostpone();
     const reason = `Route ${pathname} needs to bail out of prerendering at this point because it used ${expression}. ` + `React throws this special object to indicate where. It should not be caught by ` + `your own try/catch. Learn more: https://nextjs.org/docs/messages/ppr-caught-error`;
@@ -809,11 +773,8 @@ function postponeWithTracking(prerenderState, expression, pathname) {
 }
 
 ```
-## Part 11
+## Part 10
 ```js
-import { hasPostpone } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
 function assertPostpone() {
     if (!hasPostpone) {
         throw new Error(`Invariant: React.unstable_postpone is not defined. This suggests the wrong version of React was loaded. This is a bug in Next.js`);
@@ -893,7 +854,7 @@ import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
 import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 10
+    __turbopack_part__: 9
 };
 export { markCurrentScopeAsDynamic };
 import { DynamicServerError } from '../../client/components/hooks-server-context';
@@ -925,7 +886,7 @@ export { markCurrentScopeAsDynamic } from "__TURBOPACK_VAR__" assert {
 ## Part 3
 ```js
 import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 10
+    __turbopack_part__: 9
 };
 export { trackDynamicDataAccessed };
 import { DynamicServerError } from '../../client/components/hooks-server-context';
@@ -957,7 +918,7 @@ export { trackDynamicDataAccessed } from "__TURBOPACK_VAR__" assert {
 ## Part 4
 ```js
 import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 10
+    __turbopack_part__: 9
 };
 export { Postpone };
 function Postpone({ reason, prerenderState, pathname }) {
@@ -971,7 +932,7 @@ export { Postpone } from "__TURBOPACK_VAR__" assert {
 ## Part 5
 ```js
 import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 10
+    __turbopack_part__: 9
 };
 export { trackDynamicFetch };
 function trackDynamicFetch(store, expression) {
@@ -1022,16 +983,9 @@ export { formatDynamicAPIAccesses } from "__TURBOPACK_VAR__" assert {
 ## Part 8
 ```js
 import { assertPostpone } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 11
-};
-import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
 };
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
 export { createPostponedAbortSignal };
-import React from 'react';
 function createPostponedAbortSignal(reason) {
     assertPostpone();
     const controller = new AbortController();
@@ -1049,22 +1003,9 @@ export { createPostponedAbortSignal } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 9
 ```js
-import "__TURBOPACK_PART__" assert {
+import { assertPostpone } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
 };
-import React from 'react';
-const hasPostpone = typeof React.unstable_postpone === 'function';
-
-```
-## Part 10
-```js
-import { assertPostpone } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 11
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
-import React from 'react';
 function postponeWithTracking(prerenderState, expression, pathname) {
     assertPostpone();
     const reason = `Route ${pathname} needs to bail out of prerendering at this point because it used ${expression}. ` + `React throws this special object to indicate where. It should not be caught by ` + `your own try/catch. Learn more: https://nextjs.org/docs/messages/ppr-caught-error`;
@@ -1076,11 +1017,8 @@ function postponeWithTracking(prerenderState, expression, pathname) {
 }
 
 ```
-## Part 11
+## Part 10
 ```js
-import { hasPostpone } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
 function assertPostpone() {
     if (!hasPostpone) {
         throw new Error(`Invariant: React.unstable_postpone is not defined. This suggests the wrong version of React was loaded. This is a bug in Next.js`);
