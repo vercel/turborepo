@@ -143,6 +143,9 @@ graph TD
     Item3 -.-> Item1;
     Item4 -.-> Item1;
     Item5 -.-> Item1;
+    Item6 --> Item2;
+    Item6 --> Item3;
+    Item6 --> Item4;
     Item6 --> Item5;
     Item6 --> Item1;
     Item7 --> Item6;
@@ -179,6 +182,9 @@ graph TD
     Item3 -.-> Item1;
     Item4 -.-> Item1;
     Item5 -.-> Item1;
+    Item6 --> Item2;
+    Item6 --> Item3;
+    Item6 --> Item4;
     Item6 --> Item5;
     Item6 --> Item1;
     Item7 --> Item6;
@@ -215,6 +221,9 @@ graph TD
     Item3 -.-> Item1;
     Item4 -.-> Item1;
     Item5 -.-> Item1;
+    Item6 --> Item2;
+    Item6 --> Item3;
+    Item6 --> Item4;
     Item6 --> Item5;
     Item6 --> Item1;
     Item7 --> Item6;
@@ -232,7 +241,7 @@ graph TD
 ```mermaid
 graph TD
     N0["Items: [ItemId(ModuleEvaluation)]"];
-    N1["Items: [ItemId(Export((&quot;x&quot;, #2), &quot;x&quot;)), ItemId(0, VarDeclarator(0)), ItemId(4, Normal), ItemId(5, Normal), ItemId(6, Normal), ItemId(7, Normal), ItemId(8, Normal)]"];
+    N1["Items: [ItemId(Export((&quot;x&quot;, #2), &quot;x&quot;)), ItemId(0, VarDeclarator(0)), ItemId(1, Normal), ItemId(2, Normal), ItemId(3, Normal), ItemId(4, Normal), ItemId(5, Normal), ItemId(6, Normal), ItemId(7, Normal), ItemId(8, Normal)]"];
     N2["Items: [ItemId(Export((&quot;y&quot;, #2), &quot;y&quot;))]"];
 ```
 # Entrypoints
@@ -260,6 +269,9 @@ graph TD
 ```js
 export { x as x };
 let x = 1;
+x = 2;
+x = 3;
+x = 4;
 x = 5;
 x += 6;
 x += 7;
@@ -305,6 +317,9 @@ export { y };
 ```js
 export { x as x };
 let x = 1;
+x = 2;
+x = 3;
+x = 4;
 x = 5;
 x += 6;
 x += 7;
