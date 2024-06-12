@@ -303,7 +303,7 @@ impl DepGraph {
                 for dep_item in dep_items {
                     let data = data.get(dep_item).unwrap();
 
-                    for var in data.var_decls.iter().chain(data.write_vars.iter()) {
+                    for var in data.var_decls.iter() {
                         if required_vars.remove(var) {
                             dbg!("Importing", var);
                             specifiers.push(ImportSpecifier::Named(ImportNamedSpecifier {
@@ -343,10 +343,7 @@ impl DepGraph {
 
                 // Emit `export { foo }`
                 for var in data.write_vars.iter() {
-                    if required_vars.remove(var)
-                        || data.read_vars.contains(var)
-                        || data.var_decls.contains(var)
-                    {
+                    if data.var_decls.contains(var) {
                         dbg!("Exporting", var);
                         let assertion_prop =
                             PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
@@ -709,11 +706,12 @@ impl DepGraph {
                         });
 
                         {
-                            let used_ids = ids_used_by_ignoring_nested(
+                            let mut used_ids = ids_used_by_ignoring_nested(
                                 &export.decl,
                                 unresolved_ctxt,
                                 top_level_ctxt,
                             );
+                            used_ids.write.insert(default_var.to_id());
                             let captured_ids =
                                 ids_captured_by(&export.decl, unresolved_ctxt, top_level_ctxt);
                             let data = ItemData {
