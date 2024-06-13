@@ -4,7 +4,7 @@ use std::{
 };
 
 use itertools::Itertools;
-use petgraph::visit::{depth_first_search, IntoNodeIdentifiers, Reversed};
+use petgraph::visit::{depth_first_search, Reversed};
 use serde::Serialize;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
@@ -262,7 +262,7 @@ impl PackageGraph {
             self.transitive_closure_inner(Some(node), petgraph::Direction::Outgoing);
         // Add in all root dependencies as they're implied dependencies for every
         // package in the graph.
-        dependencies.extend(self.root_internal_dependencies().into_iter());
+        dependencies.extend(self.root_internal_dependencies());
         dependencies.remove(node);
         dependencies
     }
