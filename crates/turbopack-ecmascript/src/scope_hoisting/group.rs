@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_recursion::async_recursion;
 use rustc_hash::FxHashSet;
-use turbo_tasks::{vdbg, Vc};
+use turbo_tasks::Vc;
 use turbopack_core::module::Module;
 
 /// Counterpart of `Chunk` in webpack scope hoisting
@@ -21,7 +21,6 @@ struct Workspace {
     dep_graph: Vc<Box<dyn DepGraph>>,
 
     scopes: Vec<Vc<ModuleScope>>,
-    // TODO: Vc does not work here
     done: FxHashSet<Vc<Box<dyn Module>>>,
 }
 
@@ -32,8 +31,6 @@ impl Workspace {
         if !self.done.insert(entry) {
             return Ok(());
         }
-        dbg!(entry);
-        vdbg!(entry);
 
         let modules = self.walk(entry).await?;
 
