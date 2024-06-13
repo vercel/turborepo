@@ -36,7 +36,14 @@ export function transformer({
     });
   }
 
-  const turboJson: SchemaV1 = loadTurboJson(turboConfigPath);
+  const _turboJson: SchemaV1 | Schema = loadTurboJson(turboConfigPath);
+  if ("tasks" in _turboJson) {
+    // Don't do anything
+    log.info("turbo.json already has a tasks key, exiting");
+    return runner.finish();
+  }
+
+  const turboJson = _turboJson as SchemaV1;
   runner.modifyFile({
     filePath: turboConfigPath,
     after: migrateConfig(turboJson),
