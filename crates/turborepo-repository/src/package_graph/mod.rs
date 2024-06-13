@@ -276,7 +276,7 @@ impl PackageGraph {
     ///
     /// ancestors(c) = {a, b}
     pub fn ancestors(&self, node: &PackageNode) -> HashSet<&PackageNode> {
-        // If c is a root dep, then *every* package is an ancestor of this one
+        // If node is a root dep, then *every* package is an ancestor of this one
         let mut dependents = if self.root_internal_dependencies().contains(node) {
             return self.graph.node_weights().collect();
         } else {
@@ -321,12 +321,13 @@ impl PackageGraph {
     }
 
     fn root_internal_dependencies(&self) -> HashSet<&PackageNode> {
+        // We cannot call self.dependencies(&PackageNode::Workspace(PackageName::Root))
+        // as it will infinitely recurse.
         let mut dependencies = self.transitive_closure_inner(
             Some(&PackageNode::Workspace(PackageName::Root)),
             petgraph::Direction::Outgoing,
         );
         dependencies.remove(&PackageNode::Workspace(PackageName::Root));
-        tracing::debug!("root deps: {dependencies:?}");
         dependencies
     }
 
