@@ -1,6 +1,6 @@
 use anyhow::Result;
 use async_recursion::async_recursion;
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 use turbo_tasks::Vc;
 use turbopack_core::module::Module;
 
@@ -17,11 +17,16 @@ pub struct ModuleScope {
     pub modules: Vc<Vec<Vc<Box<dyn Module>>>>,
 }
 
+type Item = Vc<Box<dyn Module>>;
+
 struct Workspace {
     dep_graph: Vc<Box<dyn DepGraph>>,
 
     scopes: Vec<Vc<ModuleScope>>,
-    done: FxHashSet<Vc<Box<dyn Module>>>,
+    done: FxHashSet<Item>,
+
+    /// The modules that are in the same scope, by the start
+    grouped: FxHashMap<Item, FxHashSet<Item>>,
 }
 
 impl Workspace {
@@ -32,7 +37,7 @@ impl Workspace {
             return Ok(());
         }
 
-        let modules = self.walk(entry).await?;
+        let modules = self.walk(entry, entry).await?;
 
         let module_scope = ModuleScope {
             modules: Vc::cell(modules),
@@ -45,7 +50,7 @@ impl Workspace {
     }
 
     #[async_recursion]
-    async fn walk(&mut self, from: Vc<Box<dyn Module>>) -> Result<Vec<Vc<Box<dyn Module>>>> {
+    async fn walk(&mut self, from: Item, start: Item) -> Result<Vec<Item>> {
         let deps = self.dep_graph.deps(from);
         let mut modules = vec![from];
 
@@ -62,7 +67,7 @@ impl Workspace {
             if should_start_scope {
                 self.start_scope(dep).await?;
             } else {
-                modules.extend(self.walk(dep).await?);
+                modules.extend(self.walk(dep, start).await?);
             }
         }
 
@@ -81,6 +86,7 @@ pub async fn split_scopes(
         dep_graph,
         scopes: Default::default(),
         done: Default::default(),
+        grouped: Default::default(),
     };
 
     workspace.start_scope(entry).await?;
