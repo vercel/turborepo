@@ -279,7 +279,26 @@ impl PackageGraph {
         dependents
     }
 
-    pub fn root_internal_package_dependencies(&self) -> Vec<&AnchoredSystemPath> {
+    pub fn root_internal_package_dependencies(&self) -> HashSet<WorkspacePackage> {
+        let dependencies = self.dependencies(&PackageNode::Workspace(PackageName::Root));
+        dependencies
+            .into_iter()
+            .filter_map(|package| match package {
+                PackageNode::Workspace(package) => {
+                    let path = self
+                        .package_dir(package)
+                        .expect("packages in graph should have info");
+                    Some(WorkspacePackage {
+                        name: package.clone(),
+                        path: path.to_owned(),
+                    })
+                }
+                PackageNode::Root => None,
+            })
+            .collect()
+    }
+
+    pub fn root_internal_package_dependencies_paths(&self) -> Vec<&AnchoredSystemPath> {
         let dependencies = self.dependencies(&PackageNode::Workspace(PackageName::Root));
         dependencies
             .into_iter()
@@ -660,6 +679,10 @@ mod test {
 
         fn global_change(&self, _other: &dyn Lockfile) -> bool {
             unreachable!("global change detection not necessary for package graph construction")
+        }
+
+        fn turbo_version(&self) -> Option<String> {
+            None
         }
     }
 

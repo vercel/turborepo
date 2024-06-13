@@ -31,7 +31,9 @@ use turbo_tasks_hash::DeterministicHash;
 
 use self::{availability_info::AvailabilityInfo, available_chunk_items::AvailableChunkItems};
 pub use self::{
-    chunking_context::{ChunkGroupResult, ChunkingContext, ChunkingContextExt, MinifyType},
+    chunking_context::{
+        ChunkGroupResult, ChunkingContext, ChunkingContextExt, EntryChunkGroupResult, MinifyType,
+    },
     data::{ChunkData, ChunkDataOption, ChunksData},
     evaluate::{EvaluatableAsset, EvaluatableAssetExt, EvaluatableAssets},
 };
@@ -352,6 +354,8 @@ async fn graph_node_to_referenced_nodes(
 
             let module_data = reference
                 .resolve_reference()
+                .resolve()
+                .await?
                 .primary_modules()
                 .await?
                 .into_iter()
@@ -420,7 +424,7 @@ async fn graph_node_to_referenced_nodes(
                         ChunkingType::Async => {
                             let chunk_loading =
                                 chunking_context.environment().chunk_loading().await?;
-                            if matches!(*chunk_loading, ChunkLoading::None) {
+                            if matches!(*chunk_loading, ChunkLoading::Edge) {
                                 let chunk_item = chunkable_module
                                     .as_chunk_item(chunking_context)
                                     .resolve()

@@ -6,6 +6,7 @@ import type { DryRun } from "@turbo/types";
 import { getComparison } from "./getComparison";
 import { getTask } from "./getTask";
 import { getWorkspace } from "./getWorkspace";
+import { getTurboVersion } from "./getTurboVersion";
 import { log, info, warn, error } from "./logger";
 import { shouldWarn } from "./errors";
 import type { TurboIgnoreArg, TurboIgnoreOptions } from "./types";
@@ -79,6 +80,9 @@ export function turboIgnore(
     return continueBuild();
   }
 
+  // Find the version of turbo this project uses
+  const turboVersion = getTurboVersion(inputs, root);
+
   // Identify which task to execute from the command-line args
   const task = getTask(inputs);
 
@@ -103,8 +107,10 @@ export function turboIgnore(
     return continueBuild();
   }
 
+  // If we can't find a turbo version in package.json, don't specify a version
+  const turbo = turboVersion ? `turbo@${turboVersion}` : "turbo";
   // Build, and execute the command
-  const command = `npx turbo run ${task} --filter="${workspace}...[${comparison.ref}]" --dry=json`;
+  const command = `npx -y ${turbo} run ${task} --filter="${workspace}...[${comparison.ref}]" --dry=json`;
   info(`Analyzing results of \`${command}\``);
 
   const execOptions: { cwd: string; maxBuffer?: number } = {

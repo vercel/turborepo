@@ -1,6 +1,7 @@
 Setup
   $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/../../../helpers/copy_fixture.sh $(pwd) berry_resolutions ${TESTDIR}/../../fixtures
+  $ export TURBO_GLOBAL_WARNING_DISABLED=1
 
 Prune a
 We expect to no longer have the non-resolved is-odd descriptor and

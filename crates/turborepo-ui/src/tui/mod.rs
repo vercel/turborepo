@@ -7,10 +7,10 @@ mod spinner;
 mod table;
 mod task;
 
-pub use app::run_app;
+pub use app::{run_app, terminal_big_enough};
 use event::{Event, TaskResult};
 pub use handle::{AppReceiver, AppSender, TuiTask};
-use input::input;
+use input::{input, InputOptions};
 pub use pane::TerminalPane;
 pub use table::TaskTable;
 

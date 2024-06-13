@@ -1,4 +1,8 @@
-use std::{collections::HashMap, ffi::OsString, io};
+use std::{
+    collections::HashMap,
+    ffi::{OsStr, OsString},
+    io,
+};
 
 use convert_case::{Case, Casing};
 use miette::{Diagnostic, NamedSource, SourceSpan};
@@ -468,6 +472,18 @@ fn get_override_env_var_config(
         },
     )?;
 
+    let ui = environment
+        .get(OsStr::new("ci"))
+        .or_else(|| environment.get(OsStr::new("no_color")))
+        .and_then(|value| {
+            // If either of these are truthy, then we disable the TUI
+            if value == "true" || value == "1" {
+                Some(false)
+            } else {
+                None
+            }
+        });
+
     let output = ConfigurationOptions {
         api_url: None,
         login_url: None,
@@ -478,7 +494,7 @@ fn get_override_env_var_config(
         signature: None,
         preflight: None,
         enabled: None,
-        ui: None,
+        ui,
         timeout: None,
         upload_timeout: None,
         spaces_id: None,
@@ -799,10 +815,12 @@ mod test {
             "vercel_artifacts_owner".into(),
             vercel_artifacts_owner.into(),
         );
+        env.insert("ci".into(), "1".into());
 
         let config = get_override_env_var_config(&env).unwrap();
         assert_eq!(vercel_artifacts_token, config.token.unwrap());
         assert_eq!(vercel_artifacts_owner, config.team_id.unwrap());
+        assert_eq!(Some(false), config.ui);
     }
 
     #[test]

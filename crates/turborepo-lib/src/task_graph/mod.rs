@@ -39,7 +39,7 @@ impl TaskOutputs {
 }
 
 // Constructed from a RawTaskDefinition
-#[derive(Debug, Deserialize, PartialEq, Clone, Eq)]
+#[derive(Debug, PartialEq, Clone, Eq)]
 pub struct TaskDefinition {
     pub outputs: TaskOutputs,
     pub(crate) cache: bool,

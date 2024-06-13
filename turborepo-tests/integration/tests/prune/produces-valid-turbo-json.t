@@ -16,7 +16,8 @@ Make sure we prune tasks that reference a pruned workspace
       "build": {
         "outputs": []
       }
-    }
+    },
+    "ui": "stream"
   }
 
 Verify turbo can read the produced turbo.json

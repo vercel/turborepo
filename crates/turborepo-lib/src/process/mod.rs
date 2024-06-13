@@ -144,9 +144,10 @@ impl ProcessManager {
 
 #[cfg(test)]
 mod test {
+    use std::time::Instant;
+
     use futures::{stream::FuturesUnordered, StreamExt};
     use test_case::test_case;
-    use time::Instant;
     use tokio::{join, time::sleep};
     use tracing_test::traced_test;
 

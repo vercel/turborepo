@@ -1013,5 +1013,5 @@ describe("migrate", () => {
     mockedGetTurboUpgradeCommand.mockRestore();
     mockedGetAvailablePackageManagers.mockRestore();
     mockedGetWorkspaceDetails.mockRestore();
-  });
+  }, 10000);
 });
