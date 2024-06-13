@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_recursion::async_recursion;
 use rustc_hash::{FxHashMap, FxHashSet};
-use turbo_tasks::Vc;
+use turbo_tasks::{vdbg, Vc};
 use turbopack_core::module::Module;
 
 /// Counterpart of `Chunk` in webpack scope hoisting
@@ -37,6 +37,8 @@ impl Workspace {
             return Ok(());
         }
 
+        self.grouped.entry(entry).or_default().insert(entry);
+
         let modules = self.walk(entry, entry).await?;
 
         let module_scope = ModuleScope {
@@ -55,19 +57,40 @@ impl Workspace {
         let mut modules = vec![from];
 
         for &dep in deps.await?.iter() {
+            let dep = dep.resolve().await?;
             let dependants = self.dep_graph.depandants(dep);
 
-            let should_start_scope = if dependants.await?.len() == 1 {
+            let dependants = {
+                let mut buf = vec![];
+                for dep in dependants.await?.iter() {
+                    buf.push(dep.resolve().await?);
+                }
+                buf
+            };
+
+            let should_start_scope = if dependants.len() == 1 {
                 self.dep_graph.get_edge(from, dep).await?.is_lazy
             } else {
-                // TODO: If all dependants start from the same scope, we can merge them
-                true
+                vdbg!(start);
+                let cur_group = self.grouped.entry(start).or_default();
+                for group_item in cur_group.iter() {
+                    vdbg!(group_item);
+                }
+                // If all dependants start from the same scope, we can merge them
+                !dependants.iter().all(|dep| cur_group.contains(dep))
             };
 
             if should_start_scope {
                 self.start_scope(dep).await?;
             } else {
-                modules.extend(self.walk(dep, start).await?);
+                let v = self.walk(dep, start).await?;
+
+                for vc in v.iter() {
+                    let vc = vc.resolve().await?;
+                    modules.push(vc);
+
+                    self.grouped.entry(start).or_default().insert(vc);
+                }
             }
         }
 
