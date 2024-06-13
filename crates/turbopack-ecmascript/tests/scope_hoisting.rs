@@ -23,6 +23,44 @@ fn register() {
     include!(concat!(env!("OUT_DIR"), "/register_test_scope_hoisting.rs"));
 }
 
+#[tokio::test]
+async fn test_1() -> Result<()> {
+    let result = split(to_num_deps(vec![
+        ("example", vec![("a", false), ("b", false), ("lazy", true)]),
+        ("lazy", vec![("c", false), ("d", false)]),
+        ("a", vec![("shared", false)]),
+        ("c", vec![("shared", false), ("cjs", false)]),
+        ("shared", vec![("shared2", false)]),
+    ]))
+    .await?;
+
+    assert_eq!(result, vec![vec![6, 8], vec![3, 4, 7, 5], vec![0, 1, 2]]);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_2() -> Result<()> {
+    // a => b
+    // a => c
+    // b => d
+    // c => d
+    let result = split(to_num_deps(vec![
+        ("example", vec![("a", false), ("b", false), ("lazy", true)]),
+        ("lazy", vec![("shared", false)]),
+        ("a", vec![("shared", false), ("b", false), ("c", false)]),
+        ("b", vec![("shared", false), ("d", false)]),
+        ("c", vec![("shared", false), ("d", false)]),
+        ("d", vec![("shared", false)]),
+        ("shared", vec![("shared2", false)]),
+    ]))
+    .await?;
+
+    assert_eq!(result, vec![vec![6, 8], vec![3, 4, 7, 5], vec![0, 1, 2]]);
+
+    Ok(())
+}
+
 fn to_num_deps(deps: Vec<(&str, Vec<(&str, bool)>)>) -> Deps {
     let mut map = IndexSet::new();
 
@@ -48,22 +86,6 @@ fn to_num_deps(deps: Vec<(&str, Vec<(&str, bool)>)>) -> Deps {
             )
         })
         .collect()
-}
-
-#[tokio::test]
-async fn test_1() -> Result<()> {
-    let result = split(to_num_deps(vec![
-        ("example", vec![("a", false), ("b", false), ("lazy", true)]),
-        ("lazy", vec![("c", false), ("d", false)]),
-        ("a", vec![("shared", false)]),
-        ("c", vec![("shared", false), ("cjs", false)]),
-        ("shared", vec![("shared2", false)]),
-    ]))
-    .await?;
-
-    assert_eq!(result, vec![vec![6, 8], vec![3, 4, 7, 5], vec![0, 1, 2]]);
-
-    Ok(())
 }
 
 type Deps = Vec<(usize, Vec<(usize, bool)>)>;
