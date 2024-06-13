@@ -278,7 +278,7 @@ impl PackageGraph {
     pub fn ancestors(&self, node: &PackageNode) -> HashSet<&PackageNode> {
         // If c is a root dep, then *every* package is an ancestor of this one
         let mut dependents = if self.root_internal_dependencies().contains(node) {
-            return self.graph.node_weights().into_iter().collect();
+            return self.graph.node_weights().collect();
         } else {
             self.transitive_closure_inner(Some(node), petgraph::Direction::Incoming)
         };
