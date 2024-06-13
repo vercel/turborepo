@@ -473,14 +473,14 @@ impl DepGraph {
                 continue;
             }
 
-            let count = global_done
+            let count_of_startings = global_done
                 .iter()
                 .filter(|&&staring_point| {
                     has_path_connecting(&self.g.idx_graph, staring_point, ix as _, None)
                 })
                 .count();
 
-            if count >= 2 {
+            if count_of_startings >= 2 {
                 groups.push((vec![id.clone()], FxHashSet::default()));
                 global_done.insert(ix as u32);
             }
