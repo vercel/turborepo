@@ -219,7 +219,7 @@ impl<W> Widget for &TerminalPane<W> {
         };
         let screen = task.parser.screen();
         let mut block = Block::default()
-            .borders(Borders::ALL)
+            .borders(Borders::LEFT)
             .title(task.title(task_name))
             .title_bottom(Line::from(FOOTER_TEXT).centered());
         if self.highlight {
