@@ -14,8 +14,8 @@ use turborepo_vt100 as vt100;
 
 use super::{app::Direction, Error};
 
-const FOOTER_TEXT: &str = "Use arrow keys to navigate. Press `Enter` to interact with a task and \
-                           `Ctrl-Z` to stop interacting";
+const FOOTER_TEXT: &str =
+    " Use ↑ ↓ to select task. Press `Enter` to interact and `Ctrl-Z` to stop interacting. ";
 
 pub struct TerminalPane<W> {
     tasks: BTreeMap<String, TerminalOutput<W>>,
