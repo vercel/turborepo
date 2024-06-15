@@ -24,7 +24,7 @@
   ],
   "scripts": {
     "release": "pnpm build && pnpm publish",
-    "test": "jest",
+    "test": "jest --silent=false",
     "build": "tsup",
     "check-types": "tsc --noEmit",
     "lint": "eslint lib/",

@@ -70,6 +70,8 @@ function normalizeCwd(
 function create(context: RuleContextWithOptions): Rule.RuleListener {
   const { options } = context;
 
+  const frameworkInferencePrefixes = ["NEXT_PUBLIC", "REACT_APP"];
+
   const allowList: Array<string> = options[0]?.allowList || [];
   const regexAllowList: Array<RegExp> = [];
   allowList.forEach((allowed) => {
@@ -79,6 +81,10 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
       // log the error, but just move on without this allowList entry
       logger.error(`Unable to convert "${allowed}" to regex`);
     }
+  });
+
+  frameworkInferencePrefixes.forEach((prefix) => {
+    regexAllowList.push(new RegExp(`^${prefix}`));
   });
 
   const cwd = normalizeCwd(
