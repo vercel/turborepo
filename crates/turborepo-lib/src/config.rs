@@ -5,7 +5,7 @@ use std::{
 };
 
 use convert_case::{Case, Casing};
-use miette::{Diagnostic, NamedSource, SourceSpan};
+use miette::{Diagnostic, NamedSource, Result, SourceSpan};
 use serde::Deserialize;
 use struct_iterable::Iterable;
 use thiserror::Error;
@@ -18,17 +18,14 @@ pub use crate::turbo_json::RawTurboJson;
 use crate::{commands::CommandBase, turbo_json};
 
 #[derive(Debug, Error, Diagnostic)]
-#[error("Environment variables should not be prefixed with \"{env_pipeline_delimiter}\"")]
-#[diagnostic(
-    code(invalid_env_prefix),
-    url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
-)]
+#[error("Environment variables shouldn't be prefixed with \"{env_pipeline_delimiter}\"")]
+#[diagnostic(url("{}/messages/invalid-env-prefix", TURBO_SITE))]
 pub struct InvalidEnvPrefixError {
     pub value: String,
     pub key: String,
     #[source_code]
     pub text: NamedSource,
-    #[label("variable with invalid prefix declared here")]
+    #[label("Remove \"{env_pipeline_delimiter}\"")]
     pub span: Option<SourceSpan>,
     pub env_pipeline_delimiter: &'static str,
 }

@@ -1,12 +1,13 @@
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    fmt,
     ops::{Deref, DerefMut},
     sync::Arc,
 };
 
 use biome_deserialize_macros::Deserializable;
 use camino::Utf8Path;
-use miette::{NamedSource, SourceSpan};
+use miette::{Diagnostic, GraphicalReportHandler, GraphicalTheme, NamedSource, Result, SourceSpan};
 use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
 use tracing::debug;
@@ -89,6 +90,37 @@ impl From<&RawRemoteCacheOptions> for ConfigurationOptions {
             enabled: remote_cache_opts.enabled,
             ..Self::default()
         }
+    }
+}
+
+#[derive(Clone)]
+struct CustomReportHandler {
+    inner: GraphicalReportHandler,
+}
+
+impl CustomReportHandler {
+    fn new() -> Self {
+        Self {
+            inner: GraphicalReportHandler::new_themed(GraphicalTheme::unicode()),
+        }
+    }
+}
+
+impl fmt::Debug for CustomReportHandler {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.inner.fmt(f)
+    }
+}
+
+impl miette::ReportHandler for CustomReportHandler {
+    fn debug(&self, diagnostic: &dyn Diagnostic, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.inner.debug(diagnostic, f)?;
+
+        if let Some(url) = diagnostic.url() {
+            writeln!(f, "For more information, visit: {}", url)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -700,6 +732,8 @@ fn gather_env_vars(
     for value in vars {
         let value: Spanned<String> = value.map(|v| v.into());
         if value.starts_with(ENV_PIPELINE_DELIMITER) {
+            let handler = CustomReportHandler::new();
+            miette::set_hook(Box::new(move |_| Box::new(handler.clone()))).unwrap();
             let (span, text) = value.span_and_text("turbo.json");
             // Hard error to help people specify this correctly during migration.
             // TODO: Remove this error after we have run summary.
