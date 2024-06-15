@@ -8,6 +8,7 @@ pub enum Event {
     },
     EndTask {
         task: String,
+        result: TaskResult,
     },
     Status {
         task: String,
@@ -15,9 +16,6 @@ pub enum Event {
     },
     Stop,
     Tick,
-    Log {
-        message: Vec<u8>,
-    },
     Up,
     Down,
     ScrollUp,
@@ -31,6 +29,15 @@ pub enum Event {
     Input {
         bytes: Vec<u8>,
     },
+    UpdateTasks {
+        tasks: Vec<String>,
+    },
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub enum TaskResult {
+    Success,
+    Failure,
 }
 
 #[cfg(test)]

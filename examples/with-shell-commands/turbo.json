@@ -1,9 +1,15 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "pipeline": {
+  "tasks": {
     "build": {
-      "dependsOn": ["prebuild", "^build"],
-      "outputs": ["output-file.txt", "dist/**"]
+      "dependsOn": [
+        "prebuild",
+        "^build"
+      ],
+      "outputs": [
+        "output-file.txt",
+        "dist/**"
+      ]
     },
     "prebuild": {},
     "lint": {},

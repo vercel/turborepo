@@ -6,7 +6,6 @@ mod nft_json;
 use std::{
     collections::{BTreeSet, HashMap},
     env::current_dir,
-    fs,
     future::Future,
     path::{Path, PathBuf},
     pin::Pin,
@@ -23,16 +22,13 @@ use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::mpsc::channel;
 use turbo_tasks::{
-    backend::Backend, util::FormatDuration, TaskId, TransientInstance, TransientValue, TurboTasks,
-    TurboTasksBackendApi, UpdateInfo, Value, Vc,
+    backend::Backend, util::FormatDuration, RcStr, TaskId, TransientInstance, TransientValue,
+    TurboTasks, UpdateInfo, Value, Vc,
 };
 use turbo_tasks_fs::{
     glob::Glob, DirectoryEntry, DiskFileSystem, FileSystem, FileSystemPath, ReadGlobResult,
 };
-use turbo_tasks_memory::{
-    stats::{ReferenceType, Stats},
-    viz, MemoryBackend,
-};
+use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
     emit_asset, emit_with_completion, module_options::ModuleOptionsContext, rebase::RebasedAsset,
     ModuleAssetContext,
@@ -100,10 +96,6 @@ pub struct CommonArgs {
     #[cfg_attr(feature = "cli", clap(flatten))]
     #[cfg_attr(feature = "node-api", serde(default))]
     cache: CacheArgs,
-
-    #[cfg_attr(feature = "cli", clap(short, long))]
-    #[cfg_attr(feature = "node-api", serde(default))]
-    visualize_graph: bool,
 
     #[cfg_attr(feature = "cli", clap(short, long))]
     #[cfg_attr(feature = "node-api", serde(default))]
@@ -196,7 +188,7 @@ impl Args {
 }
 
 async fn create_fs(name: &str, root: &str, watch: bool) -> Result<Vc<Box<dyn FileSystem>>> {
-    let fs = DiskFileSystem::new(name.to_string(), root.to_string(), vec![]);
+    let fs = DiskFileSystem::new(name.into(), root.into(), vec![]);
     if watch {
         fs.await?.start_watching()?;
     } else {
@@ -240,17 +232,17 @@ async fn add_glob_results(
 #[turbo_tasks::function]
 async fn input_to_modules(
     fs: Vc<Box<dyn FileSystem>>,
-    input: Vec<String>,
+    input: Vec<RcStr>,
     exact: bool,
-    process_cwd: Option<String>,
-    context_directory: String,
+    process_cwd: Option<RcStr>,
+    context_directory: RcStr,
     module_options: TransientInstance<ModuleOptionsContext>,
     resolve_options: TransientInstance<ResolveOptionsContext>,
 ) -> Result<Vc<Modules>> {
     let root = fs.root();
     let process_cwd = process_cwd
         .clone()
-        .map(|p| format!("/ROOT{}", p.trim_start_matches(&context_directory)));
+        .map(|p| format!("/ROOT{}", p.trim_start_matches(&*context_directory)).into());
 
     let asset_context: Vc<Box<dyn AssetContext>> = Vc::upcast(create_module_asset(
         root,
@@ -291,7 +283,7 @@ fn process_context(dir: &Path, context_directory: Option<&String>) -> Result<Str
         .to_string())
 }
 
-fn make_relative_path(dir: &Path, context_directory: &str, input: &str) -> Result<String> {
+fn make_relative_path(dir: &Path, context_directory: &str, input: &str) -> Result<RcStr> {
     let mut input = PathBuf::from(input);
     if !input.is_absolute() {
         input = dir.join(input);
@@ -307,10 +299,11 @@ fn make_relative_path(dir: &Path, context_directory: &str, input: &str) -> Resul
     Ok(input
         .to_str()
         .ok_or_else(|| anyhow!("input contains invalid characters"))?
-        .replace('\\', "/"))
+        .replace('\\', "/")
+        .into())
 }
 
-fn process_input(dir: &Path, context_directory: &str, input: &[String]) -> Result<Vec<String>> {
+fn process_input(dir: &Path, context_directory: &str, input: &[String]) -> Result<Vec<RcStr>> {
     input
         .iter()
         .map(|input| make_relative_path(dir, context_directory, input))
@@ -322,10 +315,9 @@ pub async fn start(
     turbo_tasks: Option<&Arc<TurboTasks<MemoryBackend>>>,
     module_options: Option<ModuleOptionsContext>,
     resolve_options: Option<ResolveOptionsContext>,
-) -> Result<Vec<String>> {
+) -> Result<Vec<RcStr>> {
     register();
     let &CommonArgs {
-        visualize_graph,
         memory_limit,
         #[cfg(feature = "persistent_cache")]
             cache: CacheArgs {
@@ -390,22 +382,7 @@ pub async fn start(
                 TurboTasks::new(MemoryBackend::new(memory_limit.unwrap_or(usize::MAX)))
             })
         },
-        |tt, root_task, _| async move {
-            if visualize_graph {
-                let mut stats = Stats::new();
-                let b = tt.backend();
-                b.with_all_cached_tasks(|task| {
-                    stats.add_id(b, task);
-                });
-                stats.add_id(b, root_task);
-                // stats.merge_resolve();
-                let tree = stats.treeify(ReferenceType::Child);
-                let graph =
-                    viz::graph::visualize_stats_tree(tree, ReferenceType::Child, tt.stats_type());
-                fs::write("graph.html", viz::graph::wrap_html(&graph)).unwrap();
-                println!("graph.html written");
-            }
-        },
+        |_, _, _| async move {},
         module_options,
         resolve_options,
     )
@@ -418,7 +395,7 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
     final_finish: impl FnOnce(Arc<TurboTasks<B>>, TaskId, Duration) -> F,
     module_options: Option<ModuleOptionsContext>,
     resolve_options: Option<ResolveOptionsContext>,
-) -> Result<Vec<String>> {
+) -> Result<Vec<RcStr>> {
     let &CommonArgs {
         watch,
         show_all,
@@ -518,7 +495,7 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
             if has_return_value {
                 let output_read_ref = output.await?;
                 let output_iter = output_read_ref.iter().cloned();
-                sender.send(output_iter.collect::<Vec<String>>()).await?;
+                sender.send(output_iter.collect::<Vec<RcStr>>()).await?;
                 drop(sender);
             }
             Ok::<Vc<()>, _>(Default::default())
@@ -539,7 +516,7 @@ async fn main_operation(
     args: TransientInstance<Args>,
     module_options: TransientInstance<ModuleOptionsContext>,
     resolve_options: TransientInstance<ResolveOptionsContext>,
-) -> Result<Vc<Vec<String>>> {
+) -> Result<Vc<Vec<RcStr>>> {
     let dir = current_dir.into_value();
     let args = &*args;
     let &CommonArgs {
@@ -550,8 +527,11 @@ async fn main_operation(
         ref process_cwd,
         ..
     } = args.common();
-    let context_directory = process_context(&dir, context_directory.as_ref()).unwrap();
+    let context_directory: RcStr = process_context(&dir, context_directory.as_ref())
+        .unwrap()
+        .into();
     let fs = create_fs("context directory", &context_directory, watch).await?;
+    let process_cwd = process_cwd.clone().map(RcStr::from);
 
     match *args {
         Args::Print { common: _ } => {
@@ -573,7 +553,7 @@ async fn main_operation(
                     .await?;
                 for asset in set.await?.iter() {
                     let path = asset.ident().path().await?;
-                    result.insert(path.path.to_string());
+                    result.insert(RcStr::from(&*path.path));
                 }
             }
 
@@ -644,7 +624,7 @@ async fn main_operation(
 #[turbo_tasks::function]
 async fn create_module_asset(
     root: Vc<FileSystemPath>,
-    process_cwd: Option<String>,
+    process_cwd: Option<RcStr>,
     module_options: TransientInstance<ModuleOptionsContext>,
     resolve_options: TransientInstance<ResolveOptionsContext>,
 ) -> Result<Vc<ModuleAssetContext>> {
@@ -659,12 +639,12 @@ async fn create_module_asset(
     let glob_mappings = vec![
         (
             root,
-            Glob::new("**/*/next/dist/server/next.js".to_string()),
+            Glob::new("**/*/next/dist/server/next.js".into()),
             ImportMapping::Ignore.into(),
         ),
         (
             root,
-            Glob::new("**/*/next/dist/bin/next".to_string()),
+            Glob::new("**/*/next/dist/bin/next".into()),
             ImportMapping::Ignore.into(),
         ),
     ];
@@ -686,7 +666,7 @@ async fn create_module_asset(
         compile_time_info,
         ModuleOptionsContext::clone(&*module_options).cell(),
         resolve_options.cell(),
-        Vc::cell("node_file_trace".to_string()),
+        Vc::cell("node_file_trace".into()),
     ))
 }
 

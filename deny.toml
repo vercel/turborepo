@@ -10,9 +10,14 @@ allow = [
   "MIT",
   "MIT-0",
   "MPL-2.0",
+  # this requires that we do not redistribute / relicense the code under
+  # one of the MPL secondary licences, which we do not do. this does not
+  # prevent use from licensing the 'larger work' (code that uses this lib)
+  # under a different license.
+  "MPL-2.0-no-copyleft-exception",
   # enum-iterator*
   "0BSD",
-  # base16, notify
+  # notify
   "CC0-1.0",
   # Inflector, hyper-tungstenite
   "BSD-2-Clause",

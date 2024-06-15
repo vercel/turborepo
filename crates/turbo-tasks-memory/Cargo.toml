@@ -17,6 +17,7 @@ anyhow = { workspace = true }
 auto-hash-map = { workspace = true }
 concurrent-queue = { workspace = true }
 dashmap = { workspace = true }
+indexmap = { workspace = true }
 nohash-hasher = { workspace = true }
 num_cpus = "1.13.1"
 once_cell = { workspace = true }
@@ -27,14 +28,17 @@ rustc-hash = { workspace = true }
 smallvec = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+turbo-prehash = { workspace = true }
 turbo-tasks = { workspace = true }
 turbo-tasks-hash = { workspace = true }
 turbo-tasks-malloc = { workspace = true, default-features = false }
 
 [dev-dependencies]
 criterion = { workspace = true, features = ["async_tokio"] }
-indexmap = { workspace = true }
 lazy_static = { workspace = true }
+loom = "0.7.2"
+rand = { workspace = true, features = ["small_rng"] }
+rstest = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 turbo-tasks-testing = { workspace = true }
@@ -44,6 +48,7 @@ turbo-tasks-build = { workspace = true }
 
 [features]
 track_unfinished = []
+track_wait_dependencies = []
 unsafe_once_map = []
 log_running_tasks = []
 log_scheduled_tasks = []

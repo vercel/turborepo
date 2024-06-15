@@ -1,5 +1,5 @@
-use anyhow::{Context, Result};
-use turbo_tasks::{Value, Vc};
+use anyhow::Result;
+use turbo_tasks::{RcStr, Value, Vc};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{availability_info::AvailabilityInfo, ChunkableModule, ChunkingContext},
@@ -8,11 +8,11 @@ use turbopack_core::{
     reference::{ModuleReferences, SingleModuleReference},
 };
 
-use crate::{async_chunk::chunk_item::AsyncLoaderChunkItem, EcmascriptChunkingContext};
+use crate::async_chunk::chunk_item::AsyncLoaderChunkItem;
 
 #[turbo_tasks::function]
-fn modifier() -> Vc<String> {
-    Vc::cell("async loader".to_string())
+fn modifier() -> Vc<RcStr> {
+    Vc::cell("async loader".into())
 }
 
 /// The AsyncLoaderModule is a module that loads another module async, by
@@ -20,7 +20,7 @@ fn modifier() -> Vc<String> {
 #[turbo_tasks::value]
 pub struct AsyncLoaderModule {
     pub inner: Vc<Box<dyn ChunkableModule>>,
-    pub chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
+    pub chunking_context: Vc<Box<dyn ChunkingContext>>,
     pub availability_info: AvailabilityInfo,
 }
 
@@ -29,7 +29,7 @@ impl AsyncLoaderModule {
     #[turbo_tasks::function]
     pub fn new(
         module: Vc<Box<dyn ChunkableModule>>,
-        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
         availability_info: Value<AvailabilityInfo>,
     ) -> Vc<Self> {
         Self::cell(AsyncLoaderModule {
@@ -46,8 +46,8 @@ impl AsyncLoaderModule {
 }
 
 #[turbo_tasks::function]
-fn inner_module_reference_description() -> Vc<String> {
-    Vc::cell("async module".to_string())
+fn inner_module_reference_description() -> Vc<RcStr> {
+    Vc::cell("async module".into())
 }
 
 #[turbo_tasks::value_impl]
@@ -81,12 +81,6 @@ impl ChunkableModule for AsyncLoaderModule {
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
     ) -> Result<Vc<Box<dyn turbopack_core::chunk::ChunkItem>>> {
-        let chunking_context =
-            Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
-                .await?
-                .context(
-                    "chunking context must impl EcmascriptChunkingContext to use AsyncLoaderModule",
-                )?;
         Ok(Vc::upcast(
             AsyncLoaderChunkItem {
                 chunking_context,

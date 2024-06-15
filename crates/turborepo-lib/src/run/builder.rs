@@ -37,7 +37,7 @@ use {
 };
 
 use crate::{
-    cli::{DryRunMode, EnvMode},
+    cli::DryRunMode,
     commands::CommandBase,
     engine::{Engine, EngineBuilder},
     opts::Opts,
@@ -94,7 +94,7 @@ impl RunBuilder {
             opts.run_opts.experimental_space_id = config.spaces_id().map(|s| s.to_owned());
         }
         let version = base.version();
-        let experimental_ui = config.experimental_ui();
+        let experimental_ui = config.ui();
         let processes = ProcessManager::new(
             // We currently only use a pty if the following are met:
             // - we're attached to a tty
@@ -337,7 +337,6 @@ impl RunBuilder {
             &root_package_json,
             is_single_package,
         )?;
-        root_turbo_json.track_usage(&run_telemetry);
 
         pkg_dep_graph.validate()?;
 
@@ -358,7 +357,7 @@ impl RunBuilder {
                         task_name = task_name.into_root_task()
                     }
 
-                    if root_turbo_json.pipeline.contains_key(&task_name) {
+                    if root_turbo_json.tasks.contains_key(&task_name) {
                         filtered_pkgs.insert(PackageName::Root);
                         break;
                     }
@@ -375,7 +374,6 @@ impl RunBuilder {
             pkg_dep_graph.remove_package_dependencies();
             engine = self.build_engine(&pkg_dep_graph, &root_turbo_json, &filtered_pkgs)?;
         }
-        engine.track_usage(&run_telemetry);
 
         let color_selector = ColorSelector::default();
 
@@ -388,12 +386,6 @@ impl RunBuilder {
             self.ui,
             self.opts.run_opts.dry_run.is_some(),
         ));
-
-        if matches!(self.opts.run_opts.env_mode, EnvMode::Infer)
-            && root_turbo_json.global_pass_through_env.is_some()
-        {
-            self.opts.run_opts.env_mode = EnvMode::Strict;
-        }
 
         let should_print_prelude = self.should_print_prelude_override.unwrap_or_else(|| {
             self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none()
@@ -435,7 +427,7 @@ impl RunBuilder {
             pkg_dep_graph,
             self.opts.run_opts.single_package,
         )
-        .with_root_tasks(root_turbo_json.pipeline.keys().cloned())
+        .with_root_tasks(root_turbo_json.tasks.keys().cloned())
         .with_turbo_jsons(Some(
             Some((PackageName::Root, root_turbo_json.clone()))
                 .into_iter()

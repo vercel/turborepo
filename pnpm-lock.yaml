@@ -461,6 +461,9 @@ importers:
       is-git-clean:
         specifier: ^1.1.0
         version: 1.1.0
+      json5:
+        specifier: ^2.2.3
+        version: 2.2.3
       ora:
         specifier: 4.1.1
         version: 4.1.1
@@ -617,6 +620,10 @@ importers:
         version: 5.3.3
 
   packages/turbo-ignore:
+    dependencies:
+      json5:
+        specifier: ^2.2.3
+        version: 2.2.3
     devDependencies:
       '@turbo/eslint-config':
         specifier: workspace:*

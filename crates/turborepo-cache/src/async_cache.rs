@@ -1,13 +1,15 @@
-use std::sync::{atomic::AtomicU8, Arc};
+use std::sync::{atomic::AtomicU8, Arc, Mutex};
 
 use futures::{stream::FuturesUnordered, StreamExt};
-use tokio::sync::{mpsc, Semaphore};
+use tokio::sync::{mpsc, oneshot, Semaphore};
 use tracing::{warn, Instrument, Level};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{APIAuth, APIClient};
 
-use crate::{multiplexer::CacheMultiplexer, CacheError, CacheHitMetadata, CacheOpts};
+use crate::{
+    http::UploadMap, multiplexer::CacheMultiplexer, CacheError, CacheHitMetadata, CacheOpts,
+};
 
 const WARNING_CUTOFF: u8 = 4;
 
@@ -24,8 +26,11 @@ enum WorkerRequest {
         duration: u64,
         files: Vec<AnchoredSystemPathBuf>,
     },
-    Flush(tokio::sync::oneshot::Sender<()>),
-    Shutdown(tokio::sync::oneshot::Sender<()>),
+    Flush(oneshot::Sender<()>),
+    /// Shutdown the cache. The first oneshot notifies when shutdown starts and
+    /// allows the user to inspect the status of the uploads. The second
+    /// oneshot notifies when the shutdown is complete.
+    Shutdown(oneshot::Sender<Arc<Mutex<UploadMap>>>, oneshot::Sender<()>),
 }
 
 impl AsyncCache {
@@ -95,8 +100,8 @@ impl AsyncCache {
                         }
                         drop(callback);
                     }
-                    WorkerRequest::Shutdown(callback) => {
-                        shutdown_callback = Some(callback);
+                    WorkerRequest::Shutdown(closing, done) => {
+                        shutdown_callback = Some((closing, done));
                         break;
                     }
                 };
@@ -104,10 +109,18 @@ impl AsyncCache {
             // Drop write consumer to immediately notify callers that cache is shutting down
             drop(write_consumer);
 
+            let shutdown_callback = if let Some((closing, done)) = shutdown_callback {
+                closing.send(real_cache.requests().unwrap_or_default()).ok();
+                Some(done)
+            } else {
+                None
+            };
+
             // wait for all writers to finish
             while let Some(worker) = workers.next().await {
                 let _ = worker;
             }
+
             if let Some(callback) = shutdown_callback {
                 callback.send(()).ok();
             }
@@ -162,7 +175,7 @@ impl AsyncCache {
     // before checking the cache.
     #[tracing::instrument(skip_all)]
     pub async fn wait(&self) -> Result<(), CacheError> {
-        let (tx, rx) = tokio::sync::oneshot::channel();
+        let (tx, rx) = oneshot::channel();
         self.writer_sender
             .send(WorkerRequest::Flush(tx))
             .await
@@ -172,21 +185,37 @@ impl AsyncCache {
         Ok(())
     }
 
+    /// Shut down the cache, waiting for all workers to finish writing.
+    /// This function returns as soon as the shut down has started,
+    /// returning a channel through which workers can report on their
+    /// progress.
     #[tracing::instrument(skip_all)]
-    pub async fn shutdown(&self) -> Result<(), CacheError> {
-        let (tx, rx) = tokio::sync::oneshot::channel();
+    pub async fn start_shutdown(
+        &self,
+    ) -> Result<(Arc<Mutex<UploadMap>>, oneshot::Receiver<()>), CacheError> {
+        let (closing_tx, closing_rx) = oneshot::channel::<Arc<Mutex<UploadMap>>>();
+        let (closed_tx, closed_rx) = oneshot::channel::<()>();
         self.writer_sender
-            .send(WorkerRequest::Shutdown(tx))
+            .send(WorkerRequest::Shutdown(closing_tx, closed_tx))
             .await
             .map_err(|_| CacheError::CacheShuttingDown)?;
-        rx.await.ok();
+        Ok((closing_rx.await.unwrap(), closed_rx)) // todo
+    }
+
+    /// Shut down the cache, waiting for all workers to finish writing.
+    /// This function returns only when the last worker is complete.
+    /// It is a convenience wrapper around `start_shutdown`.
+    #[tracing::instrument(skip_all)]
+    pub async fn shutdown(&self) -> Result<(), CacheError> {
+        let (_, closed_rx) = self.start_shutdown().await?;
+        closed_rx.await.ok();
         Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::assert_matches::assert_matches;
+    use std::{assert_matches::assert_matches, time::Duration};
 
     use anyhow::Result;
     use futures::future::try_join_all;
@@ -235,7 +264,13 @@ mod tests {
             }),
         };
 
-        let api_client = APIClient::new(format!("http://localhost:{}", port), 200, "2.0.0", true)?;
+        let api_client = APIClient::new(
+            format!("http://localhost:{}", port),
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            true,
+        )?;
         let api_auth = Some(APIAuth {
             team_id: Some("my-team-id".to_string()),
             token: "my-token".to_string(),
@@ -266,12 +301,8 @@ mod tests {
         // Wait for async cache to process
         async_cache.wait().await.unwrap();
 
-        let fs_cache_path = repo_root_path.join_components(&[
-            "node_modules",
-            ".cache",
-            "turbo",
-            &format!("{}.tar.zst", hash),
-        ]);
+        let fs_cache_path =
+            repo_root_path.join_components(&[".turbo", "cache", &format!("{}.tar.zst", hash)]);
 
         // Confirm that fs cache file does *not* exist
         assert!(!fs_cache_path.exists());
@@ -317,7 +348,13 @@ mod tests {
 
         // Initialize client with invalid API url to ensure that we don't hit the
         // network
-        let api_client = APIClient::new("http://example.com", 200, "2.0.0", true)?;
+        let api_client = APIClient::new(
+            "http://example.com",
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            true,
+        )?;
         let api_auth = Some(APIAuth {
             team_id: Some("my-team-id".to_string()),
             token: "my-token".to_string(),
@@ -348,12 +385,8 @@ mod tests {
         // Wait for async cache to process
         async_cache.wait().await.unwrap();
 
-        let fs_cache_path = repo_root_path.join_components(&[
-            "node_modules",
-            ".cache",
-            "turbo",
-            &format!("{}.tar.zst", hash),
-        ]);
+        let fs_cache_path =
+            repo_root_path.join_components(&[".turbo", "cache", &format!("{}.tar.zst", hash)]);
 
         // Confirm that fs cache file exists
         assert!(fs_cache_path.exists());
@@ -405,7 +438,13 @@ mod tests {
             }),
         };
 
-        let api_client = APIClient::new(format!("http://localhost:{}", port), 200, "2.0.0", true)?;
+        let api_client = APIClient::new(
+            format!("http://localhost:{}", port),
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            true,
+        )?;
         let api_auth = Some(APIAuth {
             team_id: Some("my-team-id".to_string()),
             token: "my-token".to_string(),
@@ -436,12 +475,8 @@ mod tests {
         // Wait for async cache to process
         async_cache.wait().await.unwrap();
 
-        let fs_cache_path = repo_root_path.join_components(&[
-            "node_modules",
-            ".cache",
-            "turbo",
-            &format!("{}.tar.zst", hash),
-        ]);
+        let fs_cache_path =
+            repo_root_path.join_components(&[".turbo", "cache", &format!("{}.tar.zst", hash)]);
 
         // Confirm that fs cache file exists
         assert!(fs_cache_path.exists());

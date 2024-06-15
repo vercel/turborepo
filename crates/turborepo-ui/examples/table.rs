@@ -5,7 +5,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode},
 };
 use ratatui::prelude::*;
-use turborepo_ui::TaskTable;
+use turborepo_ui::{tui::event::TaskResult, TaskTable};
 
 enum Event {
     Tick(u64),
@@ -61,7 +61,7 @@ fn run_app<B: Backend>(
                 table.tick();
             }
             Event::Start(task) => table.start_task(task).unwrap(),
-            Event::Finish(task) => table.finish_task(task).unwrap(),
+            Event::Finish(task) => table.finish_task(task, TaskResult::Success).unwrap(),
             Event::Up => table.previous(),
             Event::Down => table.next(),
             Event::Stop => break,

@@ -61,7 +61,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
       install: false,
     });
@@ -151,7 +151,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: true,
+      dryRun: true,
       print: false,
       install: true,
     });
@@ -217,7 +217,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
       install: false,
       to: "1.7.0",
@@ -302,7 +302,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
       install: false,
       from: "1.0.0",
@@ -376,7 +376,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
       install: false,
     });
@@ -429,7 +429,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
       install: true,
     });
@@ -509,7 +509,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
       install: true,
     });
@@ -617,7 +617,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
       install: true,
     });
@@ -701,7 +701,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
       install: false,
     });
@@ -747,7 +747,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
       install: false,
     });
@@ -794,7 +794,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
       install: false,
     });
@@ -851,7 +851,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: true,
+      dryRun: true,
       print: false,
       install: true,
     });
@@ -885,7 +885,7 @@ describe("migrate", () => {
 
     await migrate("~/path/that/does/not/exist", {
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
       install: false,
     });
@@ -911,7 +911,7 @@ describe("migrate", () => {
 
     await migrate(root, {
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
       install: false,
     });
@@ -924,4 +924,94 @@ describe("migrate", () => {
     // restore mocks
     mockedCheckGitStatus.mockRestore();
   });
+
+  it("migrates across majors with all required codemods", async () => {
+    const { root, readJson } = useFixture({
+      fixture: "turbo-1",
+    });
+
+    const packageManager = "pnpm";
+    const packageManagerVersion = "1.2.3";
+
+    // setup mocks
+    const mockedCheckGitStatus = jest
+      .spyOn(checkGitStatus, "checkGitStatus")
+      .mockReturnValue(undefined);
+    const mockedGetCurrentVersion = jest
+      .spyOn(getCurrentVersion, "getCurrentVersion")
+      .mockReturnValue("1.99.99");
+    const mockedGetLatestVersion = jest
+      .spyOn(getLatestVersion, "getLatestVersion")
+      .mockResolvedValue("2.0.0");
+    const mockedGetTurboUpgradeCommand = jest
+      .spyOn(getTurboUpgradeCommand, "getTurboUpgradeCommand")
+      .mockResolvedValue("pnpm install -g turbo@latest");
+    const mockedGetAvailablePackageManagers = jest
+      .spyOn(turboUtils, "getAvailablePackageManagers")
+      .mockResolvedValue({
+        pnpm: packageManagerVersion,
+        npm: undefined,
+        yarn: undefined,
+        bun: undefined,
+      });
+    const mockedGetWorkspaceDetails = jest
+      .spyOn(turboWorkspaces, "getWorkspaceDetails")
+      .mockResolvedValue(
+        getWorkspaceDetailsMockReturnValue({
+          root,
+          packageManager,
+        })
+      );
+
+    await migrate(root, {
+      force: false,
+      dryRun: false,
+      print: false,
+      install: false,
+    });
+
+    expect(readJson("package.json")).toStrictEqual({
+      dependencies: {},
+      devDependencies: {
+        turbo: "1.7.1",
+      },
+      name: "turbo-1",
+      packageManager: "pnpm@1.2.3",
+      version: "1.0.0",
+    });
+    expect(readJson("turbo.json")).toStrictEqual({
+      $schema: "https://turbo.build/schema.json",
+      tasks: {
+        build: {
+          outputs: [".next/**", "!.next/cache/**"],
+        },
+        dev: {
+          cache: false,
+        },
+        lint: {
+          inputs: ["$TURBO_DEFAULT$", ".env.local"],
+          outputs: [],
+        },
+        test: {
+          outputLogs: "errors-only",
+        },
+      },
+    });
+
+    // verify mocks were called
+    expect(mockedCheckGitStatus).toHaveBeenCalled();
+    expect(mockedGetCurrentVersion).toHaveBeenCalled();
+    expect(mockedGetLatestVersion).toHaveBeenCalled();
+    expect(mockedGetTurboUpgradeCommand).toHaveBeenCalled();
+    expect(mockedGetAvailablePackageManagers).toHaveBeenCalled();
+    expect(mockedGetWorkspaceDetails).toHaveBeenCalled();
+
+    // restore mocks
+    mockedCheckGitStatus.mockRestore();
+    mockedGetCurrentVersion.mockRestore();
+    mockedGetLatestVersion.mockRestore();
+    mockedGetTurboUpgradeCommand.mockRestore();
+    mockedGetAvailablePackageManagers.mockRestore();
+    mockedGetWorkspaceDetails.mockRestore();
+  }, 10000);
 });

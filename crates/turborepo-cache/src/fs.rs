@@ -37,7 +37,7 @@ impl FSCache {
         if let Some(override_dir) = override_dir {
             AbsoluteSystemPathBuf::from_unknown(repo_root, override_dir)
         } else {
-            repo_root.join_components(&["node_modules", ".cache", "turbo"])
+            repo_root.join_components(&[".turbo", "cache"])
         }
     }
 
@@ -182,6 +182,8 @@ impl FSCache {
 
 #[cfg(test)]
 mod test {
+    use std::time::Duration;
+
     use anyhow::Result;
     use futures::future::try_join_all;
     use tempfile::tempdir;
@@ -216,7 +218,13 @@ mod test {
         let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
         test_case.initialize(repo_root_path)?;
 
-        let api_client = APIClient::new(format!("http://localhost:{}", port), 200, "2.0.0", true)?;
+        let api_client = APIClient::new(
+            format!("http://localhost:{}", port),
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            true,
+        )?;
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
             token: "my-token".to_string(),

@@ -29,7 +29,7 @@ const TEST_CASES: Array<TestCase> = [
     existingPackageManagerString: undefined,
     packageManager: "npm",
     packageManagerVersion: "7.0.0",
-    options: { force: false, dry: false, print: false },
+    options: { force: false, dryRun: false, print: false },
     result: {
       changes: {
         "package.json": {
@@ -46,7 +46,7 @@ const TEST_CASES: Array<TestCase> = [
     existingPackageManagerString: undefined,
     packageManager: "npm",
     packageManagerVersion: "7.0.0",
-    options: { force: false, dry: true, print: false },
+    options: { force: false, dryRun: true, print: false },
     result: {
       changes: {
         "package.json": {
@@ -63,7 +63,7 @@ const TEST_CASES: Array<TestCase> = [
     existingPackageManagerString: undefined,
     packageManager: "yarn",
     packageManagerVersion: "1.2.3",
-    options: { force: false, dry: false, print: true },
+    options: { force: false, dryRun: false, print: true },
     result: {
       changes: {
         "package.json": {
@@ -80,7 +80,7 @@ const TEST_CASES: Array<TestCase> = [
     existingPackageManagerString: undefined,
     packageManager: "pnpm",
     packageManagerVersion: "1.2.3",
-    options: { force: false, dry: true, print: true },
+    options: { force: false, dryRun: true, print: true },
     result: {
       changes: {
         "package.json": {
@@ -97,7 +97,7 @@ const TEST_CASES: Array<TestCase> = [
     existingPackageManagerString: "npm@1.2.3",
     packageManager: "npm",
     packageManagerVersion: "1.2.3",
-    options: { force: false, dry: false, print: false },
+    options: { force: false, dryRun: false, print: false },
     result: {
       changes: {
         "package.json": {
@@ -114,7 +114,7 @@ const TEST_CASES: Array<TestCase> = [
     existingPackageManagerString: "turbo@1.7.0",
     packageManager: "pnpm",
     packageManagerVersion: "1.2.3",
-    options: { force: false, dry: false, print: false },
+    options: { force: false, dryRun: false, print: false },
     result: {
       changes: {
         "package.json": {
@@ -180,7 +180,9 @@ describe("add-package-manager-2", () => {
       expect(mockGetWorkspaceDetails).toHaveBeenCalled();
 
       expect(JSON.parse(read("package.json") || "{}").packageManager).toEqual(
-        options.dry ? undefined : `${packageManager}@${packageManagerVersion}`
+        options.dryRun
+          ? undefined
+          : `${packageManager}@${packageManagerVersion}`
       );
 
       // result should be correct
@@ -194,9 +196,13 @@ describe("add-package-manager-2", () => {
       expect(repeatResult.fatalError).toBeUndefined();
       expect(repeatResult.changes).toMatchObject({
         "package.json": {
-          action: options.dry ? "skipped" : "unchanged",
-          additions: options.dry ? result.changes["package.json"].additions : 0,
-          deletions: options.dry ? result.changes["package.json"].deletions : 0,
+          action: options.dryRun ? "skipped" : "unchanged",
+          additions: options.dryRun
+            ? result.changes["package.json"].additions
+            : 0,
+          deletions: options.dryRun
+            ? result.changes["package.json"].deletions
+            : 0,
         },
       });
 
@@ -221,7 +227,7 @@ describe("add-package-manager-2", () => {
       // run the transformer
       const result = await transformer({
         root,
-        options: { force: false, dry: false, print: false },
+        options: { force: false, dryRun: false, print: false },
       });
 
       expect(mockGetWorkspaceDetails).toHaveBeenCalledTimes(1);
@@ -263,7 +269,7 @@ describe("add-package-manager-2", () => {
       // run the transformer
       const result = await transformer({
         root,
-        options: { force: false, dry: false, print: false },
+        options: { force: false, dryRun: false, print: false },
       });
 
       expect(mockGetAvailablePackageManagers).toHaveBeenCalledTimes(1);
@@ -317,7 +323,7 @@ describe("add-package-manager-2", () => {
       // run the transformer
       const result = await transformer({
         root,
-        options: { force: false, dry: false, print: false },
+        options: { force: false, dryRun: false, print: false },
       });
 
       // package manager should still not exist (we couldn't write it)

@@ -24,6 +24,10 @@ impl SimpleGlob {
             Ok(SimpleGlob::String(pattern.to_string()))
         }
     }
+
+    pub fn is_exact(&self) -> bool {
+        matches!(self, Self::String(_))
+    }
 }
 
 impl Match for SimpleGlob {

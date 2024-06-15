@@ -1,0 +1,28 @@
+---
+title: '@turbo/gen'
+description: Quickly generate new code in your Turborepo.
+---
+
+Use this package for type definitions in your [Turborepo code generators](/repo/docs/reference/generate).
+
+```ts title="./turbo/generators/my-generator.ts"
+import type { PlopTypes } from "@turbo/gen"; // [!code highlight]
+
+// [!code word:PlopTypes]
+export default function generator(plop: PlopTypes.NodePlopAPI): void {
+  // Create a generator
+  plop.setGenerator("Generator name", {
+    description: "Generator description",
+    // Gather information from the user
+    prompts: [
+      ...
+    ],
+    // Perform actions based on the prompts
+    actions: [
+      ...
+    ],
+  });
+}
+```
+
+For more information, [visit the Generating code guide](/repo/docs/guides/generating-code).

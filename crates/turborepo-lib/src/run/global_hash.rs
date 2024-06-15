@@ -3,13 +3,18 @@ use std::{
     str::FromStr,
 };
 
+use either::Either;
 use globwalk::{ValidatedGlob, WalkType};
+use itertools::Itertools;
 use thiserror::Error;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_env::{get_global_hashable_env_vars, DetailedMap, EnvironmentVariableMap};
 use turborepo_lockfiles::Lockfile;
-use turborepo_repository::package_manager::{self, PackageManager};
+use turborepo_repository::{
+    package_graph::PackageInfo,
+    package_manager::{self, PackageManager},
+};
 use turborepo_scm::SCM;
 
 use crate::{
@@ -19,7 +24,7 @@ use crate::{
 
 static DEFAULT_ENV_VARS: [&str; 1] = ["VERCEL_ANALYTICS_ID"];
 
-const GLOBAL_CACHE_KEY: &str = "HEY STELLLLLLLAAAAAAAAAAAAA";
+const GLOBAL_CACHE_KEY: &str = "I can’t see ya, but I know you’re here";
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -41,19 +46,22 @@ pub struct GlobalHashableInputs<'a> {
     pub global_file_hash_map: HashMap<RelativeUnixPathBuf, String>,
     // This is `None` in single package mode
     pub root_external_dependencies_hash: Option<&'a str>,
+    pub root_internal_dependencies_hash: Option<&'a str>,
+    pub engines: Option<HashMap<&'a str, &'a str>>,
     pub env: &'a [String],
     // Only Option to allow #[derive(Default)]
     pub resolved_env_vars: Option<DetailedMap>,
     pub pass_through_env: Option<&'a [String]>,
     pub env_mode: EnvMode,
     pub framework_inference: bool,
-    pub dot_env: Option<&'a [RelativeUnixPathBuf]>,
     pub env_at_execution_start: &'a EnvironmentVariableMap,
 }
 
 #[allow(clippy::too_many_arguments)]
 pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     root_external_dependencies_hash: Option<&'a str>,
+    root_internal_dependencies_hash: Option<&'a str>,
+    root_package: &'a PackageInfo,
     root_path: &AbsoluteSystemPath,
     package_manager: &PackageManager,
     lockfile: Option<&L>,
@@ -63,9 +71,10 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     global_pass_through_env: Option<&'a [String]>,
     env_mode: EnvMode,
     framework_inference: bool,
-    dot_env: Option<&'a [RelativeUnixPathBuf]>,
     hasher: &SCM,
 ) -> Result<GlobalHashableInputs<'a>, Error> {
+    let engines = root_package.package_json.engines();
+
     let global_hashable_env_vars =
         get_global_hashable_env_vars(env_at_execution_start, global_env)?;
 
@@ -90,19 +99,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
         .map(|p| root_path.anchor(p).expect("path should be from root"))
         .collect::<Vec<_>>();
 
-    let mut global_file_hash_map =
-        hasher.get_hashes_for_files(root_path, &global_deps_paths, false)?;
-
-    if !dot_env.unwrap_or_default().is_empty() {
-        let system_dot_env = dot_env
-            .into_iter()
-            .flatten()
-            .map(|p| p.to_anchored_system_path_buf());
-
-        let dot_env_object = hasher.hash_existing_of(root_path, system_dot_env)?;
-
-        global_file_hash_map.extend(dot_env_object);
-    }
+    let global_file_hash_map = hasher.get_hashes_for_files(root_path, &global_deps_paths, false)?;
 
     debug!(
         "external deps hash: {}",
@@ -113,12 +110,13 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
         global_cache_key: GLOBAL_CACHE_KEY,
         global_file_hash_map,
         root_external_dependencies_hash,
+        root_internal_dependencies_hash,
+        engines,
         env: global_env,
         resolved_env_vars: Some(global_hashable_env_vars),
         pass_through_env: global_pass_through_env,
         env_mode,
         framework_inference,
-        dot_env,
         env_at_execution_start,
     })
 }
@@ -131,7 +129,7 @@ fn collect_global_deps(
     if global_file_dependencies.is_empty() {
         return Ok(HashSet::new());
     }
-    let raw_exclusions = match package_manager.get_workspace_globs(root_path) {
+    let workspace_exclusions = match package_manager.get_workspace_globs(root_path) {
         Ok(globs) => globs.raw_exclusions,
         // If we hit a missing workspaces error, we could be in single package mode
         // so we should just use the default globs
@@ -143,13 +141,21 @@ fn collect_global_deps(
             return Err(err.into());
         }
     };
-    let exclusions = raw_exclusions
+    let (raw_inclusions, raw_exclusions): (Vec<_>, Vec<_>) = global_file_dependencies
         .iter()
-        .map(|e| ValidatedGlob::from_str(e))
+        .partition_map(|glob| match glob.strip_prefix('!') {
+            None => Either::Left(glob.as_str()),
+            Some(exclusion) => Either::Right(exclusion),
+        });
+    let exclusions = workspace_exclusions
+        .iter()
+        .map(|s| s.as_str())
+        .chain(raw_exclusions.iter().copied())
+        .map(ValidatedGlob::from_str)
         .collect::<Result<Vec<_>, _>>()?;
 
     #[cfg(not(windows))]
-    let inclusions = global_file_dependencies
+    let inclusions = raw_inclusions
         .iter()
         .map(|i| ValidatedGlob::from_str(i))
         .collect::<Result<Vec<_>, _>>()?;
@@ -181,6 +187,8 @@ impl<'a> GlobalHashableInputs<'a> {
             global_cache_key: self.global_cache_key,
             global_file_hash_map: &self.global_file_hash_map,
             root_external_dependencies_hash: self.root_external_dependencies_hash,
+            root_internal_dependencies_hash: self.root_internal_dependencies_hash,
+            engines: self.engines.clone().unwrap_or_default(),
             env: self.env,
             resolved_env_vars: self
                 .resolved_env_vars
@@ -190,7 +198,6 @@ impl<'a> GlobalHashableInputs<'a> {
             pass_through_env: self.pass_through_env.unwrap_or_default(),
             env_mode: self.env_mode,
             framework_inference: self.framework_inference,
-            dot_env: self.dot_env.unwrap_or_default(),
         };
 
         global_hashable.hash()
@@ -202,7 +209,7 @@ mod tests {
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_env::EnvironmentVariableMap;
     use turborepo_lockfiles::Lockfile;
-    use turborepo_repository::package_manager::PackageManager;
+    use turborepo_repository::{package_graph::PackageInfo, package_manager::PackageManager};
     use turborepo_scm::SCM;
 
     use super::get_global_hash_inputs;
@@ -224,6 +231,7 @@ mod tests {
             .unwrap();
 
         let env_var_map = EnvironmentVariableMap::default();
+        let package_info = PackageInfo::default();
         let lockfile: Option<&dyn Lockfile> = None;
         #[cfg(windows)]
         let file_deps = ["C:\\some\\path".to_string()];
@@ -231,6 +239,8 @@ mod tests {
         let file_deps = ["/some/path".to_string()];
         let result = get_global_hash_inputs(
             None,
+            None,
+            &package_info,
             &root,
             &PackageManager::Pnpm,
             lockfile,
@@ -238,9 +248,8 @@ mod tests {
             &env_var_map,
             &[],
             None,
-            EnvMode::Infer,
+            EnvMode::Strict,
             false,
-            None,
             &SCM::new(&root),
         );
         assert!(result.is_ok());

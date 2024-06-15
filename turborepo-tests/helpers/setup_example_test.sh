@@ -3,6 +3,7 @@
 set -eo pipefail
 
 export TURBO_TELEMETRY_MESSAGE_DISABLED=1
+export TURBO_DOWNLOAD_LOCAL_ENABLED=0
 
 # Start by figuring out which example we're testing and its package manager
 example_path=$1

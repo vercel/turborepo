@@ -1,6 +1,5 @@
 pub(crate) mod chunk_type;
 pub(crate) mod content;
-pub(crate) mod context;
 pub(crate) mod data;
 pub(crate) mod item;
 pub(crate) mod placeable;
@@ -8,7 +7,7 @@ pub(crate) mod placeable;
 use std::fmt::Write;
 
 use anyhow::{bail, Result};
-use turbo_tasks::{Value, ValueToString, Vc};
+use turbo_tasks::{RcStr, Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystem;
 use turbopack_core::{
     asset::{Asset, AssetContent},
@@ -26,7 +25,6 @@ use turbopack_core::{
 pub use self::{
     chunk_type::EcmascriptChunkType,
     content::EcmascriptChunkContent,
-    context::EcmascriptChunkingContext,
     data::EcmascriptChunkData,
     item::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemExt,
@@ -37,7 +35,7 @@ pub use self::{
 
 #[turbo_tasks::value]
 pub struct EcmascriptChunk {
-    pub chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
+    pub chunking_context: Vc<Box<dyn ChunkingContext>>,
     pub content: Vc<EcmascriptChunkContent>,
 }
 
@@ -48,7 +46,7 @@ pub struct EcmascriptChunks(Vec<Vc<EcmascriptChunk>>);
 impl EcmascriptChunk {
     #[turbo_tasks::function]
     pub async fn new(
-        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
         content: Vc<EcmascriptChunkContent>,
     ) -> Result<Vc<Self>> {
         Ok(EcmascriptChunk {
@@ -66,13 +64,13 @@ impl EcmascriptChunk {
 }
 
 #[turbo_tasks::function]
-fn chunk_item_key() -> Vc<String> {
-    Vc::cell("chunk item".to_string())
+fn chunk_item_key() -> Vc<RcStr> {
+    Vc::cell("chunk item".into())
 }
 
 #[turbo_tasks::function]
-fn availability_root_key() -> Vc<String> {
-    Vc::cell("current_availability_root".to_string())
+fn availability_root_key() -> Vc<RcStr> {
+    Vc::cell("current_availability_root".into())
 }
 
 #[turbo_tasks::value_impl]
@@ -120,7 +118,7 @@ impl Chunk for EcmascriptChunk {
             } else {
                 ServerFileSystem::new().root()
             },
-            query: Vc::<String>::default(),
+            query: Vc::<RcStr>::default(),
             fragment: None,
             assets,
             modifiers: Vec::new(),
@@ -147,11 +145,10 @@ impl Chunk for EcmascriptChunk {
 #[turbo_tasks::value_impl]
 impl ValueToString for EcmascriptChunk {
     #[turbo_tasks::function]
-    async fn to_string(self: Vc<Self>) -> Result<Vc<String>> {
-        Ok(Vc::cell(format!(
-            "chunk {}",
-            self.ident().to_string().await?
-        )))
+    async fn to_string(self: Vc<Self>) -> Result<Vc<RcStr>> {
+        Ok(Vc::cell(
+            format!("chunk {}", self.ident().to_string().await?).into(),
+        ))
     }
 }
 
@@ -177,29 +174,29 @@ impl Asset for EcmascriptChunk {
 }
 
 #[turbo_tasks::function]
-fn introspectable_type() -> Vc<String> {
-    Vc::cell("ecmascript chunk".to_string())
+fn introspectable_type() -> Vc<RcStr> {
+    Vc::cell("ecmascript chunk".into())
 }
 
 #[turbo_tasks::function]
-fn chunk_item_module_key() -> Vc<String> {
-    Vc::cell("module".to_string())
+fn chunk_item_module_key() -> Vc<RcStr> {
+    Vc::cell("module".into())
 }
 
 #[turbo_tasks::value_impl]
 impl Introspectable for EcmascriptChunk {
     #[turbo_tasks::function]
-    fn ty(&self) -> Vc<String> {
+    fn ty(&self) -> Vc<RcStr> {
         introspectable_type()
     }
 
     #[turbo_tasks::function]
-    fn title(self: Vc<Self>) -> Vc<String> {
+    fn title(self: Vc<Self>) -> Vc<RcStr> {
         self.path().to_string()
     }
 
     #[turbo_tasks::function]
-    async fn details(self: Vc<Self>) -> Result<Vc<String>> {
+    async fn details(self: Vc<Self>) -> Result<Vc<RcStr>> {
         let content = content_to_details(self.content());
         let mut details = String::new();
         let this = self.await?;
@@ -210,7 +207,7 @@ impl Introspectable for EcmascriptChunk {
         }
         details += "\nContent:\n\n";
         write!(details, "{}", content.await?)?;
-        Ok(Vc::cell(details))
+        Ok(Vc::cell(details.into()))
     }
 
     #[turbo_tasks::function]

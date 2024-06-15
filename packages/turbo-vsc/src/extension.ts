@@ -38,10 +38,6 @@ const useDebounce = <T>(func: (args: T) => void, waitMs: number) => {
   };
 };
 
-const decoration = window.createTextEditorDecorationType({
-  color: "#04f1f9", // something like cyan
-});
-
 const logs = window.createOutputChannel("Turborepo Extension");
 
 function rainbowRgb(i: number) {
@@ -311,14 +307,14 @@ function updateJSONDecorations(editor?: TextEditor) {
     return;
   }
 
-  let isPipelineKey = false;
-  let pipelineDepth = -1; // indicates we're not in a pipeline block
+  let depth = 0; // indicates we're not in a pipeline block
+  let inPipeline = false; // we do not use this right now but could highlight tasks
 
-  const ranges: Range[] = [];
   visit(editor.document.getText(), {
-    onObjectProperty: (property, offset, length) => {
-      if (property === "pipeline") {
-        isPipelineKey = true;
+    onObjectProperty: (property, offset) => {
+      // only highlight pipeline at the top level
+      if (property === "pipeline" && depth === 0 && !inPipeline) {
+        inPipeline = true;
         for (let i = 1; i < 9; i++) {
           const index = i + offset;
           editor.setDecorations(pipelineColors[i], [
@@ -329,27 +325,19 @@ function updateJSONDecorations(editor?: TextEditor) {
           ]);
         }
       }
-      if (isPipelineKey && pipelineDepth === 0) {
-        ranges.push(
-          new Range(
-            editor.document.positionAt(offset),
-            editor.document.positionAt(offset + length)
-          )
-        );
+    },
+    onObjectBegin: () => {
+      if (depth === -1) {
+        depth = 0;
+      } else if (depth !== -1) {
+        depth += 1;
       }
     },
-    onObjectBegin: (offset, length) => {
-      if (isPipelineKey && pipelineDepth === -1) {
-        pipelineDepth = 0;
-      } else if (pipelineDepth !== -1) {
-        pipelineDepth += 1;
-      }
-    },
-    onObjectEnd: (offset, length) => {
-      if (pipelineDepth === 0) {
-        pipelineDepth = -1;
-      } else if (pipelineDepth !== -1) {
-        pipelineDepth -= 1;
+    onObjectEnd: () => {
+      if (depth < -1) {
+        depth -= 1;
+      } else {
+        throw Error("imbalanced visitor");
       }
     },
   });

@@ -14,9 +14,10 @@ use swc_core::{
     },
     quote, quote_expr,
 };
-use turbo_tasks::{trace::TraceRawVcs, TryFlatJoinIterExt, ValueToString, Vc};
+use turbo_tasks::{trace::TraceRawVcs, RcStr, TryFlatJoinIterExt, ValueToString, Vc};
 use turbo_tasks_fs::glob::Glob;
 use turbopack_core::{
+    chunk::ChunkingContext,
     ident::AssetIdent,
     issue::{analyze::AnalyzeIssue, IssueExt, IssueSeverity, StyledString},
     module::Module,
@@ -25,7 +26,7 @@ use turbopack_core::{
 
 use super::base::ReferencedAsset;
 use crate::{
-    chunk::{EcmascriptChunkPlaceable, EcmascriptChunkingContext, EcmascriptExports},
+    chunk::{EcmascriptChunkPlaceable, EcmascriptExports},
     code_gen::{CodeGenerateable, CodeGeneration},
     create_visitor,
     references::esm::base::insert_hoisted_stmt,
@@ -34,9 +35,13 @@ use crate::{
 #[derive(Clone, Hash, Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
 pub enum EsmExport {
     /// A local binding that is exported (export { a } or export const a = 1)
-    LocalBinding(String),
+    ///
+    /// The last bool is true if the binding is a mutable binding
+    LocalBinding(RcStr, bool),
     /// An imported binding that is exported (export { a as b } from "...")
-    ImportedBinding(Vc<Box<dyn ModuleReference>>, String),
+    ///
+    /// The last bool is true if the binding is a mutable binding
+    ImportedBinding(Vc<Box<dyn ModuleReference>>, RcStr, bool),
     /// An imported namespace that is exported (export * from "...")
     ImportedNamespace(Vc<Box<dyn ModuleReference>>),
     /// An error occurred while resolving the export
@@ -55,14 +60,14 @@ pub enum FoundExportType {
 #[turbo_tasks::value]
 pub struct FollowExportsResult {
     pub module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
-    pub export_name: Option<String>,
+    pub export_name: Option<RcStr>,
     pub ty: FoundExportType,
 }
 
 #[turbo_tasks::function]
 pub async fn follow_reexports(
     module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
-    export_name: String,
+    export_name: RcStr,
     side_effect_free_packages: Vc<Glob>,
 ) -> Result<Vc<FollowExportsResult>> {
     if !*module
@@ -105,7 +110,7 @@ pub async fn follow_reexports(
         }
 
         // Try to find the export in the star exports
-        if !exports_ref.star_exports.is_empty() && export_name != "default" {
+        if !exports_ref.star_exports.is_empty() && &*export_name != "default" {
             let result = get_all_export_names(module).await?;
             if let Some(m) = result.esm_exports.get(&export_name) {
                 module = *m;
@@ -143,12 +148,12 @@ pub async fn follow_reexports(
 
 async fn handle_declared_export(
     module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
-    export_name: String,
+    export_name: RcStr,
     export: &EsmExport,
     side_effect_free_packages: Vc<Glob>,
-) -> Result<ControlFlow<FollowExportsResult, (Vc<Box<dyn EcmascriptChunkPlaceable>>, String)>> {
+) -> Result<ControlFlow<FollowExportsResult, (Vc<Box<dyn EcmascriptChunkPlaceable>>, RcStr)>> {
     match export {
-        EsmExport::ImportedBinding(reference, name) => {
+        EsmExport::ImportedBinding(reference, name, _) => {
             if let ReferencedAsset::Some(module) =
                 *ReferencedAsset::from_resolve_result(reference.resolve_reference()).await?
             {
@@ -158,11 +163,11 @@ async fn handle_declared_export(
                 {
                     return Ok(ControlFlow::Break(FollowExportsResult {
                         module,
-                        export_name: Some(name.to_string()),
+                        export_name: Some(name.clone()),
                         ty: FoundExportType::SideEffects,
                     }));
                 }
-                return Ok(ControlFlow::Continue((module, name.to_string())));
+                return Ok(ControlFlow::Continue((module, name.clone())));
             }
         }
         EsmExport::ImportedNamespace(reference) => {
@@ -176,7 +181,7 @@ async fn handle_declared_export(
                 }));
             }
         }
-        EsmExport::LocalBinding(_) => {
+        EsmExport::LocalBinding(..) => {
             return Ok(ControlFlow::Break(FollowExportsResult {
                 module,
                 export_name: Some(export_name),
@@ -200,7 +205,7 @@ async fn handle_declared_export(
 
 #[turbo_tasks::value]
 struct AllExportNamesResult {
-    esm_exports: IndexMap<String, Vc<Box<dyn EcmascriptChunkPlaceable>>>,
+    esm_exports: IndexMap<RcStr, Vc<Box<dyn EcmascriptChunkPlaceable>>>,
     dynamic_exporting_modules: Vec<Vc<Box<dyn EcmascriptChunkPlaceable>>>,
 }
 
@@ -258,7 +263,7 @@ async fn get_all_export_names(
 
 #[turbo_tasks::value]
 pub struct ExpandStarResult {
-    pub star_exports: Vec<String>,
+    pub star_exports: Vec<RcStr>,
     pub has_dynamic_exports: bool,
 }
 
@@ -294,7 +299,8 @@ pub async fn expand_star_exports(
                      `export type` is more efficient than `export *` as it won't emit any runtime \
                      code.",
                     asset.ident().to_string().await?
-                ),
+                )
+                .into(),
             ),
             EcmascriptExports::Value => emit_star_exports_issue(
                 asset.ident(),
@@ -303,7 +309,8 @@ pub async fn expand_star_exports(
                      is not exported with export *)\nDid you want to use `export {{ default }} \
                      from \"...\";` instead?",
                     asset.ident().to_string().await?
-                ),
+                )
+                .into(),
             ),
             EcmascriptExports::CommonJs => {
                 has_dynamic_exports = true;
@@ -315,7 +322,8 @@ pub async fn expand_star_exports(
                          b, c }} from \"...\") or rewrite the module to ESM, to avoid the \
                          additional runtime code.`",
                         asset.ident().to_string().await?
-                    ),
+                    )
+                    .into(),
                 );
             }
             EcmascriptExports::DynamicNamespace => {
@@ -331,14 +339,14 @@ pub async fn expand_star_exports(
     .cell())
 }
 
-fn emit_star_exports_issue(source_ident: Vc<AssetIdent>, message: String) {
+fn emit_star_exports_issue(source_ident: Vc<AssetIdent>, message: RcStr) {
     AnalyzeIssue {
         code: None,
         message: StyledString::Text(message).cell(),
         source_ident,
         severity: IssueSeverity::Warning.into(),
         source: None,
-        title: Vc::cell("unexpected export *".to_string()),
+        title: Vc::cell("unexpected export *".into()),
     }
     .cell()
     .emit();
@@ -347,7 +355,7 @@ fn emit_star_exports_issue(source_ident: Vc<AssetIdent>, message: String) {
 #[turbo_tasks::value(shared)]
 #[derive(Hash, Debug)]
 pub struct EsmExports {
-    pub exports: BTreeMap<String, EsmExport>,
+    pub exports: BTreeMap<RcStr, EsmExport>,
     pub star_exports: Vec<Vc<Box<dyn ModuleReference>>>,
 }
 
@@ -359,7 +367,7 @@ pub struct EsmExports {
 #[turbo_tasks::value(shared)]
 #[derive(Hash, Debug)]
 pub struct ExpandedExports {
-    pub exports: BTreeMap<String, EsmExport>,
+    pub exports: BTreeMap<RcStr, EsmExport>,
     /// Modules we couldn't analyse all exports of.
     pub dynamic_exports: Vec<Vc<Box<dyn EcmascriptChunkPlaceable>>>,
 }
@@ -368,7 +376,7 @@ pub struct ExpandedExports {
 impl EsmExports {
     #[turbo_tasks::function]
     pub async fn expand_exports(&self) -> Result<Vc<ExpandedExports>> {
-        let mut exports: BTreeMap<String, EsmExport> = self.exports.clone();
+        let mut exports: BTreeMap<RcStr, EsmExport> = self.exports.clone();
         let mut dynamic_exports = vec![];
 
         for esm_ref in self.star_exports.iter() {
@@ -386,7 +394,7 @@ impl EsmExports {
                 if !exports.contains_key(export) {
                     exports.insert(
                         export.clone(),
-                        EsmExport::ImportedBinding(Vc::upcast(*esm_ref), export.to_string()),
+                        EsmExport::ImportedBinding(Vc::upcast(*esm_ref), export.clone(), false),
                     );
                 }
             }
@@ -409,7 +417,7 @@ impl CodeGenerateable for EsmExports {
     #[turbo_tasks::function]
     async fn code_generation(
         self: Vc<Self>,
-        _context: Vc<Box<dyn EcmascriptChunkingContext>>,
+        _context: Vc<Box<dyn ChunkingContext>>,
     ) -> Result<Vc<CodeGeneration>> {
         let mut visitors = Vec::new();
 
@@ -431,29 +439,46 @@ impl CodeGenerateable for EsmExports {
                 EsmExport::Error => Some(quote!(
                     "(() => { throw new Error(\"Failed binding. See build errors!\"); })" as Expr,
                 )),
-                EsmExport::LocalBinding(name) => Some(quote!(
-                    "(() => $local)" as Expr,
-                    local = Ident::new((name as &str).into(), DUMMY_SP)
-                )),
-                EsmExport::ImportedBinding(esm_ref, name) => {
+                EsmExport::LocalBinding(name, mutable) => {
+                    if *mutable {
+                        Some(quote!(
+                            "([() => $local, (v) => $local = v])" as Expr,
+                            local = Ident::new((name as &str).into(), DUMMY_SP)
+                        ))
+                    } else {
+                        Some(quote!(
+                            "(() => $local)" as Expr,
+                            local = Ident::new((name as &str).into(), DUMMY_SP)
+                        ))
+                    }
+                }
+                EsmExport::ImportedBinding(esm_ref, name, mutable) => {
                     let referenced_asset =
                         ReferencedAsset::from_resolve_result(esm_ref.resolve_reference()).await?;
                     referenced_asset.get_ident().await?.map(|ident| {
-                        quote!(
-                            "(() => $expr)" as Expr,
-                            expr: Expr = Expr::Member(MemberExpr {
+                        let expr = Expr::Member(MemberExpr {
+                            span: DUMMY_SP,
+                            obj: Box::new(Expr::Ident(Ident::new(ident.into(), DUMMY_SP))),
+                            prop: MemberProp::Computed(ComputedPropName {
                                 span: DUMMY_SP,
-                                obj: Box::new(Expr::Ident(Ident::new(ident.into(), DUMMY_SP))),
-                                prop: MemberProp::Computed(ComputedPropName {
+                                expr: Box::new(Expr::Lit(Lit::Str(Str {
                                     span: DUMMY_SP,
-                                    expr: Box::new(Expr::Lit(Lit::Str(Str {
-                                        span: DUMMY_SP,
-                                        value: (name as &str).into(),
-                                        raw: None,
-                                    })))
-                                })
-                            })
-                        )
+                                    value: (name as &str).into(),
+                                    raw: None,
+                                }))),
+                            }),
+                        });
+                        if *mutable {
+                            quote!(
+                                "([() => $expr, (v) => $expr = v])" as Expr,
+                                expr: Expr = expr,
+                            )
+                        } else {
+                            quote!(
+                                "(() => $expr)" as Expr,
+                                expr: Expr = expr,
+                            )
+                        }
                     })
                 }
                 EsmExport::ImportedNamespace(esm_ref) => {
@@ -471,7 +496,7 @@ impl CodeGenerateable for EsmExports {
                 props.push(PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
                     key: PropName::Str(Str {
                         span: DUMMY_SP,
-                        value: exported.clone().into(),
+                        value: exported.as_str().into(),
                         raw: None,
                     }),
                     value: Box::new(expr),
