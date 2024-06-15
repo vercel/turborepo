@@ -4,7 +4,7 @@ import { type PackageJson } from "@turbo/utils";
 import type { Schema } from "@turbo/types";
 import type { TransformerResults } from "../runner";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
-import type { TransformerArgs } from "../types";
+import type { Transformer, TransformerArgs } from "../types";
 
 // transformer details
 const TRANSFORMER = "create-turbo-config";
@@ -61,7 +61,7 @@ export function transformer({
   return runner.finish();
 }
 
-const transformerMeta = {
+const transformerMeta: Transformer = {
   name: TRANSFORMER,
   description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,

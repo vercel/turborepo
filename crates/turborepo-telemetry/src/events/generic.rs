@@ -1,7 +1,6 @@
 use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
-use turbopath::RelativeUnixPathBuf;
 use turborepo_vercel_api::telemetry::{TelemetryEvent, TelemetryGenericEvent};
 use uuid::Uuid;
 
@@ -210,28 +209,6 @@ impl GenericEventBuilder {
             },
             is_sensitive: EventType::NonSensitive,
         });
-        self
-    }
-
-    pub fn track_global_dot_env(&self, global_dot_env: Option<&[RelativeUnixPathBuf]>) -> &Self {
-        if let Some(global_dot_env) = global_dot_env {
-            self.track(Event {
-                key: "global_dot_env".into(),
-                value: global_dot_env.len().to_string(),
-                is_sensitive: EventType::NonSensitive,
-            });
-        }
-        self
-    }
-
-    pub fn track_dot_env(&self, dot_env: Option<&[RelativeUnixPathBuf]>) -> &Self {
-        if let Some(dot_env) = dot_env {
-            self.track(Event {
-                key: "dot_env".into(),
-                value: dot_env.len().to_string(),
-                is_sensitive: EventType::NonSensitive,
-            });
-        }
         self
     }
 

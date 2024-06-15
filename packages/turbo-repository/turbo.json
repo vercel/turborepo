@@ -3,10 +3,10 @@
   "extends": [
     "//"
   ],
-  "pipeline": {
+  "tasks": {
     "build": {
       "dependsOn": [
-        "cli#build"
+        "cli#rust-src"
       ]
     },
     "test": {

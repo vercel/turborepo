@@ -1,5 +1,5 @@
-use anyhow::{bail, Context, Result};
-use turbo_tasks::{ValueToString, Vc};
+use anyhow::{bail, Result};
+use turbo_tasks::{RcStr, ValueToString, Vc};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{ChunkItem, ChunkType, ChunkableModule, ChunkingContext},
@@ -13,7 +13,7 @@ use turbopack_core::{
 use turbopack_ecmascript::{
     chunk::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkPlaceable,
-        EcmascriptChunkType, EcmascriptChunkingContext, EcmascriptExports,
+        EcmascriptChunkType, EcmascriptExports,
     },
     utils::StringifyJs,
 };
@@ -21,8 +21,8 @@ use turbopack_ecmascript::{
 use crate::{output_asset::WebAssemblyAsset, source::WebAssemblySource};
 
 #[turbo_tasks::function]
-fn modifier() -> Vc<String> {
-    Vc::cell("wasm raw".to_string())
+fn modifier() -> Vc<RcStr> {
+    Vc::cell("wasm raw".into())
 }
 
 /// Exports the relative path to the WebAssembly file without loading it.
@@ -78,13 +78,6 @@ impl ChunkableModule for RawWebAssemblyModuleAsset {
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
     ) -> Result<Vc<Box<dyn turbopack_core::chunk::ChunkItem>>> {
-        let chunking_context =
-            Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
-                .await?
-                .context(
-                    "chunking context must impl EcmascriptChunkingContext to use \
-                     RawWebAssemblyModuleAsset",
-                )?;
         Ok(Vc::upcast(
             RawModuleChunkItem {
                 module: self,
@@ -107,7 +100,7 @@ impl EcmascriptChunkPlaceable for RawWebAssemblyModuleAsset {
 #[turbo_tasks::value]
 struct RawModuleChunkItem {
     module: Vc<RawWebAssemblyModuleAsset>,
-    chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
+    chunking_context: Vc<Box<dyn ChunkingContext>>,
     wasm_asset: Vc<WebAssemblyAsset>,
 }
 
@@ -122,10 +115,7 @@ impl ChunkItem for RawModuleChunkItem {
     async fn references(&self) -> Result<Vc<ModuleReferences>> {
         Ok(Vc::cell(vec![Vc::upcast(SingleOutputAssetReference::new(
             Vc::upcast(self.wasm_asset),
-            Vc::cell(format!(
-                "wasm(url) {}",
-                self.wasm_asset.ident().to_string().await?
-            )),
+            Vc::cell(format!("wasm(url) {}", self.wasm_asset.ident().to_string().await?).into()),
         ))]))
     }
 
@@ -150,7 +140,7 @@ impl ChunkItem for RawModuleChunkItem {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for RawModuleChunkItem {
     #[turbo_tasks::function]
-    fn chunking_context(&self) -> Vc<Box<dyn EcmascriptChunkingContext>> {
+    fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {
         self.chunking_context
     }
 

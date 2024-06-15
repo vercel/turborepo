@@ -7,6 +7,8 @@ use crate::CachingStatus;
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("Error reading from disk: {0}")]
+    ReadError(#[from] std::io::Error),
     #[error("Error making HTTP request: {0}")]
     ReqwestError(#[from] reqwest::Error),
     #[error("skipping HTTP Request, too many failures have occurred.\nLast error: {0}")]

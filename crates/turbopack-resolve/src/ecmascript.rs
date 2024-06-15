@@ -41,14 +41,25 @@ pub fn get_condition_maps(
 }
 
 #[turbo_tasks::function]
-pub async fn apply_esm_specific_options(options: Vc<ResolveOptions>) -> Result<Vc<ResolveOptions>> {
+pub async fn apply_esm_specific_options(
+    options: Vc<ResolveOptions>,
+    reference_type: Value<ReferenceType>,
+) -> Result<Vc<ResolveOptions>> {
     let mut options: ResolveOptions = options.await?.clone_value();
     // TODO set fully_specified when in strict ESM mode
     // options.fully_specified = true;
     for conditions in get_condition_maps(&mut options) {
-        conditions.insert("import".to_string(), ConditionValue::Set);
-        conditions.insert("require".to_string(), ConditionValue::Unset);
+        conditions.insert("import".into(), ConditionValue::Set);
+        conditions.insert("require".into(), ConditionValue::Unset);
     }
+
+    if matches!(
+        reference_type.into_value(),
+        ReferenceType::EcmaScriptModules(EcmaScriptModulesReferenceSubType::ImportWithType(_))
+    ) {
+        options.extensions.clear();
+    }
+
     Ok(options.into())
 }
 
@@ -56,8 +67,8 @@ pub async fn apply_esm_specific_options(options: Vc<ResolveOptions>) -> Result<V
 pub async fn apply_cjs_specific_options(options: Vc<ResolveOptions>) -> Result<Vc<ResolveOptions>> {
     let mut options: ResolveOptions = options.await?.clone_value();
     for conditions in get_condition_maps(&mut options) {
-        conditions.insert("import".to_string(), ConditionValue::Unset);
-        conditions.insert("require".to_string(), ConditionValue::Set);
+        conditions.insert("import".into(), ConditionValue::Unset);
+        conditions.insert("require".into(), ConditionValue::Set);
     }
     Ok(options.into())
 }
@@ -71,7 +82,7 @@ pub async fn esm_resolve(
     issue_source: Option<Vc<IssueSource>>,
 ) -> Result<Vc<ModuleResolveResult>> {
     let ty = Value::new(ReferenceType::EcmaScriptModules(ty.into_value()));
-    let options = apply_esm_specific_options(origin.resolve_options(ty.clone()))
+    let options = apply_esm_specific_options(origin.resolve_options(ty.clone()), ty.clone())
         .resolve()
         .await?;
     specific_resolve(origin, request, options, ty, issue_severity, issue_source).await

@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use swc_core::ecma::preset_env::{Version, Versions};
-use turbo_tasks::{Value, Vc};
+use turbo_tasks::{RcStr, Value, Vc};
 use turbo_tasks_env::ProcessEnv;
 
 use crate::target::CompileTarget;
@@ -28,10 +28,8 @@ impl Rendering {
 }
 
 #[turbo_tasks::value]
-#[derive(Default)]
 pub enum ChunkLoading {
-    #[default]
-    None,
+    Edge,
     /// CommonJS in Node.js
     NodeJs,
     /// <script> and <link> tags in the browser
@@ -149,18 +147,14 @@ impl Environment {
     }
 
     #[turbo_tasks::function]
-    pub async fn resolve_extensions(self: Vc<Self>) -> Result<Vc<Vec<String>>> {
+    pub async fn resolve_extensions(self: Vc<Self>) -> Result<Vc<Vec<RcStr>>> {
         let env = self.await?;
         Ok(match env.execution {
             ExecutionEnvironment::NodeJsBuildTime(..) | ExecutionEnvironment::NodeJsLambda(_) => {
-                Vc::cell(vec![
-                    ".js".to_string(),
-                    ".node".to_string(),
-                    ".json".to_string(),
-                ])
+                Vc::cell(vec![".js".into(), ".node".into(), ".json".into()])
             }
             ExecutionEnvironment::EdgeWorker(_) | ExecutionEnvironment::Browser(_) => {
-                Vc::<Vec<String>>::default()
+                Vc::<Vec<RcStr>>::default()
             }
             ExecutionEnvironment::Custom(_) => todo!(),
         })
@@ -181,22 +175,22 @@ impl Environment {
     }
 
     #[turbo_tasks::function]
-    pub async fn resolve_conditions(self: Vc<Self>) -> Result<Vc<Vec<String>>> {
+    pub async fn resolve_conditions(self: Vc<Self>) -> Result<Vc<Vec<RcStr>>> {
         let env = self.await?;
         Ok(match env.execution {
             ExecutionEnvironment::NodeJsBuildTime(..) | ExecutionEnvironment::NodeJsLambda(_) => {
-                Vc::cell(vec!["node".to_string()])
+                Vc::cell(vec!["node".into()])
             }
-            ExecutionEnvironment::Browser(_) => Vc::<Vec<String>>::default(),
+            ExecutionEnvironment::Browser(_) => Vc::<Vec<RcStr>>::default(),
             ExecutionEnvironment::EdgeWorker(_) => {
-                Vc::cell(vec!["edge-light".to_string(), "worker".to_string()])
+                Vc::cell(vec!["edge-light".into(), "worker".into()])
             }
             ExecutionEnvironment::Custom(_) => todo!(),
         })
     }
 
     #[turbo_tasks::function]
-    pub async fn cwd(self: Vc<Self>) -> Result<Vc<Option<String>>> {
+    pub async fn cwd(self: Vc<Self>) -> Result<Vc<Option<RcStr>>> {
         let env = self.await?;
         Ok(match env.execution {
             ExecutionEnvironment::NodeJsBuildTime(env)
@@ -225,9 +219,9 @@ impl Environment {
             ExecutionEnvironment::NodeJsBuildTime(_) | ExecutionEnvironment::NodeJsLambda(_) => {
                 ChunkLoading::NodeJs.cell()
             }
-            ExecutionEnvironment::EdgeWorker(_) => ChunkLoading::None.cell(),
+            ExecutionEnvironment::EdgeWorker(_) => ChunkLoading::Edge.cell(),
             ExecutionEnvironment::Browser(_) => ChunkLoading::Dom.cell(),
-            _ => ChunkLoading::None.cell(),
+            ExecutionEnvironment::Custom(_) => todo!(),
         })
     }
 }
@@ -241,7 +235,7 @@ pub struct NodeJsEnvironment {
     pub compile_target: Vc<CompileTarget>,
     pub node_version: Vc<NodeJsVersion>,
     // user specified process.cwd
-    pub cwd: Vc<Option<String>>,
+    pub cwd: Vc<Option<RcStr>>,
 }
 
 impl Default for NodeJsEnvironment {
@@ -285,12 +279,12 @@ impl NodeJsEnvironment {
 #[turbo_tasks::value(shared)]
 pub enum NodeJsVersion {
     Current(Vc<Box<dyn ProcessEnv>>),
-    Static(Vc<String>),
+    Static(Vc<RcStr>),
 }
 
 impl Default for NodeJsVersion {
     fn default() -> Self {
-        NodeJsVersion::Static(Vc::cell(DEFAULT_NODEJS_VERSION.to_owned()))
+        NodeJsVersion::Static(Vc::cell(DEFAULT_NODEJS_VERSION.into()))
     }
 }
 
@@ -299,7 +293,7 @@ pub struct BrowserEnvironment {
     pub dom: bool,
     pub web_worker: bool,
     pub service_worker: bool,
-    pub browserslist_query: String,
+    pub browserslist_query: RcStr,
 }
 
 #[turbo_tasks::value(shared)]
@@ -309,8 +303,8 @@ pub struct EdgeWorkerEnvironment {}
 pub struct RuntimeVersions(#[turbo_tasks(trace_ignore)] pub Versions);
 
 #[turbo_tasks::function]
-pub async fn get_current_nodejs_version(env: Vc<Box<dyn ProcessEnv>>) -> Result<Vc<String>> {
-    let path_read = env.read("PATH".to_string()).await?;
+pub async fn get_current_nodejs_version(env: Vc<Box<dyn ProcessEnv>>) -> Result<Vc<RcStr>> {
+    let path_read = env.read("PATH".into()).await?;
     let path = path_read.as_ref().context("env must have PATH")?;
     let mut cmd = Command::new("node");
     cmd.arg("--version");
@@ -325,6 +319,6 @@ pub async fn get_current_nodejs_version(env: Vc<Box<dyn ProcessEnv>>) -> Result<
             .context("Version must begin with v")?
             .strip_suffix('\n')
             .context("Version must end with \\n")?
-            .to_owned(),
+            .into(),
     ))
 }

@@ -3,8 +3,7 @@ use std::{
     time::Instant,
 };
 
-use super::Event;
-use crate::LineWriter;
+use super::{Event, TaskResult};
 
 /// Struct for sending app events to TUI rendering
 #[derive(Debug, Clone)]
@@ -23,17 +22,6 @@ pub struct TuiTask {
     name: String,
     handle: AppSender,
     logs: Arc<Mutex<Vec<u8>>>,
-}
-
-/// Writer that will correctly render writes to the persisted part of the screen
-pub struct PersistedWriter {
-    writer: LineWriter<PersistedWriterInner>,
-}
-
-/// Writer that will correctly render writes to the persisted part of the screen
-#[derive(Debug, Clone)]
-pub struct PersistedWriterInner {
-    handle: AppSender,
 }
 
 impl AppSender {
@@ -68,6 +56,11 @@ impl AppSender {
         // it'll be a no-op.
         self.primary.send(Event::Stop).ok();
     }
+
+    /// Update the list of tasks displayed in the TUI
+    pub fn update_tasks(&self, tasks: Vec<String>) -> Result<(), mpsc::SendError<Event>> {
+        self.primary.send(Event::UpdateTasks { tasks })
+    }
 }
 
 impl AppReceiver {
@@ -99,11 +92,21 @@ impl TuiTask {
     }
 
     /// Mark the task as finished
-    pub fn finish(&self) -> Vec<u8> {
+    pub fn succeeded(&self) -> Vec<u8> {
+        self.finish(TaskResult::Success)
+    }
+
+    /// Mark the task as finished
+    pub fn failed(&self) -> Vec<u8> {
+        self.finish(TaskResult::Failure)
+    }
+
+    fn finish(&self, result: TaskResult) -> Vec<u8> {
         self.handle
             .primary
             .send(Event::EndTask {
                 task: self.name.clone(),
+                result,
             })
             .ok();
         self.logs.lock().expect("logs lock poisoned").clone()
@@ -119,18 +122,18 @@ impl TuiTask {
             .ok();
     }
 
-    /// Return a `PersistedWriter` which will properly write provided bytes to
-    /// a persisted section of the terminal.
-    ///
-    /// Designed to be a drop in replacement for `io::stdout()`,
-    /// all calls such as `writeln!(io::stdout(), "hello")` should
-    /// pass in a PersistedWriter instead.
-    pub fn stdout(&self) -> PersistedWriter {
-        PersistedWriter {
-            writer: LineWriter::new(PersistedWriterInner {
-                handle: self.as_app().clone(),
-            }),
-        }
+    pub fn status(&self, status: &str) {
+        // Since this will be rendered via ratatui we any ANSI escape codes will not be
+        // handled.
+        // TODO: prevent the status from having ANSI codes in this scenario
+        let status = console::strip_ansi_codes(status).into_owned();
+        self.handle
+            .primary
+            .send(Event::Status {
+                task: self.name.clone(),
+                status,
+            })
+            .ok();
     }
 }
 
@@ -149,31 +152,6 @@ impl std::io::Write for TuiTask {
                 task,
                 output: buf.to_vec(),
             })
-            .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "receiver dropped"))?;
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
-    }
-}
-
-impl std::io::Write for PersistedWriter {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.writer.write(buf)
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        self.writer.flush()
-    }
-}
-
-impl std::io::Write for PersistedWriterInner {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let bytes = buf.to_vec();
-        self.handle
-            .primary
-            .send(Event::Log { message: bytes })
             .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "receiver dropped"))?;
         Ok(buf.len())
     }

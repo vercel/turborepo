@@ -11,13 +11,7 @@ use turbopack_ecmascript::{CustomTransformer, TransformContext};
 /// Internally this contains a `CompiledPluginModuleBytes`, which points to the
 /// compiled, serialized wasmer::Module instead of raw file bytes to reduce the
 /// cost of the compilation.
-#[turbo_tasks::value(
-    transparent,
-    serialization = "none",
-    eq = "manual",
-    into = "new",
-    cell = "new"
-)]
+#[turbo_tasks::value(serialization = "none", eq = "manual", into = "new", cell = "new")]
 pub struct SwcPluginModule(
     #[turbo_tasks(trace_ignore)]
     #[cfg(feature = "swc_ecma_transform_plugin")]
@@ -72,7 +66,7 @@ impl Issue for UnsupportedSwcEcmaTransformPluginsIssue {
     #[turbo_tasks::function]
     async fn title(&self) -> Result<Vc<StyledString>> {
         Ok(StyledString::Text(
-            "Unsupported SWC EcmaScript transform plugins on this platform.".to_string(),
+            "Unsupported SWC EcmaScript transform plugins on this platform.".into(),
         )
         .cell())
     }
@@ -88,7 +82,7 @@ impl Issue for UnsupportedSwcEcmaTransformPluginsIssue {
             StyledString::Text(
                 "Turbopack does not yet support running SWC EcmaScript transform plugins on this \
                  platform."
-                    .to_string(),
+                    .into(),
             )
             .cell(),
         ))
@@ -120,6 +114,7 @@ impl SwcEcmaTransformPluginsTransformer {
 #[async_trait]
 impl CustomTransformer for SwcEcmaTransformPluginsTransformer {
     #[cfg_attr(not(feature = "swc_ecma_transform_plugin"), allow(unused))]
+    #[tracing::instrument(level = tracing::Level::TRACE, name = "swc_ecma_transform_plugin", skip_all)]
     async fn transform(&self, program: &mut Program, ctx: &TransformContext<'_>) -> Result<()> {
         #[cfg(feature = "swc_ecma_transform_plugin")]
         {

@@ -1,4 +1,5 @@
-use async_trait::async_trait;
+use std::future::Future;
+
 use reqwest::Method;
 use turborepo_vercel_api::telemetry::TelemetryEvent;
 
@@ -6,17 +7,15 @@ use crate::{retry, AnonAPIClient, Error};
 
 const TELEMETRY_ENDPOINT: &str = "/api/turborepo/v1/events";
 
-#[async_trait]
 pub trait TelemetryClient {
-    async fn record_telemetry(
+    fn record_telemetry(
         &self,
         events: Vec<TelemetryEvent>,
         telemetry_id: &str,
         session_id: &str,
-    ) -> Result<(), Error>;
+    ) -> impl Future<Output = Result<(), Error>> + Send;
 }
 
-#[async_trait]
 impl TelemetryClient for AnonAPIClient {
     async fn record_telemetry(
         &self,
@@ -34,8 +33,9 @@ impl TelemetryClient for AnonAPIClient {
             .header("x-turbo-session-id", session_id)
             .json(&events);
 
-        retry::make_retryable_request(telemetry_request)
+        retry::make_retryable_request(telemetry_request, retry::RetryStrategy::Timeout)
             .await?
+            .into_response()
             .error_for_status()?;
 
         Ok(())

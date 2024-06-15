@@ -1,4 +1,8 @@
-use std::{collections::HashMap, ffi::OsString, io};
+use std::{
+    collections::HashMap,
+    ffi::{OsStr, OsString},
+    io,
+};
 
 use convert_case::{Case, Casing};
 use miette::{Diagnostic, NamedSource, SourceSpan};
@@ -9,7 +13,6 @@ use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_auth::{TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE};
 use turborepo_dirs::{config_dir, vercel_config_dir};
 use turborepo_errors::TURBO_SITE;
-use turborepo_repository::package_json::{Error as PackageJsonError, PackageJson};
 
 pub use crate::turbo_json::RawTurboJson;
 use crate::{commands::CommandBase, turbo_json};
@@ -103,6 +106,14 @@ pub enum Error {
         #[source_code]
         text: NamedSource,
     },
+    #[error("`{field}` cannot contain an environment variable")]
+    InvalidDependsOnValue {
+        field: &'static str,
+        #[label("environment variable found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+    },
     #[error("`{field}` cannot contain an absolute path")]
     AbsolutePathInConfig {
         field: &'static str,
@@ -125,6 +136,14 @@ pub enum Error {
         #[source_code]
         text: NamedSource,
     },
+    #[error("found `pipeline` field instead of `tasks`")]
+    #[diagnostic(help("changed in 2.0: `pipeline` has been renamed to `tasks`"))]
+    PipelineField {
+        #[label("rename `pipeline` field to `tasks`")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+    },
     #[error("Failed to create APIClient: {0}")]
     ApiClient(#[source] turborepo_api_client::Error),
     #[error("{0} is not UTF8.")]
@@ -135,6 +154,8 @@ pub enum Error {
     InvalidRemoteCacheEnabled,
     #[error("TURBO_REMOTE_CACHE_TIMEOUT: error parsing timeout.")]
     InvalidRemoteCacheTimeout(#[source] std::num::ParseIntError),
+    #[error("TURBO_REMOTE_CACHE_UPLOAD_TIMEOUT: error parsing timeout.")]
+    InvalidUploadTimeout(#[source] std::num::ParseIntError),
     #[error("TURBO_PREFLIGHT should be either 1 or 0.")]
     InvalidPreflight,
     #[error(transparent)]
@@ -154,6 +175,7 @@ macro_rules! create_builder {
 const DEFAULT_API_URL: &str = "https://vercel.com/api";
 const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
 const DEFAULT_TIMEOUT: u64 = 30;
+const DEFAULT_UPLOAD_TIMEOUT: u64 = 60;
 
 // We intentionally don't derive Serialize so that different parts
 // of the code that want to display the config can tune how they
@@ -181,10 +203,11 @@ pub struct ConfigurationOptions {
     pub(crate) signature: Option<bool>,
     pub(crate) preflight: Option<bool>,
     pub(crate) timeout: Option<u64>,
+    pub(crate) upload_timeout: Option<u64>,
     pub(crate) enabled: Option<bool>,
     pub(crate) spaces_id: Option<String>,
-    #[serde(rename = "experimentalUI")]
-    pub(crate) experimental_ui: Option<bool>,
+    #[serde(rename = "ui")]
+    pub(crate) ui: Option<bool>,
 }
 
 #[derive(Default)]
@@ -234,16 +257,22 @@ impl ConfigurationOptions {
         self.preflight.unwrap_or_default()
     }
 
+    /// Note: 0 implies no timeout
     pub fn timeout(&self) -> u64 {
         self.timeout.unwrap_or(DEFAULT_TIMEOUT)
+    }
+
+    /// Note: 0 implies no timeout
+    pub fn upload_timeout(&self) -> u64 {
+        self.upload_timeout.unwrap_or(DEFAULT_UPLOAD_TIMEOUT)
     }
 
     pub fn spaces_id(&self) -> Option<&str> {
         self.spaces_id.as_deref()
     }
 
-    pub fn experimental_ui(&self) -> bool {
-        self.experimental_ui.unwrap_or_default() && atty::is(atty::Stream::Stdout)
+    pub fn ui(&self) -> bool {
+        self.ui.unwrap_or(true) && atty::is(atty::Stream::Stdout)
     }
 }
 
@@ -254,21 +283,6 @@ fn non_empty_str(s: Option<&str>) -> Option<&str> {
 
 trait ResolvedConfigurationOptions {
     fn get_configuration_options(self) -> Result<ConfigurationOptions, Error>;
-}
-
-impl ResolvedConfigurationOptions for PackageJson {
-    fn get_configuration_options(self) -> Result<ConfigurationOptions, Error> {
-        match &self.legacy_turbo_config {
-            Some(legacy_turbo_config) => {
-                let synthetic_raw_turbo_json: RawTurboJson = RawTurboJson::parse(
-                    &legacy_turbo_config.to_string(),
-                    AnchoredSystemPath::new("package.json").unwrap(),
-                )?;
-                synthetic_raw_turbo_json.get_configuration_options()
-            }
-            None => Ok(ConfigurationOptions::default()),
-        }
-    }
 }
 
 impl ResolvedConfigurationOptions for RawTurboJson {
@@ -284,7 +298,7 @@ impl ResolvedConfigurationOptions for RawTurboJson {
             .experimental_spaces
             .and_then(|spaces| spaces.id)
             .map(|spaces_id| spaces_id.into());
-        opts.experimental_ui = self.experimental_ui;
+        opts.ui = self.ui.map(|ui| ui.use_tui());
         Ok(opts)
     }
 }
@@ -312,7 +326,11 @@ fn get_env_var_config(
     turbo_mapping.insert(OsString::from("turbo_teamid"), "team_id");
     turbo_mapping.insert(OsString::from("turbo_token"), "token");
     turbo_mapping.insert(OsString::from("turbo_remote_cache_timeout"), "timeout");
-    turbo_mapping.insert(OsString::from("turbo_experimental_ui"), "experimental_ui");
+    turbo_mapping.insert(
+        OsString::from("turbo_remote_cache_upload_timeout"),
+        "upload_timeout",
+    );
+    turbo_mapping.insert(OsString::from("turbo_ui"), "ui");
     turbo_mapping.insert(OsString::from("turbo_preflight"), "preflight");
 
     // We do not enable new config sources:
@@ -383,14 +401,22 @@ fn get_env_var_config(
         None
     };
 
+    let upload_timeout = if let Some(upload_timeout) = output_map.get("upload_timeout") {
+        Some(
+            upload_timeout
+                .parse::<u64>()
+                .map_err(Error::InvalidUploadTimeout)?,
+        )
+    } else {
+        None
+    };
+
     // Process experimentalUI
-    let experimental_ui = output_map
-        .get("experimental_ui")
-        .and_then(|val| match val.as_str() {
-            "true" | "1" => Some(true),
-            "false" | "0" => Some(false),
-            _ => None,
-        });
+    let ui = output_map.get("ui").and_then(|val| match val.as_str() {
+        "true" | "1" => Some(true),
+        "false" | "0" => Some(false),
+        _ => None,
+    });
 
     // We currently don't pick up a Spaces ID via env var, we likely won't
     // continue using the Spaces name, we can add an env var when we have the
@@ -408,10 +434,11 @@ fn get_env_var_config(
         signature,
         preflight,
         enabled,
-        experimental_ui,
+        ui,
 
         // Processed numbers
         timeout,
+        upload_timeout,
         spaces_id,
     };
 
@@ -445,6 +472,18 @@ fn get_override_env_var_config(
         },
     )?;
 
+    let ui = environment
+        .get(OsStr::new("ci"))
+        .or_else(|| environment.get(OsStr::new("no_color")))
+        .and_then(|value| {
+            // If either of these are truthy, then we disable the TUI
+            if value == "true" || value == "1" {
+                Some(false)
+            } else {
+                None
+            }
+        });
+
     let output = ConfigurationOptions {
         api_url: None,
         login_url: None,
@@ -455,8 +494,9 @@ fn get_override_env_var_config(
         signature: None,
         preflight: None,
         enabled: None,
-        experimental_ui: None,
+        ui,
         timeout: None,
+        upload_timeout: None,
         spaces_id: None,
     };
 
@@ -592,11 +632,10 @@ impl TurborepoConfigBuilder {
     create_builder!(with_enabled, enabled, Option<bool>);
     create_builder!(with_preflight, preflight, Option<bool>);
     create_builder!(with_timeout, timeout, Option<u64>);
-    create_builder!(with_experimental_ui, experimental_ui, Option<bool>);
+    create_builder!(with_ui, ui, Option<bool>);
 
     pub fn build(&self) -> Result<ConfigurationOptions, Error> {
         // Priority, from least significant to most significant:
-        // - shared configuration (package.json .turbo)
         // - shared configuration (turbo.json)
         // - global configuration (~/.turbo/config.json)
         // - local configuration (<REPO_ROOT>/.turbo/config.json)
@@ -604,16 +643,6 @@ impl TurborepoConfigBuilder {
         // - CLI arguments
         // - builder pattern overrides.
 
-        let root_package_json = PackageJson::load(&self.repo_root.join_component("package.json"))
-            .or_else(|e| {
-            if let PackageJsonError::Io(e) = &e {
-                if matches!(e.kind(), std::io::ErrorKind::NotFound) {
-                    return Ok(Default::default());
-                }
-            }
-
-            Err(e)
-        })?;
         let turbo_json = RawTurboJson::read(
             &self.repo_root,
             AnchoredSystemPath::new("turbo.json").unwrap(),
@@ -635,7 +664,6 @@ impl TurborepoConfigBuilder {
         let override_env_var_config = get_override_env_var_config(&env_vars)?;
 
         let sources = [
-            root_package_json.get_configuration_options(),
             turbo_json.get_configuration_options(),
             global_config.get_configuration_options(),
             global_auth.get_configuration_options(),
@@ -679,8 +707,8 @@ impl TurborepoConfigBuilder {
                     if let Some(spaces_id) = current_source_config.spaces_id {
                         acc.spaces_id = Some(spaces_id);
                     }
-                    if let Some(experimental_ui) = current_source_config.experimental_ui {
-                        acc.experimental_ui = Some(experimental_ui);
+                    if let Some(ui) = current_source_config.ui {
+                        acc.ui = Some(ui);
                     }
 
                     acc
@@ -737,7 +765,7 @@ mod test {
             "turbo_remote_cache_timeout".into(),
             turbo_remote_cache_timeout.to_string().into(),
         );
-        env.insert("turbo_experimental_ui".into(), "true".into());
+        env.insert("turbo_ui".into(), "true".into());
         env.insert("turbo_preflight".into(), "true".into());
 
         let config = get_env_var_config(&env).unwrap();
@@ -748,7 +776,7 @@ mod test {
         assert_eq!(turbo_teamid, config.team_id.unwrap());
         assert_eq!(turbo_token, config.token.unwrap());
         assert_eq!(turbo_remote_cache_timeout, config.timeout.unwrap());
-        assert_eq!(Some(true), config.experimental_ui);
+        assert_eq!(Some(true), config.ui);
     }
 
     #[test]
@@ -759,7 +787,7 @@ mod test {
         env.insert("turbo_team".into(), "".into());
         env.insert("turbo_teamid".into(), "".into());
         env.insert("turbo_token".into(), "".into());
-        env.insert("turbo_experimental_ui".into(), "".into());
+        env.insert("turbo_ui".into(), "".into());
         env.insert("turbo_preflight".into(), "".into());
 
         let config = get_env_var_config(&env).unwrap();
@@ -768,7 +796,7 @@ mod test {
         assert_eq!(config.team_slug(), None);
         assert_eq!(config.team_id(), None);
         assert_eq!(config.token(), None);
-        assert!(!config.experimental_ui());
+        assert_eq!(config.ui, None);
         assert!(!config.preflight());
     }
 
@@ -787,10 +815,12 @@ mod test {
             "vercel_artifacts_owner".into(),
             vercel_artifacts_owner.into(),
         );
+        env.insert("ci".into(), "1".into());
 
         let config = get_override_env_var_config(&env).unwrap();
         assert_eq!(vercel_artifacts_token, config.token.unwrap());
         assert_eq!(vercel_artifacts_owner, config.team_id.unwrap());
+        assert_eq!(Some(false), config.ui);
     }
 
     #[test]

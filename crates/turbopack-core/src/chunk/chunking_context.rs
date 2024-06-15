@@ -1,6 +1,6 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use turbo_tasks::{trace::TraceRawVcs, TaskInput, Upcast, Value, ValueToString, Vc};
+use turbo_tasks::{trace::TraceRawVcs, RcStr, TaskInput, Upcast, Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbo_tasks_hash::DeterministicHash;
 
@@ -41,10 +41,16 @@ pub struct ChunkGroupResult {
     pub availability_info: AvailabilityInfo,
 }
 
+#[turbo_tasks::value(shared)]
+pub struct EntryChunkGroupResult {
+    pub asset: Vc<Box<dyn OutputAsset>>,
+    pub availability_info: AvailabilityInfo,
+}
+
 /// A context for the chunking that influences the way chunks are created
 #[turbo_tasks::value_trait]
 pub trait ChunkingContext {
-    fn name(self: Vc<Self>) -> Vc<String>;
+    fn name(self: Vc<Self>) -> Vc<RcStr>;
     fn context_path(self: Vc<Self>) -> Vc<FileSystemPath>;
     fn output_root(self: Vc<Self>) -> Vc<FileSystemPath>;
 
@@ -56,25 +62,19 @@ pub trait ChunkingContext {
     // discretion of chunking context implementors. However, we currently use this
     // in a couple of places in `turbopack-css`, so we need to remove that
     // dependency first.
-    fn chunk_path(self: Vc<Self>, ident: Vc<AssetIdent>, extension: String) -> Vc<FileSystemPath>;
+    fn chunk_path(self: Vc<Self>, ident: Vc<AssetIdent>, extension: RcStr) -> Vc<FileSystemPath>;
 
     // TODO(alexkirsz) Remove this from the chunking context.
     /// Reference Source Map Assets for chunks
     fn reference_chunk_source_maps(self: Vc<Self>, chunk: Vc<Box<dyn OutputAsset>>) -> Vc<bool>;
 
-    fn can_be_in_same_chunk(
-        self: Vc<Self>,
-        asset_a: Vc<Box<dyn Module>>,
-        asset_b: Vc<Box<dyn Module>>,
-    ) -> Vc<bool>;
-
     /// Returns a URL (relative or absolute, depending on the asset prefix) to
     /// the static asset based on its `ident`.
-    fn asset_url(self: Vc<Self>, ident: Vc<AssetIdent>) -> Result<Vc<String>>;
+    fn asset_url(self: Vc<Self>, ident: Vc<AssetIdent>) -> Result<Vc<RcStr>>;
 
     fn asset_path(
         self: Vc<Self>,
-        content_hash: String,
+        content_hash: RcStr,
         original_asset_ident: Vc<AssetIdent>,
     ) -> Vc<FileSystemPath>;
 
@@ -101,6 +101,18 @@ pub trait ChunkingContext {
         evaluatable_assets: Vc<EvaluatableAssets>,
         availability_info: Value<AvailabilityInfo>,
     ) -> Vc<ChunkGroupResult>;
+
+    /// Generates an output chunk that:
+    /// * evaluates the given assets; and
+    /// * exports the result of evaluating the given module as a CommonJS
+    ///   default export.
+    fn entry_chunk_group(
+        self: Vc<Self>,
+        path: Vc<FileSystemPath>,
+        module: Vc<Box<dyn Module>>,
+        evaluatable_assets: Vc<EvaluatableAssets>,
+        availability_info: Value<AvailabilityInfo>,
+    ) -> Result<Vc<EntryChunkGroupResult>>;
 
     async fn chunk_item_id_from_ident(
         self: Vc<Self>,
@@ -135,6 +147,34 @@ pub trait ChunkingContextExt {
         evaluatable_assets: Vc<EvaluatableAssets>,
         availability_info: Value<AvailabilityInfo>,
     ) -> Vc<OutputAssets>
+    where
+        Self: Send;
+
+    fn entry_chunk_group_asset(
+        self: Vc<Self>,
+        path: Vc<FileSystemPath>,
+        module: Vc<Box<dyn Module>>,
+        evaluatable_assets: Vc<EvaluatableAssets>,
+        availability_info: Value<AvailabilityInfo>,
+    ) -> Vc<Box<dyn OutputAsset>>
+    where
+        Self: Send;
+
+    fn root_entry_chunk_group(
+        self: Vc<Self>,
+        path: Vc<FileSystemPath>,
+        module: Vc<Box<dyn Module>>,
+        evaluatable_assets: Vc<EvaluatableAssets>,
+    ) -> Vc<EntryChunkGroupResult>
+    where
+        Self: Send;
+
+    fn root_entry_chunk_group_asset(
+        self: Vc<Self>,
+        path: Vc<FileSystemPath>,
+        module: Vc<Box<dyn Module>>,
+        evaluatable_assets: Vc<EvaluatableAssets>,
+    ) -> Vc<Box<dyn OutputAsset>>
     where
         Self: Send;
 
@@ -176,6 +216,51 @@ impl<T: ChunkingContext + Send + Upcast<Box<dyn ChunkingContext>>> ChunkingConte
         )
     }
 
+    fn entry_chunk_group_asset(
+        self: Vc<Self>,
+        path: Vc<FileSystemPath>,
+        module: Vc<Box<dyn Module>>,
+        evaluatable_assets: Vc<EvaluatableAssets>,
+        availability_info: Value<AvailabilityInfo>,
+    ) -> Vc<Box<dyn OutputAsset>> {
+        entry_chunk_group_asset(
+            path,
+            Vc::upcast(self),
+            module,
+            evaluatable_assets,
+            availability_info,
+        )
+    }
+
+    fn root_entry_chunk_group(
+        self: Vc<Self>,
+        path: Vc<FileSystemPath>,
+        module: Vc<Box<dyn Module>>,
+        evaluatable_assets: Vc<EvaluatableAssets>,
+    ) -> Vc<EntryChunkGroupResult> {
+        self.entry_chunk_group(
+            path,
+            module,
+            evaluatable_assets,
+            Value::new(AvailabilityInfo::Root),
+        )
+    }
+
+    fn root_entry_chunk_group_asset(
+        self: Vc<Self>,
+        path: Vc<FileSystemPath>,
+        module: Vc<Box<dyn Module>>,
+        evaluatable_assets: Vc<EvaluatableAssets>,
+    ) -> Vc<Box<dyn OutputAsset>> {
+        entry_chunk_group_asset(
+            path,
+            Vc::upcast(self),
+            module,
+            evaluatable_assets,
+            Value::new(AvailabilityInfo::Root),
+        )
+    }
+
     fn chunk_group_assets(
         self: Vc<Self>,
         module: Vc<Box<dyn ChunkableModule>>,
@@ -204,6 +289,20 @@ async fn evaluated_chunk_group_assets(
         .evaluated_chunk_group(ident, evaluatable_assets, availability_info)
         .await?
         .assets)
+}
+
+#[turbo_tasks::function]
+async fn entry_chunk_group_asset(
+    path: Vc<FileSystemPath>,
+    chunking_context: Vc<Box<dyn ChunkingContext>>,
+    module: Vc<Box<dyn Module>>,
+    evaluatable_assets: Vc<EvaluatableAssets>,
+    availability_info: Value<AvailabilityInfo>,
+) -> Result<Vc<Box<dyn OutputAsset>>> {
+    Ok(chunking_context
+        .entry_chunk_group(path, module, evaluatable_assets, availability_info)
+        .await?
+        .asset)
 }
 
 #[turbo_tasks::function]

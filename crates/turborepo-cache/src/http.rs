@@ -1,5 +1,11 @@
-use std::{backtrace::Backtrace, io::Write};
+use std::{
+    backtrace::Backtrace,
+    collections::HashMap,
+    io::{Cursor, Write},
+    sync::{Arc, Mutex},
+};
 
+use tokio_stream::StreamExt;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
@@ -11,8 +17,11 @@ use turborepo_api_client::{
 use crate::{
     cache_archive::{CacheReader, CacheWriter},
     signature_authentication::ArtifactSignatureAuthenticator,
+    upload_progress::{UploadProgress, UploadProgressQuery},
     CacheError, CacheHitMetadata, CacheOpts, CacheSource,
 };
+
+pub type UploadMap = HashMap<String, UploadProgressQuery<10, 100>>;
 
 pub struct HTTPCache {
     client: APIClient,
@@ -20,6 +29,7 @@ pub struct HTTPCache {
     repo_root: AbsoluteSystemPathBuf,
     api_auth: APIAuth,
     analytics_recorder: Option<AnalyticsSender>,
+    uploads: Arc<Mutex<UploadMap>>,
 }
 
 impl HTTPCache {
@@ -53,6 +63,7 @@ impl HTTPCache {
             client,
             signer_verifier,
             repo_root,
+            uploads: Arc::new(Mutex::new(HashMap::new())),
             api_auth,
             analytics_recorder,
         }
@@ -68,6 +79,7 @@ impl HTTPCache {
     ) -> Result<(), CacheError> {
         let mut artifact_body = Vec::new();
         self.write(&mut artifact_body, anchor, files).await?;
+        let bytes = artifact_body.len();
 
         let tag = self
             .signer_verifier
@@ -75,19 +87,49 @@ impl HTTPCache {
             .map(|signer| signer.generate_tag(hash.as_bytes(), &artifact_body))
             .transpose()?;
 
-        self.client
+        let stream = tokio_util::codec::FramedRead::new(
+            Cursor::new(artifact_body),
+            tokio_util::codec::BytesCodec::new(),
+        )
+        .map(|res| {
+            res.map(|bytes| bytes.freeze())
+                .map_err(turborepo_api_client::Error::from)
+        });
+
+        let (progress, query) = UploadProgress::<10, 100, _>::new(stream, Some(bytes));
+
+        {
+            let mut uploads = self.uploads.lock().unwrap();
+            uploads.insert(hash.to_string(), query);
+        }
+
+        tracing::debug!("uploading {}", hash);
+
+        match self
+            .client
             .put_artifact(
                 hash,
-                &artifact_body,
+                progress,
                 duration,
                 tag.as_deref(),
                 &self.api_auth.token,
                 self.api_auth.team_id.as_deref(),
                 self.api_auth.team_slug.as_deref(),
             )
-            .await?;
-
-        Ok(())
+            .await
+        {
+            Ok(_) => {
+                tracing::debug!("uploaded {}", hash);
+                Ok(())
+            }
+            Err(turborepo_api_client::Error::ReqwestError(e)) if e.is_timeout() => {
+                Err(CacheError::TimeoutError(hash.to_string()))
+            }
+            Err(turborepo_api_client::Error::ReqwestError(e)) if e.is_connect() => {
+                Err(CacheError::ConnectError)
+            }
+            Err(e) => Err(e.into()),
+        }
     }
 
     #[tracing::instrument(skip_all)]
@@ -223,6 +265,10 @@ impl HTTPCache {
         )))
     }
 
+    pub fn requests(&self) -> Arc<Mutex<UploadMap>> {
+        self.uploads.clone()
+    }
+
     #[tracing::instrument(skip_all)]
     pub(crate) fn restore_tar(
         root: &AbsoluteSystemPath,
@@ -235,6 +281,8 @@ impl HTTPCache {
 
 #[cfg(test)]
 mod test {
+    use std::time::Duration;
+
     use anyhow::Result;
     use futures::future::try_join_all;
     use tempfile::tempdir;
@@ -276,7 +324,13 @@ mod test {
         let files = &test_case.files;
         let duration = test_case.duration;
 
-        let api_client = APIClient::new(format!("http://localhost:{}", port), 200, "2.0.0", true)?;
+        let api_client = APIClient::new(
+            format!("http://localhost:{}", port),
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            true,
+        )?;
         let opts = CacheOpts::default();
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),

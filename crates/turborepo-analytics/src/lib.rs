@@ -184,7 +184,6 @@ mod tests {
         time::Duration,
     };
 
-    use async_trait::async_trait;
     use tokio::{
         select,
         sync::{mpsc, mpsc::UnboundedReceiver},
@@ -207,7 +206,6 @@ mod tests {
         }
     }
 
-    #[async_trait]
     impl AnalyticsClient for DummyClient {
         async fn record_analytics(
             &self,

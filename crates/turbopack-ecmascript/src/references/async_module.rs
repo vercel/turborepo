@@ -8,18 +8,15 @@ use swc_core::{
 };
 use turbo_tasks::{trace::TraceRawVcs, ReadRef, TryFlatJoinIterExt, TryJoinIterExt, Vc};
 use turbopack_core::{
-    chunk::{AsyncModuleInfo, ChunkableModule, ChunkableModuleReference, ChunkingType},
+    chunk::{
+        AsyncModuleInfo, ChunkableModule, ChunkableModuleReference, ChunkingContext, ChunkingType,
+    },
     reference::{ModuleReference, ModuleReferences},
     resolve::ExternalType,
 };
 
 use super::esm::base::ReferencedAsset;
-use crate::{
-    chunk::{EcmascriptChunkPlaceable, EcmascriptChunkingContext},
-    code_gen::CodeGeneration,
-    create_visitor,
-    references::esm::base::insert_hoisted_stmt,
-};
+use crate::{code_gen::CodeGeneration, create_visitor, references::esm::base::insert_hoisted_stmt};
 
 /// Information needed for generating the async module wrapper for
 /// [EcmascriptChunkItem](crate::chunk::EcmascriptChunkItem)s.
@@ -47,7 +44,6 @@ impl OptionAsyncModuleOptions {
 /// level await statement or is referencing an external ESM module.
 #[turbo_tasks::value(shared)]
 pub struct AsyncModule {
-    pub placeable: Vc<Box<dyn EcmascriptChunkPlaceable>>,
     pub has_top_level_await: bool,
     pub import_externals: bool,
 }
@@ -102,7 +98,7 @@ impl AsyncModule {
     #[turbo_tasks::function]
     async fn get_async_idents(
         &self,
-        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
         async_module_info: Vc<AsyncModuleInfo>,
         references: Vc<ModuleReferences>,
     ) -> Result<Vc<AsyncModuleIdents>> {
@@ -116,10 +112,7 @@ impl AsyncModule {
                     return Ok(None);
                 };
                 Ok(match &*referenced_asset {
-                    ReferencedAsset::External(
-                        _,
-                        ExternalType::OriginalReference | ExternalType::EcmaScriptModule,
-                    ) => {
+                    ReferencedAsset::External(_, ExternalType::EcmaScriptModule) => {
                         if self.import_externals {
                             referenced_asset.get_ident().await?
                         } else {
@@ -168,10 +161,7 @@ impl AsyncModule {
                         };
                         Ok(matches!(
                             &*referenced_asset,
-                            ReferencedAsset::External(
-                                _,
-                                ExternalType::OriginalReference | ExternalType::EcmaScriptModule
-                            )
+                            ReferencedAsset::External(_, ExternalType::EcmaScriptModule)
                         ))
                     })
                     .try_join()
@@ -199,7 +189,7 @@ impl AsyncModule {
     #[turbo_tasks::function]
     pub async fn code_generation(
         self: Vc<Self>,
-        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
         async_module_info: Option<Vc<AsyncModuleInfo>>,
         references: Vc<ModuleReferences>,
     ) -> Result<Vc<CodeGeneration>> {

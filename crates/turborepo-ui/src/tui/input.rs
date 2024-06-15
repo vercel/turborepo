@@ -4,8 +4,21 @@ use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use super::{event::Event, Error};
 
+#[derive(Debug, Clone, Copy)]
+pub struct InputOptions {
+    pub interact: bool,
+    pub tty_stdin: bool,
+}
 /// Return any immediately available event
-pub fn input(interact: bool) -> Result<Option<Event>, Error> {
+pub fn input(options: InputOptions) -> Result<Option<Event>, Error> {
+    let InputOptions {
+        interact,
+        tty_stdin,
+    } = options;
+    // If stdin is not a tty, then we do not attempt to read from it
+    if !tty_stdin {
+        return Ok(None);
+    }
     // poll with 0 duration will only return true if event::read won't need to wait
     // for input
     if crossterm::event::poll(Duration::from_millis(0))? {
@@ -23,7 +36,7 @@ pub fn input(interact: bool) -> Result<Option<Event>, Error> {
     }
 }
 
-/// Converts a crostterm key event into a TUI interaction event
+/// Converts a crossterm key event into a TUI interaction event
 fn translate_key_event(interact: bool, key_event: KeyEvent) -> Option<Event> {
     // On Windows events for releasing a key are produced
     // We skip these to avoid emitting 2 events per key press.

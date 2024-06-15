@@ -200,7 +200,6 @@ mod tests {
         }
     }
 
-    #[async_trait]
     impl Client for MockApiClient {
         async fn get_user(&self, token: &str) -> turborepo_api_client::Result<UserResponse> {
             if token.is_empty() {
@@ -269,7 +268,6 @@ mod tests {
         }
     }
 
-    #[async_trait]
     impl TokenClient for MockApiClient {
         async fn get_metadata(
             &self,
@@ -301,7 +299,6 @@ mod tests {
         }
     }
 
-    #[async_trait]
     impl CacheClient for MockApiClient {
         async fn get_artifact(
             &self,
@@ -316,7 +313,11 @@ mod tests {
         async fn put_artifact(
             &self,
             _hash: &str,
-            _artifact_body: &[u8],
+            _artifact_body: impl turborepo_api_client::Stream<
+                    Item = Result<turborepo_api_client::Bytes, turborepo_api_client::Error>,
+                > + Send
+                + Sync
+                + 'static,
             _duration: u64,
             _tag: Option<&str>,
             _token: &str,

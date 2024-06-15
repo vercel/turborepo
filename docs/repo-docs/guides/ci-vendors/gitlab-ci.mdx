@@ -1,0 +1,131 @@
+---
+title: GitLab CI
+description: Learn how to use GitLab CI with Turborepo.
+---
+
+import { PackageManagerTabs, Tab } from '#/components/tabs';
+
+The following example shows how to use Turborepo with [GitLab CI](https://docs.gitlab.com/ee/ci/).
+
+For a given root `package.json`:
+
+```json title="./package.json"
+{
+  "name": "my-turborepo",
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test"
+  },
+  "devDependencies": {
+    "turbo": "latest"
+  }
+}
+```
+
+And a `turbo.json`:
+
+```json title="./turbo.json"
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "build": {
+      "outputs": [".svelte-kit/**"],
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "dependsOn": ["^build"]
+    }
+  }
+}
+```
+
+Create a file called `.gitlab-ci.yml` in your repository with the following contents:
+
+<PackageManagerTabs>
+<Tab>
+
+        ```yaml title=".gitlab-ci.yml"
+        image: node:latest
+        stages:
+          - build
+        build:
+          stage: build
+          script:
+            - npm install
+            - npm run build
+            - npm run test
+        ```
+
+    </Tab>
+    <Tab>
+
+        ```yaml title=".gitlab-ci.yml"
+        image: node:latest
+        stages:
+          - build
+        build:
+          stage: build
+          script:
+            - yarn install
+            - yarn build
+            - yarn test
+          cache:
+            paths:
+              - node_modules/
+              - .yarn
+        ```
+
+    </Tab>
+    <Tab>
+
+        ```yaml title=".gitlab-ci.yml"
+        image: node:latest
+        stages:
+          - build
+        build:
+          stage: build
+          before_script:
+            - curl -f https://get.pnpm.io/v6.16.js | node - add --global pnpm@6.32.2
+            - pnpm config set store-dir .pnpm-store
+          script:
+            - pnpm install
+            - pnpm build
+            - pnpm test
+          cache:
+            key:
+              files:
+                - pnpm-lock.yaml
+            paths:
+              - .pnpm-store
+        ```
+
+        > For more information visit the pnpm documentation section on GitLab CI integration, view it [here](https://pnpm.io/continuous-integration#gitlab)
+    </Tab>
+
+</PackageManagerTabs>
+
+## Remote Caching
+
+To use Remote Caching, retrieve the team and token for the Remote Cache for your provider. In this example, we'll use [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching):
+
+- `TURBO_TOKEN` - The Bearer token to access the Remote Cache
+- `TURBO_TEAM` - The account to which the monorepo belongs
+
+To use Vercel Remote Caching, you can get the value of these variables in a few steps:
+
+1. Create a Scoped Access Token to your account in the [Vercel Dashboard](https://vercel.com/account/tokens)
+
+![Vercel Access Tokens](/images/docs/vercel-create-token.png)
+
+Copy the value to a safe place. You'll need it in a moment.
+
+2. Go to your GitLab repository settings and click on the **Settings** and then **CI/CD** tab. Create a new variable called `TURBO_TOKEN` and enter the value of your Scoped Access Token.
+
+![GitLab CI Variables](/images/docs/gitlab-ci-variables.png)
+![GitLab CI Create Variable](/images/docs/gitlab-ci-create-variable.png)
+
+3. Make a second secret called `TURBO_TEAM` and enter the value of your team's Vercel URL _without_ the `vercel.com/`. Your Team URL can be found inside your team's general project settings from the dashboard.
+
+   If you're using a Hobby Plan, you can use your username. Your username can be found in your [Vercel Personal Account Settings](https://vercel.com/account)
+
+![Vercel Account Slug](/images/docs/vercel-slug.png)

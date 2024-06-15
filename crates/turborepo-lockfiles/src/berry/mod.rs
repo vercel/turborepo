@@ -11,7 +11,7 @@ use std::{
 };
 
 use de::Entry;
-use identifiers::{Descriptor, Locator};
+use identifiers::{Descriptor, Ident, Locator};
 use protocol_resolver::DescriptorResolver;
 use serde::Deserialize;
 use thiserror::Error;
@@ -520,6 +520,16 @@ impl Lockfile for BerryLockfile {
             true
         }
     }
+
+    fn turbo_version(&self) -> Option<String> {
+        let turbo_ident = Ident::try_from("turbo").expect("'turbo' is valid identifier");
+        let key = self
+            .locator_package
+            .keys()
+            .find(|key| turbo_ident == key.ident)?;
+        let entry = self.locator_package.get(key)?;
+        Some(entry.version.clone())
+    }
 }
 
 impl LockfileData {
@@ -774,6 +784,7 @@ mod test {
             &lockfile,
             "apps/docs",
             HashMap::from_iter(vec![("lodash".into(), "^4.17.21".into())]),
+            false,
         )
         .unwrap();
 
@@ -883,7 +894,7 @@ mod test {
         .map(|(k, v)| (k.to_string(), v.to_string()))
         .collect();
 
-        let closure = transitive_closure(&lockfile, "packages/ui", unresolved_deps).unwrap();
+        let closure = transitive_closure(&lockfile, "packages/ui", unresolved_deps, false).unwrap();
 
         assert!(closure.contains(&Package {
             key: "ajv@npm:8.11.2".into(),
@@ -1063,6 +1074,7 @@ mod test {
             )]
             .into_iter()
             .collect(),
+            false,
         )
         .unwrap();
 
@@ -1145,5 +1157,12 @@ mod test {
                 "small-yarn4@workspace:.".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn test_turbo_version() {
+        let data = LockfileData::from_bytes(include_bytes!("../../fixtures/berry.lock")).unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
+        assert_eq!(lockfile.turbo_version().as_deref(), Some("1.4.6"));
     }
 }

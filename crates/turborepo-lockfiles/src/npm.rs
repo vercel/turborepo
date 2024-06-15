@@ -147,6 +147,11 @@ impl Lockfile for NpmLockfile {
             true
         }
     }
+
+    fn turbo_version(&self) -> Option<String> {
+        let turbo_entry = self.packages.get("node_modules/turbo")?;
+        turbo_entry.version.clone()
+    }
 }
 
 impl NpmLockfile {
@@ -440,6 +445,7 @@ mod test {
             ]
             .into_iter()
             .collect(),
+            false,
         )?;
         assert!(closures.get("packages/a").unwrap().contains(&Package {
             key: "node_modules/eslint-plugin-turbo".into(),
@@ -447,6 +453,13 @@ mod test {
         }));
         assert!(closures.get("packages/b").unwrap().is_empty());
         assert!(closures.get("packages/c").unwrap().is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_turbo_version() -> Result<(), Error> {
+        let lockfile = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
+        assert_eq!(lockfile.turbo_version().as_deref(), Some("1.5.5"));
         Ok(())
     }
 }

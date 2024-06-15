@@ -9,7 +9,7 @@
     "db:migrate:dev": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "tsx src/seed.ts",
-    "dev": "tsup --watch",
+    "dev": "tsup src/* --watch",
     "format": "prisma format",
     "generate": "prisma generate",
     "lint": "eslint . --max-warnings 0",
@@ -22,10 +22,11 @@
   },
   "devDependencies": {
     "@repo/eslint-config": "*",
+    "@repo/typescript-config": "*",
     "eslint": "^8.57.0",
     "prisma": "^5.10.2",
     "rimraf": "^5.0.5",
-    "@repo/typescript-config": "*",
+    "tsup": "^8.0.2",
     "tsx": "^4.7.1",
     "typescript": "^5.3.3"
   }

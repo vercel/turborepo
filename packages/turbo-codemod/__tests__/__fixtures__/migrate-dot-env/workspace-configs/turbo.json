@@ -1,0 +1,13 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "build-one": {
+      "dotEnv": ["build-one/.env"]
+    },
+    "build-two": {
+      "dotEnv": ["build-two/.env"],
+      "inputs": ["build-two/**/*.ts"]
+    },
+    "build-three": {}
+  }
+}

@@ -22,7 +22,7 @@ export async function transform(
   }
 
   // check git status
-  if (!options.dry) {
+  if (!options.dryRun) {
     checkGitStatus({ directory, force: options.force });
   }
 

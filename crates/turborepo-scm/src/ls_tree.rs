@@ -14,6 +14,7 @@ impl Git {
         let mut hashes = GitHashes::new();
         let mut git = Command::new(self.bin.as_std_path())
             .args(["ls-tree", "-r", "-z", "HEAD"])
+            .env("GIT_OPTIONAL_LOCKS", "0")
             .current_dir(root_path)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

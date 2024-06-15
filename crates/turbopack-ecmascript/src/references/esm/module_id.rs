@@ -1,9 +1,10 @@
 use anyhow::Result;
 use swc_core::{ecma::ast::Expr, quote};
-use turbo_tasks::{ValueToString, Vc};
+use turbo_tasks::{RcStr, ValueToString, Vc};
 use turbopack_core::{
     chunk::{
-        ChunkItemExt, ChunkableModule, ChunkableModuleReference, ChunkingTypeOption, ModuleId,
+        ChunkItemExt, ChunkableModule, ChunkableModuleReference, ChunkingContext,
+        ChunkingTypeOption, ModuleId,
     },
     reference::ModuleReference,
     resolve::ModuleResolveResult,
@@ -11,7 +12,6 @@ use turbopack_core::{
 
 use super::{base::ReferencedAsset, EsmAssetReference};
 use crate::{
-    chunk::EcmascriptChunkingContext,
     code_gen::{CodeGenerateable, CodeGeneration},
     create_visitor,
     references::AstPath,
@@ -43,11 +43,10 @@ impl ModuleReference for EsmModuleIdAssetReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for EsmModuleIdAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
-        Ok(Vc::cell(format!(
-            "module id of {}",
-            self.inner.to_string().await?,
-        )))
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
+        Ok(Vc::cell(
+            format!("module id of {}", self.inner.to_string().await?,).into(),
+        ))
     }
 }
 
@@ -64,7 +63,7 @@ impl CodeGenerateable for EsmModuleIdAssetReference {
     #[turbo_tasks::function]
     async fn code_generation(
         &self,
-        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
     ) -> Result<Vc<CodeGeneration>> {
         let mut visitors = Vec::new();
 
@@ -74,7 +73,7 @@ impl CodeGenerateable for EsmModuleIdAssetReference {
                 .id()
                 .await?;
             let id = Expr::Lit(match &*id {
-                ModuleId::String(s) => s.clone().into(),
+                ModuleId::String(s) => s.as_str().into(),
                 ModuleId::Number(n) => (*n as f64).into(),
             });
             visitors.push(

@@ -1,0 +1,15 @@
+---
+title: scan
+description: API reference for the `turbo scan` command
+---
+
+Enable faster tooling for your Turborepo locally with one, interactive command.
+
+You'll be taken through a short series of steps to enable the fastest settings for your Turborepo. These optimizations include:
+
+- **Git FS Monitor**: `turbo` leans on Git to do file change discovery. Since we have to wait for `git` to tell us about changes, we can use [Git's built-in filesystem monitor](https://git-scm.com/docs/git-fsmonitor--daemon) to get those notifications sooner.
+- **Turbo Daemon**: Turborepo's daemon optimistically understands your repository in the background. By doing shared, common work that `turbo` will need to do when running tasks beforehand, `turbo` will run your tasks faster.
+- **Remote Caching**: While Turborepo can cache your work locally, it can also share a cache across all of your machines. Enabling [Remote Caching](/repo/docs/core-concepts/remote-caching) makes your caching **multiplayer**, ensuring that you, your teammates, and your CI machines, never do the same work twice.
+- **Check `turbo` version**: We're always working towards making `turbo` better. To ensure you are using the latest version of Turborepo, we'll check your version and remind you to install `latest` if you aren't using it yet.
+- **Check for Turborepo LSP**:
+  Visit the [VSCode Extension Marketplace](https://marketplace.visualstudio.com/items?itemName=Vercel.turbo-vsc) and install the Turborepo LSP extension for your IDE.

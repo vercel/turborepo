@@ -11,10 +11,11 @@ use swc_core::{
     quote, quote_expr,
 };
 use turbo_tasks::{
-    debug::ValueDebugFormat, trace::TraceRawVcs, ReadRef, TryJoinIterExt, Value, ValueToString, Vc,
+    debug::ValueDebugFormat, trace::TraceRawVcs, RcStr, ReadRef, TryJoinIterExt, Value,
+    ValueToString, Vc,
 };
 use turbopack_core::{
-    chunk::ChunkableModuleReference,
+    chunk::{ChunkableModuleReference, ChunkingContext},
     issue::IssueSource,
     reference::ModuleReference,
     resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult},
@@ -23,7 +24,6 @@ use turbopack_resolve::ecmascript::{cjs_resolve, try_to_severity};
 
 use super::pattern_mapping::{PatternMapping, ResolveType::ChunkItem};
 use crate::{
-    chunk::EcmascriptChunkingContext,
     code_gen::{CodeGenerateable, CodeGeneration},
     create_visitor,
     references::AstPath,
@@ -72,11 +72,10 @@ impl ModuleReference for AmdDefineAssetReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for AmdDefineAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
-        Ok(Vc::cell(format!(
-            "AMD define dependency {}",
-            self.request.to_string().await?,
-        )))
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
+        Ok(Vc::cell(
+            format!("AMD define dependency {}", self.request.to_string().await?,).into(),
+        ))
     }
 }
 
@@ -139,7 +138,7 @@ impl CodeGenerateable for AmdDefineWithDependenciesCodeGen {
     #[turbo_tasks::function]
     async fn code_generation(
         &self,
-        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
     ) -> Result<Vc<CodeGeneration>> {
         let mut visitors = Vec::new();
 

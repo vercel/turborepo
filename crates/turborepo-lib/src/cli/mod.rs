@@ -8,8 +8,8 @@ use clap::{
 };
 use clap_complete::{generate, Shell};
 pub use error::Error;
-use serde::{Deserialize, Serialize};
-use tracing::{debug, error, warn};
+use serde::Serialize;
+use tracing::{debug, error};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::AnonAPIClient;
 use turborepo_repository::inference::{RepoMode, RepoState};
@@ -45,10 +45,8 @@ const DEFAULT_NUM_WORKERS: u32 = 10;
 const SUPPORTED_GRAPH_FILE_EXTENSIONS: [&str; 8] =
     ["svg", "png", "jpg", "pdf", "json", "html", "mermaid", "dot"];
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize, ValueEnum, Deserializable)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum, Deserializable, Serialize)]
 pub enum OutputLogsMode {
-    // biome also obeys serde rename directives,
-    // so the `Deserializable` derive will work properly here
     #[serde(rename = "full")]
     Full,
     #[serde(rename = "none")]
@@ -105,7 +103,15 @@ impl Display for LogOrder {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
+impl LogOrder {
+    pub fn compatible_with_tui(&self) -> bool {
+        // If the user requested a specific order to the logs, then this isn't
+        // compatible with the TUI and means we cannot use it.
+        matches!(self, Self::Auto)
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, ValueEnum)]
 pub enum DryRunMode {
     Text,
     Json,
@@ -121,24 +127,23 @@ impl Display for DryRunMode {
 }
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Serialize, ValueEnum)]
+#[serde(rename_all = "lowercase")]
 pub enum EnvMode {
-    #[default]
-    Infer,
     Loose,
+    #[default]
     Strict,
 }
 
 impl fmt::Display for EnvMode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            EnvMode::Infer => "infer",
             EnvMode::Loose => "loose",
             EnvMode::Strict => "strict",
         })
     }
 }
 
-#[derive(Parser, Clone, Default, Debug, PartialEq, Serialize)]
+#[derive(Parser, Clone, Default, Debug, PartialEq)]
 #[clap(author, about = "The build system that makes ship happen", long_about = None)]
 #[clap(disable_help_subcommand = true)]
 #[clap(disable_version_flag = true)]
@@ -146,16 +151,13 @@ impl fmt::Display for EnvMode {
 #[command(name = "turbo")]
 pub struct Args {
     #[clap(long, global = true)]
-    #[serde(skip)]
     pub version: bool,
     #[clap(long, global = true)]
     /// Skip any attempts to infer which version of Turbo the project is
     /// configured to use
-    #[serde(skip)]
     pub skip_infer: bool,
     /// Disable the turbo update notification
     #[clap(long, global = true)]
-    #[serde(skip)]
     pub no_update_notifier: bool,
     /// Override the endpoint for API calls
     #[clap(long, global = true, value_parser)]
@@ -163,9 +165,6 @@ pub struct Args {
     /// Force color usage in the terminal
     #[clap(long, global = true)]
     pub color: bool,
-    /// Specify a file to save a cpu profile
-    #[clap(long = "cpuprofile", global = true, value_parser)]
-    pub cpu_profile: Option<String>,
     /// The directory in which to run turbo
     #[clap(long, global = true, value_parser)]
     pub cwd: Option<Utf8PathBuf>,
@@ -199,15 +198,10 @@ pub struct Args {
     pub verbosity: Verbosity,
     /// Force a check for a new version of turbo
     #[clap(long, global = true, hide = true)]
-    #[serde(skip)]
     pub check_for_update: bool,
     #[clap(long = "__test-run", global = true, hide = true)]
     pub test_run: bool,
-    /// Enable the experimental UI
-    #[clap(long, hide = true, global = true)]
-    pub experimental_ui: bool,
     #[clap(flatten, next_help_heading = "Run Arguments")]
-    #[serde(skip)]
     pub run_args: Option<RunArgs>,
     // This should be inside `RunArgs` but clap currently has a bug
     // around nested flattened optional args: https://github.com/clap-rs/clap/issues/4697
@@ -217,8 +211,7 @@ pub struct Args {
     pub command: Option<Command>,
 }
 
-#[derive(Debug, Parser, Serialize, Clone, Copy, PartialEq, Eq, Default)]
-#[serde(into = "u8")]
+#[derive(Debug, Parser, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Verbosity {
     #[clap(
         long = "verbosity",
@@ -245,8 +238,7 @@ impl From<Verbosity> for u8 {
     }
 }
 
-#[derive(Subcommand, Copy, Clone, Debug, Serialize, PartialEq)]
-#[serde(tag = "command")]
+#[derive(Subcommand, Copy, Clone, Debug, PartialEq)]
 pub enum DaemonCommand {
     /// Restarts the turbo daemon
     Restart,
@@ -271,8 +263,7 @@ pub enum DaemonCommand {
     Logs,
 }
 
-#[derive(Subcommand, Copy, Clone, Debug, Serialize, PartialEq)]
-#[serde(tag = "command")]
+#[derive(Subcommand, Copy, Clone, Debug, PartialEq)]
 pub enum TelemetryCommand {
     /// Enables anonymous telemetry
     Enable,
@@ -282,7 +273,7 @@ pub enum TelemetryCommand {
     Status,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
+#[derive(Copy, Clone, Debug, PartialEq, ValueEnum)]
 pub enum LinkTarget {
     RemoteCache,
     Spaces,
@@ -400,7 +391,6 @@ impl Args {
         track_usage!(tel, &self.login, Option::is_some);
         track_usage!(tel, &self.cwd, Option::is_some);
         track_usage!(tel, &self.heap, Option::is_some);
-        track_usage!(tel, &self.cpu_profile, Option::is_some);
         track_usage!(tel, &self.team, Option::is_some);
         track_usage!(tel, &self.token, Option::is_some);
         track_usage!(tel, &self.trace, Option::is_some);
@@ -434,14 +424,11 @@ impl Args {
 /// Defines the subcommands for CLI. NOTE: If we change the commands in Go,
 /// we must change these as well to avoid accidentally passing the
 /// --single-package flag into non-build commands.
-#[derive(Subcommand, Clone, Debug, Serialize, PartialEq)]
+#[derive(Subcommand, Clone, Debug, PartialEq)]
 pub enum Command {
-    // NOTE: Empty variants still have an empty struct attached so that serde serializes
-    // them as `{ "Bin": {} }` instead of as `"Bin"`.
     /// Get the path to the Turbo binary
-    Bin {},
+    Bin,
     /// Generate the autocompletion script for the specified shell
-    #[serde(skip)]
     Completion {
         shell: Shell,
     },
@@ -451,13 +438,11 @@ pub enum Command {
         #[clap(long, default_value_t = String::from("4h0m0s"))]
         idle_time: String,
         #[clap(subcommand)]
-        #[serde(flatten)]
         command: Option<DaemonCommand>,
     },
     /// Generate a new app / package
     #[clap(aliases = ["g", "gen"])]
     Generate {
-        #[serde(skip)]
         #[clap(long, default_value_t = String::from("latest"), hide = true)]
         tag: String,
         /// The name of the generator to run
@@ -474,13 +459,11 @@ pub enum Command {
         args: Vec<String>,
 
         #[clap(subcommand)]
-        #[serde(skip)]
         command: Option<Box<GenerateCommand>>,
     },
     /// Enable or disable anonymous telemetry
     Telemetry {
         #[clap(subcommand)]
-        #[serde(flatten)]
         command: Option<TelemetryCommand>,
     },
     /// Turbo your monorepo by running a number of 'repo lints' to
@@ -594,7 +577,7 @@ pub struct GenerateWorkspaceArgs {
     pub show_all_dependencies: bool,
 }
 
-#[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
+#[derive(Parser, Clone, Debug, Default, PartialEq, Serialize)]
 pub struct GeneratorCustomArgs {
     /// The name of the generator to run
     generator_name: Option<String>,
@@ -610,7 +593,7 @@ pub struct GeneratorCustomArgs {
     args: Vec<String>,
 }
 
-#[derive(Subcommand, Clone, Debug, Serialize, PartialEq)]
+#[derive(Subcommand, Clone, Debug, PartialEq)]
 pub enum GenerateCommand {
     /// Add a new package or app to your project
     #[clap(name = "workspace", alias = "w")]
@@ -645,7 +628,7 @@ fn path_non_empty(s: &str) -> Result<Utf8PathBuf, String> {
 }
 
 /// Arguments used in run and watch
-#[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
+#[derive(Parser, Clone, Debug, Default, PartialEq)]
 #[command(groups = [
 ArgGroup::new("scope-filter-group").multiple(true).required(false),
 ])]
@@ -677,9 +660,7 @@ pub struct ExecutionArgs {
     /// Environment variable mode.
     /// Use "loose" to pass the entire existing environment.
     /// Use "strict" to use an allowlist specified in turbo.json.
-    /// Use "infer" to defer to existence of "passThroughEnv" or
-    /// "globalPassThroughEnv" in turbo.json. (default infer)
-    #[clap(long = "env-mode", default_value = "infer", num_args = 0..=1, default_missing_value = "infer")]
+    #[clap(long = "env-mode", default_value = "strict", num_args = 0..=1, default_missing_value = "strict")]
     pub env_mode: EnvMode,
     /// Use the given selector to specify package(s) to act as
     /// entry points. The syntax mirrors pnpm's syntax, and
@@ -687,38 +668,6 @@ pub struct ExecutionArgs {
     /// turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
     #[clap(short = 'F', long, group = "scope-filter-group")]
     pub filter: Vec<String>,
-
-    /// DEPRECATED: Specify package(s) to act as entry
-    /// points for task execution. Supports globs.
-    #[clap(long, group = "scope-filter-group")]
-    pub scope: Vec<String>,
-
-    //  ignore filters out files from scope and filter, so we require it here
-    // -----------------------
-    /// Files to ignore when calculating changed files from '--filter'.
-    /// Supports globs.
-    #[clap(long, requires = "scope-filter-group")]
-    pub ignore: Vec<String>,
-
-    //  since only works with scope, so we require it here
-    // -----------------------
-    /// DEPRECATED: Limit/Set scope to changed packages
-    /// since a mergebase. This uses the git diff ${target_branch}...
-    /// mechanism to identify which packages have changed.
-    #[clap(long, requires = "scope")]
-    pub since: Option<String>,
-
-    //  include_dependencies only works with scope, so we require it here
-    // -----------------------
-    /// DEPRECATED: Include the dependencies of tasks in execution.
-    #[clap(long, requires = "scope")]
-    pub include_dependencies: bool,
-
-    //  no_deps only works with scope, so we require it here
-    // -----------------------
-    /// DEPRECATED: Exclude dependent task consumers from execution.
-    #[clap(long, requires = "scope")]
-    pub no_deps: bool,
 
     /// Set type of process output logging. Use "full" to show
     /// all output. Use "hash-only" to show only turbo-computed
@@ -765,14 +714,11 @@ impl ExecutionArgs {
         track_usage!(telemetry, self.framework_inference, |val: bool| !val);
 
         track_usage!(telemetry, self.continue_execution, |val| val);
-        track_usage!(telemetry, self.include_dependencies, |val| { val });
         track_usage!(telemetry, self.single_package, |val| val);
-        track_usage!(telemetry, self.no_deps, |val| val);
         track_usage!(telemetry, self.only, |val| val);
         track_usage!(telemetry, self.remote_only, |val| val);
         track_usage!(telemetry, &self.cache_dir, Option::is_some);
         track_usage!(telemetry, &self.force, Option::is_some);
-        track_usage!(telemetry, &self.since, Option::is_some);
         track_usage!(telemetry, &self.pkg_inference_root, Option::is_some);
 
         if let Some(concurrency) = &self.concurrency {
@@ -807,18 +753,10 @@ impl ExecutionArgs {
         if !self.filter.is_empty() {
             telemetry.track_arg_value("filter:length", self.filter.len(), EventType::NonSensitive);
         }
-
-        if !self.scope.is_empty() {
-            telemetry.track_arg_value("scope:length", self.scope.len(), EventType::NonSensitive);
-        }
-
-        if !self.ignore.is_empty() {
-            telemetry.track_arg_value("ignore:length", self.ignore.len(), EventType::NonSensitive);
-        }
     }
 }
 
-#[derive(Parser, Clone, Debug, Serialize, PartialEq)]
+#[derive(Parser, Clone, Debug, PartialEq)]
 #[command(groups = [
     ArgGroup::new("daemon-group").multiple(false).required(false),
 ])]
@@ -860,12 +798,10 @@ pub struct RunArgs {
     pub profile: Option<String>,
     /// File to write turbo's performance profile output into.
     /// All identifying data omitted from the profile.
-    #[serde(skip)]
     #[clap(long, value_parser=NonEmptyStringValueParser::new(), conflicts_with = "profile")]
     pub anon_profile: Option<String>,
     /// Treat remote cache as read only
     #[clap(long, env = "TURBO_REMOTE_CACHE_READ_ONLY", value_name = "BOOL", action = ArgAction::Set, default_value = "false", default_missing_value = "true", num_args = 0..=1)]
-    #[serde(skip)]
     pub remote_cache_read_only: bool,
     /// Generate a summary of the turbo run
     #[clap(long, env = "TURBO_RUN_SUMMARY", default_missing_value = "true")]
@@ -1002,6 +938,7 @@ pub async fn run(
     #[allow(unused_variables)] logger: &TurboSubscriber,
     ui: UI,
 ) -> Result<i32, Error> {
+    // TODO: remove mutability from this function
     let mut cli_args = Args::new();
     let version = get_version();
 
@@ -1032,7 +969,9 @@ pub async fn run(
         let run_args = cli_args.run_args.take().unwrap_or_default();
         let execution_args = cli_args
             .execution_args
-            .take()
+            // We clone instead of take as take would leave the command base a copy of cli_args
+            // missing any execution args.
+            .clone()
             .ok_or_else(|| Error::NoCommand(Backtrace::capture()))?;
         if execution_args.tasks.is_empty() {
             let mut cmd = <Args as CommandFactory>::command();
@@ -1110,10 +1049,9 @@ pub async fn run(
     root_telemetry.track_cpus(num_cpus::get());
     // track args
     cli_args.track(&root_telemetry);
-    warn_all_deprecated_flags(&cli_args);
 
     let cli_result = match cli_args.command.as_ref().unwrap() {
-        Command::Bin { .. } => {
+        Command::Bin => {
             CommandEventBuilder::new("bin")
                 .with_parent(&root_telemetry)
                 .track_call();
@@ -1286,7 +1224,8 @@ pub async fn run(
             event.track_call();
             let base = CommandBase::new(cli_args, repo_root, version, ui);
 
-            WatchClient::start(base, event).await?;
+            let mut client = WatchClient::new(base, event).await?;
+            client.start().await?;
             // We only exit if we get a signal, so we return a non-zero exit code
             return Ok(1);
         }
@@ -1331,39 +1270,6 @@ pub async fn run(
     }
 
     cli_result
-}
-
-fn warn_all_deprecated_flags(args: &Args) {
-    if args.trace.is_some() {
-        warn_flag_removal("--trace");
-    }
-
-    if args.heap.is_some() {
-        warn_flag_removal("--heap");
-    }
-
-    if args.cpu_profile.is_some() {
-        warn_flag_removal("--cpuprofile");
-    }
-
-    if let Some(Command::Run { execution_args, .. }) = args.command.as_ref() {
-        if execution_args.since.is_some() {
-            warn_flag_removal("--since");
-        }
-        if !execution_args.scope.is_empty() {
-            warn_flag_removal("--scope");
-        }
-        if execution_args.include_dependencies {
-            warn_flag_removal("--include-dependencies");
-        }
-        if execution_args.no_deps {
-            warn_flag_removal("--no-deps");
-        }
-    }
-}
-
-fn warn_flag_removal(flag: &str) {
-    warn!("{flag} is deprecated and will be removed in 2.0");
 }
 
 #[cfg(test)]
@@ -1432,11 +1338,7 @@ mod test {
         }
     }
 
-    use anyhow::Result;
-
-    use crate::cli::{
-        Args, Command, DryRunMode, EnvMode, LogOrder, LogPrefix, OutputLogsMode, Verbosity,
-    };
+    use crate::cli::{Args, Command, DryRunMode, EnvMode, LogOrder, LogPrefix, OutputLogsMode};
 
     #[test_case::test_case(
         &["turbo", "run", "build"],
@@ -1514,49 +1416,34 @@ mod test {
         "framework_inference: flag set to false"
 	)]
     #[test_case::test_case(
+        &["turbo", "run", "build", "--env-mode"],
+        Args {
+            command: Some(Command::Run {
+                execution_args: Box::new(ExecutionArgs {
+                    tasks: vec!["build".to_string()],
+                    env_mode: EnvMode::Strict,
+                    ..get_default_execution_args()
+                }),
+                run_args: Box::new(get_default_run_args())
+            }),
+            ..Args::default()
+        } ;
+        "env_mode: not fully-specified"
+    )]
+    #[test_case::test_case(
 		&["turbo", "run", "build"],
         Args {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    env_mode: EnvMode::Infer,
+                    env_mode: EnvMode::Strict,
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
             }),
             ..Args::default()
 		} ;
-        "env_mode: default infer"
-	)]
-    #[test_case::test_case(
-		&["turbo", "run", "build", "--env-mode"],
-        Args {
-            command: Some(Command::Run {
-                execution_args: Box::new(ExecutionArgs {
-                    tasks: vec!["build".to_string()],
-                    env_mode: EnvMode::Infer,
-                    ..get_default_execution_args()
-                }),
-                run_args: Box::new(get_default_run_args())
-            }),
-            ..Args::default()
-		} ;
-        "env_mode: not fully-specified"
-	)]
-    #[test_case::test_case(
-		&["turbo", "run", "build", "--env-mode", "infer"],
-        Args {
-            command: Some(Command::Run {
-                execution_args: Box::new(ExecutionArgs {
-                    tasks: vec!["build".to_string()],
-                    env_mode: EnvMode::Infer,
-                    ..get_default_execution_args()
-                }),
-                run_args: Box::new(get_default_run_args())
-            }),
-            ..Args::default()
-		} ;
-        "env_mode: specified infer"
+        "env_mode: default strict"
 	)]
     #[test_case::test_case(
 		&["turbo", "run", "build", "--env-mode", "loose"],
@@ -1838,54 +1725,6 @@ mod test {
         "graph with output"
 	)]
     #[test_case::test_case(
-		&["turbo", "run", "build", "--filter", "[main]", "--ignore", "foo.js"],
-        Args {
-            command: Some(Command::Run {
-                execution_args: Box::new(ExecutionArgs {
-                    tasks: vec!["build".to_string()],
-                    ignore: vec!["foo.js".to_string()],
-                    filter: vec![String::from("[main]")],
-                    ..get_default_execution_args()
-                }),
-                run_args: Box::new(get_default_run_args())
-            }),
-            ..Args::default()
-        } ;
-        "single ignore"
-	)]
-    #[test_case::test_case(
-		&["turbo", "run", "build", "--filter", "[main]", "--ignore", "foo.js", "--ignore", "bar.js"],
-        Args {
-            command: Some(Command::Run {
-                execution_args: Box::new(ExecutionArgs {
-                    tasks: vec!["build".to_string()],
-                    ignore: vec!["foo.js".to_string(), "bar.js".to_string()],
-                    filter: vec![String::from("[main]")],
-                    ..get_default_execution_args()
-                }),
-                run_args: Box::new(get_default_run_args())
-            }),
-            ..Args::default()
-        } ;
-        "multiple ignores"
-	)]
-    #[test_case::test_case(
-		&["turbo", "run", "build", "--scope", "test", "--include-dependencies"],
-        Args {
-            command: Some(Command::Run {
-                execution_args: Box::new(ExecutionArgs {
-                   tasks: vec!["build".to_string()],
-                   include_dependencies: true,
-                   scope: vec!["test".to_string()],
-                   ..get_default_execution_args()
-                }),
-                run_args: Box::new(get_default_run_args())
-            }),
-            ..Args::default()
-        } ;
-        "include dependencies"
-	)]
-    #[test_case::test_case(
 		&["turbo", "run", "build", "--no-cache"],
         Args {
             command: Some(Command::Run {
@@ -1935,22 +1774,6 @@ mod test {
             ..Args::default()
         } ;
         "daemon"
-	)]
-    #[test_case::test_case(
-		&["turbo", "run", "build", "--scope", "test", "--no-deps"],
-        Args {
-            command: Some(Command::Run {
-                execution_args: Box::new(ExecutionArgs {
-                     tasks: vec!["build".to_string()],
-                     scope: vec!["test".to_string()],
-                     no_deps: true,
-                     ..get_default_execution_args()
-                }),
-                run_args: Box::new(get_default_run_args())
-            }),
-            ..Args::default()
-        } ;
-        "no deps"
 	)]
     #[test_case::test_case(
 		&["turbo", "run", "build", "--output-logs", "full"],
@@ -2183,38 +2006,7 @@ mod test {
         "remote_only=false works"
 	)]
     #[test_case::test_case(
-		&["turbo", "run", "build", "--scope", "foo", "--scope", "bar"],
-        Args {
-            command: Some(Command::Run {
-                execution_args: Box::new(ExecutionArgs {
-                    tasks: vec!["build".to_string()],
-                    scope: vec!["foo".to_string(), "bar".to_string()],
-                    ..get_default_execution_args()
-                }),
-                run_args: Box::new(get_default_run_args())
-            }),
-            ..Args::default()
-        } ;
-        "scope"
-	)]
-    #[test_case::test_case(
-		&["turbo", "run", "build", "--scope", "test", "--since", "foo"],
-        Args {
-            command: Some(Command::Run {
-                run_args: Box::new(get_default_run_args()),
-                execution_args: Box::new(ExecutionArgs {
-                    tasks: vec!["build".to_string()],
-                    scope: vec!["test".to_string()],
-                    since: Some("foo".to_string()),
-                    ..get_default_execution_args()
-                })
-            }),
-            ..Args::default()
-        } ;
-        "scope and since"
-	)]
-    #[test_case::test_case(
-    	&["turbo", "build"],
+		&["turbo", "build"],
         Args {
             execution_args: Some(ExecutionArgs {
                 tasks: vec!["build".to_string()],
@@ -2277,38 +2069,24 @@ mod test {
         assert_eq!(Args::try_parse_from(args).unwrap(), expected);
     }
 
-    fn test_serde() {
-        // Test that ouput-logs is not serialized by default
-        assert_eq!(
-            serde_json::to_string(&Args::try_parse_from(["turbo", "run", "build"]).unwrap())
-                .unwrap()
-                .contains("\"output_logs\":null"),
-            true
-        );
-    }
     #[test_case::test_case(
         &["turbo", "run", "build", "--daemon", "--no-daemon"],
         "cannot be used with '--no-daemon'" ;
         "daemon and no-daemon at the same time"
     )]
     #[test_case::test_case(
-        &["turbo", "run", "build", "--ignore", "foo/**"],
-        "the following required arguments were not provided" ;
-        "ignore without filter or scope"
-    )]
-    #[test_case::test_case(
         &["turbo", "run", "build", "--since", "foo"],
-        "the following required arguments were not provided" ;
+        "unexpected argument '--since' found" ;
         "since without filter or scope"
     )]
     #[test_case::test_case(
         &["turbo", "run", "build", "--include-dependencies"],
-        "the following required arguments were not provided" ;
+        "unexpected argument '--include-dependencies' found" ;
         "include-dependencies without filter or scope"
     )]
     #[test_case::test_case(
         &["turbo", "run", "build", "--no-deps"],
-        "the following required arguments were not provided" ;
+        "unexpected argument '--no-deps' found" ;
         "no-deps without filter or scope"
     )]
     fn test_parse_run_failures(args: &[&str], expected: &str) {
@@ -2628,31 +2406,6 @@ mod test {
     }
 
     #[test]
-    fn test_verbosity_serialization() -> Result<(), serde_json::Error> {
-        assert_eq!(
-            serde_json::to_string(&Verbosity {
-                verbosity: None,
-                v: 0
-            })?,
-            "0"
-        );
-        assert_eq!(
-            serde_json::to_string(&Verbosity {
-                verbosity: Some(3),
-                v: 0
-            })?,
-            "3"
-        );
-        assert_eq!(
-            serde_json::to_string(&Verbosity {
-                verbosity: None,
-                v: 3
-            })?,
-            "3"
-        );
-        Ok(())
-    }
-    #[test]
     fn test_parse_gen() {
         let default_gen = Command::Generate {
             tag: "latest".to_string(),
@@ -2754,5 +2507,12 @@ mod test {
                 .preflight
         );
         assert!(Args::try_parse_from(["turbo", "build", "--preflight=true"]).is_err());
+    }
+
+    #[test]
+    fn test_log_stream_tui_compatibility() {
+        assert!(LogOrder::Auto.compatible_with_tui());
+        assert!(!LogOrder::Stream.compatible_with_tui());
+        assert!(!LogOrder::Grouped.compatible_with_tui());
     }
 }

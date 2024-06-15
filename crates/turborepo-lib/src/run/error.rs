@@ -1,6 +1,7 @@
 use miette::Diagnostic;
 use thiserror::Error;
 use turborepo_repository::package_graph;
+use turborepo_ui::tui;
 
 use super::graph_visualizer;
 use crate::{
@@ -51,4 +52,6 @@ pub enum Error {
     SignalHandler(std::io::Error),
     #[error(transparent)]
     Daemon(#[from] daemon::DaemonError),
+    #[error(transparent)]
+    Tui(#[from] tui::Error),
 }

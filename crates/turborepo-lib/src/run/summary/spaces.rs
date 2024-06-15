@@ -148,10 +148,7 @@ impl SpacesClient {
         let space_id = space_id?;
         let is_linked = api_auth.as_ref().map_or(false, |auth| auth.is_linked());
         if !is_linked {
-            eprintln!(
-                "Error: experimentalSpaceId is enabled, but repo is not linked to API. Run `turbo \
-                 link` or `turbo login` first"
-            );
+            // TODO: Add back spaces warning with new UI
             return None;
         }
         let api_auth = api_auth.expect("presence of api auth was just checked");
@@ -351,6 +348,8 @@ fn trim_logs(logs: &[u8], limit: usize) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use anyhow::Result;
     use chrono::Local;
     use pretty_assertions::assert_eq;
@@ -375,7 +374,13 @@ mod tests {
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
 
-        let api_client = APIClient::new(format!("http://localhost:{}", port), 2, "", true)?;
+        let api_client = APIClient::new(
+            format!("http://localhost:{}", port),
+            Some(Duration::from_secs(2)),
+            None,
+            "",
+            true,
+        )?;
 
         let api_auth = Some(APIAuth {
             token: EXPECTED_TOKEN.to_string(),
