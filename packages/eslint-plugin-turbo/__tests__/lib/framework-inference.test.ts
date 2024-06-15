@@ -18,7 +18,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       options: [{ cwd: path.join(__dirname, "../../__fixtures__/") }],
       filename: path.join(
         __dirname,
-        "../../__fixtures__/framework-inference/apps/nextjs/index.js"
+        "../../__fixtures__/framework-inference/apps/nextjs/file.js"
       ),
     },
     {
@@ -26,7 +26,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       options: [{ cwd: path.join(__dirname, "../../__fixtures__/") }],
       filename: path.join(
         __dirname,
-        "../../__fixtures__/framework-inference/apps/nextjs/index.js"
+        "../../__fixtures__/framework-inference/apps/nextjs/file.js"
       ),
     },
     {
@@ -34,7 +34,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       options: [{ cwd: path.join(__dirname, "../../__fixtures__/") }],
       filename: path.join(
         __dirname,
-        "../../__fixtures__/framework-inference/apps/nextjs/index.js"
+        "../../__fixtures__/framework-inference/apps/nextjs/file.js"
       ),
     },
   ],
@@ -44,14 +44,14 @@ moduleRuleTester.run(RULES.noUndeclaredEnvVars, rule, {
   valid: [
     {
       code: `
-        const env2 = import.meta.env['ENV_2'];
+        const env2 = import.meta.env['NEXT_PUBLIC_FOO'];
       `,
       options: [
-        { cwd: path.join(__dirname, "../../__fixtures__/workspace-configs") },
+        { cwd: path.join(__dirname, "../../__fixtures__/framework-inference") },
       ],
       filename: path.join(
         __dirname,
-        "../../__fixtures__/workspace-configs/apps/web/index.js"
+        "../../__fixtures__/framework-inference/apps/nextjs/file.js"
       ),
     },
   ],
@@ -62,16 +62,15 @@ moduleRuleTester.run(RULES.noUndeclaredEnvVars, rule, {
         const env2 = import.meta.env['ENV_3'];
       `,
       options: [
-        { cwd: path.join(__dirname, "../../__fixtures__/workspace-configs") },
+        { cwd: path.join(__dirname, "../../__fixtures__/framework-inference") },
       ],
       filename: path.join(
         __dirname,
-        "../../__fixtures__/workspace-configs/apps/web/index.js"
+        "../../__fixtures__/framework-inference/apps/vite/invalid.js"
       ),
       errors: [
         {
-          message:
-            "ENV_3 is not listed as a dependency in the root turbo.json or workspace (apps/web) turbo.json",
+          message: "ENV_3 is not listed as a dependency in turbo.json",
         },
       ],
     },
