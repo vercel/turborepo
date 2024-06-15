@@ -53,7 +53,7 @@ impl TaskTable {
             .unwrap_or_default()
             // Task column width should be large enough to fit "Task" title
             // and truncate tasks with more than 40 chars.
-            .clamp(4, 40) as u16;
+            .clamp(14, 40) as u16;
         // Add space for column divider and status emoji
         task_name_width + 1
     }
@@ -263,7 +263,8 @@ impl<'a> StatefulWidget for &'a TaskTable {
         .highlight_style(Style::default().fg(Color::Yellow))
         .column_spacing(0)
         .header(
-            vec![format!("Task\n{bar}"), "\n─".to_owned()]
+            // TODO: Get the bar back!
+            vec![format!("Task\n↑ ↓ to navigate\n{bar}")]
                 .into_iter()
                 .map(Cell::from)
                 .collect::<Row>()
