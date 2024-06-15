@@ -6,20 +6,21 @@ use futures::{
 };
 use parking_lot::Mutex;
 use turbo_tasks::{
-    duration_span, mark_finished, primitives::StringVc, util::SharedError, RawVc, ValueToString,
+    duration_span, mark_finished, prevent_gc, util::SharedError, RawVc, RcStr, ValueToString, Vc,
 };
 use turbo_tasks_bytes::{Bytes, Stream};
-use turbo_tasks_env::ProcessEnvVc;
-use turbo_tasks_fs::FileSystemPathVc;
+use turbo_tasks_env::ProcessEnv;
+use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
-    asset::Asset,
-    chunk::{ChunkingContextVc, EvaluatableAssetVc, EvaluatableAssetsVc},
+    chunk::{ChunkingContext, EvaluatableAssets},
     error::PrettyPrintError,
+    issue::{IssueExt, StyledString},
+    module::Module,
 };
-use turbopack_dev_server::source::{Body, BodyVc, ProxyResult, ProxyResultVc};
+use turbopack_dev_server::source::{Body, ProxyResult};
 
 use super::{
-    issue::RenderingIssue, RenderDataVc, RenderProxyIncomingMessage, RenderProxyOutgoingMessage,
+    issue::RenderingIssue, RenderData, RenderProxyIncomingMessage, RenderProxyOutgoingMessage,
     ResponseHeaders,
 };
 use crate::{
@@ -30,19 +31,19 @@ use crate::{
 /// Renders a module as static HTML in a node.js process.
 #[turbo_tasks::function]
 pub async fn render_proxy(
-    cwd: FileSystemPathVc,
-    env: ProcessEnvVc,
-    path: FileSystemPathVc,
-    module: EvaluatableAssetVc,
-    runtime_entries: EvaluatableAssetsVc,
-    chunking_context: ChunkingContextVc,
-    intermediate_output_path: FileSystemPathVc,
-    output_root: FileSystemPathVc,
-    project_dir: FileSystemPathVc,
-    data: RenderDataVc,
-    body: BodyVc,
+    cwd: Vc<FileSystemPath>,
+    env: Vc<Box<dyn ProcessEnv>>,
+    path: Vc<FileSystemPath>,
+    module: Vc<Box<dyn Module>>,
+    runtime_entries: Vc<EvaluatableAssets>,
+    chunking_context: Vc<Box<dyn ChunkingContext>>,
+    intermediate_output_path: Vc<FileSystemPath>,
+    output_root: Vc<FileSystemPath>,
+    project_dir: Vc<FileSystemPath>,
+    data: Vc<RenderData>,
+    body: Vc<Body>,
     debug: bool,
-) -> Result<ProxyResultVc> {
+) -> Result<Vc<ProxyResult>> {
     let render = render_stream(
         cwd,
         env,
@@ -91,10 +92,10 @@ pub async fn render_proxy(
 }
 
 async fn proxy_error(
-    path: FileSystemPathVc,
+    path: Vc<FileSystemPath>,
     error: anyhow::Error,
     operation: Option<NodeJsOperation>,
-) -> Result<(u16, String)> {
+) -> Result<(u16, RcStr)> {
     let message = format!("{}", PrettyPrintError(&error));
 
     let status = match operation {
@@ -110,19 +111,18 @@ async fn proxy_error(
     let status_code = 500;
     let body = error_html(
         status_code,
-        "An error occurred while proxying the request to Node.js".to_string(),
-        format!("{message}\n\n{}", details.join("\n")),
+        "An error occurred while proxying the request to Node.js".into(),
+        format!("{message}\n\n{}", details.join("\n")).into(),
     )
     .await?
     .clone_value();
 
     RenderingIssue {
-        context: path,
-        message: StringVc::cell(message),
+        file_path: path,
+        message: StyledString::Text(message.into()).cell(),
         status: status.and_then(|status| status.code()),
     }
     .cell()
-    .as_issue()
     .emit();
 
     Ok((status_code, body))
@@ -148,19 +148,23 @@ struct RenderStream(#[turbo_tasks(trace_ignore)] Stream<RenderItemResult>);
 
 #[turbo_tasks::function]
 fn render_stream(
-    cwd: FileSystemPathVc,
-    env: ProcessEnvVc,
-    path: FileSystemPathVc,
-    module: EvaluatableAssetVc,
-    runtime_entries: EvaluatableAssetsVc,
-    chunking_context: ChunkingContextVc,
-    intermediate_output_path: FileSystemPathVc,
-    output_root: FileSystemPathVc,
-    project_dir: FileSystemPathVc,
-    data: RenderDataVc,
-    body: BodyVc,
+    cwd: Vc<FileSystemPath>,
+    env: Vc<Box<dyn ProcessEnv>>,
+    path: Vc<FileSystemPath>,
+    module: Vc<Box<dyn Module>>,
+    runtime_entries: Vc<EvaluatableAssets>,
+    chunking_context: Vc<Box<dyn ChunkingContext>>,
+    intermediate_output_path: Vc<FileSystemPath>,
+    output_root: Vc<FileSystemPath>,
+    project_dir: Vc<FileSystemPath>,
+    data: Vc<RenderData>,
+    body: Vc<Body>,
     debug: bool,
-) -> RenderStreamVc {
+) -> Vc<RenderStream> {
+    // TODO: The way we invoke render_stream_internal as side effect is not
+    // GC-safe, so we disable GC for this task.
+    prevent_gc();
+
     // Note the following code uses some hacks to create a child task that produces
     // a stream that is returned by this task.
 
@@ -175,7 +179,7 @@ fn render_stream(
     let initial = Mutex::new(Some(sender));
 
     // run the evaluation as side effect
-    render_stream_internal(
+    let _ = render_stream_internal(
         cwd,
         env,
         path,
@@ -210,24 +214,24 @@ fn render_stream(
 
 #[turbo_tasks::function]
 async fn render_stream_internal(
-    cwd: FileSystemPathVc,
-    env: ProcessEnvVc,
-    path: FileSystemPathVc,
-    module: EvaluatableAssetVc,
-    runtime_entries: EvaluatableAssetsVc,
-    chunking_context: ChunkingContextVc,
-    intermediate_output_path: FileSystemPathVc,
-    output_root: FileSystemPathVc,
-    project_dir: FileSystemPathVc,
-    data: RenderDataVc,
-    body: BodyVc,
-    sender: RenderStreamSenderVc,
+    cwd: Vc<FileSystemPath>,
+    env: Vc<Box<dyn ProcessEnv>>,
+    path: Vc<FileSystemPath>,
+    module: Vc<Box<dyn Module>>,
+    runtime_entries: Vc<EvaluatableAssets>,
+    chunking_context: Vc<Box<dyn ChunkingContext>>,
+    intermediate_output_path: Vc<FileSystemPath>,
+    output_root: Vc<FileSystemPath>,
+    project_dir: Vc<FileSystemPath>,
+    data: Vc<RenderData>,
+    body: Vc<Body>,
+    sender: Vc<RenderStreamSender>,
     debug: bool,
-) {
+) -> Result<Vc<()>> {
     mark_finished();
     let Ok(sender) = sender.await else {
         // Impossible to handle the error in a good way.
-        return;
+        return Ok(Default::default());
     };
 
     let stream = generator! {
@@ -285,11 +289,11 @@ async fn render_stream_internal(
                 yield RenderItem::Headers(ResponseHeaders {
                     status,
                     headers: vec![(
-                        "content-type".to_string(),
-                        "text/html; charset=utf-8".to_string(),
+                        "content-type".into(),
+                        "text/html; charset=utf-8".into(),
                     )],
                 });
-                yield RenderItem::BodyChunk(body.into());
+                yield RenderItem::BodyChunk(body.into_owned().into_bytes().into());
                 return;
             }
             v => {
@@ -329,10 +333,12 @@ async fn render_stream_internal(
     pin_mut!(stream);
     while let Some(value) = stream.next().await {
         if sender.send(value).await.is_err() {
-            return;
+            return Ok(Default::default());
         }
         if sender.flush().await.is_err() {
-            return;
+            return Ok(Default::default());
         }
     }
+
+    Ok(Default::default())
 }

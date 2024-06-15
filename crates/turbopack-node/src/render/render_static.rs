@@ -6,23 +6,25 @@ use futures::{
 };
 use parking_lot::Mutex;
 use turbo_tasks::{
-    duration_span, mark_finished, primitives::StringVc, util::SharedError, RawVc, ValueToString,
+    duration_span, mark_finished, prevent_gc, util::SharedError, RawVc, ValueToString, Vc,
 };
 use turbo_tasks_bytes::{Bytes, Stream};
-use turbo_tasks_env::ProcessEnvVc;
-use turbo_tasks_fs::{File, FileContent, FileSystemPathVc};
+use turbo_tasks_env::ProcessEnv;
+use turbo_tasks_fs::{File, FileSystemPath};
 use turbopack_core::{
-    asset::{Asset, AssetContentVc},
-    chunk::{ChunkingContextVc, EvaluatableAssetVc, EvaluatableAssetsVc},
+    asset::{Asset, AssetContent},
+    chunk::{ChunkingContext, EvaluatableAssets},
     error::PrettyPrintError,
+    issue::{IssueExt, StyledString},
+    module::Module,
 };
 use turbopack_dev_server::{
-    html::DevHtmlAssetVc,
-    source::{Body, HeaderListVc, RewriteBuilder, RewriteVc},
+    html::DevHtmlAsset,
+    source::{Body, HeaderList, Rewrite, RewriteBuilder},
 };
 
 use super::{
-    issue::RenderingIssue, RenderDataVc, RenderStaticIncomingMessage, RenderStaticOutgoingMessage,
+    issue::RenderingIssue, RenderData, RenderStaticIncomingMessage, RenderStaticOutgoingMessage,
 };
 use crate::{
     get_intermediate_asset, get_renderer_pool, pool::NodeJsOperation,
@@ -33,22 +35,26 @@ use crate::{
 #[turbo_tasks::value]
 pub enum StaticResult {
     Content {
-        content: AssetContentVc,
+        content: Vc<AssetContent>,
         status_code: u16,
-        headers: HeaderListVc,
+        headers: Vc<HeaderList>,
     },
     StreamedContent {
         status: u16,
-        headers: HeaderListVc,
+        headers: Vc<HeaderList>,
         body: Body,
     },
-    Rewrite(RewriteVc),
+    Rewrite(Vc<Rewrite>),
 }
 
 #[turbo_tasks::value_impl]
-impl StaticResultVc {
+impl StaticResult {
     #[turbo_tasks::function]
-    pub fn content(content: AssetContentVc, status_code: u16, headers: HeaderListVc) -> Self {
+    pub fn content(
+        content: Vc<AssetContent>,
+        status_code: u16,
+        headers: Vc<HeaderList>,
+    ) -> Vc<Self> {
         StaticResult::Content {
             content,
             status_code,
@@ -58,7 +64,7 @@ impl StaticResultVc {
     }
 
     #[turbo_tasks::function]
-    pub fn rewrite(rewrite: RewriteVc) -> Self {
+    pub fn rewrite(rewrite: Vc<Rewrite>) -> Vc<Self> {
         StaticResult::Rewrite(rewrite).cell()
     }
 }
@@ -66,19 +72,19 @@ impl StaticResultVc {
 /// Renders a module as static HTML in a node.js process.
 #[turbo_tasks::function]
 pub async fn render_static(
-    cwd: FileSystemPathVc,
-    env: ProcessEnvVc,
-    path: FileSystemPathVc,
-    module: EvaluatableAssetVc,
-    runtime_entries: EvaluatableAssetsVc,
-    fallback_page: DevHtmlAssetVc,
-    chunking_context: ChunkingContextVc,
-    intermediate_output_path: FileSystemPathVc,
-    output_root: FileSystemPathVc,
-    project_dir: FileSystemPathVc,
-    data: RenderDataVc,
+    cwd: Vc<FileSystemPath>,
+    env: Vc<Box<dyn ProcessEnv>>,
+    path: Vc<FileSystemPath>,
+    module: Vc<Box<dyn Module>>,
+    runtime_entries: Vc<EvaluatableAssets>,
+    fallback_page: Vc<DevHtmlAsset>,
+    chunking_context: Vc<Box<dyn ChunkingContext>>,
+    intermediate_output_path: Vc<FileSystemPath>,
+    output_root: Vc<FileSystemPath>,
+    project_dir: Vc<FileSystemPath>,
+    data: Vc<RenderData>,
     debug: bool,
-) -> Result<StaticResultVc> {
+) -> Result<Vc<StaticResult>> {
     let render = render_stream(
         cwd,
         env,
@@ -118,7 +124,7 @@ pub async fn render_static(
             });
             StaticResult::StreamedContent {
                 status: data.status,
-                headers: HeaderListVc::cell(data.headers),
+                headers: Vc::cell(data.headers),
                 body: Body::from_stream(body),
             }
             .cell()
@@ -128,11 +134,11 @@ pub async fn render_static(
 }
 
 async fn static_error(
-    path: FileSystemPathVc,
+    path: Vc<FileSystemPath>,
     error: anyhow::Error,
     operation: Option<NodeJsOperation>,
-    fallback_page: DevHtmlAssetVc,
-) -> Result<AssetContentVc> {
+    fallback_page: Vc<DevHtmlAsset>,
+) -> Result<Vc<AssetContent>> {
     let status = match operation {
         Some(operation) => Some(operation.wait_or_kill().await?),
         None => None,
@@ -154,20 +160,20 @@ async fn static_error(
         .to_string();
 
     body.push_str(
-        error_html_body(500, "Error rendering page".to_string(), message)
+        error_html_body(500, "Error rendering page".into(), message.into())
             .await?
             .as_str(),
     );
 
     let issue = RenderingIssue {
-        context: path,
-        message: StringVc::cell(error),
+        file_path: path,
+        message: StyledString::Text(error.into()).cell(),
         status: status.and_then(|status| status.code()),
     };
 
-    issue.cell().as_issue().emit();
+    issue.cell().emit();
 
-    let html = fallback_page.with_body(body);
+    let html = fallback_page.with_body(body.into());
 
     Ok(html.content())
 }
@@ -175,7 +181,7 @@ async fn static_error(
 #[derive(Clone, Debug)]
 #[turbo_tasks::value]
 enum RenderItem {
-    Response(StaticResultVc),
+    Response(Vc<StaticResult>),
     Headers(ResponseHeaders),
     BodyChunk(Bytes),
 }
@@ -193,19 +199,23 @@ struct RenderStream(#[turbo_tasks(trace_ignore)] Stream<RenderItemResult>);
 
 #[turbo_tasks::function]
 fn render_stream(
-    cwd: FileSystemPathVc,
-    env: ProcessEnvVc,
-    path: FileSystemPathVc,
-    module: EvaluatableAssetVc,
-    runtime_entries: EvaluatableAssetsVc,
-    fallback_page: DevHtmlAssetVc,
-    chunking_context: ChunkingContextVc,
-    intermediate_output_path: FileSystemPathVc,
-    output_root: FileSystemPathVc,
-    project_dir: FileSystemPathVc,
-    data: RenderDataVc,
+    cwd: Vc<FileSystemPath>,
+    env: Vc<Box<dyn ProcessEnv>>,
+    path: Vc<FileSystemPath>,
+    module: Vc<Box<dyn Module>>,
+    runtime_entries: Vc<EvaluatableAssets>,
+    fallback_page: Vc<DevHtmlAsset>,
+    chunking_context: Vc<Box<dyn ChunkingContext>>,
+    intermediate_output_path: Vc<FileSystemPath>,
+    output_root: Vc<FileSystemPath>,
+    project_dir: Vc<FileSystemPath>,
+    data: Vc<RenderData>,
     debug: bool,
-) -> RenderStreamVc {
+) -> Vc<RenderStream> {
+    // TODO: The way we invoke render_stream_internal as side effect is not
+    // GC-safe, so we disable GC for this task.
+    prevent_gc();
+
     // Note the following code uses some hacks to create a child task that produces
     // a stream that is returned by this task.
 
@@ -220,7 +230,7 @@ fn render_stream(
     let initial = Mutex::new(Some(sender));
 
     // run the evaluation as side effect
-    render_stream_internal(
+    let _ = render_stream_internal(
         cwd,
         env,
         path,
@@ -255,24 +265,24 @@ fn render_stream(
 
 #[turbo_tasks::function]
 async fn render_stream_internal(
-    cwd: FileSystemPathVc,
-    env: ProcessEnvVc,
-    path: FileSystemPathVc,
-    module: EvaluatableAssetVc,
-    runtime_entries: EvaluatableAssetsVc,
-    fallback_page: DevHtmlAssetVc,
-    chunking_context: ChunkingContextVc,
-    intermediate_output_path: FileSystemPathVc,
-    output_root: FileSystemPathVc,
-    project_dir: FileSystemPathVc,
-    data: RenderDataVc,
-    sender: RenderStreamSenderVc,
+    cwd: Vc<FileSystemPath>,
+    env: Vc<Box<dyn ProcessEnv>>,
+    path: Vc<FileSystemPath>,
+    module: Vc<Box<dyn Module>>,
+    runtime_entries: Vc<EvaluatableAssets>,
+    fallback_page: Vc<DevHtmlAsset>,
+    chunking_context: Vc<Box<dyn ChunkingContext>>,
+    intermediate_output_path: Vc<FileSystemPath>,
+    output_root: Vc<FileSystemPath>,
+    project_dir: Vc<FileSystemPath>,
+    data: Vc<RenderData>,
+    sender: Vc<RenderStreamSender>,
     debug: bool,
-) {
+) -> Result<Vc<()>> {
     mark_finished();
     let Ok(sender) = sender.await else {
         // Impossible to handle the error in a good way.
-        return;
+        return Ok(Default::default());
     };
 
     let stream = generator! {
@@ -309,7 +319,7 @@ async fn render_stream_internal(
             RenderStaticIncomingMessage::Headers { data } => yield RenderItem::Headers(data),
             RenderStaticIncomingMessage::Rewrite { path } => {
                 drop(guard);
-                yield RenderItem::Response(StaticResultVc::rewrite(RewriteBuilder::new(path).build()));
+                yield RenderItem::Response(StaticResult::rewrite(RewriteBuilder::new(path).build()));
                 return;
             }
             RenderStaticIncomingMessage::Response {
@@ -318,10 +328,10 @@ async fn render_stream_internal(
                 body,
             } => {
                 drop(guard);
-                yield RenderItem::Response(StaticResultVc::content(
-                    FileContent::Content(File::from(body)).into(),
+                yield RenderItem::Response(StaticResult::content(
+                    AssetContent::file(File::from(body).into()),
                     status_code,
-                    HeaderListVc::cell(headers),
+                    Vc::cell(headers),
                 ));
                 return;
             }
@@ -337,10 +347,10 @@ async fn render_stream_internal(
                 )
                 .await?;
                 yield RenderItem::Response(
-                    StaticResultVc::content(
+                    StaticResult::content(
                         static_error(path, anyhow!(trace), Some(operation), fallback_page).await?,
                         500,
-                        HeaderListVc::empty(),
+                        HeaderList::empty(),
                     )
                 );
                 return;
@@ -384,10 +394,12 @@ async fn render_stream_internal(
     pin_mut!(stream);
     while let Some(value) = stream.next().await {
         if sender.send(value).await.is_err() {
-            return;
+            return Ok(Default::default());
         }
         if sender.flush().await.is_err() {
-            return;
+            return Ok(Default::default());
         }
     }
+
+    Ok(Default::default())
 }

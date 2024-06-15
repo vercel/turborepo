@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 use turbopack_cli::{arguments::Arguments, register};
-use turbopack_cli_utils::{
+use turbopack_trace_utils::{
     exit::ExitGuard,
     raw_trace::RawTraceLayer,
     trace_writer::TraceWriter,
@@ -81,6 +81,7 @@ async fn main_inner(args: Arguments) -> Result<()> {
     register();
 
     match args {
+        Arguments::Build(args) => turbopack_cli::build::build(&args).await,
         Arguments::Dev(args) => turbopack_cli::dev::start_server(&args).await,
     }
 }

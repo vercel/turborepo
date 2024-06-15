@@ -1,12 +1,12 @@
-import path from "path";
-import fs from "fs-extra";
-import { getTurboConfigs } from "@turbo/utils";
-import type { EnvWildcard, Schema as TurboJsonSchema } from "@turbo/types";
-
-import type { TransformerArgs } from "../types";
-import getTransformerHelpers from "../utils/getTransformerHelpers";
-import { TransformerResults } from "../runner";
-import { RootSchema } from "@turbo/types/src/types/config";
+import path from "node:path";
+import { readJsonSync, existsSync } from "fs-extra";
+import { type PackageJson, getTurboConfigs } from "@turbo/utils";
+import type { EnvWildcard } from "@turbo/types";
+import type { RootSchemaV1, SchemaV1 } from "@turbo/types/src/types/config";
+import type { Transformer, TransformerArgs } from "../types";
+import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import type { TransformerResults } from "../runner";
+import { loadTurboJson } from "../utils/loadTurboJson";
 
 // transformer details
 const TRANSFORMER = "transform-env-literals-to-wildcards";
@@ -14,23 +14,22 @@ const DESCRIPTION = "Rewrite env fields to distinguish wildcards from literals";
 const INTRODUCED_IN = "1.10.0";
 
 // Rewriting of environment variable names.
-const asteriskLiteral = new RegExp("\\*", "g");
 function transformEnvVarName(envVarName: string): EnvWildcard {
   let output = envVarName;
 
   // Transform leading !
-  if (envVarName[0] === "!") {
+  if (envVarName.startsWith("!")) {
     output = `\\${output}`;
   }
 
   // Transform literal asterisks
-  output = output.replace(asteriskLiteral, "\\*");
+  output = output.replace(/\*/g, "\\*");
 
   return output;
 }
 
-function migrateRootConfig(config: RootSchema) {
-  let { globalEnv, globalPassThroughEnv } = config;
+function migrateRootConfig(config: RootSchemaV1) {
+  const { globalEnv, globalPassThroughEnv } = config;
 
   if (Array.isArray(globalEnv)) {
     config.globalEnv = globalEnv.map(transformEnvVarName);
@@ -42,9 +41,9 @@ function migrateRootConfig(config: RootSchema) {
   return migrateTaskConfigs(config);
 }
 
-function migrateTaskConfigs(config: TurboJsonSchema) {
+function migrateTaskConfigs(config: SchemaV1) {
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
-    let { env, passThroughEnv } = taskDef;
+    const { env, passThroughEnv } = taskDef;
 
     if (Array.isArray(env)) {
       taskDef.env = env.map(transformEnvVarName);
@@ -73,7 +72,7 @@ export function transformer({
   let packageJSON = {};
 
   try {
-    packageJSON = fs.readJSONSync(packageJsonPath);
+    packageJSON = readJsonSync(packageJsonPath) as PackageJson;
   } catch (e) {
     // readJSONSync probably failed because the file doesn't exist
   }
@@ -87,13 +86,13 @@ export function transformer({
 
   log.info("Rewriting env vars to support wildcards");
   const turboConfigPath = path.join(root, "turbo.json");
-  if (!fs.existsSync(turboConfigPath)) {
+  if (!existsSync(turboConfigPath)) {
     return runner.abortTransform({
       reason: `No turbo.json found at ${root}. Is the path correct?`,
     });
   }
 
-  const turboJson: RootSchema = fs.readJsonSync(turboConfigPath);
+  const turboJson: SchemaV1 = loadTurboJson(turboConfigPath);
   runner.modifyFile({
     filePath: turboConfigPath,
     after: migrateRootConfig(turboJson),
@@ -102,10 +101,10 @@ export function transformer({
   // find and migrate any workspace configs
   const allTurboJsons = getTurboConfigs(root);
   allTurboJsons.forEach((workspaceConfig) => {
-    const { config, turboConfigPath, isRootConfig } = workspaceConfig;
-    if (!isRootConfig) {
+    const { config, turboConfigPath: filePath, isRootConfig } = workspaceConfig;
+    if (!isRootConfig && "pipeline" in config) {
       runner.modifyFile({
-        filePath: turboConfigPath,
+        filePath,
         after: migrateTaskConfigs(config),
       });
     }
@@ -114,11 +113,12 @@ export function transformer({
   return runner.finish();
 }
 
-const transformerMeta = {
-  name: `${TRANSFORMER}: ${DESCRIPTION}`,
-  value: TRANSFORMER,
+const transformerMeta: Transformer = {
+  name: TRANSFORMER,
+  description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
   transformer,
 };
 
+// eslint-disable-next-line import/no-default-export -- transforms require default export
 export default transformerMeta;

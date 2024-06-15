@@ -1,5 +1,4 @@
 use std::{
-    any::Provider,
     error::Error as StdError,
     fmt::{Debug, Display},
     future::Future,
@@ -36,8 +35,8 @@ impl StdError for SharedError {
         self.inner.source()
     }
 
-    fn provide<'a>(&'a self, req: &mut std::any::Demand<'a>) {
-        Provider::provide(&*self.inner, req);
+    fn provide<'a>(&'a self, req: &mut std::error::Request<'a>) {
+        self.inner.provide(req);
     }
 }
 
@@ -235,7 +234,7 @@ pin_project! {
 }
 
 impl<F: Future, W: for<'a> Fn(Pin<&mut F>, &mut Context<'a>) -> Poll<F::Output>> WrapFuture<F, W> {
-    pub fn new(wrapper: W, future: F) -> Self {
+    pub fn new(future: F, wrapper: W) -> Self {
         Self { wrapper, future }
     }
 }

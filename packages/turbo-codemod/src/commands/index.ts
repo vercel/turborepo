@@ -1,5 +1,5 @@
-export { default as migrate } from "./migrate";
-export { default as transform } from "./transform";
+export { migrate } from "./migrate";
+export { transform } from "./transform";
 
 export type {
   TransformCommandArgument,

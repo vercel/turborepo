@@ -1,5 +1,5 @@
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 
 export function searchUp({
   target,
@@ -13,10 +13,11 @@ export function searchUp({
   const root = path.parse(cwd).root;
 
   let found = false;
-  while (!found && cwd !== root) {
+  let lastCwd = cwd;
+  while (!found && lastCwd !== root) {
     if (contentCheck) {
       try {
-        const content = fs.readFileSync(path.join(cwd, target)).toString();
+        const content = fs.readFileSync(path.join(lastCwd, target)).toString();
         if (contentCheck(content)) {
           found = true;
           break;
@@ -24,18 +25,16 @@ export function searchUp({
       } catch {
         // keep looking
       }
-    } else {
-      if (fs.existsSync(path.join(cwd, target))) {
-        found = true;
-        break;
-      }
+    } else if (fs.existsSync(path.join(lastCwd, target))) {
+      found = true;
+      break;
     }
 
-    cwd = path.dirname(cwd);
+    lastCwd = path.dirname(lastCwd);
   }
 
   if (found) {
-    return cwd;
+    return lastCwd;
   }
 
   return null;

@@ -2,7 +2,7 @@
     Call {
         func: Variable(
             (
-                Atom('x' type=static),
+                "x",
                 #2,
             ),
         ),
@@ -53,15 +53,7 @@
                 Call,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                77,
-            ),
-            hi: BytePos(
-                81,
-            ),
-            ctxt: #0,
-        },
+        span: 77..81#0,
         in_try: false,
     },
     Call {
@@ -69,7 +61,7 @@
             3,
             Variable(
                 (
-                    Atom('x' type=static),
+                    "x",
                     #2,
                 ),
             ),
@@ -121,24 +113,17 @@
                 Call,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                77,
-            ),
-            hi: BytePos(
-                84,
-            ),
-            ctxt: #0,
-        },
+        span: 77..84#0,
         in_try: false,
     },
     Conditional {
         condition: Binary(
             3,
-            Unknown(
-                None,
-                "unsupported expression",
-            ),
+            Unknown {
+                original_value: None,
+                reason: "unsupported expression",
+                has_side_effects: true,
+            },
             StrictEqual,
             Constant(
                 Num(
@@ -190,7 +175,7 @@
                     Call {
                         func: Variable(
                             (
-                                Atom('r' type=inline),
+                                "r",
                                 #2,
                             ),
                         ),
@@ -201,7 +186,7 @@
                                     [
                                         Variable(
                                             (
-                                                Atom('a' type=static),
+                                                "a",
                                                 #6,
                                             ),
                                         ),
@@ -272,15 +257,7 @@
                                 Call,
                             ),
                         ],
-                        span: Span {
-                            lo: BytePos(
-                                159,
-                            ),
-                            hi: BytePos(
-                                167,
-                            ),
-                            ctxt: #0,
-                        },
+                        span: 159..167#0,
                         in_try: false,
                     },
                 ],
@@ -352,21 +329,13 @@
                 Test,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                105,
-            ),
-            hi: BytePos(
-                176,
-            ),
-            ctxt: #0,
-        },
+        span: 105..176#0,
         in_try: false,
     },
     Call {
         func: Variable(
             (
-                Atom('r' type=inline),
+                "r",
                 #2,
             ),
         ),
@@ -408,21 +377,13 @@
                 Call,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                190,
-            ),
-            hi: BytePos(
-                194,
-            ),
-            ctxt: #0,
-        },
+        span: 190..194#0,
         in_try: false,
     },
     Call {
         func: Variable(
             (
-                Atom('inner' type=inline),
+                "inner",
                 #9,
             ),
         ),
@@ -431,7 +392,7 @@
                 Constant(
                     Str(
                         Word(
-                            Atom('b' type=static),
+                            "b",
                         ),
                     ),
                 ),
@@ -473,21 +434,13 @@
                 Call,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                271,
-            ),
-            hi: BytePos(
-                281,
-            ),
-            ctxt: #0,
-        },
+        span: 271..281#0,
         in_try: false,
     },
     Call {
         func: Variable(
             (
-                Atom('outer' type=inline),
+                "outer",
                 #2,
             ),
         ),
@@ -496,7 +449,7 @@
                 Constant(
                     Str(
                         Word(
-                            Atom('a' type=static),
+                            "a",
                         ),
                     ),
                 ),
@@ -529,15 +482,7 @@
                 Call,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                295,
-            ),
-            hi: BytePos(
-                305,
-            ),
-            ctxt: #0,
-        },
+        span: 295..305#0,
         in_try: false,
     },
 ]

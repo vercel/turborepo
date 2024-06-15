@@ -1,11 +1,11 @@
-use anyhow::Result;
-use turbo_tasks_fs::FileSystemPathVc;
+use turbo_tasks::Vc;
+use turbo_tasks_fs::FileSystemPath;
 
 use crate::{
-    asset::{Asset, AssetContentVc, AssetVc},
-    ident::AssetIdentVc,
-    reference::AssetReferencesVc,
-    version::VersionedContentVc,
+    asset::{Asset, AssetContent},
+    ident::AssetIdent,
+    output::{OutputAsset, OutputAssets},
+    version::VersionedContent,
 };
 
 /// An [`Asset`] with an overwritten path. This is helpful to expose an asset at
@@ -14,38 +14,41 @@ use crate::{
 /// Next.js apps.
 #[turbo_tasks::value]
 pub struct ProxiedAsset {
-    asset: AssetVc,
-    path: FileSystemPathVc,
+    asset: Vc<Box<dyn OutputAsset>>,
+    path: Vc<FileSystemPath>,
 }
 
 #[turbo_tasks::value_impl]
-impl ProxiedAssetVc {
+impl ProxiedAsset {
     /// Creates a new [`ProxiedAsset`] from an [`Asset`] and a path.
     #[turbo_tasks::function]
-    pub fn new(asset: AssetVc, path: FileSystemPathVc) -> Self {
+    pub fn new(asset: Vc<Box<dyn OutputAsset>>, path: Vc<FileSystemPath>) -> Vc<Self> {
         ProxiedAsset { asset, path }.cell()
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl OutputAsset for ProxiedAsset {
+    #[turbo_tasks::function]
+    fn ident(&self) -> Vc<AssetIdent> {
+        AssetIdent::from_path(self.path)
+    }
+
+    #[turbo_tasks::function]
+    fn references(&self) -> Vc<OutputAssets> {
+        self.asset.references()
     }
 }
 
 #[turbo_tasks::value_impl]
 impl Asset for ProxiedAsset {
     #[turbo_tasks::function]
-    fn ident(&self) -> AssetIdentVc {
-        AssetIdentVc::from_path(self.path)
-    }
-
-    #[turbo_tasks::function]
-    fn content(&self) -> AssetContentVc {
+    fn content(&self) -> Vc<AssetContent> {
         self.asset.content()
     }
 
     #[turbo_tasks::function]
-    fn references(&self) -> AssetReferencesVc {
-        self.asset.references()
-    }
-
-    #[turbo_tasks::function]
-    fn versioned_content(&self) -> VersionedContentVc {
+    fn versioned_content(&self) -> Vc<Box<dyn VersionedContent>> {
         self.asset.versioned_content()
     }
 }

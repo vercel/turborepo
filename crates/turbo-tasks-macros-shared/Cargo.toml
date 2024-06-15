@@ -8,7 +8,10 @@ edition = "2021"
 [lib]
 bench = false
 
+[lints]
+workspace = true
+
 [dependencies]
 proc-macro2 = { workspace = true }
 quote = { workspace = true }
-syn = { workspace = true, features = ["full"] }
+syn = { workspace = true, features = ["full", "extra-traits"] }

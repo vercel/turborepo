@@ -1,12 +1,12 @@
 [
     Member {
         obj: FreeVar(
-            Atom('A' type=inline),
+            "A",
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('B' type=inline),
+                Atom(
+                    "B",
                 ),
             ),
         ),
@@ -29,20 +29,12 @@
                 Member,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                1,
-            ),
-            hi: BytePos(
-                4,
-            ),
-            ctxt: #0,
-        },
+        span: 1..4#0,
         in_try: false,
     },
     FreeVar {
         var: FreeVar(
-            Atom('A' type=inline),
+            "A",
         ),
         ast_path: [
             Program(
@@ -69,15 +61,7 @@
                 Ident,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                1,
-            ),
-            hi: BytePos(
-                2,
-            ),
-            ctxt: #1,
-        },
+        span: 1..2#1,
         in_try: false,
     },
 ]

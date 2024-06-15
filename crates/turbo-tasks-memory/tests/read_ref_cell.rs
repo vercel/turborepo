@@ -1,9 +1,9 @@
-#![feature(min_specialization)]
+#![feature(arbitrary_self_types)]
 
 use std::sync::Mutex;
 
 use anyhow::Result;
-use turbo_tasks::{get_invalidator, Invalidator, ReadRef};
+use turbo_tasks::{get_invalidator, Invalidator, ReadRef, Vc};
 use turbo_tasks_testing::{register, run};
 
 register!();
@@ -11,7 +11,7 @@ register!();
 #[tokio::test]
 async fn read_ref() {
     run! {
-        let counter = CounterVc::cell(Counter { value: Mutex::new((0, None))});
+        let counter = Counter::cell(Counter { value: Mutex::new((0, None))});
 
         let counter_value = counter.get_value();
 
@@ -60,20 +60,19 @@ impl Counter {
 }
 
 #[turbo_tasks::value_impl]
-impl CounterVc {
+impl Counter {
     #[turbo_tasks::function]
-    async fn get_value(self) -> Result<CounterValueVc> {
-        let this = self.await?;
-        let mut lock = this.value.lock().unwrap();
+    async fn get_value(&self) -> Result<Vc<CounterValue>> {
+        let mut lock = self.value.lock().unwrap();
         lock.1 = Some(get_invalidator());
-        Ok(CounterValueVc::cell(lock.0))
+        Ok(Vc::cell(lock.0))
     }
 }
 
 #[turbo_tasks::value_impl]
-impl CounterValueVc {
+impl CounterValue {
     #[turbo_tasks::function]
-    fn get_value(self) -> CounterValueVc {
+    fn get_value(self: Vc<Self>) -> Vc<Self> {
         self
     }
 }

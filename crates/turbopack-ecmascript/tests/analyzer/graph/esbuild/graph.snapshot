@@ -13,7 +13,7 @@
                             Constant(
                                 Str(
                                     Word(
-                                        Atom('node' type=inline),
+                                        "node",
                                     ),
                                 ),
                             ),
@@ -24,39 +24,39 @@
                                         7,
                                         Variable(
                                             (
-                                                Atom('path2' type=inline),
+                                                "path2",
                                                 #2,
                                             ),
                                         ),
                                         Constant(
                                             Str(
-                                                Word(
-                                                    Atom('join' type=inline),
+                                                Atom(
+                                                    "join",
                                                 ),
                                             ),
                                         ),
                                         [
                                             FreeVar(
-                                                Atom('__dirname' type=dynamic),
+                                                "__dirname",
                                             ),
                                             Constant(
                                                 Str(
                                                     Word(
-                                                        Atom('..' type=inline),
+                                                        "..",
                                                     ),
                                                 ),
                                             ),
                                             Constant(
                                                 Str(
                                                     Word(
-                                                        Atom('bin' type=inline),
+                                                        "bin",
                                                     ),
                                                 ),
                                             ),
                                             Constant(
                                                 Str(
                                                     Word(
-                                                        Atom('esbuild' type=inline),
+                                                        "esbuild",
                                                     ),
                                                 ),
                                             ),
@@ -75,7 +75,7 @@
                                 2,
                                 Variable(
                                     (
-                                        Atom('generateBinPath' type=dynamic),
+                                        "generateBinPath",
                                         #2,
                                     ),
                                 ),
@@ -101,7 +101,7 @@
                 2,
                 Variable(
                     (
-                        Atom('esbuildCommandAndArgs' type=dynamic),
+                        "esbuildCommandAndArgs",
                         #2,
                     ),
                 ),
@@ -121,26 +121,27 @@
         Alternatives(
             13,
             [
-                Unknown(
-                    Some(
+                Unknown {
+                    original_value: Some(
                         Variable(
                             (
-                                Atom('binPath' type=inline),
+                                "binPath",
                                 #7,
                             ),
                         ),
                     ),
-                    "pattern without value",
-                ),
+                    reason: "pattern without value",
+                    has_side_effects: false,
+                },
                 MemberCall(
                     7,
                     FreeVar(
-                        Atom('require' type=static),
+                        "require",
                     ),
                     Constant(
                         Str(
-                            Word(
-                                Atom('resolve' type=inline),
+                            Atom(
+                                "resolve",
                             ),
                         ),
                     ),
@@ -150,7 +151,7 @@
                             [
                                 Variable(
                                     (
-                                        Atom('pkg' type=inline),
+                                        "pkg",
                                         #7,
                                     ),
                                 ),
@@ -163,7 +164,7 @@
                                 ),
                                 Variable(
                                     (
-                                        Atom('subpath' type=inline),
+                                        "subpath",
                                         #7,
                                     ),
                                 ),
@@ -174,18 +175,18 @@
                 Call(
                     4,
                     FreeVar(
-                        Atom('downloadedBinPath' type=dynamic),
+                        "downloadedBinPath",
                     ),
                     [
                         Variable(
                             (
-                                Atom('pkg' type=inline),
+                                "pkg",
                                 #7,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('subpath' type=inline),
+                                "subpath",
                                 #7,
                             ),
                         ),
@@ -200,21 +201,21 @@
             12,
             Variable(
                 (
-                    Atom('path' type=static),
+                    "path",
                     #2,
                 ),
             ),
             Constant(
                 Str(
-                    Word(
-                        Atom('join' type=inline),
+                    Atom(
+                        "join",
                     ),
                 ),
             ),
             [
                 Variable(
                     (
-                        Atom('esbuildLibDir' type=dynamic),
+                        "esbuildLibDir",
                         #16,
                     ),
                 ),
@@ -230,7 +231,7 @@
                         ),
                         Variable(
                             (
-                                Atom('pkg' type=inline),
+                                "pkg",
                                 #7,
                             ),
                         ),
@@ -245,21 +246,21 @@
                             4,
                             Variable(
                                 (
-                                    Atom('path' type=static),
+                                    "path",
                                     #2,
                                 ),
                             ),
                             Constant(
                                 Str(
-                                    Word(
-                                        Atom('basename' type=dynamic),
+                                    Atom(
+                                        "basename",
                                     ),
                                 ),
                             ),
                             [
                                 Variable(
                                     (
-                                        Atom('subpath' type=inline),
+                                        "subpath",
                                         #7,
                                     ),
                                 ),
@@ -278,7 +279,7 @@
                 2,
                 Variable(
                     (
-                        Atom('esbuildCommandAndArgs' type=dynamic),
+                        "esbuildCommandAndArgs",
                         #2,
                     ),
                 ),
@@ -295,37 +296,39 @@
     ),
     (
         "e#10",
-        Unknown(
-            Some(
+        Unknown {
+            original_value: Some(
                 Variable(
                     (
-                        Atom('e' type=static),
+                        "e",
                         #10,
                     ),
                 ),
             ),
-            "pattern without value",
-        ),
+            reason: "pattern without value",
+            has_side_effects: false,
+        },
     ),
     (
         "e#15",
-        Unknown(
-            Some(
+        Unknown {
+            original_value: Some(
                 Variable(
                     (
-                        Atom('e' type=static),
+                        "e",
                         #15,
                     ),
                 ),
             ),
-            "pattern without value",
-        ),
+            reason: "pattern without value",
+            has_side_effects: false,
+        },
     ),
     (
         "esbuildCommandAndArgs",
         Variable(
             (
-                Atom('*arrow function 2666*' type=dynamic),
+                "*arrow function 2666*",
                 #0,
             ),
         ),
@@ -336,14 +339,14 @@
             7,
             Variable(
                 (
-                    Atom('path' type=static),
+                    "path",
                     #2,
                 ),
             ),
             Constant(
                 Str(
-                    Word(
-                        Atom('dirname' type=inline),
+                    Atom(
+                        "dirname",
                     ),
                 ),
             ),
@@ -351,12 +354,12 @@
                 MemberCall(
                     4,
                     FreeVar(
-                        Atom('require' type=static),
+                        "require",
                     ),
                     Constant(
                         Str(
-                            Word(
-                                Atom('resolve' type=inline),
+                            Atom(
+                                "resolve",
                             ),
                         ),
                     ),
@@ -364,7 +367,7 @@
                         Constant(
                             Str(
                                 Word(
-                                    Atom('esbuild' type=inline),
+                                    "esbuild",
                                 ),
                             ),
                         ),
@@ -382,17 +385,17 @@
                 4,
                 [
                     FreeVar(
-                        Atom('ESBUILD_BINARY_PATH' type=dynamic),
+                        "ESBUILD_BINARY_PATH",
                     ),
                     Variable(
                         (
-                            Atom('binTargetPath' type=dynamic),
+                            "binTargetPath",
                             #16,
                         ),
                     ),
                     Variable(
                         (
-                            Atom('binPath' type=inline),
+                            "binPath",
                             #7,
                         ),
                     ),
@@ -422,31 +425,15 @@
                 KeyValue(
                     Constant(
                         Str(
-                            Word(
-                                Atom('android arm64 LE' type=dynamic),
+                            Atom(
+                                "android arm64 LE",
                             ),
                         ),
                     ),
                     Constant(
                         Str(
                             Word(
-                                Atom('esbuild-android-arm64' type=dynamic),
-                            ),
-                        ),
-                    ),
-                ),
-                KeyValue(
-                    Constant(
-                        Str(
-                            Word(
-                                Atom('darwin arm64 LE' type=dynamic),
-                            ),
-                        ),
-                    ),
-                    Constant(
-                        Str(
-                            Word(
-                                Atom('esbuild-darwin-arm64' type=dynamic),
+                                "esbuild-android-arm64",
                             ),
                         ),
                     ),
@@ -454,31 +441,15 @@
                 KeyValue(
                     Constant(
                         Str(
-                            Word(
-                                Atom('darwin x64 LE' type=dynamic),
+                            Atom(
+                                "darwin arm64 LE",
                             ),
                         ),
                     ),
                     Constant(
                         Str(
                             Word(
-                                Atom('esbuild-darwin-64' type=dynamic),
-                            ),
-                        ),
-                    ),
-                ),
-                KeyValue(
-                    Constant(
-                        Str(
-                            Word(
-                                Atom('freebsd arm64 LE' type=dynamic),
-                            ),
-                        ),
-                    ),
-                    Constant(
-                        Str(
-                            Word(
-                                Atom('esbuild-freebsd-arm64' type=dynamic),
+                                "esbuild-darwin-arm64",
                             ),
                         ),
                     ),
@@ -486,31 +457,15 @@
                 KeyValue(
                     Constant(
                         Str(
-                            Word(
-                                Atom('freebsd x64 LE' type=dynamic),
+                            Atom(
+                                "darwin x64 LE",
                             ),
                         ),
                     ),
                     Constant(
                         Str(
                             Word(
-                                Atom('esbuild-freebsd-64' type=dynamic),
-                            ),
-                        ),
-                    ),
-                ),
-                KeyValue(
-                    Constant(
-                        Str(
-                            Word(
-                                Atom('linux arm LE' type=dynamic),
-                            ),
-                        ),
-                    ),
-                    Constant(
-                        Str(
-                            Word(
-                                Atom('esbuild-linux-arm' type=dynamic),
+                                "esbuild-darwin-64",
                             ),
                         ),
                     ),
@@ -518,31 +473,15 @@
                 KeyValue(
                     Constant(
                         Str(
-                            Word(
-                                Atom('linux arm64 LE' type=dynamic),
+                            Atom(
+                                "freebsd arm64 LE",
                             ),
                         ),
                     ),
                     Constant(
                         Str(
                             Word(
-                                Atom('esbuild-linux-arm64' type=dynamic),
-                            ),
-                        ),
-                    ),
-                ),
-                KeyValue(
-                    Constant(
-                        Str(
-                            Word(
-                                Atom('linux ia32 LE' type=dynamic),
-                            ),
-                        ),
-                    ),
-                    Constant(
-                        Str(
-                            Word(
-                                Atom('esbuild-linux-32' type=dynamic),
+                                "esbuild-freebsd-arm64",
                             ),
                         ),
                     ),
@@ -550,31 +489,15 @@
                 KeyValue(
                     Constant(
                         Str(
-                            Word(
-                                Atom('linux mips64el LE' type=dynamic),
+                            Atom(
+                                "freebsd x64 LE",
                             ),
                         ),
                     ),
                     Constant(
                         Str(
                             Word(
-                                Atom('esbuild-linux-mips64le' type=dynamic),
-                            ),
-                        ),
-                    ),
-                ),
-                KeyValue(
-                    Constant(
-                        Str(
-                            Word(
-                                Atom('linux ppc64 LE' type=dynamic),
-                            ),
-                        ),
-                    ),
-                    Constant(
-                        Str(
-                            Word(
-                                Atom('esbuild-linux-ppc64le' type=dynamic),
+                                "esbuild-freebsd-64",
                             ),
                         ),
                     ),
@@ -582,31 +505,15 @@
                 KeyValue(
                     Constant(
                         Str(
-                            Word(
-                                Atom('linux s390x BE' type=dynamic),
+                            Atom(
+                                "linux arm LE",
                             ),
                         ),
                     ),
                     Constant(
                         Str(
                             Word(
-                                Atom('esbuild-linux-s390x' type=dynamic),
-                            ),
-                        ),
-                    ),
-                ),
-                KeyValue(
-                    Constant(
-                        Str(
-                            Word(
-                                Atom('linux x64 LE' type=dynamic),
-                            ),
-                        ),
-                    ),
-                    Constant(
-                        Str(
-                            Word(
-                                Atom('esbuild-linux-64' type=dynamic),
+                                "esbuild-linux-arm",
                             ),
                         ),
                     ),
@@ -614,31 +521,15 @@
                 KeyValue(
                     Constant(
                         Str(
-                            Word(
-                                Atom('netbsd x64 LE' type=dynamic),
+                            Atom(
+                                "linux arm64 LE",
                             ),
                         ),
                     ),
                     Constant(
                         Str(
                             Word(
-                                Atom('esbuild-netbsd-64' type=dynamic),
-                            ),
-                        ),
-                    ),
-                ),
-                KeyValue(
-                    Constant(
-                        Str(
-                            Word(
-                                Atom('openbsd x64 LE' type=dynamic),
-                            ),
-                        ),
-                    ),
-                    Constant(
-                        Str(
-                            Word(
-                                Atom('esbuild-openbsd-64' type=dynamic),
+                                "esbuild-linux-arm64",
                             ),
                         ),
                     ),
@@ -646,15 +537,127 @@
                 KeyValue(
                     Constant(
                         Str(
-                            Word(
-                                Atom('sunos x64 LE' type=dynamic),
+                            Atom(
+                                "linux ia32 LE",
                             ),
                         ),
                     ),
                     Constant(
                         Str(
                             Word(
-                                Atom('esbuild-sunos-64' type=dynamic),
+                                "esbuild-linux-32",
+                            ),
+                        ),
+                    ),
+                ),
+                KeyValue(
+                    Constant(
+                        Str(
+                            Atom(
+                                "linux mips64el LE",
+                            ),
+                        ),
+                    ),
+                    Constant(
+                        Str(
+                            Word(
+                                "esbuild-linux-mips64le",
+                            ),
+                        ),
+                    ),
+                ),
+                KeyValue(
+                    Constant(
+                        Str(
+                            Atom(
+                                "linux ppc64 LE",
+                            ),
+                        ),
+                    ),
+                    Constant(
+                        Str(
+                            Word(
+                                "esbuild-linux-ppc64le",
+                            ),
+                        ),
+                    ),
+                ),
+                KeyValue(
+                    Constant(
+                        Str(
+                            Atom(
+                                "linux s390x BE",
+                            ),
+                        ),
+                    ),
+                    Constant(
+                        Str(
+                            Word(
+                                "esbuild-linux-s390x",
+                            ),
+                        ),
+                    ),
+                ),
+                KeyValue(
+                    Constant(
+                        Str(
+                            Atom(
+                                "linux x64 LE",
+                            ),
+                        ),
+                    ),
+                    Constant(
+                        Str(
+                            Word(
+                                "esbuild-linux-64",
+                            ),
+                        ),
+                    ),
+                ),
+                KeyValue(
+                    Constant(
+                        Str(
+                            Atom(
+                                "netbsd x64 LE",
+                            ),
+                        ),
+                    ),
+                    Constant(
+                        Str(
+                            Word(
+                                "esbuild-netbsd-64",
+                            ),
+                        ),
+                    ),
+                ),
+                KeyValue(
+                    Constant(
+                        Str(
+                            Atom(
+                                "openbsd x64 LE",
+                            ),
+                        ),
+                    ),
+                    Constant(
+                        Str(
+                            Word(
+                                "esbuild-openbsd-64",
+                            ),
+                        ),
+                    ),
+                ),
+                KeyValue(
+                    Constant(
+                        Str(
+                            Atom(
+                                "sunos x64 LE",
+                            ),
+                        ),
+                    ),
+                    Constant(
+                        Str(
+                            Word(
+                                "esbuild-sunos-64",
                             ),
                         ),
                     ),
@@ -671,31 +674,15 @@
                 KeyValue(
                     Constant(
                         Str(
-                            Word(
-                                Atom('win32 arm64 LE' type=dynamic),
+                            Atom(
+                                "win32 arm64 LE",
                             ),
                         ),
                     ),
                     Constant(
                         Str(
                             Word(
-                                Atom('esbuild-windows-arm64' type=dynamic),
-                            ),
-                        ),
-                    ),
-                ),
-                KeyValue(
-                    Constant(
-                        Str(
-                            Word(
-                                Atom('win32 ia32 LE' type=dynamic),
-                            ),
-                        ),
-                    ),
-                    Constant(
-                        Str(
-                            Word(
-                                Atom('esbuild-windows-32' type=dynamic),
+                                "esbuild-windows-arm64",
                             ),
                         ),
                     ),
@@ -703,15 +690,31 @@
                 KeyValue(
                     Constant(
                         Str(
-                            Word(
-                                Atom('win32 x64 LE' type=dynamic),
+                            Atom(
+                                "win32 ia32 LE",
                             ),
                         ),
                     ),
                     Constant(
                         Str(
                             Word(
-                                Atom('esbuild-windows-64' type=dynamic),
+                                "esbuild-windows-32",
+                            ),
+                        ),
+                    ),
+                ),
+                KeyValue(
+                    Constant(
+                        Str(
+                            Atom(
+                                "win32 x64 LE",
+                            ),
+                        ),
+                    ),
+                    Constant(
+                        Str(
+                            Word(
+                                "esbuild-windows-64",
                             ),
                         ),
                     ),
@@ -725,13 +728,13 @@
         Call(
             3,
             FreeVar(
-                Atom('require' type=static),
+                "require",
             ),
             [
                 Constant(
                     Str(
                         Word(
-                            Atom('os' type=inline),
+                            "os",
                         ),
                     ),
                 ),
@@ -743,13 +746,13 @@
         Call(
             3,
             FreeVar(
-                Atom('require' type=static),
+                "require",
             ),
             [
                 Constant(
                     Str(
                         Word(
-                            Atom('path' type=static),
+                            "path",
                         ),
                     ),
                 ),
@@ -761,13 +764,13 @@
         Call(
             3,
             FreeVar(
-                Atom('require' type=static),
+                "require",
             ),
             [
                 Constant(
                     Str(
                         Word(
-                            Atom('path' type=static),
+                            "path",
                         ),
                     ),
                 ),
@@ -779,28 +782,29 @@
         Alternatives(
             8,
             [
-                Unknown(
-                    Some(
+                Unknown {
+                    original_value: Some(
                         Variable(
                             (
-                                Atom('pkg' type=inline),
+                                "pkg",
                                 #3,
                             ),
                         ),
                     ),
-                    "pattern without value",
-                ),
+                    reason: "pattern without value",
+                    has_side_effects: false,
+                },
                 Member(
                     3,
                     Variable(
                         (
-                            Atom('knownWindowsPackages' type=dynamic),
+                            "knownWindowsPackages",
                             #2,
                         ),
                     ),
                     Variable(
                         (
-                            Atom('platformKey' type=dynamic),
+                            "platformKey",
                             #3,
                         ),
                     ),
@@ -809,13 +813,13 @@
                     3,
                     Variable(
                         (
-                            Atom('knownUnixlikePackages' type=dynamic),
+                            "knownUnixlikePackages",
                             #2,
                         ),
                     ),
                     Variable(
                         (
-                            Atom('platformKey' type=dynamic),
+                            "platformKey",
                             #3,
                         ),
                     ),
@@ -831,7 +835,7 @@
                 2,
                 Variable(
                     (
-                        Atom('pkgAndSubpathForCurrentPlatform' type=dynamic),
+                        "pkgAndSubpathForCurrentPlatform",
                         #2,
                     ),
                 ),
@@ -839,8 +843,8 @@
             ),
             Constant(
                 Str(
-                    Word(
-                        Atom('pkg' type=inline),
+                    Atom(
+                        "pkg",
                     ),
                 ),
             ),
@@ -857,14 +861,14 @@
                     KeyValue(
                         Constant(
                             Str(
-                                Word(
-                                    Atom('pkg' type=inline),
+                                Atom(
+                                    "pkg",
                                 ),
                             ),
                         ),
                         Variable(
                             (
-                                Atom('pkg' type=inline),
+                                "pkg",
                                 #3,
                             ),
                         ),
@@ -872,14 +876,14 @@
                     KeyValue(
                         Constant(
                             Str(
-                                Word(
-                                    Atom('subpath' type=inline),
+                                Atom(
+                                    "subpath",
                                 ),
                             ),
                         ),
                         Variable(
                             (
-                                Atom('subpath' type=inline),
+                                "subpath",
                                 #3,
                             ),
                         ),
@@ -897,12 +901,12 @@
                 Member(
                     3,
                     FreeVar(
-                        Atom('process' type=static),
+                        "process",
                     ),
                     Constant(
                         Str(
-                            Word(
-                                Atom('platform' type=dynamic),
+                            Atom(
+                                "platform",
                             ),
                         ),
                     ),
@@ -918,14 +922,14 @@
                     3,
                     Variable(
                         (
-                            Atom('os' type=inline),
+                            "os",
                             #2,
                         ),
                     ),
                     Constant(
                         Str(
-                            Word(
-                                Atom('arch' type=inline),
+                            Atom(
+                                "arch",
                             ),
                         ),
                     ),
@@ -942,14 +946,14 @@
                     3,
                     Variable(
                         (
-                            Atom('os' type=inline),
+                            "os",
                             #2,
                         ),
                     ),
                     Constant(
                         Str(
-                            Word(
-                                Atom('endianness' type=dynamic),
+                            Atom(
+                                "endianness",
                             ),
                         ),
                     ),
@@ -963,28 +967,29 @@
         Alternatives(
             4,
             [
-                Unknown(
-                    Some(
+                Unknown {
+                    original_value: Some(
                         Variable(
                             (
-                                Atom('subpath' type=inline),
+                                "subpath",
                                 #3,
                             ),
                         ),
                     ),
-                    "pattern without value",
-                ),
+                    reason: "pattern without value",
+                    has_side_effects: false,
+                },
                 Constant(
                     Str(
                         Word(
-                            Atom('esbuild.exe' type=dynamic),
+                            "esbuild.exe",
                         ),
                     ),
                 ),
                 Constant(
                     Str(
                         Word(
-                            Atom('bin/esbuild' type=dynamic),
+                            "bin/esbuild",
                         ),
                     ),
                 ),
@@ -999,7 +1004,7 @@
                 2,
                 Variable(
                     (
-                        Atom('pkgAndSubpathForCurrentPlatform' type=dynamic),
+                        "pkgAndSubpathForCurrentPlatform",
                         #2,
                     ),
                 ),
@@ -1007,8 +1012,8 @@
             ),
             Constant(
                 Str(
-                    Word(
-                        Atom('subpath' type=inline),
+                    Atom(
+                        "subpath",
                     ),
                 ),
             ),
@@ -1020,21 +1025,21 @@
             5,
             Variable(
                 (
-                    Atom('args' type=inline),
+                    "args",
                     #2,
                 ),
             ),
             Constant(
                 Str(
-                    Word(
-                        Atom('concat' type=static),
+                    Atom(
+                        "concat",
                     ),
                 ),
             ),
             [
                 Constant(
                     Str(
-                        Atom(
+                        RcStr(
                             "--service=0.14.12",
                         ),
                     ),
@@ -1042,7 +1047,7 @@
                 Constant(
                     Str(
                         Word(
-                            Atom('--ping' type=inline),
+                            "--ping",
                         ),
                     ),
                 ),

@@ -6,13 +6,14 @@ use std::{
 };
 
 use futures::{stream::iter, StreamExt};
-use globwatch::{ConfigError, GlobWatcher, StopToken, WatchConfig, Watcher};
+use globwatch::{ConfigError, GlobWatcher, StopToken, WatchConfig, WatchError, Watcher};
 use itertools::Itertools;
 use notify::{EventKind, RecommendedWatcher};
+use thiserror::Error;
 use tokio::time::timeout;
 use tracing::{trace, warn};
-use turbopath::AbsoluteSystemPathBuf;
-use wax::{Glob as WaxGlob, Pattern};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
+use wax::{Glob as WaxGlob, Program};
 
 // these aliases are for readability, but they're just strings. it may make
 // sense to use a newtype wrapper for these types in the future.
@@ -47,15 +48,28 @@ pub struct GlobSet {
     exclude: HashSet<Glob>,
 }
 
+#[derive(Debug, Error)]
+pub enum HashGlobSetupError {
+    #[error("failed to start tracking hash-globs {0}")]
+    WatchError(#[from] WatchError),
+    #[error("failed to calculate relative path for hash-glob watching ({1}): {0}")]
+    PathError(PathError, AbsoluteSystemPathBuf),
+}
+
 impl HashGlobWatcher<RecommendedWatcher> {
     #[tracing::instrument]
     pub fn new(
-        relative_to: AbsoluteSystemPathBuf,
-        flush_folder: PathBuf,
-    ) -> Result<Self, notify::Error> {
+        relative_to: &AbsoluteSystemPath,
+        flush_folder: &AbsoluteSystemPath,
+    ) -> Result<Self, HashGlobSetupError> {
         let (watcher, config) = GlobWatcher::new(flush_folder)?;
+        let relative_to = relative_to
+            .to_realpath()
+            .map_err(|e| HashGlobSetupError::PathError(e, relative_to.to_owned()))?
+            .as_std_path()
+            .to_owned();
         Ok(Self {
-            relative_to: relative_to.as_path().canonicalize()?,
+            relative_to,
             hash_globs: Default::default(),
             glob_statuses: Default::default(),
             watcher: Arc::new(Mutex::new(Some(watcher))),
@@ -356,15 +370,19 @@ fn clear_hash_globs(
 
 #[cfg(test)]
 mod test {
-    use std::{fs::File, sync::Arc, time::Duration};
+    use std::{sync::Arc, time::Duration};
 
     use globwatch::StopSource;
     use tokio::time::timeout;
-    use turbopath::AbsoluteSystemPathBuf;
+    use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
-    fn setup() -> tempdir::TempDir {
-        let tmp = tempdir::TempDir::new("globwatch").unwrap();
+    fn temp_dir() -> (AbsoluteSystemPathBuf, tempfile::TempDir) {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        (path, tmp)
+    }
 
+    fn setup(tmp: &AbsoluteSystemPath) {
         let directories = ["my-pkg/dist/distChild", "my-pkg/.next/cache"];
 
         let files = [
@@ -375,28 +393,23 @@ mod test {
         ];
 
         for dir in directories.iter() {
-            std::fs::create_dir_all(tmp.path().join(dir)).unwrap();
+            let dir = RelativeUnixPathBuf::new(*dir).unwrap();
+            tmp.join_unix_path(&dir).create_dir_all().unwrap();
         }
 
         for file in files.iter() {
-            std::fs::File::create(tmp.path().join(file)).unwrap();
+            let file = RelativeUnixPathBuf::new(*file).unwrap();
+            tmp.join_unix_path(&file).create_with_contents("").unwrap();
         }
-
-        tmp
     }
 
     #[tokio::test]
     #[tracing_test::traced_test]
     async fn track_outputs() {
-        let dir = setup();
-        let flush = tempdir::TempDir::new("globwatch-flush").unwrap();
-        let watcher = Arc::new(
-            super::HashGlobWatcher::new(
-                AbsoluteSystemPathBuf::new(dir.path()).unwrap(),
-                flush.path().to_path_buf(),
-            )
-            .unwrap(),
-        );
+        let (dir, _tmp_dir) = temp_dir();
+        setup(&dir);
+        let (flush, _tmp_flush) = temp_dir();
+        let watcher = Arc::new(super::HashGlobWatcher::new(&dir, &flush).unwrap());
 
         let stop = StopSource::new();
 
@@ -413,11 +426,7 @@ mod test {
         println!("{:?} {:?}", include, exclude);
 
         watcher
-            .watch_globs(
-                hash.clone(),
-                include.clone().into_iter(),
-                exclude.clone().into_iter(),
-            )
+            .watch_globs(hash.clone(), include.clone(), exclude.clone())
             .await
             .unwrap();
 
@@ -434,7 +443,9 @@ mod test {
 
         // change a file that is neither included nor excluded
 
-        File::create(dir.path().join("my-pkg/irrelevant2")).unwrap();
+        dir.join_components(&["my-pkg", "irrelevant2"])
+            .create_with_contents("")
+            .unwrap();
         let changed = watcher
             .changed_globs(&hash, include.clone().into_iter().collect())
             .await
@@ -448,7 +459,9 @@ mod test {
 
         // change a file that is excluded
 
-        File::create(dir.path().join("my-pkg/.next/cache/next-file2")).unwrap();
+        dir.join_components(&["my-pkg", ".next", "cache", "next-file2"])
+            .create_with_contents("")
+            .unwrap();
         let changed = watcher
             .changed_globs(&hash, include.clone().into_iter().collect())
             .await
@@ -462,7 +475,9 @@ mod test {
 
         // change a file that is included
 
-        File::create(dir.path().join("my-pkg/dist/dist-file2")).unwrap();
+        dir.join_components(&["my-pkg", "dist", "dist-file2"])
+            .create_with_contents("")
+            .unwrap();
         let changed = watcher
             .changed_globs(&hash, include.clone().into_iter().collect())
             .await
@@ -477,7 +492,9 @@ mod test {
         // change a file that is included but with a subdirectory that is excluded
         // now both globs should be marked as changed
 
-        File::create(dir.path().join("my-pkg/.next/next-file2")).unwrap();
+        dir.join_components(&["my-pkg", ".next", "next-file2"])
+            .create_with_contents("")
+            .unwrap();
         let changed = watcher
             .changed_globs(&hash, include.clone().into_iter().collect())
             .await
@@ -504,15 +521,10 @@ mod test {
     #[tokio::test]
     #[tracing_test::traced_test]
     async fn test_multiple_hashes() {
-        let dir = setup();
-        let flush = tempdir::TempDir::new("globwatch-flush").unwrap();
-        let watcher = Arc::new(
-            super::HashGlobWatcher::new(
-                AbsoluteSystemPathBuf::new(dir.path()).unwrap(),
-                flush.path().to_path_buf(),
-            )
-            .unwrap(),
-        );
+        let (dir, _tmp_dir) = temp_dir();
+        setup(&dir);
+        let (flush, _tmp_flush) = temp_dir();
+        let watcher = Arc::new(super::HashGlobWatcher::new(&dir, &flush).unwrap());
 
         let stop = StopSource::new();
 
@@ -530,19 +542,15 @@ mod test {
         let globs2_exclusion = ["my-pkg/.next/cache/**".to_string()];
 
         watcher
-            .watch_globs(
-                hash1.clone(),
-                globs1_inclusion.clone().into_iter(),
-                vec![].into_iter(),
-            )
+            .watch_globs(hash1.clone(), globs1_inclusion.clone(), vec![])
             .await
             .unwrap();
 
         watcher
             .watch_globs(
                 hash2.clone(),
-                globs2_inclusion.clone().into_iter(),
-                globs2_exclusion.clone().into_iter(),
+                globs2_inclusion.clone(),
+                globs2_exclusion.clone(),
             )
             .await
             .unwrap();
@@ -571,7 +579,9 @@ mod test {
 
         // make a change excluded in only one of the hashes
 
-        File::create(dir.path().join("my-pkg/.next/cache/next-file2")).unwrap();
+        dir.join_components(&["my-pkg", ".next", "cache", "next-file2"])
+            .create_with_contents("")
+            .unwrap();
         let changed = watcher
             .changed_globs(&hash1, globs1_inclusion.clone().into_iter().collect())
             .await
@@ -596,7 +606,9 @@ mod test {
 
         // make a change for the other hash
 
-        File::create(dir.path().join("my-pkg/.next/next-file2")).unwrap();
+        dir.join_components(&["my-pkg", ".next", "next-file2"])
+            .create_with_contents("")
+            .unwrap();
         let changed = watcher
             .changed_globs(&hash2, globs2_inclusion.clone().into_iter().collect())
             .await
@@ -626,15 +638,10 @@ mod test {
     #[tokio::test]
     #[tracing_test::traced_test]
     async fn watch_single_file() {
-        let dir = setup();
-        let flush = tempdir::TempDir::new("globwatch-flush").unwrap();
-        let watcher = Arc::new(
-            super::HashGlobWatcher::new(
-                AbsoluteSystemPathBuf::new(dir.path()).unwrap(),
-                flush.path().to_path_buf(),
-            )
-            .unwrap(),
-        );
+        let (dir, _tmp_dir) = temp_dir();
+        setup(&dir);
+        let (flush, _tmp_flush) = temp_dir();
+        let watcher = Arc::new(super::HashGlobWatcher::new(&dir, &flush).unwrap());
 
         let stop = StopSource::new();
 
@@ -648,15 +655,13 @@ mod test {
         let inclusions = ["my-pkg/.next/next-file".to_string()];
 
         watcher
-            .watch_globs(
-                hash.clone(),
-                inclusions.clone().into_iter(),
-                vec![].into_iter(),
-            )
+            .watch_globs(hash.clone(), inclusions.clone(), vec![])
             .await
             .unwrap();
 
-        File::create(dir.path().join("my-pkg/.next/irrelevant")).unwrap();
+        dir.join_components(&["my-pkg", ".next", "irrelevant"])
+            .create_with_contents("")
+            .unwrap();
         let changed = watcher
             .changed_globs(&hash, inclusions.clone().into_iter().collect())
             .await
@@ -668,7 +673,9 @@ mod test {
             changed
         );
 
-        File::create(dir.path().join("my-pkg/.next/next-file")).unwrap();
+        dir.join_components(&["my-pkg", ".next", "next-file"])
+            .create_with_contents("")
+            .unwrap();
         let changed = watcher
             .changed_globs(&hash, inclusions.clone().into_iter().collect())
             .await
@@ -695,15 +702,10 @@ mod test {
     #[tokio::test]
     #[tracing_test::traced_test]
     async fn delete_root_kill_daemon() {
-        let dir = setup();
-        let flush = tempdir::TempDir::new("globwatch-flush").unwrap();
-        let watcher = Arc::new(
-            super::HashGlobWatcher::new(
-                AbsoluteSystemPathBuf::new(dir.path()).unwrap(),
-                flush.path().to_path_buf(),
-            )
-            .unwrap(),
-        );
+        let (dir, _tmp_dir) = temp_dir();
+        setup(&dir);
+        let (flush, _tmp_flush) = temp_dir();
+        let watcher = Arc::new(super::HashGlobWatcher::new(&dir, &flush).unwrap());
 
         let stop = StopSource::new();
 
@@ -714,7 +716,7 @@ mod test {
         let task = tokio::task::spawn(async move { task_watcher.watch(token).await });
         tokio::time::sleep(Duration::from_secs(3)).await;
         watcher.config.flush().await.unwrap();
-        std::fs::remove_dir_all(dir.path()).unwrap();
+        dir.remove_dir_all().unwrap();
 
         // it should shut down
         match timeout(Duration::from_secs(60), task).await {

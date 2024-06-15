@@ -1,11 +1,11 @@
 #![feature(min_specialization)]
+#![feature(arbitrary_self_types)]
 
 mod nft_json;
 
 use std::{
     collections::{BTreeSet, HashMap},
     env::current_dir,
-    fs,
     future::Future,
     path::{Path, PathBuf},
     pin::Pin,
@@ -17,41 +17,37 @@ use anyhow::{anyhow, Context, Result};
 #[cfg(feature = "cli")]
 use clap::Parser;
 #[cfg(feature = "node-api")]
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+#[cfg(feature = "node-api")]
+use serde::Serialize;
 use tokio::sync::mpsc::channel;
 use turbo_tasks::{
-    backend::Backend,
-    primitives::{OptionStringVc, StringsVc},
-    util::FormatDuration,
-    NothingVc, TaskId, TransientInstance, TransientValue, TurboTasks, TurboTasksBackendApi,
-    UpdateInfo, Value,
+    backend::Backend, util::FormatDuration, RcStr, TaskId, TransientInstance, TransientValue,
+    TurboTasks, UpdateInfo, Value, Vc,
 };
 use turbo_tasks_fs::{
-    glob::GlobVc, DirectoryEntry, DiskFileSystemVc, FileSystem, FileSystemPathVc, FileSystemVc,
-    ReadGlobResultVc,
+    glob::Glob, DirectoryEntry, DiskFileSystem, FileSystem, FileSystemPath, ReadGlobResult,
 };
-use turbo_tasks_memory::{
-    stats::{ReferenceType, Stats},
-    viz, MemoryBackend,
-};
+use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
-    emit_asset, emit_with_completion, module_options::ModuleOptionsContext, rebase::RebasedAssetVc,
-    resolve_options_context::ResolveOptionsContext, transition::TransitionsByNameVc,
-    ModuleAssetContextVc,
+    emit_asset, emit_with_completion, module_options::ModuleOptionsContext, rebase::RebasedAsset,
+    ModuleAssetContext,
 };
-use turbopack_cli_utils::issue::{ConsoleUiVc, IssueSeverityCliOption, LogOptions};
+use turbopack_cli_utils::issue::{ConsoleUi, IssueSeverityCliOption, LogOptions};
 use turbopack_core::{
-    asset::{Asset, AssetVc, AssetsVc},
     compile_time_info::CompileTimeInfo,
-    context::{AssetContext, AssetContextVc},
-    environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
-    issue::{IssueContextExt, IssueReporter, IssueSeverity, IssueVc},
-    reference::all_assets,
+    context::AssetContext,
+    environment::{Environment, ExecutionEnvironment, NodeJsEnvironment},
+    file_source::FileSource,
+    issue::{IssueDescriptionExt, IssueReporter, IssueSeverity},
+    module::{Module, Modules},
+    output::OutputAsset,
+    reference::all_modules_and_affecting_sources,
     resolve::options::{ImportMapping, ResolvedMap},
-    source_asset::SourceAssetVc,
 };
+use turbopack_resolve::resolve_options_context::ResolveOptionsContext;
 
-use crate::nft_json::NftJsonAssetVc;
+use crate::nft_json::NftJsonAsset;
 
 #[cfg(feature = "persistent_cache")]
 #[cfg_attr(feature = "cli", derive(clap::Args))]
@@ -100,10 +96,6 @@ pub struct CommonArgs {
     #[cfg_attr(feature = "cli", clap(flatten))]
     #[cfg_attr(feature = "node-api", serde(default))]
     cache: CacheArgs,
-
-    #[cfg_attr(feature = "cli", clap(short, long))]
-    #[cfg_attr(feature = "node-api", serde(default))]
-    visualize_graph: bool,
 
     #[cfg_attr(feature = "cli", clap(short, long))]
     #[cfg_attr(feature = "node-api", serde(default))]
@@ -195,115 +187,126 @@ impl Args {
     }
 }
 
-async fn create_fs(name: &str, context: &str, watch: bool) -> Result<FileSystemVc> {
-    let fs = DiskFileSystemVc::new(name.to_string(), context.to_string());
+async fn create_fs(name: &str, root: &str, watch: bool) -> Result<Vc<Box<dyn FileSystem>>> {
+    let fs = DiskFileSystem::new(name.into(), root.into(), vec![]);
     if watch {
         fs.await?.start_watching()?;
     } else {
         fs.await?.invalidate();
     }
-    Ok(fs.into())
+    Ok(Vc::upcast(fs))
 }
 
 async fn add_glob_results(
-    context: AssetContextVc,
-    result: ReadGlobResultVc,
-    list: &mut Vec<AssetVc>,
+    asset_context: Vc<Box<dyn AssetContext>>,
+    result: Vc<ReadGlobResult>,
+    list: &mut Vec<Vc<Box<dyn Module>>>,
 ) -> Result<()> {
     let result = result.await?;
     for entry in result.results.values() {
         if let DirectoryEntry::File(path) = entry {
-            let source = SourceAssetVc::new(*path).into();
-            list.push(context.process(
-                source,
-                Value::new(turbopack_core::reference_type::ReferenceType::Undefined),
-            ));
+            let source = Vc::upcast(FileSource::new(*path));
+            let module = asset_context
+                .process(
+                    source,
+                    Value::new(turbopack_core::reference_type::ReferenceType::Undefined),
+                )
+                .module();
+            list.push(module);
         }
     }
     for result in result.inner.values() {
         fn recurse<'a>(
-            context: AssetContextVc,
-            result: ReadGlobResultVc,
-            list: &'a mut Vec<AssetVc>,
+            asset_context: Vc<Box<dyn AssetContext>>,
+            result: Vc<ReadGlobResult>,
+            list: &'a mut Vec<Vc<Box<dyn Module>>>,
         ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
-            Box::pin(add_glob_results(context, result, list))
+            Box::pin(add_glob_results(asset_context, result, list))
         }
         // Boxing for async recursion
-        recurse(context, *result, list).await?;
+        recurse(asset_context, *result, list).await?;
     }
     Ok(())
 }
 
 #[turbo_tasks::function]
-async fn input_to_modules<'a>(
-    fs: FileSystemVc,
-    input: Vec<String>,
+async fn input_to_modules(
+    fs: Vc<Box<dyn FileSystem>>,
+    input: Vec<RcStr>,
     exact: bool,
-    process_cwd: Option<String>,
-    context: String,
+    process_cwd: Option<RcStr>,
+    context_directory: RcStr,
     module_options: TransientInstance<ModuleOptionsContext>,
     resolve_options: TransientInstance<ResolveOptionsContext>,
-) -> Result<AssetsVc> {
+) -> Result<Vc<Modules>> {
     let root = fs.root();
     let process_cwd = process_cwd
         .clone()
-        .map(|p| p.trim_start_matches(&context).to_owned());
+        .map(|p| format!("/ROOT{}", p.trim_start_matches(&*context_directory)).into());
 
-    let context: AssetContextVc =
-        create_module_asset(root, process_cwd, module_options, resolve_options).into();
+    let asset_context: Vc<Box<dyn AssetContext>> = Vc::upcast(create_module_asset(
+        root,
+        process_cwd,
+        module_options,
+        resolve_options,
+    ));
 
     let mut list = Vec::new();
-    for input in input.iter() {
+    for input in input {
         if exact {
-            let source = SourceAssetVc::new(root.join(input)).into();
-            list.push(context.process(
-                source,
-                Value::new(turbopack_core::reference_type::ReferenceType::Undefined),
-            ));
+            let source = Vc::upcast(FileSource::new(root.join(input)));
+            let module = asset_context
+                .process(
+                    source,
+                    Value::new(turbopack_core::reference_type::ReferenceType::Undefined),
+                )
+                .module();
+            list.push(module);
         } else {
-            let glob = GlobVc::new(input);
-            add_glob_results(context, root.read_glob(glob, false), &mut list).await?;
+            let glob = Glob::new(input);
+            add_glob_results(asset_context, root.read_glob(glob, false), &mut list).await?;
         };
     }
-    Ok(AssetsVc::cell(list))
+    Ok(Vc::cell(list))
 }
 
 fn process_context(dir: &Path, context_directory: Option<&String>) -> Result<String> {
-    let mut context = PathBuf::from(context_directory.map_or(".", |s| s));
-    if !context.is_absolute() {
-        context = dir.join(context);
+    let mut context_directory = PathBuf::from(context_directory.map_or(".", |s| s));
+    if !context_directory.is_absolute() {
+        context_directory = dir.join(context_directory);
     }
     // context = context.canonicalize().unwrap();
-    Ok(context
+    Ok(context_directory
         .to_str()
         .ok_or_else(|| anyhow!("context directory contains invalid characters"))
         .unwrap()
         .to_string())
 }
 
-fn make_relative_path(dir: &Path, context: &str, input: &str) -> Result<String> {
+fn make_relative_path(dir: &Path, context_directory: &str, input: &str) -> Result<RcStr> {
     let mut input = PathBuf::from(input);
     if !input.is_absolute() {
         input = dir.join(input);
     }
     // input = input.canonicalize()?;
-    let input = input.strip_prefix(context).with_context(|| {
+    let input = input.strip_prefix(context_directory).with_context(|| {
         anyhow!(
             "{} is not part of the context directory {}",
             input.display(),
-            context
+            context_directory
         )
     })?;
     Ok(input
         .to_str()
         .ok_or_else(|| anyhow!("input contains invalid characters"))?
-        .replace('\\', "/"))
+        .replace('\\', "/")
+        .into())
 }
 
-fn process_input(dir: &Path, context: &str, input: &[String]) -> Result<Vec<String>> {
+fn process_input(dir: &Path, context_directory: &str, input: &[String]) -> Result<Vec<RcStr>> {
     input
         .iter()
-        .map(|input| make_relative_path(dir, context, input))
+        .map(|input| make_relative_path(dir, context_directory, input))
         .collect()
 }
 
@@ -312,10 +315,9 @@ pub async fn start(
     turbo_tasks: Option<&Arc<TurboTasks<MemoryBackend>>>,
     module_options: Option<ModuleOptionsContext>,
     resolve_options: Option<ResolveOptionsContext>,
-) -> Result<Vec<String>> {
+) -> Result<Vec<RcStr>> {
     register();
     let &CommonArgs {
-        visualize_graph,
         memory_limit,
         #[cfg(feature = "persistent_cache")]
             cache: CacheArgs {
@@ -380,22 +382,7 @@ pub async fn start(
                 TurboTasks::new(MemoryBackend::new(memory_limit.unwrap_or(usize::MAX)))
             })
         },
-        |tt, root_task, _| async move {
-            if visualize_graph {
-                let mut stats = Stats::new();
-                let b = tt.backend();
-                b.with_all_cached_tasks(|task| {
-                    stats.add_id(b, task);
-                });
-                stats.add_id(b, root_task);
-                // stats.merge_resolve();
-                let tree = stats.treeify(ReferenceType::Child);
-                let graph =
-                    viz::graph::visualize_stats_tree(tree, ReferenceType::Child, tt.stats_type());
-                fs::write("graph.html", viz::graph::wrap_html(&graph)).unwrap();
-                println!("graph.html written");
-            }
-        },
+        |_, _, _| async move {},
         module_options,
         resolve_options,
     )
@@ -408,7 +395,7 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
     final_finish: impl FnOnce(Arc<TurboTasks<B>>, TaskId, Duration) -> F,
     module_options: Option<ModuleOptionsContext>,
     resolve_options: Option<ResolveOptionsContext>,
-) -> Result<Vec<String>> {
+) -> Result<Vec<RcStr>> {
     let &CommonArgs {
         watch,
         show_all,
@@ -491,25 +478,27 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
                 module_options,
                 resolve_options,
             );
+            let _ = output.resolve_strongly_consistent().await?;
 
-            let source = TransientValue::new(output.into());
-            let issues = IssueVc::peek_issues_with_path(output)
-                .await?
-                .strongly_consistent()
+            let source = TransientValue::new(Vc::into_raw(output));
+            let issues = output.peek_issues_with_path().await?;
+
+            let console_ui = ConsoleUi::new(log_options);
+            Vc::upcast::<Box<dyn IssueReporter>>(console_ui)
+                .report_issues(
+                    TransientInstance::new(issues),
+                    source,
+                    IssueSeverity::Error.cell(),
+                )
                 .await?;
-
-            let console_ui = ConsoleUiVc::new(log_options);
-            console_ui
-                .as_issue_reporter()
-                .report_issues(TransientInstance::new(issues), source);
 
             if has_return_value {
                 let output_read_ref = output.await?;
                 let output_iter = output_read_ref.iter().cloned();
-                sender.send(output_iter.collect::<Vec<String>>()).await?;
+                sender.send(output_iter.collect::<Vec<RcStr>>()).await?;
                 drop(sender);
             }
-            Ok(NothingVc::new().into())
+            Ok::<Vc<()>, _>(Default::default())
         })
     });
     finish(tt, task).await?;
@@ -527,7 +516,7 @@ async fn main_operation(
     args: TransientInstance<Args>,
     module_options: TransientInstance<ModuleOptionsContext>,
     resolve_options: TransientInstance<ResolveOptionsContext>,
-) -> Result<StringsVc> {
+) -> Result<Vc<Vec<RcStr>>> {
     let dir = current_dir.into_value();
     let args = &*args;
     let &CommonArgs {
@@ -538,37 +527,40 @@ async fn main_operation(
         ref process_cwd,
         ..
     } = args.common();
-    let context = process_context(&dir, context_directory.as_ref()).unwrap();
-    let fs = create_fs("context directory", &context, watch).await?;
+    let context_directory: RcStr = process_context(&dir, context_directory.as_ref())
+        .unwrap()
+        .into();
+    let fs = create_fs("context directory", &context_directory, watch).await?;
+    let process_cwd = process_cwd.clone().map(RcStr::from);
 
     match *args {
         Args::Print { common: _ } => {
-            let input = process_input(&dir, &context, input).unwrap();
+            let input = process_input(&dir, &context_directory, input).unwrap();
             let mut result = BTreeSet::new();
             let modules = input_to_modules(
                 fs,
                 input,
                 exact,
                 process_cwd.clone(),
-                context,
+                context_directory,
                 module_options,
                 resolve_options,
             )
             .await?;
             for module in modules.iter() {
-                let set = all_assets(*module)
-                    .issue_context(module.ident().path(), "gathering list of assets")
+                let set = all_modules_and_affecting_sources(*module)
+                    .issue_file_path(module.ident().path(), "gathering list of assets")
                     .await?;
                 for asset in set.await?.iter() {
                     let path = asset.ident().path().await?;
-                    result.insert(path.path.to_string());
+                    result.insert(RcStr::from(&*path.path));
                 }
             }
 
-            return Ok(StringsVc::cell(result.into_iter().collect::<Vec<_>>()));
+            return Ok(Vc::cell(result.into_iter().collect::<Vec<_>>()));
         }
         Args::Annotate { common: _ } => {
-            let input = process_input(&dir, &context, input).unwrap();
+            let input = process_input(&dir, &context_directory, input).unwrap();
             let mut output_nft_assets = Vec::new();
             let mut emits = Vec::new();
             for module in input_to_modules(
@@ -576,30 +568,30 @@ async fn main_operation(
                 input,
                 exact,
                 process_cwd.clone(),
-                context,
+                context_directory,
                 module_options,
                 resolve_options,
             )
             .await?
             .iter()
             {
-                let nft_asset = NftJsonAssetVc::new(*module);
+                let nft_asset = NftJsonAsset::new(*module);
                 let path = nft_asset.ident().path().await?.path.clone();
                 output_nft_assets.push(path);
-                emits.push(emit_asset(nft_asset.into()));
+                emits.push(emit_asset(Vc::upcast(nft_asset)));
             }
             // Wait for all files to be emitted
             for emit in emits {
                 emit.await?;
             }
-            return Ok(StringsVc::cell(output_nft_assets));
+            return Ok(Vc::cell(output_nft_assets));
         }
         Args::Build {
             ref output_directory,
             common: _,
         } => {
             let output = process_context(&dir, Some(output_directory)).unwrap();
-            let input = process_input(&dir, &context, input).unwrap();
+            let input = process_input(&dir, &context_directory, input).unwrap();
             let out_fs = create_fs("output directory", &output, watch).await?;
             let input_dir = fs.root();
             let output_dir = out_fs.root();
@@ -609,14 +601,14 @@ async fn main_operation(
                 input,
                 exact,
                 process_cwd.clone(),
-                context,
+                context_directory,
                 module_options,
                 resolve_options,
             )
             .await?
             .iter()
             {
-                let rebased = RebasedAssetVc::new(*module, input_dir, output_dir).into();
+                let rebased = Vc::upcast(RebasedAsset::new(*module, input_dir, output_dir));
                 emits.push(emit_with_completion(rebased, output_dir));
             }
             // Wait for all files to be emitted
@@ -626,36 +618,33 @@ async fn main_operation(
         }
         Args::Size { common: _ } => todo!(),
     }
-    Ok(StringsVc::cell(Vec::new()))
+    Ok(Vc::cell(Vec::new()))
 }
 
 #[turbo_tasks::function]
 async fn create_module_asset(
-    root: FileSystemPathVc,
-    process_cwd: Option<String>,
+    root: Vc<FileSystemPath>,
+    process_cwd: Option<RcStr>,
     module_options: TransientInstance<ModuleOptionsContext>,
     resolve_options: TransientInstance<ResolveOptionsContext>,
-) -> Result<ModuleAssetContextVc> {
-    let env = EnvironmentVc::new(
-        Value::new(ExecutionEnvironment::NodeJsLambda(
-            NodeJsEnvironment {
-                cwd: OptionStringVc::cell(process_cwd),
-                ..Default::default()
-            }
-            .into(),
-        )),
-        Value::new(EnvironmentIntention::Api),
-    );
+) -> Result<Vc<ModuleAssetContext>> {
+    let env = Environment::new(Value::new(ExecutionEnvironment::NodeJsLambda(
+        NodeJsEnvironment {
+            cwd: Vc::cell(process_cwd),
+            ..Default::default()
+        }
+        .into(),
+    )));
     let compile_time_info = CompileTimeInfo::builder(env).cell();
     let glob_mappings = vec![
         (
             root,
-            GlobVc::new("**/*/next/dist/server/next.js"),
+            Glob::new("**/*/next/dist/server/next.js".into()),
             ImportMapping::Ignore.into(),
         ),
         (
             root,
-            GlobVc::new("**/*/next/dist/bin/next"),
+            Glob::new("**/*/next/dist/bin/next".into()),
             ImportMapping::Ignore.into(),
         ),
     ];
@@ -672,11 +661,12 @@ async fn create_module_asset(
         );
     }
 
-    Ok(ModuleAssetContextVc::new(
-        TransitionsByNameVc::cell(HashMap::new()),
+    Ok(ModuleAssetContext::new(
+        Vc::cell(HashMap::new()),
         compile_time_info,
         ModuleOptionsContext::clone(&*module_options).cell(),
         resolve_options.cell(),
+        Vc::cell("node_file_trace".into()),
     ))
 }
 
@@ -685,5 +675,6 @@ fn register() {
     turbo_tasks_fs::register();
     turbopack::register();
     turbopack_cli_utils::register();
+    turbopack_resolve::register();
     include!(concat!(env!("OUT_DIR"), "/register.rs"));
 }

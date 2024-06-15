@@ -6,11 +6,10 @@ const config: GatsbyConfig = {
   },
   graphqlTypegen: true,
   plugins: [
-    `gatsby-plugin-pnpm`,
     {
       resolve: `gatsby-plugin-compile-es6-packages`,
       options: {
-        modules: [`ui`],
+        modules: [`@repo/ui`],
       },
     },
   ],

@@ -8,14 +8,14 @@
                 8,
                 Variable(
                     (
-                        Atom('crypt' type=inline),
+                        "crypt",
                         #3,
                     ),
                 ),
                 Constant(
                     Str(
-                        Word(
-                            Atom('endian' type=inline),
+                        Atom(
+                            "endian",
                         ),
                     ),
                 ),
@@ -25,25 +25,25 @@
                         items: [
                             Variable(
                                 (
-                                    Atom('a' type=static),
+                                    "a",
                                     #4,
                                 ),
                             ),
                             Variable(
                                 (
-                                    Atom('b' type=static),
+                                    "b",
                                     #4,
                                 ),
                             ),
                             Variable(
                                 (
-                                    Atom('c' type=inline),
+                                    "c",
                                     #4,
                                 ),
                             ),
                             Variable(
                                 (
-                                    Atom('d' type=static),
+                                    "d",
                                     #4,
                                 ),
                             ),
@@ -62,13 +62,14 @@
             Add(
                 3,
                 [
-                    Unknown(
-                        None,
-                        "unsupported expression",
-                    ),
+                    Unknown {
+                        original_value: None,
+                        reason: "unsupported expression",
+                        has_side_effects: true,
+                    },
                     Variable(
                         (
-                            Atom('b' type=static),
+                            "b",
                             #7,
                         ),
                     ),
@@ -84,13 +85,14 @@
             Add(
                 3,
                 [
-                    Unknown(
-                        None,
-                        "unsupported expression",
-                    ),
+                    Unknown {
+                        original_value: None,
+                        reason: "unsupported expression",
+                        has_side_effects: true,
+                    },
                     Variable(
                         (
-                            Atom('b' type=static),
+                            "b",
                             #8,
                         ),
                     ),
@@ -106,13 +108,14 @@
             Add(
                 3,
                 [
-                    Unknown(
-                        None,
-                        "unsupported expression",
-                    ),
+                    Unknown {
+                        original_value: None,
+                        reason: "unsupported expression",
+                        has_side_effects: true,
+                    },
                     Variable(
                         (
-                            Atom('b' type=static),
+                            "b",
                             #9,
                         ),
                     ),
@@ -128,13 +131,14 @@
             Add(
                 3,
                 [
-                    Unknown(
-                        None,
-                        "unsupported expression",
-                    ),
+                    Unknown {
+                        original_value: None,
+                        reason: "unsupported expression",
+                        has_side_effects: true,
+                    },
                     Variable(
                         (
-                            Atom('b' type=static),
+                            "b",
                             #10,
                         ),
                     ),
@@ -145,36 +149,93 @@
     (
         "*anonymous function 5685*",
         Function(
-            11,
+            22,
             5685,
-            Alternatives(
-                10,
-                [
-                    Variable(
-                        (
-                            Atom('digestbytes' type=dynamic),
-                            #11,
+            Tenary(
+                21,
+                Logical(
+                    5,
+                    And,
+                    [
+                        Variable(
+                            (
+                                "options",
+                                #11,
+                            ),
                         ),
+                        Member(
+                            3,
+                            Variable(
+                                (
+                                    "options",
+                                    #11,
+                                ),
+                            ),
+                            Constant(
+                                Str(
+                                    Atom(
+                                        "asBytes",
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ],
+                ),
+                Variable(
+                    (
+                        "digestbytes",
+                        #11,
+                    ),
+                ),
+                Tenary(
+                    14,
+                    Logical(
+                        5,
+                        And,
+                        [
+                            Variable(
+                                (
+                                    "options",
+                                    #11,
+                                ),
+                            ),
+                            Member(
+                                3,
+                                Variable(
+                                    (
+                                        "options",
+                                        #11,
+                                    ),
+                                ),
+                                Constant(
+                                    Str(
+                                        Atom(
+                                            "asString",
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ],
                     ),
                     MemberCall(
                         4,
                         Variable(
                             (
-                                Atom('bin' type=inline),
+                                "bin",
                                 #3,
                             ),
                         ),
                         Constant(
                             Str(
-                                Word(
-                                    Atom('bytesToString' type=dynamic),
+                                Atom(
+                                    "bytesToString",
                                 ),
                             ),
                         ),
                         [
                             Variable(
                                 (
-                                    Atom('digestbytes' type=dynamic),
+                                    "digestbytes",
                                     #11,
                                 ),
                             ),
@@ -184,27 +245,27 @@
                         4,
                         Variable(
                             (
-                                Atom('crypt' type=inline),
+                                "crypt",
                                 #3,
                             ),
                         ),
                         Constant(
                             Str(
-                                Word(
-                                    Atom('bytesToHex' type=dynamic),
+                                Atom(
+                                    "bytesToHex",
                                 ),
                             ),
                         ),
                         [
                             Variable(
                                 (
-                                    Atom('digestbytes' type=dynamic),
+                                    "digestbytes",
                                     #11,
                                 ),
                             ),
                         ],
                     ),
-                ],
+                ),
             ),
         ),
     ),
@@ -214,14 +275,14 @@
             3,
             Variable(
                 (
-                    Atom('md5' type=inline),
+                    "md5",
                     #3,
                 ),
             ),
             Constant(
                 Str(
-                    Word(
-                        Atom('_ff' type=inline),
+                    Atom(
+                        "_ff",
                     ),
                 ),
             ),
@@ -233,14 +294,14 @@
             3,
             Variable(
                 (
-                    Atom('md5' type=inline),
+                    "md5",
                     #3,
                 ),
             ),
             Constant(
                 Str(
-                    Word(
-                        Atom('_gg' type=inline),
+                    Atom(
+                        "_gg",
                     ),
                 ),
             ),
@@ -252,14 +313,14 @@
             3,
             Variable(
                 (
-                    Atom('md5' type=inline),
+                    "md5",
                     #3,
                 ),
             ),
             Constant(
                 Str(
-                    Word(
-                        Atom('_hh' type=inline),
+                    Atom(
+                        "_hh",
                     ),
                 ),
             ),
@@ -271,14 +332,14 @@
             3,
             Variable(
                 (
-                    Atom('md5' type=inline),
+                    "md5",
                     #3,
                 ),
             ),
             Constant(
                 Str(
-                    Word(
-                        Atom('_ii' type=inline),
+                    Atom(
+                        "_ii",
                     ),
                 ),
             ),
@@ -307,32 +368,32 @@
                     13,
                     Variable(
                         (
-                            Atom('FF' type=inline),
+                            "FF",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
@@ -340,7 +401,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -349,7 +410,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -370,42 +431,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('FF' type=inline),
+                            "FF",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
@@ -413,7 +475,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -422,7 +484,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -443,42 +505,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('FF' type=inline),
+                            "FF",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
@@ -486,7 +549,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -495,7 +558,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -529,32 +592,32 @@
                     13,
                     Variable(
                         (
-                            Atom('FF' type=inline),
+                            "FF",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
@@ -562,7 +625,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -571,7 +634,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -605,32 +668,32 @@
                     13,
                     Variable(
                         (
-                            Atom('GG' type=inline),
+                            "GG",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
@@ -638,7 +701,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -647,7 +710,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -668,42 +731,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('GG' type=inline),
+                            "GG",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
@@ -711,7 +775,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -720,7 +784,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -741,42 +805,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('GG' type=inline),
+                            "GG",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
@@ -784,7 +849,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -793,7 +858,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -827,32 +892,32 @@
                     13,
                     Variable(
                         (
-                            Atom('GG' type=inline),
+                            "GG",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
@@ -860,7 +925,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -869,7 +934,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -890,42 +955,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('HH' type=inline),
+                            "HH",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
@@ -933,7 +999,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -942,7 +1008,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -963,42 +1029,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('HH' type=inline),
+                            "HH",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
@@ -1006,7 +1073,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -1015,7 +1082,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -1036,42 +1103,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('HH' type=inline),
+                            "HH",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
@@ -1079,7 +1147,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -1088,7 +1156,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -1122,32 +1190,32 @@
                     13,
                     Variable(
                         (
-                            Atom('HH' type=inline),
+                            "HH",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
@@ -1155,7 +1223,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -1164,7 +1232,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -1185,42 +1253,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('II' type=inline),
+                            "II",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
@@ -1228,7 +1297,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -1237,7 +1306,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -1258,42 +1327,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('II' type=inline),
+                            "II",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
@@ -1301,7 +1371,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -1310,7 +1380,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -1344,32 +1414,32 @@
                     13,
                     Variable(
                         (
-                            Atom('II' type=inline),
+                            "II",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
@@ -1377,7 +1447,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -1386,7 +1456,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -1420,32 +1490,32 @@
                     13,
                     Variable(
                         (
-                            Atom('II' type=inline),
+                            "II",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
@@ -1453,7 +1523,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -1462,7 +1532,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -1483,16 +1553,18 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
+                Unknown {
+                    original_value: None,
+                    reason: "unsupported expression",
+                    has_side_effects: true,
+                },
             ],
         ),
     ),
@@ -1521,7 +1593,7 @@
         "aa",
         Variable(
             (
-                Atom('a' type=static),
+                "a",
                 #4,
             ),
         ),
@@ -1538,40 +1610,41 @@
         Alternatives(
             210,
             [
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
+                Unknown {
+                    original_value: None,
+                    reason: "unsupported expression",
+                    has_side_effects: true,
+                },
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('FF' type=inline),
+                            "FF",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
@@ -1579,7 +1652,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -1588,7 +1661,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -1609,42 +1682,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('FF' type=inline),
+                            "FF",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
@@ -1652,7 +1726,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -1661,7 +1735,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -1682,42 +1756,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('FF' type=inline),
+                            "FF",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
@@ -1725,7 +1800,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -1734,7 +1809,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -1755,42 +1830,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('FF' type=inline),
+                            "FF",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
@@ -1798,7 +1874,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -1807,7 +1883,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -1841,32 +1917,32 @@
                     13,
                     Variable(
                         (
-                            Atom('GG' type=inline),
+                            "GG",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
@@ -1874,7 +1950,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -1883,7 +1959,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -1904,42 +1980,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('GG' type=inline),
+                            "GG",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
@@ -1947,7 +2024,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -1956,7 +2033,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -1977,42 +2054,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('GG' type=inline),
+                            "GG",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
@@ -2020,7 +2098,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -2029,7 +2107,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -2063,32 +2141,32 @@
                     13,
                     Variable(
                         (
-                            Atom('GG' type=inline),
+                            "GG",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
@@ -2096,7 +2174,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -2105,7 +2183,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -2126,42 +2204,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('HH' type=inline),
+                            "HH",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
@@ -2169,7 +2248,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -2178,7 +2257,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -2199,42 +2278,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('HH' type=inline),
+                            "HH",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
@@ -2242,7 +2322,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -2251,7 +2331,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -2272,42 +2352,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('HH' type=inline),
+                            "HH",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
@@ -2315,7 +2396,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -2324,7 +2405,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -2358,32 +2439,32 @@
                     13,
                     Variable(
                         (
-                            Atom('HH' type=inline),
+                            "HH",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
@@ -2391,7 +2472,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -2400,7 +2481,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -2421,42 +2502,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('II' type=inline),
+                            "II",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
@@ -2464,7 +2546,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -2473,7 +2555,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -2494,42 +2576,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('II' type=inline),
+                            "II",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
@@ -2537,7 +2620,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -2546,7 +2629,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -2567,42 +2650,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('II' type=inline),
+                            "II",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
@@ -2610,7 +2694,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -2619,7 +2703,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -2653,32 +2737,32 @@
                     13,
                     Variable(
                         (
-                            Atom('II' type=inline),
+                            "II",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
@@ -2686,7 +2770,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -2695,7 +2779,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -2716,10 +2800,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
             ],
@@ -2750,7 +2835,7 @@
         "bb",
         Variable(
             (
-                Atom('b' type=static),
+                "b",
                 #4,
             ),
         ),
@@ -2762,13 +2847,13 @@
             Call(
                 3,
                 FreeVar(
-                    Atom('require' type=static),
+                    "require",
                 ),
                 [
                     Constant(
                         Str(
                             Word(
-                                Atom('charenc' type=inline),
+                                "charenc",
                             ),
                         ),
                     ),
@@ -2776,8 +2861,8 @@
             ),
             Constant(
                 Str(
-                    Word(
-                        Atom('bin' type=inline),
+                    Atom(
+                        "bin",
                     ),
                 ),
             ),
@@ -2795,40 +2880,41 @@
         Alternatives(
             210,
             [
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
+                Unknown {
+                    original_value: None,
+                    reason: "unsupported expression",
+                    has_side_effects: true,
+                },
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('FF' type=inline),
+                            "FF",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
@@ -2836,7 +2922,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -2845,7 +2931,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -2879,32 +2965,32 @@
                     13,
                     Variable(
                         (
-                            Atom('FF' type=inline),
+                            "FF",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
@@ -2912,7 +2998,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -2921,7 +3007,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -2942,42 +3028,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('FF' type=inline),
+                            "FF",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
@@ -2985,7 +3072,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -2994,7 +3081,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -3015,42 +3102,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('FF' type=inline),
+                            "FF",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
@@ -3058,7 +3146,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -3067,7 +3155,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -3088,42 +3176,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('GG' type=inline),
+                            "GG",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
@@ -3131,7 +3220,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -3140,7 +3229,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -3174,32 +3263,32 @@
                     13,
                     Variable(
                         (
-                            Atom('GG' type=inline),
+                            "GG",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
@@ -3207,7 +3296,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -3216,7 +3305,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -3237,42 +3326,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('GG' type=inline),
+                            "GG",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
@@ -3280,7 +3370,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -3289,7 +3379,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -3310,42 +3400,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('GG' type=inline),
+                            "GG",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
@@ -3353,7 +3444,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -3362,7 +3453,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -3396,32 +3487,32 @@
                     13,
                     Variable(
                         (
-                            Atom('HH' type=inline),
+                            "HH",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
@@ -3429,7 +3520,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -3438,7 +3529,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -3472,32 +3563,32 @@
                     13,
                     Variable(
                         (
-                            Atom('HH' type=inline),
+                            "HH",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
@@ -3505,7 +3596,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -3514,7 +3605,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -3535,42 +3626,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('HH' type=inline),
+                            "HH",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
@@ -3578,7 +3670,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -3587,7 +3679,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -3608,42 +3700,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('HH' type=inline),
+                            "HH",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
@@ -3651,7 +3744,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -3660,7 +3753,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -3694,32 +3787,32 @@
                     13,
                     Variable(
                         (
-                            Atom('II' type=inline),
+                            "II",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
@@ -3727,7 +3820,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -3736,7 +3829,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -3757,42 +3850,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('II' type=inline),
+                            "II",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
@@ -3800,7 +3894,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -3809,7 +3903,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -3830,42 +3924,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('II' type=inline),
+                            "II",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
@@ -3873,7 +3968,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -3882,7 +3977,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -3903,42 +3998,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('II' type=inline),
+                            "II",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
@@ -3946,7 +4042,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -3955,7 +4051,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -4013,7 +4109,7 @@
         "cc",
         Variable(
             (
-                Atom('c' type=inline),
+                "c",
                 #4,
             ),
         ),
@@ -4023,13 +4119,13 @@
         Call(
             3,
             FreeVar(
-                Atom('require' type=static),
+                "require",
             ),
             [
                 Constant(
                     Str(
                         Word(
-                            Atom('crypt' type=inline),
+                            "crypt",
                         ),
                     ),
                 ),
@@ -4059,32 +4155,32 @@
                     13,
                     Variable(
                         (
-                            Atom('FF' type=inline),
+                            "FF",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
@@ -4092,7 +4188,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -4101,7 +4197,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -4122,42 +4218,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('FF' type=inline),
+                            "FF",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
@@ -4165,7 +4262,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -4174,7 +4271,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -4208,32 +4305,32 @@
                     13,
                     Variable(
                         (
-                            Atom('FF' type=inline),
+                            "FF",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
@@ -4241,7 +4338,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -4250,7 +4347,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -4271,42 +4368,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('FF' type=inline),
+                            "FF",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
@@ -4314,7 +4412,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -4323,7 +4421,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -4344,42 +4442,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('GG' type=inline),
+                            "GG",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
@@ -4387,7 +4486,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -4396,7 +4495,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -4417,42 +4516,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('GG' type=inline),
+                            "GG",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
@@ -4460,7 +4560,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -4469,7 +4569,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -4503,32 +4603,32 @@
                     13,
                     Variable(
                         (
-                            Atom('GG' type=inline),
+                            "GG",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
@@ -4536,7 +4636,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -4545,7 +4645,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -4566,42 +4666,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('GG' type=inline),
+                            "GG",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
@@ -4609,7 +4710,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -4618,7 +4719,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -4639,42 +4740,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('HH' type=inline),
+                            "HH",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
@@ -4682,7 +4784,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -4691,7 +4793,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -4712,42 +4814,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('HH' type=inline),
+                            "HH",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
@@ -4755,7 +4858,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -4764,7 +4867,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -4798,32 +4901,32 @@
                     13,
                     Variable(
                         (
-                            Atom('HH' type=inline),
+                            "HH",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
@@ -4831,7 +4934,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -4840,7 +4943,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -4861,42 +4964,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('HH' type=inline),
+                            "HH",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
@@ -4904,7 +5008,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -4913,7 +5017,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -4934,42 +5038,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('II' type=inline),
+                            "II",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
@@ -4977,7 +5082,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -4986,7 +5091,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -5020,32 +5125,32 @@
                     13,
                     Variable(
                         (
-                            Atom('II' type=inline),
+                            "II",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
@@ -5053,7 +5158,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -5062,7 +5167,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -5083,42 +5188,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('II' type=inline),
+                            "II",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
@@ -5126,7 +5232,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -5135,7 +5241,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -5156,42 +5262,43 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
                     13,
                     Variable(
                         (
-                            Atom('II' type=inline),
+                            "II",
                             #4,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('d' type=static),
+                                "d",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('a' type=static),
+                                "a",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('b' type=static),
+                                "b",
                                 #4,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('c' type=inline),
+                                "c",
                                 #4,
                             ),
                         ),
@@ -5199,7 +5306,7 @@
                             5,
                             Variable(
                                 (
-                                    Atom('m' type=inline),
+                                    "m",
                                     #4,
                                 ),
                             ),
@@ -5208,7 +5315,7 @@
                                 [
                                     Variable(
                                         (
-                                            Atom('i' type=static),
+                                            "i",
                                             #4,
                                         ),
                                     ),
@@ -5229,16 +5336,18 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
+                Unknown {
+                    original_value: None,
+                    reason: "unsupported expression",
+                    has_side_effects: true,
+                },
             ],
         ),
     ),
@@ -5267,7 +5376,7 @@
         "dd",
         Variable(
             (
-                Atom('d' type=static),
+                "d",
                 #4,
             ),
         ),
@@ -5278,14 +5387,14 @@
             7,
             Variable(
                 (
-                    Atom('crypt' type=inline),
+                    "crypt",
                     #3,
                 ),
             ),
             Constant(
                 Str(
-                    Word(
-                        Atom('wordsToBytes' type=dynamic),
+                    Atom(
+                        "wordsToBytes",
                     ),
                 ),
             ),
@@ -5294,20 +5403,20 @@
                     4,
                     Variable(
                         (
-                            Atom('md5' type=inline),
+                            "md5",
                             #3,
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('message' type=inline),
+                                "message",
                                 #11,
                             ),
                         ),
                         Variable(
                             (
-                                Atom('options' type=inline),
+                                "options",
                                 #11,
                             ),
                         ),
@@ -5328,16 +5437,17 @@
                         ),
                     ),
                 ),
-                Unknown(
-                    None,
-                    "updated with update expression",
-                ),
+                Unknown {
+                    original_value: None,
+                    reason: "updated with update expression",
+                    has_side_effects: true,
+                },
                 Add(
                     3,
                     [
                         Variable(
                             (
-                                Atom('i' type=static),
+                                "i",
                                 #4,
                             ),
                         ),
@@ -5358,13 +5468,13 @@
         Call(
             3,
             FreeVar(
-                Atom('require' type=static),
+                "require",
             ),
             [
                 Constant(
                     Str(
                         Word(
-                            Atom('is-buffer' type=dynamic),
+                            "is-buffer",
                         ),
                     ),
                 ),
@@ -5373,10 +5483,11 @@
     ),
     (
         "l",
-        Unknown(
-            None,
-            "unsupported expression",
-        ),
+        Unknown {
+            original_value: None,
+            reason: "unsupported expression",
+            has_side_effects: true,
+        },
     ),
     (
         "m",
@@ -5384,21 +5495,21 @@
             4,
             Variable(
                 (
-                    Atom('crypt' type=inline),
+                    "crypt",
                     #3,
                 ),
             ),
             Constant(
                 Str(
-                    Word(
-                        Atom('bytesToWords' type=dynamic),
+                    Atom(
+                        "bytesToWords",
                     ),
                 ),
             ),
             [
                 Variable(
                     (
-                        Atom('message' type=inline),
+                        "message",
                         #4,
                     ),
                 ),
@@ -5409,7 +5520,7 @@
         "md5",
         Variable(
             (
-                Atom('*anonymous function 181*' type=dynamic),
+                "*anonymous function 181*",
                 #0,
             ),
         ),
@@ -5434,21 +5545,21 @@
                     4,
                     Variable(
                         (
-                            Atom('bin' type=inline),
+                            "bin",
                             #3,
                         ),
                     ),
                     Constant(
                         Str(
-                            Word(
-                                Atom('stringToBytes' type=dynamic),
+                            Atom(
+                                "stringToBytes",
                             ),
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('message' type=inline),
+                                "message",
                                 #4,
                             ),
                         ),
@@ -5458,21 +5569,21 @@
                     4,
                     Variable(
                         (
-                            Atom('utf8' type=inline),
+                            "utf8",
                             #3,
                         ),
                     ),
                     Constant(
                         Str(
-                            Word(
-                                Atom('stringToBytes' type=dynamic),
+                            Atom(
+                                "stringToBytes",
                             ),
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('message' type=inline),
+                                "message",
                                 #4,
                             ),
                         ),
@@ -5485,35 +5596,35 @@
                         Member(
                             3,
                             FreeVar(
-                                Atom('Array' type=static),
+                                "Array",
                             ),
                             Constant(
                                 Str(
-                                    Word(
-                                        Atom('prototype' type=dynamic),
+                                    Atom(
+                                        "prototype",
                                     ),
                                 ),
                             ),
                         ),
                         Constant(
                             Str(
-                                Word(
-                                    Atom('slice' type=static),
+                                Atom(
+                                    "slice",
                                 ),
                             ),
                         ),
                     ),
                     Constant(
                         Str(
-                            Word(
-                                Atom('call' type=static),
+                            Atom(
+                                "call",
                             ),
                         ),
                     ),
                     [
                         Variable(
                             (
-                                Atom('message' type=inline),
+                                "message",
                                 #4,
                             ),
                         ),
@@ -5530,14 +5641,14 @@
                     3,
                     Variable(
                         (
-                            Atom('message' type=inline),
+                            "message",
                             #4,
                         ),
                     ),
                     Constant(
                         Str(
-                            Word(
-                                Atom('toString' type=static),
+                            Atom(
+                                "toString",
                             ),
                         ),
                     ),
@@ -5553,21 +5664,23 @@
             [
                 Variable(
                     (
-                        Atom('a' type=static),
+                        "a",
                         #10,
                     ),
                 ),
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
+                Unknown {
+                    original_value: None,
+                    reason: "unsupported expression",
+                    has_side_effects: true,
+                },
+                Unknown {
+                    original_value: None,
+                    reason: "unsupported expression",
+                    has_side_effects: true,
+                },
                 Variable(
                     (
-                        Atom('t' type=inline),
+                        "t",
                         #10,
                     ),
                 ),
@@ -5581,21 +5694,23 @@
             [
                 Variable(
                     (
-                        Atom('a' type=static),
+                        "a",
                         #7,
                     ),
                 ),
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
+                Unknown {
+                    original_value: None,
+                    reason: "unsupported expression",
+                    has_side_effects: true,
+                },
+                Unknown {
+                    original_value: None,
+                    reason: "unsupported expression",
+                    has_side_effects: true,
+                },
                 Variable(
                     (
-                        Atom('t' type=inline),
+                        "t",
                         #7,
                     ),
                 ),
@@ -5609,21 +5724,23 @@
             [
                 Variable(
                     (
-                        Atom('a' type=static),
+                        "a",
                         #8,
                     ),
                 ),
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
+                Unknown {
+                    original_value: None,
+                    reason: "unsupported expression",
+                    has_side_effects: true,
+                },
+                Unknown {
+                    original_value: None,
+                    reason: "unsupported expression",
+                    has_side_effects: true,
+                },
                 Variable(
                     (
-                        Atom('t' type=inline),
+                        "t",
                         #8,
                     ),
                 ),
@@ -5637,21 +5754,23 @@
             [
                 Variable(
                     (
-                        Atom('a' type=static),
+                        "a",
                         #9,
                     ),
                 ),
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
+                Unknown {
+                    original_value: None,
+                    reason: "unsupported expression",
+                    has_side_effects: true,
+                },
+                Unknown {
+                    original_value: None,
+                    reason: "unsupported expression",
+                    has_side_effects: true,
+                },
                 Variable(
                     (
-                        Atom('t' type=inline),
+                        "t",
                         #9,
                     ),
                 ),
@@ -5735,13 +5854,13 @@
             Call(
                 3,
                 FreeVar(
-                    Atom('require' type=static),
+                    "require",
                 ),
                 [
                     Constant(
                         Str(
                             Word(
-                                Atom('charenc' type=inline),
+                                "charenc",
                             ),
                         ),
                     ),
@@ -5749,8 +5868,8 @@
             ),
             Constant(
                 Str(
-                    Word(
-                        Atom('utf8' type=inline),
+                    Atom(
+                        "utf8",
                     ),
                 ),
             ),

@@ -4,14 +4,14 @@
             3,
             Variable(
                 (
-                    Atom('r' type=inline),
+                    "r",
                     #3,
                 ),
             ),
             Constant(
                 Str(
-                    Word(
-                        Atom('keys' type=inline),
+                    Atom(
+                        "keys",
                     ),
                 ),
             ),
@@ -19,8 +19,8 @@
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('map' type=static),
+                Atom(
+                    "map",
                 ),
             ),
         ),
@@ -69,28 +69,20 @@
                 Member,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                34,
-            ),
-            hi: BytePos(
-                46,
-            ),
-            ctxt: #0,
-        },
+        span: 34..46#0,
         in_try: false,
     },
     Member {
         obj: Variable(
             (
-                Atom('r' type=inline),
+                "r",
                 #3,
             ),
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('keys' type=inline),
+                Atom(
+                    "keys",
                 ),
             ),
         ),
@@ -154,28 +146,20 @@
                 Member,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                34,
-            ),
-            hi: BytePos(
-                40,
-            ),
-            ctxt: #0,
-        },
+        span: 34..40#0,
         in_try: false,
     },
     MemberCall {
         obj: Variable(
             (
-                Atom('r' type=inline),
+                "r",
                 #3,
             ),
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('keys' type=inline),
+                Atom(
+                    "keys",
                 ),
             ),
         ),
@@ -231,15 +215,7 @@
                 Call,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                34,
-            ),
-            hi: BytePos(
-                42,
-            ),
-            ctxt: #0,
-        },
+        span: 34..42#0,
         in_try: false,
     },
     MemberCall {
@@ -247,14 +223,14 @@
             3,
             Variable(
                 (
-                    Atom('r' type=inline),
+                    "r",
                     #3,
                 ),
             ),
             Constant(
                 Str(
-                    Word(
-                        Atom('keys' type=inline),
+                    Atom(
+                        "keys",
                     ),
                 ),
             ),
@@ -262,8 +238,8 @@
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('map' type=static),
+                Atom(
+                    "map",
                 ),
             ),
         ),
@@ -271,7 +247,7 @@
             Value(
                 Variable(
                     (
-                        Atom('r' type=inline),
+                        "r",
                         #3,
                     ),
                 ),
@@ -313,25 +289,17 @@
                 Call,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                34,
-            ),
-            hi: BytePos(
-                49,
-            ),
-            ctxt: #0,
-        },
+        span: 34..49#0,
         in_try: false,
     },
     Member {
         obj: FreeVar(
-            Atom('require' type=static),
+            "require",
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('context' type=inline),
+                Atom(
+                    "context",
                 ),
             ),
         ),
@@ -371,20 +339,12 @@
                 Member,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                70,
-            ),
-            hi: BytePos(
-                85,
-            ),
-            ctxt: #0,
-        },
+        span: 70..85#0,
         in_try: false,
     },
     FreeVar {
         var: FreeVar(
-            Atom('require' type=static),
+            "require",
         ),
         ast_path: [
             Program(
@@ -428,25 +388,17 @@
                 Ident,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                70,
-            ),
-            hi: BytePos(
-                77,
-            ),
-            ctxt: #1,
-        },
+        span: 70..77#1,
         in_try: false,
     },
     MemberCall {
         obj: FreeVar(
-            Atom('require' type=static),
+            "require",
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('context' type=inline),
+                Atom(
+                    "context",
                 ),
             ),
         ),
@@ -455,7 +407,7 @@
                 Constant(
                     Str(
                         Word(
-                            Atom('./test' type=inline),
+                            "./test",
                         ),
                     ),
                 ),
@@ -501,21 +453,13 @@
                 Call,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                70,
-            ),
-            hi: BytePos(
-                117,
-            ),
-            ctxt: #0,
-        },
+        span: 70..117#0,
         in_try: false,
     },
     Call {
         func: Variable(
             (
-                Atom('importAll' type=dynamic),
+                "importAll",
                 #2,
             ),
         ),
@@ -523,7 +467,7 @@
             Value(
                 Variable(
                     (
-                        Atom('context' type=inline),
+                        "context",
                         #2,
                     ),
                 ),
@@ -556,28 +500,20 @@
                 Call,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                133,
-            ),
-            hi: BytePos(
-                151,
-            ),
-            ctxt: #0,
-        },
+        span: 133..151#0,
         in_try: false,
     },
     Member {
         obj: Variable(
             (
-                Atom('context' type=inline),
+                "context",
                 #2,
             ),
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('resolve' type=inline),
+                Atom(
+                    "resolve",
                 ),
             ),
         ),
@@ -617,28 +553,20 @@
                 Member,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                164,
-            ),
-            hi: BytePos(
-                179,
-            ),
-            ctxt: #0,
-        },
+        span: 164..179#0,
         in_try: false,
     },
     MemberCall {
         obj: Variable(
             (
-                Atom('context' type=inline),
+                "context",
                 #2,
             ),
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('resolve' type=inline),
+                Atom(
+                    "resolve",
                 ),
             ),
         ),
@@ -647,7 +575,7 @@
                 Constant(
                     Str(
                         Word(
-                            Atom('./a' type=inline),
+                            "./a",
                         ),
                     ),
                 ),
@@ -680,15 +608,7 @@
                 Call,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                164,
-            ),
-            hi: BytePos(
-                186,
-            ),
-            ctxt: #0,
-        },
+        span: 164..186#0,
         in_try: false,
     },
 ]

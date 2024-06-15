@@ -1,7 +1,7 @@
 [
     FreeVar {
         var: FreeVar(
-            Atom('require' type=static),
+            "require",
         ),
         ast_path: [
             Program(
@@ -54,26 +54,18 @@
                 Ident,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                54,
-            ),
-            hi: BytePos(
-                61,
-            ),
-            ctxt: #1,
-        },
+        span: 54..61#1,
         in_try: false,
     },
     Call {
         func: FreeVar(
-            Atom('require' type=static),
+            "require",
         ),
         args: [
             Value(
                 Variable(
                     (
-                        Atom('x' type=static),
+                        "x",
                         #2,
                     ),
                 ),
@@ -121,15 +113,7 @@
                 Call,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                54,
-            ),
-            hi: BytePos(
-                64,
-            ),
-            ctxt: #0,
-        },
+        span: 54..64#0,
         in_try: false,
     },
 ]

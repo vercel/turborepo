@@ -1,25 +1,27 @@
 {
   "$schema": "../docs/public/schema.json",
   "extends": ["//"],
-  "pipeline": {
+  "tasks": {
+    // A task that is used for detecting if any turborepo Rust sources change
+    "rust-src": {
+      "env": ["RUNNER_OS"],
+      "inputs": [
+        "../version.txt",
+        "../crates/turborepo*/**/*.rs", // Rust crates
+        "../crates/turborepo*/Cargo.toml",
+        "../Cargo.toml",
+        "../Cargo.lock",
+        "!../crates/**/target"
+      ]
+    },
     "build": {
-      "env": ["GO_TAG", "RUNNER_OS"],
       "outputs": [
-        "../target/debug/go-turbo",
         "../target/debug/turbo",
         "../target/debug/turbo.exe",
-        "../target/release/go-turbo",
         "../target/release/turbo",
         "../target/release/turbo.exe"
       ],
-
-      "inputs": [
-        "{internal,cmd}/**/*.go",
-        "!**/*_test.go",
-        "../crates/turborepo*/**/*.rs", // Rust crates
-        "../crates/turborepo*/Cargo.toml",
-        "!../crates/**/target"
-      ]
+      "dependsOn": ["rust-src"]
     }
   }
 }

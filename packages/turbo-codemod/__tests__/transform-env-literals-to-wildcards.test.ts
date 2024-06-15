@@ -1,5 +1,5 @@
-import { transformer } from "../src/transforms/transform-env-literals-to-wildcards";
 import { setupTestFixtures } from "@turbo/test-utils";
+import { transformer } from "../src/transforms/transform-env-literals-to-wildcards";
 
 describe.only("transform-env-literals-to-wildcards", () => {
   const { useFixture } = setupTestFixtures({
@@ -7,7 +7,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     test: "transform-env-literals-to-wildcards",
   });
 
-  it("migrates wildcards has-empty", async () => {
+  it("migrates wildcards has-empty", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "has-empty",
@@ -16,7 +16,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -43,7 +43,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     `);
   });
 
-  it("migrates env-mode has-nothing", async () => {
+  it("migrates env-mode has-nothing", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "has-nothing",
@@ -52,7 +52,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -74,7 +74,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     `);
   });
 
-  it("migrates env-mode needs-rewriting", async () => {
+  it("migrates env-mode needs-rewriting", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "needs-rewriting",
@@ -83,7 +83,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -110,7 +110,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     `);
   });
 
-  it("migrates env-mode workspace-configs", async () => {
+  it("migrates env-mode workspace-configs", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "workspace-configs",
@@ -119,7 +119,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -176,7 +176,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     `);
   });
 
-  it("errors if no turbo.json can be found", async () => {
+  it("errors if no turbo.json can be found", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "no-turbo-json",
@@ -187,7 +187,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(read("turbo.json")).toBeUndefined();
@@ -197,7 +197,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     );
   });
 
-  it("errors if package.json config exists and has not been migrated", async () => {
+  it("errors if package.json config exists and has not been migrated", () => {
     // load the fixture for the test
     const { root } = useFixture({
       fixture: "old-config",
@@ -206,7 +206,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(result.fatalError).toBeDefined();

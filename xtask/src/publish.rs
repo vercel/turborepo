@@ -242,15 +242,15 @@ pub fn run_bump(names: HashSet<String>, dry_run: bool) {
             if workspace.name.is_empty() || pkg_json.private {
                 None
             } else {
-                pkg_json.path = workspace.path.clone();
+                pkg_json.path.clone_from(&workspace.path);
                 Some(pkg_json)
             }
         })
         .collect::<Vec<PackageJson>>();
     let mut workspaces_to_bump = workspaces
         .iter()
+        .filter(|&p| names.contains(&p.name))
         .cloned()
-        .filter(|p| names.contains(&p.name))
         .collect::<Vec<_>>();
     if workspaces_to_bump.is_empty() {
         fn name_to_title(package: &PackageJson) -> String {
@@ -283,10 +283,13 @@ pub fn run_bump(names: HashSet<String>, dry_run: bool) {
         match version_type {
             "major" => {
                 semver_version.major += 1;
+                semver_version.minor = 0;
+                semver_version.patch = 0;
                 semver_version.pre = Prerelease::EMPTY;
             }
             "minor" => {
                 semver_version.minor += 1;
+                semver_version.patch = 0;
                 semver_version.pre = Prerelease::EMPTY;
             }
             "patch" => {

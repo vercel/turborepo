@@ -1,5 +1,5 @@
-export { default as summary } from "./summary";
-export { default as convert } from "./convert";
+export { summaryCommand as summary } from "./summary";
+export { convertCommand as convert } from "./convert";
 
 export type { SummaryCommandArgument } from "./summary/types";
 export type {

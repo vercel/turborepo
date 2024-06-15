@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd)
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
 
 Run a build to get a local cache.
   $ ${TURBO} run build --output-logs=none
@@ -18,7 +17,7 @@ Do a dry run so we can see the state of the cache
 
 Get the hash of the my-app#build task, so we can inspect the cache
   $ HASH=$(cat dry.json | jq -r '.tasks | map(select(.taskId == "my-app#build")) | .[0].hash')
-  $ duration=$(cat "node_modules/.cache/turbo/$HASH-meta.json" | jq .duration)
+  $ duration=$(cat ".turbo/cache/$HASH-meta.json" | jq .duration)
 check that it exists
   $ echo $duration
   [0-9]+ (re)

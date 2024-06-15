@@ -1,0 +1,22 @@
+{
+  "tasks": {
+    "build1": {},
+    "//#build1": {},
+
+    "build2": {
+      "dependsOn": ["^build2", "//#exists"]
+    },
+    "//#exists": {},
+
+    "build3": {
+      "dependsOn": ["//#not-exists"]
+    },
+
+    "build4": {
+      "dependsOn": ["^build4"]
+    },
+    "workspace-a#special": {
+      "dependsOn": ["^build4"]
+    }
+  }
+}

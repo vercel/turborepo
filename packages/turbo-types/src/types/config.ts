@@ -1,19 +1,25 @@
 /* This file generates the `schema.json` file. */
 export type Schema = RootSchema | WorkspaceSchema;
 
+/* Used to support codemods that target turbo 1 */
+export type LegacySchema = LegacyRootSchema | LegacyWorkspaceSchema;
+
+export type SchemaV1 = RootSchemaV1 | WorkspaceSchemaV1;
+
 export interface BaseSchema {
-  /** @default https://turbo.build/schema.json */
+  /** @defaultValue https://turbo.build/schema.json */
   $schema?: string;
   /**
    * An object representing the task dependency graph of your project. turbo interprets
    * these conventions to schedule, execute, and cache the outputs of tasks in
    * your project.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#pipeline
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#tasks
    *
-   * @default {}
+   * @defaultValue `{}`
    */
-  pipeline: {
+  // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style -- it's more readable to specify a name for the key
+  tasks: {
     /**
      * The name of a task that can be executed by turbo. If turbo finds a workspace
      * package with a package.json scripts object with a matching key, it will apply the
@@ -22,6 +28,15 @@ export interface BaseSchema {
     [script: string]: Pipeline;
   };
 }
+
+export interface BaseSchemaV1 {
+  // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style -- it's more readable to specify a name for the key
+  pipeline: {
+    [script: string]: Pipeline;
+  };
+}
+
+export type LegacyBaseSchema = BaseSchema | BaseSchemaV1;
 
 export interface WorkspaceSchema extends BaseSchema {
   /**
@@ -34,10 +49,14 @@ export interface WorkspaceSchema extends BaseSchema {
    *
    * Currently, only the "//" value is allowed.
    *
-   * @default ["//"]
+   * @defaultValue ["//"]
    */
-  extends: string[];
+  extends: Array<string>;
 }
+
+export type LegacyWorkspaceSchema = WorkspaceSchema & LegacyBaseSchema;
+
+export type WorkspaceSchemaV1 = Omit<WorkspaceSchema, "tasks"> & BaseSchemaV1;
 
 export interface RootSchema extends BaseSchema {
   /**
@@ -56,9 +75,9 @@ export interface RootSchema extends BaseSchema {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#globaldependencies
    *
-   * @default []
+   * @defaultValue []
    */
-  globalDependencies?: string[];
+  globalDependencies?: Array<string>;
 
   /**
    * A list of environment variables for implicit global hash dependencies.
@@ -67,30 +86,30 @@ export interface RootSchema extends BaseSchema {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#globalenv
    *
-   * @default []
+   * @defaultValue []
    */
-  globalEnv?: EnvWildcard[];
+  globalEnv?: Array<EnvWildcard>;
 
   /**
    * An allowlist of environment variables that should be made to all tasks, but
    * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalPassThroughEnv
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalpassthroughenv
    *
-   * @default null
-   * @deprecated
+   * @defaultValue null
+   * @deprecated use `globalPassThroughEnv` instead
    */
-  experimentalGlobalPassThroughEnv?: null | string[];
+  experimentalGlobalPassThroughEnv?: null | Array<string>;
 
   /**
    * An allowlist of environment variables that should be made to all tasks, but
    * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalPassThroughEnv
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalpassthroughenv
    *
-   * @default null
+   * @defaultValue null
    */
-  globalPassThroughEnv?: null | EnvWildcard[];
+  globalPassThroughEnv?: null | Array<EnvWildcard>;
 
   /**
    * A priority-ordered (most-significant to least-significant) array of project-anchored
@@ -98,19 +117,32 @@ export interface RootSchema extends BaseSchema {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#globalDotEnv
    *
-   * @default null
+   * @defaultValue null
    */
-  globalDotEnv?: null | AnchoredUnixPath[];
+  globalDotEnv?: null | Array<AnchoredUnixPath>;
 
   /**
    * Configuration options that control how turbo interfaces with the remote cache.
    *
    * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching
    *
-   * @default {}
+   * @defaultValue `{}`
    */
   remoteCache?: RemoteCache;
+
+  /**
+   * Enable use of the UI for `turbo`.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#ui
+   *
+   * @defaultValue `"tui"`
+   */
+  ui?: UI;
 }
+
+export type LegacyRootSchema = RootSchema & LegacyBaseSchema;
+
+export type RootSchemaV1 = Omit<RootSchema, "tasks"> & BaseSchemaV1;
 
 export interface Pipeline {
   /**
@@ -127,9 +159,9 @@ export interface Pipeline {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#dependson
    *
-   * @default []
+   * @defaultValue []
    */
-  dependsOn?: string[];
+  dependsOn?: Array<string>;
 
   /**
    * A list of environment variables that this task depends on.
@@ -137,36 +169,36 @@ export interface Pipeline {
    * Note: If you are migrating from a turbo version 1.5 or below,
    * you may be used to prefixing your variables with a $.
    * You no longer need to use the $ prefix.
-   * (e.g. $GITHUB_TOKEN -> GITHUB_TOKEN)
+   * (e.g. $GITHUB_TOKEN → GITHUB_TOKEN)
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#env
    *
-   * @default []
+   * @defaultValue []
    */
-  env?: EnvWildcard[];
+  env?: Array<EnvWildcard>;
 
   /**
    * An allowlist of environment variables that should be made available in this
    * task's environment, but should not contribute to the task's cache key,
    * e.g. `AWS_SECRET_KEY`.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#passThroughEnv
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#passthroughenv
    *
-   * @default null
-   * @deprecated
+   * @defaultValue null
+   * @deprecated use `passThroughEnv` instead
    */
-  experimentalPassThroughEnv?: null | string[];
+  experimentalPassThroughEnv?: null | Array<string>;
 
   /**
    * An allowlist of environment variables that should be made available in this
    * task's environment, but should not contribute to the task's cache key,
    * e.g. `AWS_SECRET_KEY`.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#passThroughEnv
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#passthroughenv
    *
-   * @default null
+   * @defaultValue null
    */
-  passThroughEnv?: null | EnvWildcard[];
+  passThroughEnv?: null | Array<EnvWildcard>;
 
   /**
    * A priority-ordered (most-significant to least-significant) array of workspace-anchored
@@ -174,9 +206,9 @@ export interface Pipeline {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#dotEnv
    *
-   * @default null
+   * @defaultValue null
    */
-  dotEnv?: null | AnchoredUnixPath[];
+  dotEnv?: null | Array<AnchoredUnixPath>;
 
   /**
    * The set of glob patterns indicating a task's cacheable filesystem outputs.
@@ -187,9 +219,9 @@ export interface Pipeline {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#outputs
    *
-   * @default []
+   * @defaultValue []
    */
-  outputs?: string[];
+  outputs?: Array<string>;
 
   /**
    * Whether or not to cache the outputs of the task.
@@ -198,7 +230,7 @@ export interface Pipeline {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#cache
    *
-   * @default true
+   * @defaultValue true
    */
   cache?: boolean;
 
@@ -215,9 +247,9 @@ export interface Pipeline {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#inputs
    *
-   * @default []
+   * @defaultValue []
    */
-  inputs?: string[];
+  inputs?: Array<string>;
 
   /**
    * Output mode for the task.
@@ -232,11 +264,11 @@ export interface Pipeline {
    *
    * "none": Hides all task output
    *
-   * Documentation: https://turbo.build/repo/docs/reference/command-line-reference#--output-logs
+   * Documentation: https://turbo.build/repo/docs/reference/run#--output-logs-option
    *
-   * @default full
+   * @defaultValue full
    */
-  outputMode?: OutputMode;
+  outputLogs?: OutputMode;
 
   /**
    * Indicates whether the task exits or not. Setting `persistent` to `true` tells
@@ -245,9 +277,18 @@ export interface Pipeline {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#persistent
    *
-   * @default false
+   * @defaultValue false
    */
   persistent?: boolean;
+
+  /**
+   * Mark a task as interactive allowing it to receive input from stdin.
+   * Interactive tasks must be marked with "cache": false as the input
+   * they receive from stdin can change the outcome of the task.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#interactive
+   */
+  interactive?: boolean;
 }
 
 export interface RemoteCache {
@@ -257,9 +298,19 @@ export interface RemoteCache {
    * variable `TURBO_REMOTE_CACHE_SIGNATURE_KEY`. Turborepo will reject any downloaded artifacts
    * that have an invalid signature or are missing a signature.
    *
-   * @default false
+   * @defaultValue false
    */
   signature?: boolean;
+
+  /**
+   * Indicates if the remote cache is enabled. When `false`, Turborepo will disable
+   * all remote cache operations, even if the repo has a valid token. If true, remote caching
+   * is enabled, but still requires the user to login and link their repo to a remote cache.
+   * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching
+   *
+   * @defaultValue true
+   */
+  enabled?: boolean;
 }
 
 export type OutputMode =
@@ -268,6 +319,8 @@ export type OutputMode =
   | "new-only"
   | "errors-only"
   | "none";
+
+export type UI = "tui" | "stream";
 
 export type AnchoredUnixPath = string;
 export type EnvWildcard = string;

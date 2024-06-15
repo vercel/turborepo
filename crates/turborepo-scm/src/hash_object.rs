@@ -1,19 +1,45 @@
+use tracing::Span;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 
 use crate::{package_deps::GitHashes, Error};
 
+#[tracing::instrument(skip(git_root, hashes, to_hash))]
 pub(crate) fn hash_objects(
     git_root: &AbsoluteSystemPath,
     pkg_path: &AbsoluteSystemPath,
     to_hash: Vec<RelativeUnixPathBuf>,
     hashes: &mut GitHashes,
 ) -> Result<(), Error> {
+    let parent = Span::current();
     for filename in to_hash {
-        let full_file_path = git_root.join_unix_path(filename)?;
-        let hash = git2::Oid::hash_file(git2::ObjectType::Blob, &full_file_path)?;
-        let package_relative_path =
-            AnchoredSystemPathBuf::relative_path_between(pkg_path, &full_file_path).to_unix()?;
-        hashes.insert(package_relative_path, hash.to_string());
+        let span = tracing::info_span!(parent: &parent, "hash_object", ?filename);
+        let _enter = span.enter();
+
+        let full_file_path = git_root.join_unix_path(filename);
+        match git2::Oid::hash_file(git2::ObjectType::Blob, &full_file_path) {
+            Ok(hash) => {
+                let package_relative_path =
+                    AnchoredSystemPathBuf::relative_path_between(pkg_path, &full_file_path)
+                        .to_unix();
+                hashes.insert(package_relative_path, hash.to_string());
+            }
+            Err(e) => {
+                // FIXME: we currently do not hash symlinks. "git hash-object" cannot handle
+                // them, and the Go implementation errors on them, switches to
+                // manual, and then skips them. For now, we'll skip them too.
+                if e.class() == git2::ErrorClass::Os
+                    && full_file_path
+                        .symlink_metadata()
+                        .map(|md| md.is_symlink())
+                        .unwrap_or(false)
+                {
+                    continue;
+                } else {
+                    // For any other error, ensure we attach some context to it
+                    return Err(Error::git2_error_context(e, full_file_path.to_string()));
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -23,14 +49,14 @@ mod test {
     use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
 
     use super::hash_objects;
-    use crate::package_deps::{find_git_root, GitHashes};
+    use crate::{find_git_root, package_deps::GitHashes};
 
     #[test]
     fn test_read_object_hashes() {
         // Note that cwd can be different based on where the test suite is running from
         // or if the test is launched in debug mode from VSCode
         let cwd = std::env::current_dir().unwrap();
-        let cwd = AbsoluteSystemPathBuf::new(cwd).unwrap();
+        let cwd = AbsoluteSystemPathBuf::try_from(cwd).unwrap();
         let git_root = find_git_root(&cwd).unwrap();
         let fixture_path = git_root.join_components(&[
             "crates",
@@ -65,9 +91,9 @@ mod test {
                 .collect();
 
             let git_to_pkg_path = git_root.anchor(pkg_path).unwrap();
-            let pkg_prefix = git_to_pkg_path.to_unix().unwrap();
+            let pkg_prefix = git_to_pkg_path.to_unix();
 
-            let expected_hashes = GitHashes::from_iter(file_hashes.into_iter());
+            let expected_hashes = GitHashes::from_iter(file_hashes);
             let mut hashes = GitHashes::new();
             let to_hash = expected_hashes.keys().map(|k| pkg_prefix.join(k)).collect();
             hash_objects(&git_root, pkg_path, to_hash, &mut hashes).unwrap();
@@ -82,7 +108,7 @@ mod test {
 
         for (to_hash, pkg_path) in error_tests {
             let git_to_pkg_path = git_root.anchor(pkg_path).unwrap();
-            let pkg_prefix = git_to_pkg_path.to_unix().unwrap();
+            let pkg_prefix = git_to_pkg_path.to_unix();
 
             let to_hash = to_hash
                 .into_iter()
@@ -90,8 +116,8 @@ mod test {
                 .collect();
 
             let mut hashes = GitHashes::new();
-            let result = hash_objects(&git_root, &pkg_path, to_hash, &mut hashes);
-            assert_eq!(result.is_err(), true);
+            let result = hash_objects(&git_root, pkg_path, to_hash, &mut hashes);
+            assert!(result.is_err());
         }
     }
 }

@@ -1,0 +1,10 @@
+{
+  "name": "@turborepo-examples-tests/with-npm",
+  "scripts": {
+    "test": "bash ./node_modules/turborepo-tests-helpers/setup_example_test.sh with-npm npm"
+  },
+  "dependencies": {
+    "turborepo-tests-helpers": "workspace:*",
+    "turborepo-examples": "workspace:*"
+  }
+}

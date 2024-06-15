@@ -1,9 +1,9 @@
-import path from "path";
+import path from "node:path";
+import { ensureDirSync, existsSync } from "fs-extra";
 import { setupTestFixtures } from "@turbo/test-utils";
+import type { PackageJson } from "@turbo/utils";
 import { Logger } from "../src/logger";
-import MANAGERS from "../src/managers";
-import { PackageJson } from "../src/types";
-import fs from "fs-extra";
+import { MANAGERS } from "../src/managers";
 import {
   generateDetectMatrix,
   generateCreateMatrix,
@@ -91,7 +91,7 @@ describe("managers", () => {
         expect(project.packageManager).toEqual(fixtureManager);
 
         if (withNodeModules) {
-          fs.ensureDirSync(project.paths.nodeModules);
+          ensureDirSync(project.paths.nodeModules);
         }
 
         await MANAGERS[fixtureManager].remove({
@@ -105,7 +105,7 @@ describe("managers", () => {
         });
 
         if (withNodeModules) {
-          expect(fs.existsSync(project.paths.nodeModules)).toEqual(dry);
+          expect(existsSync(project.paths.nodeModules)).toEqual(dry);
         }
 
         const packageJson = readJson<PackageJson>(project.paths.packageJson);
@@ -114,7 +114,7 @@ describe("managers", () => {
           expect(packageJson?.packageManager?.split("@")[0]).toEqual(
             fixtureManager
           );
-          if (fixtureType === "basic") {
+          if (fixtureType === "monorepo") {
             if (fixtureManager === "pnpm") {
               expect(project.paths.workspaceConfig).toBeDefined();
               if (project.paths.workspaceConfig) {
@@ -135,7 +135,7 @@ describe("managers", () => {
           }
         } else {
           expect(packageJson?.packageManager).toBeUndefined();
-          if (fixtureType === "basic") {
+          if (fixtureType === "monorepo") {
             expect(packageJson?.workspaces).toBeUndefined();
 
             if (fixtureManager === "pnpm") {
@@ -165,11 +165,13 @@ describe("managers", () => {
           MANAGERS[toManager].read({ workspaceRoot: path.join(root) });
         if (shouldThrow) {
           if (toManager === "pnpm") {
-            expect(read).rejects.toThrow(`Not a pnpm project`);
+            await expect(read).rejects.toThrow(`Not a pnpm project`);
           } else if (toManager === "yarn") {
-            expect(read).rejects.toThrow(`Not a yarn project`);
-          } else if (toManager === "npm") {
-            expect(read).rejects.toThrow(`Not an npm project`);
+            await expect(read).rejects.toThrow(`Not a yarn project`);
+          } else if (toManager === "bun") {
+            await expect(read).rejects.toThrow(`Not a bun project`);
+          } else {
+            await expect(read).rejects.toThrow(`Not an npm project`);
           }
           return;
         }
@@ -183,11 +185,9 @@ describe("managers", () => {
         expect(project.packageManager).toEqual(toManager);
 
         // paths
-        expect(project.paths.root).toMatch(
-          new RegExp(`^.*\/${directoryName}$`)
-        );
+        expect(project.paths.root).toMatch(new RegExp(`^.*/${directoryName}$`));
         expect(project.paths.packageJson).toMatch(
-          new RegExp(`^.*\/${directoryName}\/package.json$`)
+          new RegExp(`^.*/${directoryName}/package.json$`)
         );
 
         if (fixtureManager === "pnpm") {
@@ -196,6 +196,8 @@ describe("managers", () => {
           new RegExp(`^.*\/${directoryName}\/yarn.lock$`);
         } else if (fixtureManager === "npm") {
           new RegExp(`^.*\/${directoryName}\/package-lock.json$`);
+        } else if (fixtureManager === "bun") {
+          new RegExp(`^.*\/${directoryName}\/bun.lockb$`);
         } else {
           throw new Error("Invalid fixtureManager");
         }
@@ -211,11 +213,93 @@ describe("managers", () => {
               : "packages";
             expect(workspace.paths.packageJson).toMatch(
               new RegExp(
-                `^.*${directoryName}\/${type}\/${workspace.name}\/package.json$`
+                `^.*${directoryName}/${type}/${workspace.name}/package.json$`
               )
             );
             expect(workspace.paths.root).toMatch(
-              new RegExp(`^.*${directoryName}\/${type}\/${workspace.name}$`)
+              new RegExp(`^.*${directoryName}/${type}/${workspace.name}$`)
+            );
+          });
+        }
+      }
+    );
+  });
+
+  describe("read - alternate workspace format", () => {
+    test.each(generateReadMatrix())(
+      "reads $toManager workspaces using alternate format from $fixtureManager $fixtureType project - (shouldThrow: $shouldThrow)",
+      async ({ fixtureManager, fixtureType, toManager, shouldThrow }) => {
+        const { root, directoryName, readJson, write } = useFixture({
+          fixture: `./${fixtureManager}/${fixtureType}`,
+        });
+
+        // alter the fixtures package.json to use the alternate workspace format
+        const packageJsonPath = path.join(root, "package.json");
+        const packageJson = readJson<PackageJson>(packageJsonPath);
+        if (packageJson?.workspaces) {
+          packageJson.workspaces = {
+            packages: packageJson.workspaces as Array<string>,
+          };
+          write(packageJsonPath, JSON.stringify(packageJson, null, 2));
+        }
+
+        const read = async () =>
+          MANAGERS[toManager].read({ workspaceRoot: root });
+        if (shouldThrow) {
+          if (toManager === "pnpm") {
+            await expect(read).rejects.toThrow(`Not a pnpm project`);
+          } else if (toManager === "yarn") {
+            await expect(read).rejects.toThrow(`Not a yarn project`);
+          } else if (toManager === "bun") {
+            await expect(read).rejects.toThrow(`Not a bun project`);
+          } else {
+            await expect(read).rejects.toThrow(`Not an npm project`);
+          }
+          return;
+        }
+        const project = await MANAGERS[toManager].read({
+          workspaceRoot: root,
+        });
+
+        expect(project.name).toEqual(
+          fixtureType === "monorepo" ? `${toManager}-workspaces` : toManager
+        );
+        expect(project.packageManager).toEqual(toManager);
+
+        // paths
+        expect(project.paths.root).toMatch(new RegExp(`^.*/${directoryName}$`));
+        expect(project.paths.packageJson).toMatch(
+          new RegExp(`^.*/${directoryName}/package.json$`)
+        );
+
+        if (fixtureManager === "pnpm") {
+          new RegExp(`^.*\/${directoryName}\/pnpm-lock.yaml$`);
+        } else if (fixtureManager === "yarn") {
+          new RegExp(`^.*\/${directoryName}\/yarn.lock$`);
+        } else if (fixtureManager === "npm") {
+          new RegExp(`^.*\/${directoryName}\/package-lock.json$`);
+        } else if (fixtureManager === "bun") {
+          new RegExp(`^.*\/${directoryName}\/bun.lockb$`);
+        } else {
+          throw new Error("Invalid fixtureManager");
+        }
+
+        if (fixtureType === "non-monorepo") {
+          expect(project.workspaceData.workspaces).toEqual([]);
+          expect(project.workspaceData.globs).toEqual([]);
+        } else {
+          expect(project.workspaceData.globs).toEqual(["apps/*", "packages/*"]);
+          project.workspaceData.workspaces.forEach((workspace) => {
+            const type = ["web", "docs"].includes(workspace.name)
+              ? "apps"
+              : "packages";
+            expect(workspace.paths.packageJson).toMatch(
+              new RegExp(
+                `^.*${directoryName}/${type}/${workspace.name}/package.json$`
+              )
+            );
+            expect(workspace.paths.root).toMatch(
+              new RegExp(`^.*${directoryName}/${type}/${workspace.name}$`)
             );
           });
         }
@@ -246,7 +330,7 @@ describe("managers", () => {
           },
         });
 
-        expect(fs.existsSync(project.paths.lockfile)).toEqual(dry);
+        expect(existsSync(project.paths.lockfile)).toEqual(dry);
       }
     );
   });
@@ -267,6 +351,7 @@ describe("managers", () => {
 
         await MANAGERS[toManager].convertLock({
           project,
+          to: { name: toManager, version: "1.2.3" },
           logger: new Logger(),
           options: {
             interactive,

@@ -1,6 +1,29 @@
 {
   "$schema": "./docs/public/schema.json",
-  "pipeline": {
+  // The following are used by tools such as pnpm, gh actions to setup pnpm, and the Go toolchain
+  "globalPassThroughEnv": [
+    "Path",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "TMPDIR",
+    "HOME",
+    "TMP",
+    "GOROOT",
+    "USERPROFILE",
+    "SCCACHE_GHA_ENABLED",
+    "SCCACHE_BUCKET",
+    "SCCACHE_REGION",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "RUSTC_WRAPPER",
+    "CARGO_INCREMENTAL",
+    "ACTIONS_CACHE_URL",
+    "ACTIONS_RUNTIME_TOKEN"
+  ],
+  // This is probably overkill, but we do things per-platform often enough that we should segment
+  // everything by OS and RUNNER_OS. This will segment between GH actions and everything else for now.
+  "globalEnv": ["OS", "RUNNER_OS"],
+  "tasks": {
     "test": {
       "outputs": ["coverage/**/*"],
 
@@ -11,7 +34,7 @@
 
     // run prettier check before eslint
     "lint": {
-      "dependsOn": ["lint:prettier"]
+      "dependsOn": ["lint:prettier", "^build"]
     },
 
     // root lint task runs toml check
@@ -191,14 +214,6 @@
     // So changes in internal workspaces that we depend on, will trigger this task.
     "topo": {
       "dependsOn": ["^topo"]
-    },
-
-    // example-tesst is in the root turbo.json so we don't have to redefine in each workspace
-    // Since they also has a unique set of dependencies, we don't model example tests with the
-    // test task, or we'd have to override the dependenies in each workspace.
-    "example-test": {
-      "dependsOn": ["topo", "@turborepo-examples-tests/helpers#setup"],
-      "inputs": ["*.t", "../setup.sh"]
     }
   },
   "experimentalSpaces": {

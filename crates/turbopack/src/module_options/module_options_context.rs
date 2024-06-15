@@ -1,45 +1,42 @@
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use turbo_tasks::trace::TraceRawVcs;
-use turbopack_core::{environment::EnvironmentVc, resolve::options::ImportMappingVc};
-use turbopack_ecmascript::TransformPluginVc;
+use turbo_tasks::{trace::TraceRawVcs, RcStr, ValueDefault, Vc};
+use turbopack_core::{
+    condition::ContextCondition, environment::Environment, resolve::options::ImportMapping,
+};
+use turbopack_ecmascript::{references::esm::UrlRewriteBehavior, TreeShakingMode};
+pub use turbopack_mdx::MdxTransformOptions;
 use turbopack_node::{
-    execution_context::ExecutionContextVc, transforms::webpack::WebpackLoaderItemsVc,
+    execution_context::ExecutionContext,
+    transforms::{postcss::PostCssTransformOptions, webpack::WebpackLoaderItems},
 };
 
 use super::ModuleRule;
-use crate::condition::ContextCondition;
-
-#[derive(Default, Clone, PartialEq, Eq, Debug, TraceRawVcs, Serialize, Deserialize)]
-pub struct PostCssTransformOptions {
-    pub postcss_package: Option<ImportMappingVc>,
-    pub placeholder_for_future_extensions: (),
-}
 
 #[derive(Clone, PartialEq, Eq, Debug, TraceRawVcs, Serialize, Deserialize)]
 pub struct LoaderRuleItem {
-    pub loaders: WebpackLoaderItemsVc,
-    pub rename_as: Option<String>,
+    pub loaders: Vc<WebpackLoaderItems>,
+    pub rename_as: Option<RcStr>,
 }
 
 #[derive(Default)]
 #[turbo_tasks::value(transparent)]
-pub struct WebpackRules(IndexMap<String, LoaderRuleItem>);
+pub struct WebpackRules(IndexMap<RcStr, LoaderRuleItem>);
 
 #[derive(Default)]
 #[turbo_tasks::value(transparent)]
-pub struct OptionWebpackRules(Option<WebpackRulesVc>);
+pub struct OptionWebpackRules(Option<Vc<WebpackRules>>);
 
 #[turbo_tasks::value(shared)]
 #[derive(Clone, Debug)]
 pub struct WebpackLoadersOptions {
-    pub rules: WebpackRulesVc,
-    pub loader_runner_package: Option<ImportMappingVc>,
+    pub rules: Vc<WebpackRules>,
+    pub loader_runner_package: Option<Vc<ImportMapping>>,
 }
 
 #[derive(Default)]
 #[turbo_tasks::value(transparent)]
-pub struct OptionWebpackLoadersOptions(Option<WebpackLoadersOptionsVc>);
+pub struct OptionWebpackLoadersOptions(Option<Vc<WebpackLoadersOptions>>);
 
 /// The kind of decorators transform to use.
 /// [TODO]: might need bikeshed for the name (Ecma)
@@ -47,6 +44,13 @@ pub struct OptionWebpackLoadersOptions(Option<WebpackLoadersOptionsVc>);
 pub enum DecoratorsKind {
     Legacy,
     Ecma,
+}
+
+/// The types when replacing `typeof window` with a constant.
+#[derive(Clone, PartialEq, Eq, Debug, TraceRawVcs, Serialize, Deserialize)]
+pub enum TypeofWindow {
+    Object,
+    Undefined,
 }
 
 /// Configuration options for the decorators transform.
@@ -71,16 +75,10 @@ pub struct DecoratorsOptions {
 }
 
 #[turbo_tasks::value_impl]
-impl DecoratorsOptionsVc {
+impl ValueDefault for DecoratorsOptions {
     #[turbo_tasks::function]
-    pub fn default() -> Self {
-        Self::cell(Default::default())
-    }
-}
-
-impl Default for DecoratorsOptionsVc {
-    fn default() -> Self {
-        Self::default()
+    fn value_default() -> Vc<Self> {
+        Self::default().cell()
     }
 }
 
@@ -93,16 +91,10 @@ pub struct TypescriptTransformOptions {
 }
 
 #[turbo_tasks::value_impl]
-impl TypescriptTransformOptionsVc {
+impl ValueDefault for TypescriptTransformOptions {
     #[turbo_tasks::function]
-    pub fn default() -> Self {
-        Self::cell(Default::default())
-    }
-}
-
-impl Default for TypescriptTransformOptionsVc {
-    fn default() -> Self {
-        Self::default()
+    fn value_default() -> Vc<Self> {
+        Self::default().cell()
     }
 }
 
@@ -112,76 +104,60 @@ impl Default for TypescriptTransformOptionsVc {
 pub struct JsxTransformOptions {
     pub development: bool,
     pub react_refresh: bool,
-    pub import_source: Option<String>,
-    pub runtime: Option<String>,
-}
-
-/// Configuration options for the custom ecma transform to be applied.
-#[turbo_tasks::value(shared)]
-#[derive(Default, Clone)]
-pub struct CustomEcmascriptTransformPlugins {
-    /// List of plugins to be applied before the main transform.
-    /// Transform will be applied in the order of the list.
-    pub source_transforms: Vec<TransformPluginVc>,
-    /// List of plugins to be applied after the main transform.
-    /// Transform will be applied in the order of the list.
-    pub output_transforms: Vec<TransformPluginVc>,
+    pub import_source: Option<RcStr>,
+    pub runtime: Option<RcStr>,
 }
 
 #[turbo_tasks::value(shared)]
-#[derive(Default, Clone)]
-#[serde(default)]
-pub struct MdxTransformModuleOptions {
-    /// The path to a module providing Components to mdx modules.
-    /// The provider must export a useMDXComponents, which is called to access
-    /// an object of components.
-    pub provider_import_source: Option<String>,
-}
-
-#[turbo_tasks::value_impl]
-impl MdxTransformModuleOptionsVc {
-    #[turbo_tasks::function]
-    pub fn default() -> Self {
-        Self::cell(Default::default())
-    }
-}
-
-#[turbo_tasks::value(shared)]
-#[derive(Default, Clone)]
+#[derive(Clone, Default)]
 #[serde(default)]
 pub struct ModuleOptionsContext {
-    pub enable_jsx: Option<JsxTransformOptionsVc>,
-    pub enable_postcss_transform: Option<PostCssTransformOptions>,
-    pub enable_webpack_loaders: Option<WebpackLoadersOptionsVc>,
+    pub enable_typeof_window_inlining: Option<TypeofWindow>,
+    pub enable_jsx: Option<Vc<JsxTransformOptions>>,
+    pub enable_postcss_transform: Option<Vc<PostCssTransformOptions>>,
+    pub enable_webpack_loaders: Option<Vc<WebpackLoadersOptions>>,
+    /// Follow type references and resolve declaration files in additional to
+    /// normal resolution.
     pub enable_types: bool,
-    pub enable_typescript_transform: Option<TypescriptTransformOptionsVc>,
-    pub decorators: Option<DecoratorsOptionsVc>,
+    pub enable_typescript_transform: Option<Vc<TypescriptTransformOptions>>,
+    pub decorators: Option<Vc<DecoratorsOptions>>,
     pub enable_mdx: bool,
+    /// This skips `GlobalCss` and `ModuleCss` module assets from being
+    /// generated in the module graph, generating only `Css` module assets.
+    ///
+    /// This is useful for node-file-trace, which tries to emit all assets in
+    /// the module graph, but neither asset types can be emitted directly.
+    pub enable_raw_css: bool,
     // [Note]: currently mdx, and mdx_rs have different configuration entrypoint from next.config.js,
     // however we might want to unify them in the future.
-    pub enable_mdx_rs: Option<MdxTransformModuleOptionsVc>,
-    pub preset_env_versions: Option<EnvironmentVc>,
-    pub custom_ecma_transform_plugins: Option<CustomEcmascriptTransformPluginsVc>,
+    pub enable_mdx_rs: Option<Vc<MdxTransformOptions>>,
+    pub preset_env_versions: Option<Vc<Environment>>,
     /// Custom rules to be applied after all default rules.
     pub custom_rules: Vec<ModuleRule>,
-    pub execution_context: Option<ExecutionContextVc>,
+    pub execution_context: Option<Vc<ExecutionContext>>,
     /// A list of rules to use a different module option context for certain
     /// context paths. The first matching is used.
-    pub rules: Vec<(ContextCondition, ModuleOptionsContextVc)>,
+    pub rules: Vec<(ContextCondition, Vc<ModuleOptionsContext>)>,
     pub placeholder_for_future_extensions: (),
-    pub enable_tree_shaking: bool,
+    pub tree_shaking_mode: Option<TreeShakingMode>,
+    pub esm_url_rewrite_behavior: Option<UrlRewriteBehavior>,
+    /// References to externals from ESM imports should use `import()` and make
+    /// async modules.
+    pub import_externals: bool,
+    /// Ignore very dynamic requests which doesn't have any static known part.
+    /// If false, they will reference the whole directory. If true, they won't
+    /// reference anything and lead to an runtime error instead.
+    pub ignore_dynamic_requests: bool,
+
+    pub use_swc_css: bool,
+
+    pub side_effect_free_packages: Vec<RcStr>,
 }
 
 #[turbo_tasks::value_impl]
-impl ModuleOptionsContextVc {
+impl ValueDefault for ModuleOptionsContext {
     #[turbo_tasks::function]
-    pub fn default() -> Self {
+    fn value_default() -> Vc<Self> {
         Self::cell(Default::default())
-    }
-}
-
-impl Default for ModuleOptionsContextVc {
-    fn default() -> Self {
-        Self::default()
     }
 }

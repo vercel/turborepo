@@ -5,21 +5,22 @@ use swc_core::{
     common::GLOBALS,
     ecma::{
         ast::{
-            ArrowExpr, AssignOp, BinExpr, BinaryOp, CallExpr, Callee, Expr, ExprOrSpread, ExprStmt,
-            FnExpr, Lit, Module, ModuleItem, Program, Script, Stmt,
+            ArrowExpr, AssignOp, AssignTarget, BinExpr, BinaryOp, CallExpr, Callee, Expr,
+            ExprOrSpread, ExprStmt, FnExpr, Lit, Module, ModuleItem, Program, Script,
+            SimpleAssignTarget, Stmt,
         },
         visit::{Visit, VisitWith},
     },
 };
-use turbo_tasks::Value;
-use turbo_tasks_fs::FileSystemPathVc;
-use turbopack_core::asset::{Asset, AssetVc};
+use turbo_tasks::{Value, Vc};
+use turbo_tasks_fs::FileSystemPath;
+use turbopack_core::source::Source;
 
 use crate::{
     analyzer::{graph::EvalContext, JsValue},
     parse::{parse, ParseResult},
     utils::unparen,
-    EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
+    EcmascriptInputTransforms, EcmascriptModuleAssetType,
 };
 
 #[turbo_tasks::value(shared, serialization = "none")]
@@ -30,7 +31,7 @@ pub enum WebpackRuntime {
         /// before converting to string
         #[turbo_tasks(trace_ignore)]
         chunk_request_expr: JsValue,
-        context_path: FileSystemPathVc,
+        context_path: Vc<FileSystemPath>,
     },
     None,
 }
@@ -77,6 +78,23 @@ fn is_webpack_require_decl(stmt: &Stmt) -> bool {
     false
 }
 
+fn get_assign_target_identifier(expr: &AssignTarget) -> Option<Cow<'_, str>> {
+    match expr.as_simple()? {
+        SimpleAssignTarget::Ident(ident) => Some(Cow::Borrowed(&*ident.sym)),
+        SimpleAssignTarget::Member(member) => {
+            if let Some(obj_name) = get_expr_identifier(&member.obj) {
+                if let Some(ident) = member.prop.as_ident() {
+                    return Some(Cow::Owned(obj_name.into_owned() + "." + &*ident.sym));
+                }
+            }
+            None
+        }
+        SimpleAssignTarget::Paren(p) => get_expr_identifier(&p.expr),
+
+        _ => None,
+    }
+}
+
 fn get_expr_identifier(expr: &Expr) -> Option<Cow<'_, str>> {
     let expr = unparen(expr);
     if let Some(ident) = expr.as_ident() {
@@ -102,11 +120,9 @@ fn get_assignment<'a>(stmts: &'a Vec<Stmt>, property: &str) -> Option<&'a Expr> 
         if let Some(expr_stmt) = stmt.as_expr() {
             if let Some(assign) = unparen(&expr_stmt.expr).as_assign() {
                 if assign.op == AssignOp::Assign {
-                    if let Some(expr) = assign.left.as_expr() {
-                        if let Some(name) = get_expr_identifier(expr) {
-                            if name == property {
-                                return Some(unparen(&assign.right));
-                            }
+                    if let Some(name) = get_assign_target_identifier(&assign.left) {
+                        if name == property {
+                            return Some(unparen(&assign.right));
                         }
                     }
                 }
@@ -182,11 +198,11 @@ fn get_require_prefix(stmts: &Vec<Stmt>) -> Option<Lit> {
 
 #[turbo_tasks::function]
 pub async fn webpack_runtime(
-    asset: AssetVc,
-    transforms: EcmascriptInputTransformsVc,
-) -> Result<WebpackRuntimeVc> {
+    source: Vc<Box<dyn Source>>,
+    transforms: Vc<EcmascriptInputTransforms>,
+) -> Result<Vc<WebpackRuntime>> {
     let parsed = parse(
-        asset,
+        source,
         Value::new(EcmascriptModuleAssetType::Ecmascript),
         transforms,
     )
@@ -216,14 +232,14 @@ pub async fn webpack_runtime(
 
                         return Ok(WebpackRuntime::Webpack5 {
                             chunk_request_expr: value,
-                            context_path: asset.ident().path().parent().resolve().await?,
+                            context_path: source.ident().path().parent().resolve().await?,
                         }
                         .into());
                     }
                 }
             }
         }
-        ParseResult::Unparseable | ParseResult::NotFound => {}
+        ParseResult::Unparseable { .. } | ParseResult::NotFound => {}
     }
     Ok(WebpackRuntime::None.into())
 }

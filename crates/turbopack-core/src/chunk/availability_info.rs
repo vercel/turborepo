@@ -1,40 +1,50 @@
-use super::available_assets::AvailableAssetsVc;
-use crate::asset::AssetVc;
+use anyhow::Result;
+use turbo_tasks::Vc;
+
+use super::available_chunk_items::{AvailableChunkItemInfoMap, AvailableChunkItems};
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(PartialOrd, Ord, Hash, Clone, Copy, Debug)]
 pub enum AvailabilityInfo {
+    /// Availability of modules is not tracked
     Untracked,
-    Root {
-        current_availability_root: AssetVc,
-    },
-    Inner {
-        available_assets: AvailableAssetsVc,
-        current_availability_root: AssetVc,
+    /// Availablility of modules is tracked, but no modules are available
+    Root,
+    /// There are modules already available.
+    Complete {
+        available_chunk_items: Vc<AvailableChunkItems>,
     },
 }
 
 impl AvailabilityInfo {
-    pub fn current_availability_root(&self) -> Option<AssetVc> {
+    pub fn available_chunk_items(&self) -> Option<Vc<AvailableChunkItems>> {
         match self {
             Self::Untracked => None,
-            Self::Root {
-                current_availability_root,
-            } => Some(*current_availability_root),
-            Self::Inner {
-                current_availability_root,
+            Self::Root => None,
+            Self::Complete {
+                available_chunk_items,
                 ..
-            } => Some(*current_availability_root),
+            } => Some(*available_chunk_items),
         }
     }
 
-    pub fn available_assets(&self) -> Option<AvailableAssetsVc> {
-        match self {
-            Self::Untracked => None,
-            Self::Root { .. } => None,
-            Self::Inner {
-                available_assets, ..
-            } => Some(*available_assets),
-        }
+    pub async fn with_chunk_items(
+        self,
+        chunk_items: Vc<AvailableChunkItemInfoMap>,
+    ) -> Result<Self> {
+        Ok(match self {
+            AvailabilityInfo::Untracked => AvailabilityInfo::Untracked,
+            AvailabilityInfo::Root => AvailabilityInfo::Complete {
+                available_chunk_items: AvailableChunkItems::new(chunk_items).resolve().await?,
+            },
+            AvailabilityInfo::Complete {
+                available_chunk_items,
+            } => AvailabilityInfo::Complete {
+                available_chunk_items: available_chunk_items
+                    .with_chunk_items(chunk_items)
+                    .resolve()
+                    .await?,
+            },
+        })
     }
 }

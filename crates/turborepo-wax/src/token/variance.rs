@@ -70,10 +70,11 @@ where
         let first = variances
             .next()
             .unwrap_or_else(|| Variance::Invariant(T::empty()));
-        variances
-            .all(|variance| first == variance)
-            .then(|| first)
-            .unwrap_or(Variance::Variant(Boundedness::Closed))
+        if variances.all(|variance| first == variance) {
+            first
+        } else {
+            Variance::Variant(Boundedness::Closed)
+        }
     }
 }
 
@@ -222,9 +223,9 @@ impl Mul<usize> for InvariantSize {
 }
 
 // TODO: The derived `PartialEq` implementation is incomplete and does not
-//       detect contiguous like fragments that are equivalent to an aggregated
-//       fragment. This works, but relies on constructing `InvariantText` by
-//       consistently appending fragments.
+// detect contiguous like       fragments that are equivalent to an aggregated
+// fragment. This works, but relies on       constructing `InvariantText` by
+// consistently appending fragments.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvariantText<'t> {
     fragments: VecDeque<InvariantFragment<'t>>,
@@ -292,11 +293,7 @@ impl<'t> Add for InvariantText<'t> {
             (None, None) => InvariantText::new(),
         };
         InvariantText {
-            fragments: left
-                .into_iter()
-                .chain(middle.into_iter())
-                .chain(right.into_iter())
-                .collect(),
+            fragments: left.into_iter().chain(middle).chain(right).collect(),
         }
     }
 }
@@ -425,16 +422,13 @@ impl Boundedness {
 #[derive(Clone, Debug, Eq)]
 pub enum Variance<T> {
     Invariant(T),
-    // NOTE: In this context, _boundedness_ refers to whether or not a variant
-    //       token or expression is _constrained_ or _unconstrained_. For
-    //       example, the expression `**` is unconstrained and matches _any and
-    //       all_, while the expression `a*z` is constrained and matches _some_.
-    //       Note that both expressions match an infinite number of components,
-    //       but the constrained expression does *not* match any component.
-    //       Boundedness does **not** consider length, only whether or not some
-    //       part of an expression is constrained to a known set of matches. As
-    //       such, both the expressions `?` and `*` are variant with open
-    //       bounds.
+    // In this context, _boundedness_ refers to whether or not a variant token or expression is
+    // _constrained_ or _unconstrained_. For example, the expression `**` is unconstrained and
+    // matches _any and all_, while the expression `a*z` is constrained and matches _some_. Note
+    // that both expressions match an infinite number of components, but the constrained
+    // expression does *not* match any component. Boundedness does **not** consider length,
+    // only whether or not some part of an expression is constrained to a known set of
+    // matches. As such, both the expressions `?` and `*` are variant with open bounds.
     Variant(Boundedness),
 }
 
@@ -501,7 +495,7 @@ where
 }
 
 // TODO: Is there some way to unify this with
-//       `invariant_text_prefix_upper_bound`?
+// `invariant_text_prefix_upper_bound`?
 pub fn invariant_text_prefix<'t, A, I>(tokens: I) -> String
 where
     A: 't,
@@ -514,13 +508,13 @@ where
         .peek()
         .map_or(false, |token| !token.has_sub_tokens() && token.has_root())
     {
-        // Push a preceding separator if the first token has a root and is not a
-        // group. This ensures that initiating separators and tree wildcards
-        // express a root in invariant prefixes.
+        // Push a preceding separator if the first token has a root and is not a group.
+        // This ensures that initiating separators and tree wildcards express a
+        // root in invariant prefixes.
         prefix.push_str(separator);
     }
-    // TODO: Replace `map`, `take_while`, and `flatten` with `map_while`
-    //       when it stabilizes.
+    // TODO: Replace `map`, `take_while`, and `flatten` with `map_while` when it
+    // stabilizes.
     prefix.push_str(
         &token::components(tokens)
             .map(|component| {

@@ -16,34 +16,35 @@ fn filter_field(field: &Field) -> bool {
 /// Fields annotated with `#[debug_ignore]` will not appear in the
 /// `ValueDebugFormat` representation of the type.
 pub fn derive_value_debug_format(input: TokenStream) -> TokenStream {
-    let derive_input = parse_macro_input!(input as DeriveInput);
+    let mut derive_input = parse_macro_input!(input as DeriveInput);
 
     let ident = &derive_input.ident;
+
+    for type_param in derive_input.generics.type_params_mut() {
+        type_param
+            .bounds
+            .push(syn::parse_quote!(turbo_tasks::debug::ValueDebugFormat));
+        type_param.bounds.push(syn::parse_quote!(std::fmt::Debug));
+        type_param.bounds.push(syn::parse_quote!(std::marker::Send));
+        type_param.bounds.push(syn::parse_quote!(std::marker::Sync));
+    }
+    let (impl_generics, ty_generics, where_clause) = derive_input.generics.split_for_impl();
+
     let formatting_logic =
         match_expansion(&derive_input, &format_named, &format_unnamed, &format_unit);
 
-    let value_debug_format_ident = get_value_debug_format_ident(ident);
-
     quote! {
-        impl #ident {
-            #[doc(hidden)]
-            #[allow(non_snake_case)]
-            async fn #value_debug_format_ident(&self, depth: usize) -> anyhow::Result<turbo_tasks::debug::ValueDebugStringVc> {
-                if depth == 0 {
-                    return Ok(turbo_tasks::debug::ValueDebugStringVc::new(stringify!(#ident).to_string()));
-                }
-
-                use turbo_tasks::debug::internal::*;
-                use turbo_tasks::debug::ValueDebugFormat;
-                Ok(turbo_tasks::debug::ValueDebugStringVc::new(format!("{:#?}", #formatting_logic)))
-            }
-        }
-
-        impl turbo_tasks::debug::ValueDebugFormat for #ident {
+        impl #impl_generics turbo_tasks::debug::ValueDebugFormat for #ident #ty_generics #where_clause {
             fn value_debug_format<'a>(&'a self, depth: usize) -> turbo_tasks::debug::ValueDebugFormatString<'a> {
                 turbo_tasks::debug::ValueDebugFormatString::Async(
                     Box::pin(async move {
-                        Ok(self.#value_debug_format_ident(depth).await?.await?.to_string())
+                        if depth == 0 {
+                            return Ok(stringify!(#ident).to_string());
+                        }
+
+                        use turbo_tasks::debug::internal::*;
+                        use turbo_tasks::debug::ValueDebugFormat;
+                        Ok(format!("{:#?}", #formatting_logic))
                     })
                 )
             }
@@ -55,7 +56,7 @@ pub fn derive_value_debug_format(input: TokenStream) -> TokenStream {
 /// Formats a single field nested inside named or unnamed fields.
 fn format_field(value: TokenStream2) -> TokenStream2 {
     quote! {
-        turbo_tasks::macro_helpers::value_debug_format_field(#value.value_debug_format(depth.saturating_sub(1))).await
+        turbo_tasks::macro_helpers::value_debug_format_field(#value.value_debug_format(depth.saturating_sub(1)))
     }
 }
 
@@ -63,19 +64,27 @@ fn format_field(value: TokenStream2) -> TokenStream2 {
 /// bar: u32 }`, `Foo::Bar { baz: u32 }`).
 fn format_named(ident: &Ident, fields: &FieldsNamed) -> (TokenStream2, TokenStream2) {
     let (captures, fields_idents) = generate_destructuring(fields.named.iter(), &filter_field);
-    let fields_values = fields_idents.iter().cloned().map(format_field);
     (
         captures,
-        quote! {
-            FormattingStruct::new_named(
-                stringify!(#ident),
-                vec![#(
-                    FormattingField::new(
-                        stringify!(#fields_idents),
-                        #fields_values,
-                    ),
-                )*],
-            )
+        if fields_idents.is_empty() {
+            // this can happen if all fields are ignored, we must special-case this to avoid
+            // rustc being unable to infer the type of an empty vec of futures
+            quote! {
+                FormattingStruct::new_named(stringify!(#ident), vec![])
+            }
+        } else {
+            let fields_values = fields_idents.iter().cloned().map(format_field);
+            quote! {
+                FormattingStruct::new_named_async(
+                    stringify!(#ident),
+                    vec![#(
+                        AsyncFormattingField::new(
+                            stringify!(#fields_idents),
+                            #fields_values,
+                        ),
+                    )*],
+                ).await
+            }
         },
     )
 }
@@ -84,33 +93,34 @@ fn format_named(ident: &Ident, fields: &FieldsNamed) -> (TokenStream2, TokenStre
 /// Foo(u32)`, `Foo::Bar(u32)`).
 fn format_unnamed(ident: &Ident, fields: &FieldsUnnamed) -> (TokenStream2, TokenStream2) {
     let (captures, fields_idents) = generate_destructuring(fields.unnamed.iter(), &filter_field);
-    let fields_values = fields_idents.into_iter().map(format_field);
     (
         captures,
-        quote! {
-            FormattingStruct::new_unnamed(
-                stringify!(#ident),
-                vec![#(
-                    #fields_values,
-                )*],
-            )
+        if fields_idents.is_empty() {
+            // this can happen if all fields are ignored, we must special-case this to avoid
+            // rustc being unable to infer the type of an empty vec of futures
+            quote! {
+                FormattingStruct::new_unnamed(stringify!(#ident), vec![])
+            }
+        } else {
+            let fields_values = fields_idents.into_iter().map(format_field);
+            quote! {
+                FormattingStruct::new_unnamed_async(
+                    stringify!(#ident),
+                    vec![#(
+                        #fields_values,
+                    )*],
+                ).await
+            }
         },
     )
 }
 
 /// Formats a unit struct or enum variant (e.g. `struct Foo;`, `Foo::Bar`).
-fn format_unit(ident: &Ident) -> (TokenStream2, TokenStream2) {
-    (
-        quote! {},
-        quote! {
-            FormattingStruct::new_unnamed(
-                stringify!(#ident),
-                vec![],
-            )
-        },
-    )
-}
-
-pub(crate) fn get_value_debug_format_ident(ident: &Ident) -> Ident {
-    Ident::new(&format!("__value_debug_format_{}", ident), ident.span())
+fn format_unit(ident: &Ident) -> TokenStream2 {
+    quote! {
+        FormattingStruct::new_unnamed(
+            stringify!(#ident),
+            vec![],
+        )
+    }
 }

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "build": {
+      "outputs": []
+    },
+    // Root tasks
+    "web#gen": {
+      "outputs": ["gen.txt"]
+    },
+    "web#build": {
+      "dependsOn": ["web#gen"]
+    }
+  },
+  "ui": "stream"
+}

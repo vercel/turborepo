@@ -1,9 +1,8 @@
 {
-  "name": "logger",
+  "name": "@repo/logger",
   "version": "0.0.0",
   "private": true,
   "main": "./dist/index.js",
-  "source": "./src/index.ts",
   "types": "./dist/index.d.ts",
   "files": [
     "dist/**"
@@ -12,19 +11,21 @@
     "build": "tsc",
     "clean": "rm -rf dist",
     "dev": "tsc -w",
-    "lint": "eslint \"src/**/*.ts*\"",
+    "lint": "eslint \"src/**/*.ts*\" --max-warnings 0",
     "test": "jest"
   },
   "jest": {
-    "preset": "jest-presets/jest/node"
+    "preset": "@repo/jest-presets/node"
   },
   "devDependencies": {
-    "@types/jest": "^26.0.22",
-    "eslint": "^7.32.0",
-    "eslint-config-custom": "*",
-    "jest": "^26.6.3",
-    "jest-presets": "*",
-    "tsconfig": "*",
-    "typescript": "^4.5.3"
+    "@repo/eslint-config": "*",
+    "@repo/jest-presets": "*",
+    "@repo/typescript-config": "*",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.11.24",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "typescript": "^5.3.3"
   }
 }
+

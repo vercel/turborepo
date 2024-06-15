@@ -1,8 +1,10 @@
+#![feature(arbitrary_self_types)]
+
 pub mod bytes;
 pub mod stream;
 
 pub use crate::{
-    bytes::{Bytes, BytesVc},
+    bytes::Bytes,
     stream::{Stream, StreamRead},
 };
 

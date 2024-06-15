@@ -1,4 +1,4 @@
-import { Workspace } from "@turbo/workspaces";
+import type { Workspace } from "@turbo/workspaces";
 import type { TurboGeneratorArguments } from "../generators/types";
 import * as prompts from "../commands/workspace/prompts";
 import { getWorkspaceList } from "./getWorkspaceList";
@@ -7,46 +7,49 @@ export async function gatherAddRequirements({
   project,
   opts,
 }: TurboGeneratorArguments) {
-  let source: Workspace | undefined = undefined;
+  let source: Workspace | undefined;
+
   // suggestion for the name based on the (optional) example path
   const suggestion =
-    opts.copy.type === "external"
+    opts.method === "copy" && opts.copy.type === "external"
       ? opts.examplePath?.split("/").pop() || opts.copy.source.split("/").pop()
       : undefined;
 
   const { answer: type } = await prompts.type({
     override: opts.type,
     message:
-      opts.copy.source === "external"
+      opts.method === "copy" && opts.copy.source === "external" && suggestion
         ? `What type of workspace should "${suggestion}" be created as?`
         : undefined,
   });
 
   const { answer: name } = await prompts.name({
     override: opts.name,
-    type,
+    workspaceType: type,
     suggestion,
   });
 
-  if (opts.copy.type === "internal") {
+  // if we're copying an internal workspace, we need to know which one
+  if (opts.method === "copy" && opts.copy.type === "internal") {
     const { answer } = await prompts.source({
       override: opts.copy.source,
       workspaces: getWorkspaceList({ project, type }),
-      name,
+      workspaceName: name,
     });
     source = answer;
   }
+
   const location = await prompts.location({
-    type,
-    name,
+    workspaceType: type,
+    workspaceName: name,
     project,
     destination: opts.destination,
   });
 
   const dependencies = await prompts.dependencies({
-    name,
+    workspaceName: name,
     project,
-    source,
+    workspaceSource: source,
     showAllDependencies: opts.showAllDependencies,
   });
 

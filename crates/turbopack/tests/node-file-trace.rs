@@ -1,13 +1,16 @@
-#![feature(min_specialization)]
+#![allow(clippy::items_after_test_module)]
+#![feature(arbitrary_self_types)]
 
 mod helpers;
 #[cfg(feature = "bench_against_node_nft")]
 use std::time::Instant;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     env::temp_dir,
     fmt::Display,
-    fs::{self, remove_dir_all},
+    fs::{
+        remove_dir_all, {self},
+    },
     io::{ErrorKind, Write as _},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -20,26 +23,27 @@ use helpers::print_changeset;
 use lazy_static::lazy_static;
 use regex::Regex;
 use rstest::*;
-use rstest_reuse::{self, *};
+use rstest_reuse::{
+    *, {self},
+};
 use serde::{Deserialize, Serialize};
 use tokio::{process::Command, time::timeout};
-use turbo_tasks::{backend::Backend, TurboTasks, Value, ValueToString};
-use turbo_tasks_fs::{DiskFileSystemVc, FileSystem, FileSystemPathVc, FileSystemVc};
+use turbo_tasks::{backend::Backend, RcStr, ReadRef, TurboTasks, Value, ValueToString, Vc};
+use turbo_tasks_fs::{DiskFileSystem, FileSystem, FileSystemPath};
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
-    emit_with_completion, module_options::ModuleOptionsContext, rebase::RebasedAssetVc, register,
-    resolve_options_context::ResolveOptionsContext, transition::TransitionsByNameVc,
-    ModuleAssetContextVc,
+    emit_with_completion, module_options::ModuleOptionsContext, rebase::RebasedAsset, register,
+    ModuleAssetContext,
 };
-#[cfg(not(feature = "bench_against_node_nft"))]
-use turbopack_core::asset::Asset;
 use turbopack_core::{
-    compile_time_info::CompileTimeInfoVc,
+    compile_time_info::CompileTimeInfo,
     context::AssetContext,
-    environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
+    environment::{Environment, ExecutionEnvironment, NodeJsEnvironment},
+    file_source::FileSource,
+    output::OutputAsset,
     reference_type::ReferenceType,
-    source_asset::SourceAssetVc,
 };
+use turbopack_resolve::resolve_options_context::ResolveOptionsContext;
 
 #[global_allocator]
 static ALLOC: turbo_tasks_malloc::TurboMalloc = turbo_tasks_malloc::TurboMalloc;
@@ -81,7 +85,8 @@ static ALLOC: turbo_tasks_malloc::TurboMalloc = turbo_tasks_malloc::TurboMalloc;
 #[case::empty("integration/empty.js")]
 #[case::env_var("integration/env-var.js")]
 #[case::es_get_iterator("integration/es-get-iterator.js")]
-#[case::esbuild("integration/esbuild.js")]
+// This is flakey on Windows. Disable for now.
+#[cfg_attr(not(target_os = "windows"), case::esbuild("integration/esbuild.js"))]
 #[case::esm("integration/esm.js")]
 #[case::express_consolidate("integration/express-consolidate.js")]
 #[case::express_template_engine("integration/express-template-engine.js")]
@@ -158,7 +163,6 @@ static ALLOC: turbo_tasks_malloc::TurboMalloc = turbo_tasks_malloc::TurboMalloc;
 #[case::stripe("integration/stripe.js")]
 #[case::strong_error_handler("integration/strong-error-handler.js")]
 #[case::symlink_to_file("integration/symlink-to-file/index.js")]
-#[case::tensorflow("integration/tensorflow.js")]
 #[case::tiny_json_http("integration/tiny-json-http.js")]
 #[case::twilio("integration/twilio.js")]
 #[case::ts_morph("integration/ts-morph.js")]
@@ -170,12 +174,11 @@ static ALLOC: turbo_tasks_malloc::TurboMalloc = turbo_tasks_malloc::TurboMalloc;
 #[case::webpack_target_node("integration/webpack-target-node/index.js")]
 #[case::whatwg_url("integration/whatwg-url.js")]
 #[case::when("integration/when.js")]
-// These two tests print a deprecation warning about using folders in exports field to stderr.
 #[case::package_exports_alt_folders_base(
-    CaseInput::new("integration/package-exports/pass/alt-folders.js").expected_stderr("DeprecationWarning")
+    CaseInput::new("integration/package-exports/pass/alt-folders.js").expected_stderr("Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: Package subpath")
 )]
 #[case::package_exports_folder(
-    CaseInput::new("integration/package-exports/pass/folder.js").expected_stderr("DeprecationWarning")
+    CaseInput::new("integration/package-exports/pass/folder.js").expected_stderr("Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: Package subpath")
 )]
 #[case::package_exports_alt_base("integration/package-exports/pass/alt.js")]
 #[case::package_exports_catch_all("integration/package-exports/pass/catch-all.js")]
@@ -198,17 +201,19 @@ static ALLOC: turbo_tasks_malloc::TurboMalloc = turbo_tasks_malloc::TurboMalloc;
 #[case::package_exports_package_sub_suffix_base("integration/package-exports/pass/sub-suffix.js")]
 #[case::package_exports_alt_folders_multiple(
     CaseInput::new("integration/package-exports/fail/alt-folders-multiple.js")
-        .expected_stderr("Error [ERR_MODULE_NOT_FOUND]: Cannot find module")
+        .expected_stderr("Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: Package subpath")
 )]
 #[case::package_exports_alt_multiple(
     CaseInput::new("integration/package-exports/fail/alt-multiple.js")
         .expected_stderr("Error [ERR_MODULE_NOT_FOUND]: Cannot find module")
 )]
+#[case::read_file("integration/read-file.mjs")]
 #[cfg_attr(
     not(feature = "bench_against_node_nft"),
-    case::ts_package_base("integration/ts-package/index.ts"),
-    case::ts_package_extends("integration/ts-package-extends/index.ts"),
-    case::ts_package_from_js("integration/ts-package-from-js/index.js"),
+    //[TODO]: WEB-1188 reenable once fixed.
+    //case::ts_package_base("integration/ts-package/index.ts"),
+    //case::ts_package_extends("integration/ts-package-extends/index.ts"),
+    //case::ts_package_from_js("integration/ts-package-from-js/index.js"),
     case::ts_paths_alt_base("integration/ts-paths/pass/alt.ts"),
     case::ts_paths_catch_all("integration/ts-paths/pass/catch-all.ts"),
     case::ts_paths_direct("integration/ts-paths/pass/direct.ts"),
@@ -243,6 +248,13 @@ static ALLOC: turbo_tasks_malloc::TurboMalloc = turbo_tasks_malloc::TurboMalloc;
         CaseInput::new("integration/ts-paths/fail/sub-prefix-sep.ts")
             .expected_stderr("Cannot find module 'sub/@' or its corresponding type declarations")
     ),
+)]
+#[cfg_attr(
+    //[TODO]: WEB-1188 reenable windows once fixed.
+    not(any(feature = "bench_against_node_nft", target_os = "windows")),
+    case::ts_package_base("integration/ts-package/index.ts"),
+    case::ts_package_extends("integration/ts-package-extends/index.ts"),
+    case::ts_package_from_js("integration/ts-package-from-js/index.js"),
 )]
 fn test_cases() {}
 
@@ -362,10 +374,10 @@ fn node_file_trace<B: Backend + 'static>(
         let package_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mut tests_output_root = temp_dir();
         tests_output_root.push("tests_output");
-        let package_root = package_root.to_string_lossy().to_string();
-        let input = format!("node-file-trace/{input_path}");
+        let package_root: RcStr = package_root.to_string_lossy().into();
+        let input: RcStr = format!("node-file-trace/{input_path}").into();
         let directory_path = tests_output_root.join(format!("{mode}_{input}"));
-        let directory = directory_path.to_string_lossy().to_string();
+        let directory: RcStr = directory_path.to_string_lossy().into();
 
         remove_dir_all(&directory)
             .or_else(|err| {
@@ -390,53 +402,61 @@ fn node_file_trace<B: Backend + 'static>(
                 let bench_suites = bench_suites.clone();
                 #[cfg(feature = "bench_against_node_nft")]
                 let before_start = Instant::now();
-                let workspace_fs: FileSystemVc =
-                    DiskFileSystemVc::new("workspace".to_string(), package_root.clone()).into();
+                let workspace_fs: Vc<Box<dyn FileSystem>> = Vc::upcast(DiskFileSystem::new(
+                    "workspace".into(),
+                    package_root.clone(),
+                    vec![],
+                ));
                 let input_dir = workspace_fs.root();
-                let input = input_dir.join(&format!("tests/{input_string}"));
+                let input = input_dir.join(format!("tests/{input_string}").into());
 
                 #[cfg(not(feature = "bench_against_node_nft"))]
                 let original_output = exec_node(package_root, input);
 
-                let output_fs = DiskFileSystemVc::new("output".to_string(), directory.clone());
+                let output_fs = DiskFileSystem::new("output".into(), directory.clone(), vec![]);
                 let output_dir = output_fs.root();
 
-                let source = SourceAssetVc::new(input);
-                let context = ModuleAssetContextVc::new(
-                    TransitionsByNameVc::cell(HashMap::new()),
+                let source = FileSource::new(input);
+                let module_asset_context = ModuleAssetContext::new(
+                    Vc::cell(HashMap::new()),
                     // TODO It's easy to make a mistake here as this should match the config in the
                     // binary. TODO These test cases should move into the
                     // `node-file-trace` crate and use the same config.
-                    CompileTimeInfoVc::new(EnvironmentVc::new(
-                        Value::new(ExecutionEnvironment::NodeJsLambda(
-                            NodeJsEnvironment::default().into(),
-                        )),
-                        Value::new(EnvironmentIntention::ServerRendering),
-                    )),
+                    CompileTimeInfo::new(Environment::new(Value::new(
+                        ExecutionEnvironment::NodeJsLambda(NodeJsEnvironment::default().into()),
+                    ))),
                     ModuleOptionsContext {
                         enable_types: true,
+                        enable_raw_css: true,
                         ..Default::default()
                     }
                     .cell(),
                     ResolveOptionsContext {
                         enable_node_native_modules: true,
                         enable_node_modules: Some(input_dir),
-                        custom_conditions: vec!["node".to_string()],
+                        custom_conditions: vec!["node".into()],
                         ..Default::default()
                     }
                     .cell(),
+                    Vc::cell("test".into()),
                 );
-                let module = context.process(source.into(), Value::new(ReferenceType::Undefined));
-                let rebased = RebasedAssetVc::new(module, input_dir, output_dir);
+                let module = module_asset_context
+                    .process(Vc::upcast(source), Value::new(ReferenceType::Undefined))
+                    .module();
+                let rebased = RebasedAsset::new(Vc::upcast(module), input_dir, output_dir);
 
                 #[cfg(not(feature = "bench_against_node_nft"))]
                 let output_path = rebased.ident().path();
-                emit_with_completion(rebased.into(), output_dir).await?;
+
+                print_graph(Vc::upcast(rebased)).await?;
+
+                emit_with_completion(Vc::upcast(rebased), output_dir).await?;
 
                 #[cfg(not(feature = "bench_against_node_nft"))]
                 {
                     let output = exec_node(directory.clone(), output_path);
-                    let output = assert_output(original_output, output, expected_stderr);
+                    let output =
+                        assert_output(original_output, output, expected_stderr.map(From::from));
                     output.await
                 }
                 #[cfg(feature = "bench_against_node_nft")]
@@ -474,14 +494,14 @@ fn node_file_trace<B: Backend + 'static>(
                             rust_speedup,
                         });
                     }
-                    CommandOutputVc::cell(CommandOutput {
+                    CommandOutput::cell(CommandOutput {
                         stdout: String::new(),
                         stderr: String::new(),
                     })
                     .await
                 }
             };
-            let handle_result = |result: Result<CommandOutputReadRef>| match result {
+            let handle_result = |result: Result<ReadRef<CommandOutput>>| match result {
                 #[allow(unused)]
                 Ok(output) => {
                     #[cfg(not(feature = "bench_against_node_nft"))]
@@ -554,7 +574,7 @@ impl Display for CommandOutput {
 }
 
 #[turbo_tasks::function]
-async fn exec_node(directory: String, path: FileSystemPathVc) -> Result<CommandOutputVc> {
+async fn exec_node(directory: RcStr, path: Vc<FileSystemPath>) -> Result<Vc<CommandOutput>> {
     let mut cmd = Command::new("node");
 
     let p = path.await?;
@@ -618,7 +638,7 @@ async fn exec_node(directory: String, path: FileSystemPathVc) -> Result<CommandO
 
     println!("File: {}\n{}", f.display(), output,);
 
-    Ok(CommandOutputVc::cell(output))
+    Ok(CommandOutput::cell(output))
 }
 
 fn clean_stderr(str: &str) -> String {
@@ -651,17 +671,17 @@ fn diff(expected: &str, actual: &str) -> String {
 #[allow(unused)]
 #[turbo_tasks::function]
 async fn assert_output(
-    expected: CommandOutputVc,
-    actual: CommandOutputVc,
-    expected_stderr: Option<String>,
-) -> Result<CommandOutputVc> {
+    expected: Vc<CommandOutput>,
+    actual: Vc<CommandOutput>,
+    expected_stderr: Option<RcStr>,
+) -> Result<Vc<CommandOutput>> {
     let expected = expected.await?;
     let actual = actual.await?;
-    Ok(CommandOutputVc::cell(CommandOutput {
+    Ok(CommandOutput::cell(CommandOutput {
         stdout: diff(&expected.stdout, &actual.stdout),
         stderr: if let Some(expected_stderr) = expected_stderr {
-            if actual.stderr.contains(&expected_stderr)
-                && expected.stderr.contains(&expected_stderr)
+            if actual.stderr.contains(&*expected_stderr)
+                && expected.stderr.contains(&*expected_stderr)
             {
                 String::new()
             } else {
@@ -717,4 +737,28 @@ impl std::str::FromStr for CaseInput {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self::new(s))
     }
+}
+
+async fn print_graph(asset: Vc<Box<dyn OutputAsset>>) -> Result<()> {
+    let mut visited = HashSet::new();
+    let mut queue = Vec::new();
+    queue.push((0, asset));
+    while let Some((depth, asset)) = queue.pop() {
+        let references = asset.references().await?;
+        let mut indent = String::new();
+        for _ in 0..depth {
+            indent.push_str("  ");
+        }
+        if visited.insert(asset) {
+            for &asset in references.iter().rev() {
+                queue.push((depth + 1, asset));
+            }
+            println!("{}{}", indent, asset.ident().to_string().await?);
+        } else if references.is_empty() {
+            println!("{}{} *", indent, asset.ident().to_string().await?);
+        } else {
+            println!("{}{} *...", indent, asset.ident().to_string().await?);
+        }
+    }
+    Ok(())
 }

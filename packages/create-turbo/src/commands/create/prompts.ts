@@ -1,42 +1,39 @@
-import type { PackageManager } from "@turbo/workspaces";
-import type { CreateCommandArgument } from "./types";
+import type { PackageManager } from "@turbo/utils";
 import { getAvailablePackageManagers, validateDirectory } from "@turbo/utils";
 import inquirer from "inquirer";
+import type { CreateCommandArgument } from "./types";
 
-export async function directory({
-  directory,
-}: {
-  directory: CreateCommandArgument;
-}) {
+export async function directory({ dir }: { dir: CreateCommandArgument }) {
   const projectDirectoryAnswer = await inquirer.prompt<{
     projectDirectory: string;
   }>({
     type: "input",
     name: "projectDirectory",
     message: "Where would you like to create your turborepo?",
-    when: !directory,
+    when: !dir,
     default: "./my-turborepo",
-    validate: (directory: string) => {
-      const { valid, error } = validateDirectory(directory);
+    validate: (d: string) => {
+      const { valid, error } = validateDirectory(d);
       if (!valid && error) {
         return error;
       }
       return true;
     },
-    filter: (directory: string) => directory.trim(),
+    filter: (d: string) => d.trim(),
   });
 
-  const { projectDirectory: selectedProjectDirectory = directory as string } =
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- we know it's defined because of the `when` condition above
+  const { projectDirectory: selectedProjectDirectory = dir! } =
     projectDirectoryAnswer;
 
   return validateDirectory(selectedProjectDirectory);
 }
 
 export async function packageManager({
-  packageManager,
+  manager,
   skipTransforms,
 }: {
-  packageManager: CreateCommandArgument;
+  manager: CreateCommandArgument;
   skipTransforms?: boolean;
 }) {
   // if skip transforms is passed, we don't need to ask about the package manager (because that requires a transform)
@@ -54,24 +51,27 @@ export async function packageManager({
     when:
       // prompt for package manager if it wasn't provided as an argument, or if it was
       // provided, but isn't available (always allow npm)
-      !packageManager ||
-      !availablePackageManagers?.[packageManager as PackageManager]?.available,
-    choices: ["npm", "pnpm", "yarn"].map((p) => ({
-      name: p,
-      value: p,
-      disabled: availablePackageManagers?.[p as PackageManager]?.available
+      !manager || !availablePackageManagers[manager as PackageManager],
+    choices: [
+      { pm: "npm", label: "npm workspaces" },
+      { pm: "pnpm", label: "pnpm workspaces" },
+      { pm: "yarn", label: "yarn workspaces" },
+      { pm: "bun", label: "bun workspaces (beta)" },
+    ].map(({ pm, label }) => ({
+      name: label,
+      value: pm,
+      disabled: availablePackageManagers[pm as PackageManager]
         ? false
         : `not installed`,
     })),
   });
 
   const {
-    packageManagerInput:
-      selectedPackageManager = packageManager as PackageManager,
+    packageManagerInput: selectedPackageManager = manager as PackageManager,
   } = packageManagerAnswer;
 
   return {
     name: selectedPackageManager,
-    version: availablePackageManagers[selectedPackageManager].version,
+    version: availablePackageManagers[selectedPackageManager],
   };
 }

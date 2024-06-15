@@ -2,6 +2,12 @@
  * Definitions for the protocol that is used to communicate between the
  * Turbopack runtime and the Turbopack server for issue reporting and HMR.
  */
+type PartialServerMessage = {
+  resource: ResourceIdentifier;
+  issues: Issue[];
+  type: "partial";
+  instruction: PartialUpdate;
+};
 
 type ServerMessage = {
   resource: ResourceIdentifier;
@@ -13,10 +19,7 @@ type ServerMessage = {
   | {
       type: "notFound";
     }
-  | {
-      type: "partial";
-      instruction: PartialUpdate;
-    }
+  | PartialServerMessage
   | {
       type: "issues";
     }
@@ -87,15 +90,15 @@ type EcmascriptModuleEntry = {
 
 type ResourceIdentifier = {
   path: string;
-  headers?: { [string]: string };
+  headers?: { [key: string]: string };
 };
 
 type ClientMessageSubscribe = {
-  type: "subscribe";
+  type: "turbopack-subscribe";
 } & ResourceIdentifier;
 
 type ClientMessageUnsubscribe = {
-  type: "unsubscribe";
+  type: "turbopack-unsubscribe";
 } & ResourceIdentifier;
 
 type ClientMessage = ClientMessageSubscribe | ClientMessageUnsubscribe;
@@ -121,13 +124,17 @@ type SourcePos = {
 
 type IssueSource = {
   asset: IssueAsset;
+  range?: IssueSourceRange;
+};
+
+type IssueSourceRange = {
   start: SourcePos;
   end: SourcePos;
 };
 
 type Issue = {
   severity: IssueSeverity;
-  context: string;
+  file_path: string;
   category: string;
 
   title: string;

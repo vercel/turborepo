@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{any::Any, collections::HashMap};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -45,6 +45,7 @@ struct NpmPackage {
 }
 
 impl Lockfile for NpmLockfile {
+    #[tracing::instrument(skip(self, _version))]
     fn resolve_package(
         &self,
         workspace_path: &str,
@@ -78,6 +79,7 @@ impl Lockfile for NpmLockfile {
             .transpose()
     }
 
+    #[tracing::instrument(skip(self))]
     fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, String>>, Error> {
         self.packages
             .get(key)
@@ -98,6 +100,57 @@ impl Lockfile for NpmLockfile {
                     .collect()
             })
             .transpose()
+    }
+
+    fn subgraph(
+        &self,
+        workspace_packages: &[String],
+        packages: &[String],
+    ) -> Result<Box<dyn Lockfile>, Error> {
+        let mut pruned_packages = Map::new();
+        for pkg_key in packages {
+            let pkg = self.get_package(pkg_key)?;
+            pruned_packages.insert(pkg_key.to_string(), pkg.clone());
+        }
+        if let Some(root) = self.packages.get("") {
+            pruned_packages.insert("".into(), root.clone());
+        }
+        for workspace in workspace_packages {
+            let pkg = self.get_package(workspace)?;
+            pruned_packages.insert(workspace.to_string(), pkg.clone());
+
+            for (key, entry) in &self.packages {
+                if entry.resolved.as_deref() == Some(workspace) {
+                    pruned_packages.insert(key.clone(), entry.clone());
+                    break;
+                }
+            }
+        }
+        Ok(Box::new(Self {
+            lockfile_version: 3,
+            packages: pruned_packages,
+            dependencies: Map::default(),
+            other: self.other.clone(),
+        }))
+    }
+
+    fn encode(&self) -> Result<Vec<u8>, crate::Error> {
+        Ok(serde_json::to_vec_pretty(&self)?)
+    }
+
+    fn global_change(&self, other: &dyn Lockfile) -> bool {
+        let any_other = other as &dyn Any;
+        if let Some(other) = any_other.downcast_ref::<Self>() {
+            self.lockfile_version != other.lockfile_version
+                || self.other.get("requires") != other.other.get("requires")
+        } else {
+            true
+        }
+    }
+
+    fn turbo_version(&self) -> Option<String> {
+        let turbo_entry = self.packages.get("node_modules/turbo")?;
+        turbo_entry.version.clone()
     }
 }
 
@@ -123,38 +176,6 @@ impl NpmLockfile {
         self.packages
             .get(pkg_str)
             .ok_or_else(|| Error::MissingPackage(pkg_str.to_string()))
-    }
-
-    pub fn subgraph(
-        &self,
-        workspace_packages: &[String],
-        packages: &[String],
-    ) -> Result<Self, Error> {
-        let mut pruned_packages = Map::new();
-        for pkg_key in packages {
-            let pkg = self.get_package(pkg_key)?;
-            pruned_packages.insert(pkg_key.to_string(), pkg.clone());
-        }
-        if let Some(root) = self.packages.get("") {
-            pruned_packages.insert("".into(), root.clone());
-        }
-        for workspace in workspace_packages {
-            let pkg = self.get_package(workspace)?;
-            pruned_packages.insert(workspace.to_string(), pkg.clone());
-
-            for (key, entry) in &self.packages {
-                if entry.resolved.as_deref() == Some(workspace) {
-                    pruned_packages.insert(key.clone(), entry.clone());
-                    break;
-                }
-            }
-        }
-        Ok(Self {
-            lockfile_version: 3,
-            packages: pruned_packages,
-            dependencies: Map::default(),
-            other: self.other.clone(),
-        })
     }
 
     fn possible_npm_deps(key: &str, dep: &str) -> Vec<String> {
@@ -200,7 +221,7 @@ pub fn npm_subgraph(
 ) -> Result<Vec<u8>, Error> {
     let lockfile = NpmLockfile::load(contents)?;
     let pruned_lockfile = lockfile.subgraph(workspace_packages, packages)?;
-    let new_contents = serde_json::to_vec_pretty(&pruned_lockfile)?;
+    let new_contents = pruned_lockfile.encode()?;
 
     Ok(new_contents)
 }
@@ -424,6 +445,7 @@ mod test {
             ]
             .into_iter()
             .collect(),
+            false,
         )?;
         assert!(closures.get("packages/a").unwrap().contains(&Package {
             key: "node_modules/eslint-plugin-turbo".into(),
@@ -431,6 +453,13 @@ mod test {
         }));
         assert!(closures.get("packages/b").unwrap().is_empty());
         assert!(closures.get("packages/c").unwrap().is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_turbo_version() -> Result<(), Error> {
+        let lockfile = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
+        assert_eq!(lockfile.turbo_version().as_deref(), Some("1.5.5"));
         Ok(())
     }
 }

@@ -4,25 +4,31 @@ use super::identifiers::{Descriptor, Ident};
 
 /// A data structure for resolving descriptors when the protocol isn't known
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct DescriptorResolver<'a> {
-    mapping: HashMap<Key<'a>, Entry<'a>>,
+pub struct DescriptorResolver {
+    mapping: HashMap<Key, Entry>,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
-struct Key<'a> {
-    ident: Ident<'a>,
-    range: &'a str,
+struct Key {
+    ident: Ident<'static>,
+    range: String,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Default)]
-struct Entry<'a> {
-    without: Option<&'a str>,
-    with: Option<&'a str>,
+struct Entry {
+    without: Option<String>,
+    with: Option<RangeAndProtocol>,
 }
 
-impl<'a> DescriptorResolver<'a> {
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Default)]
+struct RangeAndProtocol {
+    protocol: String,
+    range: String,
+}
+
+impl DescriptorResolver {
     /// Add a descriptor to the resolver
-    pub fn insert(&mut self, descriptor: &Descriptor<'a>) -> Option<&'a str> {
+    pub fn insert(&mut self, descriptor: &Descriptor) -> Option<String> {
         let key = Key::new(descriptor)?;
         let entry = self.mapping.entry(key).or_default();
         entry.insert_descriptor(descriptor)
@@ -30,38 +36,57 @@ impl<'a> DescriptorResolver<'a> {
 
     /// If given a descriptor without a protocol it will return all matching
     /// descriptors with a protocol
-    pub fn get(&self, descriptor: &Descriptor) -> Option<&'a str> {
+    pub fn get(&self, descriptor: &Descriptor) -> Option<&str> {
         let key = Key::new(descriptor)?;
         self.mapping.get(&key).and_then(|e| e.get(descriptor))
     }
 }
 
-impl<'a> Key<'a> {
-    fn new(desc: &Descriptor<'a>) -> Option<Self> {
-        let ident = desc.ident.clone();
-        let range = Descriptor::strip_protocol(desc.range()?);
+impl Key {
+    fn new(desc: &Descriptor) -> Option<Self> {
+        let ident = desc.ident.to_owned();
+        let range = Descriptor::strip_protocol(desc.range()?).to_string();
         Some(Key { ident, range })
     }
 }
 
-impl<'a> Entry<'a> {
+impl Entry {
     // Insert the given descriptor's range into the correct slot depending if it is
     // with or without a protocol
-    fn insert_descriptor(&mut self, descriptor: &Descriptor<'a>) -> Option<&'a str> {
-        let range = descriptor.range()?;
-        match descriptor.protocol().is_some() {
-            true => self.with.replace(range),
-            false => self.without.replace(range),
+    fn insert_descriptor(&mut self, descriptor: &Descriptor) -> Option<String> {
+        let range = descriptor.range()?.to_string();
+        match descriptor.protocol() {
+            Some(protocol) => {
+                // Yarn 4 made the default npm protocol explicit in the lockfile.
+                // In order to return the more specific protocol we avoid overwriting other
+                // protocols with the now explicit npm protocol.
+                if protocol != "npm" || self.with.is_none() {
+                    match self.with.replace(RangeAndProtocol {
+                        range,
+                        protocol: protocol.to_string(),
+                    }) {
+                        // We only return an ejected range if the protocol isn't the default npm
+                        // protocol
+                        Some(RangeAndProtocol { range, protocol }) if protocol != "npm" => {
+                            Some(range)
+                        }
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            }
+            None => self.without.replace(range),
         }
     }
 
-    fn get(&self, descriptor: &Descriptor) -> Option<&'a str> {
+    fn get(&self, descriptor: &Descriptor) -> Option<&str> {
         // We only return the without protocol range if `without` is present
         // and the given descriptor is also without a protocol
         if self.without.is_some() && descriptor.protocol().is_none() {
-            self.without
+            self.without.as_deref()
         } else {
-            self.with
+            self.with.as_ref().map(|x| x.range.as_str())
         }
     }
 }

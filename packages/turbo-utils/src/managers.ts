@@ -1,53 +1,57 @@
+import os from "node:os";
+import type { Options } from "execa";
 import execa from "execa";
-import os from "os";
+import type { PackageManager } from "./types";
 
-export type PackageManager = "npm" | "yarn" | "pnpm";
-export type PackageManagerAvailable = { available: boolean; version?: string };
-
-async function getVersion(
-  packageManager: string
-): Promise<PackageManagerAvailable> {
+async function exec(command: string, args: Array<string> = [], opts?: Options) {
   // run the check from tmpdir to avoid corepack conflicting -
   // this is no longer needed as of https://github.com/nodejs/corepack/pull/167
   // but we'll keep the behavior for those on older versions)
-  const execOptions = {
+  const execOptions: Options = {
     cwd: os.tmpdir(),
     env: { COREPACK_ENABLE_STRICT: "0" },
+    ...opts,
   };
-
-  let available = false;
   try {
-    const userAgent = process.env.npm_config_user_agent;
-    if (userAgent && userAgent.startsWith(packageManager)) {
-      available = true;
-    }
-
-    const result = await execa(packageManager, ["--version"], execOptions);
-    return {
-      available: true,
-      version: result.stdout.trim(),
-    };
-  } catch (e) {
-    return {
-      available,
-    };
+    const { stdout } = await execa(command, args, execOptions);
+    return stdout.trim();
+  } catch {
+    return undefined;
   }
 }
 
-async function getAvailablePackageManagers(): Promise<
-  Record<PackageManager, PackageManagerAvailable>
+export async function getAvailablePackageManagers(): Promise<
+  Record<PackageManager, string | undefined>
 > {
-  const [yarn, npm, pnpm] = await Promise.all([
-    getVersion("yarnpkg"),
-    getVersion("npm"),
-    getVersion("pnpm"),
+  const [yarn, npm, pnpm, bun] = await Promise.all([
+    exec("yarnpkg", ["--version"]),
+    exec("npm", ["--version"]),
+    exec("pnpm", ["--version"]),
+    exec("bun", ["--version"]),
   ]);
 
   return {
     yarn,
     pnpm,
     npm,
+    bun,
   };
 }
 
-export { getAvailablePackageManagers };
+export async function getPackageManagersBinPaths(): Promise<
+  Record<PackageManager, string | undefined>
+> {
+  const [yarn, npm, pnpm, bun] = await Promise.all([
+    exec("yarnpkg", ["global", "bin"]),
+    exec("npm", ["config", "get", "prefix"]),
+    exec("pnpm", ["bin", "--global"]),
+    exec("bun", ["pm", "--g", "bin"]),
+  ]);
+
+  return {
+    yarn,
+    pnpm,
+    npm,
+    bun,
+  };
+}

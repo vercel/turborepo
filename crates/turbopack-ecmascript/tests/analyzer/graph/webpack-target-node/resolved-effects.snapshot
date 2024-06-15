@@ -1,14 +1,14 @@
 0 -> 5 member call = ???*0*["r"](???*1*)
-- *0* __webpack_require__
-  ⚠️  pattern without value
-- *1* __webpack_exports__
-  ⚠️  pattern without value
+- *0* arguments[2]
+  ⚠️  function calls are not analysed yet
+- *1* arguments[1]
+  ⚠️  function calls are not analysed yet
 
 0 -> 7 member call = ???*0*["d"](???*1*, {"default": (...) => handler})
-- *0* __webpack_require__
-  ⚠️  pattern without value
-- *1* __webpack_exports__
-  ⚠️  pattern without value
+- *0* arguments[2]
+  ⚠️  function calls are not analysed yet
+- *1* arguments[1]
+  ⚠️  function calls are not analysed yet
 
 0 -> 8 free var = FreeVar(require)
 
@@ -41,8 +41,10 @@
 
 0 -> 21 call = module<../../webpack-api-runtime.js, {}>(???*0*)
 - *0* unsupported expression
+  ⚠️  This value might have side effects
 
 0 -> 22 call = (...) => __webpack_require__(???*0*)(5166)
 - *0* unsupported expression
+  ⚠️  This value might have side effects
 
 0 -> 24 free var = FreeVar(module)

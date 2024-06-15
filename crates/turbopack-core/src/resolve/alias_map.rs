@@ -14,6 +14,7 @@ use serde::{
 use turbo_tasks::{
     debug::{internal::PassthroughDebug, ValueDebugFormat, ValueDebugFormatString},
     trace::{TraceRawVcs, TraceRawVcsContext},
+    RcStr,
 };
 
 /// A map of [`AliasPattern`]s to the [`Template`]s they resolve to.
@@ -110,10 +111,10 @@ impl<T> TraceRawVcs for AliasMap<T>
 where
     T: TraceRawVcs,
 {
-    fn trace_raw_vcs(&self, context: &mut TraceRawVcsContext) {
+    fn trace_raw_vcs(&self, trace_context: &mut TraceRawVcsContext) {
         for (_, map) in self.map.iter() {
             for value in map.values() {
-                value.trace_raw_vcs(context);
+                value.trace_raw_vcs(trace_context);
             }
         }
     }
@@ -198,9 +199,41 @@ impl<T> AliasMap<T> {
         // Invariant: prefixes should be sorted by increasing length (base lengths),
         // according to PATTERN_KEY_COMPARE. Since we're using a prefix tree, this is
         // the default behavior of the common prefix iterator.
-        let mut prefixes_stack = self
-            .map
-            .common_prefixes(request.as_bytes())
+        let common_prefixes = self.map.common_prefixes(request.as_bytes());
+        let mut prefixes_stack = common_prefixes.collect::<Vec<_>>();
+        AliasMapLookupIterator {
+            request,
+            current_prefix_iterator: prefixes_stack
+                .pop()
+                .map(|(prefix, map)| (prefix, map.iter())),
+            prefixes_stack,
+        }
+    }
+
+    /// Looks up a request in the alias map, but only returns aliases where the
+    /// prefix matches a certain predicate.
+    ///
+    /// Returns an iterator to all the matching aliases.
+    pub fn lookup_with_prefix_predicate<'a>(
+        &'a self,
+        request: &'a str,
+        mut prefix_predicate: impl FnMut(&str) -> bool,
+    ) -> AliasMapLookupIterator<'a, T>
+    where
+        T: Debug,
+    {
+        // Invariant: prefixes should be sorted by increasing length (base lengths),
+        // according to PATTERN_KEY_COMPARE. Since we're using a prefix tree, this is
+        // the default behavior of the common prefix iterator.
+        let common_prefixes = self.map.common_prefixes(request.as_bytes());
+        let mut prefixes_stack = common_prefixes
+            .filter(|(p, _)| {
+                let s = match std::str::from_utf8(p) {
+                    Ok(s) => s,
+                    Err(e) => std::str::from_utf8(&p[..e.valid_up_to()]).unwrap(),
+                };
+                prefix_predicate(s)
+            })
             .collect::<Vec<_>>();
         AliasMapLookupIterator {
             request,
@@ -279,14 +312,16 @@ pub struct AliasMapIntoIter<T> {
 }
 
 struct AliasMapIntoIterItem<T> {
-    prefix: String,
+    prefix: RcStr,
     iterator: std::collections::btree_map::IntoIter<AliasKey, T>,
 }
 
 impl<T> AliasMapIntoIter<T> {
     fn advance_iter(&mut self) -> Option<&mut AliasMapIntoIterItem<T>> {
         let (prefix, map) = self.iter.next()?;
-        let prefix = String::from_utf8(prefix).expect("invalid UTF-8 key in AliasMap");
+        let prefix = String::from_utf8(prefix)
+            .expect("invalid UTF-8 key in AliasMap")
+            .into();
         self.current_prefix_iterator = Some(AliasMapIntoIterItem {
             prefix,
             iterator: map.into_iter(),
@@ -342,7 +377,7 @@ pub struct AliasMapIter<'a, T> {
 }
 
 struct AliasMapIterItem<'a, T> {
-    prefix: String,
+    prefix: RcStr,
     iterator: std::collections::btree_map::Iter<'a, AliasKey, T>,
 }
 
@@ -351,7 +386,9 @@ impl<'a, T> AliasMapIter<'a, T> {
         let Some((prefix, map)) = self.iter.next() else {
             return false;
         };
-        let prefix = String::from_utf8(prefix).expect("invalid UTF-8 key in AliasMap");
+        let prefix = String::from_utf8(prefix)
+            .expect("invalid UTF-8 key in AliasMap")
+            .into();
         self.current_prefix_iterator = Some(AliasMapIterItem {
             prefix,
             iterator: map.iter(),
@@ -438,7 +475,7 @@ where
                         // The suffix is longer than what remains of the request.
                         suffix.len() > remaining.len()
                             // Not a suffix match.
-                            || !remaining.ends_with(suffix)
+                            || !remaining.ends_with(&**suffix)
                         {
                             continue;
                         }
@@ -460,9 +497,9 @@ where
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum AliasPattern {
     /// Will match an exact string.
-    Exact(String),
+    Exact(RcStr),
     /// Will match a pattern with a single wildcard.
-    Wildcard { prefix: String, suffix: String },
+    Wildcard { prefix: RcStr, suffix: RcStr },
 }
 
 impl AliasPattern {
@@ -472,25 +509,27 @@ impl AliasPattern {
     /// characters, including path separators.
     pub fn parse<'a, T>(pattern: T) -> Self
     where
-        T: Into<String> + 'a,
+        T: Into<RcStr> + 'a,
     {
-        let mut pattern = pattern.into();
+        let pattern = pattern.into();
         if let Some(wildcard_index) = pattern.find('*') {
-            let suffix = pattern[wildcard_index + 1..].to_string();
+            let mut pattern = pattern.into_owned();
+
+            let suffix = pattern[wildcard_index + 1..].into();
             pattern.truncate(wildcard_index);
             AliasPattern::Wildcard {
-                prefix: pattern,
+                prefix: pattern.into(),
                 suffix,
             }
         } else {
-            AliasPattern::Exact(pattern.to_string())
+            AliasPattern::Exact(pattern)
         }
     }
 
     /// Creates a pattern that will only match exactly what was passed in.
     pub fn exact<'a, T>(pattern: T) -> Self
     where
-        T: Into<String> + 'a,
+        T: Into<RcStr> + 'a,
     {
         AliasPattern::Exact(pattern.into())
     }
@@ -501,8 +540,8 @@ impl AliasPattern {
     /// 3. a suffix.
     pub fn wildcard<'p, 's, P, S>(prefix: P, suffix: S) -> Self
     where
-        P: Into<String> + 'p,
-        S: Into<String> + 's,
+        P: Into<RcStr> + 'p,
+        S: Into<RcStr> + 's,
     {
         AliasPattern::Wildcard {
             prefix: prefix.into(),
@@ -514,7 +553,7 @@ impl AliasPattern {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, TraceRawVcs)]
 enum AliasKey {
     Exact,
-    Wildcard { suffix: String },
+    Wildcard { suffix: RcStr },
 }
 
 /// Result of a lookup in the alias map.

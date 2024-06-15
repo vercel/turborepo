@@ -1,4 +1,8 @@
 module.exports = {
   root: true,
-  extends: ["acme"],
+  extends: ["@acme/eslint-config/next.js"],
+  parser: "@typescript-eslint/parser",
+  parserOptions: {
+    project: true,
+  },
 };

@@ -14,8 +14,8 @@ use turbo_tasks::Value;
 use turbo_tasks_testing::VcStorage;
 use turbopack_core::{
     compile_time_info::CompileTimeInfo,
-    environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
-    target::CompileTargetVc,
+    environment::{Environment, ExecutionEnvironment, NodeJsEnvironment},
+    target::CompileTarget,
 };
 use turbopack_ecmascript::analyzer::{
     graph::{create_graph, EvalContext, VarGraph},
@@ -55,7 +55,8 @@ pub fn benchmark(c: &mut Criterion) {
                 let top_level_mark = Mark::new();
                 program.visit_mut_with(&mut resolver(unresolved_mark, top_level_mark, false));
 
-                let eval_context = EvalContext::new(&program, unresolved_mark);
+                let eval_context =
+                    EvalContext::new(&program, unresolved_mark, top_level_mark, false, None);
                 let var_graph = create_graph(&program, &eval_context);
 
                 let input = BenchInput {
@@ -93,16 +94,15 @@ fn bench_link(b: &mut Bencher, input: &BenchInput) {
     b.to_async(rt).iter(|| async {
         for val in input.var_graph.values.values() {
             VcStorage::with(async {
-                let compile_time_info = CompileTimeInfo::builder(EnvironmentVc::new(
-                    Value::new(ExecutionEnvironment::NodeJsLambda(
+                let compile_time_info = CompileTimeInfo::builder(Environment::new(Value::new(
+                    ExecutionEnvironment::NodeJsLambda(
                         NodeJsEnvironment {
-                            compile_target: CompileTargetVc::unknown(),
+                            compile_target: CompileTarget::unknown(),
                             ..Default::default()
                         }
                         .into(),
-                    )),
-                    Value::new(EnvironmentIntention::ServerRendering),
-                ))
+                    ),
+                )))
                 .cell();
                 link(
                     &input.var_graph,

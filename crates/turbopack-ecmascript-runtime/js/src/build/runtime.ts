@@ -1,6 +1,7 @@
 /// <reference path="../shared/runtime-utils.ts" />
-
-declare var RUNTIME_PUBLIC_PATH: string;
+/// <reference path="../shared-node/base-externals-utils.ts" />
+/// <reference path="../shared-node/node-externals-utils.ts" />
+/// <reference path="../shared-node/node-wasm-utils.ts" />
 
 enum SourceType {
   /**
@@ -24,27 +25,24 @@ type SourceInfo =
       parentId: ModuleId;
     };
 
-interface RequireContextEntry {
-  external: boolean;
+function stringifySourceInfo(source: SourceInfo): string {
+  switch (source.type) {
+    case SourceType.Runtime:
+      return `runtime for chunk ${source.chunkPath}`;
+    case SourceType.Parent:
+      return `parent module ${source.parentId}`;
+  }
 }
 
 type ExternalRequire = (id: ModuleId) => Exports | EsmNamespaceObject;
+type ExternalImport = (id: ModuleId) => Promise<Exports | EsmNamespaceObject>;
+type ResolveAbsolutePath = (modulePath?: string) => string;
 
-interface TurbopackNodeBuildContext {
-  e: Module["exports"];
-  r: CommonJsRequire;
+interface TurbopackNodeBuildContext extends TurbopackBaseContext {
+  P: ResolveAbsolutePath;
+  R: ResolvePathFromModule;
   x: ExternalRequire;
-  f: RequireContextFactory;
-  i: EsmImport;
-  s: EsmExport;
-  j: typeof cjsExport;
-  v: ExportValue;
-  n: typeof exportNamespace;
-  m: Module;
-  c: ModuleCache;
-  l: LoadChunk;
-  g: typeof globalThis;
-  __dirname: string;
+  y: ExternalImport;
 }
 
 type ModuleFactory = (
@@ -52,82 +50,97 @@ type ModuleFactory = (
   context: TurbopackNodeBuildContext
 ) => undefined;
 
-const path = require("path");
-const relativePathToRuntimeRoot = path.relative(RUNTIME_PUBLIC_PATH, ".");
-const RUNTIME_ROOT = path.resolve(__filename, relativePathToRuntimeRoot);
+const url = require("url");
 
 const moduleFactories: ModuleFactories = Object.create(null);
 const moduleCache: ModuleCache = Object.create(null);
 
-function commonJsRequireContext(
-  entry: RequireContextEntry,
-  sourceModule: Module
-): Exports {
-  return entry.external
-    ? externalRequire(entry.id(), false)
-    : commonJsRequire(sourceModule, entry.id());
+/**
+ * Returns an absolute path to the given module's id.
+ */
+function createResolvePathFromModule(
+  resolver: (moduleId: string) => Exports
+): (moduleId: string) => string {
+  return function resolvePathFromModule(moduleId: string): string {
+    const exported = resolver(moduleId);
+    const exportedPath = exported?.default ?? exported;
+    if (typeof exportedPath !== "string") {
+      return exported as any;
+    }
+
+    const strippedAssetPrefix = exportedPath.slice(ASSET_PREFIX.length);
+    const resolved = path.resolve(
+      ABSOLUTE_ROOT,
+      OUTPUT_ROOT,
+      strippedAssetPrefix
+    );
+
+    return url.pathToFileURL(resolved);
+  };
 }
 
-function externalRequire(
-  id: ModuleId,
-  esm: boolean = false
-): Exports | EsmNamespaceObject {
-  let raw;
-  try {
-    raw = require(id);
-  } catch (err) {
-    // TODO(alexkirsz) This can happen when a client-side module tries to load
-    // an external module we don't provide a shim for (e.g. querystring, url).
-    // For now, we fail semi-silently, but in the future this should be a
-    // compilation error.
-    throw new Error(`Failed to load external module ${id}: ${err}`);
+function loadChunk(chunkData: ChunkData, source?: SourceInfo): void {
+  if (typeof chunkData === "string") {
+    return loadChunkPath(chunkData, source);
+  } else {
+    return loadChunkPath(chunkData.path, source);
   }
-  if (!esm || raw.__esModule) {
-    return raw;
-  }
-  const ns = {};
-  interopEsm(raw, ns, true);
-  return ns;
 }
-externalRequire.resolve = (
-  id: string,
-  options?:
-    | {
-        paths?: string[] | undefined;
-      }
-    | undefined
-) => {
-  return require.resolve(id, options);
-};
 
-function loadChunk(chunkPath: ChunkPath) {
+function loadChunkPath(chunkPath: ChunkPath, source?: SourceInfo): void {
   if (!chunkPath.endsWith(".js")) {
     // We only support loading JS chunks in Node.js.
     // This branch can be hit when trying to load a CSS chunk.
     return;
   }
 
-  const resolved = require.resolve(path.resolve(RUNTIME_ROOT, chunkPath));
-  delete require.cache[resolved];
-  const chunkModules: ModuleFactories = require(resolved);
+  try {
+    const resolved = path.resolve(RUNTIME_ROOT, chunkPath);
+    const chunkModules: ModuleFactories = require(resolved);
 
-  for (const [moduleId, moduleFactory] of Object.entries(chunkModules)) {
-    if (!moduleFactories[moduleId]) {
-      moduleFactories[moduleId] = moduleFactory;
+    for (const [moduleId, moduleFactory] of Object.entries(chunkModules)) {
+      if (!moduleFactories[moduleId]) {
+        moduleFactories[moduleId] = moduleFactory;
+      }
     }
+  } catch (e) {
+    let errorMessage = `Failed to load chunk ${chunkPath}`;
+
+    if (source) {
+      errorMessage += ` from ${stringifySourceInfo(source)}`;
+    }
+
+    throw new Error(errorMessage, {
+      cause: e,
+    });
   }
 }
 
-function loadChunkAsync(source: SourceInfo, chunkPath: string): Promise<void> {
+async function loadChunkAsync(
+  source: SourceInfo,
+  chunkData: ChunkData
+): Promise<any> {
   return new Promise<void>((resolve, reject) => {
     try {
-      loadChunk(chunkPath);
+      loadChunk(chunkData, source);
     } catch (err) {
       reject(err);
       return;
     }
     resolve();
   });
+}
+
+function loadWebAssembly(chunkPath: ChunkPath, imports: WebAssembly.Imports) {
+  const resolved = path.resolve(RUNTIME_ROOT, chunkPath);
+
+  return instantiateWebAssemblyFromPath(resolved, imports);
+}
+
+function loadWebAssemblyModule(chunkPath: ChunkPath) {
+  const resolved = path.resolve(RUNTIME_ROOT, chunkPath);
+
+  return compileWebAssemblyFromPath(resolved);
 }
 
 function instantiateModule(id: ModuleId, source: SourceInfo): Module {
@@ -175,20 +188,30 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
 
   // NOTE(alexkirsz) This can fail when the module encounters a runtime error.
   try {
+    const r = commonJsRequire.bind(null, module);
     moduleFactory.call(module.exports, {
+      a: asyncModule.bind(null, module),
       e: module.exports,
-      r: commonJsRequire.bind(null, module),
+      r,
+      t: runtimeRequire,
       x: externalRequire,
-      f: requireContext.bind(null, module),
+      y: externalImport,
+      f: moduleContext,
       i: esmImport.bind(null, module),
-      s: esm.bind(null, module.exports),
-      j: cjsExport.bind(null, module.exports),
+      s: esmExport.bind(null, module, module.exports),
+      j: dynamicExport.bind(null, module, module.exports),
       v: exportValue.bind(null, module),
       n: exportNamespace.bind(null, module),
       m: module,
       c: moduleCache,
+      M: moduleFactories,
       l: loadChunkAsync.bind(null, { type: SourceType.Parent, parentId: id }),
+      w: loadWebAssembly,
+      u: loadWebAssemblyModule,
       g: globalThis,
+      P: resolveAbsolutePath,
+      U: relativeURL,
+      R: createResolvePathFromModule(r),
       __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
     });
   } catch (error) {
@@ -197,7 +220,7 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
   }
 
   module.loaded = true;
-  if (module.namespaceObject) {
+  if (module.namespaceObject && module.exports !== module.namespaceObject) {
     // in case of a circular dependency: cjs1 -> esm2 -> cjs1
     interopEsm(module.exports, module.namespaceObject);
   }

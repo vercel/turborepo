@@ -1,0 +1,18 @@
+{
+  "$schema": "../../docs/public/schema.json",
+  "extends": [
+    "//"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": [
+        "cli#rust-src"
+      ]
+    },
+    "test": {
+      "dependsOn": [
+        "build"
+      ]
+    }
+  }
+}

@@ -15,9 +15,11 @@ default = ["native-tls"]
 native-tls = ["reqwest/native-tls"]
 rustls-tls = ["reqwest/rustls-tls"]
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = { workspace = true }
-indexmap = { workspace = true }
 lazy_static = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }

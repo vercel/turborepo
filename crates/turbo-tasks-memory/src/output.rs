@@ -5,9 +5,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Error, Result};
-use auto_hash_map::AutoSet;
-use nohash_hasher::BuildNoHashHasher;
-use turbo_tasks::{util::SharedError, RawVc, TaskId, TurboTasksBackendApi};
+use turbo_tasks::{util::SharedError, RawVc, TaskId, TaskIdSet, TurboTasksBackendApi};
 
 use crate::MemoryBackend;
 
@@ -15,7 +13,7 @@ use crate::MemoryBackend;
 pub struct Output {
     pub(crate) content: OutputContent,
     updates: u32,
-    pub(crate) dependent_tasks: AutoSet<TaskId, BuildNoHashHasher<TaskId>>,
+    pub(crate) dependent_tasks: TaskIdSet,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -95,10 +93,6 @@ impl Output {
         if !self.dependent_tasks.is_empty() {
             turbo_tasks.schedule_notify_tasks_set(&take(&mut self.dependent_tasks));
         }
-    }
-
-    pub fn dependent_tasks(&self) -> &AutoSet<TaskId, BuildNoHashHasher<TaskId>> {
-        &self.dependent_tasks
     }
 
     pub fn gc_drop(self, turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>) {

@@ -1,15 +1,11 @@
 use std::mem::replace;
 
-use auto_hash_map::AutoSet;
-use nohash_hasher::BuildNoHashHasher;
-use once_cell::sync::Lazy;
 use parking_lot::{RwLockReadGuard, RwLockWriteGuard};
-use turbo_tasks::{StatsType, TaskId};
 
 use super::{PartialTaskState, Task, TaskState, UnloadedTaskState};
 use crate::{
+    aggregation::AggregationNode,
     map_guard::{ReadGuard, WriteGuard},
-    scope::TaskScopes,
 };
 
 pub(super) enum TaskMetaState {
@@ -83,19 +79,22 @@ impl TaskMetaState {
     }
 }
 
-// These need to be impl types since there is no way to reference the zero-sized
-// function item type
-type TaskMetaStateAsFull = impl Fn(&TaskMetaState) -> Option<&TaskState>;
-type TaskMetaStateAsPartial = impl Fn(&TaskMetaState) -> Option<&PartialTaskState>;
-type TaskMetaStateAsUnloaded = impl Fn(&TaskMetaState) -> Option<&UnloadedTaskState>;
-type TaskMetaStateAsFullMut = impl Fn(&mut TaskMetaState) -> Option<&mut TaskState>;
-type TaskMetaStateAsPartialMut = impl Fn(&mut TaskMetaState) -> Option<&mut PartialTaskState>;
-type TaskMetaStateAsUnloadedMut = impl Fn(&mut TaskMetaState) -> Option<&mut UnloadedTaskState>;
+pub(super) type TaskMetaStateAsFull = for<'a> fn(&'a TaskMetaState) -> Option<&'a TaskState>;
+pub(super) type TaskMetaStateAsPartial = for<'a> fn(&'a TaskMetaState) -> Option<&PartialTaskState>;
+pub(super) type TaskMetaStateAsUnloaded =
+    for<'a> fn(&'a TaskMetaState) -> Option<&'a UnloadedTaskState>;
+pub(super) type TaskMetaStateAsFullMut =
+    for<'a> fn(&'a mut TaskMetaState) -> Option<&'a mut TaskState>;
+pub(super) type TaskMetaStateAsPartialMut =
+    for<'a> fn(&'a mut TaskMetaState) -> Option<&'a mut PartialTaskState>;
+pub(super) type TaskMetaStateAsUnloadedMut =
+    for<'a> fn(&'a mut TaskMetaState) -> Option<&'a mut UnloadedTaskState>;
 
+#[allow(dead_code, reason = "test")]
 pub(super) enum TaskMetaStateReadGuard<'a> {
     Full(ReadGuard<'a, TaskMetaState, TaskState, TaskMetaStateAsFull>),
     Partial(ReadGuard<'a, TaskMetaState, PartialTaskState, TaskMetaStateAsPartial>),
-    Unloaded(ReadGuard<'a, TaskMetaState, UnloadedTaskState, TaskMetaStateAsUnloaded>),
+    Unloaded,
 }
 
 pub(super) type FullTaskWriteGuard<'a> =
@@ -121,6 +120,7 @@ pub(super) enum TaskMetaStateWriteGuard<'a> {
             TaskMetaStateAsUnloadedMut,
         >,
     ),
+    TemporaryFiller,
 }
 
 impl<'a> From<RwLockReadGuard<'a, TaskMetaState>> for TaskMetaStateReadGuard<'a> {
@@ -132,9 +132,7 @@ impl<'a> From<RwLockReadGuard<'a, TaskMetaState>> for TaskMetaStateReadGuard<'a>
             TaskMetaState::Partial(_) => {
                 TaskMetaStateReadGuard::Partial(ReadGuard::new(guard, TaskMetaState::as_partial))
             }
-            TaskMetaState::Unloaded(_) => {
-                TaskMetaStateReadGuard::Unloaded(ReadGuard::new(guard, TaskMetaState::as_unloaded))
-            }
+            TaskMetaState::Unloaded(_) => TaskMetaStateReadGuard::Unloaded,
         }
     }
 }
@@ -181,9 +179,7 @@ impl<'a> TaskMetaStateWriteGuard<'a> {
                 let partial = replace(
                     &mut *guard,
                     // placeholder
-                    TaskMetaState::Unloaded(UnloadedTaskState {
-                        stats_type: StatsType::Essential,
-                    }),
+                    TaskMetaState::Unloaded(UnloadedTaskState {}),
                 )
                 .into_partial()
                 .unwrap();
@@ -194,9 +190,7 @@ impl<'a> TaskMetaStateWriteGuard<'a> {
                 let unloaded = replace(
                     &mut *guard,
                     // placeholder
-                    TaskMetaState::Unloaded(UnloadedTaskState {
-                        stats_type: StatsType::Essential,
-                    }),
+                    TaskMetaState::Unloaded(UnloadedTaskState {}),
                 )
                 .into_unloaded()
                 .unwrap();
@@ -224,9 +218,7 @@ impl<'a> TaskMetaStateWriteGuard<'a> {
                 let unloaded = replace(
                     &mut *guard,
                     // placeholder
-                    TaskMetaState::Unloaded(UnloadedTaskState {
-                        stats_type: StatsType::Essential,
-                    }),
+                    TaskMetaState::Unloaded(UnloadedTaskState {}),
                 )
                 .into_unloaded()
                 .unwrap();
@@ -237,31 +229,6 @@ impl<'a> TaskMetaStateWriteGuard<'a> {
                     TaskMetaState::as_partial_mut,
                 ))
             }
-        }
-    }
-
-    pub(super) fn scopes_and_children(
-        &mut self,
-    ) -> (&mut TaskScopes, &AutoSet<TaskId, BuildNoHashHasher<TaskId>>) {
-        match self {
-            TaskMetaStateWriteGuard::Full(state) => {
-                let TaskState {
-                    ref mut scopes,
-                    ref children,
-                    ..
-                } = **state;
-                (scopes, children)
-            }
-            TaskMetaStateWriteGuard::Partial(state) => {
-                let PartialTaskState { ref mut scopes, .. } = **state;
-                static EMPTY: Lazy<AutoSet<TaskId, BuildNoHashHasher<TaskId>>> =
-                    Lazy::new(AutoSet::default);
-                (scopes, &*EMPTY)
-            }
-            TaskMetaStateWriteGuard::Unloaded(_) => unreachable!(
-                "TaskMetaStateWriteGuard::scopes_and_children must be called with at least a \
-                 partial state"
-            ),
         }
     }
 
@@ -277,6 +244,26 @@ impl<'a> TaskMetaStateWriteGuard<'a> {
             TaskMetaStateWriteGuard::Full(state) => state.into_inner(),
             TaskMetaStateWriteGuard::Partial(state) => state.into_inner(),
             TaskMetaStateWriteGuard::Unloaded(state) => state.into_inner(),
+            TaskMetaStateWriteGuard::TemporaryFiller => unreachable!(),
+        }
+    }
+
+    pub(super) fn ensure_at_least_partial(&mut self) {
+        if matches!(self, TaskMetaStateWriteGuard::Unloaded(..)) {
+            let TaskMetaStateWriteGuard::Unloaded(state) =
+                replace(self, TaskMetaStateWriteGuard::TemporaryFiller)
+            else {
+                unreachable!();
+            };
+            let mut state = state.into_inner();
+            *state = TaskMetaState::Partial(Box::new(PartialTaskState {
+                aggregation_node: AggregationNode::new(),
+            }));
+            *self = TaskMetaStateWriteGuard::Partial(WriteGuard::new(
+                state,
+                TaskMetaState::as_partial,
+                TaskMetaState::as_partial_mut,
+            ));
         }
     }
 }

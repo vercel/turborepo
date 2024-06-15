@@ -13,7 +13,7 @@
                 Constant(
                     Str(
                         Word(
-                            Atom('foo' type=inline),
+                            "foo",
                         ),
                     ),
                 ),
@@ -23,12 +23,12 @@
         prop: Member(
             3,
             FreeVar(
-                Atom('global' type=static),
+                "global",
             ),
             Constant(
                 Str(
-                    Word(
-                        Atom('index' type=inline),
+                    Atom(
+                        "index",
                     ),
                 ),
             ),
@@ -60,25 +60,17 @@
                 Member,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                39,
-            ),
-            hi: BytePos(
-                63,
-            ),
-            ctxt: #0,
-        },
+        span: 39..63#0,
         in_try: false,
     },
     Member {
         obj: FreeVar(
-            Atom('global' type=static),
+            "global",
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('index' type=inline),
+                Atom(
+                    "index",
                 ),
             ),
         ),
@@ -121,20 +113,12 @@
                 Member,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                50,
-            ),
-            hi: BytePos(
-                62,
-            ),
-            ctxt: #0,
-        },
+        span: 50..62#0,
         in_try: false,
     },
     FreeVar {
         var: FreeVar(
-            Atom('global' type=static),
+            "global",
         ),
         ast_path: [
             Program(
@@ -181,33 +165,25 @@
                 Ident,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                50,
-            ),
-            hi: BytePos(
-                56,
-            ),
-            ctxt: #1,
-        },
+        span: 50..56#1,
         in_try: false,
     },
     Member {
         obj: Variable(
             (
-                Atom('d1' type=inline),
+                "d1",
                 #2,
             ),
         ),
         prop: Member(
             3,
             FreeVar(
-                Atom('global' type=static),
+                "global",
             ),
             Constant(
                 Str(
-                    Word(
-                        Atom('index' type=inline),
+                    Atom(
+                        "index",
                     ),
                 ),
             ),
@@ -239,25 +215,17 @@
                 Member,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                100,
-            ),
-            hi: BytePos(
-                116,
-            ),
-            ctxt: #0,
-        },
+        span: 100..116#0,
         in_try: false,
     },
     Member {
         obj: FreeVar(
-            Atom('global' type=static),
+            "global",
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('index' type=inline),
+                Atom(
+                    "index",
                 ),
             ),
         ),
@@ -300,20 +268,12 @@
                 Member,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                103,
-            ),
-            hi: BytePos(
-                115,
-            ),
-            ctxt: #0,
-        },
+        span: 103..115#0,
         in_try: false,
     },
     FreeVar {
         var: FreeVar(
-            Atom('global' type=static),
+            "global",
         ),
         ast_path: [
             Program(
@@ -360,21 +320,13 @@
                 Ident,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                103,
-            ),
-            hi: BytePos(
-                109,
-            ),
-            ctxt: #1,
-        },
+        span: 103..109#1,
         in_try: false,
     },
     Member {
         obj: Variable(
             (
-                Atom('d1' type=inline),
+                "d1",
                 #2,
             ),
         ),
@@ -412,21 +364,13 @@
                 Member,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                129,
-            ),
-            hi: BytePos(
-                134,
-            ),
-            ctxt: #0,
-        },
+        span: 129..134#0,
         in_try: false,
     },
     Member {
         obj: Variable(
             (
-                Atom('d1' type=inline),
+                "d1",
                 #2,
             ),
         ),
@@ -464,15 +408,7 @@
                 Member,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                147,
-            ),
-            hi: BytePos(
-                152,
-            ),
-            ctxt: #0,
-        },
+        span: 147..152#0,
         in_try: false,
     },
 ]

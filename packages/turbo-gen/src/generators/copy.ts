@@ -1,11 +1,15 @@
-import path from "path";
-import fs from "fs-extra";
+import path from "node:path";
+import type { CopyFilterAsync } from "fs-extra";
+import { rm, writeJSON, readJSON, copy, existsSync } from "fs-extra";
 import chalk from "chalk";
-import { CopyFilterAsync } from "fs-extra";
-import { createProject, logger } from "@turbo/utils";
+import {
+  createProject,
+  logger,
+  type DependencyGroups,
+  type PackageJson,
+} from "@turbo/utils";
 import { gatherAddRequirements } from "../utils/gatherAddRequirements";
 import type { TurboGeneratorArguments } from "./types";
-import { DependencyGroups, PackageJson } from "../types";
 
 export async function generate({ project, opts }: TurboGeneratorArguments) {
   const { name, type, location, source, dependencies } =
@@ -18,7 +22,7 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
 
   // copying from a remote example
   if (opts.copy.type === "external") {
-    console.log();
+    logger.log();
     logger.warn("Some manual modifications may be required.");
     logger.dimmed(
       `This ${type} may require local dependencies or a different package manager than what is available in this repo`
@@ -30,10 +34,8 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
     });
 
     try {
-      if (fs.existsSync(newPackageJsonPath)) {
-        const packageJson = (await fs.readJSON(
-          newPackageJsonPath
-        )) as PackageJson;
+      if (existsSync(newPackageJsonPath)) {
+        const packageJson = (await readJSON(newPackageJsonPath)) as PackageJson;
         if (packageJson.workspaces) {
           throw new Error(
             "New workspace root detected - unexpected 'workspaces' field in package.json"
@@ -43,7 +45,7 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
         throw new Error("New workspace is missing a package.json file");
       }
 
-      if (fs.existsSync(path.join(location.absolute, "pnpm-workspace.yaml"))) {
+      if (existsSync(path.join(location.absolute, "pnpm-workspace.yaml"))) {
         throw new Error(
           "New workspace root detected - unexpected pnpm-workspace.yaml"
         );
@@ -56,29 +58,25 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
       logger.error(message);
 
       // rollback changes
-      await fs.rm(location.absolute, { recursive: true, force: true });
+      await rm(location.absolute, { recursive: true, force: true });
       return;
     }
   } else if (source) {
-    const filterFunc: CopyFilterAsync = async (src, dest) => {
-      if (src.includes("node_modules")) {
-        return false;
-      }
-      return true;
-    };
+    const filterFunc: CopyFilterAsync = async (src) =>
+      Promise.resolve(!src.includes("node_modules"));
 
     const loader = logger.turboLoader(
       `Creating "${name}" from "${source.name}"...`
     );
     loader.start();
-    await fs.copy(source.paths.root, location.absolute, {
+    await copy(source.paths.root, location.absolute, {
       filter: filterFunc,
     });
     loader.stop();
   }
 
   // update package.json with new name
-  const packageJson = await fs.readJSON(newPackageJsonPath);
+  const packageJson = (await readJSON(newPackageJsonPath)) as PackageJson;
   packageJson.name = name;
 
   // update dependencies
@@ -88,10 +86,10 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
       packageJson[group as keyof DependencyGroups] = deps;
     }
   });
-  await fs.writeJSON(newPackageJsonPath, packageJson, { spaces: 2 });
+  await writeJSON(newPackageJsonPath, packageJson, { spaces: 2 });
 
-  console.log();
-  console.log(
+  logger.log();
+  logger.log(
     `${chalk.bold(logger.turboGradient(">>> Success!"))} Created ${name} at "${
       location.relative
     }"`

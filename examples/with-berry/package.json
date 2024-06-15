@@ -1,0 +1,23 @@
+{
+  "name": "with-berry",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint"
+  },
+  "devDependencies": {
+    "eslint": "8.57.0",
+    "eslint-config-custom": "*",
+    "prettier": "^3.2.5",
+    "turbo": "^2.0.3"
+  },
+  "packageManager": "yarn@3.6.3",
+  "engines": {
+    "node": ">=18"
+  }
+}

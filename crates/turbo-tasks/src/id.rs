@@ -1,7 +1,8 @@
 use std::{
     cell::RefCell,
     fmt::{Debug, Display},
-    mem::ManuallyDrop,
+    mem::{transmute_copy, ManuallyDrop},
+    num::NonZeroU32,
     ops::Deref,
 };
 
@@ -13,7 +14,16 @@ macro_rules! define_id {
     (internal $name:ident $(,$derive:ty)*) => {
         #[derive(Hash, Clone, Copy, PartialEq, Eq, PartialOrd, Ord $(,$derive)*)]
         pub struct $name {
-            id: usize,
+            id: NonZeroU32,
+        }
+
+        impl $name {
+            /// # Safety
+            ///
+            /// The passed `id` must not be zero.
+            pub unsafe fn new_unchecked(id: u32) -> Self {
+                Self { id: unsafe { NonZeroU32::new_unchecked(id) } }
+            }
         }
 
         impl Display for $name {
@@ -23,16 +33,16 @@ macro_rules! define_id {
         }
 
         impl Deref for $name {
-            type Target = usize;
+            type Target = u32;
 
             fn deref(&self) -> &Self::Target {
-                &self.id
+                unsafe { transmute_copy(&&self.id) }
             }
         }
 
-        impl From<usize> for $name {
-            fn from(id: usize) -> Self {
-                Self { id }
+        impl From<u32> for $name {
+            fn from(id: u32) -> Self {
+                Self { id: NonZeroU32::new(id).expect("Ids can only be created from non zero values") }
             }
         }
 
@@ -126,19 +136,19 @@ make_serializable!(
 );
 
 pub trait IdMapping<T> {
-    fn forward(&self, id: T) -> usize;
-    fn backward(&self, id: usize) -> T;
+    fn forward(&self, id: T) -> u32;
+    fn backward(&self, id: u32) -> T;
 }
 
 impl<T, U> IdMapping<T> for &U
 where
     U: IdMapping<T>,
 {
-    fn forward(&self, id: T) -> usize {
+    fn forward(&self, id: T) -> u32 {
         (**self).forward(id)
     }
 
-    fn backward(&self, id: usize) -> T {
+    fn backward(&self, id: u32) -> T {
         (**self).backward(id)
     }
 }
@@ -173,7 +183,7 @@ where
 
 pub fn without_task_id_mapping<T>(func: impl FnOnce() -> T) -> T {
     TASK_ID_MAPPING.with(|cell| {
-        let old = std::mem::replace(&mut *cell.borrow_mut(), None);
+        let old = cell.borrow_mut().take();
         let _swap_guard = TemporarySwapGuard(cell, ManuallyDrop::new(old));
         func()
     })
@@ -218,7 +228,7 @@ impl<'de> Deserialize<'de> for TaskId {
                 E: serde::de::Error,
             {
                 TASK_ID_MAPPING.with(|cell| {
-                    let id = v as usize;
+                    let id = v as u32;
                     let mapped_id = if let Some(mapping) = cell.borrow().as_ref() {
                         mapping.backward(id)
                     } else {

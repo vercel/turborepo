@@ -19,7 +19,7 @@ All new transformers must contain a default export that matches the [`Transforme
 ```ts
 export type Transformer = {
   name: string;
-  value: string;
+  description: string;
   introducedIn: string;
   transformer: (args: TransformerArgs) => TransformerResults;
 };

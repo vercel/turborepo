@@ -6,28 +6,32 @@ use std::{
 use nom::Finish;
 use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
-use crate::{package_deps::GitHashes, wait_for_success, Error};
+use crate::{package_deps::GitHashes, wait_for_success, Error, Git};
 
-pub fn git_ls_tree(root_path: &AbsoluteSystemPathBuf) -> Result<GitHashes, Error> {
-    let mut hashes = GitHashes::new();
-    let mut git = Command::new("git")
-        .args(["ls-tree", "-r", "-z", "HEAD"])
-        .current_dir(root_path)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
+impl Git {
+    #[tracing::instrument(skip(self))]
+    pub fn git_ls_tree(&self, root_path: &AbsoluteSystemPathBuf) -> Result<GitHashes, Error> {
+        let mut hashes = GitHashes::new();
+        let mut git = Command::new(self.bin.as_std_path())
+            .args(["ls-tree", "-r", "-z", "HEAD"])
+            .env("GIT_OPTIONAL_LOCKS", "0")
+            .current_dir(root_path)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
 
-    let stdout = git
-        .stdout
-        .as_mut()
-        .ok_or_else(|| Error::git_error("failed to get stdout for git ls-tree"))?;
-    let mut stderr = git
-        .stderr
-        .take()
-        .ok_or_else(|| Error::git_error("failed to get stderr for git ls-tree"))?;
-    let parse_result = read_ls_tree(stdout, &mut hashes);
-    wait_for_success(git, &mut stderr, "git ls-tree", root_path, parse_result)?;
-    Ok(hashes)
+        let stdout = git
+            .stdout
+            .as_mut()
+            .ok_or_else(|| Error::git_error("failed to get stdout for git ls-tree"))?;
+        let mut stderr = git
+            .stderr
+            .take()
+            .ok_or_else(|| Error::git_error("failed to get stderr for git ls-tree"))?;
+        let parse_result = read_ls_tree(stdout, &mut hashes);
+        wait_for_success(git, &mut stderr, "git ls-tree", root_path, parse_result)?;
+        Ok(hashes)
+    }
 }
 
 fn read_ls_tree<R: Read>(reader: R, hashes: &mut GitHashes) -> Result<(), Error> {
@@ -36,7 +40,7 @@ fn read_ls_tree<R: Read>(reader: R, hashes: &mut GitHashes) -> Result<(), Error>
     while reader.read_until(b'\0', &mut buffer)? != 0 {
         let entry = parse_ls_tree(&buffer)?;
         let hash = String::from_utf8(entry.hash.to_vec())?;
-        let path = RelativeUnixPathBuf::new(entry.filename)?;
+        let path = RelativeUnixPathBuf::new(String::from_utf8(entry.filename.to_vec())?)?;
         hashes.insert(path, hash);
         buffer.clear();
     }
@@ -81,12 +85,11 @@ mod tests {
     use crate::{ls_tree::read_ls_tree, package_deps::GitHashes};
 
     fn to_hash_map(pairs: &[(&str, &str)]) -> GitHashes {
-        HashMap::from_iter(pairs.iter().map(|(path, hash)| {
-            (
-                RelativeUnixPathBuf::new(path.as_bytes()).unwrap(),
-                hash.to_string(),
-            )
-        }))
+        HashMap::from_iter(
+            pairs
+                .iter()
+                .map(|(path, hash)| (RelativeUnixPathBuf::new(*path).unwrap(), hash.to_string())),
+        )
     }
 
     #[test]
@@ -102,6 +105,8 @@ mod tests {
                 &[("package.json", "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391")],
             ),
             (
+                // We aren't attempting to use octal escapes here, it just looks like it
+                #[allow(clippy::octal_escapes)]
                 "100644 blob e69de29bb2d1d6434b8b29ae775ad8c2e48c5391\t\t\000100644 blob \
                  e69de29bb2d1d6434b8b29ae775ad8c2e48c5391\t\"\000100644 blob \
                  5b999efa470b056e329b4c23a73904e0794bdc2f\t\n\000100644 blob \

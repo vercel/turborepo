@@ -12,8 +12,11 @@ bench = false
 [features]
 
 # [NOTE]: Before enable this, ensure this can build all of the target platforms we support.
-avif = ["image/avif-decoder", "image/avif-encoder"]
-webp = ["image/webp", "image/webp-encoder"]
+avif = ["image/avif"]
+webp = ["image/webp"]
+
+[lints]
+workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
@@ -26,7 +29,6 @@ image = { workspace = true, default-features = false, features = [
   "bmp",
   "tga",
 ] }
-indexmap = { workspace = true }
 mime = { workspace = true }
 once_cell = { workspace = true }
 regex = { workspace = true }

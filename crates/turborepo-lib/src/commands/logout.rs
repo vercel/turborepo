@@ -1,14 +1,18 @@
-use anyhow::Result;
-use tracing::error;
+use turborepo_auth::{logout as auth_logout, LogoutOptions};
+use turborepo_telemetry::events::command::CommandEventBuilder;
 
-use crate::{commands::CommandBase, ui::GREY};
+use crate::{cli::Error, commands::CommandBase};
 
-pub fn logout(base: &mut CommandBase) -> Result<()> {
-    if let Err(err) = base.user_config_mut()?.set_token(None) {
-        error!("could not logout. Something went wrong: {}", err);
-        return Err(err);
-    }
-
-    println!("{}", base.ui.apply(GREY.apply_to(">>> Logged out")));
-    Ok(())
+pub async fn logout(
+    base: &mut CommandBase,
+    invalidate: bool,
+    _telemetry: CommandEventBuilder,
+) -> Result<(), Error> {
+    auth_logout(&LogoutOptions {
+        ui: base.ui,
+        api_client: base.api_client()?,
+        invalidate,
+    })
+    .await
+    .map_err(Error::from)
 }

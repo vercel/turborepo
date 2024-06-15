@@ -1,44 +1,46 @@
 [
     (
         "e",
-        Unknown(
-            Some(
+        Unknown {
+            original_value: Some(
                 Variable(
                     (
-                        Atom('e' type=static),
+                        "e",
                         #4,
                     ),
                 ),
             ),
-            "pattern without value",
-        ),
+            reason: "pattern without value",
+            has_side_effects: false,
+        },
     ),
     (
         "pkg",
         Alternatives(
             8,
             [
-                Unknown(
-                    Some(
+                Unknown {
+                    original_value: Some(
                         Variable(
                             (
-                                Atom('pkg' type=inline),
+                                "pkg",
                                 #2,
                             ),
                         ),
                     ),
-                    "pattern without value",
-                ),
+                    reason: "pattern without value",
+                    has_side_effects: false,
+                },
                 Call(
                     3,
                     FreeVar(
-                        Atom('require' type=static),
+                        "require",
                     ),
                     [
                         Constant(
                             Str(
                                 Word(
-                                    Atom('packages/not-found' type=dynamic),
+                                    "packages/not-found",
                                 ),
                             ),
                         ),
@@ -47,13 +49,13 @@
                 Call(
                     3,
                     FreeVar(
-                        Atom('require' type=static),
+                        "require",
                     ),
                     [
                         Constant(
                             Str(
                                 Word(
-                                    Atom('packages/found' type=dynamic),
+                                    "packages/found",
                                 ),
                             ),
                         ),

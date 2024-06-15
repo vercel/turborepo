@@ -1,0 +1,12 @@
+{
+  "name": "app-b",
+  "description": "A workspace to use as a model for a final application that the rest of your dependencies are building towards.",
+  "scripts": {
+    "build": "mkdir -p dist && echo \"Your application output!\" > dist/app-output.txt && echo \"Application B is built!\"",
+    "lint": "echo \"Linted!\"",
+    "type-check": "echo \"Types checked!\""
+  },
+  "dependencies": {
+    "tooling-config": "workspace:*"
+  }
+}

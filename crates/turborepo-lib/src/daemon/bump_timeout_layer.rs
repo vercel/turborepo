@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use tonic::transport::NamedService;
+use tonic::server::NamedService;
 use tower::{Layer, Service};
 
 use super::bump_timeout::BumpTimeout;

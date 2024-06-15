@@ -5,10 +5,10 @@ use tokio::task::spawn_blocking;
 
 const MAX_RETRY_ATTEMPTS: usize = 10;
 
-pub(crate) async fn retry_future<R, F, Fut>(func: F) -> io::Result<R>
+pub(crate) async fn retry_future<'a, R, F, Fut>(func: F) -> io::Result<R>
 where
     F: FnMut() -> Fut + Unpin,
-    Fut: Future<Output = io::Result<R>>,
+    Fut: Future<Output = io::Result<R>> + 'a,
 {
     match FutureRetry::new(
         func,
@@ -23,14 +23,21 @@ where
     }
 }
 
-pub(crate) async fn retry_blocking<R, F>(path: impl AsRef<Path>, func: F) -> io::Result<R>
+pub(crate) async fn retry_blocking<R, F>(
+    path: impl AsRef<Path>,
+    span: tracing::Span,
+    func: F,
+) -> io::Result<R>
 where
     F: Fn(&Path) -> io::Result<R> + Send + 'static,
     R: Send + 'static,
 {
     let path = path.as_ref().to_owned();
 
+    let current_span = tracing::Span::current();
     asyncify(move || {
+        let _entered = current_span.entered();
+        let _entered = span.entered();
         let mut attempt = 1;
 
         loop {

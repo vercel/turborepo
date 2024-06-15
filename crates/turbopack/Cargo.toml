@@ -13,16 +13,19 @@ bench = false
 test_persistent_cache = []
 bench_against_node_nft = []
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = { workspace = true }
-async-recursion = "1.0.2"
-futures = { workspace = true }
+async-recursion = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 lazy_static = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
+tracing = { workspace = true }
 
 turbo-tasks = { workspace = true }
 turbo-tasks-env = { workspace = true }
@@ -30,13 +33,13 @@ turbo-tasks-fs = { workspace = true }
 turbopack-core = { workspace = true }
 turbopack-css = { workspace = true }
 turbopack-ecmascript = { workspace = true }
-turbopack-ecmascript-plugins = { workspace = true }
 turbopack-env = { workspace = true }
-turbopack-image = { workspace = true }
 turbopack-json = { workspace = true }
 turbopack-mdx = { workspace = true }
 turbopack-node = { workspace = true }
+turbopack-resolve = { workspace = true }
 turbopack-static = { workspace = true }
+turbopack-wasm = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true, features = ["async_tokio"] }

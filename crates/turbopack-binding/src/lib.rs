@@ -56,8 +56,8 @@ pub mod turbopack {
     pub use turbopack;
     #[cfg(feature = "__turbopack_bench")]
     pub use turbopack_bench as bench;
-    #[cfg(feature = "__turbopack_build")]
-    pub use turbopack_build as build;
+    #[cfg(feature = "__turbopack_browser")]
+    pub use turbopack_browser as browser;
     #[cfg(feature = "__turbopack_cli_utils")]
     pub use turbopack_cli_utils as cli_utils;
     #[cfg(feature = "__turbopack_core")]
@@ -66,12 +66,12 @@ pub mod turbopack {
     pub use turbopack_create_test_app as create_test_app;
     #[cfg(feature = "__turbopack_css")]
     pub use turbopack_css as css;
-    #[cfg(feature = "__turbopack_dev")]
-    pub use turbopack_dev as dev;
     #[cfg(feature = "__turbopack_dev_server")]
     pub use turbopack_dev_server as dev_server;
     #[cfg(feature = "__turbopack_ecmascript")]
     pub use turbopack_ecmascript as ecmascript;
+    #[cfg(feature = "__turbopack_ecmascript_hmr_protocol")]
+    pub use turbopack_ecmascript_hmr_protocol as ecmascript_hmr_protocol;
     #[cfg(feature = "__turbopack_ecmascript_plugin")]
     pub use turbopack_ecmascript_plugins as ecmascript_plugin;
     #[cfg(feature = "__turbopack_ecmascript_runtime")]
@@ -86,6 +86,8 @@ pub mod turbopack {
     pub use turbopack_mdx as mdx;
     #[cfg(feature = "__turbopack_node")]
     pub use turbopack_node as node;
+    #[cfg(feature = "__turbopack_nodejs")]
+    pub use turbopack_nodejs as nodejs;
     #[cfg(feature = "__turbopack_static")]
     pub use turbopack_static as r#static;
     #[cfg(feature = "__turbopack_swc_utils")]
@@ -94,6 +96,10 @@ pub mod turbopack {
     pub use turbopack_test_utils as test_utils;
     #[cfg(feature = "__turbopack_tests")]
     pub use turbopack_tests as tests;
+    #[cfg(feature = "__turbopack_trace_server")]
+    pub use turbopack_trace_server as trace_server;
+    #[cfg(feature = "__turbopack_trace_utils")]
+    pub use turbopack_trace_utils as trace_utils;
 }
 
 #[cfg(feature = "__features")]

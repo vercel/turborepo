@@ -4,24 +4,23 @@
   "private": true,
   "scripts": {
     "build": "vite build",
-    "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf dist",
-    "deploy": "vercel deploy dist --team=turborepo --confirm",
+    "clean": "rm -rf dist",
     "dev": "vite --host 0.0.0.0 --port 3001 --clearScreen false",
-    "lint": "tsc --noEmit && eslint \"src/**/*.ts*\""
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/"
   },
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "ui": "workspace:*"
+    "@repo/ui": "workspace:*"
   },
   "devDependencies": {
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
-    "@vitejs/plugin-react": "^2.1.0",
-    "eslint": "^7.32.0",
-    "eslint-config-custom": "workspace:*",
-    "tsconfig": "workspace:*",
-    "typescript": "^4.8.3",
-    "vite": "^3.1.0"
+    "@types/react": "^18.2.62",
+    "@types/react-dom": "^18.2.19",
+    "@vitejs/plugin-react": "^4.2.1",
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "^5.3.3",
+    "vite": "^5.1.4"
   }
 }

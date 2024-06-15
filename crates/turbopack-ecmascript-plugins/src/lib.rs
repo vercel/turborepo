@@ -1,3 +1,5 @@
+#![feature(arbitrary_self_types)]
+
 pub mod transform;
 
 pub fn register() {

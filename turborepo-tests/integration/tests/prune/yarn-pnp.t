@@ -1,10 +1,11 @@
 Setup
   $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/copy_fixture.sh $(pwd) berry_resolutions
+  $ . ${TESTDIR}/../../../helpers/copy_fixture.sh $(pwd) berry_resolutions ${TESTDIR}/../../fixtures
+  $ export TURBO_GLOBAL_WARNING_DISABLED=1
 Remove linker override
   $ rm .yarnrc.yml
 Prune the project
-  $ ${TURBO} prune --scope=a
+  $ ${TURBO} prune a
   Generating pruned monorepo for a in .*out (re)
    - Added a
 

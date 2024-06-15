@@ -1,0 +1,35 @@
+[package]
+name = "turborepo-auth"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true, features = ["backtrace"] }
+async-trait.workspace = true
+axum-server = { workspace = true }
+axum.workspace = true
+chrono.workspace = true
+hostname = "0.3.1"
+lazy_static.workspace = true
+reqwest.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+thiserror = "1.0.38"
+tokio.workspace = true
+tracing.workspace = true
+turbopath.workspace = true
+turborepo-api-client = { workspace = true }
+turborepo-dirs = { version = "0.1.0", path = "../turborepo-dirs" }
+turborepo-ui.workspace = true
+turborepo-vercel-api = { workspace = true }
+turborepo-vercel-api-mock = { workspace = true }
+url = { workspace = true }
+webbrowser = { workspace = true }
+
+[dev-dependencies]
+port_scanner = { workspace = true }

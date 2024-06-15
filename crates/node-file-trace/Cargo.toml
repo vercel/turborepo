@@ -13,6 +13,8 @@ bench = false
 [features]
 default = ["cli", "custom_allocator"]
 cli = ["dep:clap", "turbo-tasks-malloc"]
+persistent_cache = []
+serializable = []
 tokio_console = [
   "dep:console-subscriber",
   "tokio/tracing",
@@ -20,6 +22,9 @@ tokio_console = [
 ]
 node-api = []
 custom_allocator = ["turbo-tasks-malloc", "turbo-tasks-malloc/custom_allocator"]
+
+[lints]
+workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
@@ -36,6 +41,7 @@ turbo-tasks-memory = { workspace = true }
 turbopack = { workspace = true }
 turbopack-cli-utils = { workspace = true }
 turbopack-core = { workspace = true }
+turbopack-resolve = { workspace = true }
 
 [build-dependencies]
 turbo-tasks-build = { workspace = true }

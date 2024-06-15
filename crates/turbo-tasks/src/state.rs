@@ -33,8 +33,8 @@ impl<T: Debug> Debug for State<T> {
 }
 
 impl<T: TraceRawVcs> TraceRawVcs for State<T> {
-    fn trace_raw_vcs(&self, context: &mut crate::trace::TraceRawVcsContext) {
-        self.inner.lock().value.trace_raw_vcs(context);
+    fn trace_raw_vcs(&self, trace_context: &mut crate::trace::TraceRawVcsContext) {
+        self.inner.lock().value.trace_raw_vcs(trace_context);
     }
 }
 
@@ -54,7 +54,7 @@ impl<T> Eq for State<T> {}
 
 impl<T> Serialize for State<T> {
     fn serialize<S: serde::Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error> {
-        // For this to work at all we need to do more. Changing the the state need to
+        // For this to work at all we need to do more. Changing the state need to
         // invalidate the serialization of the task that contains the state. So we
         // probably need to store the state outside of the task to be able to serialize
         // it independent from the creating task.

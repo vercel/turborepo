@@ -1,8 +1,13 @@
 import chalk from "chalk";
-import managers from "./managers";
-import { Project, Options, PackageManagerDetails } from "./types";
-import install from "./install";
-import { Logger } from "./logger";
+import { MANAGERS } from "./managers";
+import type {
+  Project,
+  Options,
+  RequestedPackageManagerDetails,
+  AvailablePackageManagerDetails,
+} from "./types";
+import { install } from "./install";
+import type { Logger } from "./logger";
 import { ConvertError } from "./errors";
 
 /*
@@ -18,27 +23,39 @@ import { ConvertError } from "./errors";
 */
 export async function convertProject({
   project,
-  to,
+  convertTo,
   logger,
   options,
 }: {
   project: Project;
-  to: PackageManagerDetails;
+  convertTo: RequestedPackageManagerDetails;
   logger: Logger;
   options?: Options;
 }) {
   logger.header(
-    `Converting project from ${project.packageManager} to ${to.name}.`
+    `Converting project from ${project.packageManager} to ${convertTo.name}.`
   );
 
-  if (project.packageManager == to.name) {
+  if (project.packageManager === convertTo.name) {
     throw new ConvertError("You are already using this package manager", {
       type: "package_manager-already_in_use",
     });
   }
 
+  if (!convertTo.version) {
+    throw new ConvertError(
+      `${convertTo.name} is not installed, or could not be located`,
+      {
+        type: "package_manager-could_not_be_found",
+      }
+    );
+  }
+
+  // this cast is safe since we've just verified that the version exists above
+  const to = convertTo as AvailablePackageManagerDetails;
+
   // remove old workspace data
-  await managers[project.packageManager].remove({
+  await MANAGERS[project.packageManager].remove({
     project,
     to,
     logger,
@@ -46,16 +63,16 @@ export async function convertProject({
   });
 
   // create new workspace data
-  await managers[to.name].create({ project, to, logger, options });
+  await MANAGERS[to.name].create({ project, to, logger, options });
 
   logger.mainStep("Installing dependencies");
   if (!options?.skipInstall) {
-    await managers[to.name].convertLock({ project, logger, options });
+    await MANAGERS[to.name].convertLock({ project, to, logger, options });
     await install({ project, to, logger, options });
   } else {
     logger.subStep(chalk.yellow("Skipping install"));
   }
 
   logger.mainStep(`Cleaning up ${project.packageManager} workspaces`);
-  await managers[project.packageManager].clean({ project, logger });
+  await MANAGERS[project.packageManager].clean({ project, logger });
 }

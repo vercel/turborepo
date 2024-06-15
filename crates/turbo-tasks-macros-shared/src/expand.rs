@@ -11,18 +11,18 @@ use syn::{
 /// Requires several Fn helpers which perform expand different structures:
 ///
 /// - [expand_named] handles the expansion of a struct or enum variant with
-/// named fields (e.g. `struct Foo { bar: u32 }`, `Foo::Bar { baz: u32 }`).
+///   named fields (e.g. `struct Foo { bar: u32 }`, `Foo::Bar { baz: u32 }`).
 /// - [expand_unnamed] handles the expansion of a struct or enum variant with
-/// unnamed fields (e.g. `struct Foo(u32)`, `Foo::Bar(u32)`).
-/// - [expand_unit] handles the expansion of a unit struct or enum (e.g.
-/// `struct Foo;`, `Foo::Bar`).
+///   unnamed fields (e.g. `struct Foo(u32)`, `Foo::Bar(u32)`).
+/// - [expand_unit] handles the expansion of a unit struct or enum (e.g. `struct
+///   Foo;`, `Foo::Bar`).
 ///
 /// These helpers should themselves call [generate_destructuring] to generate
 /// the destructure necessary to access the fields of the value.
 pub fn match_expansion<
     EN: Fn(&Ident, &FieldsNamed) -> (TokenStream, TokenStream),
     EU: Fn(&Ident, &FieldsUnnamed) -> (TokenStream, TokenStream),
-    U: Fn(&Ident) -> (TokenStream, TokenStream),
+    U: Fn(&Ident) -> TokenStream,
 >(
     derive_input: &DeriveInput,
     expand_named: &EN,
@@ -30,6 +30,7 @@ pub fn match_expansion<
     expand_unit: &U,
 ) -> TokenStream {
     let ident = &derive_input.ident;
+    let expand_unit = move |ident| (TokenStream::new(), expand_unit(ident));
     match &derive_input.data {
         Data::Enum(DataEnum { variants, .. }) => {
             let (variants_idents, (variants_fields_capture, expansion)): (
@@ -63,9 +64,19 @@ pub fn match_expansion<
             let (captures, expansion) =
                 expand_fields(ident, fields, expand_named, expand_unnamed, expand_unit);
 
-            quote! {
-                match self {
-                    #ident #captures => #expansion
+            if fields.is_empty() {
+                assert!(captures.is_empty());
+                // a match expression here doesn't make sense as there's no fields to capture,
+                // just pass through the inner expression.
+                expansion
+            } else {
+                match fields {
+                    Fields::Named(_) | Fields::Unnamed(_) => quote! {
+                        match self {
+                            #ident #captures => #expansion
+                        }
+                    },
+                    Fields::Unit => unreachable!(),
                 }
             }
         }
@@ -82,6 +93,10 @@ pub fn match_expansion<
 }
 
 /// Formats the fields of any structure or enum variant.
+///
+/// Empty lists of named or unnamed fields are treated as unit structs, as they
+/// are semantically identical, and the `expand_unit` codepath can usually
+/// generate better code.
 pub fn expand_fields<
     'ident,
     'fields,
@@ -96,10 +111,15 @@ pub fn expand_fields<
     expand_unnamed: EU,
     expand_unit: U,
 ) -> R {
+    if fields.is_empty() {
+        // any empty struct (regardless of the syntax used during declaration) is
+        // equivalent to a unit struct
+        return expand_unit(ident);
+    }
     match fields {
         Fields::Named(named) => expand_named(ident, named),
         Fields::Unnamed(unnamed) => expand_unnamed(ident, unnamed),
-        Fields::Unit => expand_unit(ident),
+        Fields::Unit => unreachable!(),
     }
 }
 
@@ -114,7 +134,7 @@ pub fn expand_fields<
 /// Returns both the capture pattern token stream and the name of the bound
 /// identifiers corresponding to the input fields.
 pub fn generate_destructuring<'a, I: Fn(&Field) -> bool>(
-    fields: impl Iterator<Item = &'a Field> + ExactSizeIterator,
+    fields: impl ExactSizeIterator<Item = &'a Field>,
     filter_field: &I,
 ) -> (TokenStream, Vec<TokenStream>) {
     let fields_len = fields.len();
@@ -153,7 +173,7 @@ pub fn generate_destructuring<'a, I: Fn(&Field) -> bool>(
 /// Returns both the capture pattern token stream and the name of the bound
 /// identifiers corresponding to the input fields.
 pub fn generate_exhaustive_destructuring<'a>(
-    fields: impl Iterator<Item = &'a Field> + ExactSizeIterator,
+    fields: impl ExactSizeIterator<Item = &'a Field>,
 ) -> (TokenStream, Vec<TokenStream>) {
     generate_destructuring(fields, &|_| true)
 }

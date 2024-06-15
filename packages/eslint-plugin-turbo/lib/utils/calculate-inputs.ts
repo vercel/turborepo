@@ -1,63 +1,52 @@
-import crypto from "crypto";
-import fs from "fs";
-import path from "path";
-import { wildcardTests } from "../utils/wildcard-processing";
-import { dotEnv } from "../utils/dotenv-processing";
+import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import type { WorkspaceConfig } from "@turbo/utils";
+import { getWorkspaceConfigs } from "@turbo/utils";
+import type { Pipeline } from "@turbo/types";
+import type { RootSchema, RootSchemaV1 } from "@turbo/types/src/types/config";
+import { forEachTaskDef } from "@turbo/utils/src/getTurboConfigs";
+import { dotEnv } from "./dotenv-processing";
+import { wildcardTests } from "./wildcard-processing";
 
-import { WorkspaceConfig, getWorkspaceConfigs } from "@turbo/utils";
-import { Pipeline } from "@turbo/types";
-import { RootSchema } from "@turbo/types/src/types/config";
-
-type EnvironmentConfig = {
-  legacyConfig: string[];
-  env: string[];
-  passThroughEnv: string[] | null;
+interface EnvironmentConfig {
+  legacyConfig: Array<string>;
+  env: Array<string>;
+  passThroughEnv: Array<string> | null;
   dotEnv: DotEnvConfig | null;
-};
+}
 
 type EnvVar = string;
 type EnvTest = (variable: EnvVar) => boolean;
-type EnvironmentTest = {
+interface EnvironmentTest {
   legacyConfig: EnvTest;
   env: EnvTest;
   passThroughEnv: EnvTest;
   dotEnv: EnvTest;
-};
+}
 
-type DotEnvConfig = {
-  filePaths: string[];
-  hashes: {
-    [path: string]: string | null;
-  };
-};
+interface DotEnvConfig {
+  filePaths: Array<string>;
+  hashes: Record<string, string | null>;
+}
 
-type ProjectKey = {
+export interface ProjectKey {
   global: EnvironmentConfig;
-  globalTasks: {
-    [script: string]: EnvironmentConfig;
-  };
-  workspaceTasks: {
-    [workspace: string]: {
-      [script: string]: EnvironmentConfig;
-    };
-  };
-};
+  globalTasks: Record<string, EnvironmentConfig>;
+  workspaceTasks: Record<string, Record<string, EnvironmentConfig>>;
+}
 
-type ProjectTests = {
+interface ProjectTests {
   global: EnvironmentTest;
-  globalTasks: {
-    [script: string]: EnvironmentTest;
-  };
-  workspaceTasks: {
-    [workspace: string]: {
-      [script: string]: EnvironmentTest;
-    };
-  };
-};
+  globalTasks: Record<string, EnvironmentTest>;
+  workspaceTasks: Record<string, Record<string, EnvironmentTest>>;
+}
 
 // Process inputs for `EnvironmentConfig`s
 
-function processLegacyConfig(legacyConfig: string[] | undefined): string[] {
+function processLegacyConfig(
+  legacyConfig: Array<string> | undefined
+): Array<string> {
   if (!legacyConfig) {
     return [];
   }
@@ -79,7 +68,7 @@ function processLegacyConfig(legacyConfig: string[] | undefined): string[] {
   }
 }
 
-function processEnv(env: string[] | undefined): string[] {
+function processEnv(env: Array<string> | undefined): Array<string> {
   if (!env) {
     return [];
   }
@@ -95,8 +84,8 @@ function processEnv(env: string[] | undefined): string[] {
 }
 
 function processPassThroughEnv(
-  passThroughEnv: string[] | null | undefined
-): string[] | null {
+  passThroughEnv: Array<string> | null | undefined
+): Array<string> | null {
   if (!passThroughEnv) {
     return null;
   }
@@ -113,20 +102,22 @@ function processPassThroughEnv(
 
 function processDotEnv(
   workspacePath: string,
-  filePaths: string[] | null | undefined
+  filePaths: Array<string> | null | undefined
 ): DotEnvConfig | null {
   if (!filePaths) {
     return null;
   }
 
-  const hashEntries: [string, string][] = [];
+  const hashEntries: Array<[string, string]> = [];
   filePaths.reduce((accumulator, filePath) => {
     const hash = crypto.createHash("sha1");
     try {
       const fileContents = fs.readFileSync(path.join(workspacePath, filePath));
       hash.update(fileContents);
       accumulator.push([filePath, hash.digest("hex")]);
-    } catch (_) {}
+    } catch (_) {
+      // ignore
+    }
 
     return accumulator;
   }, hashEntries);
@@ -141,7 +132,7 @@ function processDotEnv(
 
 function processGlobal(
   workspacePath: string,
-  rootTurboJson: RootSchema
+  rootTurboJson: RootSchema | RootSchemaV1
 ): EnvironmentConfig {
   return {
     legacyConfig: processLegacyConfig(rootTurboJson.globalDependencies),
@@ -251,10 +242,10 @@ function getTaskAddress(taskName: string): {
 }
 
 export function getWorkspaceFromFilePath(
-  projectWorkspaces: WorkspaceConfig[],
+  projectWorkspaces: Array<WorkspaceConfig>,
   filePath: string
 ): WorkspaceConfig | null {
-  let possibleWorkspaces = projectWorkspaces
+  const possibleWorkspaces = projectWorkspaces
     .filter((projectWorkspace) =>
       filePath.startsWith(projectWorkspace.workspacePath)
     )
@@ -263,9 +254,8 @@ export function getWorkspaceFromFilePath(
         return -1;
       } else if (a === b) {
         return 0;
-      } else {
-        return 1;
       }
+      return 1;
     });
 
   if (possibleWorkspaces.length > 0) {
@@ -282,9 +272,9 @@ export class Project {
   _test: ProjectTests;
 
   cwd: string | undefined;
-  allConfigs: WorkspaceConfig[];
+  allConfigs: Array<WorkspaceConfig>;
   projectRoot: WorkspaceConfig | undefined;
-  projectWorkspaces: WorkspaceConfig[];
+  projectWorkspaces: Array<WorkspaceConfig>;
 
   constructor(cwd: string | undefined) {
     this.cwd = cwd;
@@ -311,20 +301,13 @@ export class Project {
       passThroughEnv: null,
       dotEnv: null,
     };
-    let globalTasks: {
-      [script: string]: EnvironmentConfig;
-    } = {};
-    let workspaceTasks: {
-      [workspace: string]: {
-        [script: string]: EnvironmentConfig;
-      };
-    } = {};
+    const globalTasks: Record<string, EnvironmentConfig> = {};
+    const workspaceTasks: Record<
+      string,
+      Record<string, EnvironmentConfig>
+    > = {};
 
-    if (
-      this.projectRoot &&
-      this.projectRoot.turboConfig &&
-      !("extends" in this.projectRoot)
-    ) {
+    if (this.projectRoot?.turboConfig && !("extends" in this.projectRoot)) {
       const rootTurboJson = this.projectRoot;
 
       global = processGlobal(
@@ -332,11 +315,15 @@ export class Project {
         this.projectRoot.turboConfig
       );
 
-      Object.entries(this.projectRoot.turboConfig.pipeline).forEach(
+      forEachTaskDef(
+        this.projectRoot.turboConfig,
         ([taskName, taskDefinition]) => {
           const { workspaceName, scriptName } = getTaskAddress(taskName);
           if (workspaceName) {
-            workspaceTasks[workspaceName] = workspaceTasks[workspaceName] || {};
+            workspaceTasks[workspaceName] =
+              workspaceName in workspaceTasks
+                ? workspaceTasks[workspaceName]
+                : {};
             workspaceTasks[workspaceName][scriptName] = processTask(
               rootTurboJson.workspacePath,
               taskDefinition
@@ -356,7 +343,8 @@ export class Project {
         return;
       }
 
-      Object.entries(projectWorkspace.turboConfig.pipeline).forEach(
+      forEachTaskDef(
+        projectWorkspace.turboConfig,
         ([taskName, taskDefinition]) => {
           const { workspaceName: erroneousWorkspaceName, scriptName } =
             getTaskAddress(taskName);
@@ -367,7 +355,10 @@ export class Project {
           }
 
           const workspaceName = projectWorkspace.workspaceName;
-          workspaceTasks[workspaceName] = workspaceTasks[workspaceName] || {};
+          workspaceTasks[workspaceName] =
+            workspaceName in workspaceTasks
+              ? workspaceTasks[workspaceName]
+              : {};
           workspaceTasks[workspaceName][scriptName] = processTask(
             projectWorkspace.workspacePath,
             taskDefinition
@@ -436,7 +427,7 @@ export class Project {
       ),
     ];
 
-    if (workspaceName) {
+    if (workspaceName && workspaceName in this._test.workspaceTasks) {
       tests.push(
         ...Object.values(this._test.workspaceTasks[workspaceName]).map(
           (context) => environmentTestArray(context)

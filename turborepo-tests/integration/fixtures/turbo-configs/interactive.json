@@ -1,0 +1,10 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["foo.txt"],
+  "globalEnv": ["SOME_ENV_VAR"],
+  "tasks": {
+    "build": {
+      "interactive": true
+    }
+  }
+}

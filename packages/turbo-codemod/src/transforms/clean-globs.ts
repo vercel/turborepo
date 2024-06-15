@@ -1,11 +1,10 @@
-import { TransformerArgs } from "../types";
-import type { Schema as TurboJsonSchema } from "@turbo/types";
-import { TransformerResults } from "../runner";
-import path from "path";
-import fs from "fs-extra";
-import getTransformerHelpers from "../utils/getTransformerHelpers";
+import path from "node:path";
+import type { SchemaV1 } from "@turbo/types/src/types/config";
 import { getTurboConfigs } from "@turbo/utils";
-import Logger from "../utils/logger";
+import type { TransformerArgs, Transformer } from "../types";
+import type { TransformerResults } from "../runner";
+import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import { loadTurboJson } from "../utils/loadTurboJson";
 
 // transformer details
 const TRANSFORMER = "clean-globs";
@@ -17,7 +16,7 @@ export function transformer({
   root,
   options,
 }: TransformerArgs): TransformerResults {
-  const { log, runner } = getTransformerHelpers({
+  const { runner } = getTransformerHelpers({
     transformer: TRANSFORMER,
     rootPath: root,
     options,
@@ -25,27 +24,29 @@ export function transformer({
 
   const turboConfigPath = path.join(root, "turbo.json");
 
-  const turboJson: TurboJsonSchema = fs.readJsonSync(turboConfigPath);
+  const turboJson: SchemaV1 = loadTurboJson(turboConfigPath);
   runner.modifyFile({
     filePath: turboConfigPath,
-    after: migrateConfig(turboJson, log),
+    after: migrateConfig(turboJson),
   });
 
   // find and migrate any workspace configs
   const workspaceConfigs = getTurboConfigs(root);
   workspaceConfigs.forEach((workspaceConfig) => {
-    const { config, turboConfigPath } = workspaceConfig;
-    runner.modifyFile({
-      filePath: turboConfigPath,
-      after: migrateConfig(config, log),
-    });
+    const { config, turboConfigPath: filePath } = workspaceConfig;
+    if ("pipeline" in config) {
+      runner.modifyFile({
+        filePath,
+        after: migrateConfig(config),
+      });
+    }
   });
 
   return runner.finish();
 }
 
-function migrateConfig(config: TurboJsonSchema, log: Logger) {
-  const mapGlob = (glob: string) => fixGlobPattern(glob, log);
+function migrateConfig(config: SchemaV1) {
+  const mapGlob = (glob: string) => fixGlobPattern(glob);
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
     taskDef.inputs = taskDef.inputs?.map(mapGlob);
     taskDef.outputs = taskDef.outputs?.map(mapGlob);
@@ -54,38 +55,41 @@ function migrateConfig(config: TurboJsonSchema, log: Logger) {
   return config;
 }
 
-export function fixGlobPattern(pattern: string, log: Logger): string {
+export function fixGlobPattern(pattern: string): string {
   let oldPattern = pattern;
   // For '../../app-store/**/**' and '**/**/result.json'
   // Collapse back-to-back doublestars '**/**' to a single doublestar '**'
-  let newPattern = pattern.replace(/\*\*\/\*\*/g, "**");
-  while (newPattern !== pattern) {
-    pattern = newPattern;
-    newPattern = pattern.replace(/\*\*\/\*\*/g, "**");
+  let newPattern = oldPattern.replace(/\*\*\/\*\*/g, "**");
+  while (newPattern !== oldPattern) {
+    oldPattern = newPattern;
+    newPattern = oldPattern.replace(/\*\*\/\*\*/g, "**");
   }
 
   // For '**.ext' change to '**/*.ext'
   // 'ext' is a filename or extension and can contain almost any character except '*' and '/'
-  newPattern = pattern.replace(/(\*\*)([^*/]+)/g, "$1/*$2");
-  if (newPattern !== pattern) {
-    pattern = newPattern;
+  // eslint-disable-next-line prefer-named-capture-group -- using positional replace
+  newPattern = oldPattern.replace(/(\*\*)([^*/]+)/g, "$1/*$2");
+  if (newPattern !== oldPattern) {
+    oldPattern = newPattern;
   }
 
   // For 'prefix**' change to 'prefix*/**'
   // 'prefix' is a folder name and can contain almost any character except '*' and '/'
-  newPattern = pattern.replace(/([^*/]+)(\*\*)/g, "$1*/$2");
-  if (newPattern !== pattern) {
-    pattern = newPattern;
+  // eslint-disable-next-line prefer-named-capture-group -- using positional replace
+  newPattern = oldPattern.replace(/([^*/]+)(\*\*)/g, "$1*/$2");
+  if (newPattern !== oldPattern) {
+    oldPattern = newPattern;
   }
 
-  return pattern;
+  return oldPattern;
 }
 
-const transformerMeta = {
-  name: `${TRANSFORMER}: ${DESCRIPTION}`,
-  value: TRANSFORMER,
+const transformerMeta: Transformer = {
+  name: TRANSFORMER,
+  description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
   transformer,
 };
 
+// eslint-disable-next-line import/no-default-export -- transforms require default export
 export default transformerMeta;

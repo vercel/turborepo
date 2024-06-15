@@ -43,7 +43,7 @@
         "b",
         Variable(
             (
-                Atom('*anonymous function 66*' type=dynamic),
+                "*anonymous function 66*",
                 #0,
             ),
         ),
@@ -52,17 +52,18 @@
         "c",
         Variable(
             (
-                Atom('*arrow function 118*' type=dynamic),
+                "*arrow function 118*",
                 #0,
             ),
         ),
     ),
     (
         "d",
-        Unknown(
-            None,
-            "unsupported expression",
-        ),
+        Unknown {
+            original_value: None,
+            reason: "unsupported expression",
+            has_side_effects: true,
+        },
     ),
     (
         "e",
@@ -78,7 +79,7 @@
         "f",
         Variable(
             (
-                Atom('e' type=static),
+                "e",
                 #8,
             ),
         ),
@@ -147,7 +148,7 @@
         "y#3",
         Variable(
             (
-                Atom('x' type=static),
+                "x",
                 #3,
             ),
         ),
@@ -156,7 +157,7 @@
         "y#4",
         Variable(
             (
-                Atom('x' type=static),
+                "x",
                 #4,
             ),
         ),
@@ -165,7 +166,7 @@
         "y#5",
         Variable(
             (
-                Atom('x' type=static),
+                "x",
                 #5,
             ),
         ),
@@ -174,7 +175,7 @@
         "y#6",
         Variable(
             (
-                Atom('x' type=static),
+                "x",
                 #6,
             ),
         ),
@@ -183,7 +184,7 @@
         "y#7",
         Variable(
             (
-                Atom('x' type=static),
+                "x",
                 #7,
             ),
         ),
@@ -192,7 +193,7 @@
         "y#9",
         Variable(
             (
-                Atom('x' type=static),
+                "x",
                 #9,
             ),
         ),
@@ -201,7 +202,7 @@
         "z#3",
         Variable(
             (
-                Atom('a' type=static),
+                "a",
                 #2,
             ),
         ),
@@ -210,7 +211,7 @@
         "z#6",
         Variable(
             (
-                Atom('d' type=static),
+                "d",
                 #2,
             ),
         ),
@@ -219,7 +220,7 @@
         "z#7",
         Variable(
             (
-                Atom('d' type=static),
+                "d",
                 #2,
             ),
         ),
@@ -228,7 +229,7 @@
         "z#9",
         Variable(
             (
-                Atom('e' type=static),
+                "e",
                 #8,
             ),
         ),
@@ -237,7 +238,7 @@
         "z2",
         Variable(
             (
-                Atom('f' type=inline),
+                "f",
                 #2,
             ),
         ),

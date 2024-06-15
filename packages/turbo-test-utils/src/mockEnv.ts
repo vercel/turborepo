@@ -1,4 +1,4 @@
-export default function mockEnv() {
+export function mockEnv() {
   const OLD_ENV = process.env;
 
   beforeEach(() => {

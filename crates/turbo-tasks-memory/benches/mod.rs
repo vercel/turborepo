@@ -1,4 +1,4 @@
-#![feature(min_specialization)]
+#![feature(arbitrary_self_types)]
 
 use criterion::{criterion_group, criterion_main, Criterion};
 

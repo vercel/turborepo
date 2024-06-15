@@ -1,13 +1,13 @@
-import { transformer } from "../src/transforms/stabilize-env-mode";
 import { setupTestFixtures } from "@turbo/test-utils";
+import { transformer } from "../src/transforms/stabilize-env-mode";
 
-describe.only("stabilize-env-mode", () => {
+describe("stabilize-env-mode", () => {
   const { useFixture } = setupTestFixtures({
     directory: __dirname,
     test: "stabilize-env-mode",
   });
 
-  it("migrates env-mode has-both", async () => {
+  it("migrates env-mode has-both", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "has-both",
@@ -16,7 +16,7 @@ describe.only("stabilize-env-mode", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -44,7 +44,7 @@ describe.only("stabilize-env-mode", () => {
     `);
   });
 
-  it("migrates env-mode has-duplicates", async () => {
+  it("migrates env-mode has-duplicates", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "has-duplicates",
@@ -53,7 +53,7 @@ describe.only("stabilize-env-mode", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -86,7 +86,7 @@ describe.only("stabilize-env-mode", () => {
     `);
   });
 
-  it("migrates env-mode has-empty", async () => {
+  it("migrates env-mode has-empty", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "has-empty",
@@ -95,7 +95,7 @@ describe.only("stabilize-env-mode", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -120,7 +120,7 @@ describe.only("stabilize-env-mode", () => {
     `);
   });
 
-  it("migrates env-mode has-neither", async () => {
+  it("migrates env-mode has-neither", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "has-neither",
@@ -129,7 +129,7 @@ describe.only("stabilize-env-mode", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -151,7 +151,7 @@ describe.only("stabilize-env-mode", () => {
     `);
   });
 
-  it("migrates env-mode has-new", async () => {
+  it("migrates env-mode has-new", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "has-new",
@@ -160,7 +160,7 @@ describe.only("stabilize-env-mode", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -185,7 +185,7 @@ describe.only("stabilize-env-mode", () => {
     `);
   });
 
-  it("migrates env-mode has-old", async () => {
+  it("migrates env-mode has-old", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "has-old",
@@ -194,7 +194,7 @@ describe.only("stabilize-env-mode", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -219,7 +219,7 @@ describe.only("stabilize-env-mode", () => {
     `);
   });
 
-  it("migrates env-mode workspace-configs", async () => {
+  it("migrates env-mode workspace-configs", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "workspace-configs",
@@ -228,7 +228,7 @@ describe.only("stabilize-env-mode", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -290,7 +290,7 @@ describe.only("stabilize-env-mode", () => {
     `);
   });
 
-  it("errors if no turbo.json can be found", async () => {
+  it("errors if no turbo.json can be found", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "no-turbo-json",
@@ -301,7 +301,7 @@ describe.only("stabilize-env-mode", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(read("turbo.json")).toBeUndefined();
@@ -311,7 +311,7 @@ describe.only("stabilize-env-mode", () => {
     );
   });
 
-  it("errors if package.json config exists and has not been migrated", async () => {
+  it("errors if package.json config exists and has not been migrated", () => {
     // load the fixture for the test
     const { root } = useFixture({
       fixture: "old-config",
@@ -320,7 +320,7 @@ describe.only("stabilize-env-mode", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(result.fatalError).toBeDefined();

@@ -1,12 +1,9 @@
-import path from "path";
-import { existsSync } from "fs-extra";
-
-import getPackageManager from "../../../utils/getPackageManager";
+import { type Project } from "@turbo/workspaces";
 import { exec } from "../utils";
 import type { MigrateCommandOptions } from "../types";
 
-function getCurrentVersion(
-  directory: string,
+export function getCurrentVersion(
+  project: Project,
   opts: MigrateCommandOptions
 ): string | undefined {
   const { from } = opts;
@@ -15,31 +12,21 @@ function getCurrentVersion(
   }
 
   // try global first
-  const turboVersionFromGlobal = exec(`turbo --version`, { cwd: directory });
+  const turboVersionFromGlobal = exec(`turbo --version`, {
+    cwd: project.paths.root,
+  });
 
   if (turboVersionFromGlobal) {
     return turboVersionFromGlobal;
   }
 
-  // try to use the package manager to find the version
-  const packageManager = getPackageManager({ directory });
-  if (packageManager) {
-    if (packageManager === "yarn") {
-      return exec(`yarn turbo --version`, { cwd: directory });
-    }
-    if (packageManager === "pnpm") {
-      return exec(`pnpm turbo --version`, { cwd: directory });
-    } else {
-      // this doesn't work for npm, so manually build the binary path
-      const turboBin = path.join(directory, "node_modules", ".bin", "turbo");
-      if (existsSync(turboBin)) {
-        return exec(`${turboBin} --version`, { cwd: directory });
-      }
-    }
+  const { packageManager } = project;
+  if (packageManager === "yarn") {
+    return exec(`yarn turbo --version`, { cwd: project.paths.root });
+  }
+  if (packageManager === "pnpm") {
+    return exec(`pnpm turbo --version`, { cwd: project.paths.root });
   }
 
-  // unable to determine local version,
-  return undefined;
+  return exec(`npm exec -c 'turbo --version'`, { cwd: project.paths.root });
 }
-
-export default getCurrentVersion;

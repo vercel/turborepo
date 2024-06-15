@@ -1,8 +1,8 @@
 import chalk from "chalk";
-
-import FileTransform from "./FileTransform";
-import Logger from "../utils/logger";
+import { logger } from "@turbo/utils";
+import { Logger } from "../utils/logger";
 import type { UtilityArgs } from "../types";
+import { FileTransform } from "./FileTransform";
 import type {
   FileResult,
   ModifyFileArgs,
@@ -10,7 +10,7 @@ import type {
   TransformerResults,
 } from "./types";
 
-class Runner {
+export class Runner {
   transform: string;
   rootPath: string;
   dry: boolean;
@@ -21,7 +21,7 @@ class Runner {
   constructor(options: UtilityArgs) {
     this.transform = options.transformer;
     this.rootPath = options.rootPath;
-    this.dry = options.dry;
+    this.dry = options.dryRun;
     this.print = options.print;
     this.logger = new Logger(options);
   }
@@ -100,9 +100,9 @@ class Runner {
 
   static logResults(results: TransformerResults): void {
     const changedFiles = Object.keys(results.changes);
-    console.log();
+    logger.log();
     if (changedFiles.length > 0) {
-      console.log(chalk.bold(`Results:`));
+      logger.bold(`Results:`);
       const table: Record<
         string,
         {
@@ -123,10 +123,9 @@ class Runner {
         };
       });
 
+      // eslint-disable-next-line no-console -- CLI utility
       console.table(table);
-      console.log();
+      logger.log();
     }
   }
 }
-
-export default Runner;

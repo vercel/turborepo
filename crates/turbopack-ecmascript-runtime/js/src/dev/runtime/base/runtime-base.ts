@@ -19,6 +19,7 @@
 type RefreshRuntimeGlobals =
   import("@next/react-refresh-utils/dist/runtime").RefreshRuntimeGlobals;
 
+declare var CHUNK_BASE_PATH: string;
 declare var $RefreshHelpers$: RefreshRuntimeGlobals["$RefreshHelpers$"];
 declare var $RefreshReg$: RefreshRuntimeGlobals["$RefreshReg$"];
 declare var $RefreshSig$: RefreshRuntimeGlobals["$RefreshSig$"];
@@ -28,25 +29,14 @@ declare var $RefreshInterceptModuleExecution$:
 type RefreshContext = {
   register: RefreshRuntimeGlobals["$RefreshReg$"];
   signature: RefreshRuntimeGlobals["$RefreshSig$"];
+  registerExports: typeof registerExportsAndSetupBoundaryForReactRefresh;
 };
 
 type RefreshHelpers = RefreshRuntimeGlobals["$RefreshHelpers$"];
 
-interface TurbopackDevBaseContext {
-  e: Module["exports"];
-  r: CommonJsRequire;
-  f: RequireContextFactory;
-  i: EsmImport;
-  s: EsmExport;
-  j: typeof cjsExport;
-  v: ExportValue;
-  n: typeof exportNamespace;
-  m: Module;
-  c: ModuleCache;
-  l: LoadChunk;
-  g: typeof globalThis;
+interface TurbopackDevBaseContext extends TurbopackBaseContext {
   k: RefreshContext;
-  __dirname: string;
+  R: ResolvePathFromModule;
 }
 
 interface TurbopackDevContext extends TurbopackDevBaseContext {}
@@ -113,6 +103,17 @@ interface RuntimeBackend {
   unloadChunk?: (chunkPath: ChunkPath) => void;
 
   restart: () => void;
+}
+
+class UpdateApplyError extends Error {
+  name = "UpdateApplyError";
+
+  dependencyChain: string[];
+
+  constructor(message: string, dependencyChain: string[]) {
+    super(message);
+    this.dependencyChain = dependencyChain;
+  }
 }
 
 const moduleFactories: ModuleFactories = Object.create(null);
@@ -271,6 +272,18 @@ async function loadChunkPath(
   }
 }
 
+/**
+ * Returns an absolute url to an asset.
+ */
+function createResolvePathFromModule(
+  resolver: (moduleId: string) => Exports
+): (moduleId: string) => string {
+  return function resolvePathFromModule(moduleId: string): string {
+    const exported = resolver(moduleId);
+    return exported?.default ?? exported;
+  };
+}
+
 function instantiateModule(id: ModuleId, source: SourceInfo): Module {
   const moduleFactory = moduleFactories[id];
   if (typeof moduleFactory !== "function") {
@@ -328,23 +341,33 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
 
   // NOTE(alexkirsz) This can fail when the module encounters a runtime error.
   try {
+    const sourceInfo: SourceInfo = { type: SourceType.Parent, parentId: id };
+
     runModuleExecutionHooks(module, (refresh) => {
+      const r = commonJsRequire.bind(null, module);
       moduleFactory.call(
         module.exports,
         augmentContext({
+          a: asyncModule.bind(null, module),
           e: module.exports,
           r: commonJsRequire.bind(null, module),
-          f: requireContext.bind(null, module),
+          t: runtimeRequire,
+          f: moduleContext,
           i: esmImport.bind(null, module),
-          s: esmExport.bind(null, module),
-          j: cjsExport.bind(null, module.exports),
+          s: esmExport.bind(null, module, module.exports),
+          j: dynamicExport.bind(null, module, module.exports),
           v: exportValue.bind(null, module),
           n: exportNamespace.bind(null, module),
           m: module,
           c: moduleCache,
-          l: loadChunk.bind(null, { type: SourceType.Parent, parentId: id }),
+          M: moduleFactories,
+          l: loadChunk.bind(null, sourceInfo),
+          w: loadWebAssembly.bind(null, sourceInfo),
+          u: loadWebAssemblyModule.bind(null, sourceInfo),
           g: globalThis,
+          U: relativeURL,
           k: refresh,
+          R: createResolvePathFromModule(r),
           __dirname: module.id.replace(/(^|\/)\/+$/, ""),
         })
       );
@@ -381,16 +404,8 @@ function runModuleExecutionHooks(
     executeModule({
       register: globalThis.$RefreshReg$,
       signature: globalThis.$RefreshSig$,
+      registerExports: registerExportsAndSetupBoundaryForReactRefresh,
     });
-
-    if ("$RefreshHelpers$" in globalThis) {
-      // This pattern can also be used to register the exports of
-      // a module with the React Refresh runtime.
-      registerExportsAndSetupBoundaryForReactRefresh(
-        module,
-        globalThis.$RefreshHelpers$
-      );
-    }
   } catch (e) {
     throw e;
   } finally {
@@ -469,8 +484,8 @@ function registerExportsAndSetupBoundaryForReactRefresh(
       // function, we want to invalidate the boundary.
       if (
         helpers.shouldInvalidateReactRefreshBoundary(
-          prevExports,
-          currentExports
+          helpers.getRefreshBoundarySignature(prevExports),
+          helpers.getRefreshBoundarySignature(currentExports)
         )
       ) {
         module.hot.invalidate();
@@ -528,16 +543,18 @@ function computedInvalidatedModules(
 
     switch (effect.type) {
       case "unaccepted":
-        throw new Error(
+        throw new UpdateApplyError(
           `cannot apply update: unaccepted module. ${formatDependencyChain(
             effect.dependencyChain
-          )}.`
+          )}.`,
+          effect.dependencyChain
         );
       case "self-declined":
-        throw new Error(
+        throw new UpdateApplyError(
           `cannot apply update: self-declined module. ${formatDependencyChain(
             effect.dependencyChain
-          )}.`
+          )}.`,
+          effect.dependencyChain
         );
       case "accepted":
         for (const outdatedModuleId of effect.outdatedModules) {
@@ -733,25 +750,22 @@ function invariant(never: never, computeMessage: (arg: any) => string): never {
   throw new Error(`Invariant: ${computeMessage(never)}`);
 }
 
-function applyUpdate(chunkListPath: ChunkPath, update: PartialUpdate) {
+function applyUpdate(update: PartialUpdate) {
   switch (update.type) {
     case "ChunkListUpdate":
-      applyChunkListUpdate(chunkListPath, update);
+      applyChunkListUpdate(update);
       break;
     default:
       invariant(update, (update) => `Unknown update type: ${update.type}`);
   }
 }
 
-function applyChunkListUpdate(
-  chunkListPath: ChunkPath,
-  update: ChunkListUpdate
-) {
+function applyChunkListUpdate(update: ChunkListUpdate) {
   if (update.merged != null) {
     for (const merged of update.merged) {
       switch (merged.type) {
         case "EcmascriptMergedUpdate":
-          applyEcmascriptMergedUpdate(chunkListPath, merged);
+          applyEcmascriptMergedUpdate(merged);
           break;
         default:
           invariant(merged, (merged) => `Unknown merged type: ${merged.type}`);
@@ -787,10 +801,7 @@ function applyChunkListUpdate(
   }
 }
 
-function applyEcmascriptMergedUpdate(
-  chunkPath: ChunkPath,
-  update: EcmascriptMergedUpdate
-) {
+function applyEcmascriptMergedUpdate(update: EcmascriptMergedUpdate) {
   const { entries = {}, chunks = {} } = update;
   const { added, modified, chunksAdded, chunksDeleted } = computeChangedModules(
     entries,
@@ -834,6 +845,7 @@ function applyInternal(
 
   // we want to continue on error and only throw the error after we tried applying all updates
   let error: any;
+
   function reportError(err: any) {
     if (!error) error = err;
   }
@@ -967,6 +979,11 @@ function getAffectedModuleEffects(moduleId: ModuleId): ModuleEffect {
     const { moduleId, dependencyChain } = nextItem;
 
     if (moduleId != null) {
+      if (outdatedModules.has(moduleId)) {
+        // Avoid infinite loops caused by cycles between modules in the dependency chain.
+        continue;
+      }
+
       outdatedModules.add(moduleId);
     }
 
@@ -1037,7 +1054,7 @@ function handleApply(chunkListPath: ChunkPath, update: ServerMessage) {
   switch (update.type) {
     case "partial": {
       // This indicates that the update is can be applied to the current state of the application.
-      applyUpdate(chunkListPath, update.instruction);
+      applyUpdate(update.instruction);
       break;
     }
     case "restart": {
@@ -1134,6 +1151,11 @@ function createModuleHot(
     // NOTE(alexkirsz) Since we always return "idle" for now, these are no-ops.
     addStatusHandler: (_handler) => {},
     removeStatusHandler: (_handler) => {},
+
+    // NOTE(jridgewell) Check returns the list of updated modules, but we don't
+    // want the webpack code paths to ever update (the turbopack paths handle
+    // this already).
+    check: () => Promise.resolve(null),
   };
 
   return { hot, hotState };
@@ -1285,6 +1307,16 @@ function getOrInstantiateRuntimeModule(
   }
 
   return instantiateModule(moduleId, { type: SourceType.Runtime, chunkPath });
+}
+
+/**
+ * Returns the URL relative to the origin where a chunk can be fetched from.
+ */
+function getChunkRelativeUrl(chunkPath: ChunkPath): string {
+  return `${CHUNK_BASE_PATH}${chunkPath
+    .split("/")
+    .map((p) => encodeURIComponent(p))
+    .join("/")}`;
 }
 
 /**

@@ -1,44 +1,50 @@
 import chalk from "chalk";
-import { UtilityArgs } from "../types";
+import type { UtilityArgs } from "../types";
 
-export default class Logger {
+export class Logger {
   transform: string;
   dry: boolean;
 
   constructor(args: UtilityArgs) {
     this.transform = args.transformer;
-    this.dry = args.dry;
+    this.dry = args.dryRun;
   }
-  modified(...args: any[]) {
-    console.log(
+
+  _log(...args: Array<unknown>) {
+    // eslint-disable-next-line no-console -- logger
+    console.log(...args);
+  }
+
+  modified(...args: Array<unknown>) {
+    this._log(
       chalk.green(` MODIFIED `),
       ...args,
       this.dry ? chalk.dim(`(dry run)`) : ""
     );
   }
-  unchanged(...args: any[]) {
-    console.log(
+  unchanged(...args: Array<unknown>) {
+    this._log(
       chalk.gray(` UNCHANGED `),
       ...args,
       this.dry ? chalk.dim(`(dry run)`) : ""
     );
   }
-  skipped(...args: any[]) {
-    console.log(
+  skipped(...args: Array<unknown>) {
+    this._log(
       chalk.yellow(` SKIPPED `),
       ...args,
       this.dry ? chalk.dim(`(dry run)`) : ""
     );
   }
-  error(...args: any[]) {
-    console.log(
+  error(...args: Array<unknown>) {
+    this._log(
       chalk.red(` ERROR `),
       ...args,
       this.dry ? chalk.dim(`(dry run)`) : ""
     );
   }
-  info(...args: any[]) {
-    console.log(
+  info(...args: Array<unknown>) {
+    this._log(
       chalk.bold(` INFO `),
       ...args,
       this.dry ? chalk.dim(`(dry run)`) : ""

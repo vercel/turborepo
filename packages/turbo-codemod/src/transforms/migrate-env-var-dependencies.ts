@@ -1,11 +1,12 @@
-import fs from "fs-extra";
-import path from "path";
-import { getTurboConfigs } from "@turbo/utils";
-import type { Schema, Pipeline } from "@turbo/types";
-
-import getTransformerHelpers from "../utils/getTransformerHelpers";
-import { TransformerResults } from "../runner";
-import type { TransformerArgs } from "../types";
+import path from "node:path";
+import { readJsonSync, existsSync } from "fs-extra";
+import { type PackageJson, getTurboConfigs } from "@turbo/utils";
+import type { Pipeline } from "@turbo/types";
+import type { SchemaV1 } from "@turbo/types/src/types/config";
+import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import type { TransformerResults } from "../runner";
+import type { Transformer, TransformerArgs } from "../types";
+import { loadTurboJson } from "../utils/loadTurboJson";
 
 // transformer details
 const TRANSFORMER = "migrate-env-var-dependencies";
@@ -13,7 +14,7 @@ const DESCRIPTION =
   'Migrate environment variable dependencies from "dependsOn" to "env" in `turbo.json`';
 const INTRODUCED_IN = "1.5.0";
 
-export function hasLegacyEnvVarDependencies(config: Schema) {
+export function hasLegacyEnvVarDependencies(config: SchemaV1) {
   const dependsOn = [
     "extends" in config ? [] : config.globalDependencies,
     Object.values(config.pipeline).flatMap(
@@ -21,18 +22,18 @@ export function hasLegacyEnvVarDependencies(config: Schema) {
     ),
   ].flat();
   const envVars = dependsOn.filter((dep) => dep?.startsWith("$"));
-  return { hasKeys: !!envVars.length, envVars };
+  return { hasKeys: Boolean(envVars.length), envVars };
 }
 
 export function migrateDependencies({
   env,
   deps,
 }: {
-  env?: string[];
-  deps?: string[];
+  env?: Array<string>;
+  deps?: Array<string>;
 }) {
-  const envDeps: Set<string> = new Set(env);
-  const otherDeps: string[] = [];
+  const envDeps = new Set<string>(env);
+  const otherDeps: Array<string> = [];
   deps?.forEach((dep) => {
     if (dep.startsWith("$")) {
       envDeps.add(dep.slice(1));
@@ -45,9 +46,8 @@ export function migrateDependencies({
       deps: otherDeps,
       env: Array.from(envDeps),
     };
-  } else {
-    return { env, deps };
   }
+  return { env, deps };
 }
 
 export function migratePipeline(pipeline: Pipeline) {
@@ -61,7 +61,7 @@ export function migratePipeline(pipeline: Pipeline) {
   } else {
     delete migratedPipeline.dependsOn;
   }
-  if (env && env.length) {
+  if (env?.length) {
     migratedPipeline.env = env;
   } else {
     delete migratedPipeline.env;
@@ -70,7 +70,7 @@ export function migratePipeline(pipeline: Pipeline) {
   return migratedPipeline;
 }
 
-export function migrateGlobal(config: Schema) {
+export function migrateGlobal(config: SchemaV1) {
   if ("extends" in config) {
     return config;
   }
@@ -80,12 +80,12 @@ export function migrateGlobal(config: Schema) {
     deps: config.globalDependencies,
   });
   const migratedConfig = { ...config };
-  if (globalDependencies && globalDependencies.length) {
+  if (globalDependencies?.length) {
     migratedConfig.globalDependencies = globalDependencies;
   } else {
     delete migratedConfig.globalDependencies;
   }
-  if (env && env.length) {
+  if (env?.length) {
     migratedConfig.globalEnv = env;
   } else {
     delete migratedConfig.globalEnv;
@@ -93,11 +93,11 @@ export function migrateGlobal(config: Schema) {
   return migratedConfig;
 }
 
-export function migrateConfig(config: Schema) {
-  let migratedConfig = migrateGlobal(config);
+export function migrateConfig(config: SchemaV1) {
+  const migratedConfig = migrateGlobal(config);
   Object.keys(config.pipeline).forEach((pipelineKey) => {
     config.pipeline;
-    if (migratedConfig.pipeline && config.pipeline[pipelineKey]) {
+    if (pipelineKey in config.pipeline) {
       const pipeline = migratedConfig.pipeline[pipelineKey];
       migratedConfig.pipeline[pipelineKey] = {
         ...pipeline,
@@ -126,7 +126,7 @@ export function transformer({
   const packageJsonPath = path.join(root, "package.json");
   let packageJSON = {};
   try {
-    packageJSON = fs.readJSONSync(packageJsonPath);
+    packageJSON = readJsonSync(packageJsonPath) as PackageJson;
   } catch (e) {
     // readJSONSync probably failed because the file doesn't exist
   }
@@ -140,13 +140,13 @@ export function transformer({
 
   // validate we have a root config
   const turboConfigPath = path.join(root, "turbo.json");
-  if (!fs.existsSync(turboConfigPath)) {
+  if (!existsSync(turboConfigPath)) {
     return runner.abortTransform({
       reason: `No turbo.json found at ${root}. Is the path correct?`,
     });
   }
 
-  let turboJson: Schema = fs.readJsonSync(turboConfigPath);
+  let turboJson: SchemaV1 = loadTurboJson(turboConfigPath);
   if (hasLegacyEnvVarDependencies(turboJson).hasKeys) {
     turboJson = migrateConfig(turboJson);
   }
@@ -159,10 +159,10 @@ export function transformer({
   // find and migrate any workspace configs
   const workspaceConfigs = getTurboConfigs(root);
   workspaceConfigs.forEach((workspaceConfig) => {
-    const { config, turboConfigPath } = workspaceConfig;
-    if (hasLegacyEnvVarDependencies(config).hasKeys) {
+    const { config, turboConfigPath: filePath } = workspaceConfig;
+    if ("pipeline" in config && hasLegacyEnvVarDependencies(config).hasKeys) {
       runner.modifyFile({
-        filePath: turboConfigPath,
+        filePath,
         after: migrateConfig(config),
       });
     }
@@ -171,11 +171,12 @@ export function transformer({
   return runner.finish();
 }
 
-const transformerMeta = {
-  name: `${TRANSFORMER}: ${DESCRIPTION}`,
-  value: TRANSFORMER,
+const transformerMeta: Transformer = {
+  name: TRANSFORMER,
+  description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
   transformer,
 };
 
+// eslint-disable-next-line import/no-default-export -- transforms require default export
 export default transformerMeta;

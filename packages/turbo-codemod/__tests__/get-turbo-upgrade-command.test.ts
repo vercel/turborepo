@@ -1,353 +1,427 @@
+import * as turboWorkspaces from "@turbo/workspaces";
+import * as turboUtils from "@turbo/utils";
 import { setupTestFixtures } from "@turbo/test-utils";
-import getTurboUpgradeCommand from "../src/commands/migrate/steps/getTurboUpgradeCommand";
+import { getTurboUpgradeCommand } from "../src/commands/migrate/steps/getTurboUpgradeCommand";
 import * as utils from "../src/commands/migrate/utils";
-import * as getPackageManager from "../src/utils/getPackageManager";
-import * as getPackageManagerVersion from "../src/utils/getPackageManagerVersion";
+import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
 
-const LOCAL_INSTALL_COMMANDS = [
+jest.mock("@turbo/workspaces", () => ({
+  __esModule: true,
+  ...jest.requireActual("@turbo/workspaces"),
+}));
+
+interface TestCase {
+  version: string;
+  packageManager: turboUtils.PackageManager;
+  packageManagerVersion: string;
+  fixture: string;
+  expected: string;
+}
+
+const LOCAL_INSTALL_COMMANDS: Array<TestCase> = [
   // npm - workspaces
-  [
-    "latest",
-    "npm",
-    "7.0.0",
-    "normal-workspaces-dev-install",
-    "npm install turbo@latest --save-dev",
-  ],
-  [
-    "1.6.3",
-    "npm",
-    "7.0.0",
-    "normal-workspaces-dev-install",
-    "npm install turbo@1.6.3 --save-dev",
-  ],
-  [
-    "canary",
-    "npm",
-    "7.0.0",
-    "normal-workspaces-dev-install",
-    "npm install turbo@canary --save-dev",
-  ],
-  ["latest", "npm", "7.0.0", "normal-workspaces", "npm install turbo@latest"],
+  {
+    version: "latest",
+    packageManager: "npm",
+    packageManagerVersion: "7.0.0",
+    fixture: "normal-workspaces-dev-install",
+    expected: "npm install turbo@latest --save-dev",
+  },
+  {
+    version: "1.6.3",
+    packageManager: "npm",
+    packageManagerVersion: "7.0.0",
+    fixture: "normal-workspaces-dev-install",
+    expected: "npm install turbo@1.6.3 --save-dev",
+  },
+  {
+    version: "canary",
+    packageManager: "npm",
+    packageManagerVersion: "7.0.0",
+    fixture: "normal-workspaces-dev-install",
+    expected: "npm install turbo@canary --save-dev",
+  },
+  {
+    version: "latest",
+    packageManager: "npm",
+    packageManagerVersion: "7.0.0",
+    fixture: "normal-workspaces",
+    expected: "npm install turbo@latest",
+  },
   // npm - single package
-  [
-    "latest",
-    "npm",
-    "7.0.0",
-    "single-package-dev-install",
-    "npm install turbo@latest --save-dev",
-  ],
-  ["latest", "npm", "7.0.0", "single-package", "npm install turbo@latest"],
+  {
+    version: "latest",
+    packageManager: "npm",
+    packageManagerVersion: "7.0.0",
+    fixture: "single-package-dev-install",
+    expected: "npm install turbo@latest --save-dev",
+  },
+  {
+    version: "latest",
+    packageManager: "npm",
+    packageManagerVersion: "7.0.0",
+    fixture: "single-package",
+    expected: "npm install turbo@latest",
+  },
   // pnpm - workspaces
-  [
-    "latest",
-    "pnpm",
-    "7.0.0",
-    "pnpm-workspaces-dev-install",
-    "pnpm install turbo@latest --save-dev -w",
-  ],
-  [
-    "1.6.3",
-    "pnpm",
-    "7.0.0",
-    "pnpm-workspaces-dev-install",
-    "pnpm install turbo@1.6.3 --save-dev -w",
-  ],
-  [
-    "canary",
-    "pnpm",
-    "7.0.0",
-    "pnpm-workspaces-dev-install",
-    "pnpm install turbo@canary --save-dev -w",
-  ],
-  [
-    "latest",
-    "pnpm",
-    "7.0.0",
-    "pnpm-workspaces",
-    "pnpm install turbo@latest -w",
-  ],
+  {
+    version: "latest",
+    packageManager: "pnpm",
+    packageManagerVersion: "7.0.0",
+    fixture: "pnpm-workspaces-dev-install",
+    expected: "pnpm add turbo@latest --save-dev -w",
+  },
+  {
+    version: "1.6.3",
+    packageManager: "pnpm",
+    packageManagerVersion: "7.0.0",
+    fixture: "pnpm-workspaces-dev-install",
+    expected: "pnpm add turbo@1.6.3 --save-dev -w",
+  },
+  {
+    version: "canary",
+    packageManager: "pnpm",
+    packageManagerVersion: "7.0.0",
+    fixture: "pnpm-workspaces-dev-install",
+    expected: "pnpm add turbo@canary --save-dev -w",
+  },
+  {
+    version: "latest",
+    packageManager: "pnpm",
+    packageManagerVersion: "7.0.0",
+    fixture: "pnpm-workspaces",
+    expected: "pnpm add turbo@latest -w",
+  },
   // pnpm - single package
-  [
-    "latest",
-    "pnpm",
-    "7.0.0",
-    "single-package-dev-install",
-    "pnpm install turbo@latest --save-dev",
-  ],
-  ["latest", "pnpm", "7.0.0", "single-package", "pnpm install turbo@latest"],
+  {
+    version: "latest",
+    packageManager: "pnpm",
+    packageManagerVersion: "7.0.0",
+    fixture: "single-package-dev-install",
+    expected: "pnpm add turbo@latest --save-dev",
+  },
+  {
+    version: "latest",
+    packageManager: "pnpm",
+    packageManagerVersion: "7.0.0",
+    fixture: "single-package",
+    expected: "pnpm add turbo@latest",
+  },
   // yarn 1.x - workspaces
-  [
-    "latest",
-    "yarn",
-    "1.22.19",
-    "normal-workspaces-dev-install",
-    "yarn add turbo@latest --dev -W",
-  ],
-  [
-    "latest",
-    "yarn",
-    "1.22.19",
-    "normal-workspaces",
-    "yarn add turbo@latest -W",
-  ],
-  [
-    "1.6.3",
-    "yarn",
-    "1.22.19",
-    "normal-workspaces-dev-install",
-    "yarn add turbo@1.6.3 --dev -W",
-  ],
-  [
-    "canary",
-    "yarn",
-    "1.22.19",
-    "normal-workspaces-dev-install",
-    "yarn add turbo@canary --dev -W",
-  ],
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "1.22.19",
+    fixture: "normal-workspaces-dev-install",
+    expected: "yarn add turbo@latest --dev -W",
+  },
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "1.22.19",
+    fixture: "normal-workspaces",
+    expected: "yarn add turbo@latest -W",
+  },
+  {
+    version: "1.6.3",
+    packageManager: "yarn",
+    packageManagerVersion: "1.22.19",
+    fixture: "normal-workspaces-dev-install",
+    expected: "yarn add turbo@1.6.3 --dev -W",
+  },
+  {
+    version: "canary",
+    packageManager: "yarn",
+    packageManagerVersion: "1.22.19",
+    fixture: "normal-workspaces-dev-install",
+    expected: "yarn add turbo@canary --dev -W",
+  },
   // yarn 1.x - single package
-  [
-    "latest",
-    "yarn",
-    "1.22.19",
-    "single-package-dev-install",
-    "yarn add turbo@latest --dev",
-  ],
-  ["latest", "yarn", "1.22.19", "single-package", "yarn add turbo@latest"],
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "1.22.19",
+    fixture: "single-package-dev-install",
+    expected: "yarn add turbo@latest --dev",
+  },
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "1.22.19",
+    fixture: "single-package",
+    expected: "yarn add turbo@latest",
+  },
   // yarn 2.x - workspaces
-  [
-    "latest",
-    "yarn",
-    "2.3.4",
-    "normal-workspaces-dev-install",
-    "yarn add turbo@latest --dev",
-  ],
-  ["latest", "yarn", "2.3.4", "normal-workspaces", "yarn add turbo@latest"],
-  [
-    "1.6.3",
-    "yarn",
-    "2.3.4",
-    "normal-workspaces-dev-install",
-    "yarn add turbo@1.6.3 --dev",
-  ],
-  [
-    "canary",
-    "yarn",
-    "2.3.4",
-    "normal-workspaces-dev-install",
-    "yarn add turbo@canary --dev",
-  ],
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "2.3.4",
+    fixture: "normal-workspaces-dev-install",
+    expected: "yarn add turbo@latest --dev",
+  },
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "2.3.4",
+    fixture: "normal-workspaces",
+    expected: "yarn add turbo@latest",
+  },
+  {
+    version: "1.6.3",
+    packageManager: "yarn",
+    packageManagerVersion: "2.3.4",
+    fixture: "normal-workspaces-dev-install",
+    expected: "yarn add turbo@1.6.3 --dev",
+  },
+  {
+    version: "canary",
+    packageManager: "yarn",
+    packageManagerVersion: "2.3.4",
+    fixture: "normal-workspaces-dev-install",
+    expected: "yarn add turbo@canary --dev",
+  },
   // yarn 2.x - single package
-  [
-    "latest",
-    "yarn",
-    "2.3.4",
-    "single-package-dev-install",
-    "yarn add turbo@latest --dev",
-  ],
-  ["latest", "yarn", "2.3.4", "single-package", "yarn add turbo@latest"],
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "2.3.4",
+    fixture: "single-package-dev-install",
+    expected: "yarn add turbo@latest --dev",
+  },
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "2.3.4",
+    fixture: "single-package",
+    expected: "yarn add turbo@latest",
+  },
   // yarn 3.x - workspaces
-  [
-    "latest",
-    "yarn",
-    "3.3.4",
-    "normal-workspaces-dev-install",
-    "yarn add turbo@latest --dev",
-  ],
-  ["latest", "yarn", "3.3.4", "normal-workspaces", "yarn add turbo@latest"],
-  [
-    "1.6.3",
-    "yarn",
-    "3.3.4",
-    "normal-workspaces-dev-install",
-    "yarn add turbo@1.6.3 --dev",
-  ],
-  [
-    "canary",
-    "yarn",
-    "3.3.4",
-    "normal-workspaces-dev-install",
-    "yarn add turbo@canary --dev",
-  ],
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "3.3.4",
+    fixture: "normal-workspaces-dev-install",
+    expected: "yarn add turbo@latest --dev",
+  },
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "3.3.4",
+    fixture: "normal-workspaces",
+    expected: "yarn add turbo@latest",
+  },
+  {
+    version: "1.6.3",
+    packageManager: "yarn",
+    packageManagerVersion: "3.3.4",
+    fixture: "normal-workspaces-dev-install",
+    expected: "yarn add turbo@1.6.3 --dev",
+  },
+  {
+    version: "canary",
+    packageManager: "yarn",
+    packageManagerVersion: "3.3.4",
+    fixture: "normal-workspaces-dev-install",
+    expected: "yarn add turbo@canary --dev",
+  },
   // yarn 3.x - single package
-  [
-    "latest",
-    "yarn",
-    "3.3.4",
-    "single-package-dev-install",
-    "yarn add turbo@latest --dev",
-  ],
-  ["latest", "yarn", "3.3.4", "single-package", "yarn add turbo@latest"],
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "3.3.4",
+    fixture: "single-package-dev-install",
+    expected: "yarn add turbo@latest --dev",
+  },
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "3.3.4",
+    fixture: "single-package",
+    expected: "yarn add turbo@latest",
+  },
 ];
 
-const GLOBAL_INSTALL_COMMANDS = [
+const GLOBAL_INSTALL_COMMANDS: Array<TestCase> = [
   // npm
-  [
-    "latest",
-    "npm",
-    "7.0.0",
-    "normal-workspaces-dev-install",
-    "npm install turbo@latest --global",
-  ],
-  [
-    "1.6.3",
-    "npm",
-    "7.0.0",
-    "normal-workspaces-dev-install",
-    "npm install turbo@1.6.3 --global",
-  ],
-  [
-    "latest",
-    "npm",
-    "7.0.0",
-    "normal-workspaces",
-    "npm install turbo@latest --global",
-  ],
-  [
-    "latest",
-    "npm",
-    "7.0.0",
-    "single-package",
-    "npm install turbo@latest --global",
-  ],
-  [
-    "latest",
-    "npm",
-    "7.0.0",
-    "single-package-dev-install",
-    "npm install turbo@latest --global",
-  ],
+  {
+    version: "latest",
+    packageManager: "npm",
+    packageManagerVersion: "7.0.0",
+    fixture: "normal-workspaces-dev-install",
+    expected: "npm install turbo@latest --global",
+  },
+  {
+    version: "1.6.3",
+    packageManager: "npm",
+    packageManagerVersion: "7.0.0",
+    fixture: "normal-workspaces-dev-install",
+    expected: "npm install turbo@1.6.3 --global",
+  },
+  {
+    version: "latest",
+    packageManager: "npm",
+    packageManagerVersion: "7.0.0",
+    fixture: "normal-workspaces",
+    expected: "npm install turbo@latest --global",
+  },
+  {
+    version: "latest",
+    packageManager: "npm",
+    packageManagerVersion: "7.0.0",
+    fixture: "single-package",
+    expected: "npm install turbo@latest --global",
+  },
+  {
+    version: "latest",
+    packageManager: "npm",
+    packageManagerVersion: "7.0.0",
+    fixture: "single-package-dev-install",
+    expected: "npm install turbo@latest --global",
+  },
   // pnpm
-  [
-    "latest",
-    "pnpm",
-    "7.0.0",
-    "pnpm-workspaces-dev-install",
-    "pnpm install turbo@latest --global",
-  ],
-  [
-    "1.6.3",
-    "pnpm",
-    "7.0.0",
-    "pnpm-workspaces-dev-install",
-    "pnpm install turbo@1.6.3 --global",
-  ],
-  [
-    "latest",
-    "pnpm",
-    "7.0.0",
-    "pnpm-workspaces",
-    "pnpm install turbo@latest --global",
-  ],
-  [
-    "latest",
-    "pnpm",
-    "7.0.0",
-    "single-package",
-    "pnpm install turbo@latest --global",
-  ],
-  [
-    "latest",
-    "pnpm",
-    "7.0.0",
-    "single-package-dev-install",
-    "pnpm install turbo@latest --global",
-  ],
+  {
+    version: "latest",
+    packageManager: "pnpm",
+    packageManagerVersion: "7.0.0",
+    fixture: "pnpm-workspaces-dev-install",
+    expected: "pnpm add turbo@latest --global",
+  },
+  {
+    version: "1.6.3",
+    packageManager: "pnpm",
+    packageManagerVersion: "7.0.0",
+    fixture: "pnpm-workspaces-dev-install",
+    expected: "pnpm add turbo@1.6.3 --global",
+  },
+  {
+    version: "latest",
+    packageManager: "pnpm",
+    packageManagerVersion: "7.0.0",
+    fixture: "pnpm-workspaces",
+    expected: "pnpm add turbo@latest --global",
+  },
+  {
+    version: "latest",
+    packageManager: "pnpm",
+    packageManagerVersion: "7.0.0",
+    fixture: "single-package",
+    expected: "pnpm add turbo@latest --global",
+  },
+  {
+    version: "latest",
+    packageManager: "pnpm",
+    packageManagerVersion: "7.0.0",
+    fixture: "single-package-dev-install",
+    expected: "pnpm add turbo@latest --global",
+  },
   // yarn 1.x
-  [
-    "latest",
-    "yarn",
-    "1.22.19",
-    "normal-workspaces-dev-install",
-    "yarn global add turbo@latest",
-  ],
-  [
-    "latest",
-    "yarn",
-    "1.22.19",
-    "normal-workspaces",
-    "yarn global add turbo@latest",
-  ],
-  [
-    "1.6.3",
-    "yarn",
-    "1.22.19",
-    "normal-workspaces-dev-install",
-    "yarn global add turbo@1.6.3",
-  ],
-  [
-    "latest",
-    "yarn",
-    "1.22.19",
-    "single-package",
-    "yarn global add turbo@latest",
-  ],
-  [
-    "latest",
-    "yarn",
-    "1.22.19",
-    "single-package-dev-install",
-    "yarn global add turbo@latest",
-  ],
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "1.22.19",
+    fixture: "normal-workspaces-dev-install",
+    expected: "yarn global add turbo@latest",
+  },
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "1.22.19",
+    fixture: "normal-workspaces",
+    expected: "yarn global add turbo@latest",
+  },
+  {
+    version: "1.6.3",
+    packageManager: "yarn",
+    packageManagerVersion: "1.22.19",
+    fixture: "normal-workspaces-dev-install",
+    expected: "yarn global add turbo@1.6.3",
+  },
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "1.22.19",
+    fixture: "single-package",
+    expected: "yarn global add turbo@latest",
+  },
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "1.22.19",
+    fixture: "single-package-dev-install",
+    expected: "yarn global add turbo@latest",
+  },
   // yarn 2.x
-  [
-    "latest",
-    "yarn",
-    "2.3.4",
-    "normal-workspaces-dev-install",
-    "yarn global add turbo@latest",
-  ],
-  [
-    "latest",
-    "yarn",
-    "2.3.4",
-    "normal-workspaces",
-    "yarn global add turbo@latest",
-  ],
-  [
-    "1.6.3",
-    "yarn",
-    "2.3.4",
-    "normal-workspaces-dev-install",
-    "yarn global add turbo@1.6.3",
-  ],
-  ["latest", "yarn", "2.3.4", "single-package", "yarn global add turbo@latest"],
-  [
-    "latest",
-    "yarn",
-    "2.3.4",
-    "single-package-dev-install",
-    "yarn global add turbo@latest",
-  ],
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "2.3.4",
+    fixture: "normal-workspaces-dev-install",
+    expected: "yarn global add turbo@latest",
+  },
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "2.3.4",
+    fixture: "normal-workspaces",
+    expected: "yarn global add turbo@latest",
+  },
+  {
+    version: "1.6.3",
+    packageManager: "yarn",
+    packageManagerVersion: "2.3.4",
+    fixture: "normal-workspaces-dev-install",
+    expected: "yarn global add turbo@1.6.3",
+  },
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "2.3.4",
+    fixture: "single-package",
+    expected: "yarn global add turbo@latest",
+  },
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "2.3.4",
+    fixture: "single-package-dev-install",
+    expected: "yarn global add turbo@latest",
+  },
   // yarn 3.x
-  [
-    "latest",
-    "yarn",
-    "3.3.3",
-    "normal-workspaces-dev-install",
-    "yarn global add turbo@latest",
-  ],
-  [
-    "latest",
-    "yarn",
-    "3.3.3",
-    "normal-workspaces",
-    "yarn global add turbo@latest",
-  ],
-  [
-    "1.6.3",
-    "yarn",
-    "3.3.3",
-    "normal-workspaces-dev-install",
-    "yarn global add turbo@1.6.3",
-  ],
-  ["latest", "yarn", "3.3.4", "single-package", "yarn global add turbo@latest"],
-  [
-    "latest",
-    "yarn",
-    "3.3.4",
-    "single-package-dev-install",
-    "yarn global add turbo@latest",
-  ],
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "3.3.3",
+    fixture: "normal-workspaces-dev-install",
+    expected: "yarn global add turbo@latest",
+  },
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "3.3.3",
+    fixture: "normal-workspaces",
+    expected: "yarn global add turbo@latest",
+  },
+  {
+    version: "1.6.3",
+    packageManager: "yarn",
+    packageManagerVersion: "3.3.3",
+    fixture: "normal-workspaces-dev-install",
+    expected: "yarn global add turbo@1.6.3",
+  },
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "3.3.4",
+    fixture: "single-package",
+    expected: "yarn global add turbo@latest",
+  },
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "3.3.4",
+    fixture: "single-package-dev-install",
+    expected: "yarn global add turbo@latest",
+  },
 ];
 
 describe("get-turbo-upgrade-command", () => {
@@ -357,14 +431,14 @@ describe("get-turbo-upgrade-command", () => {
   });
 
   test.each(LOCAL_INSTALL_COMMANDS)(
-    "returns correct upgrade command for local install of turbo@%s using %s@%s (fixture: %s)",
-    (
-      turboVersion,
+    "returns correct upgrade command for local install of turbo@$version using $packageManager@$packageManagerVersion (fixture: $fixture)",
+    async ({
+      version,
       packageManager,
       packageManagerVersion,
       fixture,
-      expectedUpgradeCommand
-    ) => {
+      expected,
+    }) => {
       const { root } = useFixture({
         fixture,
       });
@@ -372,41 +446,61 @@ describe("get-turbo-upgrade-command", () => {
       const mockedExec = jest
         .spyOn(utils, "exec")
         .mockImplementation((command: string) => {
-          // fail the check for the turbo, and package manager bins to force local
+          // fail the check for global turbo
           if (command.includes("bin")) {
             return undefined;
           }
         });
-      const mockedGetPackageManagerVersion = jest
-        .spyOn(getPackageManagerVersion, "default")
-        .mockReturnValue(packageManagerVersion);
-      const mockedGetPackageManager = jest
-        .spyOn(getPackageManager, "default")
-        .mockReturnValue(packageManager as getPackageManager.PackageManager);
+      const mockGetPackageManagersBinPaths = jest
+        .spyOn(turboUtils, "getPackageManagersBinPaths")
+        .mockResolvedValue({
+          pnpm: undefined,
+          npm: undefined,
+          yarn: undefined,
+          bun: undefined,
+        });
+      const mockGetAvailablePackageManagers = jest
+        .spyOn(turboUtils, "getAvailablePackageManagers")
+        .mockResolvedValue({
+          pnpm: packageManager === "pnpm" ? packageManagerVersion : undefined,
+          npm: packageManager === "npm" ? packageManagerVersion : undefined,
+          yarn: packageManager === "yarn" ? packageManagerVersion : undefined,
+          bun: packageManager === "bun" ? packageManagerVersion : undefined,
+        });
+
+      const project = getWorkspaceDetailsMockReturnValue({
+        root,
+        packageManager,
+        singlePackage: fixture.includes("single-package"),
+      });
+      const mockGetWorkspaceDetails = jest
+        .spyOn(turboWorkspaces, "getWorkspaceDetails")
+        .mockResolvedValue(project);
 
       // get the command
-      const upgradeCommand = getTurboUpgradeCommand({
-        directory: root,
-        to: turboVersion === "latest" ? undefined : turboVersion,
+      const upgradeCommand = await getTurboUpgradeCommand({
+        project,
+        to: version === "latest" ? undefined : version,
       });
 
-      expect(upgradeCommand).toEqual(expectedUpgradeCommand);
+      expect(upgradeCommand).toEqual(expected);
 
       mockedExec.mockRestore();
-      mockedGetPackageManager.mockRestore();
-      mockedGetPackageManagerVersion.mockRestore();
+      mockGetPackageManagersBinPaths.mockRestore();
+      mockGetAvailablePackageManagers.mockRestore();
+      mockGetWorkspaceDetails.mockRestore();
     }
   );
 
   test.each(GLOBAL_INSTALL_COMMANDS)(
-    "returns correct upgrade command for global install of turbo@%s using %s@%s (fixture: %s)",
-    (
-      turboVersion,
+    "returns correct upgrade command for global install of turbo@$version using $packageManager@$packageManagerVersion (fixture: $fixture)",
+    async ({
+      version,
       packageManager,
       packageManagerVersion,
       fixture,
-      expectedUpgradeCommand
-    ) => {
+      expected,
+    }) => {
       const { root } = useFixture({
         fixture,
       });
@@ -417,160 +511,147 @@ describe("get-turbo-upgrade-command", () => {
           if (command === "turbo bin") {
             return `/global/${packageManager}/bin/turbo`;
           }
-          if (command.includes(packageManager)) {
-            return `/global/${packageManager}/bin`;
-          }
+          return undefined;
         });
-      const mockedGetPackageManagerVersion = jest
-        .spyOn(getPackageManagerVersion, "default")
-        .mockReturnValue(packageManagerVersion);
-      const mockedGetPackageManager = jest
-        .spyOn(getPackageManager, "default")
-        .mockReturnValue(packageManager as getPackageManager.PackageManager);
+      const mockGetPackageManagersBinPaths = jest
+        .spyOn(turboUtils, "getPackageManagersBinPaths")
+        .mockResolvedValue({
+          pnpm: `/global/pnpm/bin`,
+          npm: `/global/npm/bin`,
+          yarn: `/global/yarn/bin`,
+          bun: `/global/bun/bin`,
+        });
+
+      const mockGetAvailablePackageManagers = jest
+        .spyOn(turboUtils, "getAvailablePackageManagers")
+        .mockResolvedValue({
+          pnpm: packageManager === "pnpm" ? packageManagerVersion : undefined,
+          npm: packageManager === "npm" ? packageManagerVersion : undefined,
+          yarn: packageManager === "yarn" ? packageManagerVersion : undefined,
+          bun: packageManager === "bun" ? packageManagerVersion : undefined,
+        });
+
+      const project = getWorkspaceDetailsMockReturnValue({
+        root,
+        packageManager,
+      });
+      const mockGetWorkspaceDetails = jest
+        .spyOn(turboWorkspaces, "getWorkspaceDetails")
+        .mockResolvedValue(project);
 
       // get the command
-      const upgradeCommand = getTurboUpgradeCommand({
-        directory: root,
-        to: turboVersion === "latest" ? undefined : turboVersion,
+      const upgradeCommand = await getTurboUpgradeCommand({
+        project,
+        to: version === "latest" ? undefined : version,
       });
 
-      expect(upgradeCommand).toEqual(expectedUpgradeCommand);
+      expect(upgradeCommand).toEqual(expected);
 
       mockedExec.mockRestore();
-      mockedGetPackageManager.mockRestore();
-      mockedGetPackageManagerVersion.mockRestore();
+      mockGetPackageManagersBinPaths.mockRestore();
+      mockGetAvailablePackageManagers.mockRestore();
+      mockGetWorkspaceDetails.mockRestore();
     }
   );
 
-  test("fails gracefully if no package.json exists", () => {
-    const { root } = useFixture({
-      fixture: "no-package",
-    });
-
-    const mockedExec = jest
-      .spyOn(utils, "exec")
-      .mockImplementation((command: string) => {
-        // fail the check for the turbo, and package manager bins to force local
-        if (command.includes("bin")) {
-          return undefined;
-        }
+  describe("errors", () => {
+    test("fails gracefully if no package.json exists", async () => {
+      const { root } = useFixture({
+        fixture: "no-package",
       });
 
-    const mockedGetPackageManagerVersion = jest
-      .spyOn(getPackageManagerVersion, "default")
-      .mockReturnValue("8.0.0");
-    const mockedGetPackageManager = jest
-      .spyOn(getPackageManager, "default")
-      .mockReturnValue("pnpm" as getPackageManager.PackageManager);
+      const mockedExec = jest
+        .spyOn(utils, "exec")
+        .mockImplementation((command: string) => {
+          // fail the check for the turbo to force local
+          if (command.includes("bin")) {
+            return undefined;
+          }
+        });
 
-    // get the command
-    const upgradeCommand = getTurboUpgradeCommand({
-      directory: root,
-    });
+      const mockGetAvailablePackageManagers = jest
+        .spyOn(turboUtils, "getAvailablePackageManagers")
+        .mockResolvedValue({
+          pnpm: "8.0.0",
+          npm: undefined,
+          yarn: undefined,
+          bun: undefined,
+        });
 
-    expect(upgradeCommand).toEqual(undefined);
+      const project = getWorkspaceDetailsMockReturnValue({
+        root,
+        packageManager: "pnpm",
+      });
+      const mockGetWorkspaceDetails = jest
+        .spyOn(turboWorkspaces, "getWorkspaceDetails")
+        .mockResolvedValue(project);
 
-    mockedExec.mockRestore();
-    mockedGetPackageManager.mockRestore();
-    mockedGetPackageManagerVersion.mockRestore();
-  });
-
-  test("fails gracefully if turbo cannot be found in package.json", () => {
-    const { root } = useFixture({
-      fixture: "no-turbo",
-    });
-
-    const mockedExec = jest
-      .spyOn(utils, "exec")
-      .mockImplementation((command: string) => {
-        // fail the check for the turbo, and package manager bins to force local
-        if (command.includes("bin")) {
-          return undefined;
-        }
+      // get the command
+      const upgradeCommand = await getTurboUpgradeCommand({
+        project,
       });
 
-    const mockedGetPackageManagerVersion = jest
-      .spyOn(getPackageManagerVersion, "default")
-      .mockReturnValue("8.0.0");
-    const mockedGetPackageManager = jest
-      .spyOn(getPackageManager, "default")
-      .mockReturnValue("pnpm" as getPackageManager.PackageManager);
+      expect(upgradeCommand).toEqual(undefined);
 
-    // get the command
-    const upgradeCommand = getTurboUpgradeCommand({
-      directory: root,
+      mockedExec.mockRestore();
+      mockGetAvailablePackageManagers.mockRestore();
+      mockGetWorkspaceDetails.mockRestore();
     });
 
-    expect(upgradeCommand).toEqual(undefined);
-
-    mockedExec.mockRestore();
-    mockedGetPackageManager.mockRestore();
-    mockedGetPackageManagerVersion.mockRestore();
-  });
-
-  test("fails gracefully if package.json has no deps or devDeps", () => {
-    const { root } = useFixture({
-      fixture: "no-deps",
-    });
-
-    const mockedExec = jest
-      .spyOn(utils, "exec")
-      .mockImplementation((command: string) => {
-        // fail the check for the turbo, and package manager bins to force local
-        if (command.includes("bin")) {
-          return undefined;
-        }
+    test.each([
+      {
+        fixture: "no-package",
+        name: "fails gracefully if no package.json exists",
+      },
+      {
+        fixture: "no-turbo",
+        name: "fails gracefully if turbo cannot be found in package.json",
+      },
+      {
+        fixture: "no-deps",
+        name: "fails gracefully if package.json has no deps or devDeps",
+      },
+    ])("$name", async ({ fixture }) => {
+      const { root } = useFixture({
+        fixture,
       });
 
-    const mockedGetPackageManagerVersion = jest
-      .spyOn(getPackageManagerVersion, "default")
-      .mockReturnValue("8.0.0");
-    const mockedGetPackageManager = jest
-      .spyOn(getPackageManager, "default")
-      .mockReturnValue("pnpm" as getPackageManager.PackageManager);
+      const mockedExec = jest
+        .spyOn(utils, "exec")
+        .mockImplementation((command: string) => {
+          // fail the check for the turbo to force local
+          if (command.includes("bin")) {
+            return undefined;
+          }
+        });
 
-    // get the command
-    const upgradeCommand = getTurboUpgradeCommand({
-      directory: root,
-    });
+      const mockGetAvailablePackageManagers = jest
+        .spyOn(turboUtils, "getAvailablePackageManagers")
+        .mockResolvedValue({
+          pnpm: "8.0.0",
+          npm: undefined,
+          yarn: undefined,
+          bun: undefined,
+        });
 
-    expect(upgradeCommand).toEqual(undefined);
+      const project = getWorkspaceDetailsMockReturnValue({
+        root,
+        packageManager: "pnpm",
+      });
+      const mockGetWorkspaceDetails = jest
+        .spyOn(turboWorkspaces, "getWorkspaceDetails")
+        .mockResolvedValue(project);
 
-    mockedExec.mockRestore();
-    mockedGetPackageManager.mockRestore();
-    mockedGetPackageManagerVersion.mockRestore();
-  });
-
-  test("fails gracefully if can't find packageManager", () => {
-    const { root } = useFixture({
-      fixture: "no-deps",
-    });
-
-    const mockedExec = jest
-      .spyOn(utils, "exec")
-      .mockImplementation((command: string) => {
-        // fail the check for the turbo, and package manager bins to force local
-        if (command.includes("bin")) {
-          return undefined;
-        }
+      // get the command
+      const upgradeCommand = await getTurboUpgradeCommand({
+        project,
       });
 
-    const mockedGetPackageManagerVersion = jest
-      .spyOn(getPackageManagerVersion, "default")
-      .mockReturnValue("8.0.0");
-    const mockedGetPackageManager = jest
-      .spyOn(getPackageManager, "default")
-      .mockReturnValue("pnpm" as getPackageManager.PackageManager);
+      expect(upgradeCommand).toEqual(undefined);
 
-    // get the command
-    const upgradeCommand = getTurboUpgradeCommand({
-      directory: root,
+      mockedExec.mockRestore();
+      mockGetAvailablePackageManagers.mockRestore();
+      mockGetWorkspaceDetails.mockRestore();
     });
-
-    expect(upgradeCommand).toEqual(undefined);
-
-    mockedExec.mockRestore();
-    mockedGetPackageManager.mockRestore();
-    mockedGetPackageManagerVersion.mockRestore();
   });
 });

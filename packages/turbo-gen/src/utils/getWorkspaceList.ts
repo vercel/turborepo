@@ -1,10 +1,10 @@
 import type { Project, Workspace } from "@turbo/workspaces";
-import inquirer from "inquirer";
+import { Separator } from "inquirer";
+import type { WorkspaceType } from "../generators/types";
 import {
   getWorkspaceStructure,
   getGroupFromWorkspace,
 } from "./getWorkspaceStructure";
-import { WorkspaceType } from "../generators/types";
 
 export function getWorkspaceList({
   project,
@@ -14,9 +14,9 @@ export function getWorkspaceList({
   project: Project;
   type: WorkspaceType;
   showAllDependencies?: boolean;
-}): Array<Workspace | inquirer.Separator> {
+}): Array<Workspace | Separator> {
   const structure = getWorkspaceStructure({ project });
-  const workspaceChoices: Array<Workspace | inquirer.Separator> = [];
+  const workspaceChoices: Array<Workspace | Separator> = [];
 
   let workspacesForDisplay: Array<Workspace> = project.workspaceData.workspaces;
   if (!showAllDependencies) {
@@ -32,7 +32,7 @@ export function getWorkspaceList({
   workspacesForDisplay.forEach((workspace) => {
     const group = getGroupFromWorkspace({ project, workspace });
     if (group !== lastGroup) {
-      workspaceChoices.push(new inquirer.Separator(group));
+      workspaceChoices.push(new Separator(group));
     }
     lastGroup = group;
     workspaceChoices.push(workspace);

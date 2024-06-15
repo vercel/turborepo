@@ -1,11 +1,11 @@
-import path from "path";
-import fs from "fs-extra";
-import { getTurboConfigs } from "@turbo/utils";
-import type { Schema as TurboJsonSchema } from "@turbo/types";
-
-import type { TransformerArgs } from "../types";
-import getTransformerHelpers from "../utils/getTransformerHelpers";
-import { TransformerResults } from "../runner";
+import path from "node:path";
+import { readJsonSync, existsSync } from "fs-extra";
+import { type PackageJson, getTurboConfigs } from "@turbo/utils";
+import type { SchemaV1 } from "@turbo/types/src/types/config";
+import type { Transformer, TransformerArgs } from "../types";
+import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import type { TransformerResults } from "../runner";
+import { loadTurboJson } from "../utils/loadTurboJson";
 
 const DEFAULT_OUTPUTS = ["dist/**", "build/**"];
 
@@ -14,8 +14,9 @@ const TRANSFORMER = "set-default-outputs";
 const DESCRIPTION =
   'Add the "outputs" key with defaults where it is missing in `turbo.json`';
 const INTRODUCED_IN = "1.7.0";
+const IDEMPOTENT = false;
 
-function migrateConfig(config: TurboJsonSchema) {
+function migrateConfig(config: SchemaV1) {
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
     if (taskDef.cache !== false) {
       if (!taskDef.outputs) {
@@ -48,7 +49,7 @@ export function transformer({
   let packageJSON = {};
 
   try {
-    packageJSON = fs.readJSONSync(packageJsonPath);
+    packageJSON = readJsonSync(packageJsonPath) as PackageJson;
   } catch (e) {
     // readJSONSync probably failed because the file doesn't exist
   }
@@ -62,13 +63,13 @@ export function transformer({
 
   log.info(`Adding default \`outputs\` key into tasks if it doesn't exist`);
   const turboConfigPath = path.join(root, "turbo.json");
-  if (!fs.existsSync(turboConfigPath)) {
+  if (!existsSync(turboConfigPath)) {
     return runner.abortTransform({
       reason: `No turbo.json found at ${root}. Is the path correct?`,
     });
   }
 
-  const turboJson: TurboJsonSchema = fs.readJsonSync(turboConfigPath);
+  const turboJson: SchemaV1 = loadTurboJson(turboConfigPath);
   runner.modifyFile({
     filePath: turboConfigPath,
     after: migrateConfig(turboJson),
@@ -77,21 +78,25 @@ export function transformer({
   // find and migrate any workspace configs
   const workspaceConfigs = getTurboConfigs(root);
   workspaceConfigs.forEach((workspaceConfig) => {
-    const { config, turboConfigPath } = workspaceConfig;
-    runner.modifyFile({
-      filePath: turboConfigPath,
-      after: migrateConfig(config),
-    });
+    const { config, turboConfigPath: filePath } = workspaceConfig;
+    if ("pipeline" in config) {
+      runner.modifyFile({
+        filePath,
+        after: migrateConfig(config),
+      });
+    }
   });
 
   return runner.finish();
 }
 
-const transformerMeta = {
-  name: `${TRANSFORMER}: ${DESCRIPTION}`,
-  value: TRANSFORMER,
+const transformerMeta: Transformer = {
+  name: TRANSFORMER,
+  description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
+  idempotent: IDEMPOTENT,
   transformer,
 };
 
+// eslint-disable-next-line import/no-default-export -- transforms require default export
 export default transformerMeta;

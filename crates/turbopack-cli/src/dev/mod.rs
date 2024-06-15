@@ -10,58 +10,55 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use dunce::canonicalize;
 use owo_colors::OwoColorize;
 use turbo_tasks::{
     util::{FormatBytes, FormatDuration},
-    StatsType, TransientInstance, TurboTasks, TurboTasksBackendApi, UpdateInfo, Value,
+    RcStr, TransientInstance, TurboTasks, UpdateInfo, Value, Vc,
 };
-use turbo_tasks_fs::{DiskFileSystemVc, FileSystem, FileSystemVc};
+use turbo_tasks_fs::FileSystem;
 use turbo_tasks_malloc::TurboMalloc;
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::evaluate_context::node_build_environment;
-use turbopack_cli_utils::issue::{ConsoleUiVc, LogOptions};
+use turbopack_cli_utils::issue::{ConsoleUi, LogOptions};
 use turbopack_core::{
-    environment::ServerAddr,
-    issue::{IssueReporterVc, IssueSeverity},
-    resolve::{parse::RequestVc, pattern::QueryMapVc},
-    server_fs::ServerFileSystemVc,
+    issue::{IssueReporter, IssueSeverity},
+    resolve::parse::Request,
+    server_fs::ServerFileSystem,
 };
-use turbopack_dev::DevChunkingContextVc;
 use turbopack_dev_server::{
     introspect::IntrospectionSource,
     source::{
-        combined::CombinedContentSourceVc, router::RouterContentSource,
-        source_maps::SourceMapContentSourceVc, static_assets::StaticAssetsContentSourceVc,
-        ContentSourceVc,
+        combined::CombinedContentSource, router::PrefixedRouterContentSource,
+        static_assets::StaticAssetsContentSource, ContentSource,
     },
     DevServer, DevServerBuilder,
 };
+use turbopack_ecmascript_runtime::RuntimeType;
 use turbopack_env::dotenv::load_env;
-use turbopack_node::execution_context::ExecutionContextVc;
+use turbopack_node::execution_context::ExecutionContext;
+use turbopack_nodejs::NodeJsChunkingContext;
 
 use self::web_entry_source::create_web_entry_source;
-use crate::arguments::DevArguments;
+use crate::{
+    arguments::DevArguments,
+    contexts::NodeEnv,
+    util::{
+        normalize_dirs, normalize_entries, output_fs, project_fs, EntryRequest, NormalizedDirs,
+    },
+};
 
-pub(crate) mod turbo_tasks_viz;
 pub(crate) mod web_entry_source;
-
-#[derive(Clone)]
-pub enum EntryRequest {
-    Relative(String),
-    Module(String, String),
-}
 
 pub struct TurbopackDevServerBuilder {
     turbo_tasks: Arc<TurboTasks<MemoryBackend>>,
-    project_dir: String,
-    root_dir: String,
+    project_dir: RcStr,
+    root_dir: RcStr,
     entry_requests: Vec<EntryRequest>,
     eager_compile: bool,
     hostname: Option<IpAddr>,
     issue_reporter: Option<Box<dyn IssueReporterProvider>>,
     port: Option<u16>,
-    browserslist_query: String,
+    browserslist_query: RcStr,
     log_level: IssueSeverity,
     show_all: bool,
     log_detail: bool,
@@ -71,8 +68,8 @@ pub struct TurbopackDevServerBuilder {
 impl TurbopackDevServerBuilder {
     pub fn new(
         turbo_tasks: Arc<TurboTasks<MemoryBackend>>,
-        project_dir: String,
-        root_dir: String,
+        project_dir: RcStr,
+        root_dir: RcStr,
     ) -> TurbopackDevServerBuilder {
         TurbopackDevServerBuilder {
             turbo_tasks,
@@ -85,7 +82,7 @@ impl TurbopackDevServerBuilder {
             port: None,
             browserslist_query: "last 1 Chrome versions, last 1 Firefox versions, last 1 Safari \
                                  versions, last 1 Edge versions"
-                .to_owned(),
+                .into(),
             log_level: IssueSeverity::Warning,
             show_all: false,
             log_detail: false,
@@ -113,7 +110,7 @@ impl TurbopackDevServerBuilder {
         self
     }
 
-    pub fn browserslist_query(mut self, browserslist_query: String) -> TurbopackDevServerBuilder {
+    pub fn browserslist_query(mut self, browserslist_query: RcStr) -> TurbopackDevServerBuilder {
         self.browserslist_query = browserslist_query;
         self
     }
@@ -193,12 +190,12 @@ impl TurbopackDevServerBuilder {
         let server = self.find_port(host, port, 10)?;
 
         let turbo_tasks = self.turbo_tasks;
-        let project_dir = self.project_dir;
-        let root_dir = self.root_dir;
+        let project_dir: RcStr = self.project_dir;
+        let root_dir: RcStr = self.root_dir;
         let eager_compile = self.eager_compile;
         let show_all = self.show_all;
-        let log_detail = self.log_detail;
-        let browserslist_query = self.browserslist_query;
+        let log_detail: bool = self.log_detail;
+        let browserslist_query: RcStr = self.browserslist_query;
         let log_args = Arc::new(LogOptions {
             current_dir: current_dir().unwrap(),
             project_dir: PathBuf::from(project_dir.clone()),
@@ -210,7 +207,7 @@ impl TurbopackDevServerBuilder {
         let tasks = turbo_tasks.clone();
         let issue_provider = self.issue_reporter.unwrap_or_else(|| {
             // Initialize a ConsoleUi reporter if no custom reporter was provided
-            Box::new(move || ConsoleUiVc::new(log_args.clone().into()).into())
+            Box::new(move || Vc::upcast(ConsoleUi::new(log_args.clone().into())))
         });
 
         let source = move || {
@@ -219,7 +216,6 @@ impl TurbopackDevServerBuilder {
                 project_dir.clone(),
                 entry_requests.clone().into(),
                 eager_compile,
-                turbo_tasks.clone().into(),
                 browserslist_query.clone(),
             )
         };
@@ -230,61 +226,58 @@ impl TurbopackDevServerBuilder {
 }
 
 #[turbo_tasks::function]
-async fn project_fs(project_dir: &str) -> Result<FileSystemVc> {
-    let disk_fs = DiskFileSystemVc::new("project".to_string(), project_dir.to_string());
-    disk_fs.await?.start_watching()?;
-    Ok(disk_fs.into())
-}
-
-#[turbo_tasks::function]
-async fn output_fs(project_dir: &str) -> Result<FileSystemVc> {
-    let disk_fs = DiskFileSystemVc::new("output".to_string(), project_dir.to_string());
-    disk_fs.await?.start_watching()?;
-    Ok(disk_fs.into())
-}
-
-#[allow(clippy::too_many_arguments)]
-#[turbo_tasks::function]
 async fn source(
-    root_dir: String,
-    project_dir: String,
+    root_dir: RcStr,
+    project_dir: RcStr,
     entry_requests: TransientInstance<Vec<EntryRequest>>,
     eager_compile: bool,
-    turbo_tasks: TransientInstance<TurboTasks<MemoryBackend>>,
-    browserslist_query: String,
-) -> Result<ContentSourceVc> {
-    let output_fs = output_fs(&project_dir);
-    let fs = project_fs(&root_dir);
-    let project_relative = project_dir.strip_prefix(&root_dir).unwrap();
-    let project_relative = project_relative
+    browserslist_query: RcStr,
+) -> Result<Vc<Box<dyn ContentSource>>> {
+    let project_relative = project_dir.strip_prefix(&*root_dir).unwrap();
+    let project_relative: RcStr = project_relative
         .strip_prefix(MAIN_SEPARATOR)
         .unwrap_or(project_relative)
-        .replace(MAIN_SEPARATOR, "/");
-    let project_path = fs.root().join(&project_relative);
+        .replace(MAIN_SEPARATOR, "/")
+        .into();
+
+    let output_fs = output_fs(project_dir);
+    let fs = project_fs(root_dir);
+    let project_path: Vc<turbo_tasks_fs::FileSystemPath> = fs.root().join(project_relative);
 
     let env = load_env(project_path);
-    let build_output_root = output_fs.root().join(".turbopack/build");
+    let build_output_root = output_fs.root().join(".turbopack/build".into());
 
-    let build_chunking_context = DevChunkingContextVc::builder(
+    let build_chunking_context = NodeJsChunkingContext::builder(
         project_path,
         build_output_root,
-        build_output_root.join("chunks"),
-        build_output_root.join("assets"),
+        build_output_root,
+        build_output_root.join("chunks".into()),
+        build_output_root.join("assets".into()),
         node_build_environment(),
+        RuntimeType::Development,
     )
     .build();
 
-    let execution_context = ExecutionContextVc::new(project_path, build_chunking_context, env);
+    let execution_context =
+        ExecutionContext::new(project_path, Vc::upcast(build_chunking_context), env);
 
-    let server_fs = ServerFileSystemVc::new().as_file_system();
+    let server_fs = Vc::upcast::<Box<dyn FileSystem>>(ServerFileSystem::new());
     let server_root = server_fs.root();
     let entry_requests = entry_requests
         .iter()
         .map(|r| match r {
-            EntryRequest::Relative(p) => RequestVc::relative(Value::new(p.clone().into()), false),
-            EntryRequest::Module(m, p) => {
-                RequestVc::module(m.clone(), Value::new(p.clone().into()), QueryMapVc::none())
-            }
+            EntryRequest::Relative(p) => Request::relative(
+                Value::new(p.clone().into()),
+                Default::default(),
+                Default::default(),
+                false,
+            ),
+            EntryRequest::Module(m, p) => Request::module(
+                m.clone(),
+                Value::new(p.clone().into()),
+                Default::default(),
+                Default::default(),
+            ),
         })
         .collect();
 
@@ -295,33 +288,26 @@ async fn source(
         server_root,
         env,
         eager_compile,
-        &browserslist_query,
+        NodeEnv::Development.cell(),
+        browserslist_query,
     );
-    let viz = turbo_tasks_viz::TurboTasksSource {
-        turbo_tasks: turbo_tasks.into(),
-    }
-    .cell()
-    .into();
-    let static_source =
-        StaticAssetsContentSourceVc::new(String::new(), project_path.join("public")).into();
-    let main_source = CombinedContentSourceVc::new(vec![static_source, web_source]);
-    let introspect = IntrospectionSource {
-        roots: HashSet::from([main_source.into()]),
-    }
-    .cell()
-    .into();
-    let main_source = main_source.into();
-    let source_maps = SourceMapContentSourceVc::new(main_source).into();
-    let source = RouterContentSource {
-        routes: vec![
-            ("__turbopack__/".to_string(), introspect),
-            ("__turbo_tasks__/".to_string(), viz),
-            ("__turbopack_sourcemap__/".to_string(), source_maps),
-        ],
-        fallback: main_source,
-    }
-    .cell()
-    .into();
+    let static_source = Vc::upcast(StaticAssetsContentSource::new(
+        Default::default(),
+        project_path.join("public".into()),
+    ));
+    let main_source = CombinedContentSource::new(vec![static_source, web_source]);
+    let introspect = Vc::upcast(
+        IntrospectionSource {
+            roots: HashSet::from([Vc::upcast(main_source)]),
+        }
+        .cell(),
+    );
+    let main_source = Vc::upcast(main_source);
+    let source = Vc::upcast(PrefixedRouterContentSource::new(
+        Default::default(),
+        vec![("__turbopack__".into(), introspect)],
+        main_source,
+    ));
 
     Ok(source)
 }
@@ -339,26 +325,10 @@ pub async fn start_server(args: &DevArguments) -> Result<()> {
     console_subscriber::init();
     register();
 
-    let dir = args
-        .common
-        .dir
-        .as_ref()
-        .map(canonicalize)
-        .unwrap_or_else(current_dir)
-        .context("project directory can't be found")?
-        .to_str()
-        .context("project directory contains invalid characters")?
-        .to_string();
-
-    let root_dir = if let Some(root) = args.common.root.as_ref() {
-        canonicalize(root)
-            .context("root directory can't be found")?
-            .to_str()
-            .context("root directory contains invalid characters")?
-            .to_string()
-    } else {
-        dir.clone()
-    };
+    let NormalizedDirs {
+        project_dir,
+        root_dir,
+    } = normalize_dirs(&args.common.dir, &args.common.root)?;
 
     let tt = TurboTasks::new(MemoryBackend::new(
         args.common
@@ -366,17 +336,9 @@ pub async fn start_server(args: &DevArguments) -> Result<()> {
             .map_or(usize::MAX, |l| l * 1024 * 1024),
     ));
 
-    let stats_type = match args.common.full_stats {
-        true => StatsType::Full,
-        false => StatsType::Essential,
-    };
-    tt.set_stats_type(stats_type);
-
     let tt_clone = tt.clone();
 
-    #[allow(unused_mut)]
-    let mut server = TurbopackDevServerBuilder::new(tt, dir, root_dir)
-        .entry_request(EntryRequest::Relative("src/index".into()))
+    let mut server = TurbopackDevServerBuilder::new(tt, project_dir, root_dir)
         .eager_compile(args.eager_compile)
         .hostname(args.hostname)
         .port(args.port)
@@ -388,6 +350,10 @@ pub async fn start_server(args: &DevArguments) -> Result<()> {
                 .map_or_else(|| IssueSeverity::Warning, |l| l.0),
         );
 
+    for entry in normalize_entries(&args.common.entries) {
+        server = server.entry_request(EntryRequest::Relative(entry))
+    }
+
     #[cfg(feature = "serializable")]
     {
         server = server.allow_retry(args.allow_retry);
@@ -396,7 +362,21 @@ pub async fn start_server(args: &DevArguments) -> Result<()> {
     let server = server.build().await?;
 
     {
-        let index_uri = ServerAddr::new(server.addr).to_string()?;
+        let addr = &server.addr;
+        let hostname = if addr.ip().is_loopback() || addr.ip().is_unspecified() {
+            "localhost".to_string()
+        } else if addr.is_ipv6() {
+            // When using an IPv6 address, we need to surround the IP in brackets to
+            // distinguish it from the port's `:`.
+            format!("[{}]", addr.ip())
+        } else {
+            addr.ip().to_string()
+        };
+        let index_uri = match addr.port() {
+            443 => format!("https://{hostname}"),
+            80 => format!("http://{hostname}"),
+            port => format!("http://{hostname}:{port}"),
+        };
         println!(
             "{} - started server on {}, url: {}",
             "ready".green(),
@@ -524,14 +504,14 @@ fn profile_timeout<T>(
 }
 
 pub trait IssueReporterProvider: Send + Sync + 'static {
-    fn get_issue_reporter(&self) -> IssueReporterVc;
+    fn get_issue_reporter(&self) -> Vc<Box<dyn IssueReporter>>;
 }
 
 impl<T> IssueReporterProvider for T
 where
-    T: Fn() -> IssueReporterVc + Send + Sync + Clone + 'static,
+    T: Fn() -> Vc<Box<dyn IssueReporter>> + Send + Sync + Clone + 'static,
 {
-    fn get_issue_reporter(&self) -> IssueReporterVc {
+    fn get_issue_reporter(&self) -> Vc<Box<dyn IssueReporter>> {
         self()
     }
 }

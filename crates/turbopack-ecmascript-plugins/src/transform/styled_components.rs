@@ -3,13 +3,14 @@ use std::path::PathBuf;
 use anyhow::Result;
 use async_trait::async_trait;
 use swc_core::{
-    common::FileName,
+    common::{comments::NoopComments, FileName},
     ecma::{ast::Program, atoms::JsWord, visit::VisitMutWith},
 };
+use turbo_tasks::{ValueDefault, Vc};
 use turbopack_ecmascript::{CustomTransformer, TransformContext};
 
 #[turbo_tasks::value(transparent)]
-pub struct OptionStyledComponentsTransformConfig(Option<StyledComponentsTransformConfigVc>);
+pub struct OptionStyledComponentsTransformConfig(Option<Vc<StyledComponentsTransformConfig>>);
 
 #[turbo_tasks::value(shared)]
 #[derive(Clone, Debug)]
@@ -39,16 +40,16 @@ impl Default for StyledComponentsTransformConfig {
 }
 
 #[turbo_tasks::value_impl]
-impl StyledComponentsTransformConfigVc {
+impl StyledComponentsTransformConfig {
     #[turbo_tasks::function]
-    pub fn default() -> Self {
+    fn default_private() -> Vc<Self> {
         Self::cell(Default::default())
     }
 }
 
-impl Default for StyledComponentsTransformConfigVc {
-    fn default() -> Self {
-        Self::default()
+impl ValueDefault for StyledComponentsTransformConfig {
+    fn value_default() -> Vc<Self> {
+        StyledComponentsTransformConfig::default_private()
     }
 }
 
@@ -68,7 +69,7 @@ impl StyledComponentsTransformer {
         };
 
         if let Some(namespace) = &config.namespace {
-            options.namespace = namespace.clone();
+            options.namespace.clone_from(namespace);
         }
 
         let top_level_import_paths = &config.top_level_import_paths;
@@ -80,7 +81,9 @@ impl StyledComponentsTransformer {
         }
         let meaningless_file_names = &config.meaningless_file_names;
         if !meaningless_file_names.is_empty() {
-            options.meaningless_file_names = meaningless_file_names.clone();
+            options
+                .meaningless_file_names
+                .clone_from(meaningless_file_names);
         }
 
         Self { config: options }
@@ -89,11 +92,13 @@ impl StyledComponentsTransformer {
 
 #[async_trait]
 impl CustomTransformer for StyledComponentsTransformer {
+    #[tracing::instrument(level = tracing::Level::TRACE, name = "styled_components", skip_all)]
     async fn transform(&self, program: &mut Program, ctx: &TransformContext<'_>) -> Result<()> {
         program.visit_mut_with(&mut styled_components::styled_components(
             FileName::Real(PathBuf::from(ctx.file_path_str)),
             ctx.file_name_hash,
             self.config.clone(),
+            NoopComments,
         ));
 
         Ok(())

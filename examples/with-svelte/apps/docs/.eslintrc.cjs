@@ -1,4 +1,3 @@
 module.exports = {
-  root: true,
-  extends: ['custom']
+	extends: ['@repo/eslint-config/index.js']
 };

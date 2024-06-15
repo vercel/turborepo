@@ -18,12 +18,17 @@ swc_ecma_transform_plugin = [
   "swc_core/plugin_transform_host_native_shared_runtime",
 ]
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 indexmap = { workspace = true }
+lightningcss = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+tracing = { workspace = true }
 
 turbo-tasks = { workspace = true }
 turbo-tasks-fs = { workspace = true }

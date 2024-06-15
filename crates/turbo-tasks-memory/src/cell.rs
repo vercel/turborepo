@@ -4,11 +4,10 @@ use std::{
 };
 
 use auto_hash_map::AutoSet;
-use nohash_hasher::BuildNoHashHasher;
 use turbo_tasks::{
     backend::CellContent,
     event::{Event, EventListener},
-    TaskId, TurboTasksBackendApi,
+    TaskId, TaskIdSet, TurboTasksBackendApi,
 };
 
 use crate::MemoryBackend;
@@ -25,20 +24,18 @@ pub(crate) enum Cell {
     /// tracking is still active. Any update will invalidate dependent tasks.
     /// Assigning a value will transition to the Value state.
     /// Reading this cell will transition to the Recomputing state.
-    TrackedValueless {
-        dependent_tasks: AutoSet<TaskId, BuildNoHashHasher<TaskId>>,
-    },
+    TrackedValueless { dependent_tasks: TaskIdSet },
     /// Someone wanted to read the content and it was not available. The content
     /// is now being recomputed.
     /// Assigning a value will transition to the Value state.
     Recomputing {
-        dependent_tasks: AutoSet<TaskId, BuildNoHashHasher<TaskId>>,
+        dependent_tasks: TaskIdSet,
         event: Event,
     },
     /// The content was set only once and is tracked.
     /// GC operation will transition to the TrackedValueless state.
     Value {
-        dependent_tasks: AutoSet<TaskId, BuildNoHashHasher<TaskId>>,
+        dependent_tasks: TaskIdSet,
         content: CellContent,
     },
 }
@@ -78,45 +75,10 @@ impl Cell {
         }
     }
 
-    /// Returns true if the cell has dependent tasks.
-    pub fn has_dependent_tasks(&self) -> bool {
-        match self {
-            Cell::Empty => false,
-            Cell::Recomputing {
-                dependent_tasks, ..
-            }
-            | Cell::Value {
-                dependent_tasks, ..
-            }
-            | Cell::TrackedValueless {
-                dependent_tasks, ..
-            } => !dependent_tasks.is_empty(),
-        }
-    }
-
-    /// Returns the list of dependent tasks.
-    pub fn dependent_tasks(&self) -> &AutoSet<TaskId, BuildNoHashHasher<TaskId>> {
-        match self {
-            Cell::Empty => {
-                static EMPTY: AutoSet<TaskId, BuildNoHashHasher<TaskId>> = AutoSet::with_hasher();
-                &EMPTY
-            }
-            Cell::Value {
-                dependent_tasks, ..
-            }
-            | Cell::TrackedValueless {
-                dependent_tasks, ..
-            }
-            | Cell::Recomputing {
-                dependent_tasks, ..
-            } => dependent_tasks,
-        }
-    }
-
     /// Switch the cell to recomputing state.
     fn recompute(
         &mut self,
-        dependent_tasks: AutoSet<TaskId, BuildNoHashHasher<TaskId>>,
+        dependent_tasks: TaskIdSet,
         description: impl Fn() -> String + Sync + Send + 'static,
         note: impl Fn() -> String + Sync + Send + 'static,
     ) -> EventListener {
@@ -223,9 +185,14 @@ impl Cell {
                 ref mut dependent_tasks,
             } => {
                 event.notify(usize::MAX);
+                // Assigning to a cell will invalidate all dependent tasks as the content might
+                // have changed.
+                if !dependent_tasks.is_empty() {
+                    turbo_tasks.schedule_notify_tasks_set(dependent_tasks);
+                }
                 *self = Cell::Value {
                     content,
-                    dependent_tasks: take(dependent_tasks),
+                    dependent_tasks: AutoSet::default(),
                 };
             }
             &mut Cell::TrackedValueless {
@@ -233,6 +200,9 @@ impl Cell {
             } => {
                 // Assigning to a cell will invalidate all dependent tasks as the content might
                 // have changed.
+                // TODO this leads to flagging task unnecessarily dirty when a GC'ed task is
+                // recomputed. We need to use the notification of changed cells for the current
+                // task to check if it's valid to skip the invalidation here
                 if !dependent_tasks.is_empty() {
                     turbo_tasks.schedule_notify_tasks_set(dependent_tasks);
                 }
@@ -284,9 +254,11 @@ impl Cell {
                 dependent_tasks, ..
             } => {
                 let dependent_tasks = take(dependent_tasks);
-                let Cell::Value { content, .. } = replace(self, Cell::TrackedValueless {
-                    dependent_tasks,
-                }) else { unreachable!() };
+                let Cell::Value { content, .. } =
+                    replace(self, Cell::TrackedValueless { dependent_tasks })
+                else {
+                    unreachable!()
+                };
                 Some(content)
             }
         }

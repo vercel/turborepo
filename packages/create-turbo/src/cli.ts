@@ -1,12 +1,27 @@
 #!/usr/bin/env node
 
+import http from "node:http";
+import https from "node:https";
 import chalk from "chalk";
-import { Command } from "commander";
-import notifyUpdate from "./utils/notifyUpdate";
+import { Command, Option } from "commander";
 import { logger } from "@turbo/utils";
-
-import { create } from "./commands";
+import {
+  type CreateTurboTelemetry,
+  initTelemetry,
+  withTelemetryCommand,
+} from "@turbo/telemetry";
+import { ProxyAgent } from "proxy-agent";
 import cliPkg from "../package.json";
+import { notifyUpdate } from "./utils/notifyUpdate";
+import { create } from "./commands";
+
+// Global telemetry client
+let telemetryClient: CreateTurboTelemetry | undefined;
+
+// Support http proxy vars
+const agent = new ProxyAgent();
+http.globalAgent = agent;
+https.globalAgent = agent;
 
 const createTurboCli = new Command();
 
@@ -14,9 +29,31 @@ const createTurboCli = new Command();
 createTurboCli
   .name(chalk.bold(logger.turboGradient("create-turbo")))
   .description("Create a new Turborepo")
-  .usage(`${chalk.bold("<project-directory> <package-manager>")} [options]`)
+  .usage(`${chalk.bold("<project-directory>")} [options]`)
+  .hook("preAction", async (_, thisAction) => {
+    const { telemetry } = await initTelemetry<"create-turbo">({
+      packageInfo: {
+        name: "create-turbo",
+        version: cliPkg.version,
+      },
+    });
+    // inject telemetry into the action as an option
+    thisAction.addOption(
+      new Option("--telemetry").default(telemetry).hideHelp()
+    );
+    telemetryClient = telemetry;
+  })
+  .hook("postAction", async () => {
+    await telemetryClient?.close();
+  })
+
   .argument("[project-directory]")
-  .argument("[package-manager]")
+  .addOption(
+    new Option(
+      "-m, --package-manager <package-manager>",
+      "Specify the package manager to use"
+    ).choices(["npm", "yarn", "pnpm", "bun"])
+  )
   .option(
     "--skip-install",
     "Do not run a package manager install after creating the project",
@@ -52,18 +89,17 @@ createTurboCli
   .helpOption("-h, --help", "Display help for command")
   .action(create);
 
+// Add telemetry command to the CLI
+withTelemetryCommand(createTurboCli);
+
 createTurboCli
   .parseAsync()
   .then(notifyUpdate)
   .catch(async (reason) => {
-    console.log();
-    if (reason.command) {
-      logger.error(`${chalk.bold(reason.command)} has failed.`);
-    } else {
-      logger.error("Unexpected error. Please report it as a bug:");
-      console.log(reason);
-    }
-    console.log();
+    logger.log();
+    logger.error("Unexpected error. Please report it as a bug:");
+    logger.log(reason);
+    logger.log();
     await notifyUpdate();
     process.exit(1);
   });

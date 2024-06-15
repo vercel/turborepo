@@ -19,16 +19,21 @@ This Turborepo includes the following packages/apps:
 - `docs`: a [Next.js](https://nextjs.org/) app with [Tailwind CSS](https://tailwindcss.com/)
 - `web`: another [Next.js](https://nextjs.org/) app with [Tailwind CSS](https://tailwindcss.com/)
 - `ui`: a stub React component library with [Tailwind CSS](https://tailwindcss.com/) shared by both `web` and `docs` applications
-- `eslint-config-custom`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `tsconfig`: `tsconfig.json`s used throughout the monorepo
+- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
+- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
 
 Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
 
 ### Building packages/ui
 
-This example is setup to build `packages/ui` and output the transpiled source and compiled styles to `dist/`. This was chosen to make sharing one `tailwind.config.js` as easy as possible, and to ensure only the CSS that is used by the current application and its dependencies is generated.
+This example is set up to produce compiled styles for `ui` components into the `dist` directory. The component `.tsx` files are consumed by the Next.js apps directly using `transpilePackages` in `next.config.js`. This was chosen for several reasons:
 
-Another option is to consume `packages/ui` directly from source without building. If using this option, you will need to update your `tailwind.config.js` to be aware of your package locations, so it can find all usages of the `tailwindcss` class names.
+- Make sharing one `tailwind.config.js` to apps and packages as easy as possible.
+- Make package compilation simple by only depending on the Next.js Compiler and `tailwindcss`.
+- Ensure Tailwind classes do not overwrite each other. The `ui` package uses a `ui-` prefix for it's classes.
+- Maintain clear package export boundaries.
+
+Another option is to consume `packages/ui` directly from source without building. If using this option, you will need to update the `tailwind.config.js` in your apps to be aware of your package locations, so it can find all usages of the `tailwindcss` class names for CSS compilation.
 
 For example, in [tailwind.config.js](packages/tailwind-config/tailwind.config.js):
 
@@ -37,9 +42,11 @@ For example, in [tailwind.config.js](packages/tailwind-config/tailwind.config.js
     // app content
     `src/**/*.{js,ts,jsx,tsx}`,
     // include packages if not transpiling
-    "../../packages/**/*.{js,ts,jsx,tsx}",
+    "../../packages/ui/*.{js,ts,jsx,tsx}",
   ],
 ```
+
+If you choose this strategy, you can remove the `tailwindcss` and `autoprefixer` dependencies from the `ui` package.
 
 ### Utilities
 

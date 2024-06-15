@@ -1,9 +1,9 @@
 import { ConvertError } from "./errors";
-import managers from "./managers";
-import { Project } from "./types";
+import { MANAGERS } from "./managers";
 import { directoryInfo } from "./utils";
+import type { Project } from "./types";
 
-export default async function getWorkspaceDetails({
+export async function getWorkspaceDetails({
   root,
 }: {
   root: string;
@@ -20,7 +20,8 @@ export default async function getWorkspaceDetails({
     );
   }
 
-  for (const { detect, read } of Object.values(managers)) {
+  for (const { detect, read } of Object.values(MANAGERS)) {
+    // eslint-disable-next-line no-await-in-loop -- we want to run serially and bail on the first success
     if (await detect({ workspaceRoot })) {
       return read({ workspaceRoot });
     }

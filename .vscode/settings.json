@@ -5,9 +5,8 @@
     "typescript",
     "typescriptreact"
   ],
-  "eslint.packageManager": "pnpm",
+  "eslint.workingDirectories": [{ "mode": "auto" }],
   "debug.javascript.unmapMissingSources": true,
-  "go.lintTool": "golangci-lint",
   "files.associations": {
     "libturbo.h": "c",
     "turbo.json": "jsonc"
@@ -20,5 +19,6 @@
   },
   "search.exclude": {
     "crates/turbopack-tests/tests/snapshot/**": true
-  }
+  },
+  "typescript.tsdk": "node_modules/typescript/lib"
 }

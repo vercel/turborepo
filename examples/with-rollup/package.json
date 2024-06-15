@@ -1,9 +1,5 @@
 {
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
@@ -11,9 +7,11 @@
     "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {
-    "eslint": "^7.32.0",
-    "eslint-config-custom": "workspace:*",
-    "prettier": "^2.5.1",
-    "turbo": "canary"
-  }
+    "@repo/eslint-config": "workspace:*",
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.5",
+    "turbo": "^2.0.3"
+  },
+  "packageManager": "pnpm@8.15.6",
+  "name": "with-rollup"
 }

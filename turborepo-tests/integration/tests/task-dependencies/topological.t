@@ -1,22 +1,21 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) task_dependencies/topological
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh task_dependencies/topological
 
 Check my-app#build output
   $ ${TURBO} run build
   \xe2\x80\xa2 Packages in scope: //, my-app, util (esc)
   \xe2\x80\xa2 Running build in 3 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  util:build: cache miss, executing 15afa8f5e464aba7
+  util:build: cache miss, executing 3d1f83b683510099
   util:build: 
   util:build: > build
-  util:build: > echo 'building'
+  util:build: > echo building
   util:build: 
   util:build: building
-  my-app:build: cache miss, executing 3ad0e8134e587278
+  my-app:build: cache miss, executing a24fb33a97cce572
   my-app:build: 
   my-app:build: > build
-  my-app:build: > echo 'building'
+  my-app:build: > echo building
   my-app:build: 
   my-app:build: building
   
@@ -36,9 +35,8 @@ Graph
   \tnewrank = "true" (esc)
   \tsubgraph "root" { (esc)
   \t\t"[root] //#build" -> "[root] ___ROOT___" (esc)
-  \t\t"[root] ___ROOT___#build" -> "[root] ___ROOT___" (esc)
   \t\t"[root] my-app#build" -> "[root] util#build" (esc)
-  \t\t"[root] util#build" -> "[root] ___ROOT___#build" (esc)
+  \t\t"[root] util#build" -> "[root] ___ROOT___" (esc)
   \t} (esc)
   }
   

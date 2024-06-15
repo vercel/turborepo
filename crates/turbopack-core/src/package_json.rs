@@ -2,16 +2,17 @@ use std::{fmt::Write, ops::Deref};
 
 use anyhow::Result;
 use serde_json::Value as JsonValue;
-use turbo_tasks::{debug::ValueDebugFormat, primitives::StringVc, trace::TraceRawVcs};
-use turbo_tasks_fs::{FileContent, FileJsonContent, FileJsonContentReadRef, FileSystemPathVc};
+use turbo_tasks::{debug::ValueDebugFormat, trace::TraceRawVcs, RcStr, ReadRef, Vc};
+use turbo_tasks_fs::{FileContent, FileJsonContent, FileSystemPath};
 
-use super::issue::{Issue, IssueVc};
+use super::issue::Issue;
+use crate::issue::{IssueExt, IssueStage, OptionStyledString, StyledString};
 
 /// PackageJson wraps the parsed JSON content of a `package.json` file. The
 /// wrapper is necessary so that we can reference the [FileJsonContent]'s inner
 /// [serde_json::Value] without cloning it.
 #[derive(PartialEq, Eq, ValueDebugFormat, TraceRawVcs)]
-pub struct PackageJson(FileJsonContentReadRef);
+pub struct PackageJson(ReadRef<FileJsonContent>);
 
 impl Deref for PackageJson {
     type Target = JsonValue;
@@ -29,7 +30,7 @@ pub struct OptionPackageJson(Option<PackageJson>);
 /// Reads a package.json file (if it exists). If the file is unparseable, it
 /// emits a useful [Issue] pointing to the invalid location.
 #[turbo_tasks::function]
-pub async fn read_package_json(path: FileSystemPathVc) -> Result<OptionPackageJsonVc> {
+pub async fn read_package_json(path: Vc<FileSystemPath>) -> Result<Vc<OptionPackageJson>> {
     let read = path.read_json().await?;
     match &*read {
         FileJsonContent::Content(_) => Ok(OptionPackageJson(Some(PackageJson(read))).cell()),
@@ -43,11 +44,10 @@ pub async fn read_package_json(path: FileSystemPathVc) -> Result<OptionPackageJs
                 write!(message, "{}", e)?;
             }
             PackageJsonIssue {
-                error_message: message,
+                error_message: message.into(),
                 path,
             }
             .cell()
-            .as_issue()
             .emit();
             Ok(OptionPackageJson(None).cell())
         }
@@ -57,29 +57,29 @@ pub async fn read_package_json(path: FileSystemPathVc) -> Result<OptionPackageJs
 /// Reusable Issue struct representing any problem with a `package.json`
 #[turbo_tasks::value(shared)]
 pub struct PackageJsonIssue {
-    pub path: FileSystemPathVc,
-    pub error_message: String,
+    pub path: Vc<FileSystemPath>,
+    pub error_message: RcStr,
 }
 
 #[turbo_tasks::value_impl]
 impl Issue for PackageJsonIssue {
     #[turbo_tasks::function]
-    fn title(&self) -> StringVc {
-        StringVc::cell("Error parsing package.json file".to_string())
+    fn title(&self) -> Vc<StyledString> {
+        StyledString::Text("Error parsing package.json file".into()).cell()
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> StringVc {
-        StringVc::cell("parse".to_string())
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::Parse.cell()
     }
 
     #[turbo_tasks::function]
-    fn context(&self) -> FileSystemPathVc {
+    fn file_path(&self) -> Vc<FileSystemPath> {
         self.path
     }
 
     #[turbo_tasks::function]
-    fn description(&self) -> StringVc {
-        StringVc::cell(self.error_message.clone())
+    fn description(&self) -> Vc<OptionStyledString> {
+        Vc::cell(Some(StyledString::Text(self.error_message.clone()).cell()))
     }
 }

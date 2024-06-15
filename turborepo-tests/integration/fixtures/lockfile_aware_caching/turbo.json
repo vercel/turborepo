@@ -1,0 +1,14 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "build": {
+      "outputs": [],
+      "env": [
+        "COREPACK_ENABLE_DOWNLOAD_PROMPT"
+      ],
+      "inputs": [
+        "package.json"
+      ]
+    }
+  }
+}

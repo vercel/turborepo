@@ -1,6 +1,6 @@
+import type { RepoInfo, PackageManager } from "@turbo/utils";
+import type { Project } from "@turbo/workspaces";
 import type { CreateCommandOptions } from "../commands/create/types";
-import type { RepoInfo } from "@turbo/utils";
-import type { Project, PackageManager } from "@turbo/workspaces";
 
 export interface TransformInput {
   example: {

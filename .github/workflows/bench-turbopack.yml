@@ -1,0 +1,459 @@
+name: Benchmark Turbopack
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+jobs:
+  determine_jobs:
+    name: Determine jobs to run
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Find PR Comment
+        id: comment
+        if: github.event_name == 'pull_request'
+        uses: peter-evans/find-comment@v2
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: "github-actions[bot]"
+          body-includes: "<!-- CI TURBOPACK BENCH COMMENT -->"
+
+      - name: Create or update PR comment
+        if: github.event_name == 'pull_request' && steps.comment.outputs.comment-id != ''
+        uses: peter-evans/create-or-update-comment@v2
+        continue-on-error: true
+        with:
+          comment-id: ${{ steps.comment.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            ## ⏳ Turbopack Benchmark CI is running again... ⏳
+
+            [Wait for it...](https://github.com/vercel/turbo/actions/runs/${{ github.run_id }})
+
+            <!-- CI TURBOPACK BENCH COMMENT -->
+
+          edit-mode: replace
+
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: CI related changes
+        id: ci
+        uses: technote-space/get-diff-action@v6
+        with:
+          ## TODO: are all these patterns needed?
+          PATTERNS: |
+            .github/actions/**
+            .github/workflows/bench-turbopack.yml
+
+      - name: Root cargo related changes
+        id: cargo
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            Cargo.*
+            rust-toolchain
+
+      - name: Rust related changes
+        id: rust
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            pnpm-lock.yaml
+            package.json
+            Cargo.**
+            crates/**
+            shim/**
+            xtask/**
+            .cargo/**
+            rust-toolchain
+            !**.md
+            !**.mdx
+
+      - name: Turbopack related changes
+        id: turbopack
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            pnpm-lock.yaml
+            package.json
+            crates/**
+            xtask/**
+            .cargo/**
+            rust-toolchain
+            !crates/turborepo*/**
+            !**.md
+            !**.mdx
+
+      - name: Turbopack Benchmark related changes
+        id: turbopack_bench
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            crates/turbopack-bench/**
+            !*.md
+
+    outputs:
+      rust: ${{ steps.ci.outputs.diff != '' || steps.rust.outputs.diff != '' }}
+      cargo_only: ${{ steps.ci.outputs.diff != '' || (steps.cargo.outputs.diff != '' && steps.turbopack.outputs.diff == '') }}
+      # We only test workspace dependency changes on main, not on PRs to speed up CI
+      cargo_on_main: ${{ steps.ci.outputs.diff != '' || (steps.cargo.outputs.diff != '' && github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+      turbopack: ${{ steps.ci.outputs.diff != '' || steps.turbopack.outputs.diff != '' }}
+      turbopack_bench: ${{ steps.ci.outputs.diff != '' || steps.turbopack_bench.outputs.diff != '' }}
+      push: ${{ steps.ci.outputs.diff != '' || github.event_name == 'push' }}
+      main_push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+
+  turbopack_rust_check:
+    needs: [determine_jobs]
+    # We test dependency changes only on main
+    if: |
+      (needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.turbopack == 'true') ||
+      needs.determine_jobs.outputs.cargo_on_main == 'true' ||
+      needs.determine_jobs.outputs.cargo_only == 'true'
+    name: Turbopack rust check
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          components: clippy
+          targets: wasm32-unknown-unknown
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run cargo check release
+        run: |
+          RUSTFLAGS="-D warnings -A deprecated" cargo groups check turbopack --features rustls-tls --release
+
+  turbopack_rust_bench:
+    needs: [determine_jobs, turbopack_rust_check]
+    if: needs.determine_jobs.outputs.push == 'true' || needs.determine_jobs.outputs.turbopack_bench == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        bench:
+          # One of Turbopack with 1000 modules is benchmarked in every run
+          # to create a baseline result for normalization (should the runners performance vary between jobs)
+
+          # This runs all the non turbopack-bench benchmarks
+          - name: generic
+            cache_key: all
+            args: --workspace --exclude turbopack-bench
+
+          # This measures Turbopack with small app
+          - name: turbopack
+            cache_key: turbopack-cli
+            args: -p turbopack-cli
+            TURBOPACK_BENCH_COUNTS: 100,500,1000
+
+          # This measures Turbopack with normal apps
+          - name: turbopack-large
+            cache_key: turbopack-cli
+            args: -p turbopack-cli
+            TURBOPACK_BENCH_COUNTS: 1000,2000,3000
+
+          # This measures Turbopack with larger apps
+          - name: turbopack-xlarge
+            cache_key: turbopack-cli
+            args: -p turbopack-cli
+            TURBOPACK_BENCH_COUNTS: 1000,5000
+
+          # This measures Turbopack with huge apps
+          - name: turbopack-xxlarge
+            cache_key: turbopack-cli
+            args: -p turbopack-cli
+            TURBOPACK_BENCH_COUNTS: 1000,10000
+
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
+
+    name: Benchmark on ${{ matrix.bench.name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          shared-cache-key: benchmark-${{ matrix.bench.cache_key }}
+          save-cache: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Clear benchmarks
+        run: rm -rf target/criterion
+
+      - name: Compile cargo benches
+        run: cargo bench --no-run ${{ matrix.bench.args }}
+
+      - name: Run cargo bench
+        timeout-minutes: 180
+        run: cargo bench ${{ matrix.bench.args }}
+        env:
+          TURBOPACK_BENCH_COUNTS: ${{ matrix.bench.TURBOPACK_BENCH_COUNTS }}
+
+      - name: Install critcmp
+        if: always()
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: critcmp
+
+      - name: Compare results
+        if: always()
+        run: critcmp --group "([^/]+/)[^/]+(?:/)(.+)" base
+
+      - name: Export results
+        if: always()
+        run: critcmp --export base > raw.json
+
+      - name: Upload results to datadog
+        if: always()
+        continue-on-error: true
+        env:
+          DATADOG_API_KEY: ${{ secrets.DD_KEY_TURBOPACK }}
+        run: |
+          npm install -g @datadog/datadog-ci@2.18.1
+          # Query raw benchmark output, create key:value pairs for each benchmark entries.
+          # The generated key name is compact format the path of the benchmark entry, i.e
+          # `base.hmr_to_commit.CSR.1000.mean`
+          # [TODO]: datadog-ci sometimes return 400 without detail, need to investigate further. For now accept the flaky uploads.
+          for item in $(cat raw.json | jq -r ".benchmarks[] | { name: .fullname, mean: .criterion_estimates_v1.mean.point_estimate, std: .criterion_estimates_v1.std_dev.point_estimate } | @base64"); do
+              _jq() {
+                echo ${item} | base64 --decode | jq -r ${1}
+              }
+
+              export METRICS_MEAN+=" --metrics $(echo ${{ matrix.bench.name }} | sed -e 's/turbopack-//g').$(_jq ".name" | sed -e 's/\/bench_/\//g' | sed -e 's/\/Turbopack /\//g' | sed -e 's/ modules//g'| sed -e 's/ /./g' | sed -e 's/\//./g').mean:$(printf "%0.2f" $(_jq ".mean"))"
+              export METRICS_STD+=" --metrics $(echo ${{ matrix.bench.name }} | sed -e 's/turbopack-//g').$(_jq ".name" | sed -e 's/\/bench_/\//g' | sed -e 's/\/Turbopack /\//g' | sed -e 's/ modules//g'| sed -e 's/ /./g' | sed -e 's/\//./g').std:$(printf "%0.2f" $(_jq ".std"))"
+          done
+          echo "Sending metrics $METRICS_MEAN"
+          datadog-ci metric --level pipeline --no-fail $METRICS_MEAN
+          echo "Sending metrics $METRICS_STD"
+          datadog-ci metric --level pipeline --no-fail $METRICS_STD
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: bench_${{ matrix.bench.name }}
+          path: raw.json
+
+      # This avoids putting this data into the rust-cache
+      - name: Clear benchmarks
+        run: rm -rf target/criterion
+
+  turbopack_rust_bench_commit:
+    needs: [determine_jobs, turbopack_rust_bench]
+    if: always() && needs.determine_jobs.outputs.push == 'true'
+    name: Store benchmark result
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Get current date
+        id: date
+        run: |
+          echo "year=$(date +'%Y')" >> $GITHUB_OUTPUT
+          echo "month=$(date +'%m')" >> $GITHUB_OUTPUT
+          echo "date=$(date +'%s')" >> $GITHUB_OUTPUT
+          echo "pretty=$(date +'%Y-%m-%d %H:%M')" >> $GITHUB_OUTPUT
+
+      - name: Checkout benchmark-data
+        uses: actions/checkout@v3
+        with:
+          ref: benchmark-data
+
+      - name: Download benchmark data
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Copy benchmark results
+        run: |
+          find artifacts -size 0 -delete
+          mkdir -p data/${{ steps.date.outputs.year }}/${{ steps.date.outputs.month }}/ubuntu-latest-8-core/${{ steps.date.outputs.date }}-${{ github.sha }}/
+          mv artifacts/bench_* data/${{ steps.date.outputs.year }}/${{ steps.date.outputs.month }}/ubuntu-latest-8-core/${{ steps.date.outputs.date }}-${{ github.sha }}/
+
+      - name: Git pull
+        run: git pull --depth=1 --no-tags origin benchmark-data
+
+      - name: Push data to branch
+        if: needs.determine_jobs.outputs.main_push == 'true'
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          file_pattern: data/**
+          commit_message: Benchmark result for ${{ steps.date.outputs.pretty }} (${{ github.sha }})
+
+  turbopack_bench_pr:
+    needs: [turbopack_rust_check]
+    if: github.event_name == 'pull_request'
+    name: Benchmark and compare Turbopack performance on ${{ matrix.os.title }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: linux
+            title: Linux
+            quiet: false
+            runs-on:
+              - "self-hosted"
+              - "linux"
+              - "x64"
+              - "metal"
+          # - name: macos
+          #   title: MacOS
+          #   quiet: true
+          #   runner: macos-latest
+          # - name: windows
+          #   title: Windows
+          #   quiet: true
+          #   runner: windows-latest
+    runs-on: ${{ matrix.os.runner }}
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Fetch the base branch
+        run: git -c protocol.version=2 fetch --no-tags --progress --no-recurse-submodules --depth=1 origin +${{ github.base_ref }}:base
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          shared-cache-key: benchmark-${{ matrix.os.name }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Benchmark and compare with base branch
+        uses: sokra/criterion-compare-action@main
+        timeout-minutes: 30
+        with:
+          branchName: base
+          title: ${{ matrix.os.title }} Benchmark
+          quiet: ${{ matrix.os.quiet }}
+          cwd: crates/turbopack-cli
+
+  done:
+    name: Done
+    needs:
+      - determine_jobs
+      - turbopack_rust_check
+      - turbopack_rust_bench
+    if: always()
+    permissions:
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Compute info
+        id: info
+        if: always()
+        run: |
+          cancelled=false
+          failure=false
+          subjob () {
+            local result=$1
+            local name=$2
+            echo "$name: $result"
+            if [ "$result" = "cancelled" ]; then
+              cancelled=true
+            elif [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
+              echo "- $name" >> failures.md
+              failure=true
+            fi
+          }
+          subjob ${{needs.determine_jobs.result}} "Determining jobs"
+          subjob ${{needs.turbopack_rust_check.result}} "Turbopack Rust checks"
+          subjob ${{needs.turbopack_rust_bench.result}} "Turbopack Rust benchmarks (non-blocking)"
+          if [ "$cancelled" = "true" ]; then
+             echo "cancelled=true" >> $GITHUB_OUTPUT
+          elif [ "$failure" = "true" ]; then
+            echo "failure=true" >> $GITHUB_OUTPUT
+          else
+            echo "success=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Add failure prose text
+        if: steps.info.outputs.failure == 'true'
+        run: |
+          echo "## ⚠️ Turbopack Benchmark CI failed ⚠️" > comment.md
+          echo >> comment.md
+          echo "The following steps have failed in CI:" >> comment.md
+          echo >> comment.md
+          cat failures.md >> comment.md
+          echo >> comment.md
+          echo "See [workflow summary](https://github.com/vercel/turbo/actions/runs/${{ github.run_id }}) for details">> comment.md
+          echo >> comment.md
+          echo "<!-- CI TURBOPACK BENCH COMMENT -->" >> comment.md
+
+      - name: Add success prose text
+        if: steps.info.outputs.success == 'true'
+        run: |
+          echo "## 🟢 Turbopack Benchmark CI successful 🟢" > comment.md
+          echo >> comment.md
+          echo "Thanks" >> comment.md
+          echo >> comment.md
+          echo "<!-- CI TURBOPACK BENCH COMMENT -->" >> comment.md
+
+      - name: Find PR Comment
+        id: comment
+        if: always() && github.event_name == 'pull_request' && steps.info.outputs.cancelled != 'true'
+        uses: peter-evans/find-comment@v2
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: "github-actions[bot]"
+          body-includes: "<!-- CI TURBOPACK BENCH COMMENT -->"
+
+      - name: Create or update PR comment
+        if: always() && github.event_name == 'pull_request' && steps.info.outputs.cancelled != 'true'
+        uses: peter-evans/create-or-update-comment@v2
+        continue-on-error: true
+        with:
+          comment-id: ${{ steps.comment.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body-file: "comment.md"
+          edit-mode: replace
+
+      - name: It's not fine
+        if: steps.info.outputs.failure == 'true'
+        run: exit 1
+
+      - name: It's fine
+        if: steps.info.outputs.success == 'true'
+        run: echo Ok
+
+  cleanup:
+    name: Cleanup
+    needs: [done]
+    if: always()
+    uses: ./.github/workflows/pr-clean-caches.yml
+    secrets: inherit

@@ -2,14 +2,14 @@
     Member {
         obj: Variable(
             (
-                Atom('exports' type=inline),
+                "exports",
                 #3,
             ),
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('id' type=static),
+                Atom(
+                    "id",
                 ),
             ),
         ),
@@ -69,38 +69,27 @@
             AssignExpr(
                 Left,
             ),
-            PatOrExpr(
-                Pat,
+            AssignTarget(
+                Simple,
             ),
-            Pat(
-                Expr,
-            ),
-            Expr(
+            SimpleAssignTarget(
                 Member,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                46,
-            ),
-            hi: BytePos(
-                56,
-            ),
-            ctxt: #0,
-        },
+        span: 46..56#0,
         in_try: false,
     },
     Member {
         obj: Variable(
             (
-                Atom('exports' type=inline),
+                "exports",
                 #3,
             ),
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('ids' type=inline),
+                Atom(
+                    "ids",
                 ),
             ),
         ),
@@ -160,38 +149,27 @@
             AssignExpr(
                 Left,
             ),
-            PatOrExpr(
-                Pat,
+            AssignTarget(
+                Simple,
             ),
-            Pat(
-                Expr,
-            ),
-            Expr(
+            SimpleAssignTarget(
                 Member,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                66,
-            ),
-            hi: BytePos(
-                77,
-            ),
-            ctxt: #0,
-        },
+        span: 66..77#0,
         in_try: false,
     },
     Member {
         obj: Variable(
             (
-                Atom('exports' type=inline),
+                "exports",
                 #3,
             ),
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('modules' type=inline),
+                Atom(
+                    "modules",
                 ),
             ),
         ),
@@ -251,38 +229,27 @@
             AssignExpr(
                 Left,
             ),
-            PatOrExpr(
-                Pat,
+            AssignTarget(
+                Simple,
             ),
-            Pat(
-                Expr,
-            ),
-            Expr(
+            SimpleAssignTarget(
                 Member,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                89,
-            ),
-            hi: BytePos(
-                104,
-            ),
-            ctxt: #0,
-        },
+        span: 89..104#0,
         in_try: false,
     },
     Member {
         obj: Variable(
             (
-                Atom('__webpack_require__' type=dynamic),
+                "__webpack_require__",
                 #4,
             ),
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('r' type=inline),
+                Atom(
+                    "r",
                 ),
             ),
         ),
@@ -392,28 +359,20 @@
                 Member,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                259,
-            ),
-            hi: BytePos(
-                280,
-            ),
-            ctxt: #0,
-        },
+        span: 259..280#0,
         in_try: false,
     },
     MemberCall {
         obj: Variable(
             (
-                Atom('__webpack_require__' type=dynamic),
+                "__webpack_require__",
                 #4,
             ),
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('r' type=inline),
+                Atom(
+                    "r",
                 ),
             ),
         ),
@@ -421,7 +380,7 @@
             Value(
                 Variable(
                     (
-                        Atom('__webpack_exports__' type=dynamic),
+                        "__webpack_exports__",
                         #4,
                     ),
                 ),
@@ -524,28 +483,20 @@
                 Call,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                259,
-            ),
-            hi: BytePos(
-                301,
-            ),
-            ctxt: #0,
-        },
+        span: 259..301#0,
         in_try: false,
     },
     Member {
         obj: Variable(
             (
-                Atom('__webpack_require__' type=dynamic),
+                "__webpack_require__",
                 #4,
             ),
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('d' type=static),
+                Atom(
+                    "d",
                 ),
             ),
         ),
@@ -655,28 +606,20 @@
                 Member,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                327,
-            ),
-            hi: BytePos(
-                348,
-            ),
-            ctxt: #0,
-        },
+        span: 327..348#0,
         in_try: false,
     },
     MemberCall {
         obj: Variable(
             (
-                Atom('__webpack_require__' type=dynamic),
+                "__webpack_require__",
                 #4,
             ),
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('d' type=static),
+                Atom(
+                    "d",
                 ),
             ),
         ),
@@ -684,7 +627,7 @@
             Value(
                 Variable(
                     (
-                        Atom('__webpack_exports__' type=dynamic),
+                        "__webpack_exports__",
                         #4,
                     ),
                 ),
@@ -696,14 +639,14 @@
                         KeyValue(
                             Constant(
                                 Str(
-                                    Word(
-                                        Atom('default' type=static),
+                                    Atom(
+                                        "default",
                                     ),
                                 ),
                             ),
                             Variable(
                                 (
-                                    Atom('*arrow function 389*' type=dynamic),
+                                    "*arrow function 389*",
                                     #0,
                                 ),
                             ),
@@ -810,20 +753,12 @@
                 Call,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                327,
-            ),
-            hi: BytePos(
-                426,
-            ),
-            ctxt: #0,
-        },
+        span: 327..426#0,
         in_try: false,
     },
     FreeVar {
         var: FreeVar(
-            Atom('require' type=static),
+            "require",
         ),
         ast_path: [
             Program(
@@ -939,27 +874,19 @@
                 Ident,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                515,
-            ),
-            hi: BytePos(
-                522,
-            ),
-            ctxt: #1,
-        },
+        span: 515..522#1,
         in_try: false,
     },
     Call {
         func: FreeVar(
-            Atom('require' type=static),
+            "require",
         ),
         args: [
             Value(
                 Constant(
                     Str(
                         Word(
-                            Atom('fs/promises' type=dynamic),
+                            "fs/promises",
                         ),
                     ),
                 ),
@@ -1070,28 +997,20 @@
                 Call,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                515,
-            ),
-            hi: BytePos(
-                537,
-            ),
-            ctxt: #0,
-        },
+        span: 515..537#0,
         in_try: false,
     },
     Member {
         obj: Variable(
             (
-                Atom('promises_namespaceObject' type=dynamic),
+                "promises_namespaceObject",
                 #4,
             ),
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('readFile' type=dynamic),
+                Atom(
+                    "readFile",
                 ),
             ),
         ),
@@ -1246,28 +1165,20 @@
                 Member,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                828,
-            ),
-            hi: BytePos(
-                861,
-            ),
-            ctxt: #0,
-        },
+        span: 828..861#0,
         in_try: false,
     },
     MemberCall {
         obj: Variable(
             (
-                Atom('promises_namespaceObject' type=dynamic),
+                "promises_namespaceObject",
                 #4,
             ),
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('readFile' type=dynamic),
+                Atom(
+                    "readFile",
                 ),
             ),
         ),
@@ -1276,7 +1187,7 @@
                 Constant(
                     Str(
                         Word(
-                            Atom('./hello.txt' type=dynamic),
+                            "./hello.txt",
                         ),
                     ),
                 ),
@@ -1285,7 +1196,7 @@
                 Constant(
                     Str(
                         Word(
-                            Atom('utf-8' type=inline),
+                            "utf-8",
                         ),
                     ),
                 ),
@@ -1419,15 +1330,7 @@
                 Call,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                824,
-            ),
-            hi: BytePos(
-                916,
-            ),
-            ctxt: #0,
-        },
+        span: 824..916#0,
         in_try: false,
     },
     Member {
@@ -1435,14 +1338,14 @@
             4,
             Variable(
                 (
-                    Atom('res' type=inline),
+                    "res",
                     #5,
                 ),
             ),
             Constant(
                 Str(
-                    Word(
-                        Atom('status' type=inline),
+                    Atom(
+                        "status",
                     ),
                 ),
             ),
@@ -1458,8 +1361,8 @@
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('json' type=inline),
+                Atom(
+                    "json",
                 ),
             ),
         ),
@@ -1586,28 +1489,20 @@
                 Member,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                965,
-            ),
-            hi: BytePos(
-                985,
-            ),
-            ctxt: #0,
-        },
+        span: 965..985#0,
         in_try: false,
     },
     Member {
         obj: Variable(
             (
-                Atom('res' type=inline),
+                "res",
                 #5,
             ),
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('status' type=inline),
+                Atom(
+                    "status",
                 ),
             ),
         ),
@@ -1749,28 +1644,20 @@
                 Member,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                965,
-            ),
-            hi: BytePos(
-                975,
-            ),
-            ctxt: #0,
-        },
+        span: 965..975#0,
         in_try: false,
     },
     MemberCall {
         obj: Variable(
             (
-                Atom('res' type=inline),
+                "res",
                 #5,
             ),
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('status' type=inline),
+                Atom(
+                    "status",
                 ),
             ),
         ),
@@ -1914,15 +1801,7 @@
                 Call,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                965,
-            ),
-            hi: BytePos(
-                980,
-            ),
-            ctxt: #0,
-        },
+        span: 965..980#0,
         in_try: false,
     },
     MemberCall {
@@ -1930,14 +1809,14 @@
             4,
             Variable(
                 (
-                    Atom('res' type=inline),
+                    "res",
                     #5,
                 ),
             ),
             Constant(
                 Str(
-                    Word(
-                        Atom('status' type=inline),
+                    Atom(
+                        "status",
                     ),
                 ),
             ),
@@ -1953,8 +1832,8 @@
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('json' type=inline),
+                Atom(
+                    "json",
                 ),
             ),
         ),
@@ -1966,14 +1845,14 @@
                         KeyValue(
                             Constant(
                                 Str(
-                                    Word(
-                                        Atom('users' type=inline),
+                                    Atom(
+                                        "users",
                                     ),
                                 ),
                             ),
                             Variable(
                                 (
-                                    Atom('users' type=inline),
+                                    "users",
                                     #4,
                                 ),
                             ),
@@ -1981,14 +1860,14 @@
                         KeyValue(
                             Constant(
                                 Str(
-                                    Word(
-                                        Atom('hello' type=inline),
+                                    Atom(
+                                        "hello",
                                     ),
                                 ),
                             ),
                             Variable(
                                 (
-                                    Atom('hello' type=inline),
+                                    "hello",
                                     #5,
                                 ),
                             ),
@@ -2112,20 +1991,12 @@
                 Call,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                965,
-            ),
-            hi: BytePos(
-                1032,
-            ),
-            ctxt: #0,
-        },
+        span: 965..1032#0,
         in_try: false,
     },
     FreeVar {
         var: FreeVar(
-            Atom('require' type=static),
+            "require",
         ),
         ast_path: [
             Program(
@@ -2198,27 +2069,19 @@
                 Ident,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                1113,
-            ),
-            hi: BytePos(
-                1120,
-            ),
-            ctxt: #1,
-        },
+        span: 1113..1120#1,
         in_try: false,
     },
     Call {
         func: FreeVar(
-            Atom('require' type=static),
+            "require",
         ),
         args: [
             Value(
                 Constant(
                     Str(
                         Word(
-                            Atom('../../webpack-api-runtime.js' type=dynamic),
+                            "../../webpack-api-runtime.js",
                         ),
                     ),
                 ),
@@ -2286,28 +2149,20 @@
                 Call,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                1113,
-            ),
-            hi: BytePos(
-                1152,
-            ),
-            ctxt: #0,
-        },
+        span: 1113..1152#0,
         in_try: false,
     },
     Member {
         obj: Variable(
             (
-                Atom('__webpack_require__' type=dynamic),
+                "__webpack_require__",
                 #3,
             ),
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('C' type=inline),
+                Atom(
+                    "C",
                 ),
             ),
         ),
@@ -2374,28 +2229,20 @@
                 Member,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                1156,
-            ),
-            hi: BytePos(
-                1177,
-            ),
-            ctxt: #0,
-        },
+        span: 1156..1177#0,
         in_try: false,
     },
     MemberCall {
         obj: Variable(
             (
-                Atom('__webpack_require__' type=dynamic),
+                "__webpack_require__",
                 #3,
             ),
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('C' type=inline),
+                Atom(
+                    "C",
                 ),
             ),
         ),
@@ -2403,7 +2250,7 @@
             Value(
                 Variable(
                     (
-                        Atom('exports' type=inline),
+                        "exports",
                         #3,
                     ),
                 ),
@@ -2463,28 +2310,20 @@
                 Call,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                1156,
-            ),
-            hi: BytePos(
-                1186,
-            ),
-            ctxt: #0,
-        },
+        span: 1156..1186#0,
         in_try: false,
     },
     Member {
         obj: Variable(
             (
-                Atom('__webpack_require__' type=dynamic),
+                "__webpack_require__",
                 #3,
             ),
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('s' type=static),
+                Atom(
+                    "s",
                 ),
             ),
         ),
@@ -2578,40 +2417,30 @@
             AssignExpr(
                 Left,
             ),
-            PatOrExpr(
-                Pat,
+            AssignTarget(
+                Simple,
             ),
-            Pat(
-                Expr,
-            ),
-            Expr(
+            SimpleAssignTarget(
                 Member,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                1252,
-            ),
-            hi: BytePos(
-                1273,
-            ),
-            ctxt: #0,
-        },
+        span: 1252..1273#0,
         in_try: false,
     },
     Call {
         func: Variable(
             (
-                Atom('__webpack_require__' type=dynamic),
+                "__webpack_require__",
                 #3,
             ),
         ),
         args: [
             Value(
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
+                Unknown {
+                    original_value: None,
+                    reason: "unsupported expression",
+                    has_side_effects: true,
+                },
             ),
         ],
         ast_path: [
@@ -2685,21 +2514,13 @@
                 Call,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                1231,
-            ),
-            hi: BytePos(
-                1286,
-            ),
-            ctxt: #0,
-        },
+        span: 1231..1286#0,
         in_try: false,
     },
     Call {
         func: Variable(
             (
-                Atom('__webpack_exec__' type=dynamic),
+                "__webpack_exec__",
                 #3,
             ),
         ),
@@ -2776,25 +2597,17 @@
                 Call,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                1316,
-            ),
-            hi: BytePos(
-                1338,
-            ),
-            ctxt: #0,
-        },
+        span: 1316..1338#0,
         in_try: false,
     },
     Member {
         obj: FreeVar(
-            Atom('module' type=static),
+            "module",
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('exports' type=inline),
+                Atom(
+                    "exports",
                 ),
             ),
         ),
@@ -2854,30 +2667,19 @@
             AssignExpr(
                 Left,
             ),
-            PatOrExpr(
-                Pat,
+            AssignTarget(
+                Simple,
             ),
-            Pat(
-                Expr,
-            ),
-            Expr(
+            SimpleAssignTarget(
                 Member,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                1342,
-            ),
-            hi: BytePos(
-                1356,
-            ),
-            ctxt: #0,
-        },
+        span: 1342..1356#0,
         in_try: false,
     },
     FreeVar {
         var: FreeVar(
-            Atom('module' type=static),
+            "module",
         ),
         ast_path: [
             Program(
@@ -2935,13 +2737,10 @@
             AssignExpr(
                 Left,
             ),
-            PatOrExpr(
-                Pat,
+            AssignTarget(
+                Simple,
             ),
-            Pat(
-                Expr,
-            ),
-            Expr(
+            SimpleAssignTarget(
                 Member,
             ),
             MemberExpr(
@@ -2951,15 +2750,7 @@
                 Ident,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                1342,
-            ),
-            hi: BytePos(
-                1348,
-            ),
-            ctxt: #1,
-        },
+        span: 1342..1348#1,
         in_try: false,
     },
 ]

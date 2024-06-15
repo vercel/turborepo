@@ -1,15 +1,20 @@
 [package]
-name = "vercel-api-mock"
+name = "turborepo-vercel-api-mock"
 version = "0.1.0"
 edition = "2021"
-license = "MPL-2.0"
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lints]
+workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
 axum = { workspace = true }
 axum-server = "0.4.7"
+futures-util = "0.3.28"
 port_scanner = { workspace = true }
+tempfile = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
-turborepo-api-client = { workspace = true }
+turborepo-vercel-api = { workspace = true }

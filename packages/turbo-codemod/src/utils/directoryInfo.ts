@@ -1,7 +1,7 @@
-import path from "path";
-import fs from "fs";
+import path from "node:path";
+import fs from "node:fs";
 
-export default function directoryInfo({ directory }: { directory: string }) {
+export function directoryInfo({ directory }: { directory: string }) {
   const dir = path.isAbsolute(directory)
     ? directory
     : path.join(process.cwd(), directory);

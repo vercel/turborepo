@@ -8,15 +8,16 @@
                 3,
                 Variable(
                     (
-                        Atom('__webpack_require__' type=dynamic),
+                        "__webpack_require__",
                         #3,
                     ),
                 ),
                 [
-                    Unknown(
-                        None,
-                        "unsupported expression",
-                    ),
+                    Unknown {
+                        original_value: None,
+                        reason: "unsupported expression",
+                        has_side_effects: true,
+                    },
                 ],
             ),
         ),
@@ -38,7 +39,7 @@
             389,
             Variable(
                 (
-                    Atom('handler' type=inline),
+                    "handler",
                     #4,
                 ),
             ),
@@ -46,23 +47,16 @@
     ),
     (
         "__unused_webpack_module",
-        Unknown(
-            Some(
-                Variable(
-                    (
-                        Atom('__unused_webpack_module' type=dynamic),
-                        #4,
-                    ),
-                ),
-            ),
-            "pattern without value",
+        Argument(
+            131,
+            0,
         ),
     ),
     (
         "__webpack_exec__",
         Variable(
             (
-                Atom('*arrow function 1213*' type=dynamic),
+                "*arrow function 1213*",
                 #0,
             ),
         ),
@@ -73,7 +67,7 @@
             3,
             Variable(
                 (
-                    Atom('__webpack_exec__' type=dynamic),
+                    "__webpack_exec__",
                     #3,
                 ),
             ),
@@ -90,16 +84,9 @@
     ),
     (
         "__webpack_exports__#4",
-        Unknown(
-            Some(
-                Variable(
-                    (
-                        Atom('__webpack_exports__' type=dynamic),
-                        #4,
-                    ),
-                ),
-            ),
-            "pattern without value",
+        Argument(
+            131,
+            1,
         ),
     ),
     (
@@ -107,13 +94,13 @@
         Call(
             3,
             FreeVar(
-                Atom('require' type=static),
+                "require",
             ),
             [
                 Constant(
                     Str(
                         Word(
-                            Atom('../../webpack-api-runtime.js' type=dynamic),
+                            "../../webpack-api-runtime.js",
                         ),
                     ),
                 ),
@@ -122,16 +109,9 @@
     ),
     (
         "__webpack_require__#4",
-        Unknown(
-            Some(
-                Variable(
-                    (
-                        Atom('__webpack_require__' type=dynamic),
-                        #4,
-                    ),
-                ),
-            ),
-            "pattern without value",
+        Argument(
+            131,
+            2,
         ),
     ),
     (
@@ -165,14 +145,14 @@
             5,
             Variable(
                 (
-                    Atom('promises_namespaceObject' type=dynamic),
+                    "promises_namespaceObject",
                     #4,
                 ),
             ),
             Constant(
                 Str(
-                    Word(
-                        Atom('readFile' type=dynamic),
+                    Atom(
+                        "readFile",
                     ),
                 ),
             ),
@@ -180,14 +160,14 @@
                 Constant(
                     Str(
                         Word(
-                            Atom('./hello.txt' type=dynamic),
+                            "./hello.txt",
                         ),
                     ),
                 ),
                 Constant(
                     Str(
                         Word(
-                            Atom('utf-8' type=inline),
+                            "utf-8",
                         ),
                     ),
                 ),
@@ -196,16 +176,9 @@
     ),
     (
         "moduleId",
-        Unknown(
-            Some(
-                Variable(
-                    (
-                        Atom('moduleId' type=dynamic),
-                        #6,
-                    ),
-                ),
-            ),
-            "pattern without value",
+        Argument(
+            1213,
+            0,
         ),
     ),
     (
@@ -213,13 +186,13 @@
         Call(
             3,
             FreeVar(
-                Atom('require' type=static),
+                "require",
             ),
             [
                 Constant(
                     Str(
                         Word(
-                            Atom('fs/promises' type=dynamic),
+                            "fs/promises",
                         ),
                     ),
                 ),
@@ -244,8 +217,8 @@
                         KeyValue(
                             Constant(
                                 Str(
-                                    Word(
-                                        Atom('id' type=static),
+                                    Atom(
+                                        "id",
                                     ),
                                 ),
                             ),
@@ -266,8 +239,8 @@
                         KeyValue(
                             Constant(
                                 Str(
-                                    Word(
-                                        Atom('id' type=static),
+                                    Atom(
+                                        "id",
                                     ),
                                 ),
                             ),
@@ -288,8 +261,8 @@
                         KeyValue(
                             Constant(
                                 Str(
-                                    Word(
-                                        Atom('id' type=static),
+                                    Atom(
+                                        "id",
                                     ),
                                 ),
                             ),

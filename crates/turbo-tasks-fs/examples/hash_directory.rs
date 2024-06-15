@@ -1,6 +1,4 @@
 #![feature(trivial_bounds)]
-#![feature(once_cell)]
-#![feature(min_specialization)]
 
 use std::{
     collections::BTreeMap,
@@ -11,10 +9,10 @@ use std::{
 
 use anyhow::Result;
 use sha2::{Digest, Sha256};
-use turbo_tasks::{primitives::StringVc, util::FormatDuration, NothingVc, TurboTasks, UpdateInfo};
+use turbo_tasks::{util::FormatDuration, RcStr, TurboTasks, UpdateInfo, Vc};
 use turbo_tasks_fs::{
-    register, DirectoryContent, DirectoryEntry, DiskFileSystemVc, FileContent, FileSystem,
-    FileSystemPathVc, FileSystemVc,
+    register, DirectoryContent, DirectoryEntry, DiskFileSystem, FileContent, FileSystem,
+    FileSystemPath,
 };
 use turbo_tasks_memory::MemoryBackend;
 
@@ -31,16 +29,16 @@ async fn main() -> Result<()> {
 
     let task = tt.spawn_root_task(|| {
         Box::pin(async {
-            let root = current_dir().unwrap().to_str().unwrap().to_string();
-            let disk_fs = DiskFileSystemVc::new("project".to_string(), root);
+            let root = current_dir().unwrap().to_str().unwrap().into();
+            let disk_fs = DiskFileSystem::new("project".into(), root, vec![]);
             disk_fs.await?.start_watching()?;
 
             // Smart Pointer cast
-            let fs: FileSystemVc = disk_fs.into();
-            let input = fs.root().join("demo");
+            let fs: Vc<Box<dyn FileSystem>> = Vc::upcast(disk_fs);
+            let input = fs.root().join("demo".into());
             let dir_hash = hash_directory(input);
-            print_hash(dir_hash);
-            Ok(NothingVc::new().into())
+            print_hash(dir_hash).await?;
+            Ok::<Vc<()>, _>(Default::default())
         })
     });
     tt.wait_task_completion(task, true).await.unwrap();
@@ -57,17 +55,17 @@ async fn main() -> Result<()> {
 }
 
 #[turbo_tasks::function]
-async fn print_hash(dir_hash: StringVc) -> Result<()> {
+async fn print_hash(dir_hash: Vc<RcStr>) -> Result<Vc<()>> {
     println!("DIR HASH: {}", dir_hash.await?.as_str());
-    Ok(())
+    Ok(Default::default())
 }
 
-async fn filename(path: FileSystemPathVc) -> Result<String> {
+async fn filename(path: Vc<FileSystemPath>) -> Result<String> {
     Ok(path.await?.path.split('/').last().unwrap().to_string())
 }
 
 #[turbo_tasks::function]
-async fn hash_directory(directory: FileSystemPathVc) -> Result<StringVc> {
+async fn hash_directory(directory: Vc<FileSystemPath>) -> Result<Vc<RcStr>> {
     let dir_path = &directory.await?.path;
     let content = directory.read_dir();
     let mut hashes = BTreeMap::new();
@@ -94,7 +92,7 @@ async fn hash_directory(directory: FileSystemPathVc) -> Result<StringVc> {
     let hash = hash_content(
         &mut hashes
             .into_values()
-            .collect::<Vec<String>>()
+            .collect::<Vec<RcStr>>()
             .join(",")
             .as_bytes(),
     );
@@ -103,18 +101,18 @@ async fn hash_directory(directory: FileSystemPathVc) -> Result<StringVc> {
 }
 
 #[turbo_tasks::function]
-async fn hash_file(file_path: FileSystemPathVc) -> Result<StringVc> {
+async fn hash_file(file_path: Vc<FileSystemPath>) -> Result<Vc<RcStr>> {
     let content = file_path.read().await?;
     Ok(match &*content {
         FileContent::Content(file) => hash_content(&mut file.read()),
         FileContent::NotFound => {
             // report error
-            StringVc::cell("".to_string())
+            Vc::cell(Default::default())
         }
     })
 }
 
-fn hash_content<R: Read>(content: &mut R) -> StringVc {
+fn hash_content<R: Read>(content: &mut R) -> Vc<RcStr> {
     let mut hasher = Sha256::new();
     let mut buf = [0; 1024];
     while let Ok(size) = content.read(&mut buf) {
@@ -122,5 +120,5 @@ fn hash_content<R: Read>(content: &mut R) -> StringVc {
     }
     let result = format!("{:x}", hasher.finalize());
 
-    StringVc::cell(result)
+    Vc::cell(result.into())
 }

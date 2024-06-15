@@ -1,22 +1,13 @@
-use std::{
-    fmt::Debug,
-    future::Future,
-    hash::Hash,
-    pin::Pin,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::{fmt::Debug, hash::Hash};
 
-use anyhow::{Context, Result};
+use tracing::Span;
 
 use crate::{
-    self as turbo_tasks, registry::register_function, task_input::TaskInput, util::SharedError,
-    RawVc,
+    registry::register_function,
+    task::{function::NativeTaskFn, IntoTaskFn, TaskFn},
+    util::SharedError,
+    ConcreteTaskInput, {self as turbo_tasks},
 };
-
-type NativeTaskFuture = Pin<Box<dyn Future<Output = Result<RawVc>> + Send>>;
-type NativeTaskFn = Box<dyn Fn() -> NativeTaskFuture + Send + Sync>;
-type BoundNativeTaskFn =
-    Box<dyn (Fn(&Vec<TaskInput>) -> Result<NativeTaskFn>) + Send + Sync + 'static>;
 
 /// A native (rust) turbo-tasks function. It's used internally by
 /// `#[turbo_tasks::function]`.
@@ -27,11 +18,7 @@ pub struct NativeFunction {
     /// The functor that creates a functor from inputs. The inner functor
     /// handles the task execution.
     #[turbo_tasks(debug_ignore, trace_ignore)]
-    pub bind_fn: BoundNativeTaskFn,
-    // TODO move to Task
-    /// A counter that tracks total executions of that function
-    #[turbo_tasks(debug_ignore, trace_ignore)]
-    pub executed_count: AtomicUsize,
+    pub implementation: Box<dyn TaskFn + Send + Sync + 'static>,
 }
 
 impl Debug for NativeFunction {
@@ -42,32 +29,21 @@ impl Debug for NativeFunction {
     }
 }
 
-type BindFn = Box<dyn (Fn(&Vec<TaskInput>) -> Result<NativeTaskFn>) + Send + Sync + 'static>;
-
 impl NativeFunction {
-    pub fn new(name: String, bind_fn: BindFn) -> Self {
+    pub fn new<I, Mode, Inputs>(name: String, implementation: I) -> Self
+    where
+        I: IntoTaskFn<Mode, Inputs>,
+    {
         Self {
             name,
-            bind_fn,
-            executed_count: AtomicUsize::new(0),
+            implementation: Box::new(implementation.into_task_fn()),
         }
     }
 
     /// Creates a functor for execution from a fixed set of inputs.
-    pub fn bind(&'static self, inputs: &Vec<TaskInput>) -> NativeTaskFn {
-        match (self.bind_fn)(inputs)
-            .with_context(|| format!("Error during argument binding of {}", self.name))
-        {
-            Ok(native_fn) => Box::new(move || {
-                let r = native_fn();
-                if cfg!(feature = "log_function_stats") {
-                    let count = self.executed_count.fetch_add(1, Ordering::Relaxed);
-                    if count > 0 && count % 100000 == 0 {
-                        println!("{} was executed {}k times", self.name, count / 1000);
-                    }
-                }
-                r
-            }),
+    pub fn bind(&'static self, inputs: &[ConcreteTaskInput]) -> NativeTaskFn {
+        match (self.implementation).functor(inputs) {
+            Ok(functor) => functor,
             Err(err) => {
                 let err = SharedError::new(err);
                 Box::new(move || {
@@ -78,7 +54,15 @@ impl NativeFunction {
         }
     }
 
-    pub fn register(&'static self, global_name: &str) {
+    pub fn span(&'static self) -> Span {
+        tracing::trace_span!("turbo_tasks::function", name = self.name.as_str())
+    }
+
+    pub fn resolve_span(&'static self) -> Span {
+        tracing::trace_span!("turbo_tasks::resolve_call", name = self.name.as_str())
+    }
+
+    pub fn register(&'static self, global_name: &'static str) {
         register_function(global_name, self);
     }
 }
@@ -99,12 +83,10 @@ impl Hash for &'static NativeFunction {
 
 impl PartialOrd for &'static NativeFunction {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        PartialOrd::partial_cmp(
-            &(*self as *const NativeFunction),
-            &(*other as *const NativeFunction),
-        )
+        Some(self.cmp(other))
     }
 }
+
 impl Ord for &'static NativeFunction {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         Ord::cmp(

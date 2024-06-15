@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
+const fs = require("node:fs");
+const path = require("node:path");
 const tsj = require("ts-json-schema-generator");
-const fs = require("fs");
-const path = require("path");
 
 /** @type {import('ts-json-schema-generator/dist/src/Config').Config} */
 const config = {

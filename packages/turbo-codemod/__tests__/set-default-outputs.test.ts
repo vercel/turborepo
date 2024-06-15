@@ -1,12 +1,13 @@
-import { transformer } from "../src/transforms/set-default-outputs";
 import { setupTestFixtures } from "@turbo/test-utils";
+import { type Schema } from "@turbo/types";
+import { transformer } from "../src/transforms/set-default-outputs";
 
 describe("set-default-outputs", () => {
   const { useFixture } = setupTestFixtures({
     directory: __dirname,
     test: "set-default-outputs",
   });
-  it("migrates turbo.json outputs - basic", async () => {
+  it("migrates turbo.json outputs - basic", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "old-outputs",
@@ -15,7 +16,7 @@ describe("set-default-outputs", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -43,7 +44,7 @@ describe("set-default-outputs", () => {
     `);
   });
 
-  it("migrates turbo.json outputs - workspace configs", async () => {
+  it("migrates turbo.json outputs - workspace configs", () => {
     // load the fixture for the test
     const { root, readJson } = useFixture({
       fixture: "workspace-configs",
@@ -52,7 +53,7 @@ describe("set-default-outputs", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(readJson("turbo.json") || "{}").toStrictEqual({
@@ -123,18 +124,18 @@ describe("set-default-outputs", () => {
     `);
   });
 
-  it("migrates turbo.json outputs - dry", async () => {
+  it("migrates turbo.json outputs - dry", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "old-outputs",
     });
 
-    const turboJson = JSON.parse(read("turbo.json") || "{}");
+    const turboJson = JSON.parse(read("turbo.json") || "{}") as Schema;
 
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: true, print: false },
+      options: { force: false, dryRun: true, print: false },
     });
 
     // make sure it didn't change
@@ -152,7 +153,7 @@ describe("set-default-outputs", () => {
     `);
   });
 
-  it("migrates turbo.json outputs - print", async () => {
+  it("migrates turbo.json outputs - print", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "old-outputs",
@@ -161,7 +162,7 @@ describe("set-default-outputs", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: true },
+      options: { force: false, dryRun: false, print: true },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -189,18 +190,18 @@ describe("set-default-outputs", () => {
     `);
   });
 
-  it("migrates turbo.json outputs - dry & print", async () => {
+  it("migrates turbo.json outputs - dry & print", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "old-outputs",
     });
 
-    const turboJson = JSON.parse(read("turbo.json") || "{}");
+    const turboJson = JSON.parse(read("turbo.json") || "{}") as Schema;
 
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: true, print: false },
+      options: { force: false, dryRun: true, print: false },
     });
 
     // make sure it didn't change
@@ -218,7 +219,7 @@ describe("set-default-outputs", () => {
     `);
   });
 
-  it("migrates turbo.json outputs - invalid", async () => {
+  it("migrates turbo.json outputs - invalid", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "invalid-outputs",
@@ -227,7 +228,7 @@ describe("set-default-outputs", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -279,7 +280,7 @@ describe("set-default-outputs", () => {
     `);
   });
 
-  it("migrates turbo.json outputs - config with no pipeline", async () => {
+  it("migrates turbo.json outputs - config with no pipeline", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "no-pipeline",
@@ -288,7 +289,7 @@ describe("set-default-outputs", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -309,7 +310,7 @@ describe("set-default-outputs", () => {
     `);
   });
 
-  it("migrates turbo.json outputs - config with no outputs", async () => {
+  it("migrates turbo.json outputs - config with no outputs", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "no-outputs",
@@ -318,7 +319,7 @@ describe("set-default-outputs", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -350,7 +351,7 @@ describe("set-default-outputs", () => {
     `);
   });
 
-  it("errors if no turbo.json can be found", async () => {
+  it("errors if no turbo.json can be found", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
       fixture: "no-turbo-json",
@@ -361,7 +362,7 @@ describe("set-default-outputs", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(read("turbo.json")).toBeUndefined();
@@ -371,7 +372,7 @@ describe("set-default-outputs", () => {
     );
   });
 
-  it("errors if package.json config exists and has not been migrated", async () => {
+  it("errors if package.json config exists and has not been migrated", () => {
     // load the fixture for the test
     const { root } = useFixture({
       fixture: "old-config",
@@ -380,7 +381,7 @@ describe("set-default-outputs", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(result.fatalError).toBeDefined();

@@ -35,4 +35,4 @@ Learn more about Turborepo Generators in the [docs](https://turbo.build/repo/doc
 
 ---
 
-For more information about Turborepo, visit [turbo.build](https://turbo.build) and follow us on Twitter ([@turborepo](https://twitter.com/turborepo))!
+For more information about Turborepo, visit [turbo.build](https://turbo.build) and follow us on X ([@turborepo](https://x.com/turborepo))!

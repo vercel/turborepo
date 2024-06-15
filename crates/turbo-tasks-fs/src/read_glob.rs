@@ -1,14 +1,15 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
+use turbo_tasks::{RcStr, Vc};
 
-use crate::{glob::GlobVc, DirectoryContent, DirectoryEntry, FileSystemPathVc};
+use crate::{glob::Glob, DirectoryContent, DirectoryEntry, FileSystemPath};
 
 #[turbo_tasks::value]
 #[derive(Default, Debug)]
 pub struct ReadGlobResult {
     pub results: HashMap<String, DirectoryEntry>,
-    pub inner: HashMap<String, ReadGlobResultVc>,
+    pub inner: HashMap<String, Vc<ReadGlobResult>>,
 }
 
 /// Reads matches of a glob pattern.
@@ -17,29 +18,29 @@ pub struct ReadGlobResult {
 /// on the order.
 #[turbo_tasks::function]
 pub async fn read_glob(
-    directory: FileSystemPathVc,
-    glob: GlobVc,
+    directory: Vc<FileSystemPath>,
+    glob: Vc<Glob>,
     include_dot_files: bool,
-) -> Result<ReadGlobResultVc> {
+) -> Result<Vc<ReadGlobResult>> {
     read_glob_internal("", directory, glob, include_dot_files).await
 }
 
 #[turbo_tasks::function]
 async fn read_glob_inner(
-    prefix: String,
-    directory: FileSystemPathVc,
-    glob: GlobVc,
+    prefix: RcStr,
+    directory: Vc<FileSystemPath>,
+    glob: Vc<Glob>,
     include_dot_files: bool,
-) -> Result<ReadGlobResultVc> {
+) -> Result<Vc<ReadGlobResult>> {
     read_glob_internal(&prefix, directory, glob, include_dot_files).await
 }
 
 async fn read_glob_internal(
     prefix: &str,
-    directory: FileSystemPathVc,
-    glob: GlobVc,
+    directory: Vc<FileSystemPath>,
+    glob: Vc<Glob>,
     include_dot_files: bool,
-) -> Result<ReadGlobResultVc> {
+) -> Result<Vc<ReadGlobResult>> {
     let dir = directory.read_dir().await?;
     let mut result = ReadGlobResult::default();
     let glob_value = glob.await?;
@@ -49,7 +50,7 @@ async fn read_glob_internal(
                 match item {
                     (segment, DirectoryEntry::Directory(path)) => {
                         let full_path = format!("{prefix}{segment}");
-                        let full_path_prefix = format!("{full_path}/");
+                        let full_path_prefix: RcStr = format!("{full_path}/").into();
                         if glob_value.execute(&full_path) {
                             result
                                 .results
@@ -73,5 +74,5 @@ async fn read_glob_internal(
         }
         DirectoryContent::NotFound => {}
     }
-    Ok(ReadGlobResultVc::cell(result))
+    Ok(ReadGlobResult::cell(result))
 }

@@ -1,10 +1,20 @@
 import typescript from "@rollup/plugin-typescript";
 
-export default {
-  input: "index.tsx",
-  output: {
-    file: "dist/index.js",
-    format: "cjs",
+export default [
+  {
+    input: "Button.tsx",
+    output: {
+      file: "dist/button.js",
+    },
   },
+  {
+    input: "Header.tsx",
+    output: {
+      file: "dist/header.js",
+    },
+  },
+].map((entry) => ({
+  ...entry,
+  external: ["react/jsx-runtime"],
   plugins: [typescript()],
-};
+}));

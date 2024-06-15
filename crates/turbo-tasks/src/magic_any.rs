@@ -90,7 +90,7 @@ impl Eq for dyn MagicAny {}
 
 impl PartialOrd for dyn MagicAny {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.magic_cmp(other))
+        Some(self.cmp(other))
     }
 }
 
@@ -149,9 +149,9 @@ pub struct MagicAnyDeserializeSeed {
 }
 
 impl MagicAnyDeserializeSeed {
-    pub fn new<T: Debug + Eq + Ord + Hash + Send + Sync + 'static>() -> Self
+    pub fn new<T>() -> Self
     where
-        T: for<'de> Deserialize<'de>,
+        T: for<'de> Deserialize<'de> + Debug + Eq + Ord + Hash + Send + Sync + 'static,
     {
         fn deserialize<
             T: Debug + Eq + Ord + Hash + for<'de> Deserialize<'de> + Send + Sync + 'static,
@@ -189,9 +189,9 @@ pub struct AnyDeserializeSeed {
 }
 
 impl AnyDeserializeSeed {
-    pub fn new<T: Any + Send + Sync + 'static>() -> Self
+    pub fn new<T>() -> Self
     where
-        T: for<'de> Deserialize<'de>,
+        T: for<'de> Deserialize<'de> + Any + Send + Sync + 'static,
     {
         fn deserialize<T: Any + for<'de> Deserialize<'de> + Send + Sync + 'static>(
             deserializer: &mut dyn erased_serde::Deserializer<'_>,

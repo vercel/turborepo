@@ -1,0 +1,59 @@
+name: Turborepo Native Library Tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+jobs:
+  js_native_packages:
+    name: JS Native Package Tests
+    timeout-minutes: 30
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu
+            runner:
+              - "self-hosted"
+              - "linux"
+              - "x64"
+              - "metal"
+          - name: macos
+            runner: macos-latest
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_REMOTE_ONLY: true
+
+    steps:
+      - name: Determine fetch depth
+        id: fetch-depth
+        run: |
+          echo "depth=$(( ${{ github.event.pull_request.commits || 1 }} + 1 ))" >> $GITHUB_OUTPUT
+
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}
+
+      - name: Setup Turborepo Environment
+        uses: ./.github/actions/setup-turborepo-environment
+        with:
+          windows: ${{ matrix.os.name == 'windows' }}
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node-version: "20"
+
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      - name: Run tests
+        # Manually set TURBO_API to an empty string to override Hetzner env
+        run: |
+          TURBO_API= turbo run test --filter "turborepo-repository" --color --env-mode=strict

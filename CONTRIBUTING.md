@@ -6,6 +6,7 @@ Thanks for your interest in contributing to Turbo!
 
 - [Contributing to Turbo](#contributing-to-turbo)
   - [General Dependencies](#general-dependencies)
+    - [Linux Dependencies](#linux-dependencies)
   - [Contributing to Turborepo](#contributing-to-turborepo)
     - [Building Turborepo](#building-turborepo)
     - [TLS Implementation](#tls-implementation)
@@ -21,7 +22,6 @@ Thanks for your interest in contributing to Turbo!
   - [Contributing to Turbopack](#contributing-to-turbopack)
     - [Turbopack Architecture](#turbopack-architecture)
     - [Testing Turbopack](#testing-turbopack)
-    - [Benchmarking Turbopack](#benchmarking-turbopack)
     - [Profiling Turbopack](#profiling-turbopack)
   - [Troubleshooting](#troubleshooting)
 
@@ -29,6 +29,10 @@ Thanks for your interest in contributing to Turbo!
 
 - [Rust](https://www.rust-lang.org/tools/install)
 - [cargo-groups](https://github.com/nicholaslyang/cargo-groups) (used to group crates into Turborepo-specific ones and Turbopack-specific ones)
+
+### Linux Dependencies
+
+- LLD (LLVM Linker), as it's not installed by default on many Linux distributions (e.g. `apt install lld`).
 
 ## Contributing to Turborepo
 
@@ -50,9 +54,9 @@ Building
 Turborepo uses `reqwest`, a Rust HTTP client, to make requests to the Turbo API. `reqwest` supports two TLS
 implementations: `rustls` and `native-tls`. `rustls` is a pure Rust implementation of TLS, while `native-tls`
 is a wrapper around OpenSSL. Turborepo allows users to select which implementation they want with the `native-tls`
-and `rustls-tls` features. By default, the `native-tls` feature is selected---this is done so that `cargo build` works
-out of the box. If you wish to select `rustls-tls`, you may do so by passing `--no-default-features --features rustls-tls`
-to the build command. This allows for us to build for more platforms, as `native-tls` is not supported everywhere.
+and `rustls-tls` features. By default, the `rustls-tls` feature is selected---this is done so that `cargo build` works
+out of the box. If you wish to select `native-tls`, you may do so by passing `--no-default-features --features native-tls`
+to the build command.
 
 ### Running Turborepo Tests
 
@@ -89,17 +93,16 @@ Then from the root directory, you can run:
   pnpm test -- --filter=turborepo-tests-integration
   ```
 - A single Integration test
-  e.g to run everything in `tests/run_summary`:
+  e.g to run everything in `tests/run-summary`:
+
   ```
   # build first because the next command doesn't run through turbo
   pnpm -- turbo run build --filter=cli
-  pnpm test -F turborepo-tests-integration -- "run_summary"
+  pnpm test -F turborepo-tests-integration -- "run-summary"
   ```
+
   Note: this is not through turbo, so you'll have to build turbo yourself first.
-- E2E test
-  ```bash
-  pnpm -- turbo e2e --filter=cli
-  ```
+
 - Example tests
   ```bash
   pnpm test -- --filter=turborepo-tests-examples -- <example-name> <packagemanager>
@@ -141,8 +144,8 @@ Here's a checklist of testing strategies to cover:
 
 - Test `login`, `logout`, `login --sso-team`, `link`, `unlink`
 - Test `prune` (Note `turbo` here is the unreleased turbo binary)
-  - `npx create-turbo --use-pnpm prune-test && cd prune-test`
-  - `turbo --skip-infer prune --scope=docs && cd out && pnpm install --frozen-lockfile`
+  - `pnpm dlx create-turbo@latest prune-test --package-manager pnpm && cd prune-test`
+  - `turbo --skip-infer prune docs && cd out && pnpm install --frozen-lockfile`
   - `turbo --skip-infer build`
 - Test `--dry-run` and `--graph`.
 - Test with and without daemon.
@@ -258,7 +261,7 @@ Finally, the crate must be added to the Turborepo section of CODEOWNERS:
 
 Turbopack uses [Cargo workspaces][workspaces] in the Turbo monorepo. You'll find
 several workspaces inside the `crates/` directory. In order to run a particular
-crate, you can use the `cargo run -p [CRATE_NAME]` command. For example, to test the Next.js development server, run `cargo run -p next-dev`.
+crate, you can use the `cargo run -p [CRATE_NAME]` command.
 
 ### Turbopack Architecture
 
@@ -288,9 +291,13 @@ You can also create a little demo app and run
 cargo run -p node-file-trace -- print demo/index.js
 ```
 
-### Benchmarking Turbopack
+Updating snapshot tests:
 
-See [the benchmarking README for Turbopack](crates/next-dev/benches/README.md) for details.
+In case of changes that involve updating snapshots you can use the `UPDATE=1` environment variable.
+
+```
+UPDATE=1 cargo nextest run
+```
 
 ### Profiling Turbopack
 

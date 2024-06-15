@@ -1,9 +1,16 @@
 {
-  "name": "jest-presets",
+  "name": "@repo/jest-presets",
   "version": "0.0.0",
   "private": true,
   "license": "MIT",
+  "files": [
+    "browser/jest-preset.js",
+    "node/jest-preset.js"
+  ],
   "dependencies": {
-    "ts-jest": "^26.5.0"
+    "ts-jest": "^29.1.2"
+  },
+  "devDependencies": {
+    "jest-environment-jsdom": "^29.7.0"
   }
 }

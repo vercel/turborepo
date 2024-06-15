@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) composable_config
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config
 
 # The override-values-task-with-deps configures dependsOn in the root turbo.json.
 # The workspace does not have a turbo.json config. This test checks that both regular dependencies
@@ -13,10 +12,10 @@ Setup
   \xe2\x80\xa2 Packages in scope: override-values (esc)
   \xe2\x80\xa2 Running override-values-task-with-deps in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  override-values:override-values-task-with-deps: cache miss, executing 83ee0949c3d7de54
+  override-values:override-values-task-with-deps: cache miss, executing 9b51bda96ea87896
   override-values:override-values-task-with-deps: 
   override-values:override-values-task-with-deps: > override-values-task-with-deps
-  override-values:override-values-task-with-deps: > echo "running override-values-task-with-deps" > out/foo.min.txt
+  override-values:override-values-task-with-deps: > echo running-override-values-task-with-deps > out/foo.min.txt
   override-values:override-values-task-with-deps: 
   
    Tasks:    1 successful, 1 total
@@ -31,11 +30,11 @@ Setup
     "cache": true,
     "dependsOn": [],
     "inputs": [],
-    "outputMode": "full",
+    "outputLogs": "full",
     "persistent": false,
     "env": [],
     "passThroughEnv": null,
-    "dotEnv": null
+    "interactive": false
   }
 
 # This task is similar, but `dependsOn` in the root turbo.json _only_ has a topological dependency
@@ -46,9 +45,9 @@ Setup
     "cache": true,
     "dependsOn": [],
     "inputs": [],
-    "outputMode": "full",
+    "outputLogs": "full",
     "persistent": false,
     "env": [],
     "passThroughEnv": null,
-    "dotEnv": null
+    "interactive": false
   }

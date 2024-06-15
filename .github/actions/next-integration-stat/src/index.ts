@@ -128,7 +128,7 @@ async function fetchJobLogsFromWorkflow(
   // downloadJobLogsForWorkflowRun returns a redirect to the actual logs
   const jobLogRedirectResponse =
     await octokit.rest.actions.downloadJobLogsForWorkflowRun({
-      accept: "application/vnd.github+json",
+      accept: "application/vnd.github.v3+json",
       ...context.repo,
       job_id: job.id,
     });
@@ -136,6 +136,7 @@ async function fetchJobLogsFromWorkflow(
   // fetch the actual logs
   const jobLogsResponse = await nodeFetch(jobLogRedirectResponse.url, {
     headers: {
+      Accept: "application/vnd.github.v3+json",
       Authorization: `token ${token}`,
     },
   });
@@ -258,7 +259,7 @@ async function createSlackPostSummary(payload: {
     2
   );
   console.log(
-    "Storing slack payload to ./slack-paylod.json to report into Slack channel.",
+    "Storing slack payload to ./slack-payload.json to report into Slack channel.",
     slackPayloadJson
   );
   fs.writeFileSync("./slack-payload.json", slackPayloadJson);
@@ -410,7 +411,6 @@ async function getJobResults(
   const integrationTestJobs = jobs?.filter((job) =>
     /Next\.js integration test \([^)]*\) \([^)]*\)$/.test(job.name)
   );
-  console.log(jobs?.map((j) => j.name));
 
   console.log(
     `Logs found for ${integrationTestJobs.length} jobs`,
@@ -436,12 +436,15 @@ async function getJobResults(
       const subset = job.name.includes("FLAKY_SUBSET");
       const index = subset ? 1 : 0;
 
+      const { id, run_id, run_url, html_url } = job;
+      console.log("Parsing logs for job", { id, run_id, run_url, html_url });
       const splittedLogs = logs.split("--test output start--");
       // First item isn't test data, it's just the log header
       splittedLogs.shift();
       for (const logLine of splittedLogs) {
+        let testData;
         try {
-          const testData = logLine.split("--test output end--")[0].trim()!;
+          testData = logLine.split("--test output end--")[0].trim()!;
 
           const data = JSON.parse(testData);
           acc[index].push({
@@ -450,8 +453,11 @@ async function getJobResults(
           });
         } catch (err) {
           console.log("Failed to parse test results", {
-            err,
-            logs,
+            id,
+            run_id,
+            run_url,
+            html_url,
+            testData,
           });
         }
       }
@@ -932,6 +938,7 @@ async function run() {
   const postCommentAsync = createCommentPostAsync(octokit, prNumber);
 
   const failedTestLists = [];
+  const passedTestsLists = [];
   // Collect failed test results for each job. We don't use this actively yet.
   const perJobFailedLists = {};
 
@@ -974,6 +981,8 @@ async function run() {
           }
           perJobFailedLists[value.job].push(failedTest);
         }
+      } else {
+        passedTestsLists.push(test.name);
       }
     }
     if (hasFailedTest) commentValues.push(`\n`);
@@ -1053,6 +1062,11 @@ async function run() {
         null,
         2
       )
+    );
+
+    fs.writeFileSync(
+      "./passed-test-path-list.json",
+      JSON.stringify(passedTestsLists, null, 2)
     );
 
     if (!prNumber) {

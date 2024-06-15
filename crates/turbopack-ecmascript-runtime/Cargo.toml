@@ -15,6 +15,9 @@ dynamic_embed_contents = ["turbo-tasks-fs/dynamic_embed_contents"]
 # enable test utilities such as `RuntimeType::Dummy`
 test = []
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = { workspace = true }
 indoc = { workspace = true }
@@ -25,8 +28,6 @@ turbo-tasks-fs = { workspace = true }
 turbopack = { workspace = true }
 turbopack-core = { workspace = true }
 turbopack-ecmascript = { workspace = true }
-
-swc_core = { workspace = true }
 
 [build-dependencies]
 turbo-tasks-build = { workspace = true }

@@ -1,16 +1,18 @@
 import * as React from "react";
-import type { HeadFC, PageProps } from "gatsby";
-import { Button } from "ui";
+import type { HeadProps, PageProps } from "gatsby";
+import { Button } from "@repo/ui/button";
 
-const IndexPage: React.FC<PageProps> = () => {
+function IndexPage(_: PageProps): JSX.Element {
   return (
     <main>
       <h1>Web</h1>
       <Button />
     </main>
   );
-};
+}
 
 export default IndexPage;
 
-export const Head: HeadFC = () => <title>Home Page</title>;
+export function Head(_: HeadProps): JSX.Element {
+  return <title>Home Page</title>;
+}

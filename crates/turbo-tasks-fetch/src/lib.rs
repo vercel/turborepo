@@ -1,9 +1,10 @@
 #![feature(min_specialization)]
+#![feature(arbitrary_self_types)]
 
 use anyhow::Result;
-use turbo_tasks::primitives::{OptionStringVc, StringVc};
-use turbo_tasks_fs::FileSystemPathVc;
-use turbopack_core::issue::{Issue, IssueSeverityVc, IssueVc};
+use turbo_tasks::{RcStr, Vc};
+use turbo_tasks_fs::FileSystemPath;
+use turbopack_core::issue::{Issue, IssueSeverity, IssueStage, OptionStyledString, StyledString};
 
 pub fn register() {
     turbo_tasks::register();
@@ -13,13 +14,13 @@ pub fn register() {
 }
 
 #[turbo_tasks::value(transparent)]
-pub struct FetchResult(Result<HttpResponseVc, FetchErrorVc>);
+pub struct FetchResult(Result<Vc<HttpResponse>, Vc<FetchError>>);
 
 #[turbo_tasks::value(shared)]
 #[derive(Debug)]
 pub struct HttpResponse {
     pub status: u16,
-    pub body: HttpResponseBodyVc,
+    pub body: Vc<HttpResponseBody>,
 }
 
 #[turbo_tasks::value(shared)]
@@ -27,23 +28,46 @@ pub struct HttpResponse {
 pub struct HttpResponseBody(pub Vec<u8>);
 
 #[turbo_tasks::value_impl]
-impl HttpResponseBodyVc {
+impl HttpResponseBody {
     #[turbo_tasks::function]
-    pub async fn to_string(self) -> Result<StringVc> {
+    pub async fn to_string(self: Vc<Self>) -> Result<Vc<RcStr>> {
         let this = &*self.await?;
-        Ok(StringVc::cell(std::str::from_utf8(&this.0)?.to_owned()))
+        Ok(Vc::cell(std::str::from_utf8(&this.0)?.into()))
     }
 }
 
+#[turbo_tasks::value(shared)]
+#[derive(Debug)]
+pub enum ProxyConfig {
+    Http(String),
+    Https(String),
+}
+
+#[turbo_tasks::value(transparent)]
+pub struct OptionProxyConfig(Option<ProxyConfig>);
+
 #[turbo_tasks::function]
-pub async fn fetch(url: StringVc, user_agent: OptionStringVc) -> Result<FetchResultVc> {
+pub async fn fetch(
+    url: Vc<RcStr>,
+    user_agent: Vc<Option<RcStr>>,
+    proxy_option: Vc<OptionProxyConfig>,
+) -> Result<Vc<FetchResult>> {
     let url = &*url.await?;
     let user_agent = &*user_agent.await?;
-    let client = reqwest::Client::new();
+    let proxy_option = &*proxy_option.await?;
 
-    let mut builder = client.get(url);
+    let client_builder = reqwest::Client::builder();
+    let client_builder = match proxy_option {
+        Some(ProxyConfig::Http(proxy)) => client_builder.proxy(reqwest::Proxy::http(proxy)?),
+        Some(ProxyConfig::Https(proxy)) => client_builder.proxy(reqwest::Proxy::https(proxy)?),
+        _ => client_builder,
+    };
+
+    let client = client_builder.build()?;
+
+    let mut builder = client.get(url.as_str());
     if let Some(user_agent) = user_agent {
-        builder = builder.header("User-Agent", user_agent);
+        builder = builder.header("User-Agent", user_agent.as_str());
     }
 
     let response = builder.send().await.and_then(|r| r.error_for_status());
@@ -52,16 +76,15 @@ pub async fn fetch(url: StringVc, user_agent: OptionStringVc) -> Result<FetchRes
             let status = response.status().as_u16();
             let body = response.bytes().await?.to_vec();
 
-            Ok(FetchResultVc::cell(Ok(HttpResponse {
+            Ok(Vc::cell(Ok(HttpResponse {
                 status,
-                body: HttpResponseBodyVc::cell(HttpResponseBody(body)),
+                body: HttpResponseBody::cell(HttpResponseBody(body)),
             }
             .cell())))
         }
-        Err(err) => Ok(FetchResultVc::cell(Err(FetchError::from_reqwest_error(
-            &err, url,
-        )
-        .cell()))),
+        Err(err) => Ok(Vc::cell(Err(
+            FetchError::from_reqwest_error(&err, url).cell()
+        ))),
     }
 }
 
@@ -76,9 +99,9 @@ pub enum FetchErrorKind {
 
 #[turbo_tasks::value(shared)]
 pub struct FetchError {
-    pub url: StringVc,
-    pub kind: FetchErrorKindVc,
-    pub detail: StringVc,
+    pub url: Vc<RcStr>,
+    pub kind: Vc<FetchErrorKind>,
+    pub detail: Vc<StyledString>,
 }
 
 impl FetchError {
@@ -94,24 +117,24 @@ impl FetchError {
         };
 
         FetchError {
-            detail: StringVc::cell(error.to_string()),
-            url: StringVc::cell(url.to_owned()),
+            detail: StyledString::Text(error.to_string().into()).cell(),
+            url: Vc::cell(url.into()),
             kind: kind.into(),
         }
     }
 }
 
 #[turbo_tasks::value_impl]
-impl FetchErrorVc {
+impl FetchError {
     #[turbo_tasks::function]
     pub async fn to_issue(
-        self,
-        severity: IssueSeverityVc,
-        context: FileSystemPathVc,
-    ) -> Result<FetchIssueVc> {
+        self: Vc<Self>,
+        severity: Vc<IssueSeverity>,
+        issue_context: Vc<FileSystemPath>,
+    ) -> Result<Vc<FetchIssue>> {
         let this = &*self.await?;
         Ok(FetchIssue {
-            context,
+            issue_context,
             severity,
             url: this.url,
             kind: this.kind,
@@ -123,58 +146,63 @@ impl FetchErrorVc {
 
 #[turbo_tasks::value(shared)]
 pub struct FetchIssue {
-    pub context: FileSystemPathVc,
-    pub severity: IssueSeverityVc,
-    pub url: StringVc,
-    pub kind: FetchErrorKindVc,
-    pub detail: StringVc,
+    pub issue_context: Vc<FileSystemPath>,
+    pub severity: Vc<IssueSeverity>,
+    pub url: Vc<RcStr>,
+    pub kind: Vc<FetchErrorKind>,
+    pub detail: Vc<StyledString>,
 }
 
 #[turbo_tasks::value_impl]
 impl Issue for FetchIssue {
     #[turbo_tasks::function]
-    fn context(&self) -> FileSystemPathVc {
-        self.context
+    fn file_path(&self) -> Vc<FileSystemPath> {
+        self.issue_context
     }
 
     #[turbo_tasks::function]
-    fn severity(&self) -> IssueSeverityVc {
+    fn severity(&self) -> Vc<IssueSeverity> {
         self.severity
     }
 
     #[turbo_tasks::function]
-    fn title(&self) -> StringVc {
-        StringVc::cell("Error while requesting resource".to_string())
+    fn title(&self) -> Vc<StyledString> {
+        StyledString::Text("Error while requesting resource".into()).cell()
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> StringVc {
-        StringVc::cell("fetch".to_string())
+    fn stage(&self) -> Vc<IssueStage> {
+        IssueStage::Load.into()
     }
 
     #[turbo_tasks::function]
-    async fn description(&self) -> Result<StringVc> {
+    async fn description(&self) -> Result<Vc<OptionStyledString>> {
         let url = &*self.url.await?;
         let kind = &*self.kind.await?;
 
-        Ok(StringVc::cell(match kind {
-            FetchErrorKind::Connect => format!(
-                "There was an issue establishing a connection while requesting {}.",
-                url
-            ),
-            FetchErrorKind::Status(status) => {
-                format!(
+        Ok(Vc::cell(Some(
+            StyledString::Text(match kind {
+                FetchErrorKind::Connect => format!(
+                    "There was an issue establishing a connection while requesting {}.",
+                    url
+                )
+                .into(),
+                FetchErrorKind::Status(status) => format!(
                     "Received response with status {} when requesting {}",
                     status, url
                 )
-            }
-            FetchErrorKind::Timeout => format!("Connection timed out when requesting {}", url),
-            FetchErrorKind::Other => format!("There was an issue requesting {}", url),
-        }))
+                .into(),
+                FetchErrorKind::Timeout => {
+                    format!("Connection timed out when requesting {}", url).into()
+                }
+                FetchErrorKind::Other => format!("There was an issue requesting {}", url).into(),
+            })
+            .cell(),
+        )))
     }
 
     #[turbo_tasks::function]
-    fn detail(&self) -> StringVc {
-        self.detail
+    fn detail(&self) -> Vc<OptionStyledString> {
+        Vc::cell(Some(self.detail))
     }
 }

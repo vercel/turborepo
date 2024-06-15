@@ -1,0 +1,23 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "override-values-task": {
+      "inputs": [
+        "src/bar.txt"
+      ],
+      "outputs": [
+        "lib/**"
+      ],
+      "env": [
+        "OTHER_VAR"
+      ],
+      "outputLogs": "full"
+    },
+    "override-values-task-with-deps": {
+      "dependsOn": []
+    },
+    "override-values-task-with-deps-2": {
+      "dependsOn": []
+    }
+  }
+}

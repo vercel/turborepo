@@ -5,52 +5,48 @@ use serde::{Deserialize, Serialize};
 use swc_core::{
     common::DUMMY_SP,
     ecma::{
-        ast::{CallExpr, Callee, Expr, ExprOrSpread},
+        ast::{CallExpr, Callee, Expr, ExprOrSpread, Lit},
         utils::private_ident,
     },
     quote, quote_expr,
 };
 use turbo_tasks::{
-    debug::ValueDebugFormat, primitives::StringVc, trace::TraceRawVcs, TryJoinIterExt, Value,
-    ValueToString, ValueToStringVc,
+    debug::ValueDebugFormat, trace::TraceRawVcs, RcStr, ReadRef, TryJoinIterExt, Value,
+    ValueToString, Vc,
 };
 use turbopack_core::{
-    chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc},
-    issue::{IssueSourceVc, OptionIssueSourceVc},
-    reference::{AssetReference, AssetReferenceVc},
-    resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResultVc},
+    chunk::{ChunkableModuleReference, ChunkingContext},
+    issue::IssueSource,
+    reference::ModuleReference,
+    resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult},
 };
+use turbopack_resolve::ecmascript::{cjs_resolve, try_to_severity};
 
-use super::pattern_mapping::{PatternMappingVc, ResolveType::Cjs};
+use super::pattern_mapping::{PatternMapping, ResolveType::ChunkItem};
 use crate::{
-    chunk::EcmascriptChunkingContextVc,
-    code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
+    code_gen::{CodeGenerateable, CodeGeneration},
     create_visitor,
-    references::{
-        pattern_mapping::{PatternMapping, PatternMappingReadRef},
-        AstPathVc,
-    },
-    resolve::{cjs_resolve, try_to_severity},
+    references::AstPath,
 };
 
 #[turbo_tasks::value]
 #[derive(Hash, Debug)]
 pub struct AmdDefineAssetReference {
-    origin: ResolveOriginVc,
-    request: RequestVc,
-    issue_source: IssueSourceVc,
+    origin: Vc<Box<dyn ResolveOrigin>>,
+    request: Vc<Request>,
+    issue_source: Vc<IssueSource>,
     in_try: bool,
 }
 
 #[turbo_tasks::value_impl]
-impl AmdDefineAssetReferenceVc {
+impl AmdDefineAssetReference {
     #[turbo_tasks::function]
     pub fn new(
-        origin: ResolveOriginVc,
-        request: RequestVc,
-        issue_source: IssueSourceVc,
+        origin: Vc<Box<dyn ResolveOrigin>>,
+        request: Vc<Request>,
+        issue_source: Vc<IssueSource>,
         in_try: bool,
-    ) -> Self {
+    ) -> Vc<Self> {
         Self::cell(AmdDefineAssetReference {
             origin,
             request,
@@ -61,13 +57,13 @@ impl AmdDefineAssetReferenceVc {
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for AmdDefineAssetReference {
+impl ModuleReference for AmdDefineAssetReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> ResolveResultVc {
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
         cjs_resolve(
             self.origin,
             self.request,
-            OptionIssueSourceVc::some(self.issue_source),
+            Some(self.issue_source),
             try_to_severity(self.in_try),
         )
     }
@@ -76,22 +72,22 @@ impl AssetReference for AmdDefineAssetReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for AmdDefineAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
-            "AMD define dependency {}",
-            self.request.to_string().await?,
-        )))
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
+        Ok(Vc::cell(
+            format!("AMD define dependency {}", self.request.to_string().await?,).into(),
+        ))
     }
 }
 
 #[turbo_tasks::value_impl]
-impl ChunkableAssetReference for AmdDefineAssetReference {}
+impl ChunkableModuleReference for AmdDefineAssetReference {}
 
-#[derive(
-    ValueDebugFormat, Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs, Copy, Clone,
-)]
+#[derive(ValueDebugFormat, Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs, Clone)]
 pub enum AmdDefineDependencyElement {
-    Request(RequestVc),
+    Request {
+        request: Vc<Request>,
+        request_str: String,
+    },
     Exports,
     Module,
     Require,
@@ -110,22 +106,22 @@ pub enum AmdDefineFactoryType {
 #[derive(Debug)]
 pub struct AmdDefineWithDependenciesCodeGen {
     dependencies_requests: Vec<AmdDefineDependencyElement>,
-    origin: ResolveOriginVc,
-    path: AstPathVc,
+    origin: Vc<Box<dyn ResolveOrigin>>,
+    path: Vc<AstPath>,
     factory_type: AmdDefineFactoryType,
-    issue_source: IssueSourceVc,
+    issue_source: Vc<IssueSource>,
     in_try: bool,
 }
 
-impl AmdDefineWithDependenciesCodeGenVc {
+impl AmdDefineWithDependenciesCodeGen {
     pub fn new(
         dependencies_requests: Vec<AmdDefineDependencyElement>,
-        origin: ResolveOriginVc,
-        path: AstPathVc,
+        origin: Vc<Box<dyn ResolveOrigin>>,
+        path: Vc<AstPath>,
         factory_type: AmdDefineFactoryType,
-        issue_source: IssueSourceVc,
+        issue_source: Vc<IssueSource>,
         in_try: bool,
-    ) -> Self {
+    ) -> Vc<Self> {
         Self::cell(AmdDefineWithDependenciesCodeGen {
             dependencies_requests,
             origin,
@@ -142,8 +138,8 @@ impl CodeGenerateable for AmdDefineWithDependenciesCodeGen {
     #[turbo_tasks::function]
     async fn code_generation(
         &self,
-        context: EcmascriptChunkingContextVc,
-    ) -> Result<CodeGenerationVc> {
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
+    ) -> Result<Vc<CodeGeneration>> {
         let mut visitors = Vec::new();
 
         let resolved_elements = self
@@ -151,24 +147,25 @@ impl CodeGenerateable for AmdDefineWithDependenciesCodeGen {
             .iter()
             .map(|element| async move {
                 Ok(match element {
-                    AmdDefineDependencyElement::Request(request) => {
-                        ResolvedElement::PatternMapping(
-                            PatternMappingVc::resolve_request(
-                                *request,
+                    AmdDefineDependencyElement::Request {
+                        request,
+                        request_str,
+                    } => ResolvedElement::PatternMapping {
+                        pattern_mapping: PatternMapping::resolve_request(
+                            *request,
+                            self.origin,
+                            Vc::upcast(chunking_context),
+                            cjs_resolve(
                                 self.origin,
-                                context.into(),
-                                cjs_resolve(
-                                    self.origin,
-                                    *request,
-                                    OptionIssueSourceVc::some(self.issue_source),
-                                    try_to_severity(self.in_try),
-                                ),
-                                Value::new(Cjs),
-                            )
-                            .await?,
-                            request.await?.request(),
+                                *request,
+                                Some(self.issue_source),
+                                try_to_severity(self.in_try),
+                            ),
+                            Value::new(ChunkItem),
                         )
-                    }
+                        .await?,
+                        request_str: request_str.to_string(),
+                    },
                     AmdDefineDependencyElement::Exports => {
                         ResolvedElement::Expr(quote!("exports" as Expr))
                     }
@@ -197,7 +194,10 @@ impl CodeGenerateable for AmdDefineWithDependenciesCodeGen {
 }
 
 enum ResolvedElement {
-    PatternMapping(PatternMappingReadRef, Option<String>),
+    PatternMapping {
+        pattern_mapping: ReadRef<PatternMapping>,
+        request_str: String,
+    },
     Expr(Expr),
 }
 
@@ -223,23 +223,14 @@ fn transform_amd_factory(
     let deps = resolved_elements
         .iter()
         .map(|element| match element {
-            ResolvedElement::PatternMapping(pm, req) => match &**pm {
-                PatternMapping::Invalid => quote_expr!("undefined"),
-                pm => {
-                    let arg = if let Some(req) = req {
-                        pm.apply(req.as_str().into())
-                    } else {
-                        pm.create()
-                    };
-
-                    if pm.is_internal_import() {
-                        quote_expr!("__turbopack_require__($arg)", arg: Expr = arg)
-                    } else {
-                        quote_expr!("__turbopack_external_require__($arg)", arg: Expr = arg)
-                    }
-                }
-            },
-            ResolvedElement::Expr(expr) => Box::new(expr.clone()),
+            ResolvedElement::PatternMapping {
+                pattern_mapping: pm,
+                request_str: request,
+            } => {
+                let key_expr = Expr::Lit(Lit::Str(request.as_str().into()));
+                pm.create_require(key_expr)
+            }
+            ResolvedElement::Expr(expr) => expr.clone(),
         })
         .map(ExprOrSpread::from)
         .collect();

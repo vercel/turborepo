@@ -7,18 +7,20 @@ import {
   Scripts,
   ScrollRestoration,
 } from "@remix-run/react";
-import styles from "~/styles.css";
 import { Analytics } from "@vercel/analytics/react";
+import styles from "./styles.css";
 
-export const meta: MetaFunction = () => ({
-  charset: "utf-8",
-  title: "Blog | Kitchen Sink",
-  viewport: "width=device-width,initial-scale=1",
-});
+export const meta: MetaFunction = () => [
+  {
+    charset: "utf-8",
+    title: "Blog | Kitchen Sink",
+    viewport: "width=device-width,initial-scale=1",
+  },
+];
 
 export const links: LinksFunction = () => [{ rel: "stylesheet", href: styles }];
 
-export default function App() {
+export default function App(): JSX.Element {
   return (
     <html lang="en">
       <head>

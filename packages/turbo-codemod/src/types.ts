@@ -1,22 +1,25 @@
-import { TransformerResults } from "./runner";
+import type { TransformerResults } from "./runner";
 
-export type Transformer = {
+export interface Transformer {
   name: string;
-  value: string;
+  description: string;
   introducedIn: string;
-  transformer: (args: TransformerArgs) => TransformerResults;
-};
+  idempotent?: boolean;
+  transformer: (
+    args: TransformerArgs
+  ) => Promise<TransformerResults> | TransformerResults;
+}
 
-export type TransformerOptions = {
+export interface TransformerOptions {
   force: boolean;
-  dry: boolean;
+  dryRun: boolean;
   print: boolean;
-};
+}
 
-export type TransformerArgs = {
+export interface TransformerArgs {
   root: string;
   options: TransformerOptions;
-};
+}
 
 export interface UtilityArgs extends TransformerOptions {
   transformer: string;

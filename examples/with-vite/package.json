@@ -1,16 +1,17 @@
 {
   "private": true,
   "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev",
-    "lint": "turbo run lint",
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {
-    "eslint": "^7.32.0",
-    "eslint-config-custom": "workspace:*",
-    "prettier": "^2.5.1",
-    "turbo": "latest"
+    "@repo/eslint-config": "workspace:*",
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.5",
+    "turbo": "^2.0.3"
   },
-  "packageManager": "pnpm@7.15.0"
+  "packageManager": "pnpm@8.15.6",
+  "name": "with-vite"
 }

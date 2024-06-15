@@ -15,8 +15,12 @@ tokio_tracing = ["tokio/tracing"]
 log_function_stats = []
 hanging_detection = []
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = { workspace = true }
+async-trait = { workspace = true }
 auto-hash-map = { workspace = true }
 concurrent-queue = { workspace = true }
 dashmap = { workspace = true }
@@ -33,12 +37,12 @@ regex = { workspace = true }
 serde = { workspace = true, features = ["rc", "derive"] }
 serde_json = { workspace = true }
 serde_regex = "1.1.0"
-stable_deref_trait = "1.2.0"
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 turbo-tasks-hash = { workspace = true }
 turbo-tasks-macros = { workspace = true }
+turbo-tasks-malloc = { workspace = true }
 
 [dev-dependencies]
 serde_test = "1.0.157"

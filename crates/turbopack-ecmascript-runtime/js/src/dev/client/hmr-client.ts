@@ -3,21 +3,54 @@
 /// <reference path="../runtime/base/protocol.d.ts" />
 /// <reference path="../runtime/base/extensions.d.ts" />
 
-import { addEventListener, sendMessage } from "./websocket";
+import {
+  addMessageListener as turboSocketAddMessageListener,
+  sendMessage as turboSocketSendMessage,
+} from "./websocket";
+type SendMessage = typeof import("./websocket").sendMessage;
 
 export type ClientOptions = {
-  assetPrefix: string;
+  addMessageListener: typeof import("./websocket").addMessageListener;
+  sendMessage: SendMessage;
+  onUpdateError: (err: unknown) => void;
 };
 
-export function connect({ assetPrefix }: ClientOptions) {
-  addEventListener((event) => {
-    switch (event.type) {
-      case "connected":
-        handleSocketConnected();
+export function connect({
+  // TODO(WEB-1465) Remove this backwards compat fallback once
+  // vercel/next.js#54586 is merged.
+  addMessageListener = turboSocketAddMessageListener,
+  // TODO(WEB-1465) Remove this backwards compat fallback once
+  // vercel/next.js#54586 is merged.
+  sendMessage = turboSocketSendMessage,
+  onUpdateError = console.error,
+}: ClientOptions) {
+  addMessageListener((msg) => {
+    switch (msg.type) {
+      case "turbopack-connected":
+        handleSocketConnected(sendMessage);
         break;
-      case "message":
-        const msg: ServerMessage = JSON.parse(event.message.data);
-        handleSocketMessage(msg);
+      default:
+        try {
+          if (Array.isArray(msg.data)) {
+            for (let i = 0; i < msg.data.length; i++) {
+              handleSocketMessage(msg.data[i] as ServerMessage);
+            }
+          } else {
+            handleSocketMessage(msg.data as ServerMessage);
+          }
+          applyAggregatedUpdates();
+        } catch (e: unknown) {
+          console.warn(
+            "[Fast Refresh] performing full reload\n\n" +
+              "Fast Refresh will perform a full reload when you edit a file that's imported by modules outside of the React rendering tree.\n" +
+              "You might have a file which exports a React component but also exports a value that is imported by a non-React component file.\n" +
+              "Consider migrating the non-React component export to a separate file and importing it into both files.\n\n" +
+              "It is also possible the parent component of the component you edited is a class component, which disables Fast Refresh.\n" +
+              "Fast Refresh requires at least one parent function component in your React tree."
+          );
+          onUpdateError(e);
+          location.reload();
+        }
         break;
     }
   });
@@ -28,13 +61,13 @@ export function connect({ assetPrefix }: ClientOptions) {
   }
   globalThis.TURBOPACK_CHUNK_UPDATE_LISTENERS = {
     push: ([chunkPath, callback]: [ChunkPath, UpdateCallback]) => {
-      subscribeToChunkUpdate(chunkPath, callback);
+      subscribeToChunkUpdate(chunkPath, sendMessage, callback);
     },
   };
 
   if (Array.isArray(queued)) {
     for (const [chunkPath, callback] of queued) {
-      subscribeToChunkUpdate(chunkPath, callback);
+      subscribeToChunkUpdate(chunkPath, sendMessage, callback);
     }
   }
 }
@@ -46,7 +79,7 @@ type UpdateCallbackSet = {
 
 const updateCallbackSets: Map<ResourceKey, UpdateCallbackSet> = new Map();
 
-function sendJSON(message: ClientMessage) {
+function sendJSON(sendMessage: SendMessage, message: ClientMessage) {
   sendMessage(JSON.stringify(message));
 }
 
@@ -59,81 +92,55 @@ function resourceKey(resource: ResourceIdentifier): ResourceKey {
   });
 }
 
-function subscribeToUpdates(resource: ResourceIdentifier): () => void {
-  sendJSON({
-    type: "subscribe",
+function subscribeToUpdates(
+  sendMessage: SendMessage,
+  resource: ResourceIdentifier
+): () => void {
+  sendJSON(sendMessage, {
+    type: "turbopack-subscribe",
     ...resource,
   });
 
   return () => {
-    sendJSON({
-      type: "unsubscribe",
+    sendJSON(sendMessage, {
+      type: "turbopack-unsubscribe",
       ...resource,
     });
   };
 }
 
-function handleSocketConnected() {
+function handleSocketConnected(sendMessage: SendMessage) {
   for (const key of updateCallbackSets.keys()) {
-    subscribeToUpdates(JSON.parse(key));
+    subscribeToUpdates(sendMessage, JSON.parse(key));
   }
 }
 
 // we aggregate all pending updates until the issues are resolved
-const chunkListsWithPendingUpdates: Map<
-  ResourceKey,
-  { update: ChunkListUpdate; resource: ResourceIdentifier }
-> = new Map();
+const chunkListsWithPendingUpdates: Map<ResourceKey, PartialServerMessage> =
+  new Map();
 
-function aggregateUpdates(
-  msg: ServerMessage,
-  aggregate: boolean
-): ServerMessage {
+function aggregateUpdates(msg: PartialServerMessage) {
   const key = resourceKey(msg.resource);
   let aggregated = chunkListsWithPendingUpdates.get(key);
 
-  if (msg.type === "issues" && aggregated != null) {
-    if (!aggregate) {
-      chunkListsWithPendingUpdates.delete(key);
-    }
-
-    return {
-      ...msg,
-      type: "partial",
-      instruction: aggregated.update,
-    };
-  }
-
-  if (msg.type !== "partial") return msg;
-
-  if (aggregated == null) {
-    if (aggregate) {
-      chunkListsWithPendingUpdates.set(key, {
-        resource: msg.resource,
-        update: msg.instruction,
-      });
-    }
-
-    return msg;
-  }
-
-  aggregated = {
-    resource: msg.resource,
-    update: mergeChunkListUpdates(aggregated.update, msg.instruction),
-  };
-
-  if (aggregate) {
-    chunkListsWithPendingUpdates.set(key, aggregated);
+  if (aggregated) {
+    aggregated.instruction = mergeChunkListUpdates(
+      aggregated.instruction,
+      msg.instruction
+    );
   } else {
-    // Once we receive a partial update with no critical issues, we can stop aggregating updates.
-    // The aggregated update will be applied.
-    chunkListsWithPendingUpdates.delete(key);
+    chunkListsWithPendingUpdates.set(key, msg);
   }
+}
 
-  return {
-    ...msg,
-    instruction: aggregated.update,
-  };
+function applyAggregatedUpdates() {
+  if (chunkListsWithPendingUpdates.size === 0) return;
+  hooks.beforeRefresh();
+  for (const msg of chunkListsWithPendingUpdates.values()) {
+    triggerUpdate(msg);
+  }
+  chunkListsWithPendingUpdates.clear();
+  finalizeUpdate();
 }
 
 function mergeChunkListUpdates(
@@ -403,7 +410,7 @@ function mergeEcmascriptChunkUpdates(
   return undefined;
 }
 
-function invariant(never: never, message: string): never {
+function invariant(_: never, message: string): never {
   throw new Error(`Invariant: ${message}`);
 }
 
@@ -478,7 +485,7 @@ const hooks = {
   beforeRefresh: () => {},
   refresh: () => {},
   buildOk: () => {},
-  issues: (issues: Issue[]) => {},
+  issues: (_issues: Issue[]) => {},
 };
 
 export function setHooks(newHooks: typeof hooks) {
@@ -488,23 +495,29 @@ export function setHooks(newHooks: typeof hooks) {
 function handleSocketMessage(msg: ServerMessage) {
   sortIssues(msg.issues);
 
-  const hasCriticalIssues = handleIssues(msg);
+  handleIssues(msg);
 
-  // TODO(WEB-582) Disable update aggregation for now.
-  const aggregate = /* hasCriticalIssues */ false;
-  const aggregatedMsg = aggregateUpdates(msg, aggregate);
-
-  if (aggregate) return;
-
-  const runHooks = chunkListsWithPendingUpdates.size === 0;
-
-  if (aggregatedMsg.type !== "issues") {
-    if (runHooks) hooks.beforeRefresh();
-    triggerUpdate(aggregatedMsg);
-    if (runHooks) hooks.refresh();
+  switch (msg.type) {
+    case "issues":
+      // issues are already handled
+      break;
+    case "partial":
+      // aggregate updates
+      aggregateUpdates(msg);
+      break;
+    default:
+      // run single update
+      const runHooks = chunkListsWithPendingUpdates.size === 0;
+      if (runHooks) hooks.beforeRefresh();
+      triggerUpdate(msg);
+      if (runHooks) finalizeUpdate();
+      break;
   }
+}
 
-  if (runHooks) hooks.buildOk();
+function finalizeUpdate() {
+  hooks.refresh();
+  hooks.buildOk();
 
   // This is used by the Next.js integration test suite to notify it when HMR
   // updates have been completed.
@@ -515,29 +528,39 @@ function handleSocketMessage(msg: ServerMessage) {
   }
 }
 
-export function subscribeToChunkUpdate(
+function subscribeToChunkUpdate(
   chunkPath: ChunkPath,
+  sendMessage: SendMessage,
   callback: UpdateCallback
 ): () => void {
   return subscribeToUpdate(
     {
       path: chunkPath,
     },
+    sendMessage,
     callback
   );
 }
 
 export function subscribeToUpdate(
   resource: ResourceIdentifier,
+  sendMessage: SendMessage,
   callback: UpdateCallback
 ) {
+  // TODO(WEB-1465) Remove this backwards compat fallback once
+  // vercel/next.js#54586 is merged.
+  if (callback === undefined) {
+    callback = sendMessage;
+    sendMessage = turboSocketSendMessage;
+  }
+
   const key = resourceKey(resource);
   let callbackSet: UpdateCallbackSet;
   const existingCallbackSet = updateCallbackSets.get(key);
   if (!existingCallbackSet) {
     callbackSet = {
       callbacks: new Set([callback]),
-      unsubscribe: subscribeToUpdates(resource),
+      unsubscribe: subscribeToUpdates(sendMessage, resource),
     };
     updateCallbackSets.set(key, callbackSet);
   } else {
@@ -562,25 +585,17 @@ function triggerUpdate(msg: ServerMessage) {
     return;
   }
 
-  try {
-    for (const callback of callbackSet.callbacks) {
-      callback(msg);
-    }
+  for (const callback of callbackSet.callbacks) {
+    callback(msg);
+  }
 
-    if (msg.type === "notFound") {
-      // This indicates that the resource which we subscribed to either does not exist or
-      // has been deleted. In either case, we should clear all update callbacks, so if a
-      // new subscription is created for the same resource, it will send a new "subscribe"
-      // message to the server.
-      // No need to send an "unsubscribe" message to the server, it will have already
-      // dropped the update stream before sending the "notFound" message.
-      updateCallbackSets.delete(key);
-    }
-  } catch (err) {
-    console.error(
-      `An error occurred during the update of resource \`${msg.resource.path}\``,
-      err
-    );
-    location.reload();
+  if (msg.type === "notFound") {
+    // This indicates that the resource which we subscribed to either does not exist or
+    // has been deleted. In either case, we should clear all update callbacks, so if a
+    // new subscription is created for the same resource, it will send a new "subscribe"
+    // message to the server.
+    // No need to send an "unsubscribe" message to the server, it will have already
+    // dropped the update stream before sending the "notFound" message.
+    updateCallbackSets.delete(key);
   }
 }

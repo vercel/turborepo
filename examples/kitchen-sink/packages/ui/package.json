@@ -1,5 +1,5 @@
 {
-  "name": "ui",
+  "name": "@repo/ui",
   "version": "0.0.0",
   "private": true,
   "license": "MIT",
@@ -11,29 +11,28 @@
     "dist/**"
   ],
   "scripts": {
-    "build": "tsup src/index.tsx --format esm,cjs --dts --external react",
+    "build": "tsup",
     "clean": "rm -rf dist",
-    "dev": "tsup src/index.tsx --format esm,cjs --watch --dts --external react",
-    "lint": "eslint \"src/**/*.ts*\"",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
     "test": "jest"
   },
   "jest": {
-    "preset": "jest-presets/jest/node"
+    "preset": "@repo/jest-presets/browser"
   },
   "devDependencies": {
-    "@types/jest": "^26.0.22",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
-    "eslint": "^7.32.0",
-    "eslint-config-custom": "workspace:*",
-    "jest": "^26.6.3",
-    "jest-presets": "workspace:*",
+    "@repo/eslint-config": "workspace:*",
+    "@repo/jest-presets": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.11.24",
+    "@types/react": "^18.2.62",
+    "@types/react-dom": "^18.2.19",
+    "jest": "^29.7.0",
     "react": "^18.2.0",
-    "tsconfig": "workspace:*",
-    "tsup": "^6.2.3",
-    "typescript": "^4.8.3"
-  },
-  "dependencies": {
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "tsup": "^8.0.2",
+    "typescript": "^5.3.3"
   }
 }

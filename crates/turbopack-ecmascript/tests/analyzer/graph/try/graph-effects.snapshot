@@ -1,7 +1,7 @@
 [
     FreeVar {
         var: FreeVar(
-            Atom('require' type=static),
+            "require",
         ),
         ast_path: [
             Program(
@@ -48,27 +48,19 @@
                 Ident,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                25,
-            ),
-            hi: BytePos(
-                32,
-            ),
-            ctxt: #1,
-        },
+        span: 25..32#1,
         in_try: true,
     },
     Call {
         func: FreeVar(
-            Atom('require' type=static),
+            "require",
         ),
         args: [
             Value(
                 Constant(
                     Str(
                         Word(
-                            Atom('packages/not-found' type=dynamic),
+                            "packages/not-found",
                         ),
                     ),
                 ),
@@ -110,20 +102,12 @@
                 Call,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                25,
-            ),
-            hi: BytePos(
-                54,
-            ),
-            ctxt: #0,
-        },
+        span: 25..54#0,
         in_try: true,
     },
     FreeVar {
         var: FreeVar(
-            Atom('require' type=static),
+            "require",
         ),
         ast_path: [
             Program(
@@ -173,27 +157,19 @@
                 Ident,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                78,
-            ),
-            hi: BytePos(
-                85,
-            ),
-            ctxt: #1,
-        },
+        span: 78..85#1,
         in_try: false,
     },
     Call {
         func: FreeVar(
-            Atom('require' type=static),
+            "require",
         ),
         args: [
             Value(
                 Constant(
                     Str(
                         Word(
-                            Atom('packages/found' type=dynamic),
+                            "packages/found",
                         ),
                     ),
                 ),
@@ -238,28 +214,20 @@
                 Call,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                78,
-            ),
-            hi: BytePos(
-                103,
-            ),
-            ctxt: #0,
-        },
+        span: 78..103#0,
         in_try: false,
     },
     Member {
         obj: Variable(
             (
-                Atom('pkg' type=inline),
+                "pkg",
                 #2,
             ),
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('fn' type=inline),
+                Atom(
+                    "fn",
                 ),
             ),
         ),
@@ -291,28 +259,20 @@
                 Member,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                108,
-            ),
-            hi: BytePos(
-                114,
-            ),
-            ctxt: #0,
-        },
+        span: 108..114#0,
         in_try: false,
     },
     MemberCall {
         obj: Variable(
             (
-                Atom('pkg' type=inline),
+                "pkg",
                 #2,
             ),
         ),
         prop: Constant(
             Str(
-                Word(
-                    Atom('fn' type=inline),
+                Atom(
+                    "fn",
                 ),
             ),
         ),
@@ -336,15 +296,7 @@
                 Call,
             ),
         ],
-        span: Span {
-            lo: BytePos(
-                108,
-            ),
-            hi: BytePos(
-                116,
-            ),
-            ctxt: #0,
-        },
+        span: 108..116#0,
         in_try: false,
     },
 ]
