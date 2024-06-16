@@ -13,13 +13,13 @@ use tracing::debug;
 const PANE_SIZE_RATIO: f32 = 3.0 / 4.0;
 const FRAMERATE: Duration = Duration::from_millis(3);
 
-use super::{input, AppReceiver, Error, Event, TaskTable, TerminalPane};
+use super::{input, AppReceiver, Error, Event, InputOptions, TaskTable, TerminalPane};
 
 pub struct App<I> {
     table: TaskTable,
     pane: TerminalPane<I>,
     done: bool,
-    interact: bool,
+    input_options: InputOptions,
 }
 
 pub enum Direction {
@@ -34,7 +34,11 @@ impl<I> App<I> {
             table: TaskTable::new(tasks.clone()),
             pane: TerminalPane::new(rows, cols, tasks),
             done: false,
-            interact: false,
+            input_options: InputOptions {
+                interact: false,
+                // Check if stdin is a tty that we should read input from
+                tty_stdin: atty::is(atty::Stream::Stdin),
+            },
         };
         // Start with first task selected
         this.next();
@@ -60,7 +64,7 @@ impl<I> App<I> {
             return;
         };
         if self.pane.has_stdin(selected_task) {
-            self.interact = interact;
+            self.input_options.interact = interact;
             self.pane.highlight(interact);
         }
     }
@@ -87,7 +91,7 @@ impl<I> App<I> {
 impl<I: std::io::Write> App<I> {
     pub fn forward_input(&mut self, bytes: &[u8]) -> Result<(), Error> {
         // If we aren't in interactive mode, ignore input
-        if !self.interact {
+        if !self.input_options.interact {
             return Ok(());
         }
         let selected_task = self
@@ -104,7 +108,6 @@ impl<I: std::io::Write> App<I> {
 pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
     let mut terminal = startup()?;
     let size = terminal.size()?;
-
     // Figure out pane width?
     let task_width_hint = TaskTable::width_hint(tasks.iter().map(|s| s.as_str()));
     // Want to maximize pane width
@@ -131,7 +134,7 @@ fn run_app_inner<B: Backend + std::io::Write>(
     // Render initial state to paint the screen
     terminal.draw(|f| view(app, f))?;
     let mut last_render = Instant::now();
-    while let Some(event) = poll(app.interact, &receiver, last_render + FRAMERATE) {
+    while let Some(event) = poll(app.input_options, &receiver, last_render + FRAMERATE) {
         update(app, event)?;
         if app.done {
             break;
@@ -147,13 +150,21 @@ fn run_app_inner<B: Backend + std::io::Write>(
 
 /// Blocking poll for events, will only return None if app handle has been
 /// dropped
-fn poll(interact: bool, receiver: &AppReceiver, deadline: Instant) -> Option<Event> {
-    match input(interact) {
+fn poll(input_options: InputOptions, receiver: &AppReceiver, deadline: Instant) -> Option<Event> {
+    match input(input_options) {
         Ok(Some(event)) => Some(event),
         Ok(None) => receiver.recv(deadline).ok(),
         // Unable to read from stdin, shut down and attempt to clean up
         Err(_) => Some(Event::Stop),
     }
+}
+
+const MIN_HEIGHT: u16 = 10;
+const MIN_WIDTH: u16 = 20;
+
+pub fn terminal_big_enough() -> Result<bool, Error> {
+    let (width, height) = crossterm::terminal::size()?;
+    Ok(width >= MIN_WIDTH && height >= MIN_HEIGHT)
 }
 
 /// Configures terminal for rendering App

@@ -1,0 +1,40 @@
+---
+title: telemetry
+description: API reference for the `turbo telemetry` command
+---
+
+import { LinkToDocumentation } from '#/components/link-to-documentation';
+
+`turbo telemetry [argument]`
+
+Manage telemetry for this machine.
+
+<LinkToDocumentation href="/repo/docs/telemetry">
+  Learn more about Turborepo's telemetry.
+</LinkToDocumentation>
+
+## Arguments
+
+### `status`
+
+Retrieve the current state of telemetry for this machine.
+
+```bash title="Terminal"
+turbo telemetry status
+```
+
+### `enable`
+
+Enable telemetry for this machine.
+
+```bash title="Terminal"
+turbo telemetry enable
+```
+
+### `disable`
+
+Disable telemetry for this machine.
+
+```bash title="Terminal"
+turbo telemetry disable
+```

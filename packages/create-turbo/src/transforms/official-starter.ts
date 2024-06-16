@@ -1,8 +1,6 @@
 import path from "node:path";
 import { readJsonSync, writeJsonSync, rmSync, existsSync } from "fs-extra";
 import type { PackageJson } from "@turbo/utils";
-import semverPrerelease from "semver/functions/prerelease";
-import cliPkgJson from "../../package.json";
 import { isDefaultExample } from "../utils/isDefaultExample";
 import type { TransformInput, TransformResult } from "./types";
 import { TransformError } from "./errors";
@@ -60,17 +58,15 @@ export async function transform(args: TransformInput): TransformResult {
       }
 
       if (packageJsonContent.devDependencies?.turbo) {
-        const shouldUsePreRelease =
-          semverPrerelease(cliPkgJson.version) !== null;
         // if the user specified a turbo version, use that
         if (opts.turboVersion) {
           packageJsonContent.devDependencies.turbo = opts.turboVersion;
-          // if we're using a pre-release version of create-turbo, use turbo canary
-        } else if (shouldUsePreRelease) {
-          packageJsonContent.devDependencies.turbo = "canary";
-          // otherwise, use the latest stable version
+          // use the same version as the create-turbo invocation
         } else {
-          packageJsonContent.devDependencies.turbo = "latest";
+          // eslint-disable-next-line @typescript-eslint/no-var-requires -- Have to go get package.json
+          const version = (require("../../package.json") as { version: string })
+            .version;
+          packageJsonContent.devDependencies.turbo = `^${version}`;
         }
       }
 

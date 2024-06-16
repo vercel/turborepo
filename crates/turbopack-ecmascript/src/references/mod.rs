@@ -5,6 +5,7 @@ pub mod constant_condition;
 pub mod constant_value;
 pub mod dynamic_expression;
 pub mod esm;
+pub mod external_module;
 pub mod node;
 pub mod pattern_mapping;
 pub mod raw;
@@ -768,7 +769,6 @@ pub(crate) async fn analyse_ecmascript_module_internal(
 
     if eval_context.is_esm() || specified_type == SpecifiedModuleType::EcmaScript {
         let async_module = AsyncModule {
-            placeable: Vc::upcast(module),
             has_top_level_await,
             import_externals,
         }
@@ -2315,7 +2315,9 @@ async fn require_resolve_visitor(
     Ok(if args.len() == 1 {
         let pat = js_value_to_pattern(&args[0]);
         let request = Request::parse(Value::new(pat.clone()));
-        let resolved = cjs_resolve(origin, request, None, try_to_severity(in_try));
+        let resolved = cjs_resolve(origin, request, None, try_to_severity(in_try))
+            .resolve()
+            .await?;
         let mut values = resolved
             .primary_modules()
             .await?

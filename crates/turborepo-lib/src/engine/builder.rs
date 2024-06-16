@@ -579,6 +579,10 @@ mod test {
         fn global_change(&self, _other: &dyn Lockfile) -> bool {
             unreachable!()
         }
+
+        fn turbo_version(&self) -> Option<String> {
+            None
+        }
     }
 
     struct MockDiscovery;

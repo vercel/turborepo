@@ -473,14 +473,22 @@ impl DepGraph {
                 continue;
             }
 
-            let count = global_done
+            // The number of nodes that this node is dependent on.
+            let dependant_count = self
+                .g
+                .idx_graph
+                .neighbors_directed(ix as _, petgraph::Direction::Incoming)
+                .count();
+
+            // The number of starting points that can reach to this node.
+            let count_of_startings = global_done
                 .iter()
                 .filter(|&&staring_point| {
                     has_path_connecting(&self.g.idx_graph, staring_point, ix as _, None)
                 })
                 .count();
 
-            if count >= 2 {
+            if dependant_count >= 2 && count_of_startings >= 2 {
                 groups.push((vec![id.clone()], FxHashSet::default()));
                 global_done.insert(ix as u32);
             }
@@ -607,7 +615,7 @@ impl DepGraph {
                             let (orig, mut local, exported) = match s {
                                 ExportSpecifier::Named(s) => (
                                     Some(s.orig.clone()),
-                                    match s.exported.as_ref().unwrap_or(&s.orig) {
+                                    match &s.orig {
                                         ModuleExportName::Ident(i) => i.clone(),
                                         ModuleExportName::Str(..) => quote_ident!("_tmp"),
                                     },
@@ -698,10 +706,11 @@ impl DepGraph {
                         {
                             let used_ids = ids_used_by_ignoring_nested(
                                 &export.decl,
-                                [unresolved_ctxt, top_level_ctxt],
+                                unresolved_ctxt,
+                                top_level_ctxt,
                             );
                             let captured_ids =
-                                ids_captured_by(&export.decl, [unresolved_ctxt, top_level_ctxt]);
+                                ids_captured_by(&export.decl, unresolved_ctxt, top_level_ctxt);
                             let data = ItemData {
                                 read_vars: used_ids.read,
                                 eventual_read_vars: captured_ids.read,
@@ -736,10 +745,11 @@ impl DepGraph {
 
                             let mut used_ids = ids_used_by_ignoring_nested(
                                 &export.expr,
-                                [unresolved_ctxt, top_level_ctxt],
+                                unresolved_ctxt,
+                                top_level_ctxt,
                             );
                             let captured_ids =
-                                ids_captured_by(&export.expr, [unresolved_ctxt, top_level_ctxt]);
+                                ids_captured_by(&export.expr, unresolved_ctxt, top_level_ctxt);
 
                             used_ids.write.insert(default_var.to_id());
 
@@ -871,7 +881,7 @@ impl DepGraph {
                     };
                     ids.push(id.clone());
 
-                    let vars = ids_used_by(&f.function, [unresolved_ctxt, top_level_ctxt]);
+                    let vars = ids_used_by(&f.function, unresolved_ctxt, top_level_ctxt);
                     let var_decls = {
                         let mut v = IndexSet::with_capacity_and_hasher(1, Default::default());
                         v.insert(f.ident.to_id());
@@ -901,7 +911,7 @@ impl DepGraph {
                     };
                     ids.push(id.clone());
 
-                    let vars = ids_used_by(&c.class, [unresolved_ctxt, top_level_ctxt]);
+                    let vars = ids_used_by(&c.class, unresolved_ctxt, top_level_ctxt);
                     let var_decls = {
                         let mut v = IndexSet::with_capacity_and_hasher(1, Default::default());
                         v.insert(c.ident.to_id());
@@ -935,10 +945,13 @@ impl DepGraph {
                         let decl_ids: Vec<Id> = find_pat_ids(&decl.name);
                         let vars = ids_used_by_ignoring_nested(
                             &decl.init,
-                            [unresolved_ctxt, top_level_ctxt],
+                            unresolved_ctxt,
+                            top_level_ctxt,
                         );
                         let eventual_vars =
-                            ids_captured_by(&decl.init, [unresolved_ctxt, top_level_ctxt]);
+                            ids_captured_by(&decl.init, unresolved_ctxt, top_level_ctxt);
+
+                        let side_effects = vars.found_unresolved;
 
                         let var_decl = Box::new(VarDecl {
                             decls: vec![decl.clone()],
@@ -954,6 +967,7 @@ impl DepGraph {
                                 write_vars: decl_ids.into_iter().chain(vars.write).collect(),
                                 eventual_write_vars: eventual_vars.write,
                                 content,
+                                side_effects,
                                 ..Default::default()
                             },
                         );
@@ -965,25 +979,22 @@ impl DepGraph {
                     ..
                 })) => {
                     let mut used_ids =
-                        ids_used_by_ignoring_nested(item, [unresolved_ctxt, top_level_ctxt]);
-                    let captured_ids = ids_captured_by(item, [unresolved_ctxt, top_level_ctxt]);
+                        ids_used_by_ignoring_nested(item, unresolved_ctxt, top_level_ctxt);
+                    let captured_ids = ids_captured_by(item, unresolved_ctxt, top_level_ctxt);
 
                     if assign.op != op!("=") {
                         used_ids.read.extend(used_ids.write.iter().cloned());
 
                         let extra_ids = ids_used_by_ignoring_nested(
                             &assign.left,
-                            [unresolved_ctxt, top_level_ctxt],
+                            unresolved_ctxt,
+                            top_level_ctxt,
                         );
                         used_ids.read.extend(extra_ids.read);
                         used_ids.write.extend(extra_ids.write);
                     }
 
-                    let side_effects = used_ids
-                        .read
-                        .iter()
-                        .chain(used_ids.write.iter())
-                        .any(|id| id.1 == unresolved_ctxt);
+                    let side_effects = used_ids.found_unresolved;
 
                     let data = ItemData {
                         read_vars: used_ids.read,
@@ -1006,15 +1017,15 @@ impl DepGraph {
                 ModuleItem::ModuleDecl(
                     ModuleDecl::ExportDefaultDecl(..)
                     | ModuleDecl::ExportDefaultExpr(..)
-                    | ModuleDecl::ExportNamed(NamedExport { src: Some(..), .. }),
+                    | ModuleDecl::ExportNamed(NamedExport { .. }),
                 ) => {}
 
                 _ => {
                     // Default to normal
 
                     let used_ids =
-                        ids_used_by_ignoring_nested(item, [unresolved_ctxt, top_level_ctxt]);
-                    let captured_ids = ids_captured_by(item, [unresolved_ctxt, top_level_ctxt]);
+                        ids_used_by_ignoring_nested(item, unresolved_ctxt, top_level_ctxt);
+                    let captured_ids = ids_captured_by(item, unresolved_ctxt, top_level_ctxt);
                     let data = ItemData {
                         read_vars: used_ids.read,
                         eventual_read_vars: captured_ids.read,
@@ -1120,6 +1131,13 @@ impl DepGraph {
             .edge_weight(from, to)
             .map(|d| matches!(d, Dependency::Strong))
             .unwrap_or(false)
+    }
+
+    pub(crate) fn has_path_connecting(&mut self, from: &ItemId, to: &ItemId) -> bool {
+        let from = self.g.node(from);
+        let to = self.g.node(to);
+
+        has_path_connecting(&self.g.idx_graph, from, to, None)
     }
 }
 

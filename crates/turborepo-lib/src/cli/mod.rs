@@ -8,7 +8,7 @@ use clap::{
 };
 use clap_complete::{generate, Shell};
 pub use error::Error;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tracing::{debug, error};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::AnonAPIClient;
@@ -45,10 +45,8 @@ const DEFAULT_NUM_WORKERS: u32 = 10;
 const SUPPORTED_GRAPH_FILE_EXTENSIONS: [&str; 8] =
     ["svg", "png", "jpg", "pdf", "json", "html", "mermaid", "dot"];
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize, ValueEnum, Deserializable)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum, Deserializable, Serialize)]
 pub enum OutputLogsMode {
-    // biome also obeys serde rename directives,
-    // so the `Deserializable` derive will work properly here
     #[serde(rename = "full")]
     Full,
     #[serde(rename = "none")]
@@ -105,7 +103,15 @@ impl Display for LogOrder {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
+impl LogOrder {
+    pub fn compatible_with_tui(&self) -> bool {
+        // If the user requested a specific order to the logs, then this isn't
+        // compatible with the TUI and means we cannot use it.
+        matches!(self, Self::Auto)
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, ValueEnum)]
 pub enum DryRunMode {
     Text,
     Json,
@@ -137,7 +143,7 @@ impl fmt::Display for EnvMode {
     }
 }
 
-#[derive(Parser, Clone, Default, Debug, PartialEq, Serialize)]
+#[derive(Parser, Clone, Default, Debug, PartialEq)]
 #[clap(author, about = "The build system that makes ship happen", long_about = None)]
 #[clap(disable_help_subcommand = true)]
 #[clap(disable_version_flag = true)]
@@ -145,16 +151,13 @@ impl fmt::Display for EnvMode {
 #[command(name = "turbo")]
 pub struct Args {
     #[clap(long, global = true)]
-    #[serde(skip)]
     pub version: bool,
     #[clap(long, global = true)]
     /// Skip any attempts to infer which version of Turbo the project is
     /// configured to use
-    #[serde(skip)]
     pub skip_infer: bool,
     /// Disable the turbo update notification
     #[clap(long, global = true)]
-    #[serde(skip)]
     pub no_update_notifier: bool,
     /// Override the endpoint for API calls
     #[clap(long, global = true, value_parser)]
@@ -195,12 +198,10 @@ pub struct Args {
     pub verbosity: Verbosity,
     /// Force a check for a new version of turbo
     #[clap(long, global = true, hide = true)]
-    #[serde(skip)]
     pub check_for_update: bool,
     #[clap(long = "__test-run", global = true, hide = true)]
     pub test_run: bool,
     #[clap(flatten, next_help_heading = "Run Arguments")]
-    #[serde(skip)]
     pub run_args: Option<RunArgs>,
     // This should be inside `RunArgs` but clap currently has a bug
     // around nested flattened optional args: https://github.com/clap-rs/clap/issues/4697
@@ -210,8 +211,7 @@ pub struct Args {
     pub command: Option<Command>,
 }
 
-#[derive(Debug, Parser, Serialize, Clone, Copy, PartialEq, Eq, Default)]
-#[serde(into = "u8")]
+#[derive(Debug, Parser, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Verbosity {
     #[clap(
         long = "verbosity",
@@ -238,8 +238,7 @@ impl From<Verbosity> for u8 {
     }
 }
 
-#[derive(Subcommand, Copy, Clone, Debug, Serialize, PartialEq)]
-#[serde(tag = "command")]
+#[derive(Subcommand, Copy, Clone, Debug, PartialEq)]
 pub enum DaemonCommand {
     /// Restarts the turbo daemon
     Restart,
@@ -264,8 +263,7 @@ pub enum DaemonCommand {
     Logs,
 }
 
-#[derive(Subcommand, Copy, Clone, Debug, Serialize, PartialEq)]
-#[serde(tag = "command")]
+#[derive(Subcommand, Copy, Clone, Debug, PartialEq)]
 pub enum TelemetryCommand {
     /// Enables anonymous telemetry
     Enable,
@@ -275,7 +273,7 @@ pub enum TelemetryCommand {
     Status,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
+#[derive(Copy, Clone, Debug, PartialEq, ValueEnum)]
 pub enum LinkTarget {
     RemoteCache,
     Spaces,
@@ -426,14 +424,11 @@ impl Args {
 /// Defines the subcommands for CLI. NOTE: If we change the commands in Go,
 /// we must change these as well to avoid accidentally passing the
 /// --single-package flag into non-build commands.
-#[derive(Subcommand, Clone, Debug, Serialize, PartialEq)]
+#[derive(Subcommand, Clone, Debug, PartialEq)]
 pub enum Command {
-    // NOTE: Empty variants still have an empty struct attached so that serde serializes
-    // them as `{ "Bin": {} }` instead of as `"Bin"`.
     /// Get the path to the Turbo binary
-    Bin {},
+    Bin,
     /// Generate the autocompletion script for the specified shell
-    #[serde(skip)]
     Completion {
         shell: Shell,
     },
@@ -443,13 +438,11 @@ pub enum Command {
         #[clap(long, default_value_t = String::from("4h0m0s"))]
         idle_time: String,
         #[clap(subcommand)]
-        #[serde(flatten)]
         command: Option<DaemonCommand>,
     },
     /// Generate a new app / package
     #[clap(aliases = ["g", "gen"])]
     Generate {
-        #[serde(skip)]
         #[clap(long, default_value_t = String::from("latest"), hide = true)]
         tag: String,
         /// The name of the generator to run
@@ -466,13 +459,11 @@ pub enum Command {
         args: Vec<String>,
 
         #[clap(subcommand)]
-        #[serde(skip)]
         command: Option<Box<GenerateCommand>>,
     },
     /// Enable or disable anonymous telemetry
     Telemetry {
         #[clap(subcommand)]
-        #[serde(flatten)]
         command: Option<TelemetryCommand>,
     },
     /// Turbo your monorepo by running a number of 'repo lints' to
@@ -586,7 +577,7 @@ pub struct GenerateWorkspaceArgs {
     pub show_all_dependencies: bool,
 }
 
-#[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
+#[derive(Parser, Clone, Debug, Default, PartialEq, Serialize)]
 pub struct GeneratorCustomArgs {
     /// The name of the generator to run
     generator_name: Option<String>,
@@ -602,7 +593,7 @@ pub struct GeneratorCustomArgs {
     args: Vec<String>,
 }
 
-#[derive(Subcommand, Clone, Debug, Serialize, PartialEq)]
+#[derive(Subcommand, Clone, Debug, PartialEq)]
 pub enum GenerateCommand {
     /// Add a new package or app to your project
     #[clap(name = "workspace", alias = "w")]
@@ -637,7 +628,7 @@ fn path_non_empty(s: &str) -> Result<Utf8PathBuf, String> {
 }
 
 /// Arguments used in run and watch
-#[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
+#[derive(Parser, Clone, Debug, Default, PartialEq)]
 #[command(groups = [
 ArgGroup::new("scope-filter-group").multiple(true).required(false),
 ])]
@@ -765,7 +756,7 @@ impl ExecutionArgs {
     }
 }
 
-#[derive(Parser, Clone, Debug, Serialize, PartialEq)]
+#[derive(Parser, Clone, Debug, PartialEq)]
 #[command(groups = [
     ArgGroup::new("daemon-group").multiple(false).required(false),
 ])]
@@ -807,12 +798,10 @@ pub struct RunArgs {
     pub profile: Option<String>,
     /// File to write turbo's performance profile output into.
     /// All identifying data omitted from the profile.
-    #[serde(skip)]
     #[clap(long, value_parser=NonEmptyStringValueParser::new(), conflicts_with = "profile")]
     pub anon_profile: Option<String>,
     /// Treat remote cache as read only
     #[clap(long, env = "TURBO_REMOTE_CACHE_READ_ONLY", value_name = "BOOL", action = ArgAction::Set, default_value = "false", default_missing_value = "true", num_args = 0..=1)]
-    #[serde(skip)]
     pub remote_cache_read_only: bool,
     /// Generate a summary of the turbo run
     #[clap(long, env = "TURBO_RUN_SUMMARY", default_missing_value = "true")]
@@ -949,6 +938,7 @@ pub async fn run(
     #[allow(unused_variables)] logger: &TurboSubscriber,
     ui: UI,
 ) -> Result<i32, Error> {
+    // TODO: remove mutability from this function
     let mut cli_args = Args::new();
     let version = get_version();
 
@@ -979,7 +969,9 @@ pub async fn run(
         let run_args = cli_args.run_args.take().unwrap_or_default();
         let execution_args = cli_args
             .execution_args
-            .take()
+            // We clone instead of take as take would leave the command base a copy of cli_args
+            // missing any execution args.
+            .clone()
             .ok_or_else(|| Error::NoCommand(Backtrace::capture()))?;
         if execution_args.tasks.is_empty() {
             let mut cmd = <Args as CommandFactory>::command();
@@ -1059,7 +1051,7 @@ pub async fn run(
     cli_args.track(&root_telemetry);
 
     let cli_result = match cli_args.command.as_ref().unwrap() {
-        Command::Bin { .. } => {
+        Command::Bin => {
             CommandEventBuilder::new("bin")
                 .with_parent(&root_telemetry)
                 .track_call();
@@ -1346,11 +1338,7 @@ mod test {
         }
     }
 
-    use anyhow::Result;
-
-    use crate::cli::{
-        Args, Command, DryRunMode, EnvMode, LogOrder, LogPrefix, OutputLogsMode, Verbosity,
-    };
+    use crate::cli::{Args, Command, DryRunMode, EnvMode, LogOrder, LogPrefix, OutputLogsMode};
 
     #[test_case::test_case(
         &["turbo", "run", "build"],
@@ -2081,15 +2069,6 @@ mod test {
         assert_eq!(Args::try_parse_from(args).unwrap(), expected);
     }
 
-    fn test_serde() {
-        // Test that ouput-logs is not serialized by default
-        assert_eq!(
-            serde_json::to_string(&Args::try_parse_from(["turbo", "run", "build"]).unwrap())
-                .unwrap()
-                .contains("\"output_logs\":null"),
-            true
-        );
-    }
     #[test_case::test_case(
         &["turbo", "run", "build", "--daemon", "--no-daemon"],
         "cannot be used with '--no-daemon'" ;
@@ -2427,31 +2406,6 @@ mod test {
     }
 
     #[test]
-    fn test_verbosity_serialization() -> Result<(), serde_json::Error> {
-        assert_eq!(
-            serde_json::to_string(&Verbosity {
-                verbosity: None,
-                v: 0
-            })?,
-            "0"
-        );
-        assert_eq!(
-            serde_json::to_string(&Verbosity {
-                verbosity: Some(3),
-                v: 0
-            })?,
-            "3"
-        );
-        assert_eq!(
-            serde_json::to_string(&Verbosity {
-                verbosity: None,
-                v: 3
-            })?,
-            "3"
-        );
-        Ok(())
-    }
-    #[test]
     fn test_parse_gen() {
         let default_gen = Command::Generate {
             tag: "latest".to_string(),
@@ -2553,5 +2507,12 @@ mod test {
                 .preflight
         );
         assert!(Args::try_parse_from(["turbo", "build", "--preflight=true"]).is_err());
+    }
+
+    #[test]
+    fn test_log_stream_tui_compatibility() {
+        assert!(LogOrder::Auto.compatible_with_tui());
+        assert!(!LogOrder::Stream.compatible_with_tui());
+        assert!(!LogOrder::Grouped.compatible_with_tui());
     }
 }

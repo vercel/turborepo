@@ -1,6 +1,10 @@
 Setup
   $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh root_deps
 
+Verify that no packages are in scope
+  $ ${TURBO} build --filter='[HEAD]' --dry=json | jq '.packages'
+  []
+
 Warm the cache
   $ ${TURBO} build --filter=another --output-logs=hash-only
   \xe2\x80\xa2 Packages in scope: another (esc)
@@ -40,6 +44,16 @@ All tasks should be a cache miss, even ones that don't depend on changed package
     Time:\s+[.0-9]+m?s  (re)
   
 
+Verify that all packages are in scope on a internal root dep change
+  $ ${TURBO} build --filter='[HEAD]' --dry=json | jq '.packages'
+  [
+    "//",
+    "another",
+    "my-app",
+    "util",
+    "yet-another"
+  ]
+
 Change a file that is git ignored
   $ mkdir packages/util/dist
   $ touch packages/util/dist/unused.txt
@@ -54,3 +68,20 @@ Cache hit since only tracked files contribute to root dep hash
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
+
+Verify that all packages are considered dependants of a root dep
+  $ ${TURBO} build --filter='...util' --dry=json | jq '.packages'
+  [
+    "//",
+    "another",
+    "my-app",
+    "util",
+    "yet-another"
+  ]
+Verify that a root dependency is considered a dependency of all packages
+  $ ${TURBO} build --filter='another...' --dry=json | jq '.packages'
+  [
+    "another",
+    "util",
+    "yet-another"
+  ]

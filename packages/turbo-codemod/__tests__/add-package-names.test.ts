@@ -114,4 +114,36 @@ describe("add-package-names", () => {
       names.add(pkgJson?.name);
     }
   });
+
+  test("ignored packages", async () => {
+    // load the fixture for the test
+    const { root, readJson } = useFixture({
+      fixture: "ignored-packages",
+    });
+
+    // run the transformer
+    const result = await transformer({
+      root,
+      options: { force: false, dryRun: false, print: false },
+    });
+
+    // result should be correct
+    expect(result.fatalError).toBeUndefined();
+    expect(result.changes).toMatchInlineSnapshot(`Object {}`);
+
+    // validate unique names
+    const names = new Set();
+
+    const pkg = "utils";
+    const pkgJson = readJson<{ name: string }>(`packages/${pkg}/package.json`);
+    expect(pkgJson?.name).toBeDefined();
+    expect(names.has(pkgJson?.name)).toBe(false);
+    names.add(pkgJson?.name);
+
+    const unchangedPkg = "ui";
+    const unchangedPkgJson = readJson<{ name: string }>(
+      `packages/${unchangedPkg}/package.json`
+    );
+    expect(unchangedPkgJson?.name).toBeUndefined();
+  });
 });

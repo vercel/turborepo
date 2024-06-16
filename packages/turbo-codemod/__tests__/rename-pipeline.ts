@@ -139,4 +139,28 @@ describe("rename-pipeline", () => {
       /No turbo\.json found at .*?\. Is the path correct\?/
     );
   });
+
+  it("does not do anything if there is already a top level tasks key", () => {
+    // load the fixture for the test
+    const { root, read } = useFixture({
+      fixture: "with-tasks",
+    });
+
+    // run the transformer
+    const result = transformer({
+      root,
+      options: { force: false, dryRun: false, print: false },
+    });
+
+    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+      $schema: "https://turbo.build/schema.json",
+      tasks: {
+        build: {
+          outputs: ["dist"],
+        },
+      },
+    });
+    expect(result.fatalError).toBeUndefined();
+    expect(result.changes).toStrictEqual({});
+  });
 });

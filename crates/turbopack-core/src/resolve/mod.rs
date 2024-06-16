@@ -11,7 +11,7 @@ use anyhow::{bail, Result};
 use indexmap::{indexmap, IndexMap, IndexSet};
 use serde::{Deserialize, Serialize};
 use tracing::{Instrument, Level};
-use turbo_tasks::{trace::TraceRawVcs, RcStr, TryJoinIterExt, Value, ValueToString, Vc};
+use turbo_tasks::{trace::TraceRawVcs, RcStr, TaskInput, TryJoinIterExt, Value, ValueToString, Vc};
 use turbo_tasks_fs::{
     util::{normalize_path, normalize_request},
     FileSystemEntryType, FileSystemPath, RealPathResult,
@@ -392,9 +392,8 @@ impl ModuleResolveResultOption {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, TraceRawVcs)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, TraceRawVcs, TaskInput)]
 pub enum ExternalType {
-    OriginalReference,
     Url,
     CommonJs,
     EcmaScriptModule,
@@ -403,7 +402,6 @@ pub enum ExternalType {
 impl Display for ExternalType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ExternalType::OriginalReference => write!(f, "original reference"),
             ExternalType::CommonJs => write!(f, "commonjs"),
             ExternalType::EcmaScriptModule => write!(f, "esm"),
             ExternalType::Url => write!(f, "url"),
@@ -1418,7 +1416,7 @@ async fn handle_before_resolve_plugins(
 ) -> Result<Option<Vc<ResolveResult>>> {
     for plugin in &options.await?.before_resolve_plugins {
         let condition = plugin.before_resolve_condition().resolve().await?;
-        if !*condition.matches(request).await? {
+        if !condition.await?.matches(request).await? {
             continue;
         }
 
@@ -2571,6 +2569,10 @@ async fn resolve_package_internal_with_imports_field(
     .await
 }
 
+async fn is_unresolveable(result: Vc<ModuleResolveResult>) -> Result<bool> {
+    Ok(*result.resolve().await?.is_unresolveable().await?)
+}
+
 pub async fn handle_resolve_error(
     result: Vc<ModuleResolveResult>,
     reference_type: Value<ReferenceType>,
@@ -2580,9 +2582,9 @@ pub async fn handle_resolve_error(
     severity: Vc<IssueSeverity>,
     source: Option<Vc<IssueSource>>,
 ) -> Result<Vc<ModuleResolveResult>> {
-    Ok(match result.is_unresolveable().await {
+    Ok(match is_unresolveable(result).await {
         Ok(unresolveable) => {
-            if *unresolveable {
+            if unresolveable {
                 ResolvingIssue {
                     severity,
                     file_path: origin_path,
