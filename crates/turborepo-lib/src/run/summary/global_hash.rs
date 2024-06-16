@@ -31,8 +31,9 @@ pub struct GlobalHashSummary<'a> {
     pub root_key: &'static str,
     pub files: BTreeMap<RelativeUnixPathBuf, String>,
     pub hash_of_external_dependencies: &'a str,
-    pub global_dot_env: Option<&'a [RelativeUnixPathBuf]>,
+    pub hash_of_internal_dependencies: &'a str,
     pub environment_variables: GlobalEnvVarSummary<'a>,
+    pub engines: Option<BTreeMap<&'a str, &'a str>>,
 }
 
 impl<'a> TryFrom<GlobalHashableInputs<'a>> for GlobalHashSummary<'a> {
@@ -43,11 +44,12 @@ impl<'a> TryFrom<GlobalHashableInputs<'a>> for GlobalHashSummary<'a> {
             global_cache_key,
             global_file_hash_map,
             root_external_dependencies_hash,
+            root_internal_dependencies_hash,
             env,
             resolved_env_vars,
             pass_through_env,
-            dot_env,
             env_at_execution_start,
+            engines,
             ..
         } = global_hashable_inputs;
 
@@ -62,11 +64,14 @@ impl<'a> TryFrom<GlobalHashableInputs<'a>> for GlobalHashSummary<'a> {
             )
             .transpose()?;
 
+        let engines = engines.map(|engines| engines.into_iter().collect());
+
         Ok(Self {
             root_key: global_cache_key,
             files: global_file_hash_map.into_iter().collect(),
             // This can be empty in single package mode
             hash_of_external_dependencies: root_external_dependencies_hash.unwrap_or_default(),
+            hash_of_internal_dependencies: root_internal_dependencies_hash.unwrap_or_default(),
             environment_variables: GlobalEnvVarSummary {
                 specified: GlobalEnvConfiguration {
                     env,
@@ -80,8 +85,7 @@ impl<'a> TryFrom<GlobalHashableInputs<'a>> for GlobalHashSummary<'a> {
                     .map(|vars| vars.by_source.matching.to_secret_hashable()),
                 pass_through,
             },
-
-            global_dot_env: dot_env,
+            engines,
         })
     }
 }

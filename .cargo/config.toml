@@ -15,6 +15,9 @@ rustdocflags = ["-Znormalize-docs"]
 [target.x86_64-pc-windows-msvc]
 linker = "rust-lld"
 
+[target.aarch64-pc-windows-msvc]
+linker = "rust-lld"
+
 [target.'cfg(target_os = "macos")']
 linker = "rust-lld"
 

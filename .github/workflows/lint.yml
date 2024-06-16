@@ -1,0 +1,136 @@
+name: Lint
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+jobs:
+  determine_jobs:
+    name: Determine jobs to run
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: CI related changes
+        id: ci
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            .github/actions/**
+            .github/workflows/lint.yml
+
+      - name: Rust related changes
+        id: rust
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            pnpm-lock.yaml
+            package.json
+            Cargo.**
+            crates/**
+            shim/**
+            xtask/**
+            .cargo/**
+            rust-toolchain
+            !**.md
+            !**.mdx
+
+      - name: Formatting related changes
+        id: format
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            **/*.{yml,yaml,md,mdx,js,jsx,ts,tsx,json,toml,css}
+
+    outputs:
+      rust: ${{ steps.ci.outputs.diff != '' || steps.rust.outputs.diff != '' }}
+      format: ${{ steps.ci.outputs.diff != '' || steps.format.outputs.diff != '' }}
+
+  rust_lint:
+    needs: [determine_jobs]
+    if: needs.determine_jobs.outputs.rust == 'true'
+    name: Rust lints
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Run cargo fmt check
+        run: |
+          cargo fmt --check
+
+      - name: Check Cargo.toml formatting (taplo)
+        run: npx @taplo/cli@0.5.2 format --check
+
+      - name: Check licenses
+        uses: EmbarkStudios/cargo-deny-action@v1
+        with:
+          command: check licenses
+
+  format_lint:
+    name: Formatting
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
+    needs: determine_jobs
+    if: needs.determine_jobs.outputs.format == 'true'
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_REMOTE_ONLY: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: "Setup Node"
+        uses: ./.github/actions/setup-node
+        with:
+          extra-flags: --no-optional
+          node-version: "20"
+
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      - name: Lint
+        # Filters some packages out, but not sure why
+        run: |
+          turbo run lint \
+          --filter=!@vercel/devlow-bench \
+          --filter=!@vercel/experimental-nft-next-plugin \
+          --filter=!@vercel/experimental-nft-next-plugin \
+          --filter=!turbopack-bump-action \
+          --filter=!next-integration-stat \
+          --env-mode=strict
+
+  cleanup:
+    name: Cleanup
+    needs:
+      - rust_lint
+      - format_lint
+    if: always()
+    uses: ./.github/workflows/pr-clean-caches.yml
+    secrets: inherit

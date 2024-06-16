@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import yaml from "js-yaml";
 import { sync } from "fast-glob";
-import type { Schema } from "@turbo/types";
+import type { LegacySchema, Pipeline } from "@turbo/types/src/types/config";
 import JSON5 from "json5";
 import * as logger from "./logger";
 import { getTurboRoot } from "./getTurboRoot";
@@ -15,11 +15,11 @@ export interface WorkspaceConfig {
   workspaceName: string;
   workspacePath: string;
   isWorkspaceRoot: boolean;
-  turboConfig?: Schema;
+  turboConfig?: LegacySchema;
 }
 
 export interface TurboConfig {
-  config: Schema;
+  config: LegacySchema;
   turboConfigPath: string;
   workspacePath: string;
   isRootConfig: boolean;
@@ -92,7 +92,7 @@ export function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
       try {
         const raw = fs.readFileSync(configPath, "utf8");
         // eslint-disable-next-line import/no-named-as-default-member -- json5 exports different objects depending on if you're using esm or cjs (https://github.com/json5/json5/issues/240)
-        const turboJsonContent: Schema = JSON5.parse(raw);
+        const turboJsonContent: LegacySchema = JSON5.parse(raw);
         // basic config validation
         const isRootConfig = path.dirname(configPath) === turboRoot;
         if (isRootConfig) {
@@ -163,7 +163,7 @@ export function getWorkspaceConfigs(
         // Try and get turbo.json
         const turboJsonPath = path.join(workspacePath, "turbo.json");
         let rawTurboJson = null;
-        let turboConfig: Schema | undefined;
+        let turboConfig: LegacySchema | undefined;
         try {
           rawTurboJson = fs.readFileSync(turboJsonPath, "utf8");
           // eslint-disable-next-line import/no-named-as-default-member -- json5 exports different objects depending on if you're using esm or cjs (https://github.com/json5/json5/issues/240)
@@ -203,4 +203,15 @@ export function getWorkspaceConfigs(
   }
 
   return configs;
+}
+
+export function forEachTaskDef(
+  config: LegacySchema,
+  f: (value: [string, Pipeline]) => void
+): void {
+  if ("pipeline" in config) {
+    Object.entries(config.pipeline).forEach(f);
+  } else {
+    Object.entries(config.tasks).forEach(f);
+  }
 }

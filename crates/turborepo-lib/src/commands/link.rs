@@ -720,7 +720,7 @@ mod test {
 
         fs::write(
             turbo_json_file.as_path(),
-            r#"{ "globalEnv": [], "pipeline": {} }"#,
+            r#"{ "globalEnv": [], "tasks": {} }"#,
         )
         .unwrap();
 

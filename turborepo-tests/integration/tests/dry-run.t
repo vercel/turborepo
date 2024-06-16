@@ -18,20 +18,20 @@ Setup
   Global Hash Inputs
     Global Files                          = 1
     External Dependencies Hash            = 459c029558afe716
-    Global Cache Key                      = HEY STELLLLLLLAAAAAAAAAAAAA
-    Global .env Files Considered          = 0
+    Global Cache Key                      = I can\xe2\x80\x99t see ya, but I know you\xe2\x80\x99re here (esc)
     Global Env Vars                       = SOME_ENV_VAR
     Global Env Vars Values                = 
     Inferred Global Env Vars Values       = 
     Global Passed Through Env Vars        = 
     Global Passed Through Env Vars Values = 
+    Engines Values                        = 
 
 # Part 3 are Tasks to Run, and we have to validate each task separately
-  $ cat tmp-3.txt | grep "my-app#build" -A 18
+  $ cat tmp-3.txt | grep "my-app#build" -A 17
   my-app#build
     Task                           = build\s* (re)
     Package                        = my-app\s* (re)
-    Hash                           = f5b905676d8a275c\s* (re)
+    Hash                           = 0555ce94ca234049
     Cached \(Local\)                 = false\s* (re)
     Cached \(Remote\)                = false\s* (re)
     Directory                      = apps(\/|\\)my-app\s* (re)
@@ -41,18 +41,17 @@ Setup
     Dependencies                   =\s* (re)
     Dependents                     =\s* (re)
     Inputs Files Considered        = 2\s* (re)
-    .env Files Considered          = 1\s* (re)
     Env Vars                       =\s* (re)
     Env Vars Values                =\s* (re)
     Inferred Env Vars Values       =\s* (re)
     Passed Through Env Vars        =\s* (re)
     Passed Through Env Vars Values =\s* (re)
 
-  $ cat tmp-3.txt | grep "util#build" -A 18
+  $ cat tmp-3.txt | grep "util#build" -A 17
   util#build
     Task                           = build\s* (re)
     Package                        = util\s* (re)
-    Hash                           = 1ce33e04f265f95c\s* (re)
+    Hash                           = bf1798d3e46e1b48
     Cached \(Local\)                 = false\s* (re)
     Cached \(Remote\)                = false\s* (re)
     Directory                      = packages(\/|\\)util\s* (re)
@@ -62,7 +61,6 @@ Setup
     Dependencies                   =\s* (re)
     Dependents                     =\s* (re)
     Inputs Files Considered        = 1\s* (re)
-    .env Files Considered          = 0\s* (re)
     Env Vars                       = NODE_ENV\s* (re)
     Env Vars Values                =\s* (re)
     Inferred Env Vars Values       =\s* (re)

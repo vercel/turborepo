@@ -13,9 +13,9 @@ Run as `infer`
   $ rm -rf .turbo/runs
   $ ${TURBO} run build --summarize > /dev/null
   $ cat .turbo/runs/*.json | jq -r '.envMode'
-  infer
+  strict
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
-  loose
+  strict
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].environmentVariables | {passthrough, globalPassthrough}'
   {
     "passthrough": null,
@@ -141,7 +141,7 @@ Task passthrough specified empty array + infer
   $ ${TESTDIR}/../../../helpers/replace_turbo_json.sh $(pwd) "strict_env_vars/task_pt-empty.json"
   $ ${TURBO} run build --summarize > /dev/null
   $ cat .turbo/runs/*.json | jq -r '.envMode'
-  infer
+  strict
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
   strict
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].environmentVariables | {passthrough, globalPassthrough}'
@@ -155,7 +155,7 @@ Task passthrough specified value + infer
   $ ${TESTDIR}/../../../helpers/replace_turbo_json.sh $(pwd) "strict_env_vars/task_pt.json"
   $ ${TURBO} run build --summarize > /dev/null
   $ cat .turbo/runs/*.json | jq -r '.envMode'
-  infer
+  strict
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
   strict
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].environmentVariables | {passthrough, globalPassthrough}'

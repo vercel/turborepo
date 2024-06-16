@@ -1,16 +1,17 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     sync::{Arc, RwLock},
 };
 
 use anyhow::{bail, Context, Result};
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexMap;
 use lightningcss::{
     css_modules::{CssModuleExport, CssModuleExports, CssModuleReference, Pattern, Segment},
     dependencies::{Dependency, ImportDependency, Location, SourceRange},
     stylesheet::{ParserOptions, PrinterOptions, StyleSheet, ToCssResult},
     targets::{Features, Targets},
     values::url::Url,
+    visit_types,
     visitor::Visit,
 };
 use once_cell::sync::Lazy;
@@ -32,7 +33,7 @@ use swc_core::{
     },
 };
 use tracing::Instrument;
-use turbo_tasks::{ValueToString, Vc};
+use turbo_tasks::{RcStr, ValueToString, Vc};
 use turbo_tasks_fs::{FileContent, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
@@ -427,7 +428,7 @@ pub async fn finalize_css(
             for (src, reference) in (*url_references.await?).iter() {
                 let resolved = resolve_url_reference(*reference, chunking_context).await?;
                 if let Some(v) = resolved.as_ref().cloned() {
-                    url_map.insert(src.to_string(), v);
+                    url_map.insert(RcStr::from(src.as_str()), v);
                 }
             }
 
@@ -476,8 +477,8 @@ pub async fn parse_css(
     use_swc_css: bool,
 ) -> Result<Vc<ParseCssResult>> {
     let span = {
-        let name = source.ident().to_string().await?;
-        tracing::info_span!("parse css", name = *name)
+        let name = source.ident().to_string().await?.to_string();
+        tracing::info_span!("parse css", name = name)
     };
     async move {
         let content = source.content();
@@ -547,6 +548,8 @@ async fn process_content(
                     ],
                 },
                 dashed_idents: false,
+                grid: false,
+                ..Default::default()
             }),
 
             _ => None,
@@ -571,9 +574,8 @@ async fn process_content(
             ) {
                 Ok(mut ss) => {
                     if matches!(ty, CssModuleAssetType::Module) {
-                        let mut validator = CssModuleValidator::default();
+                        let mut validator = CssValidator { errors: Vec::new() };
                         ss.visit(&mut validator).unwrap();
-                        validator.validate_done();
 
                         for err in validator.errors {
                             err.report(source, fs_path_vc);
@@ -595,7 +597,7 @@ async fn process_content(
 
                                 ParsingIssue {
                                     file: fs_path_vc,
-                                    msg: Vc::cell(err.to_string()),
+                                    msg: Vc::cell(err.to_string().into()),
                                     source: Vc::cell(source),
                                 }
                                 .cell()
@@ -622,7 +624,7 @@ async fn process_content(
 
                     ParsingIssue {
                         file: fs_path_vc,
-                        msg: Vc::cell(e.to_string()),
+                        msg: Vc::cell(e.to_string().into()),
                         source: Vc::cell(source),
                     }
                     .cell()
@@ -640,7 +642,7 @@ async fn process_content(
             Box::new(IssueEmitter::new(
                 source,
                 cm.clone(),
-                Some("Parsing css source code failed".to_string()),
+                Some("Parsing css source code failed".into()),
             )),
         );
 
@@ -676,9 +678,8 @@ async fn process_content(
         }
 
         if matches!(ty, CssModuleAssetType::Module) {
-            let mut validator = CssModuleValidator::default();
+            let mut validator = CssValidator { errors: vec![] };
             ss.visit_with(&mut validator);
-            validator.validate_done();
 
             for err in validator.errors {
                 err.report(source, fs_path_vc);
@@ -732,29 +733,14 @@ async fn process_content(
 /// ```
 ///
 /// is wrong for a css module because it doesn't have a class name.
-#[derive(Default)]
-struct CssModuleValidator {
+struct CssValidator {
     errors: Vec<CssError>,
-    used_grid_areas: IndexSet<String>,
-    used_grid_templates: HashSet<String>,
-}
-impl CssModuleValidator {
-    fn validate_done(&mut self) {
-        for grid_area in &self.used_grid_areas {
-            if !self.used_grid_templates.contains(grid_area) {
-                self.errors.push(CssError::UnknownGridAreaInModules {
-                    name: grid_area.to_string(),
-                });
-            }
-        }
-    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
 enum CssError {
     SwcSelectorInModuleNotPure { span: Span },
     LightningCssSelectorInModuleNotPure { selector: String },
-    UnknownGridAreaInModules { name: String },
 }
 
 impl CssError {
@@ -763,7 +749,7 @@ impl CssError {
             CssError::SwcSelectorInModuleNotPure { span } => {
                 ParsingIssue {
                     file,
-                    msg: Vc::cell(CSS_MODULE_ERROR.to_string()),
+                    msg: Vc::cell(CSS_MODULE_ERROR.into()),
                     source: Vc::cell(Some(IssueSource::from_swc_offsets(
                         source,
                         span.lo.0 as _,
@@ -776,19 +762,7 @@ impl CssError {
             CssError::LightningCssSelectorInModuleNotPure { selector } => {
                 ParsingIssue {
                     file,
-                    msg: Vc::cell(format!("{CSS_MODULE_ERROR}, (lightningcss, {selector})")),
-                    source: Vc::cell(None),
-                }
-                .cell()
-                .emit();
-            }
-
-            CssError::UnknownGridAreaInModules { name } => {
-                ParsingIssue {
-                    file,
-                    msg: Vc::cell(format!(
-                        "Cannot find grid-template-areas with name '{name}'"
-                    )),
+                    msg: Vc::cell(format!("{CSS_MODULE_ERROR}, (lightningcss, {selector})").into()),
                     source: Vc::cell(None),
                 }
                 .cell()
@@ -802,7 +776,7 @@ const CSS_MODULE_ERROR: &str =
     "Selector is not pure (pure selectors must contain at least one local class or id)";
 
 /// We only vist top-level selectors.
-impl swc_core::css::visit::Visit for CssModuleValidator {
+impl swc_core::css::visit::Visit for CssValidator {
     fn visit_complex_selector(&mut self, n: &ComplexSelector) {
         fn is_complex_not_pure(sel: &ComplexSelector) -> bool {
             sel.children.iter().all(|sel| match sel {
@@ -906,73 +880,11 @@ impl swc_core::css::visit::Visit for CssModuleValidator {
 }
 
 /// We only vist top-level selectors.
-impl lightningcss::visitor::Visitor<'_> for CssModuleValidator {
+impl lightningcss::visitor::Visitor<'_> for CssValidator {
     type Error = ();
 
     fn visit_types(&self) -> lightningcss::visitor::VisitTypes {
-        lightningcss::visitor::VisitTypes::all()
-    }
-
-    fn visit_property(
-        &mut self,
-        property: &mut lightningcss::properties::Property,
-    ) -> Result<(), Self::Error> {
-        match property {
-            lightningcss::properties::Property::GridArea(p) => {
-                for line in [&p.row_start, &p.row_end, &p.column_start, &p.column_end] {
-                    if let lightningcss::properties::grid::GridLine::Area { name } = line {
-                        self.used_grid_areas.insert(name.to_string());
-                    }
-                }
-            }
-
-            lightningcss::properties::Property::GridColumn(p) => {
-                for line in [&p.start, &p.end] {
-                    if let lightningcss::properties::grid::GridLine::Area { name } = line {
-                        self.used_grid_areas.insert(name.to_string());
-                    }
-                }
-            }
-
-            lightningcss::properties::Property::GridRow(p) => {
-                for line in [&p.start, &p.end] {
-                    if let lightningcss::properties::grid::GridLine::Area { name } = line {
-                        self.used_grid_areas.insert(name.to_string());
-                    }
-                }
-            }
-
-            lightningcss::properties::Property::GridRowStart(p)
-            | lightningcss::properties::Property::GridRowEnd(p)
-            | lightningcss::properties::Property::GridColumnStart(p)
-            | lightningcss::properties::Property::GridColumnEnd(p) => {
-                if let lightningcss::properties::grid::GridLine::Area { name } = p {
-                    self.used_grid_areas.insert(name.to_string());
-                }
-            }
-
-            lightningcss::properties::Property::GridTemplateAreas(
-                lightningcss::properties::grid::GridTemplateAreas::Areas { areas, .. },
-            ) => {
-                for area in areas.iter().flatten() {
-                    self.used_grid_templates.insert(area.clone());
-                }
-            }
-
-            lightningcss::properties::Property::GridTemplate(p) => {
-                if let lightningcss::properties::grid::GridTemplateAreas::Areas { areas, .. } =
-                    &mut p.areas
-                {
-                    for area in areas.iter().flatten() {
-                        self.used_grid_templates.insert(area.clone());
-                    }
-                }
-            }
-
-            _ => {}
-        }
-
-        Ok(())
+        visit_types!(SELECTORS)
     }
 
     fn visit_selector(
@@ -1171,7 +1083,7 @@ impl TransformConfig for ModuleTransformConfig {
 
 #[turbo_tasks::value]
 struct ParsingIssue {
-    msg: Vc<String>,
+    msg: Vc<RcStr>,
     file: Vc<FileSystemPath>,
     source: Vc<OptionIssueSource>,
 }
@@ -1190,7 +1102,7 @@ impl Issue for ParsingIssue {
 
     #[turbo_tasks::function]
     fn title(&self) -> Vc<StyledString> {
-        StyledString::Text("Parsing css source code failed".to_string()).cell()
+        StyledString::Text("Parsing css source code failed".into()).cell()
     }
 
     #[turbo_tasks::function]
@@ -1201,7 +1113,7 @@ impl Issue for ParsingIssue {
     #[turbo_tasks::function]
     async fn description(&self) -> Result<Vc<OptionStyledString>> {
         Ok(Vc::cell(Some(
-            StyledString::Text(self.msg.await?.clone_value()).cell(),
+            StyledString::Text(self.msg.await?.as_str().into()).cell(),
         )))
     }
 }
@@ -1218,7 +1130,7 @@ mod tests {
         css::{ast::Stylesheet, parser::parser::ParserConfig, visit::VisitWith},
     };
 
-    use super::{CssError, CssModuleValidator};
+    use super::{CssError, CssValidator};
 
     fn lint_lightningcss(code: &str) -> Vec<CssError> {
         let mut ss = StyleSheet::parse(
@@ -1227,15 +1139,16 @@ mod tests {
                 css_modules: Some(lightningcss::css_modules::Config {
                     pattern: Pattern::default(),
                     dashed_idents: false,
+                    grid: false,
+                    ..Default::default()
                 }),
                 ..Default::default()
             },
         )
         .unwrap();
 
-        let mut validator = CssModuleValidator::default();
+        let mut validator = CssValidator { errors: Vec::new() };
         ss.visit(&mut validator).unwrap();
-        validator.validate_done();
 
         validator.errors
     }
@@ -1256,9 +1169,8 @@ mod tests {
         )
         .unwrap();
 
-        let mut validator = CssModuleValidator::default();
+        let mut validator = CssValidator { errors: Vec::new() };
         ss.visit_with(&mut validator);
-        validator.validate_done();
 
         validator.errors
     }
@@ -1273,11 +1185,6 @@ mod tests {
     fn assert_lint_failure(code: &str) {
         assert_ne!(lint_lightningcss(code), vec![], "lightningcss: {code}");
         assert_ne!(lint_swc(code), vec![], "swc: {code}");
-    }
-
-    #[track_caller]
-    fn assert_lint_failure_only_lightning_css(code: &str) {
-        assert_ne!(lint_lightningcss(code), vec![], "lightningcss: {code}");
     }
 
     #[test]
@@ -1400,101 +1307,6 @@ mod tests {
             ":where(div) {
             color: red;
         }",
-        );
-    }
-
-    #[test]
-    fn css_module_grid_lint() {
-        assert_lint_success(
-            r#"
-        .item1 {
-            grid-area: myArea;
-        }
-        .grid-container {
-            display: grid;
-            grid-template-areas: "myArea myArea";
-        }
-        "#,
-        );
-
-        assert_lint_failure_only_lightning_css(
-            r#"
-        .item1 {
-            grid-area: my;
-        }
-        .grid-container {
-            display: grid;
-            grid-template-areas: "myArea myArea";
-        }
-        "#,
-        );
-
-        assert_lint_failure_only_lightning_css(
-            r#"
-        .item1 {
-            grid-row-start: my;
-        }
-        .grid-container {
-            display: grid;
-            grid-template-areas: "myArea myArea";
-        }
-        "#,
-        );
-        assert_lint_failure_only_lightning_css(
-            r#"
-        .item1 {
-            grid-row-end: my;
-        }
-        .grid-container {
-            display: grid;
-            grid-template-areas: "myArea myArea";
-        }
-        "#,
-        );
-        assert_lint_failure_only_lightning_css(
-            r#"
-        .item1 {
-            grid-column-start: my;
-        }
-        .grid-container {
-            display: grid;
-            grid-template-areas: "myArea myArea";
-        }
-        "#,
-        );
-        assert_lint_failure_only_lightning_css(
-            r#"
-        .item1 {
-            grid-column-end: my;
-        }
-        .grid-container {
-            display: grid;
-            grid-template-areas: "myArea myArea";
-        }
-        "#,
-        );
-
-        assert_lint_success(
-            r#"
-        .item1 {
-            grid-area: my;
-        }
-        .grid-container {
-            display: grid;
-            grid-template: "my" "my";
-        }
-        "#,
-        );
-        assert_lint_failure_only_lightning_css(
-            r#"
-        .item1 {
-            grid-area: my;
-        }
-        .grid-container {
-            display: grid;
-            grid-template: "myArea" "myArea"
-        }
-        "#,
         );
     }
 }

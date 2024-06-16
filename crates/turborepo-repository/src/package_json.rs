@@ -1,4 +1,7 @@
-use std::{collections::BTreeMap, str::FromStr};
+use std::{
+    collections::{BTreeMap, HashMap},
+    str::FromStr,
+};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -22,8 +25,6 @@ pub struct PackageJson {
     pub optional_dependencies: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub peer_dependencies: Option<BTreeMap<String, String>>,
-    #[serde(rename = "turbo", default, skip_serializing_if = "Option::is_none")]
-    pub legacy_turbo_config: Option<Value>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub scripts: BTreeMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -81,6 +82,19 @@ impl PackageJson {
             .filter(|command| !command.is_empty())
             .map(|command| command.as_str())
     }
+
+    pub fn engines(&self) -> Option<HashMap<&str, &str>> {
+        let engines = self.other.get("engines")?.as_object()?;
+        Some(
+            engines
+                .iter()
+                .filter_map(|(key, value)| {
+                    let value = value.as_str()?;
+                    Some((key.as_str(), value))
+                })
+                .collect(),
+        )
+    }
 }
 
 impl FromStr for PackageJson {
@@ -107,20 +121,5 @@ mod test {
         let package_json: PackageJson = serde_json::from_value(json.clone()).unwrap();
         let actual = serde_json::to_value(package_json).unwrap();
         assert_eq!(actual, json);
-    }
-
-    #[test]
-    fn test_legacy_turbo_config() -> Result<()> {
-        let contents = r#"{"turbo": {}}"#;
-        let package_json = serde_json::from_str::<PackageJson>(contents)?;
-
-        assert!(package_json.legacy_turbo_config.is_some());
-
-        let contents = r#"{"turbo": { "globalDependencies": [".env"] } }"#;
-        let package_json = serde_json::from_str::<PackageJson>(contents)?;
-
-        assert!(package_json.legacy_turbo_config.is_some());
-
-        Ok(())
     }
 }

@@ -12,11 +12,12 @@ Make sure we prune tasks that reference a pruned workspace
   $ cat out/turbo.json | jq
   {
     "$schema": "https://turbo.build/schema.json",
-    "pipeline": {
+    "tasks": {
       "build": {
         "outputs": []
       }
-    }
+    },
+    "ui": "stream"
   }
 
 Verify turbo can read the produced turbo.json

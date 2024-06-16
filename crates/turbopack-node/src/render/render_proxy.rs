@@ -6,13 +6,13 @@ use futures::{
 };
 use parking_lot::Mutex;
 use turbo_tasks::{
-    duration_span, mark_finished, prevent_gc, util::SharedError, RawVc, ValueToString, Vc,
+    duration_span, mark_finished, prevent_gc, util::SharedError, RawVc, RcStr, ValueToString, Vc,
 };
 use turbo_tasks_bytes::{Bytes, Stream};
 use turbo_tasks_env::ProcessEnv;
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
-    chunk::{ChunkingContext, EvaluatableAsset, EvaluatableAssets},
+    chunk::{ChunkingContext, EvaluatableAssets},
     error::PrettyPrintError,
     issue::{IssueExt, StyledString},
     module::Module,
@@ -34,7 +34,7 @@ pub async fn render_proxy(
     cwd: Vc<FileSystemPath>,
     env: Vc<Box<dyn ProcessEnv>>,
     path: Vc<FileSystemPath>,
-    module: Vc<Box<dyn EvaluatableAsset>>,
+    module: Vc<Box<dyn Module>>,
     runtime_entries: Vc<EvaluatableAssets>,
     chunking_context: Vc<Box<dyn ChunkingContext>>,
     intermediate_output_path: Vc<FileSystemPath>,
@@ -95,7 +95,7 @@ async fn proxy_error(
     path: Vc<FileSystemPath>,
     error: anyhow::Error,
     operation: Option<NodeJsOperation>,
-) -> Result<(u16, String)> {
+) -> Result<(u16, RcStr)> {
     let message = format!("{}", PrettyPrintError(&error));
 
     let status = match operation {
@@ -111,15 +111,15 @@ async fn proxy_error(
     let status_code = 500;
     let body = error_html(
         status_code,
-        "An error occurred while proxying the request to Node.js".to_string(),
-        format!("{message}\n\n{}", details.join("\n")),
+        "An error occurred while proxying the request to Node.js".into(),
+        format!("{message}\n\n{}", details.join("\n")).into(),
     )
     .await?
     .clone_value();
 
     RenderingIssue {
         file_path: path,
-        message: StyledString::Text(message).cell(),
+        message: StyledString::Text(message.into()).cell(),
         status: status.and_then(|status| status.code()),
     }
     .cell()
@@ -151,7 +151,7 @@ fn render_stream(
     cwd: Vc<FileSystemPath>,
     env: Vc<Box<dyn ProcessEnv>>,
     path: Vc<FileSystemPath>,
-    module: Vc<Box<dyn EvaluatableAsset>>,
+    module: Vc<Box<dyn Module>>,
     runtime_entries: Vc<EvaluatableAssets>,
     chunking_context: Vc<Box<dyn ChunkingContext>>,
     intermediate_output_path: Vc<FileSystemPath>,
@@ -217,7 +217,7 @@ async fn render_stream_internal(
     cwd: Vc<FileSystemPath>,
     env: Vc<Box<dyn ProcessEnv>>,
     path: Vc<FileSystemPath>,
-    module: Vc<Box<dyn EvaluatableAsset>>,
+    module: Vc<Box<dyn Module>>,
     runtime_entries: Vc<EvaluatableAssets>,
     chunking_context: Vc<Box<dyn ChunkingContext>>,
     intermediate_output_path: Vc<FileSystemPath>,
@@ -289,11 +289,11 @@ async fn render_stream_internal(
                 yield RenderItem::Headers(ResponseHeaders {
                     status,
                     headers: vec![(
-                        "content-type".to_string(),
-                        "text/html; charset=utf-8".to_string(),
+                        "content-type".into(),
+                        "text/html; charset=utf-8".into(),
                     )],
                 });
-                yield RenderItem::BodyChunk(body.into());
+                yield RenderItem::BodyChunk(body.into_owned().into_bytes().into());
                 return;
             }
             v => {

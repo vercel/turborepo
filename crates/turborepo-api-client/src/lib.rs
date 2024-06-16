@@ -1,5 +1,6 @@
 #![feature(async_closure)]
 #![feature(error_generic_member_access)]
+#![feature(assert_matches)]
 #![deny(clippy::all)]
 
 use std::{backtrace::Backtrace, env, future::Future, time::Duration};
@@ -7,7 +8,7 @@ use std::{backtrace::Backtrace, env, future::Future, time::Duration};
 use lazy_static::lazy_static;
 use regex::Regex;
 pub use reqwest::Response;
-use reqwest::{Method, RequestBuilder, StatusCode};
+use reqwest::{Body, Method, RequestBuilder, StatusCode};
 use serde::Deserialize;
 use turborepo_ci::{is_ci, Vendor};
 use turborepo_vercel_api::{
@@ -24,6 +25,9 @@ mod error;
 mod retry;
 pub mod spaces;
 pub mod telemetry;
+
+pub use bytes::Bytes;
+pub use tokio_stream::Stream;
 
 lazy_static! {
     static ref AUTHORIZATION_REGEX: Regex =
@@ -73,7 +77,7 @@ pub trait CacheClient {
     fn put_artifact(
         &self,
         hash: &str,
-        artifact_body: &[u8],
+        artifact_body: impl tokio_stream::Stream<Item = Result<bytes::Bytes>> + Send + Sync + 'static,
         duration: u64,
         tag: Option<&str>,
         token: &str,
@@ -134,9 +138,11 @@ impl Client for APIClient {
             .header("User-Agent", self.user_agent.clone())
             .header("Authorization", format!("Bearer {}", token))
             .header("Content-Type", "application/json");
-        let response = retry::make_retryable_request(request_builder)
-            .await?
-            .error_for_status()?;
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+                .await?
+                .into_response()
+                .error_for_status()?;
 
         Ok(response.json().await?)
     }
@@ -149,9 +155,11 @@ impl Client for APIClient {
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {}", token));
 
-        let response = retry::make_retryable_request(request_builder)
-            .await?
-            .error_for_status()?;
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+                .await?
+                .into_response()
+                .error_for_status()?;
 
         Ok(response.json().await?)
     }
@@ -194,9 +202,11 @@ impl Client for APIClient {
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {}", token));
 
-        let response = retry::make_retryable_request(request_builder)
-            .await?
-            .error_for_status()?;
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+                .await?
+                .into_response()
+                .error_for_status()?;
 
         Ok(response.json().await?)
     }
@@ -208,9 +218,11 @@ impl Client for APIClient {
             .query(&[("token", token), ("tokenName", token_name)])
             .header("User-Agent", self.user_agent.clone());
 
-        let response = retry::make_retryable_request(request_builder)
-            .await?
-            .error_for_status()?;
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+                .await?
+                .into_response()
+                .error_for_status()?;
 
         let verification_response: VerificationResponse = response.json().await?;
 
@@ -310,7 +322,9 @@ impl CacheClient for APIClient {
 
         request_builder = Self::add_team_params(request_builder, team_id, team_slug);
 
-        let response = retry::make_retryable_request(request_builder).await?;
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout).await?;
+        let response = response.into_response();
 
         match response.status() {
             StatusCode::FORBIDDEN => Err(Self::handle_403(response).await),
@@ -347,7 +361,7 @@ impl CacheClient for APIClient {
     async fn put_artifact(
         &self,
         hash: &str,
-        artifact_body: &[u8],
+        artifact_body: impl tokio_stream::Stream<Item = Result<bytes::Bytes>> + Send + Sync + 'static,
         duration: u64,
         tag: Option<&str>,
         token: &str,
@@ -371,13 +385,15 @@ impl CacheClient for APIClient {
             request_url = preflight_response.location.clone();
         }
 
+        let stream = Body::wrap_stream(artifact_body);
+
         let mut request_builder = self
             .cache_client
             .put(request_url)
             .header("Content-Type", "application/octet-stream")
             .header("x-artifact-duration", duration.to_string())
             .header("User-Agent", self.user_agent.clone())
-            .body(artifact_body.to_vec());
+            .body(stream);
 
         if allow_auth {
             request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
@@ -391,7 +407,10 @@ impl CacheClient for APIClient {
             request_builder = request_builder.header("x-artifact-tag", tag);
         }
 
-        let response = retry::make_retryable_request(request_builder).await?;
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Connection)
+                .await?
+                .into_response();
 
         if response.status() == StatusCode::FORBIDDEN {
             return Err(Self::handle_403(response).await);
@@ -416,9 +435,11 @@ impl CacheClient for APIClient {
 
         let request_builder = Self::add_team_params(request_builder, team_id, team_slug);
 
-        let response = retry::make_retryable_request(request_builder)
-            .await?
-            .error_for_status()?;
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+                .await?
+                .into_response()
+                .error_for_status()?;
 
         Ok(response.json().await?)
     }
@@ -451,7 +472,9 @@ impl TokenClient for APIClient {
             invalid_token: bool,
         }
 
-        let response = retry::make_retryable_request(request_builder).await?;
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout).await?;
+        let response = response.into_response();
         let status = response.status();
         // Give a better error message for invalid tokens. This endpoint returns the
         // following statuses:
@@ -503,7 +526,10 @@ impl TokenClient for APIClient {
             invalid_token: bool,
         }
 
-        let response = retry::make_retryable_request(request_builder).await?;
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+                .await?
+                .into_response();
         let status = response.status();
         // Give a better error message for invalid tokens. This endpoint returns the
         // following statuses:
@@ -604,7 +630,10 @@ impl APIClient {
             .header("Access-Control-Request-Headers", request_headers)
             .header("Authorization", format!("Bearer {}", token));
 
-        let response = retry::make_retryable_request(request_builder).await?;
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+                .await?
+                .into_response();
 
         let headers = response.headers();
         let location = if let Some(location) = headers.get("Location") {

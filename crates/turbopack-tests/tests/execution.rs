@@ -7,9 +7,11 @@ use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{Context, Result};
 use dunce::canonicalize;
+use indexmap::indexmap;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{
-    debug::ValueDebugFormat, trace::TraceRawVcs, Completion, TryJoinIterExt, TurboTasks, Value, Vc,
+    debug::ValueDebugFormat, trace::TraceRawVcs, Completion, RcStr, TryJoinIterExt, TurboTasks,
+    Value, Vc,
 };
 use turbo_tasks_bytes::stream::SingleValue;
 use turbo_tasks_env::CommandLineProcessEnv;
@@ -21,17 +23,15 @@ use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
     ecmascript::TreeShakingMode, module_options::ModuleOptionsContext, ModuleAssetContext,
 };
-use turbopack_browser::BrowserChunkingContext;
 use turbopack_core::{
-    chunk::{EvaluatableAssetExt, EvaluatableAssets},
     compile_time_defines,
     compile_time_info::CompileTimeInfo,
     condition::ContextCondition,
-    context::{AssetContext, ProcessResult},
+    context::AssetContext,
     environment::{Environment, ExecutionEnvironment, NodeJsEnvironment},
     file_source::FileSource,
     issue::{Issue, IssueDescriptionExt},
-    reference_type::{EntryReferenceSubType, ReferenceType},
+    reference_type::{InnerAssets, ReferenceType},
     resolve::{
         options::{ImportMap, ImportMapping},
         ExternalType,
@@ -40,6 +40,7 @@ use turbopack_core::{
 };
 use turbopack_ecmascript_runtime::RuntimeType;
 use turbopack_node::{debug::should_debug, evaluate::evaluate};
+use turbopack_nodejs::NodeJsChunkingContext;
 use turbopack_resolve::resolve_options_context::ResolveOptionsContext;
 use turbopack_test_utils::jest::JestRunResult;
 
@@ -71,7 +72,7 @@ fn register() {
     turbo_tasks_env::register();
     turbo_tasks_fs::register();
     turbopack::register();
-    turbopack_browser::register();
+    turbopack_nodejs::register();
     turbopack_env::register();
     turbopack_ecmascript_plugins::register();
     turbopack_resolve::register();
@@ -124,7 +125,7 @@ fn get_messages(js_results: JsResult) -> Vec<String> {
     let mut messages = vec![];
 
     if js_results.jest_result.test_results.is_empty() {
-        messages.push("No tests were run.".to_string());
+        messages.push("No tests were run.".into());
     }
 
     for test_result in js_results.jest_result.test_results {
@@ -155,10 +156,16 @@ fn get_messages(js_results: JsResult) -> Vec<String> {
 async fn run(resource: PathBuf, snapshot_mode: IssueSnapshotMode) -> Result<JsResult> {
     register();
 
+    // Clean up old output files.
+    let output_path = resource.join("output");
+    if output_path.exists() {
+        std::fs::remove_dir_all(&output_path)?;
+    }
+
     let tt = TurboTasks::new(MemoryBackend::default());
     tt.run_once(async move {
         let resource_str = resource.to_str().unwrap();
-        let prepared_test = prepare_test(resource_str.to_string());
+        let prepared_test = prepare_test(resource_str.into());
         let run_result = run_test(prepared_test);
         if matches!(snapshot_mode, IssueSnapshotMode::Snapshots) {
             snapshot_issues(prepared_test, run_result).await?;
@@ -185,7 +192,7 @@ struct PreparedTest {
 }
 
 #[turbo_tasks::function]
-async fn prepare_test(resource: String) -> Result<Vc<PreparedTest>> {
+async fn prepare_test(resource: RcStr) -> Result<Vc<PreparedTest>> {
     let resource_path = canonicalize(&resource)?;
     assert!(resource_path.exists(), "{} does not exist", resource);
     assert!(
@@ -194,8 +201,8 @@ async fn prepare_test(resource: String) -> Result<Vc<PreparedTest>> {
         resource_path.to_str().unwrap()
     );
 
-    let root_fs = DiskFileSystem::new("workspace".to_string(), REPO_ROOT.clone(), vec![]);
-    let project_fs = DiskFileSystem::new("project".to_string(), REPO_ROOT.clone(), vec![]);
+    let root_fs = DiskFileSystem::new("workspace".into(), REPO_ROOT.clone(), vec![]);
+    let project_fs = DiskFileSystem::new("project".into(), REPO_ROOT.clone(), vec![]);
     let project_root = project_fs.root();
 
     let relative_path = resource_path.strip_prefix(&*REPO_ROOT).context(format!(
@@ -203,12 +210,12 @@ async fn prepare_test(resource: String) -> Result<Vc<PreparedTest>> {
         &*REPO_ROOT,
         resource_path.display()
     ))?;
-    let relative_path = sys_to_unix(relative_path.to_str().unwrap());
-    let path = root_fs.root().join(relative_path.to_string());
-    let project_path = project_root.join(relative_path.to_string());
-    let tests_path = project_fs.root().join("crates/turbopack-tests".to_string());
+    let relative_path: RcStr = sys_to_unix(relative_path.to_str().unwrap()).into();
+    let path = root_fs.root().join(relative_path.clone());
+    let project_path = project_root.join(relative_path.clone());
+    let tests_path = project_fs.root().join("crates/turbopack-tests".into());
 
-    let options_file = path.join("options.json".to_string());
+    let options_file = path.join("options.json".into());
 
     let mut options = TestOptions::default();
     if matches!(*options_file.get_type().await?, FileSystemEntryType::File) {
@@ -238,12 +245,11 @@ async fn run_test(prepared_test: Vc<PreparedTest>) -> Result<Vc<RunTestResult>> 
         ref options,
     } = *prepared_test.await?;
 
-    let jest_runtime_path = tests_path.join("js/jest-runtime.ts".to_string());
-    let jest_entry_path = tests_path.join("js/jest-entry.ts".to_string());
-    let test_path = project_path.join("input/index.js".to_string());
+    let jest_entry_path = tests_path.join("js/jest-entry.ts".into());
+    let test_path = project_path.join("input/index.js".into());
 
-    let chunk_root_path = path.join("output".to_string());
-    let static_root_path = path.join("static".to_string());
+    let chunk_root_path = path.join("output".into());
+    let static_root_path = path.join("static".into());
 
     let env = Environment::new(Value::new(ExecutionEnvironment::NodeJsBuildTime(
         NodeJsEnvironment::default().into(),
@@ -263,7 +269,7 @@ async fn run_test(prepared_test: Vc<PreparedTest>) -> Result<Vc<RunTestResult>> 
     let mut import_map = ImportMap::empty();
     import_map.insert_wildcard_alias(
         "esm-external/",
-        ImportMapping::External(Some("*".to_string()), ExternalType::EcmaScriptModule).cell(),
+        ImportMapping::External(Some("*".into()), ExternalType::EcmaScriptModule).cell(),
     );
 
     let asset_context: Vc<Box<dyn AssetContext>> = Vc::upcast(ModuleAssetContext::new(
@@ -275,7 +281,7 @@ async fn run_test(prepared_test: Vc<PreparedTest>) -> Result<Vc<RunTestResult>> 
             tree_shaking_mode: options.tree_shaking_mode,
             import_externals: true,
             rules: vec![(
-                ContextCondition::InDirectory("node_modules".to_string()),
+                ContextCondition::InDirectory("node_modules".into()),
                 ModuleOptionsContext {
                     tree_shaking_mode: options.tree_shaking_mode,
                     ..Default::default()
@@ -288,12 +294,12 @@ async fn run_test(prepared_test: Vc<PreparedTest>) -> Result<Vc<RunTestResult>> 
         ResolveOptionsContext {
             enable_typescript: true,
             enable_node_modules: Some(project_root),
-            custom_conditions: vec!["development".to_string()],
+            custom_conditions: vec!["development".into()],
             rules: vec![(
-                ContextCondition::InDirectory("node_modules".to_string()),
+                ContextCondition::InDirectory("node_modules".into()),
                 ResolveOptionsContext {
                     enable_node_modules: Some(project_root),
-                    custom_conditions: vec!["development".to_string()],
+                    custom_conditions: vec!["development".into()],
                     browser: true,
                     ..Default::default()
                 }
@@ -305,10 +311,10 @@ async fn run_test(prepared_test: Vc<PreparedTest>) -> Result<Vc<RunTestResult>> 
             ..Default::default()
         }
         .cell(),
-        Vc::cell("test".to_string()),
+        Vc::cell("test".into()),
     ));
 
-    let chunking_context = BrowserChunkingContext::builder(
+    let chunking_context = NodeJsChunkingContext::builder(
         project_root,
         chunk_root_path,
         static_root_path,
@@ -319,10 +325,24 @@ async fn run_test(prepared_test: Vc<PreparedTest>) -> Result<Vc<RunTestResult>> 
     )
     .build();
 
-    let jest_entry_asset = process_path_to_asset(jest_entry_path, asset_context).module();
-    let jest_runtime_asset = FileSource::new(jest_runtime_path);
+    let jest_entry_source = FileSource::new(jest_entry_path);
     let test_source = FileSource::new(test_path);
-    let test_evaluatable = test_source.to_evaluatable(asset_context);
+
+    let test_asset = asset_context
+        .process(
+            Vc::upcast(test_source),
+            Value::new(ReferenceType::Internal(InnerAssets::empty())),
+        )
+        .module();
+
+    let jest_entry_asset = asset_context
+        .process(
+            Vc::upcast(jest_entry_source),
+            Value::new(ReferenceType::Internal(Vc::cell(indexmap! {
+                "TESTS".into() => test_asset,
+            }))),
+        )
+        .module();
 
     let res = evaluate(
         jest_entry_asset,
@@ -331,10 +351,7 @@ async fn run_test(prepared_test: Vc<PreparedTest>) -> Result<Vc<RunTestResult>> 
         test_source.ident(),
         asset_context,
         Vc::upcast(chunking_context),
-        Some(EvaluatableAssets::many(vec![
-            jest_runtime_asset.to_evaluatable(asset_context),
-            test_evaluatable,
-        ])),
+        None,
         vec![],
         Completion::immutable(),
         should_debug("execution_test"),
@@ -386,22 +403,11 @@ async fn snapshot_issues(
 
     turbopack_test_utils::snapshot::snapshot_issues(
         plain_issues,
-        path.join("issues".to_string()),
+        path.join("issues".into()),
         &REPO_ROOT,
     )
     .await
     .context("Unable to handle issues")?;
 
     Ok(Default::default())
-}
-
-#[turbo_tasks::function]
-fn process_path_to_asset(
-    path: Vc<FileSystemPath>,
-    asset_context: Vc<Box<dyn AssetContext>>,
-) -> Vc<ProcessResult> {
-    asset_context.process(
-        Vc::upcast(FileSource::new(path)),
-        Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
-    )
 }

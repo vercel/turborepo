@@ -12,12 +12,12 @@ pub mod task_access;
 pub mod task_id;
 pub mod watch;
 
-use std::{collections::HashSet, io::Write, sync::Arc};
+use std::{collections::HashSet, io::Write, sync::Arc, time::Duration};
 
 pub use cache::{CacheOutput, ConfigCache, Error as CacheError, RunCache, TaskCache};
 use chrono::{DateTime, Local};
 use rayon::iter::ParallelBridge;
-use tokio::task::JoinHandle;
+use tokio::{select, task::JoinHandle};
 use tracing::debug;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::{APIAuth, APIClient};
@@ -37,7 +37,7 @@ use crate::{
     run::{global_hash::get_global_hash_inputs, summary::RunTracker, task_access::TaskAccess},
     signal::SignalHandler,
     task_graph::Visitor,
-    task_hash::{get_external_deps_hash, PackageInputsHashes},
+    task_hash::{get_external_deps_hash, get_internal_deps_hash, PackageInputsHashes},
     turbo_json::TurboJson,
     DaemonClient, DaemonConnector,
 };
@@ -140,28 +140,98 @@ impl Run {
         self.experimental_ui
     }
 
-    pub fn start_experimental_ui(&self) -> Option<(AppSender, JoinHandle<Result<(), tui::Error>>)> {
-        if !self.experimental_ui {
-            return None;
+    pub fn should_start_ui(&self) -> Result<bool, Error> {
+        Ok(self.experimental_ui
+            && self.opts.run_opts.dry_run.is_none()
+            && tui::terminal_big_enough()?)
+    }
+
+    #[allow(clippy::type_complexity)]
+    pub fn start_experimental_ui(
+        &self,
+    ) -> Result<Option<(AppSender, JoinHandle<Result<(), tui::Error>>)>, Error> {
+        // Print prelude here as this needs to happen before the UI is started
+        if self.should_print_prelude {
+            self.print_run_prelude();
+        }
+
+        if !self.should_start_ui()? {
+            return Ok(None);
         }
 
         let task_names = self.engine.tasks_with_command(&self.pkg_dep_graph);
         let (sender, receiver) = AppSender::new();
         let handle = tokio::task::spawn_blocking(move || tui::run_app(task_names, receiver));
 
-        Some((sender, handle))
+        Ok(Some((sender, handle)))
     }
 
     pub async fn run(&mut self, experimental_ui_sender: Option<AppSender>) -> Result<i32, Error> {
-        if self.should_print_prelude {
-            self.print_run_prelude();
-        }
         if let Some(subscriber) = self.signal_handler.subscribe() {
             let run_cache = self.run_cache.clone();
             tokio::spawn(async move {
                 let _guard = subscriber.listen().await;
                 let spinner = turborepo_ui::start_spinner("...Finishing writing to cache...");
-                run_cache.shutdown_cache().await;
+                if let Ok((status, closed)) = run_cache.shutdown_cache().await {
+                    let fut = async {
+                        loop {
+                            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                            // loop through hashmap, extract items that are still running,
+                            // sum up bit per second
+                            let (bytes_per_second, bytes_uploaded, bytes_total) = {
+                                let status = status.lock().unwrap();
+                                let total_bps: f64 = status
+                                    .iter()
+                                    .filter_map(|(_hash, task)| task.average_bps())
+                                    .sum();
+                                let bytes_uploaded: usize =
+                                    status.iter().filter_map(|(_hash, task)| task.bytes()).sum();
+                                let bytes_total: usize = status
+                                    .iter()
+                                    .filter(|(_hash, task)| !task.done())
+                                    .filter_map(|(_hash, task)| task.size())
+                                    .sum();
+                                (total_bps, bytes_uploaded, bytes_total)
+                            };
+
+                            if bytes_total == 0 {
+                                continue;
+                            }
+
+                            // convert to human readable
+                            let mut formatter = human_format::Formatter::new();
+                            let formatter = formatter.with_decimals(2).with_separator("");
+                            let bytes_per_second =
+                                formatter.with_units("B/s").format(bytes_per_second);
+                            let bytes_remaining = formatter
+                                .with_units("B")
+                                .format(bytes_total.saturating_sub(bytes_uploaded) as f64);
+
+                            spinner.set_message(format!(
+                                "...Finishing writing to cache... ({} remaining, {})",
+                                bytes_remaining, bytes_per_second
+                            ));
+                        }
+                    };
+
+                    let interrupt = async {
+                        if let Ok(fut) = crate::commands::run::get_signal() {
+                            fut.await;
+                        } else {
+                            tracing::warn!("could not register ctrl-c handler");
+                            // wait forever
+                            tokio::time::sleep(Duration::MAX).await;
+                        }
+                    };
+
+                    select! {
+                        _ = closed => {}
+                        _ = fut => {}
+                        _ = interrupt => {tracing::debug!("received interrupt, exiting");}
+                    }
+                } else {
+                    tracing::warn!("could not start shutdown, exiting");
+                }
                 spinner.finish_and_clear();
             });
         }
@@ -200,27 +270,31 @@ impl Run {
         let root_external_dependencies_hash =
             is_monorepo.then(|| get_external_deps_hash(&root_workspace.transitive_dependencies));
 
+        let root_internal_dependencies_hash = is_monorepo
+            .then(|| {
+                get_internal_deps_hash(
+                    &self.scm,
+                    &self.repo_root,
+                    self.pkg_dep_graph
+                        .root_internal_package_dependencies_paths(),
+                )
+            })
+            .transpose()?;
+
         let global_hash_inputs = {
-            let (env_mode, pass_through_env) = match self.opts.run_opts.env_mode {
-                // In infer mode, if there is any pass_through config (even if it is an empty array)
-                // we'll hash the whole object, so we can detect changes to that config
-                // Further, resolve the envMode to the concrete value.
-                EnvMode::Infer if self.root_turbo_json.global_pass_through_env.is_some() => (
-                    EnvMode::Strict,
-                    self.root_turbo_json.global_pass_through_env.as_deref(),
-                ),
+            let env_mode = self.opts.run_opts.env_mode;
+            let pass_through_env = match env_mode {
                 EnvMode::Loose => {
                     // Remove the passthroughs from hash consideration if we're explicitly loose.
-                    (EnvMode::Loose, None)
+                    None
                 }
-                env_mode => (
-                    env_mode,
-                    self.root_turbo_json.global_pass_through_env.as_deref(),
-                ),
+                EnvMode::Strict => self.root_turbo_json.global_pass_through_env.as_deref(),
             };
 
             get_global_hash_inputs(
                 root_external_dependencies_hash.as_deref(),
+                root_internal_dependencies_hash.as_deref(),
+                root_workspace,
                 &self.repo_root,
                 self.pkg_dep_graph.package_manager(),
                 self.pkg_dep_graph.lockfile(),
@@ -230,7 +304,6 @@ impl Run {
                 pass_through_env,
                 env_mode,
                 self.opts.run_opts.framework_inference,
-                self.root_turbo_json.global_dot_env.as_deref(),
                 &self.scm,
             )?
         };

@@ -33,11 +33,21 @@ function defineProp(obj, name1, options) {
         value: "Module"
     });
     for(const key in getters){
-        defineProp(exports, key, {
-            get: getters[key],
-            enumerable: true
-        });
+        const item = getters[key];
+        if (Array.isArray(item)) {
+            defineProp(exports, key, {
+                get: item[0],
+                set: item[1],
+                enumerable: true
+            });
+        } else {
+            defineProp(exports, key, {
+                get: item,
+                enumerable: true
+            });
+        }
     }
+    Object.seal(exports);
 }
 /**
  * Makes the module an ESM with exports
@@ -203,9 +213,10 @@ function createPromise() {
 const turbopackQueues = Symbol("turbopack queues");
 const turbopackExports = Symbol("turbopack exports");
 const turbopackError = Symbol("turbopack error");
+let QueueStatus;
 function resolveQueue(queue) {
-    if (queue && !queue.resolved) {
-        queue.resolved = true;
+    if (queue && queue.status !== 1) {
+        queue.status = 1;
         queue.forEach((fn)=>fn.queueCount--);
         queue.forEach((fn)=>fn.queueCount-- ? fn.queueCount++ : fn());
     }
@@ -216,7 +227,7 @@ function wrapDeps(deps) {
             if (isAsyncModuleExt(dep)) return dep;
             if (isPromise(dep)) {
                 const queue = Object.assign([], {
-                    resolved: false
+                    status: 0
                 });
                 const obj = {
                     [turbopackExports]: {},
@@ -232,30 +243,39 @@ function wrapDeps(deps) {
                 return obj;
             }
         }
-        const ret = {
+        return {
             [turbopackExports]: dep,
             [turbopackQueues]: ()=>{}
         };
-        return ret;
     });
 }
 function asyncModule(module, body, hasAwait) {
     const queue = hasAwait ? Object.assign([], {
-        resolved: true
+        status: -1
     }) : undefined;
     const depQueues = new Set();
-    ensureDynamicExports(module, module.exports);
-    const exports = module.exports;
     const { resolve, reject, promise: rawPromise } = createPromise();
     const promise = Object.assign(rawPromise, {
-        [turbopackExports]: exports,
+        [turbopackExports]: module.exports,
         [turbopackQueues]: (fn)=>{
             queue && fn(queue);
             depQueues.forEach(fn);
             promise["catch"](()=>{});
         }
     });
-    module.exports = module.namespaceObject = promise;
+    const attributes = {
+        get () {
+            return promise;
+        },
+        set (v) {
+            // Calling `esmExport` leads to this.
+            if (v !== promise) {
+                promise[turbopackExports] = v;
+            }
+        }
+    };
+    Object.defineProperty(module, "exports", attributes);
+    Object.defineProperty(module, "namespaceObject", attributes);
     function handleAsyncDependencies(deps) {
         const currentDeps = wrapDeps(deps);
         const getResult = ()=>currentDeps.map((d)=>{
@@ -269,7 +289,7 @@ function asyncModule(module, body, hasAwait) {
         function fnQueue(q) {
             if (q !== queue && !depQueues.has(q)) {
                 depQueues.add(q);
-                if (q && !q.resolved) {
+                if (q && q.status === 0) {
                     fn.queueCount++;
                     q.push(fn);
                 }
@@ -282,13 +302,13 @@ function asyncModule(module, body, hasAwait) {
         if (err) {
             reject(promise[turbopackError] = err);
         } else {
-            resolve(exports);
+            resolve(promise[turbopackExports]);
         }
         resolveQueue(queue);
     }
     body(handleAsyncDependencies, asyncResult);
-    if (queue) {
-        queue.resolved = false;
+    if (queue && queue.status === -1) {
+        queue.status = 0;
     }
 }
 /**
@@ -576,13 +596,9 @@ function instantiateModule(id, source) {
     try {
         executeModule({
             register: globalThis.$RefreshReg$,
-            signature: globalThis.$RefreshSig$
+            signature: globalThis.$RefreshSig$,
+            registerExports: registerExportsAndSetupBoundaryForReactRefresh
         });
-        if ("$RefreshHelpers$" in globalThis) {
-            // This pattern can also be used to register the exports of
-            // a module with the React Refresh runtime.
-            registerExportsAndSetupBoundaryForReactRefresh(module, globalThis.$RefreshHelpers$);
-        }
     } catch (e) {
         throw e;
     } finally{
@@ -999,6 +1015,9 @@ function getAffectedModuleEffects(moduleId) {
     while(nextItem = queue.shift()){
         const { moduleId, dependencyChain } = nextItem;
         if (moduleId != null) {
+            if (outdatedModules.has(moduleId)) {
+                continue;
+            }
             outdatedModules.add(moduleId);
         }
         // We've arrived at the runtime of the chunk, which means that nothing

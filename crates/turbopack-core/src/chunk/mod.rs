@@ -24,14 +24,16 @@ use turbo_tasks::{
     debug::ValueDebugFormat,
     graph::{AdjacencyMap, GraphTraversal, GraphTraversalResult, Visit, VisitControlFlow},
     trace::TraceRawVcs,
-    ReadRef, TaskInput, TryFlatJoinIterExt, TryJoinIterExt, Upcast, ValueToString, Vc,
+    RcStr, ReadRef, TaskInput, TryFlatJoinIterExt, TryJoinIterExt, Upcast, ValueToString, Vc,
 };
 use turbo_tasks_fs::FileSystemPath;
 use turbo_tasks_hash::DeterministicHash;
 
 use self::{availability_info::AvailabilityInfo, available_chunk_items::AvailableChunkItems};
 pub use self::{
-    chunking_context::{ChunkGroupResult, ChunkingContext, ChunkingContextExt, MinifyType},
+    chunking_context::{
+        ChunkGroupResult, ChunkingContext, ChunkingContextExt, EntryChunkGroupResult, MinifyType,
+    },
     data::{ChunkData, ChunkDataOption, ChunksData},
     evaluate::{EvaluatableAsset, EvaluatableAssetExt, EvaluatableAssets},
 };
@@ -50,7 +52,7 @@ use crate::{
 #[serde(untagged)]
 pub enum ModuleId {
     Number(u32),
-    String(String),
+    String(RcStr),
 }
 
 impl Display for ModuleId {
@@ -65,8 +67,8 @@ impl Display for ModuleId {
 #[turbo_tasks::value_impl]
 impl ValueToString for ModuleId {
     #[turbo_tasks::function]
-    fn to_string(&self) -> Vc<String> {
-        Vc::cell(self.to_string())
+    fn to_string(&self) -> Vc<RcStr> {
+        Vc::cell(self.to_string().into())
     }
 }
 
@@ -74,7 +76,7 @@ impl ModuleId {
     pub fn parse(id: &str) -> Result<ModuleId> {
         Ok(match id.parse::<u32>() {
             Ok(i) => ModuleId::Number(i),
-            Err(_) => ModuleId::String(id.to_string()),
+            Err(_) => ModuleId::String(id.into()),
         })
     }
 }
@@ -226,7 +228,7 @@ enum ChunkContentGraphNode {
     // Chunk items that are placed into the current chunk group
     ChunkItem {
         item: Vc<Box<dyn ChunkItem>>,
-        ident: ReadRef<String>,
+        ident: ReadRef<RcStr>,
     },
     // Async module that is referenced from the chunk group
     AsyncModule {
@@ -352,6 +354,8 @@ async fn graph_node_to_referenced_nodes(
 
             let module_data = reference
                 .resolve_reference()
+                .resolve()
+                .await?
                 .primary_modules()
                 .await?
                 .into_iter()
@@ -420,7 +424,7 @@ async fn graph_node_to_referenced_nodes(
                         ChunkingType::Async => {
                             let chunk_loading =
                                 chunking_context.environment().chunk_loading().await?;
-                            if matches!(*chunk_loading, ChunkLoading::None) {
+                            if matches!(*chunk_loading, ChunkLoading::Edge) {
                                 let chunk_item = chunkable_module
                                     .as_chunk_item(chunking_context)
                                     .resolve()
