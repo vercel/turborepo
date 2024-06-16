@@ -287,7 +287,7 @@ export async function create(
           } all apps and packages`
         );
       });
-    logger.log("- Run a command twice to hit cache.");
+    logger.log("- Run a command twice to hit cache");
   }
   opts.telemetry?.trackCommandStatus({ command: "create", status: "end" });
 }
