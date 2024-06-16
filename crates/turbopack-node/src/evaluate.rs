@@ -21,7 +21,7 @@ use turbo_tasks_env::ProcessEnv;
 use turbo_tasks_fs::{to_sys_path, File, FileSystemPath};
 use turbopack_core::{
     asset::AssetContent,
-    chunk::{ChunkingContext, EvaluatableAsset, EvaluatableAssets},
+    chunk::{ChunkingContext, ChunkingContextExt, EvaluatableAsset, EvaluatableAssets},
     context::AssetContext,
     error::PrettyPrintError,
     file_source::FileSource,
@@ -33,7 +33,6 @@ use turbopack_core::{
 };
 
 use crate::{
-    bootstrap::NodeJsBootstrapAsset,
     embed_js::embed_file_path,
     emit, emit_package_json, internal_assets_for_source_mapping,
     pool::{FormattingMode, NodeJsOperation, NodeJsPool},
@@ -92,9 +91,7 @@ pub async fn get_evaluate_pool(
 ) -> Result<Vc<NodeJsPool>> {
     let runtime_asset = asset_context
         .process(
-            Vc::upcast(FileSource::new(embed_file_path(
-                "ipc/evaluate.ts".to_string(),
-            ))),
+            Vc::upcast(FileSource::new(embed_file_path("ipc/evaluate.ts".into()))),
             Value::new(ReferenceType::Internal(InnerAssets::empty())),
         )
         .module();
@@ -108,27 +105,21 @@ pub async fn get_evaluate_pool(
     } else {
         Cow::Owned(format!("{file_name}.js"))
     };
-    let path = chunking_context.output_root().join(file_name.to_string());
+    let path = chunking_context.output_root().join(file_name.into());
     let entry_module = asset_context
         .process(
             Vc::upcast(VirtualSource::new(
-                runtime_asset.ident().path().join("evaluate.js".to_string()),
+                runtime_asset.ident().path().join("evaluate.js".into()),
                 AssetContent::file(
                     File::from("import { run } from 'RUNTIME'; run(() => import('INNER'))").into(),
                 ),
             )),
             Value::new(ReferenceType::Internal(Vc::cell(indexmap! {
-                "INNER".to_string() => module_asset,
-                "RUNTIME".to_string() => runtime_asset
+                "INNER".into() => module_asset,
+                "RUNTIME".into() => runtime_asset
             }))),
         )
         .module();
-
-    let Some(entry_module) =
-        Vc::try_resolve_sidecast::<Box<dyn EvaluatableAsset>>(entry_module).await?
-    else {
-        bail!("Internal module is not evaluatable");
-    };
 
     let (Some(cwd), Some(entrypoint)) = (to_sys_path(cwd).await?, to_sys_path(path).await?) else {
         panic!("can only evaluate from a disk filesystem");
@@ -137,7 +128,7 @@ pub async fn get_evaluate_pool(
     let runtime_entries = {
         let globals_module = asset_context
             .process(
-                Vc::upcast(FileSource::new(embed_file_path("globals.ts".to_string()))),
+                Vc::upcast(FileSource::new(embed_file_path("globals.ts".into()))),
                 Value::new(ReferenceType::Internal(InnerAssets::empty())),
             )
             .module();
@@ -158,14 +149,8 @@ pub async fn get_evaluate_pool(
         Vc::<EvaluatableAssets>::cell(entries)
     };
 
-    let bootstrap = Vc::upcast(
-        NodeJsBootstrapAsset {
-            path,
-            chunking_context,
-            evaluatable_assets: runtime_entries.with_entry(entry_module),
-        }
-        .cell(),
-    );
+    let bootstrap =
+        chunking_context.root_entry_chunk_group_asset(path, entry_module, runtime_entries);
 
     let output_root: Vc<FileSystemPath> = chunking_context.output_root();
     let emit_package = emit_package_json(output_root);
@@ -585,7 +570,7 @@ pub struct EvaluationIssue {
 impl Issue for EvaluationIssue {
     #[turbo_tasks::function]
     fn title(&self) -> Vc<StyledString> {
-        StyledString::Text("Error evaluating Node.js code".to_string()).cell()
+        StyledString::Text("Error evaluating Node.js code".into()).cell()
     }
 
     #[turbo_tasks::function]
@@ -609,7 +594,8 @@ impl Issue for EvaluationIssue {
                         self.project_dir,
                         FormattingMode::Plain,
                     )
-                    .await?,
+                    .await?
+                    .into(),
             )
             .cell(),
         )))

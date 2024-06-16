@@ -1,0 +1,61 @@
+---
+title: Biome
+description: Learn how to use Biome in your Turborepo projects.
+---
+
+import { Callout } from '#/components/callout';
+import { CreateTurboCallout } from './create-turbo-callout.tsx';
+
+[Biome](https://biomejs.dev/) is a fast formatter for JavaScript, TypeScript, JSX, and JSON that saves CI and developer time.
+
+<CreateTurboCallout />
+
+## Using Biome with Turborepo
+
+Biome is a rare exception to most tools that are used with Turborepo because it is **so extraordinarily fast**. For this reason, we recommend using a [Root Task](/repo/docs/crafting-your-repository/configuring-tasks#registering-root-tasks) rather than creating separate scripts in each of your packages.
+
+<Callout type="info" title="Caching behavior">
+  Using Biome at the root of the project will result in cache misses for all
+  tasks when you upgrade Biome versions or change configuration. If you prefer
+  the tradeoff of higher cache hit ratios in these situations over less
+  configuration, you can still use Biome in separate scripts like the other
+  recommendations in our guides.
+</Callout>
+
+### Initialize Biome
+
+First, [follow the installation documentation to set up Biome](https://biomejs.dev/guides/getting-started/) in your repository. You'll then be able to create a script to use Biome in the root of your repository:
+
+```json title="./package.json"
+{
+  "scripts": {
+    "format-and-lint": "biome check .",
+    "format-and-lint:fix": "biome check . --write"
+  }
+}
+```
+
+### Create a root task
+
+In practice, Biome is unlikely to be a bottleneck in the iteration speed of your repository. For this reason, we can have less configuration to manage in our repository by using Biome in a [Root Task](/repo/docs/crafting-your-repository/configuring-tasks#registering-root-tasks).
+
+<Callout type="info">
+  If you believe Biome may be faster in your repository split up into tasks in
+  packages, you are free to do so. We encourage you to experiment with what's
+  best for your use case.
+</Callout>
+
+To create a Root Task, register the scripts to Turborepo:
+
+```json title="./turbo.json"
+{
+  "tasks": {
+    "//#format-and-lint": {},
+    "//#format-and-lint:fix": {
+      "cache": false
+    }
+  }
+}
+```
+
+You'll now be able to run these scripts using `turbo run format-and-lint` and `turbo run format-and-lint:fix`.

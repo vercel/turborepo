@@ -1,5 +1,6 @@
 import merge from "deepmerge";
 import type { Schema } from "@turbo/types";
+import type { SchemaV1 } from "@turbo/types/src/types/config";
 import { setupTestFixtures } from "@turbo/test-utils";
 import {
   hasLegacyEnvVarDependencies,
@@ -8,7 +9,9 @@ import {
   transformer,
 } from "../src/transforms/migrate-env-var-dependencies";
 
-const getTestTurboConfig = (override: Schema = { pipeline: {} }): Schema => {
+const getTestTurboConfig = (
+  override: SchemaV1 = { pipeline: {} }
+): SchemaV1 => {
   const config = {
     $schema: "./docs/public/schema.json",
     globalDependencies: ["$GLOBAL_ENV_KEY"],
@@ -388,7 +391,7 @@ describe("migrate-env-var-dependencies", () => {
       // run the transformer
       const result = transformer({
         root,
-        options: { force: false, dry: false, print: false },
+        options: { force: false, dryRun: false, print: false },
       });
 
       expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -438,7 +441,7 @@ describe("migrate-env-var-dependencies", () => {
       // run the transformer
       const result = transformer({
         root,
-        options: { force: false, dry: false, print: false },
+        options: { force: false, dryRun: false, print: false },
       });
 
       expect(readJson("turbo.json") || "{}").toStrictEqual({
@@ -522,7 +525,7 @@ describe("migrate-env-var-dependencies", () => {
       // run the transformer
       const result = transformer({
         root,
-        options: { force: false, dry: false, print: false },
+        options: { force: false, dryRun: false, print: false },
       });
 
       expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -565,7 +568,7 @@ describe("migrate-env-var-dependencies", () => {
       // run the transformer
       const repeatResult = transformer({
         root,
-        options: { force: false, dry: false, print: false },
+        options: { force: false, dryRun: false, print: false },
       });
 
       expect(repeatResult.fatalError).toBeUndefined();
@@ -591,7 +594,7 @@ describe("migrate-env-var-dependencies", () => {
       // run the transformer
       const result = transformer({
         root,
-        options: { force: false, dry: true, print: false },
+        options: { force: false, dryRun: true, print: false },
       });
 
       // make sure it didn't change
@@ -618,7 +621,7 @@ describe("migrate-env-var-dependencies", () => {
       // run the transformer
       const result = transformer({
         root,
-        options: { force: false, dry: false, print: true },
+        options: { force: false, dryRun: false, print: true },
       });
 
       expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -670,7 +673,7 @@ describe("migrate-env-var-dependencies", () => {
       // run the transformer
       const result = transformer({
         root,
-        options: { force: false, dry: true, print: true },
+        options: { force: false, dryRun: true, print: true },
       });
 
       // make sure it didn't change
@@ -699,7 +702,7 @@ describe("migrate-env-var-dependencies", () => {
       // run the transformer
       const result = transformer({
         root,
-        options: { force: false, dry: false, print: false },
+        options: { force: false, dryRun: false, print: false },
       });
 
       expect(JSON.parse(read("turbo.json") || "{}")).toEqual(turboJson);
@@ -727,7 +730,7 @@ describe("migrate-env-var-dependencies", () => {
       // run the transformer
       const result = transformer({
         root,
-        options: { force: false, dry: false, print: false },
+        options: { force: false, dryRun: false, print: false },
       });
 
       expect(read("turbo.json")).toBeUndefined();
@@ -746,7 +749,7 @@ describe("migrate-env-var-dependencies", () => {
       // run the transformer
       const result = transformer({
         root,
-        options: { force: false, dry: false, print: false },
+        options: { force: false, dryRun: false, print: false },
       });
 
       expect(result.fatalError).toBeDefined();

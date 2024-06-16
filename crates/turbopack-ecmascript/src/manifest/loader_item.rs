@@ -2,7 +2,7 @@ use std::io::Write as _;
 
 use anyhow::{anyhow, Result};
 use indoc::writedoc;
-use turbo_tasks::{TryJoinIterExt, Vc};
+use turbo_tasks::{RcStr, TryJoinIterExt, Vc};
 use turbopack_core::{
     chunk::{
         ChunkData, ChunkItem, ChunkItemExt, ChunkType, ChunkableModule, ChunkingContext, ChunksData,
@@ -16,14 +16,14 @@ use super::chunk_asset::ManifestAsyncModule;
 use crate::{
     chunk::{
         data::EcmascriptChunkData, EcmascriptChunkItem, EcmascriptChunkItemContent,
-        EcmascriptChunkPlaceable, EcmascriptChunkType, EcmascriptChunkingContext,
+        EcmascriptChunkPlaceable, EcmascriptChunkType,
     },
     utils::StringifyJs,
 };
 
 #[turbo_tasks::function]
-fn modifier() -> Vc<String> {
-    Vc::cell("loader".to_string())
+fn modifier() -> Vc<RcStr> {
+    Vc::cell("loader".into())
 }
 
 /// The manifest loader item is shipped in the same chunk that uses the dynamic
@@ -74,13 +74,13 @@ impl ManifestLoaderChunkItem {
 }
 
 #[turbo_tasks::function]
-fn manifest_loader_chunk_reference_description() -> Vc<String> {
-    Vc::cell("manifest loader chunk".to_string())
+fn manifest_loader_chunk_reference_description() -> Vc<RcStr> {
+    Vc::cell("manifest loader chunk".into())
 }
 
 #[turbo_tasks::function]
-fn chunk_data_reference_description() -> Vc<String> {
-    Vc::cell("chunk data reference".to_string())
+fn chunk_data_reference_description() -> Vc<RcStr> {
+    Vc::cell("chunk data reference".into())
 }
 
 #[turbo_tasks::value_impl]
@@ -145,7 +145,7 @@ impl ChunkItem for ManifestLoaderChunkItem {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for ManifestLoaderChunkItem {
     #[turbo_tasks::function]
-    async fn chunking_context(&self) -> Result<Vc<Box<dyn EcmascriptChunkingContext>>> {
+    async fn chunking_context(&self) -> Result<Vc<Box<dyn ChunkingContext>>> {
         Ok(self.manifest.await?.chunking_context)
     }
 

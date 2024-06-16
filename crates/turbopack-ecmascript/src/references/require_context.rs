@@ -1,6 +1,6 @@
 use std::{borrow::Cow, collections::VecDeque, sync::Arc};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use indexmap::IndexMap;
 use swc_core::{
     common::DUMMY_SP,
@@ -13,7 +13,7 @@ use swc_core::{
     },
     quote, quote_expr,
 };
-use turbo_tasks::{primitives::Regex, Value, ValueToString, Vc};
+use turbo_tasks::{primitives::Regex, RcStr, Value, ValueToString, Vc};
 use turbo_tasks_fs::{DirectoryContent, DirectoryEntry, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
@@ -32,8 +32,7 @@ use turbopack_resolve::ecmascript::{cjs_resolve, try_to_severity};
 
 use crate::{
     chunk::{
-        EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkType,
-        EcmascriptChunkingContext, EcmascriptExports,
+        EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkType, EcmascriptExports,
     },
     code_gen::CodeGeneration,
     create_visitor,
@@ -53,7 +52,7 @@ pub(crate) enum DirListEntry {
 }
 
 #[turbo_tasks::value(transparent)]
-pub(crate) struct DirList(IndexMap<String, DirListEntry>);
+pub(crate) struct DirList(IndexMap<RcStr, DirListEntry>);
 
 #[turbo_tasks::value_impl]
 impl DirList {
@@ -135,7 +134,7 @@ impl DirList {
 }
 
 #[turbo_tasks::value(transparent)]
-pub(crate) struct FlatDirList(IndexMap<String, Vc<FileSystemPath>>);
+pub(crate) struct FlatDirList(IndexMap<RcStr, Vc<FileSystemPath>>);
 
 #[turbo_tasks::value_impl]
 impl FlatDirList {
@@ -148,14 +147,14 @@ impl FlatDirList {
 #[turbo_tasks::value]
 #[derive(Debug)]
 pub struct RequireContextMapEntry {
-    pub origin_relative: String,
+    pub origin_relative: RcStr,
     pub request: Vc<Request>,
     pub result: Vc<ModuleResolveResult>,
 }
 
 /// The resolved context map for a `require.context(..)` call.
 #[turbo_tasks::value(transparent)]
-pub struct RequireContextMap(IndexMap<String, RequireContextMapEntry>);
+pub struct RequireContextMap(IndexMap<RcStr, RequireContextMapEntry>);
 
 #[turbo_tasks::value_impl]
 impl RequireContextMap {
@@ -202,7 +201,7 @@ impl RequireContextMap {
 #[derive(Hash, Debug)]
 pub struct RequireContextAssetReference {
     pub inner: Vc<RequireContextAsset>,
-    pub dir: String,
+    pub dir: RcStr,
     pub include_subdirs: bool,
 
     pub path: Vc<AstPath>,
@@ -216,7 +215,7 @@ impl RequireContextAssetReference {
     pub fn new(
         source: Vc<Box<dyn Source>>,
         origin: Vc<Box<dyn ResolveOrigin>>,
-        dir: String,
+        dir: RcStr,
         include_subdirs: bool,
         filter: Vc<Regex>,
         path: Vc<AstPath>,
@@ -263,12 +262,15 @@ impl ModuleReference for RequireContextAssetReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for RequireContextAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
-        Ok(Vc::cell(format!(
-            "require.context {}/{}",
-            self.dir,
-            if self.include_subdirs { "**" } else { "*" },
-        )))
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
+        Ok(Vc::cell(
+            format!(
+                "require.context {}/{}",
+                self.dir,
+                if self.include_subdirs { "**" } else { "*" },
+            )
+            .into(),
+        ))
     }
 }
 
@@ -280,7 +282,7 @@ impl CodeGenerateable for RequireContextAssetReference {
     #[turbo_tasks::function]
     async fn code_generation(
         &self,
-        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
     ) -> Result<Vc<CodeGeneration>> {
         let chunk_item = self.inner.as_chunk_item(Vc::upcast(chunking_context));
         let module_id = chunk_item.id().await?.clone_value();
@@ -315,8 +317,8 @@ impl ModuleReference for ResolvedModuleReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for ResolvedModuleReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
-        Ok(Vc::cell("resolved reference".to_string()))
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
+        Ok(Vc::cell("resolved reference".into()))
     }
 }
 
@@ -330,17 +332,20 @@ pub struct RequireContextAsset {
     origin: Vc<Box<dyn ResolveOrigin>>,
     map: Vc<RequireContextMap>,
 
-    dir: String,
+    dir: RcStr,
     include_subdirs: bool,
 }
 
 #[turbo_tasks::function]
-fn modifier(dir: String, include_subdirs: bool) -> Vc<String> {
-    Vc::cell(format!(
-        "require.context {}/{}",
-        dir,
-        if include_subdirs { "**" } else { "*" },
-    ))
+fn modifier(dir: RcStr, include_subdirs: bool) -> Vc<RcStr> {
+    Vc::cell(
+        format!(
+            "require.context {}/{}",
+            dir,
+            if include_subdirs { "**" } else { "*" },
+        )
+        .into(),
+    )
 }
 
 #[turbo_tasks::value_impl]
@@ -379,13 +384,6 @@ impl ChunkableModule for RequireContextAsset {
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
     ) -> Result<Vc<Box<dyn turbopack_core::chunk::ChunkItem>>> {
-        let chunking_context =
-            Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
-                .await?
-                .context(
-                    "chunking context must impl EcmascriptChunkingContext to use \
-                     RequireContextAsset",
-                )?;
         let this = self.await?;
         Ok(Vc::upcast(
             RequireContextChunkItem {
@@ -410,7 +408,7 @@ impl EcmascriptChunkPlaceable for RequireContextAsset {
 
 #[turbo_tasks::value]
 pub struct RequireContextChunkItem {
-    chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
+    chunking_context: Vc<Box<dyn ChunkingContext>>,
     inner: Vc<RequireContextAsset>,
 
     origin: Vc<Box<dyn ResolveOrigin>>,
@@ -420,7 +418,7 @@ pub struct RequireContextChunkItem {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for RequireContextChunkItem {
     #[turbo_tasks::function]
-    fn chunking_context(&self) -> Vc<Box<dyn EcmascriptChunkingContext>> {
+    fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {
         self.chunking_context
     }
 

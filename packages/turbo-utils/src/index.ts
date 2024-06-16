@@ -1,6 +1,10 @@
 // utils
 export { getTurboRoot } from "./getTurboRoot";
-export { getTurboConfigs, getWorkspaceConfigs } from "./getTurboConfigs";
+export {
+  getTurboConfigs,
+  getWorkspaceConfigs,
+  forEachTaskDef,
+} from "./getTurboConfigs";
 export { searchUp } from "./searchUp";
 export {
   getAvailablePackageManagers,

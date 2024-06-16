@@ -36,7 +36,11 @@ codemodCli
     "Bypass Git safety checks and forcibly run codemods",
     false
   )
-  .option("--dry", "Dry run (no changes are made to files)", false)
+  .option(
+    "--dry, --dry-run, -d",
+    "Dry run (no changes are made to files)",
+    false
+  )
   .option("--print", "Print transformed files to your terminal", false)
   .action(migrate);
 
@@ -52,7 +56,11 @@ codemodCli
     false
   )
   .option("--list", "List all available transforms", false)
-  .option("--dry", "Dry run (no changes are made to files)", false)
+  .option(
+    "--dry, --dry-run, -d",
+    "Dry run (no changes are made to files)",
+    false
+  )
   .option("--print", "Print transformed files to your terminal", false)
   .action(transform);
 

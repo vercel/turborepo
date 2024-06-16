@@ -5,6 +5,7 @@ use tracing::{
     span, Subscriber,
 };
 use tracing_subscriber::{registry::LookupSpan, Layer};
+use turbo_tasks_malloc::TurboMalloc;
 
 use crate::{
     flavor::BufFlavor,
@@ -30,24 +31,23 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> RawTraceLayer<S> {
     }
 
     fn write(&self, data: TraceRow<'_>) {
+        let start = TurboMalloc::allocation_counters();
         // Buffer is recycled
         let buf = self.trace_writer.try_get_buffer().unwrap_or_default();
         let buf = postcard::serialize_with_flavor(&data, BufFlavor { buf }).unwrap();
         self.trace_writer.write(buf);
+        TurboMalloc::reset_allocation_counters(start);
     }
 
     fn report_allocations(&self, ts: u64, thread_id: u64) {
-        let allocation_info = turbo_tasks_malloc::TurboMalloc::pop_allocations();
-        if allocation_info.is_empty() {
-            return;
-        }
-        self.write(TraceRow::Allocation {
+        let allocation_counters = turbo_tasks_malloc::TurboMalloc::allocation_counters();
+        self.write(TraceRow::AllocationCounters {
             ts,
             thread_id,
-            allocations: allocation_info.allocations as u64,
-            deallocations: allocation_info.deallocations as u64,
-            allocation_count: allocation_info.allocation_count as u64,
-            deallocation_count: allocation_info.deallocation_count as u64,
+            allocations: allocation_counters.allocations as u64,
+            deallocations: allocation_counters.deallocations as u64,
+            allocation_count: allocation_counters.allocation_count as u64,
+            deallocation_count: allocation_counters.deallocation_count as u64,
         });
     }
 }

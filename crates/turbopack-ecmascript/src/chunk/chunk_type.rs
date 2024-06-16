@@ -1,5 +1,5 @@
 use anyhow::{bail, Result};
-use turbo_tasks::{TryJoinIterExt, ValueDefault, ValueToString, Vc};
+use turbo_tasks::{RcStr, TryJoinIterExt, ValueDefault, ValueToString, Vc};
 use turbopack_core::{
     chunk::{
         AsyncModuleInfo, Chunk, ChunkItem, ChunkItemWithAsyncModuleInfo, ChunkType, ChunkingContext,
@@ -7,19 +7,17 @@ use turbopack_core::{
     output::OutputAssets,
 };
 
-use super::{
-    EcmascriptChunk, EcmascriptChunkContent, EcmascriptChunkItem, EcmascriptChunkingContext,
-};
+use super::{EcmascriptChunk, EcmascriptChunkContent, EcmascriptChunkItem};
 
-#[derive(Default)]
 #[turbo_tasks::value]
+#[derive(Default)]
 pub struct EcmascriptChunkType {}
 
 #[turbo_tasks::value_impl]
 impl ValueToString for EcmascriptChunkType {
     #[turbo_tasks::function]
-    fn to_string(&self) -> Vc<String> {
-        Vc::cell("ecmascript".to_string())
+    fn to_string(&self) -> Vc<RcStr> {
+        Vc::cell("ecmascript".into())
     }
 }
 
@@ -33,8 +31,7 @@ impl ChunkType for EcmascriptChunkType {
         referenced_output_assets: Vc<OutputAssets>,
     ) -> Result<Vc<Box<dyn Chunk>>> {
         let Some(chunking_context) =
-            Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
-                .await?
+            Vc::try_resolve_downcast::<Box<dyn ChunkingContext>>(chunking_context).await?
         else {
             bail!("Ecmascript chunking context not found");
         };

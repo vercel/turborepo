@@ -4,6 +4,7 @@ export interface Transformer {
   name: string;
   description: string;
   introducedIn: string;
+  idempotent?: boolean;
   transformer: (
     args: TransformerArgs
   ) => Promise<TransformerResults> | TransformerResults;
@@ -11,7 +12,7 @@ export interface Transformer {
 
 export interface TransformerOptions {
   force: boolean;
-  dry: boolean;
+  dryRun: boolean;
   print: boolean;
 }
 

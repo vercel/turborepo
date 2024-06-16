@@ -11,7 +11,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  missing-workspace-config:missing-workspace-config-task: cache miss, executing fa2b3189d6b42055
+  missing-workspace-config:missing-workspace-config-task: cache miss, executing 924463dcfeefce9e
   missing-workspace-config:missing-workspace-config-task: 
   missing-workspace-config:missing-workspace-config-task: > missing-workspace-config-task
   missing-workspace-config:missing-workspace-config-task: > echo running-missing-workspace-config-task > out/foo.min.txt
@@ -22,7 +22,7 @@ Setup
     Time:\s*[\.0-9]+m?s  (re)
   
   $ HASH=$(cat tmp.log | grep -E "missing-workspace-config:missing-workspace-config-task.* executing .*" | awk '{print $5}')
-  $ tar -tf $TARGET_DIR/node_modules/.cache/turbo/$HASH.tar.zst;
+  $ tar -tf $TARGET_DIR/.turbo/cache/$HASH.tar.zst;
   apps/missing-workspace-config/.turbo/turbo-missing-workspace-config-task.log
   apps/missing-workspace-config/out/
   apps/missing-workspace-config/out/.keep
@@ -33,7 +33,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  missing-workspace-config:missing-workspace-config-task: cache hit, suppressing logs fa2b3189d6b42055
+  missing-workspace-config:missing-workspace-config-task: cache hit, suppressing logs 924463dcfeefce9e
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
@@ -45,7 +45,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  missing-workspace-config:missing-workspace-config-task: cache miss, executing 2fcb67955fb2c7b7
+  missing-workspace-config:missing-workspace-config-task: cache miss, executing 6393b168ee1654c5
   missing-workspace-config:missing-workspace-config-task: 
   missing-workspace-config:missing-workspace-config-task: > missing-workspace-config-task
   missing-workspace-config:missing-workspace-config-task: > echo running-missing-workspace-config-task > out/foo.min.txt
@@ -62,7 +62,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  missing-workspace-config:missing-workspace-config-task: cache hit, suppressing logs 2fcb67955fb2c7b7
+  missing-workspace-config:missing-workspace-config-task: cache hit, suppressing logs 6393b168ee1654c5
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
@@ -73,7 +73,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  missing-workspace-config:missing-workspace-config-task: cache miss, executing 3ad30dba93a44cfc
+  missing-workspace-config:missing-workspace-config-task: cache miss, executing e70657c42c4e2edb
   missing-workspace-config:missing-workspace-config-task: 
   missing-workspace-config:missing-workspace-config-task: > missing-workspace-config-task
   missing-workspace-config:missing-workspace-config-task: > echo running-missing-workspace-config-task > out/foo.min.txt
@@ -89,7 +89,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running cached-task-4 in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  missing-workspace-config:cached-task-4: cache bypass, force executing a3402b79e54983c6
+  missing-workspace-config:cached-task-4: cache bypass, force executing 95ba5489441bdc13
   missing-workspace-config:cached-task-4: 
   missing-workspace-config:cached-task-4: > cached-task-4
   missing-workspace-config:cached-task-4: > echo cached-task-4 > out/foo.min.txt
@@ -102,5 +102,5 @@ Setup
   $ HASH=$(cat tmp.log | grep -E "missing-workspace-config:cached-task-4.* executing .*" | awk '{print $6}')
   $ echo $HASH
   [a-z0-9]{16} (re)
-  $ test -f $TARGET_DIR/node_modules/.cache/turbo/$HASH.tar.zst;
+  $ test -f $TARGET_DIR/.turbo/cache/$HASH.tar.zst;
   [1]

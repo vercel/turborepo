@@ -13,7 +13,7 @@ use turbo_tasks_env::ProcessEnv;
 use turbo_tasks_fs::{File, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
-    chunk::{ChunkingContext, EvaluatableAsset, EvaluatableAssets},
+    chunk::{ChunkingContext, EvaluatableAssets},
     error::PrettyPrintError,
     issue::{IssueExt, StyledString},
     module::Module,
@@ -75,7 +75,7 @@ pub async fn render_static(
     cwd: Vc<FileSystemPath>,
     env: Vc<Box<dyn ProcessEnv>>,
     path: Vc<FileSystemPath>,
-    module: Vc<Box<dyn EvaluatableAsset>>,
+    module: Vc<Box<dyn Module>>,
     runtime_entries: Vc<EvaluatableAssets>,
     fallback_page: Vc<DevHtmlAsset>,
     chunking_context: Vc<Box<dyn ChunkingContext>>,
@@ -160,20 +160,20 @@ async fn static_error(
         .to_string();
 
     body.push_str(
-        error_html_body(500, "Error rendering page".to_string(), message)
+        error_html_body(500, "Error rendering page".into(), message.into())
             .await?
             .as_str(),
     );
 
     let issue = RenderingIssue {
         file_path: path,
-        message: StyledString::Text(error).cell(),
+        message: StyledString::Text(error.into()).cell(),
         status: status.and_then(|status| status.code()),
     };
 
     issue.cell().emit();
 
-    let html = fallback_page.with_body(body);
+    let html = fallback_page.with_body(body.into());
 
     Ok(html.content())
 }
@@ -202,7 +202,7 @@ fn render_stream(
     cwd: Vc<FileSystemPath>,
     env: Vc<Box<dyn ProcessEnv>>,
     path: Vc<FileSystemPath>,
-    module: Vc<Box<dyn EvaluatableAsset>>,
+    module: Vc<Box<dyn Module>>,
     runtime_entries: Vc<EvaluatableAssets>,
     fallback_page: Vc<DevHtmlAsset>,
     chunking_context: Vc<Box<dyn ChunkingContext>>,
@@ -268,7 +268,7 @@ async fn render_stream_internal(
     cwd: Vc<FileSystemPath>,
     env: Vc<Box<dyn ProcessEnv>>,
     path: Vc<FileSystemPath>,
-    module: Vc<Box<dyn EvaluatableAsset>>,
+    module: Vc<Box<dyn Module>>,
     runtime_entries: Vc<EvaluatableAssets>,
     fallback_page: Vc<DevHtmlAsset>,
     chunking_context: Vc<Box<dyn ChunkingContext>>,

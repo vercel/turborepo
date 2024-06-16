@@ -30,7 +30,7 @@ use ecmascript::{
 use graph::{aggregate, AggregatedGraph, AggregatedGraphNodeContent};
 use module_options::{ModuleOptions, ModuleOptionsContext, ModuleRuleEffect, ModuleType};
 use tracing::Instrument;
-use turbo_tasks::{Completion, Value, ValueToString, Vc};
+use turbo_tasks::{Completion, RcStr, Value, ValueToString, Vc};
 use turbo_tasks_fs::{glob::Glob, FileSystemPath};
 pub use turbopack_core::condition;
 use turbopack_core::{
@@ -43,16 +43,18 @@ use turbopack_core::{
     output::OutputAsset,
     raw_module::RawModule,
     reference_type::{
-        CssReferenceSubType, EcmaScriptModulesReferenceSubType, InnerAssets, ReferenceType,
+        CssReferenceSubType, EcmaScriptModulesReferenceSubType, ImportWithType, InnerAssets,
+        ReferenceType,
     },
     resolve::{
-        options::ResolveOptions, origin::PlainResolveOrigin, parse::Request, resolve, ModulePart,
-        ModuleResolveResult, ModuleResolveResultItem, ResolveResult,
+        options::ResolveOptions, origin::PlainResolveOrigin, parse::Request, resolve, ExternalType,
+        ModulePart, ModuleResolveResult, ModuleResolveResultItem, ResolveResult,
     },
     source::Source,
 };
 pub use turbopack_css as css;
 pub use turbopack_ecmascript as ecmascript;
+use turbopack_ecmascript::references::external_module::{CachedExternalModule, CachedExternalType};
 use turbopack_json::JsonModuleAsset;
 use turbopack_mdx::MdxModuleAsset;
 pub use turbopack_resolve::{resolve::resolve_options, resolve_options_context};
@@ -162,13 +164,31 @@ async fn apply_module_type(
             if runtime_code {
                 Vc::upcast(builder.build())
             } else {
+                let options = options.await?;
                 match options.tree_shaking_mode {
                     Some(TreeShakingMode::ModuleFragments) => {
-                        if let Some(part) = part {
-                            Vc::upcast(builder.build_part(part))
-                        } else {
-                            Vc::upcast(builder.build_part(ModulePart::exports()))
-                        }
+                        let side_effect_free_packages =
+                            module_asset_context.side_effect_free_packages();
+
+                        let module = builder.clone().build();
+
+                        Vc::upcast(
+                            if let Some(part) = part {
+                                if let ModulePart::Evaluation = *part.await? {
+                                    if *module
+                                        .is_marked_as_side_effect_free(side_effect_free_packages)
+                                        .await?
+                                    {
+                                        return Ok(ProcessResult::Ignore.cell());
+                                    }
+                                }
+
+                                builder.build_part(part)
+                            } else {
+                                builder.build_part(ModulePart::facade())
+                            }
+                            .await?,
+                        )
                     }
                     Some(TreeShakingMode::ReexportsOnly) => {
                         let side_effect_free_packages =
@@ -260,11 +280,13 @@ async fn apply_module_type(
         ModuleType::Mdx {
             transforms,
             options,
+            ecmascript_options,
         } => Vc::upcast(MdxModuleAsset::new(
             source,
             Vc::upcast(module_asset_context),
             *transforms,
             *options,
+            *ecmascript_options,
         )),
         ModuleType::WebAssembly { source_ty } => Vc::upcast(WebAssemblyModuleAsset::new(
             WebAssemblySource::new(source, *source_ty),
@@ -315,7 +337,7 @@ pub struct ModuleAssetContext {
     pub compile_time_info: Vc<CompileTimeInfo>,
     pub module_options_context: Vc<ModuleOptionsContext>,
     pub resolve_options_context: Vc<ResolveOptionsContext>,
-    pub layer: Vc<String>,
+    pub layer: Vc<RcStr>,
     transition: Option<Vc<Box<dyn Transition>>>,
 }
 
@@ -327,7 +349,7 @@ impl ModuleAssetContext {
         compile_time_info: Vc<CompileTimeInfo>,
         module_options_context: Vc<ModuleOptionsContext>,
         resolve_options_context: Vc<ResolveOptionsContext>,
-        layer: Vc<String>,
+        layer: Vc<RcStr>,
     ) -> Vc<Self> {
         Self::cell(ModuleAssetContext {
             transitions,
@@ -345,7 +367,7 @@ impl ModuleAssetContext {
         compile_time_info: Vc<CompileTimeInfo>,
         module_options_context: Vc<ModuleOptionsContext>,
         resolve_options_context: Vc<ResolveOptionsContext>,
-        layer: Vc<String>,
+        layer: Vc<RcStr>,
         transition: Vc<Box<dyn Transition>>,
     ) -> Vc<Self> {
         Self::cell(ModuleAssetContext {
@@ -405,23 +427,6 @@ impl ModuleAssetContext {
     ) -> Vc<ProcessResult> {
         process_default(self, source, reference_type, Vec::new())
     }
-
-    #[turbo_tasks::function]
-    pub async fn side_effect_free_packages(self: Vc<Self>) -> Result<Vc<Glob>> {
-        let pkgs = &*self
-            .await?
-            .module_options_context
-            .await?
-            .side_effect_free_packages;
-
-        let mut globs = Vec::with_capacity(pkgs.len());
-
-        for pkg in pkgs {
-            globs.push(Glob::new(format!("**/node_modules/{{{}}}/**", pkg)));
-        }
-
-        Ok(Glob::alternatives(globs))
-    }
 }
 
 #[turbo_tasks::function]
@@ -433,7 +438,7 @@ async fn process_default(
 ) -> Result<Vc<ProcessResult>> {
     let span = tracing::info_span!(
         "process module",
-        name = *source.ident().to_string().await?,
+        name = source.ident().to_string().await?.to_string(),
         reference_type = display(&*reference_type)
     );
     process_default_internal(
@@ -471,9 +476,25 @@ async fn process_default_internal(
         ReferenceType::Internal(inner_assets) => Some(*inner_assets),
         _ => None,
     };
+
+    let mut has_type_attribute = false;
+
     let mut current_source = source;
-    let mut current_module_type = None;
+    let mut current_module_type = match &reference_type {
+        ReferenceType::EcmaScriptModules(EcmaScriptModulesReferenceSubType::ImportWithType(ty)) => {
+            has_type_attribute = true;
+
+            match ty {
+                ImportWithType::Json => Some(ModuleType::Json),
+            }
+        }
+        _ => None,
+    };
+
     for (i, rule) in options.await?.rules.iter().enumerate() {
+        if has_type_attribute && current_module_type.is_some() {
+            continue;
+        }
         if processed_rules.contains(&i) {
             continue;
         }
@@ -520,19 +541,20 @@ async fn process_default_internal(
                             Some(ModuleType::Mdx {
                                 transforms,
                                 options,
+                                ecmascript_options,
                             }) => Some(ModuleType::Mdx {
                                 transforms: prepend.extend(transforms).extend(*append),
                                 options,
+                                ecmascript_options,
                             }),
                             Some(module_type) => {
                                 ModuleIssue {
                                     ident,
-                                    title: StyledString::Text("Invalid module type".to_string())
-                                        .cell(),
+                                    title: StyledString::Text("Invalid module type".into()).cell(),
                                     description: StyledString::Text(
                                         "The module type must be Ecmascript or Typescript to add \
                                          Ecmascript transforms"
-                                            .to_string(),
+                                            .into(),
                                     )
                                     .cell(),
                                 }
@@ -543,12 +565,11 @@ async fn process_default_internal(
                             None => {
                                 ModuleIssue {
                                     ident,
-                                    title: StyledString::Text("Missing module type".to_string())
-                                        .cell(),
+                                    title: StyledString::Text("Missing module type".into()).cell(),
                                     description: StyledString::Text(
                                         "The module type effect must be applied before adding \
                                          Ecmascript transforms"
-                                            .to_string(),
+                                            .into(),
                                     )
                                     .cell(),
                                 }
@@ -568,11 +589,11 @@ async fn process_default_internal(
         None => {
             ModuleIssue {
                 ident,
-                title: StyledString::Text("Unknown module type".to_string()).cell(),
+                title: StyledString::Text("Unknown module type".into()).cell(),
                 description: StyledString::Text(
                     r"This module doesn't have an associated type. Use a known file extension, or register a loader for it.
 
-Read more: https://nextjs.org/docs/app/api-reference/next-config-js/turbo#webpack-loaders".to_string(),
+Read more: https://nextjs.org/docs/app/api-reference/next-config-js/turbo#webpack-loaders".into(),
                 )
                 .cell(),
             }
@@ -602,7 +623,7 @@ impl AssetContext for ModuleAssetContext {
     }
 
     #[turbo_tasks::function]
-    fn layer(&self) -> Vc<String> {
+    fn layer(&self) -> Vc<RcStr> {
         self.layer
     }
 
@@ -663,7 +684,8 @@ impl AssetContext for ModuleAssetContext {
     ) -> Result<Vc<ModuleResolveResult>> {
         let this = self.await?;
         let transition = this.transition;
-        Ok(result
+
+        let result = result
             .await?
             .map_module(|source| {
                 let reference_type = reference_type.clone();
@@ -679,8 +701,12 @@ impl AssetContext for ModuleAssetContext {
                     })
                 }
             })
-            .await?
-            .into())
+            .await?;
+
+        let result =
+            replace_externals(result, this.module_options_context.await?.import_externals).await?;
+
+        Ok(result.cell())
     }
 
     #[turbo_tasks::function]
@@ -698,7 +724,7 @@ impl AssetContext for ModuleAssetContext {
     }
 
     #[turbo_tasks::function]
-    async fn with_transition(&self, transition: String) -> Result<Vc<Box<dyn AssetContext>>> {
+    async fn with_transition(&self, transition: RcStr) -> Result<Vc<Box<dyn AssetContext>>> {
         Ok(
             if let Some(transition) = self.transitions.await?.get(&transition) {
                 Vc::upcast(ModuleAssetContext::new_transition(
@@ -720,6 +746,23 @@ impl AssetContext for ModuleAssetContext {
                 ))
             },
         )
+    }
+
+    #[turbo_tasks::function]
+    async fn side_effect_free_packages(self: Vc<Self>) -> Result<Vc<Glob>> {
+        let pkgs = &*self
+            .await?
+            .module_options_context
+            .await?
+            .side_effect_free_packages;
+
+        let mut globs = Vec::with_capacity(pkgs.len());
+
+        for pkg in pkgs {
+            globs.push(Glob::new(format!("**/node_modules/{{{}}}/**", pkg).into()));
+        }
+
+        Ok(Glob::alternatives(globs))
     }
 }
 
@@ -839,6 +882,41 @@ async fn top_references(list: Vc<ReferencesList>) -> Result<Vc<ReferencesList>> 
             .collect(),
     }
     .into())
+}
+
+/// Replaces the externals in the result with `ExternalModuleAsset` instances.
+pub async fn replace_externals(
+    mut result: ModuleResolveResult,
+    import_externals: bool,
+) -> Result<ModuleResolveResult> {
+    for item in result.primary.values_mut() {
+        let ModuleResolveResultItem::External(request, ty) = item else {
+            continue;
+        };
+
+        let external_type = match ty {
+            ExternalType::CommonJs => CachedExternalType::CommonJs,
+            ExternalType::EcmaScriptModule => {
+                if import_externals {
+                    CachedExternalType::EcmaScriptViaImport
+                } else {
+                    CachedExternalType::EcmaScriptViaRequire
+                }
+            }
+            ExternalType::Url => {
+                // we don't want to wrap url externals.
+                continue;
+            }
+        };
+
+        let module = CachedExternalModule::new(request.clone(), external_type)
+            .resolve()
+            .await?;
+
+        *item = ModuleResolveResultItem::Module(Vc::upcast(module));
+    }
+
+    Ok(result)
 }
 
 pub fn register() {

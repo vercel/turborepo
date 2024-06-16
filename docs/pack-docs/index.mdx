@@ -1,0 +1,80 @@
+---
+title: Getting started
+description: Start building web applications with Turbopack.
+---
+
+import { Callout } from '#/components/callout';
+import { PackageManagerTabs, Tab } from '#/components/tabs';
+
+Turbopack is an incremental bundler optimized for JavaScript and TypeScript, written in Rust by the creators of webpack and [Next.js](https://nextjs.org/) at [Vercel](https://vercel.com/).
+
+The secret to Turbopack's performance is twofold: highly optimized machine code and a low-level incremental computation engine that enables caching down to the level of individual functions. Once Turbopack performs a task it never does it again.
+
+Our team has taken the lessons from 10 years of webpack, combined with the innovations in incremental computation from [Turborepo](/repo) and Google's Bazel, and created an architecture ready to support the coming decades of computing.
+
+<Callout type="info">
+    Turbopack is currently in <strong>beta</strong> in the Next.js development server. You can try out Turbopack today by adding the `--turbo` flag to your `next dev` command.
+
+    To report an issue, please use [the issue template in the Next.js repository](https://github.com/vercel/next.js/issues/new?assignees=&labels=template%3A+bug&projects=&template=1.bug_report.yml). We appreciate your feedback.
+
+    Note: Production builds with `next build` are not yet supported.
+
+</Callout>
+
+## Quickstart
+
+As of today, Turbopack can be used in Next.js 14. In the future, we will be releasing a standalone CLI, plugin API, and support for other frameworks such as Svelte and Vue. For now, please follow these instructions to get started:
+
+### New Projects
+
+1. Create a Next.js 14 project with Turbopack:
+
+```bash title="Terminal"
+npx create-next-app --example with-turbopack
+```
+
+2. Start the Next.js development server (with Turbopack):
+
+{' '}
+
+<PackageManagerTabs>
+  <Tab>
+
+```bash title="Terminal"
+npm run dev
+```
+
+  </Tab>
+  <Tab>
+
+```bash title="Terminal"
+yarn dev
+```
+
+  </Tab>
+  <Tab>
+
+```bash title="Terminal"
+pnpm dev
+```
+
+  </Tab>
+</PackageManagerTabs>
+
+The Next.js 14 development server is now powered by Turbopack! Startup and updates should both be near-instant. The larger the application, the larger the improvement will be.
+
+### Existing Projects
+
+Add `--turbo` to your `next dev` command:
+
+```json title="package.json"
+{
+  "scripts": {
+    "dev": "next dev --turbo"
+  }
+}
+```
+
+## Next Steps
+
+Want to learn more about Turbopack? Here's a deep dive on what we think makes it special.

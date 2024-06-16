@@ -4,7 +4,7 @@ use swc_core::{
     ecma::ast::{ModuleItem, Program},
     quote,
 };
-use turbo_tasks::Vc;
+use turbo_tasks::{RcStr, Vc};
 use turbopack_core::issue::IssueExt;
 use turbopack_ecmascript::{CustomTransformer, TransformContext, UnsupportedServerActionIssue};
 
@@ -15,11 +15,11 @@ pub struct ServerDirectiveTransformer {
     // ServerDirective is not implemented yet and always reports an issue.
     // We don't have to pass a valid transition name yet, but the API is prepared.
     #[allow(unused)]
-    transition_name: Vc<String>,
+    transition_name: Vc<RcStr>,
 }
 
 impl ServerDirectiveTransformer {
-    pub fn new(transition_name: &Vc<String>) -> Self {
+    pub fn new(transition_name: &Vc<RcStr>) -> Self {
         Self {
             transition_name: *transition_name,
         }
@@ -28,6 +28,7 @@ impl ServerDirectiveTransformer {
 
 #[async_trait]
 impl CustomTransformer for ServerDirectiveTransformer {
+    #[tracing::instrument(level = tracing::Level::TRACE, name = "server_directive", skip_all)]
     async fn transform(&self, program: &mut Program, ctx: &TransformContext<'_>) -> Result<()> {
         if is_server_module(program) {
             let stmt = quote!(

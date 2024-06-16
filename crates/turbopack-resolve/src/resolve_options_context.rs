@@ -1,12 +1,12 @@
 use anyhow::Result;
-use turbo_tasks::{ValueDefault, Vc};
+use turbo_tasks::{RcStr, ValueDefault, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     condition::ContextCondition,
     environment::Environment,
     resolve::{
         options::{ImportMap, ResolvedMap},
-        plugin::ResolvePlugin,
+        plugin::{AfterResolvePlugin, BeforeResolvePlugin},
     },
 };
 
@@ -44,9 +44,9 @@ pub struct ResolveOptionsContext {
     /// Enables the "module" field and export condition in package.json
     pub module: bool,
     #[serde(default)]
-    pub custom_conditions: Vec<String>,
+    pub custom_conditions: Vec<RcStr>,
     #[serde(default)]
-    pub custom_extensions: Option<Vec<String>>,
+    pub custom_extensions: Option<Vec<RcStr>>,
     #[serde(default)]
     /// An additional import map to use when resolving modules.
     ///
@@ -69,9 +69,9 @@ pub struct ResolveOptionsContext {
     /// context paths. The first matching is used.
     pub rules: Vec<(ContextCondition, Vc<ResolveOptionsContext>)>,
     #[serde(default)]
-    /// A list of plugins which get applied before (in the future) and after
-    /// resolving.
-    pub plugins: Vec<Vc<Box<dyn ResolvePlugin>>>,
+    /// Plugins which get applied before and after resolving.
+    pub after_resolve_plugins: Vec<Vc<Box<dyn AfterResolvePlugin>>>,
+    pub before_resolve_plugins: Vec<Vc<Box<dyn BeforeResolvePlugin>>>,
     #[serde(default)]
     pub placeholder_for_future_extensions: (),
 }

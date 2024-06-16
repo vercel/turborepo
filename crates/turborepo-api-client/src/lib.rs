@@ -1,14 +1,14 @@
 #![feature(async_closure)]
 #![feature(error_generic_member_access)]
+#![feature(assert_matches)]
 #![deny(clippy::all)]
 
-use std::{backtrace::Backtrace, env};
+use std::{backtrace::Backtrace, env, future::Future, time::Duration};
 
-use async_trait::async_trait;
 use lazy_static::lazy_static;
 use regex::Regex;
 pub use reqwest::Response;
-use reqwest::{Method, RequestBuilder, StatusCode};
+use reqwest::{Body, Method, RequestBuilder, StatusCode};
 use serde::Deserialize;
 use turborepo_ci::{is_ci, Vendor};
 use turborepo_vercel_api::{
@@ -26,75 +26,91 @@ mod retry;
 pub mod spaces;
 pub mod telemetry;
 
+pub use bytes::Bytes;
+pub use tokio_stream::Stream;
+
 lazy_static! {
     static ref AUTHORIZATION_REGEX: Regex =
         Regex::new(r"(?i)(?:^|,) *authorization *(?:,|$)").unwrap();
 }
 
-#[async_trait]
 pub trait Client {
-    async fn get_user(&self, token: &str) -> Result<UserResponse>;
-    async fn get_teams(&self, token: &str) -> Result<TeamsResponse>;
-    async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>>;
+    fn get_user(&self, token: &str) -> impl Future<Output = Result<UserResponse>> + Send;
+    fn get_teams(&self, token: &str) -> impl Future<Output = Result<TeamsResponse>> + Send;
+    fn get_team(
+        &self,
+        token: &str,
+        team_id: &str,
+    ) -> impl Future<Output = Result<Option<Team>>> + Send;
     fn add_ci_header(request_builder: RequestBuilder) -> RequestBuilder;
-    async fn get_spaces(&self, token: &str, team_id: Option<&str>) -> Result<SpacesResponse>;
-    async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser>;
-    async fn handle_403(response: Response) -> Error;
+    fn get_spaces(
+        &self,
+        token: &str,
+        team_id: Option<&str>,
+    ) -> impl Future<Output = Result<SpacesResponse>> + Send;
+    fn verify_sso_token(
+        &self,
+        token: &str,
+        token_name: &str,
+    ) -> impl Future<Output = Result<VerifiedSsoUser>> + Send;
+    fn handle_403(response: Response) -> impl Future<Output = Error> + Send;
     fn make_url(&self, endpoint: &str) -> Result<Url>;
 }
 
-#[async_trait]
 pub trait CacheClient {
-    async fn get_artifact(
+    fn get_artifact(
         &self,
         hash: &str,
         token: &str,
         team_id: Option<&str>,
         team_slug: Option<&str>,
         method: Method,
-    ) -> Result<Option<Response>>;
-    async fn fetch_artifact(
+    ) -> impl Future<Output = Result<Option<Response>>> + Send;
+    fn fetch_artifact(
         &self,
         hash: &str,
         token: &str,
         team_id: Option<&str>,
         team_slug: Option<&str>,
-    ) -> Result<Option<Response>>;
+    ) -> impl Future<Output = Result<Option<Response>>> + Send;
     #[allow(clippy::too_many_arguments)]
-    async fn put_artifact(
+    fn put_artifact(
         &self,
         hash: &str,
-        artifact_body: &[u8],
+        artifact_body: impl tokio_stream::Stream<Item = Result<bytes::Bytes>> + Send + Sync + 'static,
         duration: u64,
         tag: Option<&str>,
         token: &str,
         team_id: Option<&str>,
         team_slug: Option<&str>,
-    ) -> Result<()>;
-    async fn artifact_exists(
+    ) -> impl Future<Output = Result<()>> + Send;
+    fn artifact_exists(
         &self,
         hash: &str,
         token: &str,
         team_id: Option<&str>,
         team_slug: Option<&str>,
-    ) -> Result<Option<Response>>;
-    async fn get_caching_status(
+    ) -> impl Future<Output = Result<Option<Response>>> + Send;
+    fn get_caching_status(
         &self,
         token: &str,
         team_id: Option<&str>,
         team_slug: Option<&str>,
-    ) -> Result<CachingStatusResponse>;
+    ) -> impl Future<Output = Result<CachingStatusResponse>> + Send;
 }
 
-#[async_trait]
 pub trait TokenClient {
-    async fn get_metadata(&self, token: &str) -> Result<ResponseTokenMetadata>;
-    async fn delete_token(&self, token: &str) -> Result<()>;
+    fn get_metadata(
+        &self,
+        token: &str,
+    ) -> impl Future<Output = Result<ResponseTokenMetadata>> + Send;
+    fn delete_token(&self, token: &str) -> impl Future<Output = Result<()>> + Send;
 }
 
 #[derive(Clone)]
 pub struct APIClient {
     client: reqwest::Client,
+    cache_client: reqwest::Client,
     base_url: String,
     user_agent: String,
     use_preflight: bool,
@@ -113,7 +129,6 @@ pub fn is_linked(api_auth: &Option<APIAuth>) -> bool {
         .map_or(false, |api_auth| api_auth.is_linked())
 }
 
-#[async_trait]
 impl Client for APIClient {
     async fn get_user(&self, token: &str) -> Result<UserResponse> {
         let url = self.make_url("/v2/user")?;
@@ -123,9 +138,11 @@ impl Client for APIClient {
             .header("User-Agent", self.user_agent.clone())
             .header("Authorization", format!("Bearer {}", token))
             .header("Content-Type", "application/json");
-        let response = retry::make_retryable_request(request_builder)
-            .await?
-            .error_for_status()?;
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+                .await?
+                .into_response()
+                .error_for_status()?;
 
         Ok(response.json().await?)
     }
@@ -138,9 +155,11 @@ impl Client for APIClient {
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {}", token));
 
-        let response = retry::make_retryable_request(request_builder)
-            .await?
-            .error_for_status()?;
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+                .await?
+                .into_response()
+                .error_for_status()?;
 
         Ok(response.json().await?)
     }
@@ -183,9 +202,11 @@ impl Client for APIClient {
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {}", token));
 
-        let response = retry::make_retryable_request(request_builder)
-            .await?
-            .error_for_status()?;
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+                .await?
+                .into_response()
+                .error_for_status()?;
 
         Ok(response.json().await?)
     }
@@ -197,9 +218,11 @@ impl Client for APIClient {
             .query(&[("token", token), ("tokenName", token_name)])
             .header("User-Agent", self.user_agent.clone());
 
-        let response = retry::make_retryable_request(request_builder)
-            .await?
-            .error_for_status()?;
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+                .await?
+                .into_response()
+                .error_for_status()?;
 
         let verification_response: VerificationResponse = response.json().await?;
 
@@ -262,7 +285,6 @@ impl Client for APIClient {
     }
 }
 
-#[async_trait]
 impl CacheClient for APIClient {
     async fn get_artifact(
         &self,
@@ -300,7 +322,9 @@ impl CacheClient for APIClient {
 
         request_builder = Self::add_team_params(request_builder, team_id, team_slug);
 
-        let response = retry::make_retryable_request(request_builder).await?;
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout).await?;
+        let response = response.into_response();
 
         match response.status() {
             StatusCode::FORBIDDEN => Err(Self::handle_403(response).await),
@@ -337,7 +361,7 @@ impl CacheClient for APIClient {
     async fn put_artifact(
         &self,
         hash: &str,
-        artifact_body: &[u8],
+        artifact_body: impl tokio_stream::Stream<Item = Result<bytes::Bytes>> + Send + Sync + 'static,
         duration: u64,
         tag: Option<&str>,
         token: &str,
@@ -361,13 +385,15 @@ impl CacheClient for APIClient {
             request_url = preflight_response.location.clone();
         }
 
+        let stream = Body::wrap_stream(artifact_body);
+
         let mut request_builder = self
-            .client
+            .cache_client
             .put(request_url)
             .header("Content-Type", "application/octet-stream")
             .header("x-artifact-duration", duration.to_string())
             .header("User-Agent", self.user_agent.clone())
-            .body(artifact_body.to_vec());
+            .body(stream);
 
         if allow_auth {
             request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
@@ -381,7 +407,10 @@ impl CacheClient for APIClient {
             request_builder = request_builder.header("x-artifact-tag", tag);
         }
 
-        let response = retry::make_retryable_request(request_builder).await?;
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Connection)
+                .await?
+                .into_response();
 
         if response.status() == StatusCode::FORBIDDEN {
             return Err(Self::handle_403(response).await);
@@ -406,15 +435,16 @@ impl CacheClient for APIClient {
 
         let request_builder = Self::add_team_params(request_builder, team_id, team_slug);
 
-        let response = retry::make_retryable_request(request_builder)
-            .await?
-            .error_for_status()?;
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+                .await?
+                .into_response()
+                .error_for_status()?;
 
         Ok(response.json().await?)
     }
 }
 
-#[async_trait]
 impl TokenClient for APIClient {
     async fn get_metadata(&self, token: &str) -> Result<ResponseTokenMetadata> {
         let endpoint = "/v5/user/tokens/current";
@@ -442,7 +472,9 @@ impl TokenClient for APIClient {
             invalid_token: bool,
         }
 
-        let response = retry::make_retryable_request(request_builder).await?;
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout).await?;
+        let response = response.into_response();
         let status = response.status();
         // Give a better error message for invalid tokens. This endpoint returns the
         // following statuses:
@@ -464,9 +496,9 @@ impl TokenClient for APIClient {
                         message: body.error.message,
                     });
                 }
-                return Err(Error::ForbiddenToken {
+                Err(Error::ForbiddenToken {
                     url: self.make_url(endpoint)?.to_string(),
-                });
+                })
             }
             _ => Err(response.error_for_status().unwrap_err().into()),
         }
@@ -494,7 +526,10 @@ impl TokenClient for APIClient {
             invalid_token: bool,
         }
 
-        let response = retry::make_retryable_request(request_builder).await?;
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+                .await?
+                .into_response();
         let status = response.status();
         // Give a better error message for invalid tokens. This endpoint returns the
         // following statuses:
@@ -516,9 +551,9 @@ impl TokenClient for APIClient {
                         message: body.error.message,
                     });
                 }
-                return Err(Error::ForbiddenToken {
+                Err(Error::ForbiddenToken {
                     url: self.make_url(endpoint)?.to_string(),
-                });
+                })
             }
             _ => Err(response.error_for_status().unwrap_err().into()),
         }
@@ -526,25 +561,50 @@ impl TokenClient for APIClient {
 }
 
 impl APIClient {
+    /// Create a new APIClient.
+    ///
+    /// # Arguments
+    /// `base_url` - The base URL for the API.
+    /// `timeout` - The timeout for requests.
+    /// `upload_timeout` - If specified, uploading files will use `timeout` for
+    ///                    the connection, and `upload_timeout` for the total.
+    ///                    Otherwise, `timeout` will be used for the total.
+    /// `version` - The version of the client.
+    /// `use_preflight` - If true, use the preflight API for all requests.
     pub fn new(
         base_url: impl AsRef<str>,
-        timeout: u64,
+        timeout: Option<Duration>,
+        upload_timeout: Option<Duration>,
         version: &str,
         use_preflight: bool,
     ) -> Result<Self> {
-        let client_build = if timeout != 0 {
-            reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(timeout))
-                .build()
+        // for the api client, the timeout applies for the entire duration
+        // of the request, including the connection phase
+        let client = reqwest::Client::builder();
+        let client = if let Some(dur) = timeout {
+            client.timeout(dur)
         } else {
-            reqwest::Client::builder().build()
-        };
+            client
+        }
+        .build()
+        .map_err(Error::TlsError)?;
 
-        let client = client_build.map_err(Error::TlsError)?;
+        // for the cache client, the timeout applies only to the request
+        // connection time, while the upload timeout applies to the entire
+        // request
+        let cache_client = reqwest::Client::builder();
+        let cache_client = match (timeout, upload_timeout) {
+            (Some(dur), Some(upload_dur)) => cache_client.connect_timeout(dur).timeout(upload_dur),
+            (Some(dur), None) | (None, Some(dur)) => cache_client.timeout(dur),
+            (None, None) => cache_client,
+        }
+        .build()
+        .map_err(Error::TlsError)?;
 
         let user_agent = build_user_agent(version);
         Ok(APIClient {
             client,
+            cache_client,
             base_url: base_url.as_ref().to_string(),
             user_agent,
             use_preflight,
@@ -570,7 +630,10 @@ impl APIClient {
             .header("Access-Control-Request-Headers", request_headers)
             .header("Authorization", format!("Bearer {}", token));
 
-        let response = retry::make_retryable_request(request_builder).await?;
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+                .await?
+                .into_response();
 
         let headers = response.headers();
         let location = if let Some(location) = headers.get("Location") {
@@ -700,7 +763,7 @@ impl AnonAPIClient {
     pub fn new(base_url: impl AsRef<str>, timeout: u64, version: &str) -> Result<Self> {
         let client_build = if timeout != 0 {
             reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(timeout))
+                .timeout(Duration::from_secs(timeout))
                 .build()
         } else {
             reqwest::Client::builder().build()
@@ -729,6 +792,8 @@ fn build_user_agent(version: &str) -> String {
 
 #[cfg(test)]
 mod test {
+    use std::time::Duration;
+
     use anyhow::Result;
     use turborepo_vercel_api_mock::start_test_server;
     use url::Url;
@@ -741,7 +806,13 @@ mod test {
         let handle = tokio::spawn(start_test_server(port));
         let base_url = format!("http://localhost:{}", port);
 
-        let client = APIClient::new(&base_url, 200, "2.0.0", true)?;
+        let client = APIClient::new(
+            &base_url,
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            true,
+        )?;
 
         let response = client
             .do_preflight(

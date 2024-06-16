@@ -12,7 +12,7 @@ use super::chunk_asset::ManifestAsyncModule;
 use crate::{
     chunk::{
         data::EcmascriptChunkData, EcmascriptChunkItem, EcmascriptChunkItemContent,
-        EcmascriptChunkType, EcmascriptChunkingContext,
+        EcmascriptChunkType,
     },
     utils::StringifyJs,
 };
@@ -22,7 +22,7 @@ use crate::{
 /// __turbopack_import__ the actual module that was dynamically imported.
 #[turbo_tasks::value(shared)]
 pub(super) struct ManifestChunkItem {
-    pub chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
+    pub chunking_context: Vc<Box<dyn ChunkingContext>>,
     pub manifest: Vc<ManifestAsyncModule>,
 }
 
@@ -41,7 +41,7 @@ impl ManifestChunkItem {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for ManifestChunkItem {
     #[turbo_tasks::function]
-    fn chunking_context(&self) -> Vc<Box<dyn EcmascriptChunkingContext>> {
+    fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {
         self.chunking_context
     }
 
@@ -86,7 +86,7 @@ impl ChunkItem for ManifestChunkItem {
         let this = self.await?;
         let mut references = this.manifest.references().await?.clone_value();
 
-        let key = Vc::cell("chunk data reference".to_string());
+        let key = Vc::cell("chunk data reference".into());
 
         for chunk_data in &*self.chunks_data().await? {
             references.extend(chunk_data.references().await?.iter().map(|&output_asset| {

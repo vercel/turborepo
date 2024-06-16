@@ -41,3 +41,8 @@ Setup
     Time:\s*[\.0-9]+m?s  (re)
   
 
+Non existent package name should error
+  $ ${TURBO} run build --filter="foo" --output-logs none
+    x No package found with name 'foo' in workspace
+  
+  [1]

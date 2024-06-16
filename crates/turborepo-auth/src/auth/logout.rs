@@ -82,7 +82,6 @@ impl<T: TokenClient> LogoutOptions<T> {
 mod tests {
     use std::backtrace::Backtrace;
 
-    use async_trait::async_trait;
     use reqwest::{RequestBuilder, Response};
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
@@ -100,7 +99,6 @@ mod tests {
         pub succeed_delete_request: bool,
     }
 
-    #[async_trait]
     impl Client for MockApiClient {
         async fn get_user(&self, _token: &str) -> turborepo_api_client::Result<UserResponse> {
             unimplemented!("get_user")
@@ -143,7 +141,6 @@ mod tests {
         }
     }
 
-    #[async_trait]
     impl TokenClient for MockApiClient {
         async fn delete_token(&self, _token: &str) -> turborepo_api_client::Result<()> {
             if self.succeed_delete_request {

@@ -38,9 +38,7 @@ const useDebounce = <T>(func: (args: T) => void, waitMs: number) => {
   };
 };
 
-const decoration = window.createTextEditorDecorationType({
-  color: "#04f1f9", // something like cyan
-});
+const logs = window.createOutputChannel("Turborepo Extension");
 
 function rainbowRgb(i: number) {
   const f = 0.5;
@@ -71,21 +69,27 @@ export function activate(context: ExtensionContext) {
   let turboPath: string | undefined = turboSettings.get("path");
   const useLocalTurbo: boolean = turboSettings.get("useLocalTurbo") ?? false;
 
+  logs.appendLine("starting the turbo extension");
+
   if (turboPath && !fs.existsSync(turboPath)) {
-    window.showErrorMessage(
-      `turbo does not exist at path \`${turboPath}\`, attempting to locate it`
+    logs.appendLine(
+      `manually specified turbo does not exist at path \`${turboPath}\`, attempting to locate it`
     );
     turboPath = undefined;
   }
 
   try {
     if (turboPath == null) {
-      turboPath = cp.execSync(
-        // attempt to source two well known version managers
-        // as well as adding the bun global bin to the path
-        'sh -c \'source "$HOME/.nvm/nvm.sh" > /dev/null 2>&1; source "$HOME/.asdf/asdf.sh" > /dev/null 2>&1; export PATH="$HOME/.bun/bin:$PATH"; which turbo\'',
-        options
-      );
+      logs.appendLine("attempting to find global turbo");
+      turboPath = cp
+        .execSync(
+          // attempt to source two well known version managers
+          // as well as adding the bun global bin to the path
+          'bash -c \'source "$HOME/.nvm/nvm.sh" > /dev/null 2>&1; source "$HOME/.asdf/asdf.sh" > /dev/null 2>&1; eval "$(brew shellenv)" > /dev/null 2>&1; export PATH="$HOME/.bun/bin:$PATH"; which turbo\'',
+          options
+        )
+        .trim();
+      logs.appendLine(`set turbo path to ${turboPath}`);
     }
   } catch (e: any) {
     if (
@@ -94,11 +98,16 @@ export function activate(context: ExtensionContext) {
       e.message.includes("which: no turbo in")
     ) {
       // attempt to find local turbo instead
+      logs.appendLine("prompting global turbo");
       promptGlobalTurbo(useLocalTurbo);
       turboPath = findLocalTurbo();
     } else {
-      window.showErrorMessage(e.message);
+      logs.appendLine(`unable to find turbo: ${e.message}`);
     }
+  }
+
+  if (turboPath) {
+    logs.appendLine(`using turbo at path ${turboPath}`);
   }
 
   context.subscriptions.push(
@@ -108,7 +117,7 @@ export function activate(context: ExtensionContext) {
           if (err.message.includes("command not found")) {
             promptGlobalTurbo(useLocalTurbo);
           } else {
-            window.showErrorMessage(JSON.stringify(err));
+            logs.appendLine(`unable to start turbo: ${err.message}`);
           }
         } else {
           updateStatusBarItem(true);
@@ -125,7 +134,7 @@ export function activate(context: ExtensionContext) {
           if (err.message.includes("command not found")) {
             promptGlobalTurbo(useLocalTurbo);
           } else {
-            window.showErrorMessage(err.message);
+            logs.appendLine(`unable to stop turbo: ${err.message}`);
           }
         } else {
           updateStatusBarItem(false);
@@ -142,7 +151,7 @@ export function activate(context: ExtensionContext) {
           if (err.message.includes("command not found")) {
             promptGlobalTurbo(useLocalTurbo);
           } else {
-            window.showErrorMessage(err.message);
+            logs.appendLine(`unable to get turbo status: ${err.message}`);
             updateStatusBarItem(false);
           }
         } else {
@@ -298,14 +307,14 @@ function updateJSONDecorations(editor?: TextEditor) {
     return;
   }
 
-  let isPipelineKey = false;
-  let pipelineDepth = -1; // indicates we're not in a pipeline block
+  let depth = 0; // indicates we're not in a pipeline block
+  let inPipeline = false; // we do not use this right now but could highlight tasks
 
-  const ranges: Range[] = [];
   visit(editor.document.getText(), {
-    onObjectProperty: (property, offset, length) => {
-      if (property === "pipeline") {
-        isPipelineKey = true;
+    onObjectProperty: (property, offset) => {
+      // only highlight pipeline at the top level
+      if (property === "pipeline" && depth === 0 && !inPipeline) {
+        inPipeline = true;
         for (let i = 1; i < 9; i++) {
           const index = i + offset;
           editor.setDecorations(pipelineColors[i], [
@@ -316,27 +325,19 @@ function updateJSONDecorations(editor?: TextEditor) {
           ]);
         }
       }
-      if (isPipelineKey && pipelineDepth === 0) {
-        ranges.push(
-          new Range(
-            editor.document.positionAt(offset),
-            editor.document.positionAt(offset + length)
-          )
-        );
+    },
+    onObjectBegin: () => {
+      if (depth === -1) {
+        depth = 0;
+      } else if (depth !== -1) {
+        depth += 1;
       }
     },
-    onObjectBegin: (offset, length) => {
-      if (isPipelineKey && pipelineDepth === -1) {
-        pipelineDepth = 0;
-      } else if (pipelineDepth !== -1) {
-        pipelineDepth += 1;
-      }
-    },
-    onObjectEnd: (offset, length) => {
-      if (pipelineDepth === 0) {
-        pipelineDepth = -1;
-      } else if (pipelineDepth !== -1) {
-        pipelineDepth -= 1;
+    onObjectEnd: () => {
+      if (depth < -1) {
+        depth -= 1;
+      } else {
+        throw Error("imbalanced visitor");
       }
     },
   });
@@ -384,6 +385,7 @@ function findLocalTurbo(): string | undefined {
 
   const checks = [
     () => {
+      logs.appendLine("attempting to find local turbo using npm");
       const npmList = cp.execSync("npm ls turbo --json", options);
       const npmData = JSON.parse(npmList);
 
@@ -402,14 +404,17 @@ function findLocalTurbo(): string | undefined {
       }
     },
     () => {
+      logs.appendLine("attempting to find local turbo using yarn");
       const turboBin = cp.execSync("yarn bin turbo", options);
       return turboBin.trim();
     },
     () => {
+      logs.appendLine("attempting to find local turbo using pnpm");
       const binFolder = cp.execSync("pnpm bin", options).trim();
       return path.join(binFolder, "turbo");
     },
     () => {
+      logs.appendLine("attempting to find local turbo using bun");
       const binFolder = cp.execSync("bun pm bin", options).trim();
       return path.join(binFolder, "turbo");
     },
@@ -417,8 +422,9 @@ function findLocalTurbo(): string | undefined {
 
   for (const potentialPath of checks) {
     try {
-      const potential = potentialPath();
+      const potential = potentialPath()?.trim();
       if (potential && fs.existsSync(potential)) {
+        logs.appendLine(`found local turbo at ${potential}`);
         return potential;
       }
     } catch (e) {
