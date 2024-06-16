@@ -1,7 +1,7 @@
 import { defineConfig, Options } from "tsup";
 import fs from "fs-extra";
 import { green } from "picocolors";
-import { hex } from "@turbo/utils/src/logger";
+import { logger } from "@turbo/utils";
 
 export default defineConfig((options: Options) => ({
   entry: ["src/cli.ts", "src/types.ts"],
@@ -15,7 +15,7 @@ export default defineConfig((options: Options) => ({
     await fs.copy("src/templates", "dist/templates");
     // make the output match
     console.log(
-      hex("#7c5cad")("TEMPLATES"),
+      logger.hex("#7c5cad")("TEMPLATES"),
       "copied in",
       green(`${Date.now() - start}ms`)
     );

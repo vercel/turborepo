@@ -12,6 +12,11 @@ const BLUE = "#0099F7";
 const RED = "#F11712";
 const YELLOW = "#FFFF00";
 
+export const hex = (color: string): ((text: string) => string) => {
+  const ansiColor = hexToAnsi256(color);
+  return (text: string) => `\x1b[38;5;${ansiColor}m${text}${reset("")}`;
+};
+
 export const turboGradient = gradient(BLUE, RED);
 export const turboBlue = hex(BLUE);
 export const turboRed = hex(RED);
@@ -56,7 +61,7 @@ export const log = (...args: Array<unknown>) => {
 
 export const warn = (...args: Array<unknown>) => {
   // eslint-disable-next-line no-console -- warn logger
-  console.error(yellow([pcBold(">>>"), ...args].join(" ")));
+  console.error(yellow(pcBold(">>>")), args.join(" "));
 };
 
 export const error = (...args: Array<unknown>) => {
@@ -76,9 +81,4 @@ function hexToAnsi256(sHex: string): number {
     6 * Math.round((g / 255) * 5) +
     Math.round((b / 255) * 5);
   return ansi;
-}
-
-export function hex(color: string): (text: string) => string {
-  const ansiColor = hexToAnsi256(color);
-  return (text: string) => `\x1b[38;5;${ansiColor}m${text}${reset("")}`;
 }
