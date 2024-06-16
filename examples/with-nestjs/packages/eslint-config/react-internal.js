@@ -13,7 +13,7 @@ const project = resolve(process.cwd(), 'tsconfig.json');
  * @type {import("eslint").Linter.Config}
  */
 module.exports = {
-  extends: ['./base.js', 'eslint-config-turbo'],
+  extends: ['./base.js'],
   plugins: ['only-warn'],
   globals: {
     React: true,
