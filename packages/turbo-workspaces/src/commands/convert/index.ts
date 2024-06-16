@@ -75,15 +75,15 @@ export async function convertCommand(
   }>({
     name: "packageManagerInput",
     type: "list",
-    message: `Convert from ${project.packageManager} workspaces to:`,
+    message: `Convert from ${project.packageManager} to:`,
     when:
       !packageManager ||
       !Object.keys(availablePackageManagers).includes(packageManager),
     choices: [
-      { pm: "npm", label: "npm workspaces" },
-      { pm: "pnpm", label: "pnpm workspaces" },
-      { pm: "yarn", label: "yarn workspaces" },
-      { pm: "bun", label: "bun workspaces (beta)" },
+      { pm: "npm", label: "npm" },
+      { pm: "pnpm", label: "pnpm" },
+      { pm: "yarn", label: "yarn" },
+      { pm: "bun", label: "Bun (beta)" },
     ].map(({ pm, label }) => ({
       name: label,
       value: pm,

@@ -147,27 +147,18 @@ export async function createProject({
   /**
    * clone the example repository
    */
-  const loader = logger.turboLoader("Downloading files...");
+  logger.log();
+  const loader = logger.turboLoader(
+    "Downloading files... (This might take a moment.)"
+  );
   try {
     if (!isDefaultExample && repoInfo) {
-      logger.log(
-        `\nDownloading files from repo ${chalk.cyan(
-          example
-        )}. This might take a moment.`
-      );
-      logger.log();
       loader.start();
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- this is type guarded above (wtf TS)
       await retry(() => downloadAndExtractRepo(root, repoInfo!), {
         retries: 3,
       });
     } else {
-      logger.log(
-        `\nDownloading files${
-          !isDefaultExample ? ` for example ${chalk.cyan(example)}` : ""
-        }. This might take a moment.`
-      );
-      logger.log();
       loader.start();
       await retry(() => downloadAndExtractExample(root, example), {
         retries: 3,
