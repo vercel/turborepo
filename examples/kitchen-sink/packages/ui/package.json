@@ -9,12 +9,12 @@
   ],
   "exports": {
     "./link": {
-      "types": "./src/Link.index.tsx",
-      "default": "./dist/link.js"
+      "types": "./src/link.index.tsx",
+      "default": "./dist/link/index.js"
     },
     "./counter-button": {
       "types": "./src/counter-button.index.tsx",
-      "default": "./dist/counter-button.js"
+      "default": "./dist/counter-button/index.js"
     }
   },
   "scripts": {
@@ -40,5 +40,8 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "next": "^14.2.4"
   }
 }
