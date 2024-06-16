@@ -34,10 +34,6 @@ impl RelativeUnixPathBuf {
         self.0
     }
 
-    pub fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
-
     pub fn make_canonical_for_tar(&mut self, is_dir: bool) {
         if is_dir && !self.0.ends_with('/') {
             self.0.push('/');

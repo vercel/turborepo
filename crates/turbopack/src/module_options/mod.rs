@@ -8,7 +8,7 @@ pub use custom_module_type::CustomModuleType;
 pub use module_options_context::*;
 pub use module_rule::*;
 pub use rule_condition::*;
-use turbo_tasks::Vc;
+use turbo_tasks::{RcStr, Vc};
 use turbo_tasks_fs::{glob::Glob, FileSystemPath};
 use turbopack_core::{
     reference_type::{CssReferenceSubType, ReferenceType, UrlReferenceSubType},
@@ -25,7 +25,7 @@ use crate::{
 
 #[turbo_tasks::function]
 async fn package_import_map_from_import_mapping(
-    package_name: String,
+    package_name: RcStr,
     package_mapping: Vc<ImportMapping>,
 ) -> Result<Vc<ImportMap>> {
     let mut import_map = ImportMap::default();
@@ -38,7 +38,7 @@ async fn package_import_map_from_import_mapping(
 
 #[turbo_tasks::function]
 async fn package_import_map_from_context(
-    package_name: String,
+    package_name: RcStr,
     context_path: Vc<FileSystemPath>,
 ) -> Result<Vc<ImportMap>> {
     let mut import_map = ImportMap::default();
@@ -81,8 +81,10 @@ impl ModuleOptions {
             import_externals,
             ignore_dynamic_requests,
             use_swc_css,
+            ref enable_typeof_window_inlining,
             ..
         } = *module_options_context.await?;
+
         if !rules.is_empty() {
             let path_value = path.await?;
 
@@ -128,6 +130,15 @@ impl ModuleOptions {
 
         if let Some(env) = preset_env_versions {
             transforms.push(EcmascriptInputTransform::PresetEnv(env));
+        }
+
+        if let Some(enable_typeof_window_inlining) = enable_typeof_window_inlining {
+            transforms.push(EcmascriptInputTransform::GlobalTypeofs {
+                window_value: match enable_typeof_window_inlining {
+                    TypeofWindow::Object => "object".to_string(),
+                    TypeofWindow::Undefined => "undefined".to_string(),
+                },
+            });
         }
 
         let ts_transform = if let Some(options) = enable_typescript_transform {
@@ -209,7 +220,7 @@ impl ModuleOptions {
         );
 
         let mut rules = vec![
-            ModuleRule::new(
+            ModuleRule::new_all(
                 ModuleRuleCondition::ResourcePathEndsWith(".json".to_string()),
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Json)],
             ),
@@ -404,9 +415,9 @@ impl ModuleOptions {
                     .context("execution_context is required for the postcss_transform")?;
 
                 let import_map = if let Some(postcss_package) = options.postcss_package {
-                    package_import_map_from_import_mapping("postcss".to_string(), postcss_package)
+                    package_import_map_from_import_mapping("postcss".into(), postcss_package)
                 } else {
-                    package_import_map_from_context("postcss".to_string(), path)
+                    package_import_map_from_context("postcss".into(), path)
                 };
 
                 rules.push(ModuleRule::new(
@@ -417,7 +428,7 @@ impl ModuleOptions {
                                 execution_context,
                                 Some(import_map),
                                 None,
-                                "postcss".to_string(),
+                                "postcss".into(),
                             ),
                             execution_context,
                             options.config_location,
@@ -519,6 +530,7 @@ impl ModuleOptions {
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Mdx {
                     transforms: mdx_transforms,
                     options: mdx_transform_options,
+                    ecmascript_options: ecmascript_options_vc,
                 })],
             ));
         }
@@ -531,11 +543,11 @@ impl ModuleOptions {
                 webpack_loaders_options.loader_runner_package
             {
                 package_import_map_from_import_mapping(
-                    "loader-runner".to_string(),
+                    "loader-runner".into(),
                     loader_runner_package,
                 )
             } else {
-                package_import_map_from_context("loader-runner".to_string(), path)
+                package_import_map_from_context("loader-runner".into(), path)
             };
             for (glob, rule) in webpack_loaders_options.rules.await?.iter() {
                 rules.push(ModuleRule::new(
@@ -565,7 +577,7 @@ impl ModuleOptions {
                                     execution_context,
                                     Some(import_map),
                                     None,
-                                    "webpack_loaders".to_string(),
+                                    "webpack_loaders".into(),
                                 ),
                                 execution_context,
                                 rule.loaders,

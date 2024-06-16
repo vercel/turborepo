@@ -5,7 +5,7 @@ use swc_core::{
     ecma::ast::{self, Expr, ExprStmt, Ident, Lit, ModuleItem, Program, Script, Stmt},
     quote,
 };
-use turbo_tasks::{Value, ValueToString, Vc};
+use turbo_tasks::{RcStr, Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::{
         ChunkItemExt, ChunkableModule, ChunkableModuleReference, ChunkingContext, ChunkingType,
@@ -29,12 +29,13 @@ use crate::{
     code_gen::{CodeGenerateable, CodeGeneration},
     create_visitor, magic_identifier,
     references::util::{request_to_string, throw_module_not_found_expr},
+    tree_shake::{asset::EcmascriptModulePartAsset, TURBOPACK_PART_IMPORT_SOURCE},
 };
 
 #[turbo_tasks::value]
 pub enum ReferencedAsset {
     Some(Vc<Box<dyn EcmascriptChunkPlaceable>>),
-    External(String, ExternalType),
+    External(RcStr, ExternalType),
     None,
 }
 
@@ -105,7 +106,7 @@ impl EsmAssetReference {
     fn get_origin(&self) -> Vc<Box<dyn ResolveOrigin>> {
         let mut origin = self.origin;
         if let Some(transition) = self.annotations.transition() {
-            origin = origin.with_transition(transition.to_string());
+            origin = origin.with_transition(transition.into());
         }
         origin
     }
@@ -150,6 +151,24 @@ impl ModuleReference for EsmAssetReference {
             EcmaScriptModulesReferenceSubType::Import
         };
 
+        if let Request::Module { module, .. } = &*self.request.await? {
+            if module == TURBOPACK_PART_IMPORT_SOURCE {
+                if let Some(part) = self.export_name {
+                    let full_module: Vc<crate::EcmascriptModuleAsset> =
+                        Vc::try_resolve_downcast_type(self.origin)
+                            .await?
+                            .expect("EsmAssetReference origin should be a EcmascriptModuleAsset");
+
+                    let module =
+                        EcmascriptModulePartAsset::new(full_module, part, self.import_externals);
+
+                    return Ok(ModuleResolveResult::module(Vc::upcast(module)).cell());
+                }
+
+                bail!("export_name is required for part import")
+            }
+        }
+
         Ok(esm_resolve(
             self.get_origin().resolve().await?,
             self.request,
@@ -163,12 +182,15 @@ impl ModuleReference for EsmAssetReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for EsmAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
-        Ok(Vc::cell(format!(
-            "import {} with {}",
-            self.request.to_string().await?,
-            self.annotations
-        )))
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
+        Ok(Vc::cell(
+            format!(
+                "import {} with {}",
+                self.request.to_string().await?,
+                self.annotations
+            )
+            .into(),
+        ))
     }
 }
 
@@ -235,17 +257,14 @@ impl CodeGenerateable for EsmAssetReference {
                                 "var $name = __turbopack_import__($id);" as Stmt,
                                 name = Ident::new(ident.clone().into(), DUMMY_SP),
                                 id: Expr = Expr::Lit(match &*id {
-                                    ModuleId::String(s) => s.clone().into(),
+                                    ModuleId::String(s) => s.clone().as_str().into(),
                                     ModuleId::Number(n) => (*n as f64).into(),
                                 })
                             );
                             insert_hoisted_stmt(program, stmt);
                         }));
                     }
-                    ReferencedAsset::External(
-                        request,
-                        ExternalType::OriginalReference | ExternalType::EcmaScriptModule,
-                    ) => {
+                    ReferencedAsset::External(request, ExternalType::EcmaScriptModule) => {
                         if !*chunking_context
                             .environment()
                             .supports_esm_externals()
@@ -264,13 +283,13 @@ impl CodeGenerateable for EsmAssetReference {
                                 quote!(
                                     "var $name = __turbopack_external_import__($id);" as Stmt,
                                     name = Ident::new(ident.clone().into(), DUMMY_SP),
-                                    id: Expr = Expr::Lit(request.clone().into())
+                                    id: Expr = Expr::Lit(request.to_string().into())
                                 )
                             } else {
                                 quote!(
                                     "var $name = __turbopack_external_require__($id, true);" as Stmt,
                                     name = Ident::new(ident.clone().into(), DUMMY_SP),
-                                    id: Expr = Expr::Lit(request.clone().into())
+                                    id: Expr = Expr::Lit(request.to_string().into())
                                 )
                             };
                             insert_hoisted_stmt(program, stmt);
@@ -297,7 +316,7 @@ impl CodeGenerateable for EsmAssetReference {
                             let stmt = quote!(
                                 "var $name = __turbopack_external_require__($id, true);" as Stmt,
                                 name = Ident::new(ident.clone().into(), DUMMY_SP),
-                                id: Expr = Expr::Lit(request.clone().into())
+                                id: Expr = Expr::Lit(request.to_string().into())
                             );
                             insert_hoisted_stmt(program, stmt);
                         }));

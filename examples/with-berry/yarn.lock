@@ -565,7 +565,7 @@ __metadata:
     "@typescript-eslint/parser": ^7.1.0
     "@vercel/style-guide": ^5.2.0
     eslint-config-prettier: ^9.1.0
-    eslint-config-turbo: ^1.12.4
+    eslint-config-turbo: ^2.0.0
     eslint-plugin-only-warn: ^1.1.0
     typescript: ^5.3.3
   languageName: unknown
@@ -2012,14 +2012,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eslint-config-turbo@npm:^1.12.4":
-  version: 1.12.4
-  resolution: "eslint-config-turbo@npm:1.12.4"
+"eslint-config-turbo@npm:^2.0.0":
+  version: 2.0.0
+  resolution: "eslint-config-turbo@npm:2.0.0"
   dependencies:
-    eslint-plugin-turbo: 1.12.4
+    eslint-plugin-turbo: 2.0.0
   peerDependencies:
     eslint: ">6.6.0"
-  checksum: 521ab9edf2d8e4426335147702e57511a3f65a35dc4ed482616a3bc2acf31ecbd189b4b284e21b7ef214d769c03e4fb5c9af7880238f4811cc198c343330dd28
+  checksum: d4cd50b4fdd19f285cfe5231800fd7165884eb42115363273fd7b8a5f7a9c5fbb8d926ccf84efc92e722d6cae4ccd87511a0b58e67df0bbcbcfd9f18fc05b13b
   languageName: node
   linkType: hard
 
@@ -2283,14 +2283,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eslint-plugin-turbo@npm:1.12.4":
-  version: 1.12.4
-  resolution: "eslint-plugin-turbo@npm:1.12.4"
+"eslint-plugin-turbo@npm:2.0.0":
+  version: 2.0.0
+  resolution: "eslint-plugin-turbo@npm:2.0.0"
   dependencies:
     dotenv: 16.0.3
   peerDependencies:
     eslint: ">6.6.0"
-  checksum: ba6f46aa3b271fdc5620d6743d738a84af4b44acc09d451071bd27377035cccacd6cfe9d22cedf084b87e486248b0a51333f531966c5a2672210f31bbeeef01c
+  checksum: 60bc0595877c85d3d4a67cedaa68c154125a724421c78360e1b207402d998bebdc7c9f639929fc948e5634d175e32de0659bf94b86bd412aecad198768839bbd
   languageName: node
   linkType: hard
 
@@ -4424,17 +4424,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"root-workspace-0b6124@workspace:.":
-  version: 0.0.0-use.local
-  resolution: "root-workspace-0b6124@workspace:."
-  dependencies:
-    eslint: 8.57.0
-    eslint-config-custom: "*"
-    prettier: ^3.2.5
-    turbo: ^1.12.4
-  languageName: unknown
-  linkType: soft
-
 "run-applescript@npm:^5.0.0":
   version: 5.0.0
   resolution: "run-applescript@npm:5.0.0"
@@ -4966,58 +4955,58 @@ __metadata:
   languageName: node
   linkType: hard
 
-"turbo-darwin-64@npm:1.12.4":
-  version: 1.12.4
-  resolution: "turbo-darwin-64@npm:1.12.4"
+"turbo-darwin-64@npm:2.0.3":
+  version: 2.0.3
+  resolution: "turbo-darwin-64@npm:2.0.3"
   conditions: os=darwin & cpu=x64
   languageName: node
   linkType: hard
 
-"turbo-darwin-arm64@npm:1.12.4":
-  version: 1.12.4
-  resolution: "turbo-darwin-arm64@npm:1.12.4"
+"turbo-darwin-arm64@npm:2.0.3":
+  version: 2.0.3
+  resolution: "turbo-darwin-arm64@npm:2.0.3"
   conditions: os=darwin & cpu=arm64
   languageName: node
   linkType: hard
 
-"turbo-linux-64@npm:1.12.4":
-  version: 1.12.4
-  resolution: "turbo-linux-64@npm:1.12.4"
+"turbo-linux-64@npm:2.0.3":
+  version: 2.0.3
+  resolution: "turbo-linux-64@npm:2.0.3"
   conditions: os=linux & cpu=x64
   languageName: node
   linkType: hard
 
-"turbo-linux-arm64@npm:1.12.4":
-  version: 1.12.4
-  resolution: "turbo-linux-arm64@npm:1.12.4"
+"turbo-linux-arm64@npm:2.0.3":
+  version: 2.0.3
+  resolution: "turbo-linux-arm64@npm:2.0.3"
   conditions: os=linux & cpu=arm64
   languageName: node
   linkType: hard
 
-"turbo-windows-64@npm:1.12.4":
-  version: 1.12.4
-  resolution: "turbo-windows-64@npm:1.12.4"
+"turbo-windows-64@npm:2.0.3":
+  version: 2.0.3
+  resolution: "turbo-windows-64@npm:2.0.3"
   conditions: os=win32 & cpu=x64
   languageName: node
   linkType: hard
 
-"turbo-windows-arm64@npm:1.12.4":
-  version: 1.12.4
-  resolution: "turbo-windows-arm64@npm:1.12.4"
+"turbo-windows-arm64@npm:2.0.3":
+  version: 2.0.3
+  resolution: "turbo-windows-arm64@npm:2.0.3"
   conditions: os=win32 & cpu=arm64
   languageName: node
   linkType: hard
 
-"turbo@npm:^1.12.4":
-  version: 1.12.4
-  resolution: "turbo@npm:1.12.4"
+"turbo@npm:^2.0.3":
+  version: 2.0.3
+  resolution: "turbo@npm:2.0.3"
   dependencies:
-    turbo-darwin-64: 1.12.4
-    turbo-darwin-arm64: 1.12.4
-    turbo-linux-64: 1.12.4
-    turbo-linux-arm64: 1.12.4
-    turbo-windows-64: 1.12.4
-    turbo-windows-arm64: 1.12.4
+    turbo-darwin-64: 2.0.3
+    turbo-darwin-arm64: 2.0.3
+    turbo-linux-64: 2.0.3
+    turbo-linux-arm64: 2.0.3
+    turbo-windows-64: 2.0.3
+    turbo-windows-arm64: 2.0.3
   dependenciesMeta:
     turbo-darwin-64:
       optional: true
@@ -5033,7 +5022,7 @@ __metadata:
       optional: true
   bin:
     turbo: bin/turbo
-  checksum: d387fb91af6ed0ea925201d3858180353c5d93be564829de2e22f48fe57124d1347d2abb8b99215901a305d4c6da4a0daf4c28afeec20fa1bc1ae2762c3b8d3d
+  checksum: deeddef5bbf1db454ebcc0d460f638506146f85724c5bb10c9b08009c3471798ce3594b4ef50fd03722313d9ef80552f9c93119e04c5859eac73225837caccac
   languageName: node
   linkType: hard
 
@@ -5294,6 +5283,17 @@ __metadata:
   checksum: 1a5c563d3c1b52d5f893c8b61afe11abc3bab4afac492e8da5bde69d550de701cf9806235f20a47b5c8fa8a1d6a9135841de2596535e998027a54589000e66d1
   languageName: node
   linkType: hard
+
+"with-berry@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "with-berry@workspace:."
+  dependencies:
+    eslint: 8.57.0
+    eslint-config-custom: "*"
+    prettier: ^3.2.5
+    turbo: ^2.0.3
+  languageName: unknown
+  linkType: soft
 
 "wrap-ansi-cjs@npm:wrap-ansi@^7.0.0":
   version: 7.0.0

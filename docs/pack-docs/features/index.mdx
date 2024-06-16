@@ -1,0 +1,62 @@
+---
+title: Features
+description: Learn about Turbopack's supported features
+---
+
+import { Cards, Card } from '#/components/card';
+
+The practice of building web applications is enormously diverse. In CSS alone, you have SCSS, Less, CSS Modules, PostCSS, and hundreds of other libraries. Frameworks like React, Vue and Svelte require custom setups.
+
+When building a bundler, we needed to consider which features would be:
+
+- **Built-in**: they work out of the box, no config required
+- **Available via plugins**: usually installed from a registry and configured
+- **Unavailable**: not available at all
+
+**Turbopack is in beta**, so very few of these decisions are set in stone. In its current state, **Turbopack cannot yet be configured** - so plugins are not available yet.
+
+Let's discuss which features are available out-of-the-box, in Turbopack's default configuration. We'll also touch on features which will be configurable via plugins.
+
+<Cards>
+<Card
+  title="JavaScript"
+  description="All ESNext features, Browserslist and top-level await."
+  href="/pack/docs/features/javascript"
+/>
+
+<Card
+  title="TypeScript"
+  description="TypeScript out of the box, including resolving paths and baseUrl."
+  href="/pack/docs/features/typescript"
+/>
+
+<Card
+  title="Imports"
+  description="require, import, dynamic imports, and more."
+  href="/pack/docs/features/imports"
+/>
+
+<Card
+  title="Dev server"
+  description="Hot Module Reloading (HMR) and Fast Refresh."
+  href="/pack/docs/features/dev-server"
+/>
+
+<Card
+  title="CSS"
+  description="Global CSS, CSS Modules, postcss-nested, and @import."
+  href="/pack/docs/features/css"
+/>
+
+<Card
+  title="Frameworks"
+  description="Next.js, Svelte, Vue, and React Server Components"
+  href="/pack/docs/features/frameworks"
+/>
+
+<Card
+  title="Static assets"
+  description="/public directory, JSON imports, and importing assets via ESM."
+  href="/pack/docs/features/static-assets"
+/>
+</Cards>

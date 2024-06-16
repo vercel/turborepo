@@ -147,6 +147,7 @@ impl WithMetadata for RawTurboJson {
         self.global_dependencies.add_text(text.clone());
         self.global_env.add_text(text.clone());
         self.global_pass_through_env.add_text(text.clone());
+        self.tasks.add_text(text.clone());
         self.pipeline.add_text(text);
     }
 
@@ -156,6 +157,7 @@ impl WithMetadata for RawTurboJson {
         self.global_dependencies.add_path(path.clone());
         self.global_env.add_path(path.clone());
         self.global_pass_through_env.add_path(path.clone());
+        self.tasks.add_path(path.clone());
         self.pipeline.add_path(path);
     }
 }
@@ -182,13 +184,12 @@ impl WithMetadata for RawTaskDefinition {
         if let Some(depends_on) = &mut self.depends_on {
             depends_on.value.add_text(text.clone());
         }
-        self.dot_env.add_text(text.clone());
         self.env.add_text(text.clone());
         self.inputs.add_text(text.clone());
         self.pass_through_env.add_text(text.clone());
         self.persistent.add_text(text.clone());
         self.outputs.add_text(text.clone());
-        self.output_mode.add_text(text.clone());
+        self.output_logs.add_text(text.clone());
         self.interactive.add_text(text);
     }
 
@@ -197,13 +198,12 @@ impl WithMetadata for RawTaskDefinition {
         if let Some(depends_on) = &mut self.depends_on {
             depends_on.value.add_path(path.clone());
         }
-        self.dot_env.add_path(path.clone());
         self.env.add_path(path.clone());
         self.inputs.add_path(path.clone());
         self.pass_through_env.add_path(path.clone());
         self.persistent.add_path(path.clone());
         self.outputs.add_path(path.clone());
-        self.output_mode.add_path(path.clone());
+        self.output_logs.add_path(path.clone());
         self.interactive.add_path(path);
     }
 }

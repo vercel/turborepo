@@ -118,7 +118,7 @@ impl WatchClient {
 
         let watched_packages = run.get_relevant_packages();
 
-        let (sender, handle) = run.start_experimental_ui().unzip();
+        let (sender, handle) = run.start_experimental_ui()?.unzip();
 
         let connector = DaemonConnector {
             can_start_server: true,

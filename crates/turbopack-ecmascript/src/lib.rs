@@ -55,7 +55,7 @@ pub use transform::{
     TransformContext, TransformPlugin, UnsupportedServerActionIssue,
 };
 use turbo_tasks::{
-    trace::TraceRawVcs, ReadRef, TaskInput, TryJoinIterExt, Value, ValueToString, Vc,
+    trace::TraceRawVcs, RcStr, ReadRef, TaskInput, TryJoinIterExt, Value, ValueToString, Vc,
 };
 use turbo_tasks_fs::{rope::Rope, FileJsonContent, FileSystemPath};
 use turbopack_core::{
@@ -177,8 +177,8 @@ impl Display for EcmascriptModuleAssetType {
 }
 
 #[turbo_tasks::function]
-fn modifier() -> Vc<String> {
-    Vc::cell("ecmascript".to_string())
+fn modifier() -> Vc<RcStr> {
+    Vc::cell("ecmascript".into())
 }
 
 #[derive(PartialEq, Eq, Clone, TraceRawVcs)]
@@ -193,6 +193,7 @@ struct MemoizedSuccessfulAnalysis {
     source_map: Option<ReadRef<SourceMap>>,
 }
 
+#[derive(Clone)]
 pub struct EcmascriptModuleAssetBuilder {
     source: Vc<Box<dyn Source>>,
     asset_context: Vc<Box<dyn AssetContext>>,
@@ -538,7 +539,7 @@ impl Module for EcmascriptModuleAsset {
         if let Some(inner_assets) = self.inner_assets {
             let mut ident = self.source.ident().await?.clone_value();
             for (name, asset) in inner_assets.await?.iter() {
-                ident.add_asset(Vc::cell(name.clone()), asset.ident());
+                ident.add_asset(Vc::cell(name.to_string().into()), asset.ident());
             }
             ident.add_modifier(modifier());
             ident.layer = Some(self.asset_context.layer());
@@ -689,7 +690,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
         let this = self.await?;
         let _span = tracing::info_span!(
             "code generation",
-            module = *self.asset_ident().to_string().await?
+            module = self.asset_ident().to_string().await?.to_string()
         )
         .entered();
         let async_module_options = this
@@ -893,7 +894,7 @@ async fn gen_content_with_visitors(
                 error_messages = messages
                     .as_ref()
                     .and_then(|m| { m.first().map(|f| format!("\n{}", f)) })
-                    .unwrap_or("".to_string())
+                    .unwrap_or("".into())
             )
             .into(),
             source_map: None,

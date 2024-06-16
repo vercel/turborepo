@@ -6,6 +6,7 @@ Thanks for your interest in contributing to Turbo!
 
 - [Contributing to Turbo](#contributing-to-turbo)
   - [General Dependencies](#general-dependencies)
+    - [Linux Dependencies](#linux-dependencies)
   - [Contributing to Turborepo](#contributing-to-turborepo)
     - [Building Turborepo](#building-turborepo)
     - [TLS Implementation](#tls-implementation)
@@ -45,7 +46,7 @@ Dependencies
 
 Building
 
-- Building `turbo` CLI: In `cli` run `make turbo`
+- Building `turbo` CLI: `cargo build -p turbo`
 - Using `turbo` to build `turbo` CLI: `./turbow.js`
 
 ### TLS Implementation
@@ -288,6 +289,14 @@ You can also create a little demo app and run
 
 ```shell
 cargo run -p node-file-trace -- print demo/index.js
+```
+
+Updating snapshot tests:
+
+In case of changes that involve updating snapshots you can use the `UPDATE=1` environment variable.
+
+```
+UPDATE=1 cargo nextest run
 ```
 
 ### Profiling Turbopack

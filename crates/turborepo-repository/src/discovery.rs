@@ -108,7 +108,10 @@ impl PackageDiscoveryBuilder for LocalPackageDiscoveryBuilder {
         let package_manager = match self.package_manager {
             Some(pm) => pm,
             None => {
-                PackageManager::get_package_manager(&self.repo_root, self.package_json.as_ref())?
+                let package_json = self.package_json.map(Ok).unwrap_or_else(|| {
+                    PackageJson::load(&self.repo_root.join_component("package.json"))
+                })?;
+                PackageManager::get_package_manager(&package_json)?
             }
         };
 

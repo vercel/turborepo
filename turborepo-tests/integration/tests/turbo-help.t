@@ -28,7 +28,6 @@ Test help flag
         --no-update-notifier              Disable the turbo update notification
         --api <API>                       Override the endpoint for API calls
         --color                           Force color usage in the terminal
-        --cpuprofile <CPU_PROFILE>        Specify a file to save a cpu profile
         --cwd <CWD>                       The directory in which to run turbo
         --heap <HEAP>                     Specify a file to save a pprof heap profile
         --login <LOGIN>                   Override the login endpoint
@@ -77,19 +76,9 @@ Test help flag
         --global-deps <GLOBAL_DEPS>
             Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
         --env-mode [<ENV_MODE>]
-            Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json. Use "infer" to defer to existence of "passThroughEnv" or "globalPassThroughEnv" in turbo.json. (default infer) [default: infer] [possible values: infer, loose, strict]
+            Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json [default: strict] [possible values: loose, strict]
     -F, --filter <FILTER>
             Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
-        --scope <SCOPE>
-            DEPRECATED: Specify package(s) to act as entry points for task execution. Supports globs
-        --ignore <IGNORE>
-            Files to ignore when calculating changed files from '--filter'. Supports globs
-        --since <SINCE>
-            DEPRECATED: Limit/Set scope to changed packages since a mergebase. This uses the git diff ${target_branch}... mechanism to identify which packages have changed
-        --include-dependencies
-            DEPRECATED: Include the dependencies of tasks in execution
-        --no-deps
-            DEPRECATED: Exclude dependent task consumers from execution
         --output-logs <OUTPUT_LOGS>
             Set type of process output logging. Use "full" to show all output. Use "hash-only" to show only turbo-computed task hashes. Use "new-only" to show only new output with only hashes for cached tasks. Use "none" to hide process output. (default full) [possible values: full, none, hash-only, new-only, errors-only]
         --log-order <LOG_ORDER>
@@ -132,7 +121,6 @@ Test help flag
         --no-update-notifier              Disable the turbo update notification
         --api <API>                       Override the endpoint for API calls
         --color                           Force color usage in the terminal
-        --cpuprofile <CPU_PROFILE>        Specify a file to save a cpu profile
         --cwd <CWD>                       The directory in which to run turbo
         --heap <HEAP>                     Specify a file to save a pprof heap profile
         --login <LOGIN>                   Override the login endpoint
@@ -181,19 +169,9 @@ Test help flag
         --global-deps <GLOBAL_DEPS>
             Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
         --env-mode [<ENV_MODE>]
-            Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json. Use "infer" to defer to existence of "passThroughEnv" or "globalPassThroughEnv" in turbo.json. (default infer) [default: infer] [possible values: infer, loose, strict]
+            Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json [default: strict] [possible values: loose, strict]
     -F, --filter <FILTER>
             Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
-        --scope <SCOPE>
-            DEPRECATED: Specify package(s) to act as entry points for task execution. Supports globs
-        --ignore <IGNORE>
-            Files to ignore when calculating changed files from '--filter'. Supports globs
-        --since <SINCE>
-            DEPRECATED: Limit/Set scope to changed packages since a mergebase. This uses the git diff ${target_branch}... mechanism to identify which packages have changed
-        --include-dependencies
-            DEPRECATED: Include the dependencies of tasks in execution
-        --no-deps
-            DEPRECATED: Exclude dependent task consumers from execution
         --output-logs <OUTPUT_LOGS>
             Set type of process output logging. Use "full" to show all output. Use "hash-only" to show only turbo-computed task hashes. Use "new-only" to show only new output with only hashes for cached tasks. Use "none" to hide process output. (default full) [possible values: full, none, hash-only, new-only, errors-only]
         --log-order <LOG_ORDER>
@@ -219,7 +197,6 @@ Test help flag for link command
         --no-update-notifier              Disable the turbo update notification
         --api <API>                       Override the endpoint for API calls
         --color                           Force color usage in the terminal
-        --cpuprofile <CPU_PROFILE>        Specify a file to save a cpu profile
         --cwd <CWD>                       The directory in which to run turbo
         --heap <HEAP>                     Specify a file to save a pprof heap profile
         --login <LOGIN>                   Override the login endpoint
@@ -245,7 +222,6 @@ Test help flag for unlink command
         --no-update-notifier              Disable the turbo update notification
         --api <API>                       Override the endpoint for API calls
         --color                           Force color usage in the terminal
-        --cpuprofile <CPU_PROFILE>        Specify a file to save a cpu profile
         --cwd <CWD>                       The directory in which to run turbo
         --heap <HEAP>                     Specify a file to save a pprof heap profile
         --login <LOGIN>                   Override the login endpoint
@@ -272,7 +248,6 @@ Test help flag for login command
         --no-update-notifier              Disable the turbo update notification
         --api <API>                       Override the endpoint for API calls
         --color                           Force color usage in the terminal
-        --cpuprofile <CPU_PROFILE>        Specify a file to save a cpu profile
         --cwd <CWD>                       The directory in which to run turbo
         --heap <HEAP>                     Specify a file to save a pprof heap profile
         --login <LOGIN>                   Override the login endpoint
@@ -298,7 +273,6 @@ Test help flag for logout command
         --no-update-notifier              Disable the turbo update notification
         --api <API>                       Override the endpoint for API calls
         --color                           Force color usage in the terminal
-        --cpuprofile <CPU_PROFILE>        Specify a file to save a cpu profile
         --cwd <CWD>                       The directory in which to run turbo
         --heap <HEAP>                     Specify a file to save a pprof heap profile
         --login <LOGIN>                   Override the login endpoint
