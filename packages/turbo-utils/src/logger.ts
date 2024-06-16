@@ -26,7 +26,7 @@ export const turboLoader = (text: string) =>
   });
 
 export const info = (...args: Array<unknown>) => {
-  log(turboBlue([pcBold(">>>"), ...args].join(" ")));
+  log(turboBlue(pcBold(">>>")), args.join(" "));
 };
 
 export const bold = (...args: Array<string>) => {
@@ -46,7 +46,7 @@ export const grey = (...args: Array<string>) => {
 };
 
 export const item = (...args: Array<unknown>) => {
-  log(turboBlue([pcBold("  •"), ...args].join(" ")));
+  log(turboBlue(pcBold("  •")), args.join(" "));
 };
 
 export const log = (...args: Array<unknown>) => {
@@ -61,7 +61,7 @@ export const warn = (...args: Array<unknown>) => {
 
 export const error = (...args: Array<unknown>) => {
   // eslint-disable-next-line no-console -- error logger
-  console.error(turboRed([pcBold(">>>"), ...args].join(" ")));
+  console.error(turboRed(pcBold(">>>")), args.join(" "));
 };
 
 function hexToAnsi256(sHex: string): number {
@@ -80,5 +80,5 @@ function hexToAnsi256(sHex: string): number {
 
 export function hex(color: string): (text: string) => string {
   const ansiColor = hexToAnsi256(color);
-  return (text: string) => `\x1b[38;5;${ansiColor}m${text}${reset(null)}`;
+  return (text: string) => `\x1b[38;5;${ansiColor}m${text}${reset("")}`;
 }
