@@ -330,13 +330,6 @@ async fn get_part_id(result: &SplitResult, part: Vc<ModulePart>) -> Result<u32> 
     let part_id = match entrypoints.get(&key) {
         Some(id) => *id,
         None => {
-            // We need to handle `*` reexports specially.
-            if let ModulePart::Export(..) = &*part {
-                if let Some(&part_id) = entrypoints.get(&Key::ModuleEvaluation) {
-                    return Ok(part_id);
-                }
-            }
-
             bail!(
                 "could not find part id for module part {:?} in {:?}",
                 key,
