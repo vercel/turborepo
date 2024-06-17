@@ -154,6 +154,14 @@ impl ModuleReference for EsmAssetReference {
         if let Request::Module { module, .. } = &*self.request.await? {
             if module == TURBOPACK_PART_IMPORT_SOURCE {
                 if let Some(part) = self.export_name {
+                    match &*part.await? {
+                        ModulePart::Evaluation | ModulePart::Internal(5) => {
+                            vdbg!(part, self.origin);
+                        }
+
+                        _ => {}
+                    }
+
                     let full_module: Vc<crate::EcmascriptModuleAsset> =
                         Vc::try_resolve_downcast_type(self.origin)
                             .await?

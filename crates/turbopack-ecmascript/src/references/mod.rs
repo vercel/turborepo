@@ -581,7 +581,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
             },
             import_externals,
         );
-        vdbg!(origin, part, r);
+        vdbg!(part, r.await?.export_name, origin);
 
         import_references.push(r);
     }
