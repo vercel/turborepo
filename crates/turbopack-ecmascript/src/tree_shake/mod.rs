@@ -88,7 +88,6 @@ impl Analyzer<'_> {
 
         analyzer.handle_exports(module);
 
-        g.g.sort();
         (g, items)
     }
 
