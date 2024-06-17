@@ -51,9 +51,9 @@ impl TaskTable {
             .map(|task| task.len())
             .max()
             .unwrap_or_default()
-            // Task column width should be large enough to fit "Task" title
+            // Task column width should be large enough to fit "↑ ↓ to select task" instructions
             // and truncate tasks with more than 40 chars.
-            .clamp(14, 40) as u16;
+            .clamp(13, 40) as u16;
         // Add space for column divider and status emoji
         task_name_width + 1
     }
@@ -263,19 +263,18 @@ impl<'a> StatefulWidget for &'a TaskTable {
         .highlight_style(Style::default().fg(Color::Yellow))
         .column_spacing(0)
         .header(
-            vec![format!("Task\n{bar}").to_owned()]
+            vec![format!("Tasks\n{bar}")]
                 .into_iter()
                 .map(Cell::from)
                 .collect::<Row>()
                 .height(2),
         )
         .footer(
-            ["↑ ↓ to navigate"]
-                .iter()
-                .copied()
+            vec![format!("{bar}\n↑ ↓ to navigate")]
+                .into_iter()
                 .map(Cell::from)
                 .collect::<Row>()
-                .height(1),
+                .height(2),
         );
         StatefulWidget::render(table, area, buf, state);
     }
