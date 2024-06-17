@@ -3589,7 +3589,7 @@ mod tests {
                 m.visit_mut_with(&mut resolver(unresolved_mark, top_level_mark, false));
 
                 let eval_context =
-                    EvalContext::new(&m, unresolved_mark, top_level_mark, false, None);
+                    EvalContext::new(cm.clone(), &m, unresolved_mark, top_level_mark, false, None);
 
                 let mut var_graph = create_graph(&m, &eval_context);
 
