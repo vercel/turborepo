@@ -115,7 +115,7 @@ impl CodeGenerateable for EcmascriptModulePartReference {
         let mut visitors = Vec::new();
 
         let referenced_asset = ReferencedAsset::from_resolve_result(self.resolve_reference());
-        vdbg!(referenced_asset);
+        // vdbg!(referenced_asset);
         let referenced_asset = referenced_asset.await?;
         let ident = referenced_asset
             .get_ident()

@@ -418,7 +418,6 @@ pub(crate) async fn analyse_ecmascript_module_internal(
     let parsed = if let Some(part) = part {
         let parsed = parse(source, ty, transforms);
         let split_data = split(source.ident(), source, parsed);
-        vdbg!(part, split_data);
         part_of_module(split_data, part)
     } else {
         parse(source, ty, transforms)
@@ -582,7 +581,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
             },
             import_externals,
         );
-        vdbg!(part, r.await?.export_name, origin);
+        // vdbg!(part, r.await?.export_name, origin);
 
         import_references.push(r);
     }
@@ -1942,7 +1941,6 @@ async fn handle_free_var_reference(
             lookup_path,
             export,
         } => {
-            vdbg!(request, lookup_path, export);
             let esm_reference = EsmAssetReference::new(
                 lookup_path.map_or(state.origin, |lookup_path| {
                     Vc::upcast(PlainResolveOrigin::new(
