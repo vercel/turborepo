@@ -2,7 +2,7 @@
 
 Count: 28
 
-## Item 1: Stmt 0, `ImportOfModule`
+## Item 10: Stmt 0, `ImportOfModule`
 
 ```js
 import React from 'react';
@@ -12,7 +12,7 @@ import React from 'react';
 - Hoisted
 - Side effects
 
-## Item 2: Stmt 0, `ImportBinding(0)`
+## Item 11: Stmt 0, `ImportBinding(0)`
 
 ```js
 import React from 'react';
@@ -22,7 +22,7 @@ import React from 'react';
 - Hoisted
 - Declares: `React`
 
-## Item 3: Stmt 1, `ImportOfModule`
+## Item 12: Stmt 1, `ImportOfModule`
 
 ```js
 import { DynamicServerError } from '../../client/components/hooks-server-context';
@@ -32,7 +32,7 @@ import { DynamicServerError } from '../../client/components/hooks-server-context
 - Hoisted
 - Side effects
 
-## Item 4: Stmt 1, `ImportBinding(0)`
+## Item 13: Stmt 1, `ImportBinding(0)`
 
 ```js
 import { DynamicServerError } from '../../client/components/hooks-server-context';
@@ -42,7 +42,7 @@ import { DynamicServerError } from '../../client/components/hooks-server-context
 - Hoisted
 - Declares: `DynamicServerError`
 
-## Item 5: Stmt 2, `ImportOfModule`
+## Item 14: Stmt 2, `ImportOfModule`
 
 ```js
 import { StaticGenBailoutError } from '../../client/components/static-generation-bailout';
@@ -52,7 +52,7 @@ import { StaticGenBailoutError } from '../../client/components/static-generation
 - Hoisted
 - Side effects
 
-## Item 6: Stmt 2, `ImportBinding(0)`
+## Item 15: Stmt 2, `ImportBinding(0)`
 
 ```js
 import { StaticGenBailoutError } from '../../client/components/static-generation-bailout';
@@ -62,7 +62,7 @@ import { StaticGenBailoutError } from '../../client/components/static-generation
 - Hoisted
 - Declares: `StaticGenBailoutError`
 
-## Item 7: Stmt 3, `ImportOfModule`
+## Item 16: Stmt 3, `ImportOfModule`
 
 ```js
 import { getPathname } from '../../lib/url';
@@ -72,7 +72,7 @@ import { getPathname } from '../../lib/url';
 - Hoisted
 - Side effects
 
-## Item 8: Stmt 3, `ImportBinding(0)`
+## Item 17: Stmt 3, `ImportBinding(0)`
 
 ```js
 import { getPathname } from '../../lib/url';
@@ -82,7 +82,7 @@ import { getPathname } from '../../lib/url';
 - Hoisted
 - Declares: `getPathname`
 
-## Item 9: Stmt 4, `VarDeclarator(0)`
+## Item 18: Stmt 4, `VarDeclarator(0)`
 
 ```js
 const hasPostpone = typeof React.unstable_postpone === 'function';
@@ -93,7 +93,7 @@ const hasPostpone = typeof React.unstable_postpone === 'function';
 - Reads: `React`
 - Write: `hasPostpone`, `React`
 
-## Item 10: Stmt 5, `Normal`
+## Item 19: Stmt 5, `Normal`
 
 ```js
 export function createPrerenderState(isDebugSkeleton) {
@@ -109,7 +109,7 @@ export function createPrerenderState(isDebugSkeleton) {
 - Declares: `createPrerenderState`
 - Write: `createPrerenderState`
 
-## Item 11: Stmt 6, `Normal`
+## Item 20: Stmt 6, `Normal`
 
 ```js
 export function markCurrentScopeAsDynamic(store, expression) {
@@ -138,7 +138,7 @@ export function markCurrentScopeAsDynamic(store, expression) {
 - Reads (eventual): `getPathname`, `StaticGenBailoutError`, `postponeWithTracking`, `DynamicServerError`
 - Write: `markCurrentScopeAsDynamic`
 
-## Item 12: Stmt 7, `Normal`
+## Item 21: Stmt 7, `Normal`
 
 ```js
 export function trackDynamicDataAccessed(store, expression) {
@@ -167,7 +167,7 @@ export function trackDynamicDataAccessed(store, expression) {
 - Reads (eventual): `getPathname`, `StaticGenBailoutError`, `postponeWithTracking`, `DynamicServerError`
 - Write: `trackDynamicDataAccessed`
 
-## Item 13: Stmt 8, `Normal`
+## Item 22: Stmt 8, `Normal`
 
 ```js
 export function Postpone({ reason, prerenderState, pathname }) {
@@ -181,7 +181,7 @@ export function Postpone({ reason, prerenderState, pathname }) {
 - Reads (eventual): `postponeWithTracking`
 - Write: `Postpone`
 
-## Item 14: Stmt 9, `Normal`
+## Item 23: Stmt 9, `Normal`
 
 ```js
 export function trackDynamicFetch(store, expression) {
@@ -196,7 +196,7 @@ export function trackDynamicFetch(store, expression) {
 - Reads (eventual): `postponeWithTracking`
 - Write: `trackDynamicFetch`
 
-## Item 15: Stmt 10, `Normal`
+## Item 24: Stmt 10, `Normal`
 
 ```js
 function postponeWithTracking(prerenderState, expression, pathname) {
@@ -217,7 +217,7 @@ function postponeWithTracking(prerenderState, expression, pathname) {
 - Write: `postponeWithTracking`
 - Write (eventual): `React`
 
-## Item 16: Stmt 11, `Normal`
+## Item 25: Stmt 11, `Normal`
 
 ```js
 export function usedDynamicAPIs(prerenderState) {
@@ -230,7 +230,7 @@ export function usedDynamicAPIs(prerenderState) {
 - Declares: `usedDynamicAPIs`
 - Write: `usedDynamicAPIs`
 
-## Item 17: Stmt 12, `Normal`
+## Item 26: Stmt 12, `Normal`
 
 ```js
 export function formatDynamicAPIAccesses(prerenderState) {
@@ -257,7 +257,7 @@ export function formatDynamicAPIAccesses(prerenderState) {
 - Declares: `formatDynamicAPIAccesses`
 - Write: `formatDynamicAPIAccesses`
 
-## Item 18: Stmt 13, `Normal`
+## Item 27: Stmt 13, `Normal`
 
 ```js
 function assertPostpone() {
@@ -273,7 +273,7 @@ function assertPostpone() {
 - Reads (eventual): `hasPostpone`
 - Write: `assertPostpone`
 
-## Item 19: Stmt 14, `Normal`
+## Item 28: Stmt 14, `Normal`
 
 ```js
 export function createPostponedAbortSignal(reason) {
@@ -298,43 +298,43 @@ export function createPostponedAbortSignal(reason) {
 # Phase 1
 ```mermaid
 graph TD
-    Item1;
     Item5;
-    Item2;
+    Item5["ModuleEvaluation"];
     Item6;
-    Item3;
+    Item6["export Postpone"];
     Item7;
-    Item4;
+    Item7["export createPostponedAbortSignal"];
     Item8;
+    Item8["export createPrerenderState"];
     Item9;
+    Item9["export formatDynamicAPIAccesses"];
     Item10;
+    Item10["export markCurrentScopeAsDynamic"];
     Item11;
+    Item11["export trackDynamicDataAccessed"];
     Item12;
+    Item12["export trackDynamicFetch"];
     Item13;
+    Item13["export usedDynamicAPIs"];
+    Item1;
     Item14;
+    Item2;
     Item15;
+    Item3;
     Item16;
+    Item4;
     Item17;
     Item18;
     Item19;
     Item20;
-    Item20["ModuleEvaluation"];
     Item21;
-    Item21["export createPrerenderState"];
     Item22;
-    Item22["export markCurrentScopeAsDynamic"];
     Item23;
-    Item23["export trackDynamicDataAccessed"];
     Item24;
-    Item24["export Postpone"];
     Item25;
-    Item25["export trackDynamicFetch"];
     Item26;
-    Item26["export usedDynamicAPIs"];
     Item27;
-    Item27["export formatDynamicAPIAccesses"];
     Item28;
-    Item28["export createPostponedAbortSignal"];
     Item2 --> Item1;
     Item3 --> Item1;
     Item3 --> Item2;
@@ -345,227 +345,227 @@ graph TD
 # Phase 2
 ```mermaid
 graph TD
-    Item1;
     Item5;
-    Item2;
+    Item5["ModuleEvaluation"];
     Item6;
-    Item3;
+    Item6["export Postpone"];
     Item7;
-    Item4;
+    Item7["export createPostponedAbortSignal"];
     Item8;
+    Item8["export createPrerenderState"];
     Item9;
+    Item9["export formatDynamicAPIAccesses"];
     Item10;
+    Item10["export markCurrentScopeAsDynamic"];
     Item11;
+    Item11["export trackDynamicDataAccessed"];
     Item12;
+    Item12["export trackDynamicFetch"];
     Item13;
+    Item13["export usedDynamicAPIs"];
+    Item1;
     Item14;
+    Item2;
     Item15;
+    Item3;
     Item16;
+    Item4;
     Item17;
     Item18;
     Item19;
     Item20;
-    Item20["ModuleEvaluation"];
     Item21;
-    Item21["export createPrerenderState"];
     Item22;
-    Item22["export markCurrentScopeAsDynamic"];
     Item23;
-    Item23["export trackDynamicDataAccessed"];
     Item24;
-    Item24["export Postpone"];
     Item25;
-    Item25["export trackDynamicFetch"];
     Item26;
-    Item26["export usedDynamicAPIs"];
     Item27;
-    Item27["export formatDynamicAPIAccesses"];
     Item28;
-    Item28["export createPostponedAbortSignal"];
     Item2 --> Item1;
     Item3 --> Item1;
     Item3 --> Item2;
     Item4 --> Item1;
     Item4 --> Item2;
     Item4 --> Item3;
-    Item9 --> Item5;
-    Item21 --> Item10;
-    Item22 --> Item11;
-    Item23 --> Item12;
-    Item24 --> Item13;
-    Item25 --> Item14;
-    Item26 --> Item16;
-    Item27 --> Item17;
-    Item28 --> Item19;
+    Item6 --> Item22;
+    Item7 --> Item28;
+    Item8 --> Item19;
+    Item9 --> Item26;
+    Item10 --> Item20;
+    Item11 --> Item21;
+    Item12 --> Item23;
+    Item13 --> Item25;
+    Item18 --> Item14;
 ```
 # Phase 3
 ```mermaid
 graph TD
-    Item1;
     Item5;
-    Item2;
+    Item5["ModuleEvaluation"];
     Item6;
-    Item3;
+    Item6["export Postpone"];
     Item7;
-    Item4;
+    Item7["export createPostponedAbortSignal"];
     Item8;
+    Item8["export createPrerenderState"];
     Item9;
+    Item9["export formatDynamicAPIAccesses"];
     Item10;
+    Item10["export markCurrentScopeAsDynamic"];
     Item11;
+    Item11["export trackDynamicDataAccessed"];
     Item12;
+    Item12["export trackDynamicFetch"];
     Item13;
+    Item13["export usedDynamicAPIs"];
+    Item1;
     Item14;
+    Item2;
     Item15;
+    Item3;
     Item16;
+    Item4;
     Item17;
     Item18;
     Item19;
     Item20;
-    Item20["ModuleEvaluation"];
     Item21;
-    Item21["export createPrerenderState"];
     Item22;
-    Item22["export markCurrentScopeAsDynamic"];
     Item23;
-    Item23["export trackDynamicDataAccessed"];
     Item24;
-    Item24["export Postpone"];
     Item25;
-    Item25["export trackDynamicFetch"];
     Item26;
-    Item26["export usedDynamicAPIs"];
     Item27;
-    Item27["export formatDynamicAPIAccesses"];
     Item28;
-    Item28["export createPostponedAbortSignal"];
     Item2 --> Item1;
     Item3 --> Item1;
     Item3 --> Item2;
     Item4 --> Item1;
     Item4 --> Item2;
     Item4 --> Item3;
-    Item9 --> Item5;
-    Item21 --> Item10;
-    Item22 --> Item11;
-    Item23 --> Item12;
-    Item24 --> Item13;
-    Item25 --> Item14;
-    Item26 --> Item16;
-    Item27 --> Item17;
-    Item28 --> Item19;
-    Item11 --> Item8;
-    Item11 --> Item7;
-    Item11 --> Item15;
-    Item11 --> Item6;
-    Item12 --> Item8;
-    Item12 --> Item7;
-    Item12 --> Item15;
-    Item12 --> Item6;
-    Item13 --> Item15;
-    Item14 --> Item15;
-    Item15 --> Item18;
-    Item15 --> Item9;
-    Item18 --> Item9;
-    Item19 --> Item18;
-    Item19 --> Item9;
+    Item6 --> Item22;
+    Item7 --> Item28;
+    Item8 --> Item19;
+    Item9 --> Item26;
+    Item10 --> Item20;
+    Item11 --> Item21;
+    Item12 --> Item23;
+    Item13 --> Item25;
+    Item18 --> Item14;
+    Item20 --> Item17;
+    Item20 --> Item16;
+    Item20 --> Item24;
+    Item20 --> Item15;
+    Item21 --> Item17;
+    Item21 --> Item16;
+    Item21 --> Item24;
+    Item21 --> Item15;
+    Item22 --> Item24;
+    Item23 --> Item24;
+    Item24 --> Item27;
+    Item24 --> Item18;
+    Item27 --> Item18;
+    Item28 --> Item27;
+    Item28 --> Item18;
 ```
 # Phase 4
 ```mermaid
 graph TD
-    Item1;
     Item5;
-    Item2;
+    Item5["ModuleEvaluation"];
     Item6;
-    Item3;
+    Item6["export Postpone"];
     Item7;
-    Item4;
+    Item7["export createPostponedAbortSignal"];
     Item8;
+    Item8["export createPrerenderState"];
     Item9;
+    Item9["export formatDynamicAPIAccesses"];
     Item10;
+    Item10["export markCurrentScopeAsDynamic"];
     Item11;
+    Item11["export trackDynamicDataAccessed"];
     Item12;
+    Item12["export trackDynamicFetch"];
     Item13;
+    Item13["export usedDynamicAPIs"];
+    Item1;
     Item14;
+    Item2;
     Item15;
+    Item3;
     Item16;
+    Item4;
     Item17;
     Item18;
     Item19;
     Item20;
-    Item20["ModuleEvaluation"];
     Item21;
-    Item21["export createPrerenderState"];
     Item22;
-    Item22["export markCurrentScopeAsDynamic"];
     Item23;
-    Item23["export trackDynamicDataAccessed"];
     Item24;
-    Item24["export Postpone"];
     Item25;
-    Item25["export trackDynamicFetch"];
     Item26;
-    Item26["export usedDynamicAPIs"];
     Item27;
-    Item27["export formatDynamicAPIAccesses"];
     Item28;
-    Item28["export createPostponedAbortSignal"];
     Item2 --> Item1;
     Item3 --> Item1;
     Item3 --> Item2;
     Item4 --> Item1;
     Item4 --> Item2;
     Item4 --> Item3;
-    Item9 --> Item5;
-    Item21 --> Item10;
-    Item22 --> Item11;
-    Item23 --> Item12;
-    Item24 --> Item13;
-    Item25 --> Item14;
-    Item26 --> Item16;
-    Item27 --> Item17;
-    Item28 --> Item19;
-    Item11 --> Item8;
-    Item11 --> Item7;
-    Item11 --> Item15;
-    Item11 --> Item6;
-    Item12 --> Item8;
-    Item12 --> Item7;
-    Item12 --> Item15;
-    Item12 --> Item6;
-    Item13 --> Item15;
-    Item14 --> Item15;
-    Item15 --> Item18;
-    Item15 --> Item9;
-    Item18 --> Item9;
-    Item19 --> Item18;
-    Item19 --> Item9;
-    Item20 --> Item1;
-    Item20 --> Item2;
-    Item20 --> Item3;
-    Item20 --> Item4;
+    Item6 --> Item22;
+    Item7 --> Item28;
+    Item8 --> Item19;
+    Item9 --> Item26;
+    Item10 --> Item20;
+    Item11 --> Item21;
+    Item12 --> Item23;
+    Item13 --> Item25;
+    Item18 --> Item14;
+    Item20 --> Item17;
+    Item20 --> Item16;
+    Item20 --> Item24;
+    Item20 --> Item15;
+    Item21 --> Item17;
+    Item21 --> Item16;
+    Item21 --> Item24;
+    Item21 --> Item15;
+    Item22 --> Item24;
+    Item23 --> Item24;
+    Item24 --> Item27;
+    Item24 --> Item18;
+    Item27 --> Item18;
+    Item28 --> Item27;
+    Item28 --> Item18;
+    Item5 --> Item1;
+    Item5 --> Item2;
+    Item5 --> Item3;
+    Item5 --> Item4;
 ```
 # Final
 ```mermaid
 graph TD
     N0["Items: [ItemId(ModuleEvaluation), ItemId(0, ImportOfModule), ItemId(1, ImportOfModule), ItemId(2, ImportOfModule), ItemId(3, ImportOfModule)]"];
-    N1["Items: [ItemId(Export((&quot;createPrerenderState&quot;, #2), &quot;createPrerenderState&quot;)), ItemId(5, Normal)]"];
-    N2["Items: [ItemId(Export((&quot;markCurrentScopeAsDynamic&quot;, #2), &quot;markCurrentScopeAsDynamic&quot;)), ItemId(1, ImportBinding(0)), ItemId(2, ImportBinding(0)), ItemId(3, ImportBinding(0)), ItemId(6, Normal)]"];
-    N3["Items: [ItemId(Export((&quot;trackDynamicDataAccessed&quot;, #2), &quot;trackDynamicDataAccessed&quot;)), ItemId(1, ImportBinding(0)), ItemId(2, ImportBinding(0)), ItemId(3, ImportBinding(0)), ItemId(7, Normal)]"];
-    N4["Items: [ItemId(Export((&quot;Postpone&quot;, #2), &quot;Postpone&quot;)), ItemId(8, Normal)]"];
-    N5["Items: [ItemId(Export((&quot;trackDynamicFetch&quot;, #2), &quot;trackDynamicFetch&quot;)), ItemId(9, Normal)]"];
-    N6["Items: [ItemId(Export((&quot;usedDynamicAPIs&quot;, #2), &quot;usedDynamicAPIs&quot;)), ItemId(11, Normal)]"];
-    N7["Items: [ItemId(Export((&quot;formatDynamicAPIAccesses&quot;, #2), &quot;formatDynamicAPIAccesses&quot;)), ItemId(12, Normal)]"];
-    N8["Items: [ItemId(Export((&quot;createPostponedAbortSignal&quot;, #2), &quot;createPostponedAbortSignal&quot;)), ItemId(14, Normal)]"];
+    N1["Items: [ItemId(Export((&quot;Postpone&quot;, #2), &quot;Postpone&quot;)), ItemId(8, Normal)]"];
+    N2["Items: [ItemId(Export((&quot;createPostponedAbortSignal&quot;, #2), &quot;createPostponedAbortSignal&quot;)), ItemId(14, Normal)]"];
+    N3["Items: [ItemId(Export((&quot;createPrerenderState&quot;, #2), &quot;createPrerenderState&quot;)), ItemId(5, Normal)]"];
+    N4["Items: [ItemId(Export((&quot;formatDynamicAPIAccesses&quot;, #2), &quot;formatDynamicAPIAccesses&quot;)), ItemId(12, Normal)]"];
+    N5["Items: [ItemId(Export((&quot;markCurrentScopeAsDynamic&quot;, #2), &quot;markCurrentScopeAsDynamic&quot;)), ItemId(1, ImportBinding(0)), ItemId(2, ImportBinding(0)), ItemId(3, ImportBinding(0)), ItemId(6, Normal)]"];
+    N6["Items: [ItemId(Export((&quot;trackDynamicDataAccessed&quot;, #2), &quot;trackDynamicDataAccessed&quot;)), ItemId(1, ImportBinding(0)), ItemId(2, ImportBinding(0)), ItemId(3, ImportBinding(0)), ItemId(7, Normal)]"];
+    N7["Items: [ItemId(Export((&quot;trackDynamicFetch&quot;, #2), &quot;trackDynamicFetch&quot;)), ItemId(9, Normal)]"];
+    N8["Items: [ItemId(Export((&quot;usedDynamicAPIs&quot;, #2), &quot;usedDynamicAPIs&quot;)), ItemId(11, Normal)]"];
     N9["Items: [ItemId(0, ImportBinding(0)), ItemId(4, VarDeclarator(0))]"];
     N10["Items: [ItemId(10, Normal)]"];
     N11["Items: [ItemId(13, Normal)]"];
-    N2 --> N3;
-    N2 --> N10;
-    N3 --> N10;
-    N4 --> N10;
+    N1 --> N10;
+    N2 --> N11;
+    N2 --> N9;
+    N5 --> N6;
     N5 --> N10;
-    N8 --> N11;
-    N8 --> N9;
+    N6 --> N10;
+    N7 --> N10;
     N10 --> N11;
     N10 --> N9;
     N11 --> N9;
@@ -577,28 +577,28 @@ graph TD
     ModuleEvaluation: 0,
     Export(
         "createPrerenderState",
-    ): 1,
-    Export(
-        "markCurrentScopeAsDynamic",
-    ): 2,
-    Export(
-        "usedDynamicAPIs",
-    ): 6,
-    Export(
-        "trackDynamicDataAccessed",
     ): 3,
     Export(
-        "Postpone",
-    ): 4,
-    Export(
-        "trackDynamicFetch",
+        "markCurrentScopeAsDynamic",
     ): 5,
     Export(
-        "createPostponedAbortSignal",
+        "usedDynamicAPIs",
     ): 8,
     Export(
-        "formatDynamicAPIAccesses",
+        "Postpone",
+    ): 1,
+    Export(
+        "trackDynamicDataAccessed",
+    ): 6,
+    Export(
+        "trackDynamicFetch",
     ): 7,
+    Export(
+        "createPostponedAbortSignal",
+    ): 2,
+    Export(
+        "formatDynamicAPIAccesses",
+    ): 4,
 }
 ```
 
@@ -615,6 +615,44 @@ import '../../lib/url';
 ```
 ## Part 1
 ```js
+import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 10
+};
+export { Postpone };
+function Postpone({ reason, prerenderState, pathname }) {
+    postponeWithTracking(prerenderState, reason, pathname);
+}
+export { Postpone } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+
+```
+## Part 2
+```js
+import { assertPostpone } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 11
+};
+import { React } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
+};
+export { createPostponedAbortSignal };
+function createPostponedAbortSignal(reason) {
+    assertPostpone();
+    const controller = new AbortController();
+    try {
+        React.unstable_postpone(reason);
+    } catch (x) {
+        controller.abort(x);
+    }
+    return controller.signal;
+}
+export { createPostponedAbortSignal } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+
+```
+## Part 3
+```js
 export { createPrerenderState };
 function createPrerenderState(isDebugSkeleton) {
     return {
@@ -627,10 +665,35 @@ export { createPrerenderState } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
-## Part 2
+## Part 4
+```js
+export { formatDynamicAPIAccesses };
+function formatDynamicAPIAccesses(prerenderState) {
+    return prerenderState.dynamicAccesses.filter((access)=>typeof access.stack === 'string' && access.stack.length > 0).map(({ expression, stack })=>{
+        stack = stack.split('\n').slice(4).filter((line)=>{
+            if (line.includes('node_modules/next/')) {
+                return false;
+            }
+            if (line.includes(' (<anonymous>)')) {
+                return false;
+            }
+            if (line.includes(' (node:')) {
+                return false;
+            }
+            return true;
+        }).join('\n');
+        return `Dynamic API Usage Debug - ${expression}:\n${stack}`;
+    });
+}
+export { formatDynamicAPIAccesses } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+
+```
+## Part 5
 ```js
 import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
+    __turbopack_part__: 6
 };
 import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
@@ -671,7 +734,7 @@ export { markCurrentScopeAsDynamic } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
-## Part 3
+## Part 6
 ```js
 import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
@@ -712,21 +775,7 @@ export { trackDynamicDataAccessed } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
-## Part 4
-```js
-import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 10
-};
-export { Postpone };
-function Postpone({ reason, prerenderState, pathname }) {
-    postponeWithTracking(prerenderState, reason, pathname);
-}
-export { Postpone } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-
-```
-## Part 5
+## Part 7
 ```js
 import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
@@ -741,62 +790,13 @@ export { trackDynamicFetch } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
-## Part 6
+## Part 8
 ```js
 export { usedDynamicAPIs };
 function usedDynamicAPIs(prerenderState) {
     return prerenderState.dynamicAccesses.length > 0;
 }
 export { usedDynamicAPIs } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-
-```
-## Part 7
-```js
-export { formatDynamicAPIAccesses };
-function formatDynamicAPIAccesses(prerenderState) {
-    return prerenderState.dynamicAccesses.filter((access)=>typeof access.stack === 'string' && access.stack.length > 0).map(({ expression, stack })=>{
-        stack = stack.split('\n').slice(4).filter((line)=>{
-            if (line.includes('node_modules/next/')) {
-                return false;
-            }
-            if (line.includes(' (<anonymous>)')) {
-                return false;
-            }
-            if (line.includes(' (node:')) {
-                return false;
-            }
-            return true;
-        }).join('\n');
-        return `Dynamic API Usage Debug - ${expression}:\n${stack}`;
-    });
-}
-export { formatDynamicAPIAccesses } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-
-```
-## Part 8
-```js
-import { assertPostpone } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 11
-};
-import { React } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
-export { createPostponedAbortSignal };
-function createPostponedAbortSignal(reason) {
-    assertPostpone();
-    const controller = new AbortController();
-    try {
-        React.unstable_postpone(reason);
-    } catch (x) {
-        controller.abort(x);
-    }
-    return controller.signal;
-}
-export { createPostponedAbortSignal } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 
@@ -866,28 +866,28 @@ import '../../lib/url';
     ModuleEvaluation: 0,
     Export(
         "createPrerenderState",
-    ): 1,
-    Export(
-        "markCurrentScopeAsDynamic",
-    ): 2,
-    Export(
-        "usedDynamicAPIs",
-    ): 6,
-    Export(
-        "trackDynamicDataAccessed",
     ): 3,
     Export(
-        "Postpone",
-    ): 4,
-    Export(
-        "trackDynamicFetch",
+        "markCurrentScopeAsDynamic",
     ): 5,
     Export(
-        "createPostponedAbortSignal",
+        "usedDynamicAPIs",
     ): 8,
     Export(
-        "formatDynamicAPIAccesses",
+        "Postpone",
+    ): 1,
+    Export(
+        "trackDynamicDataAccessed",
+    ): 6,
+    Export(
+        "trackDynamicFetch",
     ): 7,
+    Export(
+        "createPostponedAbortSignal",
+    ): 2,
+    Export(
+        "formatDynamicAPIAccesses",
+    ): 4,
 }
 ```
 
@@ -904,6 +904,44 @@ import '../../lib/url';
 ```
 ## Part 1
 ```js
+import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 10
+};
+export { Postpone };
+function Postpone({ reason, prerenderState, pathname }) {
+    postponeWithTracking(prerenderState, reason, pathname);
+}
+export { Postpone } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+
+```
+## Part 2
+```js
+import { assertPostpone } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 11
+};
+import { React } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
+};
+export { createPostponedAbortSignal };
+function createPostponedAbortSignal(reason) {
+    assertPostpone();
+    const controller = new AbortController();
+    try {
+        React.unstable_postpone(reason);
+    } catch (x) {
+        controller.abort(x);
+    }
+    return controller.signal;
+}
+export { createPostponedAbortSignal } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+
+```
+## Part 3
+```js
 export { createPrerenderState };
 function createPrerenderState(isDebugSkeleton) {
     return {
@@ -916,10 +954,35 @@ export { createPrerenderState } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
-## Part 2
+## Part 4
+```js
+export { formatDynamicAPIAccesses };
+function formatDynamicAPIAccesses(prerenderState) {
+    return prerenderState.dynamicAccesses.filter((access)=>typeof access.stack === 'string' && access.stack.length > 0).map(({ expression, stack })=>{
+        stack = stack.split('\n').slice(4).filter((line)=>{
+            if (line.includes('node_modules/next/')) {
+                return false;
+            }
+            if (line.includes(' (<anonymous>)')) {
+                return false;
+            }
+            if (line.includes(' (node:')) {
+                return false;
+            }
+            return true;
+        }).join('\n');
+        return `Dynamic API Usage Debug - ${expression}:\n${stack}`;
+    });
+}
+export { formatDynamicAPIAccesses } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+
+```
+## Part 5
 ```js
 import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
+    __turbopack_part__: 6
 };
 import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
@@ -960,7 +1023,7 @@ export { markCurrentScopeAsDynamic } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
-## Part 3
+## Part 6
 ```js
 import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
@@ -1001,21 +1064,7 @@ export { trackDynamicDataAccessed } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
-## Part 4
-```js
-import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 10
-};
-export { Postpone };
-function Postpone({ reason, prerenderState, pathname }) {
-    postponeWithTracking(prerenderState, reason, pathname);
-}
-export { Postpone } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-
-```
-## Part 5
+## Part 7
 ```js
 import { postponeWithTracking } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
@@ -1030,62 +1079,13 @@ export { trackDynamicFetch } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
-## Part 6
+## Part 8
 ```js
 export { usedDynamicAPIs };
 function usedDynamicAPIs(prerenderState) {
     return prerenderState.dynamicAccesses.length > 0;
 }
 export { usedDynamicAPIs } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-
-```
-## Part 7
-```js
-export { formatDynamicAPIAccesses };
-function formatDynamicAPIAccesses(prerenderState) {
-    return prerenderState.dynamicAccesses.filter((access)=>typeof access.stack === 'string' && access.stack.length > 0).map(({ expression, stack })=>{
-        stack = stack.split('\n').slice(4).filter((line)=>{
-            if (line.includes('node_modules/next/')) {
-                return false;
-            }
-            if (line.includes(' (<anonymous>)')) {
-                return false;
-            }
-            if (line.includes(' (node:')) {
-                return false;
-            }
-            return true;
-        }).join('\n');
-        return `Dynamic API Usage Debug - ${expression}:\n${stack}`;
-    });
-}
-export { formatDynamicAPIAccesses } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-
-```
-## Part 8
-```js
-import { assertPostpone } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 11
-};
-import { React } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
-export { createPostponedAbortSignal };
-function createPostponedAbortSignal(reason) {
-    assertPostpone();
-    const controller = new AbortController();
-    try {
-        React.unstable_postpone(reason);
-    } catch (x) {
-        controller.abort(x);
-    }
-    return controller.signal;
-}
-export { createPostponedAbortSignal } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 

@@ -2,7 +2,7 @@
 
 Count: 5
 
-## Item 1: Stmt 0, `VarDeclarator(0)`
+## Item 4: Stmt 0, `VarDeclarator(0)`
 
 ```js
 const a = "a";
@@ -12,7 +12,7 @@ const a = "a";
 - Declares: `a`
 - Write: `a`
 
-## Item 2: Stmt 1, `VarDeclarator(0)`
+## Item 5: Stmt 1, `VarDeclarator(0)`
 
 ```js
 const b = "b";
@@ -26,55 +26,57 @@ const b = "b";
 ```mermaid
 graph TD
     Item1;
+    Item1["ModuleEvaluation"];
     Item2;
+    Item2["export a"];
     Item3;
-    Item3["ModuleEvaluation"];
+    Item3["export b"];
     Item4;
-    Item4["export a"];
     Item5;
-    Item5["export b"];
 ```
 # Phase 2
 ```mermaid
 graph TD
     Item1;
+    Item1["ModuleEvaluation"];
     Item2;
+    Item2["export a"];
     Item3;
-    Item3["ModuleEvaluation"];
+    Item3["export b"];
     Item4;
-    Item4["export a"];
     Item5;
-    Item5["export b"];
-    Item4 --> Item1;
-    Item5 --> Item2;
+    Item4 -.-> Item2;
+    Item5 -.-> Item3;
 ```
 # Phase 3
 ```mermaid
 graph TD
     Item1;
+    Item1["ModuleEvaluation"];
     Item2;
+    Item2["export a"];
     Item3;
-    Item3["ModuleEvaluation"];
+    Item3["export b"];
     Item4;
-    Item4["export a"];
     Item5;
-    Item5["export b"];
-    Item4 --> Item1;
-    Item5 --> Item2;
+    Item4 -.-> Item2;
+    Item5 -.-> Item3;
 ```
 # Phase 4
 ```mermaid
 graph TD
     Item1;
+    Item1["ModuleEvaluation"];
     Item2;
+    Item2["export a"];
     Item3;
-    Item3["ModuleEvaluation"];
+    Item3["export b"];
     Item4;
-    Item4["export a"];
     Item5;
-    Item5["export b"];
-    Item4 --> Item1;
-    Item5 --> Item2;
+    Item4 -.-> Item2;
+    Item5 -.-> Item3;
+    Item2 --> Item4;
+    Item3 --> Item5;
 ```
 # Final
 ```mermaid

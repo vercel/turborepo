@@ -2,7 +2,7 @@
 
 Count: 15
 
-## Item 1: Stmt 0, `Normal`
+## Item 5: Stmt 0, `Normal`
 
 ```js
 function d1() {}
@@ -13,7 +13,7 @@ function d1() {}
 - Declares: `d1`
 - Write: `d1`
 
-## Item 2: Stmt 1, `Normal`
+## Item 6: Stmt 1, `Normal`
 
 ```js
 function d2() {}
@@ -24,7 +24,7 @@ function d2() {}
 - Declares: `d2`
 - Write: `d2`
 
-## Item 3: Stmt 2, `Normal`
+## Item 7: Stmt 2, `Normal`
 
 ```js
 function d3() {}
@@ -35,7 +35,7 @@ function d3() {}
 - Declares: `d3`
 - Write: `d3`
 
-## Item 4: Stmt 3, `Normal`
+## Item 8: Stmt 3, `Normal`
 
 ```js
 export function c1_1() {
@@ -49,7 +49,7 @@ export function c1_1() {
 - Reads (eventual): `c1_2`
 - Write: `c1_1`
 
-## Item 5: Stmt 4, `Normal`
+## Item 9: Stmt 4, `Normal`
 
 ```js
 function c1_2() {
@@ -63,7 +63,7 @@ function c1_2() {
 - Reads (eventual): `c1_3`, `d1`
 - Write: `c1_2`
 
-## Item 6: Stmt 5, `Normal`
+## Item 10: Stmt 5, `Normal`
 
 ```js
 export function c1_3() {
@@ -77,7 +77,7 @@ export function c1_3() {
 - Reads (eventual): `c1_1`, `d2`
 - Write: `c1_3`
 
-## Item 7: Stmt 6, `Normal`
+## Item 11: Stmt 6, `Normal`
 
 ```js
 function c2_1() {
@@ -91,7 +91,7 @@ function c2_1() {
 - Reads (eventual): `c2_2`, `d3`
 - Write: `c2_1`
 
-## Item 8: Stmt 7, `Normal`
+## Item 12: Stmt 7, `Normal`
 
 ```js
 export function c2_2() {
@@ -105,7 +105,7 @@ export function c2_2() {
 - Reads (eventual): `c2_3`
 - Write: `c2_2`
 
-## Item 9: Stmt 8, `Normal`
+## Item 13: Stmt 8, `Normal`
 
 ```js
 function c2_3() {
@@ -119,7 +119,7 @@ function c2_3() {
 - Reads (eventual): `c2_1`
 - Write: `c2_3`
 
-## Item 10: Stmt 9, `Normal`
+## Item 14: Stmt 9, `Normal`
 
 ```js
 c1_3();
@@ -129,7 +129,7 @@ c1_3();
 - Side effects
 - Reads: `c1_3`
 
-## Item 11: Stmt 10, `Normal`
+## Item 15: Stmt 10, `Normal`
 
 ```js
 c2_2();
@@ -143,9 +143,13 @@ c2_2();
 ```mermaid
 graph TD
     Item1;
+    Item1["ModuleEvaluation"];
     Item2;
+    Item2["export c1_1"];
     Item3;
+    Item3["export c1_3"];
     Item4;
+    Item4["export c2_2"];
     Item5;
     Item6;
     Item7;
@@ -154,21 +158,21 @@ graph TD
     Item10;
     Item11;
     Item12;
-    Item12["ModuleEvaluation"];
     Item13;
-    Item13["export c1_1"];
     Item14;
-    Item14["export c1_3"];
     Item15;
-    Item15["export c2_2"];
 ```
 # Phase 2
 ```mermaid
 graph TD
     Item1;
+    Item1["ModuleEvaluation"];
     Item2;
+    Item2["export c1_1"];
     Item3;
+    Item3["export c1_3"];
     Item4;
+    Item4["export c2_2"];
     Item5;
     Item6;
     Item7;
@@ -177,43 +181,49 @@ graph TD
     Item10;
     Item11;
     Item12;
-    Item12["ModuleEvaluation"];
     Item13;
-    Item13["export c1_1"];
     Item14;
-    Item14["export c1_3"];
     Item15;
-    Item15["export c2_2"];
-    Item10 --> Item6;
-    Item10 -.-> Item5;
-    Item10 -.-> Item1;
-    Item10 -.-> Item4;
-    Item10 -.-> Item2;
-    Item10 -.-> Item8;
-    Item10 -.-> Item3;
-    Item10 -.-> Item9;
-    Item10 -.-> Item7;
-    Item11 --> Item8;
-    Item11 --> Item10;
-    Item11 -.-> Item5;
-    Item11 -.-> Item6;
-    Item11 -.-> Item1;
-    Item11 -.-> Item4;
-    Item11 -.-> Item2;
-    Item11 -.-> Item3;
-    Item11 -.-> Item9;
-    Item11 -.-> Item7;
-    Item13 --> Item4;
-    Item14 --> Item6;
-    Item15 --> Item8;
+    Item2 --> Item8;
+    Item3 --> Item10;
+    Item4 --> Item12;
+    Item14 --> Item10;
+    Item14 -.-> Item9;
+    Item14 -.-> Item3;
+    Item14 -.-> Item5;
+    Item14 -.-> Item8;
+    Item14 -.-> Item2;
+    Item14 -.-> Item6;
+    Item14 -.-> Item12;
+    Item14 -.-> Item4;
+    Item14 -.-> Item7;
+    Item14 -.-> Item13;
+    Item14 -.-> Item11;
+    Item15 --> Item12;
+    Item15 --> Item14;
+    Item15 -.-> Item9;
+    Item15 -.-> Item10;
+    Item15 -.-> Item3;
+    Item15 -.-> Item5;
+    Item15 -.-> Item8;
+    Item15 -.-> Item2;
+    Item15 -.-> Item6;
+    Item15 -.-> Item4;
+    Item15 -.-> Item7;
+    Item15 -.-> Item13;
+    Item15 -.-> Item11;
 ```
 # Phase 3
 ```mermaid
 graph TD
     Item1;
+    Item1["ModuleEvaluation"];
     Item2;
+    Item2["export c1_1"];
     Item3;
+    Item3["export c1_3"];
     Item4;
+    Item4["export c2_2"];
     Item5;
     Item6;
     Item7;
@@ -222,52 +232,58 @@ graph TD
     Item10;
     Item11;
     Item12;
-    Item12["ModuleEvaluation"];
     Item13;
-    Item13["export c1_1"];
     Item14;
-    Item14["export c1_3"];
     Item15;
-    Item15["export c2_2"];
-    Item10 --> Item6;
-    Item10 -.-> Item5;
-    Item10 -.-> Item1;
-    Item10 -.-> Item4;
-    Item10 -.-> Item2;
-    Item10 -.-> Item8;
-    Item10 -.-> Item3;
-    Item10 -.-> Item9;
-    Item10 -.-> Item7;
-    Item11 --> Item8;
-    Item11 --> Item10;
-    Item11 -.-> Item5;
-    Item11 -.-> Item6;
-    Item11 -.-> Item1;
-    Item11 -.-> Item4;
-    Item11 -.-> Item2;
-    Item11 -.-> Item3;
-    Item11 -.-> Item9;
-    Item11 -.-> Item7;
-    Item13 --> Item4;
-    Item14 --> Item6;
-    Item15 --> Item8;
-    Item4 --> Item5;
-    Item5 --> Item6;
-    Item5 --> Item1;
-    Item6 --> Item4;
-    Item6 --> Item2;
-    Item7 --> Item8;
-    Item7 --> Item3;
+    Item2 --> Item8;
+    Item3 --> Item10;
+    Item4 --> Item12;
+    Item14 --> Item10;
+    Item14 -.-> Item9;
+    Item14 -.-> Item3;
+    Item14 -.-> Item5;
+    Item14 -.-> Item8;
+    Item14 -.-> Item2;
+    Item14 -.-> Item6;
+    Item14 -.-> Item12;
+    Item14 -.-> Item4;
+    Item14 -.-> Item7;
+    Item14 -.-> Item13;
+    Item14 -.-> Item11;
+    Item15 --> Item12;
+    Item15 --> Item14;
+    Item15 -.-> Item9;
+    Item15 -.-> Item10;
+    Item15 -.-> Item3;
+    Item15 -.-> Item5;
+    Item15 -.-> Item8;
+    Item15 -.-> Item2;
+    Item15 -.-> Item6;
+    Item15 -.-> Item4;
+    Item15 -.-> Item7;
+    Item15 -.-> Item13;
+    Item15 -.-> Item11;
     Item8 --> Item9;
-    Item9 --> Item7;
+    Item9 --> Item10;
+    Item9 --> Item5;
+    Item10 --> Item8;
+    Item10 --> Item6;
+    Item11 --> Item12;
+    Item11 --> Item7;
+    Item12 --> Item13;
+    Item13 --> Item11;
 ```
 # Phase 4
 ```mermaid
 graph TD
     Item1;
+    Item1["ModuleEvaluation"];
     Item2;
+    Item2["export c1_1"];
     Item3;
+    Item3["export c1_3"];
     Item4;
+    Item4["export c2_2"];
     Item5;
     Item6;
     Item7;
@@ -276,46 +292,48 @@ graph TD
     Item10;
     Item11;
     Item12;
-    Item12["ModuleEvaluation"];
     Item13;
-    Item13["export c1_1"];
     Item14;
-    Item14["export c1_3"];
     Item15;
-    Item15["export c2_2"];
-    Item10 --> Item6;
-    Item10 -.-> Item5;
-    Item10 -.-> Item1;
-    Item10 -.-> Item4;
-    Item10 -.-> Item2;
-    Item10 -.-> Item8;
-    Item10 -.-> Item3;
-    Item10 -.-> Item9;
-    Item10 -.-> Item7;
-    Item11 --> Item8;
-    Item11 --> Item10;
-    Item11 -.-> Item5;
-    Item11 -.-> Item6;
-    Item11 -.-> Item1;
-    Item11 -.-> Item4;
-    Item11 -.-> Item2;
-    Item11 -.-> Item3;
-    Item11 -.-> Item9;
-    Item11 -.-> Item7;
-    Item13 --> Item4;
-    Item14 --> Item6;
-    Item15 --> Item8;
-    Item4 --> Item5;
-    Item5 --> Item6;
-    Item5 --> Item1;
-    Item6 --> Item4;
-    Item6 --> Item2;
-    Item7 --> Item8;
-    Item7 --> Item3;
+    Item2 --> Item8;
+    Item3 --> Item10;
+    Item4 --> Item12;
+    Item14 --> Item10;
+    Item14 -.-> Item9;
+    Item14 -.-> Item3;
+    Item14 -.-> Item5;
+    Item14 -.-> Item8;
+    Item14 -.-> Item2;
+    Item14 -.-> Item6;
+    Item14 -.-> Item12;
+    Item14 -.-> Item4;
+    Item14 -.-> Item7;
+    Item14 -.-> Item13;
+    Item14 -.-> Item11;
+    Item15 --> Item12;
+    Item15 --> Item14;
+    Item15 -.-> Item9;
+    Item15 -.-> Item10;
+    Item15 -.-> Item3;
+    Item15 -.-> Item5;
+    Item15 -.-> Item8;
+    Item15 -.-> Item2;
+    Item15 -.-> Item6;
+    Item15 -.-> Item4;
+    Item15 -.-> Item7;
+    Item15 -.-> Item13;
+    Item15 -.-> Item11;
     Item8 --> Item9;
-    Item9 --> Item7;
-    Item12 --> Item10;
-    Item12 --> Item11;
+    Item9 --> Item10;
+    Item9 --> Item5;
+    Item10 --> Item8;
+    Item10 --> Item6;
+    Item11 --> Item12;
+    Item11 --> Item7;
+    Item12 --> Item13;
+    Item13 --> Item11;
+    Item1 --> Item14;
+    Item1 --> Item15;
 ```
 # Final
 ```mermaid
@@ -330,9 +348,12 @@ graph TD
     N7["Items: [ItemId(1, Normal)]"];
     N8["Items: [ItemId(2, Normal)]"];
     N0 --> N4;
+    N0 --> N2;
     N0 --> N6;
+    N0 --> N1;
     N0 --> N7;
     N0 --> N5;
+    N0 --> N3;
     N0 --> N8;
     N1 --> N4;
     N2 --> N4;
@@ -366,13 +387,22 @@ import { c1_3 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
 import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
 };
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
 };
 import { c2_2 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
 };
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
@@ -489,13 +519,22 @@ import { c1_3 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
 import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
 };
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
 };
 import { c2_2 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
 };
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
@@ -563,7 +602,6 @@ export { c2_2 };
 ```
 ## Part 4
 ```js
-function d2() {}
 function c1_1() {
     return c1_2();
 }
@@ -573,9 +611,6 @@ function c1_2() {
 function c1_3() {
     return c1_1(d2);
 }
-export { d2 } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 export { c1_1 } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };

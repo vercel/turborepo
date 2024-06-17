@@ -2,7 +2,7 @@
 
 Count: 2
 
-## Item 1: Stmt 0, `Normal`
+## Item 2: Stmt 0, `Normal`
 
 ```js
 process.turbopack = {};
@@ -15,30 +15,30 @@ process.turbopack = {};
 ```mermaid
 graph TD
     Item1;
+    Item1["ModuleEvaluation"];
     Item2;
-    Item2["ModuleEvaluation"];
 ```
 # Phase 2
 ```mermaid
 graph TD
     Item1;
+    Item1["ModuleEvaluation"];
     Item2;
-    Item2["ModuleEvaluation"];
 ```
 # Phase 3
 ```mermaid
 graph TD
     Item1;
+    Item1["ModuleEvaluation"];
     Item2;
-    Item2["ModuleEvaluation"];
 ```
 # Phase 4
 ```mermaid
 graph TD
     Item1;
+    Item1["ModuleEvaluation"];
     Item2;
-    Item2["ModuleEvaluation"];
-    Item2 --> Item1;
+    Item1 --> Item2;
 ```
 # Final
 ```mermaid

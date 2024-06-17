@@ -2,7 +2,7 @@
 
 Count: 11
 
-## Item 1: Stmt 0, `VarDeclarator(0)`
+## Item 5: Stmt 0, `VarDeclarator(0)`
 
 ```js
 export const order = [];
@@ -12,7 +12,7 @@ export const order = [];
 - Declares: `order`
 - Write: `order`
 
-## Item 2: Stmt 1, `Normal`
+## Item 6: Stmt 1, `Normal`
 
 ```js
 order.push("a");
@@ -23,7 +23,7 @@ order.push("a");
 - Reads: `order`
 - Write: `order`
 
-## Item 3: Stmt 2, `VarDeclarator(0)`
+## Item 7: Stmt 2, `VarDeclarator(0)`
 
 ```js
 const random = Math.random();
@@ -34,7 +34,7 @@ const random = Math.random();
 - Declares: `random`
 - Write: `random`
 
-## Item 4: Stmt 3, `VarDeclarator(0)`
+## Item 8: Stmt 3, `VarDeclarator(0)`
 
 ```js
 const shared = {
@@ -48,7 +48,7 @@ const shared = {
 - Reads: `random`, `order`
 - Write: `shared`, `order`
 
-## Item 5: Stmt 4, `Normal`
+## Item 9: Stmt 4, `Normal`
 
 ```js
 order.push("c");
@@ -59,7 +59,7 @@ order.push("c");
 - Reads: `order`
 - Write: `order`
 
-## Item 6: Stmt 5, `VarDeclarator(0)`
+## Item 10: Stmt 5, `VarDeclarator(0)`
 
 ```js
 export const a = {
@@ -73,7 +73,7 @@ export const a = {
 - Reads: `shared`
 - Write: `a`
 
-## Item 7: Stmt 6, `VarDeclarator(0)`
+## Item 11: Stmt 6, `VarDeclarator(0)`
 
 ```js
 export const b = {
@@ -91,133 +91,142 @@ export const b = {
 ```mermaid
 graph TD
     Item1;
+    Item1["ModuleEvaluation"];
     Item2;
+    Item2["export a"];
     Item3;
+    Item3["export b"];
     Item4;
+    Item4["export order"];
     Item5;
     Item6;
     Item7;
     Item8;
-    Item8["ModuleEvaluation"];
     Item9;
-    Item9["export order"];
     Item10;
-    Item10["export a"];
     Item11;
-    Item11["export b"];
 ```
 # Phase 2
 ```mermaid
 graph TD
     Item1;
+    Item1["ModuleEvaluation"];
     Item2;
+    Item2["export a"];
     Item3;
+    Item3["export b"];
     Item4;
+    Item4["export order"];
     Item5;
     Item6;
     Item7;
     Item8;
-    Item8["ModuleEvaluation"];
     Item9;
-    Item9["export order"];
     Item10;
-    Item10["export a"];
     Item11;
-    Item11["export b"];
-    Item2 --> Item1;
-    Item3 --> Item2;
-    Item4 --> Item3;
-    Item4 --> Item2;
-    Item4 --> Item1;
-    Item5 --> Item4;
-    Item5 --> Item1;
-    Item5 --> Item2;
-    Item5 --> Item3;
-    Item6 --> Item4;
-    Item7 --> Item4;
+    Item5 -.-> Item4;
+    Item6 --> Item5;
+    Item6 -.-> Item4;
+    Item7 --> Item6;
+    Item8 --> Item7;
+    Item8 --> Item6;
+    Item8 --> Item5;
+    Item8 -.-> Item4;
+    Item9 --> Item8;
     Item9 --> Item5;
-    Item9 --> Item1;
-    Item10 --> Item6;
-    Item11 --> Item7;
+    Item9 -.-> Item4;
+    Item9 --> Item6;
+    Item9 --> Item7;
+    Item10 --> Item8;
+    Item10 -.-> Item2;
+    Item11 --> Item8;
+    Item11 -.-> Item3;
 ```
 # Phase 3
 ```mermaid
 graph TD
     Item1;
+    Item1["ModuleEvaluation"];
     Item2;
+    Item2["export a"];
     Item3;
+    Item3["export b"];
     Item4;
+    Item4["export order"];
     Item5;
     Item6;
     Item7;
     Item8;
-    Item8["ModuleEvaluation"];
     Item9;
-    Item9["export order"];
     Item10;
-    Item10["export a"];
     Item11;
-    Item11["export b"];
-    Item2 --> Item1;
-    Item3 --> Item2;
-    Item4 --> Item3;
-    Item4 --> Item2;
-    Item4 --> Item1;
-    Item5 --> Item4;
-    Item5 --> Item1;
-    Item5 --> Item2;
-    Item5 --> Item3;
-    Item6 --> Item4;
-    Item7 --> Item4;
+    Item5 -.-> Item4;
+    Item6 --> Item5;
+    Item6 -.-> Item4;
+    Item7 --> Item6;
+    Item8 --> Item7;
+    Item8 --> Item6;
+    Item8 --> Item5;
+    Item8 -.-> Item4;
+    Item9 --> Item8;
     Item9 --> Item5;
-    Item9 --> Item1;
-    Item10 --> Item6;
-    Item11 --> Item7;
+    Item9 -.-> Item4;
+    Item9 --> Item6;
+    Item9 --> Item7;
+    Item10 --> Item8;
+    Item10 -.-> Item2;
+    Item11 --> Item8;
+    Item11 -.-> Item3;
 ```
 # Phase 4
 ```mermaid
 graph TD
     Item1;
+    Item1["ModuleEvaluation"];
     Item2;
+    Item2["export a"];
     Item3;
+    Item3["export b"];
     Item4;
+    Item4["export order"];
     Item5;
     Item6;
     Item7;
     Item8;
-    Item8["ModuleEvaluation"];
     Item9;
-    Item9["export order"];
     Item10;
-    Item10["export a"];
     Item11;
-    Item11["export b"];
-    Item2 --> Item1;
-    Item3 --> Item2;
-    Item4 --> Item3;
-    Item4 --> Item2;
-    Item4 --> Item1;
-    Item5 --> Item4;
-    Item5 --> Item1;
-    Item5 --> Item2;
-    Item5 --> Item3;
-    Item6 --> Item4;
-    Item7 --> Item4;
-    Item9 --> Item5;
-    Item9 --> Item1;
-    Item10 --> Item6;
-    Item11 --> Item7;
-    Item8 --> Item2;
-    Item8 --> Item3;
+    Item5 -.-> Item4;
+    Item6 --> Item5;
+    Item6 -.-> Item4;
+    Item7 --> Item6;
+    Item8 --> Item7;
+    Item8 --> Item6;
     Item8 --> Item5;
+    Item8 -.-> Item4;
+    Item9 --> Item8;
+    Item9 --> Item5;
+    Item9 -.-> Item4;
+    Item9 --> Item6;
+    Item9 --> Item7;
+    Item10 --> Item8;
+    Item10 -.-> Item2;
+    Item11 --> Item8;
+    Item11 -.-> Item3;
+    Item1 --> Item6;
+    Item1 --> Item7;
+    Item1 --> Item9;
+    Item2 --> Item10;
+    Item3 --> Item11;
+    Item4 --> Item9;
 ```
 # Final
 ```mermaid
 graph TD
     N0["Items: [ItemId(ModuleEvaluation)]"];
-    N1["Items: [ItemId(Export((&quot;order&quot;, #2), &quot;order&quot;))]"];
-    N2["Items: [ItemId(Export((&quot;a&quot;, #2), &quot;a&quot;)), ItemId(5, VarDeclarator(0))]"];
-    N3["Items: [ItemId(Export((&quot;b&quot;, #2), &quot;b&quot;)), ItemId(6, VarDeclarator(0))]"];
+    N1["Items: [ItemId(Export((&quot;a&quot;, #2), &quot;a&quot;)), ItemId(5, VarDeclarator(0))]"];
+    N2["Items: [ItemId(Export((&quot;b&quot;, #2), &quot;b&quot;)), ItemId(6, VarDeclarator(0))]"];
+    N3["Items: [ItemId(Export((&quot;order&quot;, #2), &quot;order&quot;))]"];
     N4["Items: [ItemId(0, VarDeclarator(0))]"];
     N5["Items: [ItemId(1, Normal)]"];
     N6["Items: [ItemId(2, VarDeclarator(0))]"];
@@ -226,17 +235,20 @@ graph TD
     N0 --> N5;
     N0 --> N6;
     N0 --> N8;
-    N1 --> N8;
-    N1 --> N4;
+    N1 --> N7;
     N2 --> N7;
-    N3 --> N7;
+    N3 --> N8;
+    N4 --> N3;
     N5 --> N4;
+    N5 --> N3;
     N6 --> N5;
     N7 --> N6;
     N7 --> N5;
     N7 --> N4;
+    N7 --> N3;
     N8 --> N7;
     N8 --> N4;
+    N8 --> N3;
     N8 --> N5;
     N8 --> N6;
 ```
@@ -247,13 +259,13 @@ graph TD
     ModuleEvaluation: 0,
     Export(
         "order",
-    ): 1,
-    Export(
-        "b",
     ): 3,
     Export(
-        "a",
+        "b",
     ): 2,
+    Export(
+        "a",
+    ): 1,
 }
 ```
 
@@ -275,17 +287,6 @@ import "__TURBOPACK_PART__" assert {
 ```
 ## Part 1
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
-import { order } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
-export { order };
-
-```
-## Part 2
-```js
 import { shared } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
 };
@@ -299,7 +300,7 @@ export { a } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
-## Part 3
+## Part 2
 ```js
 import { shared } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
@@ -314,8 +315,19 @@ export { b } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
+## Part 3
+```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 8
+};
+export { order };
+
+```
 ## Part 4
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
 const order = [];
 export { order } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
@@ -326,6 +338,9 @@ export { order } from "__TURBOPACK_VAR__" assert {
 ```js
 import { order } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
 };
 order.push("a");
 
@@ -352,6 +367,9 @@ import "__TURBOPACK_PART__" assert {
 import { order } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
 const shared = {
     random,
     effect: order.push("b")
@@ -368,6 +386,9 @@ import "__TURBOPACK_PART__" assert {
 };
 import { order } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
 };
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
@@ -399,13 +420,13 @@ import "__TURBOPACK_PART__" assert {
     ModuleEvaluation: 0,
     Export(
         "order",
-    ): 1,
-    Export(
-        "b",
     ): 3,
     Export(
-        "a",
+        "b",
     ): 2,
+    Export(
+        "a",
+    ): 1,
 }
 ```
 
@@ -427,17 +448,6 @@ import "__TURBOPACK_PART__" assert {
 ```
 ## Part 1
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
-import { order } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
-export { order };
-
-```
-## Part 2
-```js
 import { shared } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
 };
@@ -451,7 +461,7 @@ export { a } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
-## Part 3
+## Part 2
 ```js
 import { shared } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
@@ -464,6 +474,14 @@ const b = {
 export { b } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
+
+```
+## Part 3
+```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 8
+};
+export { order };
 
 ```
 ## Part 4

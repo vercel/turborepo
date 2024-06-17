@@ -2,7 +2,7 @@
 
 Count: 4
 
-## Item 1: Stmt 0, `ImportOfModule`
+## Item 3: Stmt 0, `ImportOfModule`
 
 ```js
 export { cat as fakeCat } from "./lib";
@@ -12,7 +12,7 @@ export { cat as fakeCat } from "./lib";
 - Hoisted
 - Side effects
 
-## Item 2: Stmt 0, `ImportBinding(0)`
+## Item 4: Stmt 0, `ImportBinding(0)`
 
 ```js
 export { cat as fakeCat } from "./lib";
@@ -25,44 +25,44 @@ export { cat as fakeCat } from "./lib";
 # Phase 1
 ```mermaid
 graph TD
-    Item1;
     Item2;
+    Item2["ModuleEvaluation"];
     Item3;
-    Item3["ModuleEvaluation"];
+    Item3["export fakeCat"];
+    Item1;
     Item4;
-    Item4["export fakeCat"];
 ```
 # Phase 2
 ```mermaid
 graph TD
-    Item1;
     Item2;
+    Item2["ModuleEvaluation"];
     Item3;
-    Item3["ModuleEvaluation"];
+    Item3["export fakeCat"];
+    Item1;
     Item4;
-    Item4["export fakeCat"];
 ```
 # Phase 3
 ```mermaid
 graph TD
-    Item1;
     Item2;
+    Item2["ModuleEvaluation"];
     Item3;
-    Item3["ModuleEvaluation"];
+    Item3["export fakeCat"];
+    Item1;
     Item4;
-    Item4["export fakeCat"];
 ```
 # Phase 4
 ```mermaid
 graph TD
-    Item1;
     Item2;
+    Item2["ModuleEvaluation"];
     Item3;
-    Item3["ModuleEvaluation"];
+    Item3["export fakeCat"];
+    Item1;
     Item4;
-    Item4["export fakeCat"];
-    Item3 --> Item1;
-    Item4 --> Item2;
+    Item2 --> Item1;
+    Item3 --> Item4;
 ```
 # Final
 ```mermaid

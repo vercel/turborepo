@@ -2,7 +2,7 @@
 
 Count: 7
 
-## Item 1: Stmt 0, `ImportOfModule`
+## Item 3: Stmt 0, `ImportOfModule`
 
 ```js
 import { IPC } from "./index";
@@ -12,7 +12,7 @@ import { IPC } from "./index";
 - Hoisted
 - Side effects
 
-## Item 2: Stmt 0, `ImportBinding(0)`
+## Item 4: Stmt 0, `ImportBinding(0)`
 
 ```js
 import { IPC } from "./index";
@@ -22,7 +22,7 @@ import { IPC } from "./index";
 - Hoisted
 - Declares: `IPC`
 
-## Item 3: Stmt 1, `VarDeclarator(0)`
+## Item 5: Stmt 1, `VarDeclarator(0)`
 
 ```js
 const ipc = IPC;
@@ -33,7 +33,7 @@ const ipc = IPC;
 - Reads: `IPC`
 - Write: `ipc`
 
-## Item 4: Stmt 2, `VarDeclarator(0)`
+## Item 6: Stmt 2, `VarDeclarator(0)`
 
 ```js
 const queue = [];
@@ -43,7 +43,7 @@ const queue = [];
 - Declares: `queue`
 - Write: `queue`
 
-## Item 5: Stmt 3, `VarDeclarator(0)`
+## Item 7: Stmt 3, `VarDeclarator(0)`
 
 ```js
 export const run = async (moduleFactory)=>{
@@ -148,65 +148,66 @@ export const run = async (moduleFactory)=>{
 # Phase 1
 ```mermaid
 graph TD
-    Item1;
     Item2;
+    Item2["ModuleEvaluation"];
     Item3;
+    Item3["export run"];
+    Item1;
     Item4;
     Item5;
     Item6;
-    Item6["ModuleEvaluation"];
     Item7;
-    Item7["export run"];
 ```
 # Phase 2
 ```mermaid
 graph TD
-    Item1;
     Item2;
+    Item2["ModuleEvaluation"];
     Item3;
+    Item3["export run"];
+    Item1;
     Item4;
     Item5;
     Item6;
-    Item6["ModuleEvaluation"];
     Item7;
-    Item7["export run"];
-    Item3 --> Item2;
-    Item7 --> Item5;
+    Item5 --> Item4;
+    Item7 -.-> Item3;
 ```
 # Phase 3
 ```mermaid
 graph TD
-    Item1;
     Item2;
+    Item2["ModuleEvaluation"];
     Item3;
+    Item3["export run"];
+    Item1;
     Item4;
     Item5;
     Item6;
-    Item6["ModuleEvaluation"];
     Item7;
-    Item7["export run"];
-    Item3 --> Item2;
-    Item7 --> Item5;
-    Item5 --> Item3;
     Item5 --> Item4;
+    Item7 -.-> Item3;
+    Item7 --> Item5;
+    Item7 --> Item6;
 ```
 # Phase 4
 ```mermaid
 graph TD
-    Item1;
     Item2;
+    Item2["ModuleEvaluation"];
     Item3;
+    Item3["export run"];
+    Item1;
     Item4;
     Item5;
     Item6;
-    Item6["ModuleEvaluation"];
     Item7;
-    Item7["export run"];
-    Item3 --> Item2;
-    Item7 --> Item5;
-    Item5 --> Item3;
     Item5 --> Item4;
-    Item6 --> Item1;
+    Item7 -.-> Item3;
+    Item7 --> Item5;
+    Item7 --> Item6;
+    Item2 --> Item1;
+    Item3 --> Item7;
 ```
 # Final
 ```mermaid

@@ -2,7 +2,7 @@
 
 Count: 4
 
-## Item 1: Stmt 0, `VarDeclarator(0)`
+## Item 3: Stmt 0, `VarDeclarator(0)`
 
 ```js
 export var RouteKind;
@@ -12,7 +12,7 @@ export var RouteKind;
 - Declares: `RouteKind`
 - Write: `RouteKind`
 
-## Item 2: Stmt 1, `Normal`
+## Item 4: Stmt 1, `Normal`
 
 ```js
 (function(RouteKind) {
@@ -32,63 +32,62 @@ export var RouteKind;
 ```mermaid
 graph TD
     Item1;
+    Item1["ModuleEvaluation"];
     Item2;
+    Item2["export RouteKind"];
     Item3;
-    Item3["ModuleEvaluation"];
     Item4;
-    Item4["export RouteKind"];
 ```
 # Phase 2
 ```mermaid
 graph TD
     Item1;
+    Item1["ModuleEvaluation"];
     Item2;
+    Item2["export RouteKind"];
     Item3;
-    Item3["ModuleEvaluation"];
     Item4;
-    Item4["export RouteKind"];
-    Item2 --> Item1;
-    Item4 --> Item2;
-    Item4 --> Item1;
+    Item3 -.-> Item2;
+    Item4 --> Item3;
+    Item4 -.-> Item2;
 ```
 # Phase 3
 ```mermaid
 graph TD
     Item1;
+    Item1["ModuleEvaluation"];
     Item2;
+    Item2["export RouteKind"];
     Item3;
-    Item3["ModuleEvaluation"];
     Item4;
-    Item4["export RouteKind"];
-    Item2 --> Item1;
-    Item4 --> Item2;
-    Item4 --> Item1;
+    Item3 -.-> Item2;
+    Item4 --> Item3;
+    Item4 -.-> Item2;
 ```
 # Phase 4
 ```mermaid
 graph TD
     Item1;
+    Item1["ModuleEvaluation"];
     Item2;
+    Item2["export RouteKind"];
     Item3;
-    Item3["ModuleEvaluation"];
     Item4;
-    Item4["export RouteKind"];
-    Item2 --> Item1;
-    Item4 --> Item2;
-    Item4 --> Item1;
-    Item3 --> Item2;
+    Item3 -.-> Item2;
+    Item4 --> Item3;
+    Item4 -.-> Item2;
+    Item1 --> Item4;
+    Item2 --> Item4;
 ```
 # Final
 ```mermaid
 graph TD
     N0["Items: [ItemId(ModuleEvaluation)]"];
     N1["Items: [ItemId(Export((&quot;RouteKind&quot;, #2), &quot;RouteKind&quot;))]"];
-    N2["Items: [ItemId(0, VarDeclarator(0))]"];
-    N3["Items: [ItemId(1, Normal)]"];
-    N0 --> N3;
-    N1 --> N3;
+    N2["Items: [ItemId(0, VarDeclarator(0)), ItemId(1, Normal)]"];
+    N0 --> N2;
     N1 --> N2;
-    N3 --> N2;
+    N2 --> N1;
 ```
 # Entrypoints
 
@@ -106,16 +105,13 @@ graph TD
 ## Part 0
 ```js
 import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
+    __turbopack_part__: 2
 };
 "module evaluation";
 
 ```
 ## Part 1
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
 import { RouteKind } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
@@ -124,29 +120,25 @@ export { RouteKind };
 ```
 ## Part 2
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
+};
 var RouteKind;
-export { RouteKind } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-
-```
-## Part 3
-```js
-import { RouteKind } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
-};
 (function(RouteKind) {
     RouteKind["PAGES"] = "PAGES";
     RouteKind["PAGES_API"] = "PAGES_API";
     RouteKind["APP_PAGE"] = "APP_PAGE";
     RouteKind["APP_ROUTE"] = "APP_ROUTE";
 })(RouteKind || (RouteKind = {}));
+export { RouteKind } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Merged (module eval)
 ```js
 import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
+    __turbopack_part__: 2
 };
 "module evaluation";
 
@@ -167,16 +159,13 @@ import "__TURBOPACK_PART__" assert {
 ## Part 0
 ```js
 import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
+    __turbopack_part__: 2
 };
 "module evaluation";
 
 ```
 ## Part 1
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
 import { RouteKind } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
@@ -186,28 +175,21 @@ export { RouteKind };
 ## Part 2
 ```js
 var RouteKind;
-export { RouteKind } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-
-```
-## Part 3
-```js
-import { RouteKind } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
-};
 (function(RouteKind) {
     RouteKind["PAGES"] = "PAGES";
     RouteKind["PAGES_API"] = "PAGES_API";
     RouteKind["APP_PAGE"] = "APP_PAGE";
     RouteKind["APP_ROUTE"] = "APP_ROUTE";
 })(RouteKind || (RouteKind = {}));
+export { RouteKind } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 
 ```
 ## Merged (module eval)
 ```js
 import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
+    __turbopack_part__: 2
 };
 "module evaluation";
 
