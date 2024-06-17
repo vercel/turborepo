@@ -1085,6 +1085,7 @@ impl DepGraph {
             );
         }
 
+        ids.sort();
         (ids, items)
     }
 

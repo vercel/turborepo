@@ -70,10 +70,7 @@ impl Analyzer<'_> {
         top_level_ctxt: SyntaxContext,
     ) -> (DepGraph, FxHashMap<ItemId, ItemData>) {
         let mut g = DepGraph::default();
-        let (mut item_ids, mut items) = g.init(module, unresolved_ctxt, top_level_ctxt);
-        dbg!(&item_ids);
-        item_ids.sort();
-        dbg!(&item_ids);
+        let (item_ids, mut items) = g.init(module, unresolved_ctxt, top_level_ctxt);
 
         let mut analyzer = Analyzer {
             g: &mut g,
