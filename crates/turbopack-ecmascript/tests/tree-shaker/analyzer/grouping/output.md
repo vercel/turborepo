@@ -138,11 +138,23 @@ graph TD
     Item12["export x"];
     Item13;
     Item13["export y"];
+    Item2 -.-> Item1;
+    Item3 -.-> Item1;
+    Item4 -.-> Item1;
+    Item5 -.-> Item1;
+    Item6 --> Item1;
     Item6 --> Item5;
     Item7 --> Item6;
+    Item7 --> Item1;
     Item8 --> Item7;
+    Item8 --> Item1;
     Item9 --> Item8;
+    Item9 --> Item1;
     Item10 --> Item9;
+    Item10 --> Item1;
+    Item12 --> Item9;
+    Item12 --> Item1;
+    Item13 --> Item10;
 ```
 # Phase 3
 ```mermaid
@@ -163,11 +175,23 @@ graph TD
     Item12["export x"];
     Item13;
     Item13["export y"];
+    Item2 -.-> Item1;
+    Item3 -.-> Item1;
+    Item4 -.-> Item1;
+    Item5 -.-> Item1;
+    Item6 --> Item1;
     Item6 --> Item5;
     Item7 --> Item6;
+    Item7 --> Item1;
     Item8 --> Item7;
+    Item8 --> Item1;
     Item9 --> Item8;
+    Item9 --> Item1;
     Item10 --> Item9;
+    Item10 --> Item1;
+    Item12 --> Item9;
+    Item12 --> Item1;
+    Item13 --> Item10;
 ```
 # Phase 4
 ```mermaid
@@ -188,12 +212,22 @@ graph TD
     Item12["export x"];
     Item13;
     Item13["export y"];
+    Item2 -.-> Item1;
+    Item3 -.-> Item1;
+    Item4 -.-> Item1;
+    Item5 -.-> Item1;
+    Item6 --> Item1;
     Item6 --> Item5;
     Item7 --> Item6;
+    Item7 --> Item1;
     Item8 --> Item7;
+    Item8 --> Item1;
     Item9 --> Item8;
+    Item9 --> Item1;
     Item10 --> Item9;
+    Item10 --> Item1;
     Item12 --> Item9;
+    Item12 --> Item1;
     Item13 --> Item10;
 ```
 # Final
@@ -202,9 +236,13 @@ graph TD
     N0["Items: [ItemId(ModuleEvaluation)]"];
     N1["Items: [ItemId(Export((&quot;x&quot;, #2), &quot;x&quot;))]"];
     N2["Items: [ItemId(Export((&quot;y&quot;, #2), &quot;y&quot;)), ItemId(10, VarDeclarator(0))]"];
-    N3["Items: [ItemId(4, Normal), ItemId(5, Normal), ItemId(6, Normal), ItemId(7, Normal), ItemId(8, Normal)]"];
+    N3["Items: [ItemId(0, VarDeclarator(0))]"];
+    N4["Items: [ItemId(4, Normal), ItemId(5, Normal), ItemId(6, Normal), ItemId(7, Normal), ItemId(8, Normal)]"];
+    N1 --> N4;
     N1 --> N3;
+    N2 --> N4;
     N2 --> N3;
+    N4 --> N3;
 ```
 # Entrypoints
 
@@ -229,6 +267,9 @@ graph TD
 ```
 ## Part 1
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
 import { x } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
@@ -237,6 +278,9 @@ export { x as x };
 ```
 ## Part 2
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
 import { x } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
@@ -249,26 +293,22 @@ export { y } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
+let x = 1;
+export { x } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+
+```
+## Part 4
+```js
+import { x } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
 x = 5;
 x += 6;
 x += 7;
 x += 8;
 x += 9;
-export { x } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { x } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { x } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { x } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { x } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Merged (module eval)
@@ -299,6 +339,9 @@ export { x } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 1
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
 import { x } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
@@ -307,6 +350,9 @@ export { x as x };
 ```
 ## Part 2
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
 import { x } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
@@ -319,26 +365,22 @@ export { y } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
+let x = 1;
+export { x } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+
+```
+## Part 4
+```js
+import { x } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
 x = 5;
 x += 6;
 x += 7;
 x += 8;
 x += 9;
-export { x } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { x } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { x } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { x } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { x } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 
 ```
 ## Merged (module eval)
