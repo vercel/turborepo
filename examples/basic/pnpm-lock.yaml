@@ -125,6 +125,10 @@ importers:
   packages/typescript-config: {}
 
   packages/ui:
+    dependencies:
+      react:
+        specifier: ^18.2.0
+        version: 18.2.0
     devDependencies:
       '@repo/eslint-config':
         specifier: workspace:*
@@ -150,9 +154,6 @@ importers:
       eslint:
         specifier: ^8.57.0
         version: 8.57.0
-      react:
-        specifier: ^18.2.0
-        version: 18.2.0
       typescript:
         specifier: ^5.3.3
         version: 5.3.3
