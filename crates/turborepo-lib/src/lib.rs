@@ -42,7 +42,9 @@ mod unescape;
 pub use crate::{
     child::spawn_child,
     cli::Args,
-    daemon::{DaemonClient, DaemonConnector, Paths as DaemonPaths},
+    daemon::{
+        DaemonClient, DaemonConnector, DaemonConnectorError, DaemonError, Paths as DaemonPaths,
+    },
     panic_handler::panic_handler,
     run::package_discovery::DaemonPackageDiscovery,
 };

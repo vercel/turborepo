@@ -1,7 +1,7 @@
 {
   "name": "turbo-vsc",
   "displayName": "Turborepo LSP",
-  "version": "1.1.2",
+  "version": "2.0.0",
   "description": "Tools and instant feedback for your build system",
   "main": "out/main.js",
   "publisher": "Vercel",
@@ -49,10 +49,11 @@
     "vscode": "^1.84.2"
   },
   "devDependencies": {
+    "@turbo/tsconfig": "workspace:*",
     "@types/node": "^20.9.0",
     "@types/vscode": "^1.84.1",
     "esbuild": "^0.15.0",
-    "@turbo/tsconfig": "workspace:*"
+    "vsce": "^2.15.0"
   },
   "contributes": {
     "commands": [
