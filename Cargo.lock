@@ -751,9 +751,9 @@ dependencies = [
 
 [[package]]
 name = "biome_deserialize"
-version = "0.5.7"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b4443260d505148169f5fb35634c2a60d8489882f8c9c3f1db8b7cf0cb57632"
+checksum = "d6f619dc8ca0595ed8850d729ebc71722d4233aba68c5aec7d9993a53e59f3fe"
 dependencies = [
  "biome_console",
  "biome_deserialize_macros",
@@ -762,19 +762,18 @@ dependencies = [
  "biome_json_syntax",
  "biome_rowan",
  "bitflags 2.5.0",
- "indexmap 1.9.3",
+ "indexmap 2.2.6",
  "serde",
  "serde_json",
- "tracing",
 ]
 
 [[package]]
 name = "biome_deserialize_macros"
-version = "0.5.7"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3fc1244cc5f0cc267bd26b601e9ccd6851c6a4d395bba07e27c2de641dc84479"
+checksum = "07c12826fff87ac09f63bbacf8bdf5225dfdf890da04d426f758cbcacf068e3e"
 dependencies = [
- "convert_case 0.6.0",
+ "biome_string_case",
  "proc-macro-error",
  "proc-macro2",
  "quote",
@@ -899,6 +898,12 @@ dependencies = [
  "rustc-hash",
  "tracing",
 ]
+
+[[package]]
+name = "biome_string_case"
+version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c28b4d0e08c2f13f1c9e0df4e7a8f9bfa03ef3803713d1bcd5110578cc5c67be"
 
 [[package]]
 name = "biome_text_edit"
@@ -5915,9 +5920,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.79"
+version = "1.0.85"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e835ff2298f5721608eb1a980ecaee1aef2c132bf95ecc026a11b7bf3c01c02e"
+checksum = "22244ce15aa966053a896d1accb3a6e68469b97c7f33f284b99f0d576879fc23"
 dependencies = [
  "unicode-ident",
 ]
@@ -6941,9 +6946,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.115"
+version = "1.0.117"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12dc5c46daa8e9fdf4f5e71b6cf9a53f2487da0e86e55808e2d35539666497dd"
+checksum = "455182ea6142b14f93f4bc5320a2b31c1f266b66a4a5c858b013302a5d8cbfc3"
 dependencies = [
  "indexmap 2.2.6",
  "itoa",
@@ -10998,6 +11003,10 @@ name = "turbopath"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "biome_deserialize",
+ "biome_deserialize_macros",
+ "biome_diagnostics",
+ "biome_json_parser",
  "camino",
  "dunce",
  "fs-err",
@@ -11008,6 +11017,7 @@ dependencies = [
  "tempdir",
  "test-case",
  "thiserror",
+ "turborepo-unescape",
  "wax",
 ]
 
@@ -11152,10 +11162,12 @@ name = "turborepo-errors"
 version = "0.1.0"
 dependencies = [
  "biome_deserialize",
+ "biome_diagnostics",
  "miette 5.10.0",
  "serde",
  "serde_json",
  "test-case",
+ "thiserror",
 ]
 
 [[package]]
@@ -11316,6 +11328,7 @@ dependencies = [
  "turborepo-scm",
  "turborepo-telemetry",
  "turborepo-ui",
+ "turborepo-unescape",
  "turborepo-vercel-api",
  "turborepo-vercel-api-mock",
  "twox-hash",
@@ -11384,9 +11397,15 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-once-cell",
+ "biome_deserialize",
+ "biome_deserialize_macros",
+ "biome_diagnostics",
+ "biome_json_parser",
+ "biome_json_syntax",
  "globwalk",
  "itertools 0.10.5",
  "lazy-regex",
+ "miette 5.10.0",
  "node-semver",
  "petgraph",
  "pretty_assertions",
@@ -11402,8 +11421,10 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "turbopath",
+ "turborepo-errors",
  "turborepo-graph-utils",
  "turborepo-lockfiles",
+ "turborepo-unescape",
  "wax",
  "which",
 ]
@@ -11484,6 +11505,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-unescape"
+version = "0.1.0"
+dependencies = [
+ "biome_deserialize",
+ "biome_diagnostics",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "turborepo-vercel-api"
 version = "0.1.0"
 dependencies = [
@@ -11533,7 +11564,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.4.6",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
