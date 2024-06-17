@@ -2,7 +2,7 @@
 
 Count: 7
 
-## Item 4: Stmt 0, `VarDeclarator(0)`
+## Item 1: Stmt 0, `VarDeclarator(0)`
 
 ```js
 const dog = "dog";
@@ -12,7 +12,7 @@ const dog = "dog";
 - Declares: `dog`
 - Write: `dog`
 
-## Item 5: Stmt 1, `VarDeclarator(0)`
+## Item 2: Stmt 1, `VarDeclarator(0)`
 
 ```js
 const cat = "cat";
@@ -22,7 +22,7 @@ const cat = "cat";
 - Declares: `cat`
 - Write: `cat`
 
-## Item 6: Stmt 2, `VarDeclarator(0)`
+## Item 3: Stmt 2, `VarDeclarator(0)`
 
 ```js
 export const DOG = dog;
@@ -33,7 +33,7 @@ export const DOG = dog;
 - Reads: `dog`
 - Write: `DOG`
 
-## Item 7: Stmt 3, `VarDeclarator(0)`
+## Item 4: Stmt 3, `VarDeclarator(0)`
 
 ```js
 export const CHIMERA = cat + dog;
@@ -48,81 +48,79 @@ export const CHIMERA = cat + dog;
 ```mermaid
 graph TD
     Item1;
-    Item1["ModuleEvaluation"];
     Item2;
-    Item2["export CHIMERA"];
     Item3;
-    Item3["export DOG"];
     Item4;
     Item5;
+    Item5["ModuleEvaluation"];
     Item6;
+    Item6["export DOG"];
     Item7;
+    Item7["export CHIMERA"];
 ```
 # Phase 2
 ```mermaid
 graph TD
     Item1;
-    Item1["ModuleEvaluation"];
     Item2;
-    Item2["export CHIMERA"];
     Item3;
-    Item3["export DOG"];
     Item4;
     Item5;
+    Item5["ModuleEvaluation"];
     Item6;
+    Item6["export DOG"];
     Item7;
-    Item6 --> Item4;
-    Item6 -.-> Item3;
-    Item7 --> Item5;
+    Item7["export CHIMERA"];
+    Item3 --> Item1;
+    Item4 --> Item2;
+    Item4 --> Item1;
+    Item6 --> Item3;
     Item7 --> Item4;
-    Item7 -.-> Item2;
 ```
 # Phase 3
 ```mermaid
 graph TD
     Item1;
-    Item1["ModuleEvaluation"];
     Item2;
-    Item2["export CHIMERA"];
     Item3;
-    Item3["export DOG"];
     Item4;
     Item5;
+    Item5["ModuleEvaluation"];
     Item6;
+    Item6["export DOG"];
     Item7;
-    Item6 --> Item4;
-    Item6 -.-> Item3;
-    Item7 --> Item5;
+    Item7["export CHIMERA"];
+    Item3 --> Item1;
+    Item4 --> Item2;
+    Item4 --> Item1;
+    Item6 --> Item3;
     Item7 --> Item4;
-    Item7 -.-> Item2;
 ```
 # Phase 4
 ```mermaid
 graph TD
     Item1;
-    Item1["ModuleEvaluation"];
     Item2;
-    Item2["export CHIMERA"];
     Item3;
-    Item3["export DOG"];
     Item4;
     Item5;
+    Item5["ModuleEvaluation"];
     Item6;
+    Item6["export DOG"];
     Item7;
-    Item6 --> Item4;
-    Item6 -.-> Item3;
-    Item7 --> Item5;
+    Item7["export CHIMERA"];
+    Item3 --> Item1;
+    Item4 --> Item2;
+    Item4 --> Item1;
+    Item6 --> Item3;
     Item7 --> Item4;
-    Item7 -.-> Item2;
-    Item2 --> Item7;
-    Item3 --> Item6;
 ```
 # Final
 ```mermaid
 graph TD
     N0["Items: [ItemId(ModuleEvaluation)]"];
-    N1["Items: [ItemId(Export((&quot;CHIMERA&quot;, #2), &quot;CHIMERA&quot;)), ItemId(1, VarDeclarator(0)), ItemId(3, VarDeclarator(0))]"];
-    N2["Items: [ItemId(Export((&quot;DOG&quot;, #2), &quot;DOG&quot;)), ItemId(2, VarDeclarator(0))]"];
+    N1["Items: [ItemId(Export((&quot;DOG&quot;, #2), &quot;DOG&quot;)), ItemId(2, VarDeclarator(0))]"];
+    N2["Items: [ItemId(Export((&quot;CHIMERA&quot;, #2), &quot;CHIMERA&quot;)), ItemId(1, VarDeclarator(0)), ItemId(3, VarDeclarator(0))]"];
     N3["Items: [ItemId(0, VarDeclarator(0))]"];
     N1 --> N3;
     N2 --> N3;
@@ -133,10 +131,10 @@ graph TD
 {
     ModuleEvaluation: 0,
     Export(
-        "CHIMERA",
+        "DOG",
     ): 1,
     Export(
-        "DOG",
+        "CHIMERA",
     ): 2,
 }
 ```
@@ -153,13 +151,9 @@ graph TD
 import { dog } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
-export { CHIMERA };
-const cat = "cat";
-const CHIMERA = cat + dog;
-export { cat } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { CHIMERA } from "__TURBOPACK_VAR__" assert {
+export { DOG };
+const DOG = dog;
+export { DOG } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 
@@ -169,9 +163,13 @@ export { CHIMERA } from "__TURBOPACK_VAR__" assert {
 import { dog } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
-export { DOG };
-const DOG = dog;
-export { DOG } from "__TURBOPACK_VAR__" assert {
+export { CHIMERA };
+const cat = "cat";
+const CHIMERA = cat + dog;
+export { cat } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { CHIMERA } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 
@@ -195,10 +193,10 @@ export { dog } from "__TURBOPACK_VAR__" assert {
 {
     ModuleEvaluation: 0,
     Export(
-        "CHIMERA",
+        "DOG",
     ): 1,
     Export(
-        "DOG",
+        "CHIMERA",
     ): 2,
 }
 ```
@@ -215,13 +213,9 @@ export { dog } from "__TURBOPACK_VAR__" assert {
 import { dog } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
-export { CHIMERA };
-const cat = "cat";
-const CHIMERA = cat + dog;
-export { cat } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { CHIMERA } from "__TURBOPACK_VAR__" assert {
+export { DOG };
+const DOG = dog;
+export { DOG } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 
@@ -231,9 +225,13 @@ export { CHIMERA } from "__TURBOPACK_VAR__" assert {
 import { dog } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
-export { DOG };
-const DOG = dog;
-export { DOG } from "__TURBOPACK_VAR__" assert {
+export { CHIMERA };
+const cat = "cat";
+const CHIMERA = cat + dog;
+export { cat } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+export { CHIMERA } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 
