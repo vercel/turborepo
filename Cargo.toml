@@ -99,6 +99,8 @@ unix-archive = ".tar.gz"
 pr-run-mode = "plan"
 # Whether CI should trigger releases with dispatches instead of tag pushes
 dispatch-releases = true
+# Plan jobs to run in CI
+plan-jobs = ["./setup-release-environment"]
 
 [workspace.metadata.dist.dependencies.homebrew]
 protobuf = "*"
@@ -117,7 +119,8 @@ llvm = "*"
 capnproto = "*"
 gcc-aarch64-linux-gnu = { version = "*", targets = ["aarch64-unknown-linux-musl"] }
 binutils-aarch64-linux-gnu = { version = "*", targets = ["aarch64-unknown-linux-musl"] }
-protobuf-compiler = "2"
+protobuf-compiler = "*"
+
 
 [workspace.lints.clippy]
 too_many_arguments = "allow"
