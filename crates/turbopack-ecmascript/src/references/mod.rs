@@ -52,7 +52,7 @@ use swc_core::{
     },
 };
 use tracing::Instrument;
-use turbo_tasks::{RcStr, TryJoinIterExt, Upcast, Value, ValueToString, Vc};
+use turbo_tasks::{vdbg, RcStr, TryJoinIterExt, Upcast, Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     compile_time_info::{CompileTimeInfo, FreeVarReference},
@@ -581,6 +581,8 @@ pub(crate) async fn analyse_ecmascript_module_internal(
             },
             import_externals,
         );
+        vdbg!(origin, part, r);
+
         import_references.push(r);
     }
 
@@ -1939,6 +1941,7 @@ async fn handle_free_var_reference(
             lookup_path,
             export,
         } => {
+            vdbg!(request, lookup_path, export);
             let esm_reference = EsmAssetReference::new(
                 lookup_path.map_or(state.origin, |lookup_path| {
                     Vc::upcast(PlainResolveOrigin::new(
