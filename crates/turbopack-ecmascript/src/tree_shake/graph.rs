@@ -173,6 +173,15 @@ where
     }
 }
 
+impl<T> InternedGraph<T>
+where
+    T: Eq + Hash + Clone + Ord,
+{
+    pub(crate) fn sort(&mut self) {
+        self.graph_ix.sort();
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct DepGraph {
     pub(super) g: InternedGraph<ItemId>,
@@ -1085,7 +1094,6 @@ impl DepGraph {
             );
         }
 
-        ids.sort();
         (ids, items)
     }
 
