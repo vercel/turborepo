@@ -5,9 +5,12 @@ use indexmap::IndexSet;
 use rustc_hash::FxHashMap;
 use swc_core::{
     common::{util::take::Take, SyntaxContext, DUMMY_SP, GLOBALS},
-    ecma::ast::{
-        ExportNamedSpecifier, Id, Ident, ImportDecl, Module, ModuleDecl, ModuleExportName,
-        ModuleItem, NamedExport, Program,
+    ecma::{
+        ast::{
+            ExportNamedSpecifier, Id, Ident, ImportDecl, Module, ModuleDecl, ModuleExportName,
+            ModuleItem, NamedExport, Program,
+        },
+        codegen::Emitter,
     },
 };
 use turbo_tasks::{RcStr, ValueToString, Vc};
@@ -423,6 +426,32 @@ pub(super) async fn split(
                 part_deps,
                 modules,
             } = dep_graph.split_module(&items);
+
+            dbg!(&entrypoints, &part_deps);
+
+            for (i, m) in modules.iter().enumerate() {
+                let mut buf = Vec::new();
+                {
+                    let wr = swc_core::ecma::codegen::text_writer::JsWriter::new(
+                        Default::default(),
+                        "\n",
+                        &mut buf,
+                        None,
+                    );
+                    let mut emitter = Emitter {
+                        cfg: Default::default(),
+                        cm: source_map.clone(),
+                        comments: None,
+                        wr: Box::new(wr),
+                    };
+
+                    emitter.emit_module(&m).unwrap();
+
+                    let code = String::from_utf8(buf).unwrap();
+
+                    println!("Module #{}: {}", i, code);
+                }
+            }
 
             assert_ne!(modules.len(), 0, "modules.len() == 0;\nModule: {module:?}",);
 
