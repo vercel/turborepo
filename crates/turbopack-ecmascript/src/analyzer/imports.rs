@@ -270,7 +270,7 @@ impl Visit for Analyzer<'_> {
 
         let internal_symbol = parse_with(import.with.as_deref());
 
-        if internal_symbol.is_none() || import.specifiers.is_empty() {
+        if internal_symbol.is_none() {
             self.ensure_reference(
                 import.span,
                 import.src.value.clone(),
