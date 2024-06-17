@@ -4,7 +4,7 @@ use swc_core::{
     ecma::ast::{Expr, Ident},
     quote,
 };
-use turbo_tasks::{RcStr, ValueToString, Vc};
+use turbo_tasks::{vdbg, RcStr, ValueToString, Vc};
 use turbopack_core::{
     chunk::{
         ChunkItemExt, ChunkableModule, ChunkableModuleReference, ChunkingContext, ChunkingType,
@@ -115,6 +115,7 @@ impl CodeGenerateable for EcmascriptModulePartReference {
         let mut visitors = Vec::new();
 
         let referenced_asset = ReferencedAsset::from_resolve_result(self.resolve_reference());
+        vdbg!(referenced_asset);
         let referenced_asset = referenced_asset.await?;
         let ident = referenced_asset
             .get_ident()
