@@ -263,12 +263,19 @@ impl<'a> StatefulWidget for &'a TaskTable {
         .highlight_style(Style::default().fg(Color::Yellow))
         .column_spacing(0)
         .header(
-            // TODO: Get the bar back!
-            vec![format!("Task\n↑ ↓ to navigate\n{bar}").to_owned()]
+            vec![format!("Task\n{bar}").to_owned()]
                 .into_iter()
                 .map(Cell::from)
                 .collect::<Row>()
                 .height(2),
+        )
+        .footer(
+            ["↑ ↓ to navigate"]
+                .iter()
+                .copied()
+                .map(Cell::from)
+                .collect::<Row>()
+                .height(1),
         );
         StatefulWidget::render(table, area, buf, state);
     }
