@@ -2,15 +2,13 @@ use std::{
     collections::HashMap,
     iter,
     mem::{replace, take},
-    sync::Arc,
 };
 
 use swc_core::{
-    common::{pass::AstNodePath, Mark, SourceMap, Span, Spanned, SyntaxContext, GLOBALS},
+    common::{pass::AstNodePath, Mark, Span, Spanned, SyntaxContext, GLOBALS},
     ecma::{
         ast::*,
         atoms::js_word,
-        codegen::Emitter,
         visit::{fields::*, *},
     },
 };
@@ -269,42 +267,16 @@ pub struct EvalContext {
 
 impl EvalContext {
     pub fn new(
-        cm: Arc<SourceMap>,
         module: &Program,
         unresolved_mark: Mark,
         top_level_mark: Mark,
         skip_namespace: bool,
         source: Option<Vc<Box<dyn Source>>>,
     ) -> Self {
-        let imports = ImportMap::analyze(module, skip_namespace, source);
-
-        if module.is_module() {
-            let mut buf = Vec::new();
-            {
-                let wr = swc_core::ecma::codegen::text_writer::JsWriter::new(
-                    Default::default(),
-                    "\n",
-                    &mut buf,
-                    None,
-                );
-                let mut emitter = Emitter {
-                    cfg: Default::default(),
-                    cm,
-                    comments: None,
-                    wr: Box::new(wr),
-                };
-
-                emitter.emit_program(module).unwrap();
-
-                let code = String::from_utf8(buf).unwrap();
-
-                println!("# Program\n{}\n{:?}", code, imports);
-            }
-        }
         Self {
             unresolved_mark,
             top_level_mark,
-            imports,
+            imports: ImportMap::analyze(module, skip_namespace, source),
         }
     }
 

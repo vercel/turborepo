@@ -428,7 +428,6 @@ async fn parse_content(
             );
 
             let eval_context = EvalContext::new(
-                source_map.clone(),
                 &parsed_program,
                 unresolved_mark,
                 top_level_mark,
