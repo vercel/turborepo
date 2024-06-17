@@ -52,7 +52,7 @@ use swc_core::{
     },
 };
 use tracing::Instrument;
-use turbo_tasks::{vdbg, RcStr, TryJoinIterExt, Upcast, Value, ValueToString, Vc};
+use turbo_tasks::{RcStr, TryJoinIterExt, Upcast, Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     compile_time_info::{CompileTimeInfo, FreeVarReference},
@@ -581,7 +581,6 @@ pub(crate) async fn analyse_ecmascript_module_internal(
             },
             import_externals,
         );
-        // vdbg!(part, r.await?.export_name, origin);
 
         import_references.push(r);
     }
