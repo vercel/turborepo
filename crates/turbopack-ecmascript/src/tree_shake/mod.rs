@@ -446,7 +446,7 @@ pub(super) async fn split(
 
                     let code = String::from_utf8(buf).unwrap();
 
-                    println!("Module #{}: {}", i, code);
+                    println!("# Module {}: \n{}", i, code);
                 }
             }
 
