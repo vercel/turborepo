@@ -149,7 +149,7 @@ export async function createProject({
    */
   logger.log();
   const loader = logger.turboLoader(
-    "Downloading files... (This might take a moment.)"
+    "Downloading files... (This might take a moment)"
   );
   try {
     if (!isDefaultExample && repoInfo) {
