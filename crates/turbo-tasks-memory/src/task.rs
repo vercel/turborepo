@@ -1494,7 +1494,7 @@ impl Task {
 
         let mut cells_to_drop = Vec::new();
 
-        let result = if let TaskMetaStateWriteGuard::Full(mut state) = self.state_mut() {
+        if let TaskMetaStateWriteGuard::Full(mut state) = self.state_mut() {
             if state.gc.generation > generation {
                 return false;
             }
@@ -1524,20 +1524,17 @@ impl Task {
             for cells in state.cells.values_mut() {
                 cells.shrink_to_fit();
                 for cell in cells.iter_mut() {
-                    if cell.has_value() {
-                        cells_to_drop.extend(cell.gc_content());
-                    }
+                    cells_to_drop.extend(cell.gc_content());
                     cell.shrink_to_fit();
                 }
             }
-            true
         } else {
-            false
+            return false;
         };
 
         drop(cells_to_drop);
 
-        result
+        true
     }
 
     pub(crate) fn gc_state(&self) -> Option<GcTaskState> {
