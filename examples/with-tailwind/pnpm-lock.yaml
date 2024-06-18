@@ -137,6 +137,10 @@ importers:
   packages/config-typescript: {}
 
   packages/ui:
+    dependencies:
+      react:
+        specifier: ^18.2.0
+        version: 18.2.0
     devDependencies:
       '@repo/eslint-config':
         specifier: workspace:*
@@ -156,9 +160,6 @@ importers:
       postcss:
         specifier: ^8.4.35
         version: 8.4.35
-      react:
-        specifier: ^18.2.0
-        version: 18.2.0
       tailwindcss:
         specifier: ^3.4.1
         version: 3.4.1
@@ -3375,6 +3376,7 @@ packages:
     engines: {node: '>=0.10.0'}
     dependencies:
       loose-envify: 1.4.0
+    dev: false
 
   /read-cache@1.0.0:
     resolution: {integrity: sha512-Owdv/Ft7IjOgm/i0xvNDZ1LrRANRfew4b2prF3OWMQLxLfu3bS8FVhCsrSCMK4lR56Y9ya+AThoTpDCTxCmpRA==}
