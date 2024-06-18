@@ -20,7 +20,7 @@ use swc_core::{
             VarDeclKind, VarDeclarator,
         },
         atoms::JsWord,
-        utils::{find_pat_ids, private_ident, quote_ident, IdentExt},
+        utils::{find_pat_ids, private_ident, quote_ident},
     },
 };
 use turbo_tasks::RcStr;
@@ -294,7 +294,7 @@ impl DepGraph {
                 for dep_item in dep_items {
                     let data = data.get(dep_item).unwrap();
 
-                    for var in data.var_decls.iter().chain(data.write_vars.iter()) {
+                    for var in data.var_decls.iter() {
                         if required_vars.remove(var) {
                             specifiers.push(ImportSpecifier::Named(ImportNamedSpecifier {
                                 span: DUMMY_SP,
@@ -330,43 +330,36 @@ impl DepGraph {
                 let data = data.get(g).unwrap();
 
                 // Emit `export { foo }`
-                for var in data.write_vars.iter() {
-                    if required_vars.remove(var)
-                        || data.read_vars.contains(var)
-                        || data.var_decls.contains(var)
-                    {
-                        let assertion_prop =
-                            PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
-                                key: quote_ident!("__turbopack_var__").into(),
-                                value: Box::new(true.into()),
-                            })));
+                for var in data.var_decls.iter() {
+                    let assertion_prop =
+                        PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
+                            key: quote_ident!("__turbopack_var__").into(),
+                            value: Box::new(true.into()),
+                        })));
 
-                        chunk
-                            .body
-                            .push(ModuleItem::ModuleDecl(ModuleDecl::ExportNamed(
-                                NamedExport {
+                    chunk
+                        .body
+                        .push(ModuleItem::ModuleDecl(ModuleDecl::ExportNamed(
+                            NamedExport {
+                                span: DUMMY_SP,
+                                specifiers: vec![ExportSpecifier::Named(ExportNamedSpecifier {
                                     span: DUMMY_SP,
-                                    specifiers: vec![ExportSpecifier::Named(
-                                        ExportNamedSpecifier {
-                                            span: DUMMY_SP,
-                                            orig: ModuleExportName::Ident(var.clone().into()),
-                                            exported: None,
-                                            is_type_only: false,
-                                        },
-                                    )],
-                                    src: if cfg!(test) {
-                                        Some(Box::new("__TURBOPACK_VAR__".into()))
-                                    } else {
-                                        None
-                                    },
-                                    type_only: false,
-                                    with: Some(Box::new(ObjectLit {
-                                        span: DUMMY_SP,
-                                        props: vec![assertion_prop],
-                                    })),
+                                    orig: ModuleExportName::Ident(var.clone().into()),
+                                    exported: None,
+                                    is_type_only: false,
+                                })],
+                                src: if cfg!(test) {
+                                    Some(Box::new("__TURBOPACK_VAR__".into()))
+                                } else {
+                                    None
                                 },
-                            )));
-                    }
+                                type_only: false,
+                                with: Some(Box::new(ObjectLit {
+                                    span: DUMMY_SP,
+                                    props: vec![assertion_prop],
+                                })),
+                            },
+                        )));
                 }
             }
 
@@ -405,15 +398,15 @@ impl DepGraph {
                 .idx_graph
                 .neighbors_directed(start_ix, petgraph::Direction::Outgoing)
             {
-                let dep_id = graph.graph_ix.get_index(dep_ix as _).unwrap().clone();
+                let dep_id = graph.graph_ix.get_index(dep_ix as _).unwrap();
 
                 if global_done.insert(dep_ix)
-                    || (data.get(&dep_id).map_or(false, |data| data.pure)
+                    || (data.get(dep_id).map_or(false, |data| data.pure)
                         && group_done.insert(dep_ix))
                 {
                     changed = true;
 
-                    group.push(dep_id);
+                    group.push(dep_id.clone());
 
                     add_to_group(graph, data, group, dep_ix, global_done, group_done);
                 }
@@ -473,14 +466,22 @@ impl DepGraph {
                 continue;
             }
 
-            let count = global_done
+            // The number of nodes that this node is dependent on.
+            let dependant_count = self
+                .g
+                .idx_graph
+                .neighbors_directed(ix as _, petgraph::Direction::Incoming)
+                .count();
+
+            // The number of starting points that can reach to this node.
+            let count_of_startings = global_done
                 .iter()
                 .filter(|&&staring_point| {
                     has_path_connecting(&self.g.idx_graph, staring_point, ix as _, None)
                 })
                 .count();
 
-            if count >= 2 {
+            if dependant_count >= 2 && count_of_startings >= 2 {
                 groups.push((vec![id.clone()], FxHashSet::default()));
                 global_done.insert(ix as u32);
             }
@@ -490,8 +491,8 @@ impl DepGraph {
             let mut changed = false;
 
             for (group, group_done) in &mut groups {
-                let start = group[0].clone();
-                let start_ix = self.g.get_node(&start);
+                let start = &group[0];
+                let start_ix = self.g.get_node(start);
                 changed |=
                     add_to_group(&self.g, data, group, start_ix, &mut global_done, group_done);
             }
@@ -635,7 +636,7 @@ impl DepGraph {
                                 local.sym =
                                     magic_identifier::mangle(&format!("reexport {}", local.sym))
                                         .into();
-                                local = local.private();
+                                local = local.into_private();
                             }
 
                             exports.push((local.to_id(), exported.clone()));
@@ -696,11 +697,12 @@ impl DepGraph {
                         });
 
                         {
-                            let used_ids = ids_used_by_ignoring_nested(
+                            let mut used_ids = ids_used_by_ignoring_nested(
                                 &export.decl,
                                 unresolved_ctxt,
                                 top_level_ctxt,
                             );
+                            used_ids.write.insert(default_var.to_id());
                             let captured_ids =
                                 ids_captured_by(&export.decl, unresolved_ctxt, top_level_ctxt);
                             let data = ItemData {
@@ -1076,6 +1078,7 @@ impl DepGraph {
                         type_only: false,
                         with: None,
                     })),
+                    read_vars: [name.clone()].into_iter().collect(),
                     export: Some(name.0),
                     ..Default::default()
                 },
@@ -1115,13 +1118,13 @@ impl DepGraph {
         }
     }
 
-    pub(crate) fn has_strong_dep(&mut self, id: &ItemId, dep: &ItemId) -> bool {
+    pub(crate) fn has_dep(&mut self, id: &ItemId, dep: &ItemId, only_strong: bool) -> bool {
         let from = self.g.node(id);
         let to = self.g.node(dep);
         self.g
             .idx_graph
             .edge_weight(from, to)
-            .map(|d| matches!(d, Dependency::Strong))
+            .map(|d| matches!(d, Dependency::Strong) || !only_strong)
             .unwrap_or(false)
     }
 
