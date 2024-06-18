@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, fmt::Write};
 
 use anyhow::{bail, Result};
 use indexmap::IndexSet;
@@ -325,16 +325,53 @@ async fn get_part_id(result: &SplitResult, part: Vc<ModulePart>) -> Result<u32> 
         }
     };
 
-    let entrypoints = match &result {
-        SplitResult::Ok { entrypoints, .. } => entrypoints,
-        _ => bail!("split failed"),
+    let SplitResult::Ok {
+        entrypoints,
+        modules,
+        ..
+    } = &result
+    else {
+        bail!("split failed")
     };
 
     let part_id = match entrypoints.get(&key) {
         Some(id) => *id,
         None => {
+            let mut dump = String::new();
+
+            for (idx, m) in modules.iter().enumerate() {
+                let ParseResult::Ok {
+                    program,
+                    source_map,
+                    ..
+                } = &*m.await?
+                else {
+                    bail!("failed to get module")
+                };
+
+                {
+                    let mut buf = vec![];
+
+                    {
+                        let wr = JsWriter::new(Default::default(), "\n", &mut buf, None);
+
+                        let mut emitter = Emitter {
+                            cfg: Default::default(),
+                            comments: None,
+                            cm: source_map.clone(),
+                            wr,
+                        };
+
+                        emitter.emit_program(program).unwrap();
+                    }
+                    let code = String::from_utf8(buf).unwrap();
+
+                    writeln!(dump, "# Module #{idx}:\n{code}\n\n\n")?;
+                }
+            }
+
             bail!(
-                "could not find part id for module part {:?} in {:?}",
+                "could not find part id for module part {:?} in {:?}\n\nModule dump:\n{dump}",
                 key,
                 entrypoints
             )
