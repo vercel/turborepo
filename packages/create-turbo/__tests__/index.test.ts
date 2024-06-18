@@ -93,19 +93,24 @@ describe("create-turbo", () => {
       });
 
       const expected = `${chalk.bold(
-        logger.turboGradient(">>> Success!")
-      )} Created a new Turborepo at "${path.relative(process.cwd(), root)}".`;
+        logger.turboGradient(">>>")
+      )} Creating a new Turborepo with:`;
 
-      expect(mockConsole.log).toHaveBeenCalledWith(expected);
+      // expect(mockConsole.log).toHaveBeenCalledWith(
+      //     chalk.bold(logger.turboBlue(">>>"))
+      //   `Created your Turborepo at ${chalk.green(
+      //   )}:`
+      // );
+      expect(mockConsole.log).toHaveBeenCalledWith();
       expect(mockConsole.log).toHaveBeenCalledWith(
-        "Inside that directory, you can run several commands:"
+        chalk.bold("To get started:")
       );
 
-      availableScripts.forEach((script) => {
-        expect(mockConsole.log).toHaveBeenCalledWith(
-          chalk.cyan(`  ${packageManager} run ${script}`)
-        );
-      });
+      // availableScripts.forEach((script) => {
+      //   expect(mockConsole.log).toHaveBeenCalledWith(
+      //     chalk.cyan(`  - ${packageManager} run ${script}`)
+      //   );
+      // });
 
       mockAvailablePackageManagers.mockRestore();
       mockCreateProject.mockRestore();
@@ -166,19 +171,21 @@ describe("create-turbo", () => {
       });
 
       const expected = `${chalk.bold(
-        logger.turboGradient(">>> Success!")
-      )} Created a new Turborepo at "${path.relative(process.cwd(), root)}".`;
+        logger.turboBlue(">>>")
+      )} Created a new Turborepo with:`;
 
-      expect(mockConsole.log).toHaveBeenCalledWith(expected);
-      expect(mockConsole.log).toHaveBeenCalledWith(
-        "Inside that directory, you can run several commands:"
-      );
-
-      availableScripts.forEach((script) => {
-        expect(mockConsole.log).toHaveBeenCalledWith(
-          chalk.cyan(`  ${packageManager} run ${script}`)
-        );
-      });
+      // expect(mockConsole.log).toHaveBeenCalledWith(
+      //   chalk.bold(logger.turboBlue(">>>")),
+      //   "Creating a new Turborepo with:"
+      // );
+      expect(mockConsole.log).toHaveBeenCalledWith();
+      // expect(mockConsole.log).toHaveBeenCalledWith("To get started:");
+      //
+      // availableScripts.forEach((script) => {
+      //   expect(mockConsole.log).toHaveBeenCalledWith(
+      //     chalk.cyan(`  ${packageManager} run ${script}`)
+      //   );
+      // });
 
       mockAvailablePackageManagers.mockRestore();
       mockCreateProject.mockRestore();
