@@ -26,7 +26,7 @@ use swc_core::{
 use turbo_tasks::RcStr;
 
 use super::{
-    util::{ids_captured_by, ids_used_by, ids_used_by_ignoring_nested},
+    util::{collect_top_level_decls, ids_captured_by, ids_used_by, ids_used_by_ignoring_nested},
     Key, TURBOPACK_PART_IMPORT_SOURCE,
 };
 use crate::magic_identifier;
@@ -557,6 +557,7 @@ impl DepGraph {
         unresolved_ctxt: SyntaxContext,
         top_level_ctxt: SyntaxContext,
     ) -> (Vec<ItemId>, FxHashMap<ItemId, ItemData>) {
+        let top_level_vars = collect_top_level_decls(module);
         let mut exports = vec![];
         let mut items = FxHashMap::default();
         let mut ids = vec![];
@@ -701,10 +702,15 @@ impl DepGraph {
                                 &export.decl,
                                 unresolved_ctxt,
                                 top_level_ctxt,
+                                &top_level_vars,
                             );
                             used_ids.write.insert(default_var.to_id());
-                            let captured_ids =
-                                ids_captured_by(&export.decl, unresolved_ctxt, top_level_ctxt);
+                            let captured_ids = ids_captured_by(
+                                &export.decl,
+                                unresolved_ctxt,
+                                top_level_ctxt,
+                                &top_level_vars,
+                            );
                             let data = ItemData {
                                 read_vars: used_ids.read,
                                 eventual_read_vars: captured_ids.read,
@@ -741,9 +747,14 @@ impl DepGraph {
                                 &export.expr,
                                 unresolved_ctxt,
                                 top_level_ctxt,
+                                &top_level_vars,
                             );
-                            let captured_ids =
-                                ids_captured_by(&export.expr, unresolved_ctxt, top_level_ctxt);
+                            let captured_ids = ids_captured_by(
+                                &export.expr,
+                                unresolved_ctxt,
+                                top_level_ctxt,
+                                &top_level_vars,
+                            );
 
                             used_ids.write.insert(default_var.to_id());
 
@@ -875,7 +886,12 @@ impl DepGraph {
                     };
                     ids.push(id.clone());
 
-                    let vars = ids_used_by(&f.function, unresolved_ctxt, top_level_ctxt);
+                    let vars = ids_used_by(
+                        &f.function,
+                        unresolved_ctxt,
+                        top_level_ctxt,
+                        &top_level_vars,
+                    );
                     let var_decls = {
                         let mut v = IndexSet::with_capacity_and_hasher(1, Default::default());
                         v.insert(f.ident.to_id());
@@ -905,7 +921,8 @@ impl DepGraph {
                     };
                     ids.push(id.clone());
 
-                    let vars = ids_used_by(&c.class, unresolved_ctxt, top_level_ctxt);
+                    let vars =
+                        ids_used_by(&c.class, unresolved_ctxt, top_level_ctxt, &top_level_vars);
                     let var_decls = {
                         let mut v = IndexSet::with_capacity_and_hasher(1, Default::default());
                         v.insert(c.ident.to_id());
@@ -941,9 +958,14 @@ impl DepGraph {
                             &decl.init,
                             unresolved_ctxt,
                             top_level_ctxt,
+                            &top_level_vars,
                         );
-                        let eventual_vars =
-                            ids_captured_by(&decl.init, unresolved_ctxt, top_level_ctxt);
+                        let eventual_vars = ids_captured_by(
+                            &decl.init,
+                            unresolved_ctxt,
+                            top_level_ctxt,
+                            &top_level_vars,
+                        );
 
                         let side_effects = vars.found_unresolved;
 
@@ -972,9 +994,14 @@ impl DepGraph {
                     expr: box Expr::Assign(assign),
                     ..
                 })) => {
-                    let mut used_ids =
-                        ids_used_by_ignoring_nested(item, unresolved_ctxt, top_level_ctxt);
-                    let captured_ids = ids_captured_by(item, unresolved_ctxt, top_level_ctxt);
+                    let mut used_ids = ids_used_by_ignoring_nested(
+                        item,
+                        unresolved_ctxt,
+                        top_level_ctxt,
+                        &top_level_vars,
+                    );
+                    let captured_ids =
+                        ids_captured_by(item, unresolved_ctxt, top_level_ctxt, &top_level_vars);
 
                     if assign.op != op!("=") {
                         used_ids.read.extend(used_ids.write.iter().cloned());
@@ -983,6 +1010,7 @@ impl DepGraph {
                             &assign.left,
                             unresolved_ctxt,
                             top_level_ctxt,
+                            &top_level_vars,
                         );
                         used_ids.read.extend(extra_ids.read);
                         used_ids.write.extend(extra_ids.write);
@@ -1017,9 +1045,14 @@ impl DepGraph {
                 _ => {
                     // Default to normal
 
-                    let used_ids =
-                        ids_used_by_ignoring_nested(item, unresolved_ctxt, top_level_ctxt);
-                    let captured_ids = ids_captured_by(item, unresolved_ctxt, top_level_ctxt);
+                    let used_ids = ids_used_by_ignoring_nested(
+                        item,
+                        unresolved_ctxt,
+                        top_level_ctxt,
+                        &top_level_vars,
+                    );
+                    let captured_ids =
+                        ids_captured_by(item, unresolved_ctxt, top_level_ctxt, &top_level_vars);
                     let data = ItemData {
                         read_vars: used_ids.read,
                         eventual_read_vars: captured_ids.read,

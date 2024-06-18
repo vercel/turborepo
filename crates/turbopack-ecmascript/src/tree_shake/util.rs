@@ -1,13 +1,15 @@
 use std::hash::BuildHasherDefault;
 
 use indexmap::IndexSet;
-use rustc_hash::FxHasher;
+use rustc_hash::{FxHashSet, FxHasher};
 use swc_core::{
     common::SyntaxContext,
     ecma::{
         ast::{
-            AssignTarget, BlockStmtOrExpr, Constructor, ExportNamedSpecifier, ExportSpecifier,
-            Expr, Function, Id, Ident, MemberExpr, MemberProp, NamedExport, Pat, PropName,
+            ArrowExpr, AssignPatProp, AssignTarget, BlockStmtOrExpr, ClassDecl, ClassExpr,
+            Constructor, DefaultDecl, ExportDefaultDecl, ExportNamedSpecifier, ExportSpecifier,
+            Expr, FnDecl, FnExpr, Function, Id, Ident, ImportSpecifier, MemberExpr, MemberProp,
+            NamedExport, Param, Pat, PropName, VarDeclarator,
         },
         visit::{noop_visit_type, Visit, VisitWith},
     },
@@ -27,10 +29,11 @@ struct Target {
 }
 
 /// A visitor which collects variables which are read or written.
-#[derive(Default)]
-pub(crate) struct IdentUsageCollector {
+pub(crate) struct IdentUsageCollector<'a> {
     unresolved: SyntaxContext,
     top_level: SyntaxContext,
+    top_level_vars: &'a FxHashSet<Id>,
+
     vars: Vars,
 
     is_nested: bool,
@@ -39,7 +42,7 @@ pub(crate) struct IdentUsageCollector {
     mode: Option<Mode>,
 }
 
-impl IdentUsageCollector {
+impl IdentUsageCollector<'_> {
     fn with_nested(&mut self, f: impl FnOnce(&mut Self)) {
         if !self.target.eventual {
             return;
@@ -58,7 +61,7 @@ impl IdentUsageCollector {
     }
 }
 
-impl Visit for IdentUsageCollector {
+impl Visit for IdentUsageCollector<'_> {
     fn visit_assign_target(&mut self, n: &AssignTarget) {
         self.with_mode(Some(Mode::Write), |this| {
             n.visit_children_with(this);
@@ -114,6 +117,7 @@ impl Visit for IdentUsageCollector {
         if n.span.ctxt != self.unresolved
             && n.span.ctxt != self.top_level
             && n.span.ctxt != SyntaxContext::empty()
+            && !self.top_level_vars.contains(&n.to_id())
         {
             return;
         }
@@ -186,18 +190,26 @@ pub(crate) struct Vars {
 ///
 /// Note: This functions accept `SyntaxContext` to filter out variables which
 /// are not interesting. We only need to analyze top-level variables.
-pub(crate) fn ids_captured_by<N>(n: &N, unresolved: SyntaxContext, top_level: SyntaxContext) -> Vars
+pub(crate) fn ids_captured_by<'a, N>(
+    n: &N,
+    unresolved: SyntaxContext,
+    top_level: SyntaxContext,
+    top_level_vars: &'a FxHashSet<Id>,
+) -> Vars
 where
-    N: VisitWith<IdentUsageCollector>,
+    N: VisitWith<IdentUsageCollector<'a>>,
 {
     let mut v = IdentUsageCollector {
         unresolved,
         top_level,
+        top_level_vars,
         target: Target {
             direct: false,
             eventual: true,
         },
-        ..Default::default()
+        vars: Vars::default(),
+        is_nested: false,
+        mode: None,
     };
     n.visit_with(&mut v);
     v.vars
@@ -207,18 +219,26 @@ where
 ///
 /// Note: This functions accept `SyntaxContext` to filter out variables which
 /// are not interesting. We only need to analyze top-level variables.
-pub(crate) fn ids_used_by<N>(n: &N, unresolved: SyntaxContext, top_level: SyntaxContext) -> Vars
+pub(crate) fn ids_used_by<'a, N>(
+    n: &N,
+    unresolved: SyntaxContext,
+    top_level: SyntaxContext,
+    top_level_vars: &'a FxHashSet<Id>,
+) -> Vars
 where
-    N: VisitWith<IdentUsageCollector>,
+    N: VisitWith<IdentUsageCollector<'a>>,
 {
     let mut v = IdentUsageCollector {
         unresolved,
         top_level,
+        top_level_vars,
         target: Target {
             direct: true,
             eventual: true,
         },
-        ..Default::default()
+        vars: Vars::default(),
+        is_nested: false,
+        mode: None,
     };
     n.visit_with(&mut v);
     v.vars
@@ -228,23 +248,131 @@ where
 ///
 /// Note: This functions accept `SyntaxContext` to filter out variables which
 /// are not interesting. We only need to analyze top-level variables.
-pub(crate) fn ids_used_by_ignoring_nested<N>(
+pub(crate) fn ids_used_by_ignoring_nested<'a, N>(
     n: &N,
     unresolved: SyntaxContext,
     top_level: SyntaxContext,
+    top_level_vars: &'a FxHashSet<Id>,
 ) -> Vars
 where
-    N: VisitWith<IdentUsageCollector>,
+    N: VisitWith<IdentUsageCollector<'a>>,
 {
     let mut v = IdentUsageCollector {
         unresolved,
         top_level,
+        top_level_vars,
         target: Target {
             direct: true,
             eventual: false,
         },
-        ..Default::default()
+        vars: Vars::default(),
+        is_nested: false,
+        mode: None,
     };
     n.visit_with(&mut v);
     v.vars
+}
+
+pub struct TopLevelBindingCollector {
+    bindings: FxHashSet<Id>,
+    is_pat_decl: bool,
+}
+
+impl TopLevelBindingCollector {
+    fn add(&mut self, i: &Ident) {
+        self.bindings.insert(i.to_id());
+    }
+}
+
+impl Visit for TopLevelBindingCollector {
+    noop_visit_type!();
+
+    fn visit_arrow_expr(&mut self, _: &ArrowExpr) {}
+
+    fn visit_assign_pat_prop(&mut self, node: &AssignPatProp) {
+        node.value.visit_with(self);
+
+        if self.is_pat_decl {
+            self.add(&node.key);
+        }
+    }
+
+    fn visit_class_decl(&mut self, node: &ClassDecl) {
+        self.add(&node.ident);
+    }
+
+    fn visit_expr(&mut self, _: &Expr) {}
+
+    fn visit_export_default_decl(&mut self, e: &ExportDefaultDecl) {
+        match &e.decl {
+            DefaultDecl::Class(ClassExpr {
+                ident: Some(ident), ..
+            }) => {
+                self.add(ident);
+            }
+            DefaultDecl::Fn(FnExpr {
+                ident: Some(ident),
+                function: f,
+            }) if f.body.is_some() => {
+                self.add(ident);
+            }
+            _ => {}
+        }
+    }
+
+    fn visit_fn_decl(&mut self, node: &FnDecl) {
+        self.add(&node.ident);
+    }
+
+    fn visit_import_specifier(&mut self, node: &ImportSpecifier) {
+        match node {
+            ImportSpecifier::Named(s) => self.add(&s.local),
+            ImportSpecifier::Default(s) => {
+                self.add(&s.local);
+            }
+            ImportSpecifier::Namespace(s) => {
+                self.add(&s.local);
+            }
+        }
+    }
+
+    fn visit_param(&mut self, node: &Param) {
+        let old = self.is_pat_decl;
+        self.is_pat_decl = true;
+        node.visit_children_with(self);
+        self.is_pat_decl = old;
+    }
+
+    fn visit_pat(&mut self, node: &Pat) {
+        node.visit_children_with(self);
+
+        if self.is_pat_decl {
+            if let Pat::Ident(i) = node {
+                self.add(&i.id)
+            }
+        }
+    }
+
+    fn visit_var_declarator(&mut self, node: &VarDeclarator) {
+        let old = self.is_pat_decl;
+        self.is_pat_decl = true;
+        node.name.visit_with(self);
+
+        self.is_pat_decl = false;
+        node.init.visit_with(self);
+        self.is_pat_decl = old;
+    }
+}
+
+/// Collects binding identifiers.
+pub fn collect_top_level_decls<N>(n: &N) -> FxHashSet<Id>
+where
+    N: VisitWith<TopLevelBindingCollector>,
+{
+    let mut v = TopLevelBindingCollector {
+        bindings: Default::default(),
+        is_pat_decl: false,
+    };
+    n.visit_with(&mut v);
+    v.bindings
 }
