@@ -203,7 +203,7 @@ pub async fn link(
                 .await
                 .map_err(Error::TeamsRequest)?;
 
-            let selected_team = select_team(base, &teams_response.teams, user_display_name)?;
+            let selected_team = select_team(base, &teams_response.teams)?;
 
             let team_id = match selected_team {
                 SelectedTeam::User => user_response.user.id.as_str(),
@@ -288,18 +288,12 @@ pub async fn link(
                 .await
                 .map_err(Error::UserNotFound)?;
 
-            let user_display_name = user_response
-                .user
-                .name
-                .as_deref()
-                .unwrap_or(user_response.user.username.as_str());
-
             let teams_response = api_client
                 .get_teams(token)
                 .await
                 .map_err(Error::TeamsRequest)?;
 
-            let selected_team = select_team(base, &teams_response.teams, user_display_name)?;
+            let selected_team = select_team(base, &teams_response.teams)?;
 
             let team_id = match selected_team {
                 SelectedTeam::User => user_response.user.id.as_str(),
@@ -382,28 +376,15 @@ fn should_enable_caching() -> Result<bool, Error> {
 }
 
 #[cfg(test)]
-fn select_team<'a>(
-    _: &CommandBase,
-    teams: &'a [Team],
-    _: &'a str,
-) -> Result<SelectedTeam<'a>, Error> {
+fn select_team<'a>(_: &CommandBase, teams: &'a [Team]) -> Result<SelectedTeam<'a>, Error> {
     let mut rng = rand::thread_rng();
     let idx = rng.gen_range(0..=(teams.len()));
-    if idx == teams.len() {
-        Ok(SelectedTeam::User)
-    } else {
-        Ok(SelectedTeam::Team(&teams[idx]))
-    }
+    Ok(SelectedTeam::Team(&teams[idx]))
 }
 
 #[cfg(not(test))]
-fn select_team<'a>(
-    base: &CommandBase,
-    teams: &'a [Team],
-    user_display_name: &'a str,
-) -> Result<SelectedTeam<'a>, Error> {
-    let mut team_names = vec![user_display_name];
-    team_names.extend(teams.iter().map(|team| team.name.as_str()));
+fn select_team<'a>(base: &CommandBase, teams: &'a [Team]) -> Result<SelectedTeam<'a>, Error> {
+    let team_names = vec![teams.iter().map(|team| team.name.as_str())];
 
     let theme = DialoguerTheme {
         active_item_style: Style::new().cyan().bold(),
@@ -429,11 +410,7 @@ fn select_team<'a>(
         .interact()
         .map_err(Error::UserCanceled)?;
 
-    if selection == 0 {
-        Ok(SelectedTeam::User)
-    } else {
-        Ok(SelectedTeam::Team(&teams[selection - 1]))
-    }
+    Ok(SelectedTeam::Team(&teams[selection]))
 }
 
 #[cfg(test)]

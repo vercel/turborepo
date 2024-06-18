@@ -1,6 +1,8 @@
 //! Types for interacting with the Vercel API. Used for both
 //! the client (`turborepo-api-client`) and for the
 //! mock server (`turborepo-vercel-api-mock`)
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 use url::Url;
 pub mod telemetry;
@@ -78,6 +80,11 @@ pub struct Team {
 impl Team {
     pub fn is_owner(&self) -> bool {
         matches!(self.membership.role, Role::Owner)
+    }
+}
+impl fmt::Display for Team {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:#?}", self.name)
     }
 }
 
