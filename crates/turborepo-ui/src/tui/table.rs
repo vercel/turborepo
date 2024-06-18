@@ -255,7 +255,7 @@ impl<'a> StatefulWidget for &'a TaskTable {
                 .chain(self.running_rows())
                 .chain(self.planned_rows()),
             [
-                Constraint::Min(4),
+                Constraint::Min(14),
                 // Status takes one cell to render
                 Constraint::Length(1),
             ],
