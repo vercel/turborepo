@@ -384,7 +384,10 @@ fn select_team<'a>(_: &CommandBase, teams: &'a [Team]) -> Result<SelectedTeam<'a
 
 #[cfg(not(test))]
 fn select_team<'a>(base: &CommandBase, teams: &'a [Team]) -> Result<SelectedTeam<'a>, Error> {
-    let team_names = vec![teams.iter().map(|team| team.name.as_str())];
+    let team_names = teams
+        .iter()
+        .map(|team| team.name.as_str())
+        .collect::<Vec<_>>();
 
     let theme = DialoguerTheme {
         active_item_style: Style::new().cyan().bold(),
