@@ -1,15 +1,19 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalDependencies": ["**/.env.*local"],
-  "pipeline": {
+  "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env", ".env.*"],
       "outputs": [".next/**", "!.next/cache/**"]
     },
     "lint": {
       "dependsOn": ["^lint"]
     },
-    "test": {},
+    "type-check": {},
+    "test": {
+      "cache": false,
+      "inputs": ["**/*.test.ts", "**/*.test.tsx", "vitest.config.ts"]
+    },
     "dev": {
       "cache": false,
       "persistent": true

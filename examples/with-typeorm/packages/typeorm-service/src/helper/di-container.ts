@@ -1,7 +1,6 @@
 import { AppDataSource } from "../orm-config";
 import { reflectFactory } from "./reflect-factory";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Class<T = any> = { new (...args: any[]): T };
 
 const ProxyForDatabaseInitialize = <T extends object>(obj: T): T => {

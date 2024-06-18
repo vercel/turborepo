@@ -20,11 +20,11 @@ This Turborepo includes the following packages/apps:
 The @repo/typeorm-service package demonstrates a sophisticated setup where services are defined using TypeORM repositories and injected into Next.js apps using a custom dependency injection mechanism. This approach emphasizes a clear separation of concerns and a modular architecture.
 
 ```typescript
-// packages/typeorm-service/domain/todo/todo.repository.ts
+// root/packages/typeorm-service/domain/todo/todo.repository.ts
 @Repository
 export class TodoRepository {...}
 
-// packages/typeorm-service/domain/todo/todo.service.ts
+// root/packages/typeorm-service/domain/todo/todo.service.ts
 @InjectAble
 export class TodoService {
     constructor(private todoRepo: TodoRepository) {}
@@ -32,8 +32,12 @@ export class TodoService {
 }
 ```
 
+## Example Usage of the Service Layer
+
+This example demonstrates how to use the typeorm-service package to inject and use services within a Next.js app. The TodoService is injected into both page.tsx and API routes.
+
 ```typescript
-// app/page.tsx
+// root/apps/docs/app/page.tsx
 import { inject, TodoService } from "@repo/typeorm-service";
 
 export default async function Page(): Promise<JSX.Element> {
@@ -43,8 +47,12 @@ export default async function Page(): Promise<JSX.Element> {
 
   return ...
 }
+```
 
-// app/api/todo/route.ts
+In the API route file, TodoService is injected to handle GET and POST requests. The GET request returns the list of todos, while the POST request adds a new todo.
+
+```typescript
+// root/apps/web/app/api/todo/route.ts
 
 import { inject, type Todo, TodoService } from "@repo/typeorm-service";
 
@@ -63,15 +71,13 @@ export async function POST(req: Request) {
 
   return Response.json(entity);
 }
-
-
 ```
 
 ## Configuring the Database
 
 For managing the database settings such as the database type, username, password, and other configurations, refer to the orm-config.ts file located in the packages/typeorm-service/src directory. This file centralizes all database connection settings to ensure secure and efficient database management. Make sure to review and adjust these settings according to your environment to ensure optimal performance and security.
 
-```typescript 
+```typescript
 // packages/typeorm-service/src/orm-config.ts
 import { DataSource } from "typeorm";
 
@@ -89,7 +95,6 @@ export const AppDataSource = new DataSource({
 });
 
 ```
-
 
 ### Utilities
 

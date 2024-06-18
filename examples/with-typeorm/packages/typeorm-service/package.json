@@ -6,9 +6,13 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "lint": "eslint src/",
+    "lint": "eslint src/ --max-warnings 0",
     "test:watch": "vitest",
-    "test": "vitest run"
+    "test": "vitest run",
+    "type-check":"tsc --noEmit"
+  },
+  "peerDependencies": {
+    "typeorm": "^0.3.20"
   },
   "dependencies": {
     "mysql2": "^3.9.7",
@@ -21,6 +25,7 @@
     "@repo/typescript-config": "workspace:*",
     "@types/node": "^20.11.24",
     "typescript": "^5.3.3",
+    "eslint": "^8.57.0",
     "vitest": "^1.5.0"
   }
 }

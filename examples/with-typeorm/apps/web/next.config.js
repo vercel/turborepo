@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 module.exports = {
-  transpilePackages: ["@repo/ui", "@repo/typeorm-service"],
+  transpilePackages: ["@repo/ui"],
   experimental: {
     serverComponentsExternalPackages: ["typeorm"],
   },
