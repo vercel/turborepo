@@ -339,7 +339,7 @@ async fn get_part_id(result: &SplitResult, part: Vc<ModulePart>) -> Result<u32> 
         None => {
             // This is required to handle `export * from 'foo'`
             if let ModulePart::Export(..) = &*part {
-                if let Some(&v) = entrypoints.get(&key) {
+                if let Some(&v) = entrypoints.get(&Key::ModuleEvaluation) {
                     return Ok(v);
                 }
             }
