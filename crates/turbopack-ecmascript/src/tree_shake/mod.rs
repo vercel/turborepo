@@ -444,6 +444,25 @@ pub(super) async fn split(
                 modules,
             } = dep_graph.split_module(&items);
 
+            for (i, m) in modules.iter().enumerate() {
+                let mut buf = vec![];
+
+                {
+                    let wr = JsWriter::new(Default::default(), "\n", &mut buf, None);
+
+                    let mut emitter = Emitter {
+                        cfg: Default::default(),
+                        comments: None,
+                        cm: source_map.clone(),
+                        wr,
+                    };
+
+                    emitter.emit_module(m).unwrap();
+                }
+                let code = String::from_utf8(buf).unwrap();
+
+                println!("# Module #{i}:\n{code}");
+            }
             assert_ne!(modules.len(), 0, "modules.len() == 0;\nModule: {module:?}",);
 
             for &v in entrypoints.values() {
