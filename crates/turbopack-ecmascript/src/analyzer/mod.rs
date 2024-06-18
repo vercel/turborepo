@@ -24,7 +24,7 @@ use swc_core::{
         atoms::{Atom, JsWord},
     },
 };
-use turbo_tasks::Vc;
+use turbo_tasks::{RcStr, Vc};
 use turbopack_core::compile_time_info::CompileTimeDefineValue;
 use url::Url;
 
@@ -98,6 +98,7 @@ impl Eq for ConstantNumber {}
 pub enum ConstantString {
     Word(JsWord),
     Atom(Atom),
+    RcStr(RcStr),
 }
 
 impl ConstantString {
@@ -105,6 +106,7 @@ impl ConstantString {
         match self {
             Self::Word(s) => s,
             Self::Atom(s) => s,
+            Self::RcStr(s) => s,
         }
     }
 
@@ -148,6 +150,12 @@ impl From<&'static str> for ConstantString {
 impl From<String> for ConstantString {
     fn from(v: String) -> Self {
         ConstantString::Atom(v.into())
+    }
+}
+
+impl From<RcStr> for ConstantString {
+    fn from(v: RcStr) -> Self {
+        ConstantString::RcStr(v)
     }
 }
 
@@ -361,8 +369,8 @@ enum JsValueMetaKind {
 /// - Replace all built-in functions with their values when they are
 ///   compile-time constant.
 /// - For optimization, any nested operations are replaced with
-///   [JsValue::Unknown]. So only one layer of operation remains.
-/// Any remaining operation or placeholder can be treated as unknown.
+///   [JsValue::Unknown]. So only one layer of operation remains. Any remaining
+///   operation or placeholder can be treated as unknown.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum JsValue {
     // LEAF VALUES
@@ -484,9 +492,15 @@ impl From<f64> for JsValue {
     }
 }
 
+impl From<RcStr> for JsValue {
+    fn from(v: RcStr) -> Self {
+        ConstantValue::Str(v.into()).into()
+    }
+}
+
 impl From<String> for JsValue {
     fn from(v: String) -> Self {
-        ConstantValue::Str(v.into()).into()
+        RcStr::from(v).into()
     }
 }
 
@@ -3258,7 +3272,7 @@ impl WellKnownObjectKind {
 
 #[derive(Debug, Clone)]
 pub struct RequireContextOptions {
-    pub dir: String,
+    pub dir: RcStr,
     pub include_subdirs: bool,
     /// this is a regex (pattern, flags)
     pub filter: Regex,
@@ -3307,7 +3321,7 @@ pub fn parse_require_context(args: &[JsValue]) -> Result<RequireContextOptions> 
         bail!("require.context() only supports 1-3 arguments (mode is not supported)");
     }
 
-    let Some(dir) = args[0].as_str().map(|s| s.to_string()) else {
+    let Some(dir) = args[0].as_str().map(|s| s.into()) else {
         bail!("require.context(dir, ...) requires dir to be a constant string");
     };
 
@@ -3347,7 +3361,7 @@ pub fn parse_require_context(args: &[JsValue]) -> Result<RequireContextOptions> 
 
 #[turbo_tasks::value(transparent)]
 #[derive(Debug, Clone)]
-pub struct RequireContextValue(IndexMap<String, String>);
+pub struct RequireContextValue(IndexMap<RcStr, RcStr>);
 
 #[turbo_tasks::value_impl]
 impl RequireContextValue {
@@ -3478,9 +3492,9 @@ pub mod test_utils {
                 Ok(options) => {
                     let mut map = IndexMap::new();
 
-                    map.insert("./a".into(), format!("[context: {}]/a", options.dir));
-                    map.insert("./b".into(), format!("[context: {}]/b", options.dir));
-                    map.insert("./c".into(), format!("[context: {}]/c", options.dir));
+                    map.insert("./a".into(), format!("[context: {}]/a", options.dir).into());
+                    map.insert("./b".into(), format!("[context: {}]/b", options.dir).into());
+                    map.insert("./c".into(), format!("[context: {}]/c", options.dir).into());
 
                     JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContextRequire(
                         Vc::cell(map),
@@ -3574,7 +3588,8 @@ mod tests {
                 let top_level_mark = Mark::new();
                 m.visit_mut_with(&mut resolver(unresolved_mark, top_level_mark, false));
 
-                let eval_context = EvalContext::new(&m, unresolved_mark, None);
+                let eval_context =
+                    EvalContext::new(&m, unresolved_mark, top_level_mark, false, None);
 
                 let mut var_graph = create_graph(&m, &eval_context);
 

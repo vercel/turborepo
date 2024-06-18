@@ -48,9 +48,6 @@ createTurboCli
   })
 
   .argument("[project-directory]")
-  // TODO: argument is still provided (but removed from help)
-  // for backwards compatibility, remove this in the next major
-  .argument("[package-manager]")
   .addOption(
     new Option(
       "-m, --package-manager <package-manager>",

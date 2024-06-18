@@ -19,6 +19,7 @@ mod multiplexer;
 pub mod signature_authentication;
 #[cfg(test)]
 mod test_cases;
+mod upload_progress;
 
 use std::{backtrace, backtrace::Backtrace};
 

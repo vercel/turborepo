@@ -6,6 +6,7 @@ Thanks for your interest in contributing to Turbo!
 
 - [Contributing to Turbo](#contributing-to-turbo)
   - [General Dependencies](#general-dependencies)
+    - [Linux Dependencies](#linux-dependencies)
   - [Contributing to Turborepo](#contributing-to-turborepo)
     - [Building Turborepo](#building-turborepo)
     - [TLS Implementation](#tls-implementation)
@@ -29,6 +30,10 @@ Thanks for your interest in contributing to Turbo!
 - [Rust](https://www.rust-lang.org/tools/install)
 - [cargo-groups](https://github.com/nicholaslyang/cargo-groups) (used to group crates into Turborepo-specific ones and Turbopack-specific ones)
 
+### Linux Dependencies
+
+- LLD (LLVM Linker), as it's not installed by default on many Linux distributions (e.g. `apt install lld`).
+
 ## Contributing to Turborepo
 
 ### Building Turborepo
@@ -41,7 +46,7 @@ Dependencies
 
 Building
 
-- Building `turbo` CLI: In `cli` run `make turbo`
+- Building `turbo` CLI: `cargo build -p turbo`
 - Using `turbo` to build `turbo` CLI: `./turbow.js`
 
 ### TLS Implementation
@@ -284,6 +289,14 @@ You can also create a little demo app and run
 
 ```shell
 cargo run -p node-file-trace -- print demo/index.js
+```
+
+Updating snapshot tests:
+
+In case of changes that involve updating snapshots you can use the `UPDATE=1` environment variable.
+
+```
+UPDATE=1 cargo nextest run
 ```
 
 ### Profiling Turbopack

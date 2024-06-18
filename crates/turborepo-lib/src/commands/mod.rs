@@ -68,7 +68,15 @@ impl CommandBase {
             .with_token(self.args.token.clone())
             .with_timeout(self.args.remote_cache_timeout)
             .with_preflight(self.args.preflight.then_some(true))
-            .with_experimental_ui(self.args.experimental_ui.then_some(true))
+            .with_ui(self.args.execution_args.as_ref().and_then(|args| {
+                if !args.log_order.compatible_with_tui() {
+                    Some(false)
+                } else {
+                    // If the argument is compatible with the TUI this does not mean we should
+                    // override other configs
+                    None
+                }
+            }))
             .build()
     }
 

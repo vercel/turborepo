@@ -21,7 +21,7 @@ export class Runner {
   constructor(options: UtilityArgs) {
     this.transform = options.transformer;
     this.rootPath = options.rootPath;
-    this.dry = options.dry;
+    this.dry = options.dryRun;
     this.print = options.print;
     this.logger = new Logger(options);
   }

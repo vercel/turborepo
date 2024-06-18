@@ -99,9 +99,9 @@ impl TurboSubscriber {
     ///
     /// `TurboSubscriber` has optional loggers that can be enabled later:
     /// - `set_daemon_logger` enables logging to a file, using the standard
-    ///  formatter.
+    ///   formatter.
     /// - `enable_chrome_tracing` enables logging to a file, using the chrome
-    ///  tracing formatter.
+    ///   tracing formatter.
     pub fn new_with_verbosity(verbosity: usize, ui: &UI) -> Self {
         let level_override = match verbosity {
             0 => None,

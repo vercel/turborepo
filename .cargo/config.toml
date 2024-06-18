@@ -15,11 +15,21 @@ rustdocflags = ["-Znormalize-docs"]
 [target.x86_64-pc-windows-msvc]
 linker = "rust-lld"
 
-[target.aarch64-apple-darwin]
+[target.aarch64-pc-windows-msvc]
 linker = "rust-lld"
 
-[target.x86_64-apple-darwin]
+[target.'cfg(target_os = "macos")']
 linker = "rust-lld"
+
+[target.'cfg(all(target_os = "linux", target_env = "gnu"))']
+rustflags = [
+  "--cfg",
+  "tokio_unstable",
+  "-Zshare-generics=y",
+  "-Zthreads=8",
+  "-Csymbol-mangling-version=v0",
+  "-Clink-arg=-fuse-ld=lld",
+]
 
 [alias]
 xtask = "run --package xtask --"

@@ -3,7 +3,7 @@ use swc_core::{
     ecma::ast::{Expr, ExprOrSpread, NewExpr},
     quote,
 };
-use turbo_tasks::{Value, ValueToString, Vc};
+use turbo_tasks::{RcStr, Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::{
         ChunkItemExt, ChunkableModule, ChunkableModuleReference, ChunkingContext, ChunkingType,
@@ -104,11 +104,10 @@ impl ModuleReference for UrlAssetReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for UrlAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
-        Ok(Vc::cell(format!(
-            "new URL({})",
-            self.request.to_string().await?,
-        )))
+    async fn to_string(&self) -> Result<Vc<RcStr>> {
+        Ok(Vc::cell(
+            format!("new URL({})", self.request.to_string().await?,).into(),
+        ))
     }
 }
 
@@ -183,10 +182,7 @@ impl CodeGenerateable for UrlAssetReference {
                             }
                         }));
                     }
-                    ReferencedAsset::External(
-                        request,
-                        ExternalType::OriginalReference | ExternalType::Url,
-                    ) => {
+                    ReferencedAsset::External(request, ExternalType::Url) => {
                         let request = request.to_string();
                         visitors.push(create_visitor!(ast_path, visit_mut_expr(new_expr: &mut Expr) {
                             let should_rewrite_to_relative = if let Expr::New(NewExpr { args: Some(args), .. }) = new_expr {
@@ -275,10 +271,7 @@ impl CodeGenerateable for UrlAssetReference {
                             }
                         }));
                     }
-                    ReferencedAsset::External(
-                        request,
-                        ExternalType::OriginalReference | ExternalType::Url,
-                    ) => {
+                    ReferencedAsset::External(request, ExternalType::Url) => {
                         let request = request.to_string();
                         visitors.push(create_visitor!(ast_path, visit_mut_expr(new_expr: &mut Expr) {
                             if let Expr::New(NewExpr { args: Some(args), .. }) = new_expr {
