@@ -5,9 +5,12 @@ use indexmap::IndexSet;
 use rustc_hash::FxHashMap;
 use swc_core::{
     common::{util::take::Take, SyntaxContext, DUMMY_SP, GLOBALS},
-    ecma::ast::{
-        ExportNamedSpecifier, Id, Ident, ImportDecl, Module, ModuleDecl, ModuleExportName,
-        ModuleItem, NamedExport, Program,
+    ecma::{
+        ast::{
+            ExportNamedSpecifier, Id, Ident, ImportDecl, Module, ModuleDecl, ModuleExportName,
+            ModuleItem, NamedExport, Program,
+        },
+        codegen::{text_writer::JsWriter, Emitter},
     },
 };
 use turbo_tasks::{RcStr, ValueToString, Vc};
@@ -398,6 +401,26 @@ pub(super) async fn split(
                     parse_result: parsed,
                 }
                 .cell());
+            }
+
+            {
+                let mut buf = vec![];
+
+                {
+                    let wr = JsWriter::new(Default::default(), "\n", &mut buf, None);
+
+                    let mut emitter = Emitter {
+                        cfg: Default::default(),
+                        comments: None,
+                        cm: source_map.clone(),
+                        wr,
+                    };
+
+                    emitter.emit_program(program).unwrap();
+                }
+                let code = String::from_utf8(buf).unwrap();
+
+                println!("# Program:\n{code}");
             }
 
             let module = match program {
