@@ -308,9 +308,9 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                         |group_name| {
                             Arc::new(move |end_time| {
                                 let timestamp = end_time.timestamp();
-                                String::from(format!(
+                               format!(
                                     "\\e[0Ksection_end:{timestamp}:{group_name}\\r\\e[0K"
-                                ))
+                                )
                             })
                         },
                     )),
