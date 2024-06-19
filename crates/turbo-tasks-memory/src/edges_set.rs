@@ -89,6 +89,7 @@ impl EdgeEntry {
 type ComplexSet = AutoSet<EdgeEntry, BuildHasherDefault<FxHasher>, 3>;
 
 enum EdgesEntry {
+    Empty,
     Output,
     Child,
     ChildAndOutput,
@@ -123,6 +124,7 @@ impl EdgesEntry {
 
     fn len(&self) -> usize {
         match self {
+            EdgesEntry::Empty => unreachable!(),
             EdgesEntry::Output => 1,
             EdgesEntry::Child => 1,
             EdgesEntry::Cell0(_) => 1,
@@ -136,6 +138,7 @@ impl EdgesEntry {
 
     fn into_iter(self) -> impl Iterator<Item = EdgeEntry> {
         match self {
+            EdgesEntry::Empty => unreachable!(),
             EdgesEntry::Output => IntoIters::One([EdgeEntry::Output].into_iter()),
             EdgesEntry::Child => IntoIters::One([EdgeEntry::Child].into_iter()),
             EdgesEntry::Cell0(type_id) => {
@@ -167,6 +170,56 @@ impl EdgesEntry {
                 .into_iter(),
             ),
             EdgesEntry::Complex(set) => IntoIters::Four(set.into_iter()),
+        }
+    }
+
+    fn iter(&self) -> impl Iterator<Item = EdgeEntry> + '_ {
+        match self {
+            EdgesEntry::Empty => unreachable!(),
+            EdgesEntry::Output => IntoIters::One([EdgeEntry::Output].into_iter()),
+            EdgesEntry::Child => IntoIters::One([EdgeEntry::Child].into_iter()),
+            EdgesEntry::Cell0(type_id) => IntoIters::One(
+                [EdgeEntry::Cell(CellId {
+                    type_id: *type_id,
+                    index: 0,
+                })]
+                .into_iter(),
+            ),
+            EdgesEntry::ChildAndOutput => {
+                IntoIters::Two([EdgeEntry::Child, EdgeEntry::Output].into_iter())
+            }
+            EdgesEntry::ChildAndCell0(type_id) => IntoIters::Two(
+                [
+                    EdgeEntry::Child,
+                    EdgeEntry::Cell(CellId {
+                        type_id: *type_id,
+                        index: 0,
+                    }),
+                ]
+                .into_iter(),
+            ),
+            EdgesEntry::OutputAndCell0(type_id) => IntoIters::Two(
+                [
+                    EdgeEntry::Output,
+                    EdgeEntry::Cell(CellId {
+                        type_id: *type_id,
+                        index: 0,
+                    }),
+                ]
+                .into_iter(),
+            ),
+            EdgesEntry::ChildOutputAndCell0(type_id) => IntoIters::Three(
+                [
+                    EdgeEntry::Child,
+                    EdgeEntry::Output,
+                    EdgeEntry::Cell(CellId {
+                        type_id: *type_id,
+                        index: 0,
+                    }),
+                ]
+                .into_iter(),
+            ),
+            EdgesEntry::Complex(set) => IntoIters::Four(set.iter().copied()),
         }
     }
 
@@ -285,6 +338,71 @@ impl EdgesEntry {
         self.into_complex().insert(entry);
     }
 
+    fn remove(&mut self, entry: EdgeEntry) {
+        if !self.has(entry) {
+            return;
+        }
+        match entry {
+            EdgeEntry::Output => match self {
+                EdgesEntry::Output => {
+                    *self = EdgesEntry::Empty;
+                    return;
+                }
+                EdgesEntry::ChildAndOutput => {
+                    *self = EdgesEntry::Child;
+                    return;
+                }
+                EdgesEntry::OutputAndCell0(type_id) => {
+                    *self = EdgesEntry::Cell0(*type_id);
+                    return;
+                }
+                _ => {}
+            },
+            EdgeEntry::Child => match self {
+                EdgesEntry::Child => {
+                    *self = EdgesEntry::Empty;
+                    return;
+                }
+                EdgesEntry::ChildAndOutput => {
+                    *self = EdgesEntry::Output;
+                    return;
+                }
+                EdgesEntry::ChildAndCell0(type_id) => {
+                    *self = EdgesEntry::Cell0(*type_id);
+                    return;
+                }
+                _ => {}
+            },
+            EdgeEntry::Cell(type_id) => {
+                let CellId { type_id, index } = type_id;
+                if index == 0 {
+                    match self {
+                        EdgesEntry::Cell0(_) => {
+                            *self = EdgesEntry::Empty;
+                            return;
+                        }
+                        EdgesEntry::OutputAndCell0(_) => {
+                            *self = EdgesEntry::Output;
+                            return;
+                        }
+                        EdgesEntry::ChildAndCell0(_) => {
+                            *self = EdgesEntry::Child;
+                            return;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            EdgeEntry::Collectibles(_) => {}
+        }
+        if let EdgesEntry::Complex(set) = self {
+            set.remove(&entry);
+            if set.is_empty() {
+                *self = EdgesEntry::Empty;
+            }
+        }
+    }
+
     fn shrink_to_fit(&mut self) {
         if let EdgesEntry::Complex(set) = self {
             set.shrink_to_fit();
@@ -358,6 +476,23 @@ pub struct TaskDependenciesList {
 impl TaskDependenciesList {
     pub fn is_empty(&self) -> bool {
         self.edges.is_empty()
+    }
+
+    pub(crate) fn remove(&mut self, dependencies: &TaskDependencySet) {
+        self.edges.retain_mut(|(task, entry)| {
+            if let Some(other) = dependencies.map.get(task) {
+                for item in other.iter() {
+                    entry.remove(item)
+                }
+                if matches!(entry, EdgesEntry::Empty) {
+                    false
+                } else {
+                    true
+                }
+            } else {
+                true
+            }
+        });
     }
 }
 
