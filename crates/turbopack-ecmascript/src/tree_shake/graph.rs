@@ -930,7 +930,6 @@ impl DepGraph {
                     items.insert(
                         id,
                         ItemData {
-                            is_hoisted: true,
                             read_vars: vars.read,
                             write_vars: vars.write,
                             var_decls,
