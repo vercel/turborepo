@@ -577,10 +577,9 @@ impl Task {
         }
     }
 
-    #[cfg(not(feature = "report_expensive"))]
     fn clear_dependencies(
         &self,
-        dependencies: impl IntoIterator<Item = TaskDependency>,
+        dependencies: TaskDependencySet,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
@@ -589,31 +588,14 @@ impl Task {
         }
     }
 
-    #[cfg(feature = "report_expensive")]
-    fn clear_dependencies(
+    fn clear_dependencies_set(
         &self,
-        dependencies: impl IntoIterator<Item = TaskDependency>,
+        dependencies: TaskDependenciesList,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
-        use std::time::Instant;
-
-        use turbo_tasks::util::FormatDuration;
-        let start = Instant::now();
-
-        let count = dependencies.len();
-
         for dep in dependencies.into_iter() {
             Task::remove_dependency(dep, self.id, backend, turbo_tasks);
-        }
-        let elapsed = start.elapsed();
-        if elapsed.as_millis() >= 10 || count > 10000 {
-            println!(
-                "clear_dependencies({}) took {}: {:?}",
-                count,
-                FormatDuration(elapsed),
-                self
-            );
         }
     }
 
@@ -644,7 +626,6 @@ impl Task {
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> Option<TaskExecutionSpec> {
         let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
-        let dependencies;
         let (future, span) = {
             let mut state = self.full_state_mut();
             #[cfg(not(feature = "lazy_remove_children"))]
@@ -694,7 +675,6 @@ impl Task {
             result
         };
         aggregation_context.apply_queued_updates();
-        self.clear_dependencies(dependencies, backend, turbo_tasks);
         Some(TaskExecutionSpec { future, span })
     }
 
@@ -944,7 +924,7 @@ impl Task {
                         }
                         event.notify(usize::MAX);
                         drop(state);
-                        self.clear_dependencies(outdated_dependencies, backend, turbo_tasks);
+                        self.clear_dependencies_set(outdated_dependencies, backend, turbo_tasks);
                     }
                     InProgressDirty {
                         ref mut event,
@@ -1680,7 +1660,7 @@ impl Task {
         // removing dependencies We can clear the dependencies as we are already
         // marked as dirty
         if let Some(dependencies) = clear_dependencies {
-            self.clear_dependencies(dependencies, backend, turbo_tasks);
+            self.clear_dependencies_set(dependencies, backend, turbo_tasks);
         }
 
         aggregation_context.apply_queued_updates();
