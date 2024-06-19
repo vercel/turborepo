@@ -1,7 +1,11 @@
 import path from "node:path";
 import { readJsonSync, existsSync } from "fs-extra";
 import { type PackageJson, getTurboConfigs } from "@turbo/utils";
-import type { SchemaV1, RootSchemaV1 } from "@turbo/types/src/types/config";
+import type {
+  SchemaV1,
+  RootSchemaV1,
+  Pipeline,
+} from "@turbo/types/src/types/config";
 import type { Transformer, TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
@@ -13,7 +17,20 @@ const DESCRIPTION =
   "Rewrite experimentalPassThroughEnv and experimentalGlobalPassThroughEnv";
 const INTRODUCED_IN = "1.10.0";
 
-function migrateRootConfig(config: RootSchemaV1) {
+type ExperimentalRootSchema = Omit<RootSchemaV1, "pipeline"> & {
+  experimentalGlobalPassThroughEnv?: null | Array<string>;
+  pipeline: Record<string, ExperimentalPipeline>;
+};
+
+type ExperimentalPipeline = Pipeline & {
+  experimentalPassThroughEnv?: null | Array<string>;
+};
+
+type ExperimentalSchema = Omit<SchemaV1, "pipeline"> & {
+  pipeline: Record<string, ExperimentalPipeline>;
+};
+
+function migrateRootConfig(config: ExperimentalRootSchema) {
   const oldConfig = config.experimentalGlobalPassThroughEnv;
   const newConfig = config.globalPassThroughEnv;
   // Set to an empty array is meaningful, so we have undefined as an option here.
@@ -45,7 +62,7 @@ function migrateRootConfig(config: RootSchemaV1) {
   return migrateTaskConfigs(config);
 }
 
-function migrateTaskConfigs(config: SchemaV1) {
+function migrateTaskConfigs(config: ExperimentalSchema) {
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
     const oldConfig = taskDef.experimentalPassThroughEnv;
     const newConfig = taskDef.passThroughEnv;
