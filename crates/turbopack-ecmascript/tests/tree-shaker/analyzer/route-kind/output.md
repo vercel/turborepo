@@ -48,8 +48,8 @@ graph TD
     Item4;
     Item4["export RouteKind"];
     Item2 --> Item1;
-    Item4 --> Item2;
     Item4 --> Item1;
+    Item4 --> Item2;
 ```
 # Phase 3
 ```mermaid
@@ -61,8 +61,8 @@ graph TD
     Item4;
     Item4["export RouteKind"];
     Item2 --> Item1;
-    Item4 --> Item2;
     Item4 --> Item1;
+    Item4 --> Item2;
 ```
 # Phase 4
 ```mermaid
@@ -74,8 +74,8 @@ graph TD
     Item4;
     Item4["export RouteKind"];
     Item2 --> Item1;
-    Item4 --> Item2;
     Item4 --> Item1;
+    Item4 --> Item2;
     Item3 --> Item2;
 ```
 # Final
@@ -86,8 +86,8 @@ graph TD
     N2["Items: [ItemId(0, VarDeclarator(0))]"];
     N3["Items: [ItemId(1, Normal)]"];
     N0 --> N3;
-    N1 --> N3;
     N1 --> N2;
+    N1 --> N3;
     N3 --> N2;
 ```
 # Entrypoints
@@ -113,11 +113,11 @@ import "__TURBOPACK_PART__" assert {
 ```
 ## Part 1
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
 import { RouteKind } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
 };
 export { RouteKind };
 
@@ -174,11 +174,11 @@ import "__TURBOPACK_PART__" assert {
 ```
 ## Part 1
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
 import { RouteKind } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
 };
 export { RouteKind };
 
