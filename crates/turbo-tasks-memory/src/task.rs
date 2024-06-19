@@ -567,6 +567,9 @@ impl Task {
                 let mut aggregation = aggregation_context.aggregation_data(task);
                 aggregation.remove_collectible_dependent_task(trait_type, reader);
             }
+            TaskDependency::Child(_) => {
+                panic!("Children should not be removed via remove_dependency")
+            }
         }
     }
 

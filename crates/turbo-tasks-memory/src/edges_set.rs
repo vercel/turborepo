@@ -1,6 +1,7 @@
 use std::{
     collections::{hash_map::Entry, HashMap},
     hash::BuildHasherDefault,
+    mem::replace,
 };
 
 use auto_hash_map::AutoSet;
@@ -48,31 +49,245 @@ pub enum TaskDependency {
     Output(TaskId),
     Cell(TaskId, CellId),
     Collectibles(TaskId, TraitTypeId),
+    Child(TaskId),
+}
+
+impl TaskDependency {
+    fn task_and_edge_entry(self) -> (TaskId, EdgeEntry) {
+        match self {
+            TaskDependency::Output(task) => (task, EdgeEntry::Output),
+            TaskDependency::Cell(task, cell_id) => (task, EdgeEntry::Cell(cell_id)),
+            TaskDependency::Collectibles(task, trait_type_id) => {
+                (task, EdgeEntry::Collectibles(trait_type_id))
+            }
+            TaskDependency::Child(task) => (task, EdgeEntry::Child),
+        }
+    }
 }
 
 #[derive(Hash, Copy, Clone, PartialEq, Eq)]
 enum EdgeEntry {
     Output,
+    Child,
     Cell(CellId),
     Collectibles(TraitTypeId),
+}
+
+impl EdgeEntry {
+    fn into_dependency(self, task: TaskId) -> TaskDependency {
+        match self {
+            EdgeEntry::Output => TaskDependency::Output(task),
+            EdgeEntry::Cell(cell_id) => TaskDependency::Cell(task, cell_id),
+            EdgeEntry::Collectibles(trait_type_id) => {
+                TaskDependency::Collectibles(task, trait_type_id)
+            }
+            EdgeEntry::Child => TaskDependency::Child(task),
+        }
+    }
 }
 
 type ComplexSet = AutoSet<EdgeEntry, BuildHasherDefault<FxHasher>, 3>;
 
 enum EdgesEntry {
     Output,
+    Child,
+    ChildAndOutput,
     Cell0(ValueTypeId),
+    ChildAndCell0(ValueTypeId),
     OutputAndCell0(ValueTypeId),
+    ChildOutputAndCell0(ValueTypeId),
     Complex(Box<ComplexSet>),
 }
 
 impl EdgesEntry {
+    fn from(entry: EdgeEntry) -> Self {
+        match entry {
+            EdgeEntry::Output => EdgesEntry::Output,
+            EdgeEntry::Child => EdgesEntry::Child,
+            EdgeEntry::Cell(CellId { type_id, index }) => {
+                if index == 0 {
+                    EdgesEntry::Cell0(type_id)
+                } else {
+                    let mut set = AutoSet::default();
+                    set.insert(EdgeEntry::Cell(CellId { type_id, index }));
+                    EdgesEntry::Complex(Box::new(set))
+                }
+            }
+            EdgeEntry::Collectibles(trait_type_id) => {
+                let mut set = AutoSet::default();
+                set.insert(EdgeEntry::Collectibles(trait_type_id));
+                EdgesEntry::Complex(Box::new(set))
+            }
+        }
+    }
+
     fn len(&self) -> usize {
         match self {
             EdgesEntry::Output => 1,
+            EdgesEntry::Child => 1,
             EdgesEntry::Cell0(_) => 1,
             EdgesEntry::OutputAndCell0(_) => 2,
+            EdgesEntry::ChildAndCell0(_) => 2,
+            EdgesEntry::ChildAndOutput => 2,
+            EdgesEntry::ChildOutputAndCell0(_) => 3,
             EdgesEntry::Complex(set) => set.len(),
+        }
+    }
+
+    fn into_iter(self) -> impl Iterator<Item = EdgeEntry> {
+        match self {
+            EdgesEntry::Output => IntoIters::One([EdgeEntry::Output].into_iter()),
+            EdgesEntry::Child => IntoIters::One([EdgeEntry::Child].into_iter()),
+            EdgesEntry::Cell0(type_id) => {
+                IntoIters::One([EdgeEntry::Cell(CellId { type_id, index: 0 })].into_iter())
+            }
+            EdgesEntry::ChildAndOutput => {
+                IntoIters::Two([EdgeEntry::Child, EdgeEntry::Output].into_iter())
+            }
+            EdgesEntry::ChildAndCell0(type_id) => IntoIters::Two(
+                [
+                    EdgeEntry::Child,
+                    EdgeEntry::Cell(CellId { type_id, index: 0 }),
+                ]
+                .into_iter(),
+            ),
+            EdgesEntry::OutputAndCell0(type_id) => IntoIters::Two(
+                [
+                    EdgeEntry::Output,
+                    EdgeEntry::Cell(CellId { type_id, index: 0 }),
+                ]
+                .into_iter(),
+            ),
+            EdgesEntry::ChildOutputAndCell0(type_id) => IntoIters::Three(
+                [
+                    EdgeEntry::Child,
+                    EdgeEntry::Output,
+                    EdgeEntry::Cell(CellId { type_id, index: 0 }),
+                ]
+                .into_iter(),
+            ),
+            EdgesEntry::Complex(set) => IntoIters::Four(set.into_iter()),
+        }
+    }
+
+    fn has(&self, entry: EdgeEntry) -> bool {
+        match entry {
+            EdgeEntry::Output => {
+                if let EdgesEntry::Complex(set) = self {
+                    set.contains(&EdgeEntry::Output)
+                } else {
+                    matches!(
+                        self,
+                        EdgesEntry::Output
+                            | EdgesEntry::OutputAndCell0(_)
+                            | EdgesEntry::ChildAndOutput
+                            | EdgesEntry::ChildOutputAndCell0(_)
+                    )
+                }
+            }
+            EdgeEntry::Child => {
+                if let EdgesEntry::Complex(set) = self {
+                    set.contains(&EdgeEntry::Child)
+                } else {
+                    matches!(
+                        self,
+                        EdgesEntry::Child
+                            | EdgesEntry::ChildAndOutput
+                            | EdgesEntry::ChildAndCell0(_)
+                            | EdgesEntry::ChildOutputAndCell0(_)
+                    )
+                }
+            }
+            EdgeEntry::Cell(cell_id) => {
+                if let EdgesEntry::Complex(set) = self {
+                    set.contains(&EdgeEntry::Cell(cell_id))
+                } else if cell_id.index == 0 {
+                    match self {
+                        EdgesEntry::Cell0(type_id) => *type_id == cell_id.type_id,
+                        EdgesEntry::OutputAndCell0(type_id) => *type_id == cell_id.type_id,
+                        EdgesEntry::ChildAndCell0(type_id) => *type_id == cell_id.type_id,
+                        EdgesEntry::ChildOutputAndCell0(type_id) => *type_id == cell_id.type_id,
+                        _ => false,
+                    }
+                } else {
+                    false
+                }
+            }
+            EdgeEntry::Collectibles(trait_type_id) => {
+                if let EdgesEntry::Complex(set) = self {
+                    set.contains(&EdgeEntry::Collectibles(trait_type_id))
+                } else {
+                    false
+                }
+            }
+        }
+    }
+
+    fn into_complex(&mut self) -> &mut ComplexSet {
+        match self {
+            EdgesEntry::Complex(set) => set,
+            _ => {
+                let items = replace(self, EdgesEntry::Output).into_iter().collect();
+                *self = EdgesEntry::Complex(Box::new(items));
+                let EdgesEntry::Complex(set) = self else {
+                    unreachable!();
+                };
+                set
+            }
+        }
+    }
+
+    fn insert(&mut self, entry: EdgeEntry) {
+        if self.has(entry) {
+            return;
+        }
+        match entry {
+            EdgeEntry::Output => match self {
+                EdgesEntry::Child => {
+                    *self = EdgesEntry::ChildAndOutput;
+                    return;
+                }
+                EdgesEntry::Cell0(type_id) => {
+                    *self = EdgesEntry::OutputAndCell0(*type_id);
+                    return;
+                }
+                _ => {}
+            },
+            EdgeEntry::Child => match self {
+                EdgesEntry::Output => {
+                    *self = EdgesEntry::ChildAndOutput;
+                    return;
+                }
+                EdgesEntry::Cell0(type_id) => {
+                    *self = EdgesEntry::ChildAndCell0(*type_id);
+                    return;
+                }
+                _ => {}
+            },
+            EdgeEntry::Cell(type_id) => {
+                let CellId { type_id, index } = type_id;
+                if index == 0 {
+                    match self {
+                        EdgesEntry::Output => {
+                            *self = EdgesEntry::OutputAndCell0(type_id);
+                            return;
+                        }
+                        EdgesEntry::Child => {
+                            *self = EdgesEntry::ChildAndCell0(type_id);
+                            return;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            EdgeEntry::Collectibles(_) => {}
+        }
+        self.into_complex().insert(entry);
+    }
+
+    fn shrink_to_fit(&mut self) {
+        if let EdgesEntry::Complex(set) = self {
+            set.shrink_to_fit();
         }
     }
 }
@@ -90,89 +305,21 @@ impl TaskDependencySet {
     }
 
     pub fn insert(&mut self, edge: TaskDependency) {
-        match edge {
-            TaskDependency::Output(task) => match self.map.entry(task) {
-                Entry::Occupied(mut entry) => {
-                    let entry = entry.get_mut();
-                    match entry {
-                        EdgesEntry::Output => {}
-                        EdgesEntry::OutputAndCell0(_) => {}
-                        EdgesEntry::Cell0(type_id) => {
-                            let mut set = AutoSet::default();
-                            set.insert(EdgeEntry::Output);
-                            set.insert(EdgeEntry::Cell(CellId {
-                                type_id: *type_id,
-                                index: 0,
-                            }));
-                            *entry = EdgesEntry::Complex(Box::new(set));
-                        }
-                        EdgesEntry::Complex(set) => {
-                            set.insert(EdgeEntry::Output);
-                        }
-                    }
-                }
-                Entry::Vacant(entry) => {
-                    entry.insert(EdgesEntry::Output);
-                }
-            },
-            TaskDependency::Cell(task, cell_id) => {
-                let CellId { type_id, index } = cell_id;
-                if index == 0 {
-                    match self.map.entry(task) {
-                        Entry::Occupied(mut entry) => {
-                            let entry = entry.get_mut();
-                            match entry {
-                                EdgesEntry::Output => {
-                                    *entry = EdgesEntry::OutputAndCell0(type_id);
-                                }
-                                EdgesEntry::OutputAndCell0(other_type_id) => {
-                                    if *other_type_id != type_id {
-                                        let mut set = AutoSet::default();
-                                        set.insert(EdgeEntry::Output);
-                                        set.insert(EdgeEntry::Cell(CellId {
-                                            type_id: *other_type_id,
-                                            index: 0,
-                                        }));
-                                        set.insert(EdgeEntry::Cell(cell_id));
-                                        *entry = EdgesEntry::Complex(Box::new(set));
-                                    }
-                                }
-                                EdgesEntry::Cell0(other_type_id) => {
-                                    if *other_type_id != type_id {
-                                        let mut set = AutoSet::default();
-                                        set.insert(EdgeEntry::Cell(CellId {
-                                            type_id: *other_type_id,
-                                            index: 0,
-                                        }));
-                                        set.insert(EdgeEntry::Cell(cell_id));
-                                        *entry = EdgesEntry::Complex(Box::new(set));
-                                    }
-                                }
-                                EdgesEntry::Complex(set) => {
-                                    set.insert(EdgeEntry::Cell(cell_id));
-                                }
-                            }
-                        }
-                        Entry::Vacant(entry) => {
-                            entry.insert(EdgesEntry::Cell0(cell_id.type_id));
-                        }
-                    }
-                } else {
-                    self.get_complex_mut(task).insert(EdgeEntry::Cell(cell_id));
-                }
+        let (task, edge) = edge.task_and_edge_entry();
+        match self.map.entry(task) {
+            Entry::Occupied(mut entry) => {
+                let entry = entry.get_mut();
+                entry.insert(edge);
             }
-            TaskDependency::Collectibles(task, trait_type_id) => {
-                self.get_complex_mut(task)
-                    .insert(EdgeEntry::Collectibles(trait_type_id));
+            Entry::Vacant(entry) => {
+                entry.insert(EdgesEntry::from(edge));
             }
         }
     }
 
     pub fn shrink_to_fit(&mut self) {
         for entry in self.map.values_mut() {
-            if let EdgesEntry::Complex(set) = entry {
-                set.shrink_to_fit();
-            }
+            entry.shrink_to_fit();
         }
         self.map.shrink_to_fit();
     }
@@ -190,53 +337,6 @@ impl TaskDependencySet {
         self.map.into_iter().for_each(|edge| edges.push(edge));
         TaskDependenciesList { edges }
     }
-
-    fn get_complex_mut(&mut self, task: TaskId) -> &mut ComplexSet {
-        match self.map.entry(task) {
-            Entry::Occupied(entry) => {
-                let entry = entry.into_mut();
-                match entry {
-                    EdgesEntry::Output => {
-                        let mut set = AutoSet::default();
-                        set.insert(EdgeEntry::Output);
-                        *entry = EdgesEntry::Complex(Box::new(set));
-                    }
-                    EdgesEntry::OutputAndCell0(type_id) => {
-                        let mut set = AutoSet::default();
-                        set.insert(EdgeEntry::Output);
-                        set.insert(EdgeEntry::Cell(CellId {
-                            type_id: *type_id,
-                            index: 0,
-                        }));
-                        *entry = EdgesEntry::Complex(Box::new(set));
-                    }
-                    EdgesEntry::Cell0(type_id) => {
-                        let mut set = AutoSet::default();
-                        set.insert(EdgeEntry::Cell(CellId {
-                            type_id: *type_id,
-                            index: 0,
-                        }));
-                        *entry = EdgesEntry::Complex(Box::new(set));
-                    }
-                    EdgesEntry::Complex(set) => {
-                        return set;
-                    }
-                }
-                let EdgesEntry::Complex(set) = entry else {
-                    unreachable!();
-                };
-                set
-            }
-            Entry::Vacant(entry) => {
-                let EdgesEntry::Complex(set) =
-                    entry.insert(EdgesEntry::Complex(Box::new(AutoSet::default())))
-                else {
-                    unreachable!();
-                };
-                set
-            }
-        }
-    }
 }
 
 impl IntoIterator for TaskDependencySet {
@@ -246,7 +346,7 @@ impl IntoIterator for TaskDependencySet {
     fn into_iter(self) -> Self::IntoIter {
         self.map
             .into_iter()
-            .flat_map(|(task, entry)| entry_to_iterator(task, entry))
+            .flat_map(|(task, entry)| entry.into_iter().map(move |e| e.into_dependency(task)))
     }
 }
 
@@ -268,29 +368,6 @@ impl IntoIterator for TaskDependenciesList {
     fn into_iter(self) -> Self::IntoIter {
         self.edges
             .into_iter()
-            .flat_map(|(task, entry)| entry_to_iterator(task, entry))
-    }
-}
-
-fn entry_to_iterator(task: TaskId, entry: EdgesEntry) -> impl Iterator<Item = TaskDependency> {
-    match entry {
-        EdgesEntry::Complex(set) => IntoIters::One(set.into_iter().map(move |entry| match entry {
-            EdgeEntry::Output => TaskDependency::Output(task),
-            EdgeEntry::Cell(cell_id) => TaskDependency::Cell(task, cell_id),
-            EdgeEntry::Collectibles(trait_type_id) => {
-                TaskDependency::Collectibles(task, trait_type_id)
-            }
-        })),
-        EdgesEntry::Output => IntoIters::Two([TaskDependency::Output(task)].into_iter()),
-        EdgesEntry::Cell0(type_id) => {
-            IntoIters::Three([TaskDependency::Cell(task, CellId { type_id, index: 0 })].into_iter())
-        }
-        EdgesEntry::OutputAndCell0(type_id) => IntoIters::Four(
-            [
-                TaskDependency::Output(task),
-                TaskDependency::Cell(task, CellId { type_id, index: 0 }),
-            ]
-            .into_iter(),
-        ),
+            .flat_map(|(task, entry)| entry.into_iter().map(move |e| e.into_dependency(task)))
     }
 }
