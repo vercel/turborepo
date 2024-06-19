@@ -205,9 +205,10 @@ impl Analyzer<'_> {
                     // Optimization: Remove each module item to which we
                     // just created a strong dependency from LAST_WRITES
 
-                    state
-                        .last_writes
-                        .retain(|last_write| !self.g.has_dep(item_id, last_write, true));
+                    // state
+                    //     .last_writes
+                    //     .retain(|last_write| !self.g.has_dep(item_id,
+                    // last_write, true));
 
                     // Drop all writes which are not reachable from this item.
                     //
