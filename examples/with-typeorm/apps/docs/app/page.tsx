@@ -55,7 +55,10 @@ const LINKS = [
 export default async function Page(): Promise<JSX.Element> {
   const todoService = inject(TodoService);
 
-  const todoList = await todoService.findAll();
+  const todoList = await todoService.findAll().catch((e) => {
+    console.error(e);
+    return [];
+  });
 
   console.log(
     JSON.stringify(
@@ -63,8 +66,8 @@ export default async function Page(): Promise<JSX.Element> {
         todoList,
       },
       null,
-      2,
-    ),
+      2
+    )
   );
 
   return (
