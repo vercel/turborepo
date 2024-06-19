@@ -295,7 +295,7 @@ impl DepGraph {
                     let data = data.get(dep_item).unwrap();
 
                     for var in data.var_decls.iter() {
-                        if required_vars.remove(var) {
+                        if required_vars.contains(var) {
                             specifiers.push(ImportSpecifier::Named(ImportNamedSpecifier {
                                 span: DUMMY_SP,
                                 local: var.clone().into(),
