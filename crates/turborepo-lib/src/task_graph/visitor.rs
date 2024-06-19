@@ -402,15 +402,19 @@ impl<'a> Visitor<'a> {
             } else {
                 format!("{}:{}", task_id.package(), task_id.task())
             };
-            let (header, footer) = (
-                (vendor_behavior.group_prefix)(&group_name),
-                (vendor_behavior.group_suffix)(&group_name),
-            );
-            logger.with_header_footer(Some(header), Some(footer));
+
+            let header_factory = (vendor_behavior.group_prefix)(group_name.to_owned());
+            let footer_factory = (vendor_behavior.group_suffix)(group_name.to_owned());
+
+            logger.with_header_footer(Some(header_factory), Some(footer_factory));
 
             let (error_header, error_footer) = (
-                vendor_behavior.error_group_prefix.map(|f| f(&group_name)),
-                vendor_behavior.error_group_suffix.map(|f| f(&group_name)),
+                vendor_behavior
+                    .error_group_prefix
+                    .map(|f| f(group_name.to_owned())),
+                vendor_behavior
+                    .error_group_suffix
+                    .map(|f| f(group_name.to_owned())),
             );
             logger.with_error_header_footer(error_header, error_footer);
         }
