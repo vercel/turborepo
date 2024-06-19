@@ -854,11 +854,7 @@ impl DepGraph {
                             kind: ItemIdItemKind::ImportBinding(si as _),
                         };
                         ids.push(id.clone());
-                        let local = match s {
-                            ImportSpecifier::Named(s) => s.local.to_id(),
-                            ImportSpecifier::Default(s) => s.local.to_id(),
-                            ImportSpecifier::Namespace(s) => s.local.to_id(),
-                        };
+                        let local = s.local().to_id();
                         items.insert(
                             id,
                             ItemData {
