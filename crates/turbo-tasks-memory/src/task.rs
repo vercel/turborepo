@@ -360,13 +360,17 @@ enum TaskStateType {
         /// Children that need to be disconnected once leaving this state
         #[cfg(feature = "lazy_remove_children")]
         outdated_children: TaskIdSet,
+        outdated_dependencies: TaskDependenciesList,
         outdated_collectibles: MaybeCollectibles,
     },
 
     /// Invalid execution is happening
     ///
     /// on finish this will move to Scheduled
-    InProgressDirty { event: Event },
+    InProgressDirty {
+        event: Event,
+        outdated_dependencies: TaskDependenciesList,
+    },
 }
 
 use TaskStateType::*;
@@ -655,7 +659,7 @@ impl Task {
                     ref mut outdated_dependencies,
                 } => {
                     let event = event.take();
-                    dependencies = take(outdated_dependencies);
+                    let outdated_dependencies = take(outdated_dependencies);
                     let outdated_children = take(&mut state.children);
                     let outdated_collectibles = take(&mut state.collectibles);
                     #[cfg(not(feature = "lazy_remove_children"))]
@@ -669,6 +673,7 @@ impl Task {
                         count_as_finished: false,
                         #[cfg(feature = "lazy_remove_children")]
                         outdated_children,
+                        outdated_dependencies,
                         outdated_collectibles,
                     };
                 }
@@ -891,13 +896,16 @@ impl Task {
                         count_as_finished,
                         #[cfg(feature = "lazy_remove_children")]
                         ref mut outdated_children,
+                        ref mut outdated_dependencies,
                         ref mut outdated_collectibles,
                     } => {
                         let event = event.take();
                         #[cfg(feature = "lazy_remove_children")]
                         let outdated_children = take(outdated_children);
+                        let mut outdated_dependencies = take(outdated_dependencies);
                         let outdated_collectibles = outdated_collectibles.take_collectibles();
-                        let dependencies = take(&mut dependencies);
+                        let new_dependencies = take(&mut dependencies);
+                        outdated_dependencies.remove(&new_dependencies);
                         if !backend.has_gc() {
                             // This will stay here for longer, so make sure to not consume too much
                             // memory
@@ -908,7 +916,7 @@ impl Task {
                         }
                         state.state_type = Done {
                             stateful,
-                            dependencies: dependencies.into_list(),
+                            dependencies: new_dependencies.into_list(),
                         };
                         if !count_as_finished {
                             let mut change = TaskChange {
@@ -935,12 +943,22 @@ impl Task {
                             );
                         }
                         event.notify(usize::MAX);
+                        drop(state);
+                        self.clear_dependencies(outdated_dependencies, backend, turbo_tasks);
                     }
-                    InProgressDirty { ref mut event } => {
+                    InProgressDirty {
+                        ref mut event,
+                        ref mut outdated_dependencies,
+                    } => {
                         let event = event.take();
+                        for dep in take(outdated_dependencies).into_iter() {
+                            // TODO Could be more efficent
+                            dependencies.insert(dep);
+                        }
+                        let outdated_dependencies = take(&mut dependencies).into_list();
                         state.state_type = Scheduled {
                             event,
-                            outdated_dependencies: Default::default(),
+                            outdated_dependencies,
                         };
                         schedule_task = true;
                     }
@@ -1085,11 +1103,13 @@ impl Task {
                     count_as_finished,
                     #[cfg(feature = "lazy_remove_children")]
                     ref mut outdated_children,
+                    ref mut outdated_dependencies,
                     ref mut outdated_collectibles,
                 } => {
                     let event = event.take();
                     #[cfg(feature = "lazy_remove_children")]
                     let outdated_children = take(outdated_children);
+                    let outdated_dependencies = take(outdated_dependencies);
                     let outdated_collectibles = outdated_collectibles.take_collectibles();
                     let change = if count_as_finished {
                         let mut change = TaskChange {
@@ -1124,7 +1144,10 @@ impl Task {
                         &self.id,
                         outdated_children,
                     );
-                    state.state_type = InProgressDirty { event };
+                    state.state_type = InProgressDirty {
+                        event,
+                        outdated_dependencies,
+                    };
                     drop(state);
                     change_job.apply(&aggregation_context);
                     #[cfg(feature = "lazy_remove_children")]
@@ -1415,7 +1438,7 @@ impl Task {
             }
             Scheduled { ref event, .. }
             | InProgress { ref event, .. }
-            | InProgressDirty { ref event } => {
+            | InProgressDirty { ref event, .. } => {
                 let listener = event.listen_with_note(note);
                 drop(state);
                 Ok(Err(listener))
