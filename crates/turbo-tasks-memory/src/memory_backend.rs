@@ -30,9 +30,10 @@ use turbo_tasks::{
 
 use crate::{
     cell::RecomputingCell,
+    edges_set::{TaskDependency, TaskDependencySet},
     gc::{GcQueue, PERCENTAGE_IDLE_TARGET_MEMORY, PERCENTAGE_TARGET_MEMORY},
     output::Output,
-    task::{Task, TaskDependency, TaskDependencySet, DEPENDENCIES_TO_TRACK},
+    task::{Task, DEPENDENCIES_TO_TRACK},
 };
 
 fn prehash_task_type(task_type: PersistentTaskType) -> PreHashed<PersistentTaskType> {
@@ -283,7 +284,7 @@ impl Backend for MemoryBackend {
         _task: TaskId,
         future: T,
     ) -> Self::ExecutionScopeFuture<T> {
-        DEPENDENCIES_TO_TRACK.scope(RefCell::new(TaskDependencySet::with_hasher()), future)
+        DEPENDENCIES_TO_TRACK.scope(RefCell::new(TaskDependencySet::new()), future)
     }
 
     fn try_start_task_execution(

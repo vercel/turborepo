@@ -11,7 +11,7 @@ use std::{
 };
 
 use anyhow::Result;
-use auto_hash_map::{AutoMap, AutoSet};
+use auto_hash_map::AutoMap;
 use parking_lot::{Mutex, RwLock};
 use rustc_hash::FxHasher;
 use smallvec::SmallVec;
@@ -31,6 +31,7 @@ use crate::{
         AggregationDataGuard, PreparedOperation,
     },
     cell::Cell,
+    edges_set::{TaskDependency, TaskDependencySet},
     gc::{GcQueue, GcTaskState},
     output::{Output, OutputContent},
     task::aggregation::{TaskAggregationContext, TaskChange},
@@ -42,14 +43,6 @@ pub type NativeTaskFn = Box<dyn Fn() -> NativeTaskFuture + Send + Sync>;
 
 mod aggregation;
 mod meta_state;
-
-#[derive(Hash, Copy, Clone, PartialEq, Eq)]
-pub enum TaskDependency {
-    Output(TaskId),
-    Cell(TaskId, CellId),
-    Collectibles(TaskId, TraitTypeId),
-}
-pub type TaskDependencySet = AutoSet<TaskDependency, BuildHasherDefault<FxHasher>>;
 
 task_local! {
     /// Cells/Outputs/Collectibles that are read during task execution
