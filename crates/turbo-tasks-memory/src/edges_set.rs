@@ -1,8 +1,47 @@
-use std::hash::BuildHasherDefault;
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    hash::BuildHasherDefault,
+};
 
-use auto_hash_map::{map::Entry, AutoMap, AutoSet};
+use auto_hash_map::AutoSet;
 use rustc_hash::FxHasher;
 use turbo_tasks::{CellId, TaskId, TraitTypeId, ValueTypeId};
+
+enum IntoIters<A, B, C, D> {
+    One(A),
+    Two(B),
+    Three(C),
+    Four(D),
+}
+
+impl<
+        I,
+        A: Iterator<Item = I>,
+        B: Iterator<Item = I>,
+        C: Iterator<Item = I>,
+        D: Iterator<Item = I>,
+    > Iterator for IntoIters<A, B, C, D>
+{
+    type Item = I;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            IntoIters::One(iter) => iter.next(),
+            IntoIters::Two(iter) => iter.next(),
+            IntoIters::Three(iter) => iter.next(),
+            IntoIters::Four(iter) => iter.next(),
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match self {
+            IntoIters::One(iter) => iter.size_hint(),
+            IntoIters::Two(iter) => iter.size_hint(),
+            IntoIters::Three(iter) => iter.size_hint(),
+            IntoIters::Four(iter) => iter.size_hint(),
+        }
+    }
+}
 
 #[derive(Hash, Copy, Clone, PartialEq, Eq)]
 pub enum TaskDependency {
@@ -27,15 +66,26 @@ enum EdgesEntry {
     Complex(Box<ComplexSet>),
 }
 
+impl EdgesEntry {
+    fn len(&self) -> usize {
+        match self {
+            EdgesEntry::Output => 1,
+            EdgesEntry::Cell0(_) => 1,
+            EdgesEntry::OutputAndCell0(_) => 2,
+            EdgesEntry::Complex(set) => set.len(),
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct TaskDependencySet {
-    map: AutoMap<TaskId, EdgesEntry>,
+    map: HashMap<TaskId, EdgesEntry, BuildHasherDefault<FxHasher>>,
 }
 
 impl TaskDependencySet {
     pub fn new() -> Self {
         Self {
-            map: AutoMap::default(),
+            map: HashMap::default(),
         }
     }
 
@@ -131,6 +181,16 @@ impl TaskDependencySet {
         self.map.is_empty()
     }
 
+    pub fn len(&self) -> usize {
+        self.map.iter().map(|(_, entry)| entry.len()).sum()
+    }
+
+    pub fn into_list(self) -> TaskDependenciesList {
+        let mut edges = Vec::with_capacity(self.len());
+        self.map.into_iter().for_each(|edge| edges.push(edge));
+        TaskDependenciesList { edges }
+    }
+
     fn get_complex_mut(&mut self, task: TaskId) -> &mut ComplexSet {
         match self.map.entry(task) {
             Entry::Occupied(entry) => {
@@ -179,59 +239,58 @@ impl TaskDependencySet {
     }
 }
 
-enum IntoIters<A, B, C, D> {
-    One(A),
-    Two(B),
-    Three(C),
-    Four(D),
-}
-
-impl<
-        I,
-        A: Iterator<Item = I>,
-        B: Iterator<Item = I>,
-        C: Iterator<Item = I>,
-        D: Iterator<Item = I>,
-    > Iterator for IntoIters<A, B, C, D>
-{
-    type Item = I;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            IntoIters::One(iter) => iter.next(),
-            IntoIters::Two(iter) => iter.next(),
-            IntoIters::Three(iter) => iter.next(),
-            IntoIters::Four(iter) => iter.next(),
-        }
-    }
-}
-
 impl IntoIterator for TaskDependencySet {
     type Item = TaskDependency;
     type IntoIter = impl Iterator<Item = TaskDependency>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.map.into_iter().flat_map(|(task, entry)| match entry {
-            EdgesEntry::Complex(set) => {
-                IntoIters::One(set.into_iter().map(move |entry| match entry {
-                    EdgeEntry::Output => TaskDependency::Output(task),
-                    EdgeEntry::Cell(cell_id) => TaskDependency::Cell(task, cell_id),
-                    EdgeEntry::Collectibles(trait_type_id) => {
-                        TaskDependency::Collectibles(task, trait_type_id)
-                    }
-                }))
+        self.map
+            .into_iter()
+            .flat_map(|(task, entry)| entry_to_iterator(task, entry))
+    }
+}
+
+#[derive(Default)]
+pub struct TaskDependenciesList {
+    edges: Vec<(TaskId, EdgesEntry)>,
+}
+
+impl TaskDependenciesList {
+    pub fn is_empty(&self) -> bool {
+        self.edges.is_empty()
+    }
+}
+
+impl IntoIterator for TaskDependenciesList {
+    type Item = TaskDependency;
+    type IntoIter = impl Iterator<Item = TaskDependency>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.edges
+            .into_iter()
+            .flat_map(|(task, entry)| entry_to_iterator(task, entry))
+    }
+}
+
+fn entry_to_iterator(task: TaskId, entry: EdgesEntry) -> impl Iterator<Item = TaskDependency> {
+    match entry {
+        EdgesEntry::Complex(set) => IntoIters::One(set.into_iter().map(move |entry| match entry {
+            EdgeEntry::Output => TaskDependency::Output(task),
+            EdgeEntry::Cell(cell_id) => TaskDependency::Cell(task, cell_id),
+            EdgeEntry::Collectibles(trait_type_id) => {
+                TaskDependency::Collectibles(task, trait_type_id)
             }
-            EdgesEntry::Output => IntoIters::Two([TaskDependency::Output(task)].into_iter()),
-            EdgesEntry::Cell0(type_id) => IntoIters::Three(
-                [TaskDependency::Cell(task, CellId { type_id, index: 0 })].into_iter(),
-            ),
-            EdgesEntry::OutputAndCell0(type_id) => IntoIters::Four(
-                [
-                    TaskDependency::Output(task),
-                    TaskDependency::Cell(task, CellId { type_id, index: 0 }),
-                ]
-                .into_iter(),
-            ),
-        })
+        })),
+        EdgesEntry::Output => IntoIters::Two([TaskDependency::Output(task)].into_iter()),
+        EdgesEntry::Cell0(type_id) => {
+            IntoIters::Three([TaskDependency::Cell(task, CellId { type_id, index: 0 })].into_iter())
+        }
+        EdgesEntry::OutputAndCell0(type_id) => IntoIters::Four(
+            [
+                TaskDependency::Output(task),
+                TaskDependency::Cell(task, CellId { type_id, index: 0 }),
+            ]
+            .into_iter(),
+        ),
     }
 }
