@@ -26,7 +26,9 @@ use swc_core::{
 use turbo_tasks::RcStr;
 
 use super::{
-    util::{collect_top_level_decls, ids_captured_by, ids_used_by, ids_used_by_ignoring_nested},
+    util::{
+        collect_top_level_decls, ids_captured_by, ids_used_by, ids_used_by_ignoring_nested, Vars,
+    },
     Key, TURBOPACK_PART_IMPORT_SOURCE,
 };
 use crate::magic_identifier;
@@ -917,20 +919,20 @@ impl DepGraph {
                     };
                     ids.push(id.clone());
 
-                    let vars =
+                    let mut vars =
                         ids_used_by(&c.class, unresolved_ctxt, top_level_ctxt, &top_level_vars);
                     let var_decls = {
                         let mut v = IndexSet::with_capacity_and_hasher(1, Default::default());
                         v.insert(c.ident.to_id());
                         v
                     };
+                    vars.write.insert(c.ident.to_id());
                     items.insert(
                         id,
                         ItemData {
                             is_hoisted: true,
-                            eventual_read_vars: vars.read,
-                            eventual_write_vars: vars.write,
-                            write_vars: var_decls.clone(),
+                            read_vars: vars.read,
+                            write_vars: vars.write,
                             var_decls,
                             content: ModuleItem::Stmt(Stmt::Decl(Decl::Class(c.clone()))),
                             ..Default::default()
@@ -950,18 +952,24 @@ impl DepGraph {
                         ids.push(id.clone());
 
                         let decl_ids: Vec<Id> = find_pat_ids(&decl.name);
-                        let vars = ids_used_by_ignoring_nested(
+                        let vars = ids_used_by(
                             &decl.init,
                             unresolved_ctxt,
                             top_level_ctxt,
                             &top_level_vars,
                         );
-                        let eventual_vars = ids_captured_by(
-                            &decl.init,
-                            unresolved_ctxt,
-                            top_level_ctxt,
-                            &top_level_vars,
-                        );
+                        let eventual_vars =
+                            if matches!(decl.init.as_deref(), Some(Expr::Fn(..) | Expr::Arrow(..)))
+                            {
+                                ids_captured_by(
+                                    &decl.init,
+                                    unresolved_ctxt,
+                                    top_level_ctxt,
+                                    &top_level_vars,
+                                )
+                            } else {
+                                Vars::default()
+                            };
 
                         let side_effects = vars.found_unresolved;
 
