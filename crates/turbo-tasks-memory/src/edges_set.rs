@@ -447,7 +447,9 @@ impl TaskEdgesSet {
     pub fn into_list(self) -> TaskEdgesList {
         let mut edges = Vec::with_capacity(self.len());
         self.edges.into_iter().for_each(|edge| edges.push(edge));
-        TaskEdgesList { edges }
+        TaskEdgesList {
+            edges: edges.into_boxed_slice(),
+        }
     }
 
     pub(crate) fn drain_children(&mut self) -> SmallVec<[TaskId; 64]> {
@@ -559,13 +561,13 @@ impl IntoIterator for TaskEdgesSet {
 
 #[derive(Default)]
 pub struct TaskEdgesList {
-    edges: Vec<(TaskId, EdgesEntry)>,
+    edges: Box<[(TaskId, EdgesEntry)]>,
 }
 
 impl TaskEdgesList {
     pub fn into_set(self) -> TaskEdgesSet {
         TaskEdgesSet {
-            edges: Box::new(self.edges.into_iter().collect()),
+            edges: Box::new(self.edges.into_vec().into_iter().collect()),
         }
     }
 
@@ -597,6 +599,7 @@ impl IntoIterator for TaskEdgesList {
 
     fn into_iter(self) -> Self::IntoIter {
         self.edges
+            .into_vec()
             .into_iter()
             .flat_map(|(task, entry)| entry.into_iter().map(move |e| e.into_dependency(task)))
     }
