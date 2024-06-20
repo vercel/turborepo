@@ -478,8 +478,8 @@ impl<'a> TaskHasher<'a> {
                         "TERM",
                         "TERM_PROGRAM",
                         // Jetbrains IDE
-                        "JB_IDE_HOST",
-                        "JB_IDE_PORT",
+                        "JB_IDE_*",
+                        "JB_INTERPRETER",
                         // Vercel specific
                         "VERCEL_*",
                         "NEXT_*",
