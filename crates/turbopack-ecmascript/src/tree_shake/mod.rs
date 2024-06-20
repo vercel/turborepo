@@ -269,6 +269,14 @@ impl Analyzer<'_> {
 
                     let state = get_var(&self.vars, id);
                     self.g.add_strong_deps(item_id, state.last_writes.iter());
+
+                    if let Some(declarator) = &state.declarator {
+                        if declarator != item_id {
+                            // A read also depends on the declaration.
+                            self.g
+                                .add_strong_deps(item_id, [declarator].iter().copied());
+                        }
+                    }
                 }
 
                 // For each var in EVENTUAL_WRITE_VARS:
@@ -279,6 +287,18 @@ impl Analyzer<'_> {
                     let state = get_var(&self.vars, id);
 
                     self.g.add_weak_deps(item_id, state.last_reads.iter());
+
+                    if let Some(declarator) = &state.declarator {
+                        if declarator != item_id {
+                            // A write also depends on the declaration.
+                            if item.side_effects {
+                                self.g
+                                    .add_strong_deps(item_id, [declarator].iter().copied());
+                            } else {
+                                self.g.add_weak_deps(item_id, [declarator].iter().copied());
+                            }
+                        }
+                    }
                 }
 
                 // (no state update happens, since this is only triggered by
