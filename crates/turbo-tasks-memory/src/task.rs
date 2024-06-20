@@ -172,9 +172,6 @@ struct TaskState {
     /// dirty, scheduled, in progress
     state_type: TaskStateType,
 
-    /// true, when the task has state and that can't be dropped
-    stateful: bool,
-
     /// Children are only modified from execution
     children: TaskIdSet,
 
@@ -200,7 +197,6 @@ impl TaskState {
                 event: Event::new(move || format!("TaskState({})::event", description())),
                 outdated_dependencies: Default::default(),
             },
-            stateful: false,
             children: Default::default(),
             collectibles: Default::default(),
             output: Default::default(),
@@ -219,7 +215,6 @@ impl TaskState {
                 event: Event::new(move || format!("TaskState({})::event", description())),
                 outdated_dependencies: Default::default(),
             },
-            stateful: false,
             children: Default::default(),
             collectibles: Default::default(),
             output: Default::default(),
@@ -249,7 +244,6 @@ impl PartialTaskState {
                 event: Event::new(move || format!("TaskState({})::event", description())),
                 outdated_dependencies: Default::default(),
             },
-            stateful: false,
             children: Default::default(),
             collectibles: Default::default(),
             prepared_type: PrepareTaskType::None,
@@ -280,7 +274,6 @@ impl UnloadedTaskState {
                 event: Event::new(move || format!("TaskState({})::event", description())),
                 outdated_dependencies: Default::default(),
             },
-            stateful: false,
             children: Default::default(),
             collectibles: Default::default(),
             prepared_type: PrepareTaskType::None,
@@ -355,6 +348,9 @@ enum TaskStateType {
     /// on invalidation this will move to Dirty or Scheduled depending on active
     /// flag
     Done {
+        /// true, when the task has state and that can't be dropped
+        stateful: bool,
+
         /// Cells/Outputs/Collectibles that the task has read during execution.
         /// The Task will keep these tasks alive as invalidations that happen
         /// there might affect this task.
@@ -973,8 +969,10 @@ impl Task {
                             }
                             state.cells.shrink_to_fit();
                         }
-                        state.stateful = stateful;
-                        state.state_type = Done { dependencies };
+                        state.state_type = Done {
+                            stateful,
+                            dependencies,
+                        };
                         if !count_as_finished {
                             let mut change = TaskChange {
                                 unfinished: -1,
@@ -1554,13 +1552,20 @@ impl Task {
         let mut cells_to_drop = Vec::new();
 
         let result = if let TaskMetaStateWriteGuard::Full(mut state) = self.state_mut() {
-            if state.gc.generation > generation || state.stateful {
+            if state.gc.generation > generation {
                 return false;
             }
 
             match &mut state.state_type {
-                TaskStateType::Done { dependencies } => {
+                TaskStateType::Done {
+                    dependencies,
+                    stateful,
+                    ..
+                } => {
                     dependencies.shrink_to_fit();
+                    if *stateful {
+                        return false;
+                    }
                 }
                 TaskStateType::Dirty { .. } => {}
                 _ => {
@@ -1659,8 +1664,6 @@ impl Task {
             output,
             collectibles,
             mut aggregation_node,
-            // can be dropped as it will be recomputed on next execution
-            stateful: _,
             // can be dropped as it can be recomputed
             prepared_type: _,
             // can be dropped as always Dirty, event has been notified above
