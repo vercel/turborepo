@@ -147,15 +147,16 @@ where
     let mut string = String::new();
     let mut first = true;
 
-    let mut add_line = |dependency: &str, field: &str| {
+    let mut add_line = |dependency: &str, field: &str, setting: bool| {
         if !first {
             string.push('\n');
         }
 
         string.push_str(&format!(
-            "    {}:\n      {}: true",
+            "    {}:\n      {}: {}",
             wrap_string(dependency),
-            wrap_string(field)
+            wrap_string(field),
+            setting,
         ));
 
         first = false;
@@ -163,14 +164,14 @@ where
 
     for (dependency, meta) in metadata {
         let dependency = dependency.as_ref();
-        if meta.built.unwrap_or_default() {
-            add_line(dependency, "built");
+        if let Some(built) = meta.built {
+            add_line(dependency, "built", built);
         }
-        if meta.optional.unwrap_or_default() {
-            add_line(dependency, "optional");
+        if let Some(optional) = meta.optional {
+            add_line(dependency, "optional", optional);
         }
-        if meta.unplugged.unwrap_or_default() {
-            add_line(dependency, "unplugged");
+        if let Some(unplugged) = meta.unplugged {
+            add_line(dependency, "unplugged", unplugged);
         }
     }
 
