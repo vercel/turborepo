@@ -1,10 +1,6 @@
-use std::{
-    collections::{hash_map::Entry, HashMap},
-    hash::BuildHasherDefault,
-    mem::replace,
-};
+use std::{hash::BuildHasherDefault, mem::replace};
 
-use auto_hash_map::AutoSet;
+use auto_hash_map::{map::Entry, AutoMap, AutoSet};
 use rustc_hash::FxHasher;
 use smallvec::SmallVec;
 use turbo_tasks::{CellId, TaskId, TraitTypeId, ValueTypeId};
@@ -445,13 +441,13 @@ impl EdgesEntry {
 
 #[derive(Default)]
 pub struct TaskDependencySet {
-    edges: HashMap<TaskId, EdgesEntry, BuildHasherDefault<FxHasher>>,
+    edges: AutoMap<TaskId, EdgesEntry, BuildHasherDefault<FxHasher>>,
 }
 
 impl TaskDependencySet {
     pub fn new() -> Self {
         Self {
-            edges: HashMap::default(),
+            edges: AutoMap::default(),
         }
     }
 
