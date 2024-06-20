@@ -20,7 +20,7 @@ use crate::{
         aggregation_data, AggregationContext, AggregationDataGuard, AggregationNode,
         AggregationNodeGuard, RootQuery,
     },
-    edges_set::TaskDependency,
+    edges_set::TaskEdge,
     MemoryBackend,
 };
 
@@ -462,10 +462,10 @@ impl<'l> AggregationNodeGuard for TaskGuard<'l> {
             TaskMetaStateWriteGuard::Full(ref guard) => {
                 let outdated_children = match &guard.state_type {
                     TaskStateType::InProgress {
-                        outdated_dependencies,
+                        outdated_edges: outdated_dependencies,
                         ..
                     } => Some(outdated_dependencies.iter().filter_map(|dep| {
-                        if let TaskDependency::Child(task) = dep {
+                        if let TaskEdge::Child(task) = dep {
                             Some(task)
                         } else {
                             None

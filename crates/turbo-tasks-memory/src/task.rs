@@ -31,7 +31,7 @@ use crate::{
         AggregationDataGuard, PreparedOperation,
     },
     cell::Cell,
-    edges_set::{TaskDependenciesList, TaskDependency, TaskDependencySet},
+    edges_set::{TaskEdge, TaskEdgesList, TaskEdgesSet},
     gc::{GcQueue, GcTaskState},
     output::{Output, OutputContent},
     task::aggregation::{TaskAggregationContext, TaskChange},
@@ -47,7 +47,7 @@ mod meta_state;
 task_local! {
     /// Cells/Outputs/Collectibles that are read during task execution
     /// These will be stored as dependencies when the execution has finished
-    pub(crate) static DEPENDENCIES_TO_TRACK: RefCell<TaskDependencySet>;
+    pub(crate) static DEPENDENCIES_TO_TRACK: RefCell<TaskEdgesSet>;
 }
 
 type OnceTaskFn = Mutex<Option<Pin<Box<dyn Future<Output = Result<RawVc>> + Send + 'static>>>>;
@@ -173,7 +173,7 @@ impl TaskState {
             aggregation_node: TaskAggregationNode::new(),
             state_type: Dirty {
                 event: Event::new(move || format!("TaskState({})::event", description())),
-                outdated_dependencies: Default::default(),
+                outdated_edges: Default::default(),
             },
             children: Default::default(),
             collectibles: Default::default(),
@@ -190,7 +190,7 @@ impl TaskState {
             aggregation_node: TaskAggregationNode::new(),
             state_type: Scheduled {
                 event: Event::new(move || format!("TaskState({})::event", description())),
-                outdated_dependencies: Default::default(),
+                outdated_edges: Default::default(),
             },
             children: Default::default(),
             collectibles: Default::default(),
@@ -218,7 +218,7 @@ impl PartialTaskState {
             aggregation_node: self.aggregation_node,
             state_type: Dirty {
                 event: Event::new(move || format!("TaskState({})::event", description())),
-                outdated_dependencies: Default::default(),
+                outdated_edges: Default::default(),
             },
             children: Default::default(),
             collectibles: Default::default(),
@@ -247,7 +247,7 @@ impl UnloadedTaskState {
             aggregation_node: TaskAggregationNode::new(),
             state_type: Dirty {
                 event: Event::new(move || format!("TaskState({})::event", description())),
-                outdated_dependencies: Default::default(),
+                outdated_edges: Default::default(),
             },
             children: Default::default(),
             collectibles: Default::default(),
@@ -330,7 +330,7 @@ enum TaskStateType {
         /// there might affect this task.
         ///
         /// This back-edge is [Cell] `dependent_tasks`, which is a weak edge.
-        dependencies: TaskDependenciesList,
+        edges: TaskEdgesList,
     },
 
     /// Execution is invalid, but not yet scheduled
@@ -338,7 +338,7 @@ enum TaskStateType {
     /// on activation this will move to Scheduled
     Dirty {
         event: Event,
-        outdated_dependencies: TaskDependencySet,
+        outdated_edges: TaskEdgesSet,
     },
 
     /// Execution is invalid and scheduled
@@ -346,7 +346,7 @@ enum TaskStateType {
     /// on start this will move to InProgress or Dirty depending on active flag
     Scheduled {
         event: Event,
-        outdated_dependencies: TaskDependencySet,
+        outdated_edges: TaskEdgesSet,
     },
 
     /// Execution is happening
@@ -359,7 +359,7 @@ enum TaskStateType {
         count_as_finished: bool,
         /// Dependencies and children that need to be disconnected once leaving
         /// this state
-        outdated_dependencies: TaskDependencySet,
+        outdated_edges: TaskEdgesSet,
         outdated_collectibles: MaybeCollectibles,
     },
 
@@ -368,7 +368,7 @@ enum TaskStateType {
     /// on finish this will move to Scheduled
     InProgressDirty {
         event: Event,
-        outdated_dependencies: TaskDependencySet,
+        outdated_edges: TaskEdgesSet,
     },
 }
 
@@ -545,32 +545,32 @@ impl Task {
     }
 
     pub(crate) fn remove_dependency(
-        dep: TaskDependency,
+        dep: TaskEdge,
         reader: TaskId,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         match dep {
-            TaskDependency::Output(task) => {
+            TaskEdge::Output(task) => {
                 backend.with_task(task, |task| {
                     task.with_output_mut_if_available(|output| {
                         output.dependent_tasks.remove(&reader);
                     });
                 });
             }
-            TaskDependency::Cell(task, index) => {
+            TaskEdge::Cell(task, index) => {
                 backend.with_task(task, |task| {
                     task.with_cell_mut_if_available(index, |cell| {
                         cell.remove_dependent_task(reader);
                     });
                 });
             }
-            TaskDependency::Collectibles(task, trait_type) => {
+            TaskEdge::Collectibles(task, trait_type) => {
                 let aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
                 let mut aggregation = aggregation_context.aggregation_data(task);
                 aggregation.remove_collectible_dependent_task(trait_type, reader);
             }
-            TaskDependency::Child(_) => {
+            TaskEdge::Child(_) => {
                 panic!("Children should not be removed via remove_dependency")
             }
         }
@@ -578,7 +578,7 @@ impl Task {
 
     fn clear_dependencies(
         &self,
-        dependencies: TaskDependencySet,
+        dependencies: TaskEdgesSet,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
@@ -589,7 +589,7 @@ impl Task {
 
     fn clear_dependencies_list(
         &self,
-        dependencies: TaskDependenciesList,
+        dependencies: TaskEdgesList,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
@@ -634,15 +634,15 @@ impl Task {
                 }
                 Scheduled {
                     ref mut event,
-                    ref mut outdated_dependencies,
+                    ref mut outdated_edges,
                 } => {
                     let event = event.take();
-                    let outdated_dependencies = take(outdated_dependencies);
+                    let outdated_edges = take(outdated_edges);
                     let outdated_collectibles = take(&mut state.collectibles);
                     state.state_type = InProgress {
                         event,
                         count_as_finished: false,
-                        outdated_dependencies,
+                        outdated_edges,
                         outdated_collectibles,
                     };
                 }
@@ -839,14 +839,14 @@ impl Task {
                     InProgress {
                         ref mut event,
                         count_as_finished,
-                        ref mut outdated_dependencies,
+                        ref mut outdated_edges,
                         ref mut outdated_collectibles,
                     } => {
                         let event = event.take();
-                        let mut outdated_dependencies = take(outdated_dependencies);
+                        let mut outdated_edges = take(outdated_edges);
                         let outdated_collectibles = outdated_collectibles.take_collectibles();
                         let new_dependencies = take(&mut dependencies);
-                        outdated_dependencies.remove_all(&new_dependencies);
+                        outdated_edges.remove_all(&new_dependencies);
                         if !backend.has_gc() {
                             // This will stay here for longer, so make sure to not consume too much
                             // memory
@@ -857,7 +857,7 @@ impl Task {
                         }
                         state.state_type = Done {
                             stateful,
-                            dependencies: new_dependencies.into_list(),
+                            edges: new_dependencies.into_list(),
                         };
                         if !count_as_finished {
                             let mut change = TaskChange {
@@ -875,7 +875,7 @@ impl Task {
                                 .aggregation_node
                                 .apply_change(&aggregation_context, change);
                         }
-                        let outdated_children = outdated_dependencies.drain_children();
+                        let outdated_children = outdated_edges.drain_children();
                         if !outdated_children.is_empty() {
                             remove_job = state.aggregation_node.handle_lost_edges(
                                 &aggregation_context,
@@ -885,21 +885,21 @@ impl Task {
                         }
                         event.notify(usize::MAX);
                         drop(state);
-                        self.clear_dependencies(outdated_dependencies, backend, turbo_tasks);
+                        self.clear_dependencies(outdated_edges, backend, turbo_tasks);
                     }
                     InProgressDirty {
                         ref mut event,
-                        ref mut outdated_dependencies,
+                        ref mut outdated_edges,
                     } => {
                         let event = event.take();
-                        for dep in take(outdated_dependencies).into_iter() {
+                        for dep in take(outdated_edges).into_iter() {
                             // TODO Could be more efficent
                             dependencies.insert(dep);
                         }
-                        let outdated_dependencies = take(&mut dependencies);
+                        let outdated_edges = take(&mut dependencies);
                         state.state_type = Scheduled {
                             event,
-                            outdated_dependencies,
+                            outdated_edges,
                         };
                         schedule_task = true;
                     }
@@ -960,7 +960,7 @@ impl Task {
                     drop(state);
                 }
                 Dirty {
-                    ref mut outdated_dependencies,
+                    ref mut outdated_edges,
                     ..
                 } => {
                     if force_schedule {
@@ -969,7 +969,7 @@ impl Task {
                             event: Event::new(move || {
                                 format!("TaskState({})::event", description())
                             }),
-                            outdated_dependencies: take(outdated_dependencies),
+                            outdated_edges: take(outdated_edges),
                         };
                         let change_job = state.aggregation_node.apply_change(
                             &aggregation_context,
@@ -987,10 +987,10 @@ impl Task {
                     }
                 }
                 Done {
-                    ref mut dependencies,
+                    edges: ref mut dependencies,
                     ..
                 } => {
-                    let outdated_dependencies = take(dependencies).into_set();
+                    let outdated_edges = take(dependencies).into_set();
                     // add to dirty lists and potentially schedule
                     let description = self.get_event_description();
                     let should_schedule = force_schedule || active;
@@ -1008,7 +1008,7 @@ impl Task {
                             event: Event::new(move || {
                                 format!("TaskState({})::event", description())
                             }),
-                            outdated_dependencies,
+                            outdated_edges,
                         };
                         drop(state);
                         change_job.apply(&aggregation_context);
@@ -1032,7 +1032,7 @@ impl Task {
                             event: Event::new(move || {
                                 format!("TaskState({})::event", description())
                             }),
-                            outdated_dependencies,
+                            outdated_edges,
                         };
                         drop(state);
                         change_job.apply(&aggregation_context);
@@ -1041,11 +1041,11 @@ impl Task {
                 InProgress {
                     ref mut event,
                     count_as_finished,
-                    ref mut outdated_dependencies,
+                    ref mut outdated_edges,
                     ref mut outdated_collectibles,
                 } => {
                     let event = event.take();
-                    let outdated_dependencies = take(outdated_dependencies);
+                    let outdated_edges = take(outdated_edges);
                     let outdated_collectibles = outdated_collectibles.take_collectibles();
                     let change = if count_as_finished {
                         let mut change = TaskChange {
@@ -1076,7 +1076,7 @@ impl Task {
                     });
                     state.state_type = InProgressDirty {
                         event,
-                        outdated_dependencies,
+                        outdated_edges,
                     };
                     drop(state);
                     change_job.apply(&aggregation_context);
@@ -1094,13 +1094,13 @@ impl Task {
         let mut state = self.full_state_mut();
         if let TaskStateType::Dirty {
             ref mut event,
-            ref mut outdated_dependencies,
+            ref mut outdated_edges,
         } = state.state_type
         {
             let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
             state.state_type = Scheduled {
                 event: event.take(),
-                outdated_dependencies: take(outdated_dependencies),
+                outdated_edges: take(outdated_edges),
             };
             let job = state.aggregation_node.apply_change(
                 &aggregation_context,
@@ -1116,7 +1116,7 @@ impl Task {
         }
     }
 
-    pub(crate) fn add_dependency_to_current(dep: TaskDependency) {
+    pub(crate) fn add_dependency_to_current(dep: TaskEdge) {
         DEPENDENCIES_TO_TRACK.with(|list| {
             let mut list = list.borrow_mut();
             list.insert(dep);
@@ -1255,12 +1255,9 @@ impl Task {
             {
                 let mut state = self.full_state_mut();
                 if state.children.insert(child_id) {
-                    if let TaskStateType::InProgress {
-                        outdated_dependencies,
-                        ..
-                    } = &mut state.state_type
+                    if let TaskStateType::InProgress { outdated_edges, .. } = &mut state.state_type
                     {
-                        if outdated_dependencies.remove(TaskDependency::Child(child_id)) {
+                        if outdated_edges.remove(TaskEdge::Child(child_id)) {
                             drop(state);
                             aggregation_context.apply_queued_updates();
                             return;
@@ -1344,14 +1341,14 @@ impl Task {
             }
             Dirty {
                 ref mut event,
-                ref mut outdated_dependencies,
+                ref mut outdated_edges,
             } => {
                 turbo_tasks.schedule(self.id);
                 let event = event.take();
                 let listener = event.listen_with_note(note);
                 state.state_type = Scheduled {
                     event,
-                    outdated_dependencies: take(outdated_dependencies),
+                    outdated_edges: take(outdated_edges),
                 };
                 let change_job = state.aggregation_node.apply_change(
                     &aggregation_context,
@@ -1446,10 +1443,7 @@ impl Task {
             }
 
             match &mut state.state_type {
-                TaskStateType::Done {
-                    stateful,
-                    dependencies: _,
-                } => {
+                TaskStateType::Done { stateful, edges: _ } => {
                     if *stateful {
                         return false;
                     }
@@ -1508,7 +1502,7 @@ impl Task {
         } = *full_state;
         match state_type {
             Done {
-                ref mut dependencies,
+                edges: ref mut dependencies,
                 stateful,
             } => {
                 if *stateful {
@@ -1526,12 +1520,12 @@ impl Task {
             }
             Dirty {
                 ref event,
-                ref mut outdated_dependencies,
+                ref mut outdated_edges,
             } => {
                 // We want to get rid of this Event, so notify it to make sure it's empty.
                 event.notify(usize::MAX);
-                if !outdated_dependencies.is_empty() {
-                    clear_dependencies_set = Some(take(outdated_dependencies));
+                if !outdated_edges.is_empty() {
+                    clear_dependencies_set = Some(take(outdated_edges));
                 }
             }
             _ => {

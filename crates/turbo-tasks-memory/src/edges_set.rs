@@ -42,22 +42,22 @@ impl<
 }
 
 #[derive(Hash, Copy, Clone, PartialEq, Eq)]
-pub enum TaskDependency {
+pub enum TaskEdge {
     Output(TaskId),
     Cell(TaskId, CellId),
     Collectibles(TaskId, TraitTypeId),
     Child(TaskId),
 }
 
-impl TaskDependency {
+impl TaskEdge {
     fn task_and_edge_entry(self) -> (TaskId, EdgeEntry) {
         match self {
-            TaskDependency::Output(task) => (task, EdgeEntry::Output),
-            TaskDependency::Cell(task, cell_id) => (task, EdgeEntry::Cell(cell_id)),
-            TaskDependency::Collectibles(task, trait_type_id) => {
+            TaskEdge::Output(task) => (task, EdgeEntry::Output),
+            TaskEdge::Cell(task, cell_id) => (task, EdgeEntry::Cell(cell_id)),
+            TaskEdge::Collectibles(task, trait_type_id) => {
                 (task, EdgeEntry::Collectibles(trait_type_id))
             }
-            TaskDependency::Child(task) => (task, EdgeEntry::Child),
+            TaskEdge::Child(task) => (task, EdgeEntry::Child),
         }
     }
 }
@@ -71,14 +71,12 @@ enum EdgeEntry {
 }
 
 impl EdgeEntry {
-    fn into_dependency(self, task: TaskId) -> TaskDependency {
+    fn into_dependency(self, task: TaskId) -> TaskEdge {
         match self {
-            EdgeEntry::Output => TaskDependency::Output(task),
-            EdgeEntry::Cell(cell_id) => TaskDependency::Cell(task, cell_id),
-            EdgeEntry::Collectibles(trait_type_id) => {
-                TaskDependency::Collectibles(task, trait_type_id)
-            }
-            EdgeEntry::Child => TaskDependency::Child(task),
+            EdgeEntry::Output => TaskEdge::Output(task),
+            EdgeEntry::Cell(cell_id) => TaskEdge::Cell(task, cell_id),
+            EdgeEntry::Collectibles(trait_type_id) => TaskEdge::Collectibles(task, trait_type_id),
+            EdgeEntry::Child => TaskEdge::Child(task),
         }
     }
 }
@@ -440,18 +438,18 @@ impl EdgesEntry {
 }
 
 #[derive(Default)]
-pub struct TaskDependencySet {
+pub struct TaskEdgesSet {
     edges: Box<AutoMap<TaskId, EdgesEntry, BuildHasherDefault<FxHasher>>>,
 }
 
-impl TaskDependencySet {
+impl TaskEdgesSet {
     pub fn new() -> Self {
         Self {
             edges: Default::default(),
         }
     }
 
-    pub fn insert(&mut self, edge: TaskDependency) {
+    pub fn insert(&mut self, edge: TaskEdge) {
         let (task, edge) = edge.task_and_edge_entry();
         match self.edges.entry(task) {
             Entry::Occupied(mut entry) => {
@@ -479,10 +477,10 @@ impl TaskDependencySet {
         self.edges.iter().map(|(_, entry)| entry.len()).sum()
     }
 
-    pub fn into_list(self) -> TaskDependenciesList {
+    pub fn into_list(self) -> TaskEdgesList {
         let mut edges = Vec::with_capacity(self.len());
         self.edges.into_iter().for_each(|edge| edges.push(edge));
-        TaskDependenciesList { edges }
+        TaskEdgesList { edges }
     }
 
     pub(crate) fn drain_children(&mut self) -> SmallVec<[TaskId; 64]> {
@@ -523,14 +521,14 @@ impl TaskDependencySet {
         children
     }
 
-    pub(crate) fn iter(&self) -> impl Iterator<Item = TaskDependency> + '_ {
+    pub(crate) fn iter(&self) -> impl Iterator<Item = TaskEdge> + '_ {
         self.edges
             .iter()
             .flat_map(|(task, entry)| entry.iter().map(move |e| e.into_dependency(*task)))
     }
 
     /// Removes all dependencies from the passed `dependencies` argument
-    pub(crate) fn remove_all(&mut self, dependencies: &TaskDependencySet) {
+    pub(crate) fn remove_all(&mut self, dependencies: &TaskEdgesSet) {
         self.edges.retain(|task, entry| {
             if let Some(other) = dependencies.edges.get(task) {
                 for item in other.iter() {
@@ -547,7 +545,7 @@ impl TaskDependencySet {
         });
     }
 
-    pub(crate) fn remove(&mut self, child_id: TaskDependency) -> bool {
+    pub(crate) fn remove(&mut self, child_id: TaskEdge) -> bool {
         let (task, edge) = child_id.task_and_edge_entry();
         let Entry::Occupied(mut entry) = self.edges.entry(task) else {
             return false;
@@ -564,9 +562,9 @@ impl TaskDependencySet {
     }
 }
 
-impl IntoIterator for TaskDependencySet {
-    type Item = TaskDependency;
-    type IntoIter = impl Iterator<Item = TaskDependency>;
+impl IntoIterator for TaskEdgesSet {
+    type Item = TaskEdge;
+    type IntoIter = impl Iterator<Item = TaskEdge>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.edges
@@ -576,13 +574,13 @@ impl IntoIterator for TaskDependencySet {
 }
 
 #[derive(Default)]
-pub struct TaskDependenciesList {
+pub struct TaskEdgesList {
     edges: Vec<(TaskId, EdgesEntry)>,
 }
 
-impl TaskDependenciesList {
-    pub fn into_set(self) -> TaskDependencySet {
-        TaskDependencySet {
+impl TaskEdgesList {
+    pub fn into_set(self) -> TaskEdgesSet {
+        TaskEdgesSet {
             edges: Box::new(self.edges.into_iter().collect()),
         }
     }
@@ -592,9 +590,9 @@ impl TaskDependenciesList {
     }
 }
 
-impl IntoIterator for TaskDependenciesList {
-    type Item = TaskDependency;
-    type IntoIter = impl Iterator<Item = TaskDependency>;
+impl IntoIterator for TaskEdgesList {
+    type Item = TaskEdge;
+    type IntoIter = impl Iterator<Item = TaskEdge>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.edges
