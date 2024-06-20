@@ -717,7 +717,7 @@ impl DepGraph {
                             };
                             used_ids.read.remove(&default_var.to_id());
                             used_ids.write.insert(default_var.to_id());
-                            let captured_ids = if export.decl.is_fn_expr() {
+                            let mut captured_ids = if export.decl.is_fn_expr() {
                                 ids_captured_by(
                                     &export.decl,
                                     unresolved_ctxt,
@@ -727,6 +727,8 @@ impl DepGraph {
                             } else {
                                 Vars::default()
                             };
+                            captured_ids.read.remove(&default_var.to_id());
+
                             let data = ItemData {
                                 read_vars: used_ids.read,
                                 eventual_read_vars: captured_ids.read,
