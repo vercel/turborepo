@@ -97,7 +97,7 @@ impl ExitHandler {
     /// process's own control (e.g. `SIGKILL` or `SIGSEGV`), this API is
     /// provided on a best-effort basis.
     pub fn on_exit(&self, fut: impl Future<Output = ()> + Send + 'static) {
-        // realistically, this error case can only happen with a mock
+        // realistically, this error case can only happen with the `new_receiver` API.
         self.tx
             .send(Box::pin(fut))
             .expect("cannot send future after process exit");
@@ -116,6 +116,10 @@ impl ExitReceiver {
     /// As this is intended to be used in a library context, this does not exit
     /// the process. It is expected that the process will not exit until
     /// this async method finishes executing.
+    ///
+    /// Additional work can be scheduled using [`ExitHandler::on_exit`] even
+    /// while this is running, and it will execute before this function
+    /// finishes. Work attempted to be scheduled after this finishes will panic.
     pub async fn run_exit_handler(mut self) {
         let mut set = JoinSet::new();
         while let Ok(fut) = self.rx.try_recv() {
@@ -123,6 +127,7 @@ impl ExitReceiver {
         }
         loop {
             select! {
+                biased;
                 Some(fut) = self.rx.recv() => {
                     set.spawn(fut);
                 },
@@ -135,5 +140,73 @@ impl ExitReceiver {
                 },
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        future::Future,
+        pin::Pin,
+        sync::{
+            atomic::{AtomicBool, AtomicU32, Ordering},
+            Arc,
+        },
+    };
+
+    use super::ExitHandler;
+
+    #[tokio::test]
+    async fn test_on_exit() {
+        let (handler, receiver) = ExitHandler::new_receiver();
+
+        let called = Arc::new(AtomicBool::new(false));
+        handler.on_exit({
+            let called = Arc::clone(&called);
+            async move {
+                tokio::task::yield_now().await;
+                called.store(true, Ordering::SeqCst);
+            }
+        });
+
+        receiver.run_exit_handler().await;
+        assert_eq!(called.load(Ordering::SeqCst), true);
+    }
+
+    #[tokio::test]
+    async fn test_queue_while_exiting() {
+        let (handler, receiver) = ExitHandler::new_receiver();
+        let call_count = Arc::new(AtomicU32::new(0));
+
+        type BoxExitFuture = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
+
+        // this struct is needed to construct the recursive closure type
+        #[derive(Clone)]
+        struct GetFut {
+            handler: Arc<ExitHandler>,
+            call_count: Arc<AtomicU32>,
+        }
+
+        impl GetFut {
+            fn get(self) -> BoxExitFuture {
+                Box::pin(async move {
+                    tokio::task::yield_now().await;
+                    if self.call_count.fetch_add(1, Ordering::SeqCst) < 99 {
+                        // queue more work while the exit handler is running
+                        Arc::clone(&self.handler).on_exit(self.get())
+                    }
+                })
+            }
+        }
+
+        handler.on_exit(
+            GetFut {
+                handler: Arc::clone(&handler),
+                call_count: Arc::clone(&call_count),
+            }
+            .get(),
+        );
+        receiver.run_exit_handler().await;
+        assert_eq!(call_count.load(Ordering::SeqCst), 100);
     }
 }
