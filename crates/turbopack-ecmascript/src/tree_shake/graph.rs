@@ -735,7 +735,6 @@ impl DepGraph {
                                 write_vars: used_ids.write,
                                 eventual_write_vars: captured_ids.write,
                                 var_decls: [default_var.to_id()].into_iter().collect(),
-                                side_effects: true,
                                 content: ModuleItem::ModuleDecl(item.clone()),
                                 ..Default::default()
                             };
