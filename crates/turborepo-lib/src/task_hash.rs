@@ -477,6 +477,9 @@ impl<'a> TaskHasher<'a> {
                         "COLORTERM",
                         "TERM",
                         "TERM_PROGRAM",
+                        // Jetbrains IDE
+                        "JB_IDE_HOST",
+                        "JB_IDE_PORT",
                         // Vercel specific
                         "VERCEL_*",
                         "NEXT_*",
