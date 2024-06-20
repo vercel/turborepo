@@ -445,7 +445,7 @@ impl TaskEdgesSet {
     }
 
     pub fn into_list(self) -> TaskEdgesList {
-        let mut edges = Vec::with_capacity(self.len());
+        let mut edges = Vec::with_capacity(self.edges.len());
         self.edges.into_iter().for_each(|edge| edges.push(edge));
         TaskEdgesList {
             edges: edges.into_boxed_slice(),
