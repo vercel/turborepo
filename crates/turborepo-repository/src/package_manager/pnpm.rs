@@ -56,7 +56,7 @@ mod test {
 
     #[test]
     fn test_patch_pruning() {
-        let package_json: PackageJson = serde_json::from_value(json!({
+        let package_json: PackageJson = PackageJson::from_value(json!({
             "name": "pnpm-patches",
             "pnpm": {
                 "patchedDependencies": {

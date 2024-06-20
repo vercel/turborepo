@@ -10,11 +10,10 @@ use tracing::{debug, error, warn};
 use turbopath::{AbsoluteSystemPathBuf, PathRelation};
 use turborepo_cache::AsyncCache;
 use turborepo_scm::SCM;
+use turborepo_unescape::UnescapedString;
 
 use super::ConfigCache;
-use crate::{
-    config::RawTurboJson, gitignore::ensure_turbo_is_gitignored, unescape::UnescapedString,
-};
+use crate::{config::RawTurboJson, gitignore::ensure_turbo_is_gitignored};
 
 // Environment variable key that will be used to enable, and set the expected
 // trace location

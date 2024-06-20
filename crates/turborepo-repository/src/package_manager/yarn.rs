@@ -70,7 +70,7 @@ mod tests {
 
     #[test]
     fn test_patch_pruning() {
-        let package_json: PackageJson = serde_json::from_value(json!({
+        let package_json: PackageJson = PackageJson::from_value(json!({
             "name": "pnpm-patches",
             "resolutions": {
                 "foo@1.0.0": "patch:foo@npm%3A1.0.0#./.yarn/patches/foo-npm-1.0.0-time.patch",
