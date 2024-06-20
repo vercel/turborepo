@@ -480,6 +480,7 @@ impl<'a> TaskHasher<'a> {
                         // Jetbrains IDE
                         "JB_IDE_*",
                         "JB_INTERPRETER",
+                        "_JETBRAINS_TEST_RUNNER_RUN_SCOPE_TYPE"
                         // Vercel specific
                         "VERCEL_*",
                         "NEXT_*",
