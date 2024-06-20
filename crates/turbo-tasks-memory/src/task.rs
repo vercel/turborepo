@@ -1093,6 +1093,7 @@ impl Task {
                 }
                 Done {
                     ref mut dependencies,
+                    ..
                 } => {
                     let outdated_dependencies = take(dependencies);
                     // add to dirty lists and potentially schedule
