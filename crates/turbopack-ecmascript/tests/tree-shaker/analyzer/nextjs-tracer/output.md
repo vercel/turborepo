@@ -425,7 +425,7 @@ graph TD
     Item22["export SpanStatusCode"];
     Item23;
     Item23["export SpanKind"];
-    Item5 -.-> Item4;
+    Item5 --> Item4;
     Item5 --> Item1;
     Item6 --> Item4;
     Item6 --> Item5;
@@ -487,7 +487,7 @@ graph TD
     Item22["export SpanStatusCode"];
     Item23;
     Item23["export SpanKind"];
-    Item5 -.-> Item4;
+    Item5 --> Item4;
     Item5 --> Item1;
     Item6 --> Item4;
     Item6 --> Item5;
@@ -550,7 +550,7 @@ graph TD
     Item22["export SpanStatusCode"];
     Item23;
     Item23["export SpanKind"];
-    Item5 -.-> Item4;
+    Item5 --> Item4;
     Item5 --> Item1;
     Item6 --> Item4;
     Item6 --> Item5;
@@ -1345,6 +1345,9 @@ export { api } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 8
 ```js
+import { api } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
+};
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
