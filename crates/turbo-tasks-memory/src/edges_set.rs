@@ -304,6 +304,10 @@ impl EdgesEntry {
                     *self = EdgesEntry::OutputAndCell0(*type_id);
                     return;
                 }
+                EdgesEntry::ChildAndCell0(type_id) => {
+                    *self = EdgesEntry::ChildOutputAndCell0(*type_id);
+                    return;
+                }
                 _ => {}
             },
             EdgeEntry::Child => match self {
@@ -313,6 +317,10 @@ impl EdgesEntry {
                 }
                 EdgesEntry::Cell0(type_id) => {
                     *self = EdgesEntry::ChildAndCell0(*type_id);
+                    return;
+                }
+                EdgesEntry::OutputAndCell0(type_id) => {
+                    *self = EdgesEntry::ChildOutputAndCell0(*type_id);
                     return;
                 }
                 _ => {}
@@ -327,6 +335,10 @@ impl EdgesEntry {
                         }
                         EdgesEntry::Child => {
                             *self = EdgesEntry::ChildAndCell0(type_id);
+                            return;
+                        }
+                        EdgesEntry::ChildAndOutput => {
+                            *self = EdgesEntry::ChildOutputAndCell0(type_id);
                             return;
                         }
                         _ => {}
@@ -375,7 +387,7 @@ impl EdgesEntry {
                 }
                 _ => {}
             },
-            EdgeEntry::Cell(type_id) => match self {
+            EdgeEntry::Cell(_) => match self {
                 EdgesEntry::Cell0(_) => {
                     *self = EdgesEntry::Empty;
                     return;
