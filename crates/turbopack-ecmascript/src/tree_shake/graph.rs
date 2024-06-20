@@ -715,6 +715,7 @@ impl DepGraph {
                                     &top_level_vars,
                                 )
                             };
+                            used_ids.read.remove(&default_var.to_id());
                             used_ids.write.insert(default_var.to_id());
                             let captured_ids = if export.decl.is_fn_expr() {
                                 ids_captured_by(
