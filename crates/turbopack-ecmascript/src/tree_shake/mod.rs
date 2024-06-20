@@ -113,12 +113,12 @@ impl Analyzer<'_> {
                 for id in item.var_decls.iter() {
                     let state = self.vars.entry(id.clone()).or_default();
 
+                    if state.declarator.is_none() {
+                        state.declarator = Some(item_id.clone());
+                    }
+
                     if item.is_hoisted {
                         state.last_writes.push(item_id.clone());
-
-                        if state.declarator.is_none() {
-                            state.declarator = Some(item_id.clone());
-                        }
                     } else {
                         // TODO(WEB-705): Create a fake module item
                         // state.last_writes.push(item_id.clone());
