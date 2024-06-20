@@ -163,6 +163,9 @@ where
 
     for (dependency, meta) in metadata {
         let dependency = dependency.as_ref();
+        if meta.built.unwrap_or_default() {
+            add_line(dependency, "built");
+        }
         if meta.optional.unwrap_or_default() {
             add_line(dependency, "optional");
         }
