@@ -155,9 +155,6 @@ struct TaskState {
     /// dirty, scheduled, in progress
     state_type: TaskStateType,
 
-    /// Children are only modified from execution
-    children: TaskIdSet,
-
     /// Collectibles are only modified from execution
     collectibles: MaybeCollectibles,
     output: Output,
@@ -175,7 +172,6 @@ impl TaskState {
                 event: Event::new(move || format!("TaskState({})::event", description())),
                 outdated_edges: Default::default(),
             },
-            children: Default::default(),
             collectibles: Default::default(),
             output: Default::default(),
             cells: Default::default(),
@@ -192,7 +188,6 @@ impl TaskState {
                 event: Event::new(move || format!("TaskState({})::event", description())),
                 outdated_edges: Default::default(),
             },
-            children: Default::default(),
             collectibles: Default::default(),
             output: Default::default(),
             cells: Default::default(),
@@ -220,7 +215,6 @@ impl PartialTaskState {
                 event: Event::new(move || format!("TaskState({})::event", description())),
                 outdated_edges: Default::default(),
             },
-            children: Default::default(),
             collectibles: Default::default(),
             output: Default::default(),
             cells: Default::default(),
@@ -249,7 +243,6 @@ impl UnloadedTaskState {
                 event: Event::new(move || format!("TaskState({})::event", description())),
                 outdated_edges: Default::default(),
             },
-            children: Default::default(),
             collectibles: Default::default(),
             output: Default::default(),
             cells: Default::default(),
@@ -326,6 +319,7 @@ enum TaskStateType {
         stateful: bool,
 
         /// Cells/Outputs/Collectibles that the task has read during execution.
+        /// And children that are connected to this task.
         /// The Task will keep these tasks alive as invalidations that happen
         /// there might affect this task.
         ///
@@ -360,6 +354,7 @@ enum TaskStateType {
         /// Dependencies and children that need to be disconnected once leaving
         /// this state
         outdated_edges: TaskEdgesSet,
+        new_children: TaskIdSet,
         outdated_collectibles: MaybeCollectibles,
     },
 
@@ -644,6 +639,7 @@ impl Task {
                         count_as_finished: false,
                         outdated_edges,
                         outdated_collectibles,
+                        new_children: Default::default(),
                     };
                 }
                 Dirty { .. } => {
@@ -841,12 +837,16 @@ impl Task {
                         count_as_finished,
                         ref mut outdated_edges,
                         ref mut outdated_collectibles,
+                        ref mut new_children,
                     } => {
                         let event = event.take();
                         let mut outdated_edges = take(outdated_edges);
                         let outdated_collectibles = outdated_collectibles.take_collectibles();
-                        let new_dependencies = take(&mut dependencies);
-                        outdated_edges.remove_all(&new_dependencies);
+                        let mut new_edges = take(&mut dependencies);
+                        outdated_edges.remove_all(&new_edges);
+                        for child in take(new_children) {
+                            new_edges.insert(TaskEdge::Child(child));
+                        }
                         if !backend.has_gc() {
                             // This will stay here for longer, so make sure to not consume too much
                             // memory
@@ -857,7 +857,7 @@ impl Task {
                         }
                         state.state_type = Done {
                             stateful,
-                            edges: new_dependencies.into_list(),
+                            edges: new_edges.into_list(),
                         };
                         if !count_as_finished {
                             let mut change = TaskChange {
@@ -1043,9 +1043,13 @@ impl Task {
                     count_as_finished,
                     ref mut outdated_edges,
                     ref mut outdated_collectibles,
+                    ref mut new_children,
                 } => {
                     let event = event.take();
-                    let outdated_edges = take(outdated_edges);
+                    let mut outdated_edges = take(outdated_edges);
+                    for child in take(new_children) {
+                        outdated_edges.insert(TaskEdge::Child(child));
+                    }
                     let outdated_collectibles = outdated_collectibles.take_collectibles();
                     let change = if count_as_finished {
                         let mut change = TaskChange {
@@ -1254,24 +1258,45 @@ impl Task {
             let mut add_job = None;
             {
                 let mut state = self.full_state_mut();
-                if state.children.insert(child_id) {
-                    if let TaskStateType::InProgress { outdated_edges, .. } = &mut state.state_type
-                    {
-                        if outdated_edges.remove(TaskEdge::Child(child_id)) {
-                            drop(state);
-                            aggregation_context.apply_queued_updates();
-                            return;
+                match &mut state.state_type {
+                    TaskStateType::InProgress {
+                        outdated_edges,
+                        new_children,
+                        ..
+                    } => {
+                        if new_children.insert(child_id) {
+                            if outdated_edges.remove(TaskEdge::Child(child_id)) {
+                                drop(state);
+                                aggregation_context.apply_queued_updates();
+                                return;
+                            }
+                            let number_of_children = new_children.len();
+                            let mut guard = TaskGuard::from_full(self.id, state);
+                            add_job = Some(handle_new_edge(
+                                &aggregation_context,
+                                &mut guard,
+                                &self.id,
+                                &child_id,
+                                number_of_children,
+                            ));
                         }
                     }
-                    let number_of_children = state.children.len();
-                    let mut guard = TaskGuard::from_full(self.id, state);
-                    add_job = Some(handle_new_edge(
-                        &aggregation_context,
-                        &mut guard,
-                        &self.id,
-                        &child_id,
-                        number_of_children,
-                    ));
+                    TaskStateType::InProgressDirty { outdated_edges, .. } => {
+                        if outdated_edges.insert(TaskEdge::Child(child_id)) {
+                            // TODO we need the number of children for correct optimization, maybe
+                            // keep a counter
+                            let number_of_children = 0;
+                            let mut guard = TaskGuard::from_full(self.id, state);
+                            add_job = Some(handle_new_edge(
+                                &aggregation_context,
+                                &mut guard,
+                                &self.id,
+                                &child_id,
+                                number_of_children,
+                            ));
+                        }
+                    }
+                    _ => panic!("Unexpected task state when adding a child task"),
                 }
             }
             if let Some(job) = add_job {
@@ -1542,16 +1567,17 @@ impl Task {
             TaskMetaState::Unloaded(UnloadedTaskState {}),
         );
         let TaskState {
-            children,
             cells,
             output,
             collectibles,
             mut aggregation_node,
             // can be dropped as always Dirty, event has been notified above
-            state_type: _,
+            state_type,
             // can be dropped as only gc meta info
             gc: _,
         } = old_state.into_full().unwrap();
+
+        let children: Vec<TaskId> = todo!("Should handle edges in state_type");
 
         // Remove all children, as they will be added again when this task is executed
         // again

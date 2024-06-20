@@ -15,6 +15,7 @@ mod gc;
 mod map_guard;
 mod memory_backend;
 mod memory_backend_with_pg;
+mod multi_iter;
 mod output;
 mod task;
 

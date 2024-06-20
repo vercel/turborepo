@@ -20,7 +20,7 @@ use crate::{
         aggregation_data, AggregationContext, AggregationDataGuard, AggregationNode,
         AggregationNodeGuard, RootQuery,
     },
-    edges_set::TaskEdge,
+    multi_iter::IntoIters,
     MemoryBackend,
 };
 
@@ -459,32 +459,29 @@ impl<'l> AggregationNodeGuard for TaskGuard<'l> {
 
     fn children(&self) -> Self::ChildrenIter<'_> {
         match self.guard {
-            TaskMetaStateWriteGuard::Full(ref guard) => {
-                let outdated_children = match &guard.state_type {
-                    TaskStateType::InProgress {
-                        outdated_edges: outdated_dependencies,
-                        ..
-                    } => Some(outdated_dependencies.iter().filter_map(|dep| {
-                        if let TaskEdge::Child(task) = dep {
-                            Some(task)
-                        } else {
-                            None
-                        }
-                    })),
-                    _ => None,
-                };
-                Some(
-                    guard
-                        .children
-                        .iter()
-                        .copied()
-                        .chain(outdated_children.into_iter().flatten()),
-                )
-                .into_iter()
-                .flatten()
-            }
+            TaskMetaStateWriteGuard::Full(ref guard) => match &guard.state_type {
+                TaskStateType::Done { edges, .. } => IntoIters::One(edges.children()),
+                TaskStateType::InProgress {
+                    outdated_edges,
+                    new_children,
+                    ..
+                } => IntoIters::Two(
+                    outdated_edges
+                        .children()
+                        .chain(new_children.iter().copied()),
+                ),
+                TaskStateType::Dirty { outdated_edges, .. } => {
+                    IntoIters::Three(outdated_edges.children())
+                }
+                TaskStateType::InProgressDirty { outdated_edges, .. } => {
+                    IntoIters::Three(outdated_edges.children())
+                }
+                TaskStateType::Scheduled { outdated_edges, .. } => {
+                    IntoIters::Three(outdated_edges.children())
+                }
+            },
             TaskMetaStateWriteGuard::Partial(_) | TaskMetaStateWriteGuard::Unloaded(_) => {
-                None.into_iter().flatten()
+                IntoIters::Four(std::iter::empty())
             }
             TaskMetaStateWriteGuard::TemporaryFiller => unreachable!(),
         }

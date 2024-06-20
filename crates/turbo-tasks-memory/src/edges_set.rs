@@ -5,41 +5,7 @@ use rustc_hash::FxHasher;
 use smallvec::SmallVec;
 use turbo_tasks::{CellId, TaskId, TraitTypeId, ValueTypeId};
 
-enum IntoIters<A, B, C, D> {
-    One(A),
-    Two(B),
-    Three(C),
-    Four(D),
-}
-
-impl<
-        I,
-        A: Iterator<Item = I>,
-        B: Iterator<Item = I>,
-        C: Iterator<Item = I>,
-        D: Iterator<Item = I>,
-    > Iterator for IntoIters<A, B, C, D>
-{
-    type Item = I;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            IntoIters::One(iter) => iter.next(),
-            IntoIters::Two(iter) => iter.next(),
-            IntoIters::Three(iter) => iter.next(),
-            IntoIters::Four(iter) => iter.next(),
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        match self {
-            IntoIters::One(iter) => iter.size_hint(),
-            IntoIters::Two(iter) => iter.size_hint(),
-            IntoIters::Three(iter) => iter.size_hint(),
-            IntoIters::Four(iter) => iter.size_hint(),
-        }
-    }
-}
+use crate::multi_iter::IntoIters;
 
 #[derive(Hash, Copy, Clone, PartialEq, Eq)]
 pub enum TaskEdge {
@@ -285,38 +251,38 @@ impl EdgesEntry {
         }
     }
 
-    fn insert(&mut self, entry: EdgeEntry) {
+    fn insert(&mut self, entry: EdgeEntry) -> bool {
         if self.has(entry) {
-            return;
+            return false;
         }
         match entry {
             EdgeEntry::Output => match self {
                 EdgesEntry::Child => {
                     *self = EdgesEntry::ChildAndOutput;
-                    return;
+                    return true;
                 }
                 EdgesEntry::Cell0(type_id) => {
                     *self = EdgesEntry::OutputAndCell0(*type_id);
-                    return;
+                    return true;
                 }
                 EdgesEntry::ChildAndCell0(type_id) => {
                     *self = EdgesEntry::ChildOutputAndCell0(*type_id);
-                    return;
+                    return true;
                 }
                 _ => {}
             },
             EdgeEntry::Child => match self {
                 EdgesEntry::Output => {
                     *self = EdgesEntry::ChildAndOutput;
-                    return;
+                    return true;
                 }
                 EdgesEntry::Cell0(type_id) => {
                     *self = EdgesEntry::ChildAndCell0(*type_id);
-                    return;
+                    return true;
                 }
                 EdgesEntry::OutputAndCell0(type_id) => {
                     *self = EdgesEntry::ChildOutputAndCell0(*type_id);
-                    return;
+                    return true;
                 }
                 _ => {}
             },
@@ -326,15 +292,15 @@ impl EdgesEntry {
                     match self {
                         EdgesEntry::Output => {
                             *self = EdgesEntry::OutputAndCell0(type_id);
-                            return;
+                            return true;
                         }
                         EdgesEntry::Child => {
                             *self = EdgesEntry::ChildAndCell0(type_id);
-                            return;
+                            return true;
                         }
                         EdgesEntry::ChildAndOutput => {
                             *self = EdgesEntry::ChildOutputAndCell0(type_id);
-                            return;
+                            return true;
                         }
                         _ => {}
                     }
@@ -342,7 +308,7 @@ impl EdgesEntry {
             }
             EdgeEntry::Collectibles(_) => {}
         }
-        self.into_complex().insert(entry);
+        self.into_complex().insert(entry)
     }
 
     fn remove(&mut self, entry: EdgeEntry) -> bool {
@@ -449,15 +415,16 @@ impl TaskEdgesSet {
         }
     }
 
-    pub fn insert(&mut self, edge: TaskEdge) {
+    pub fn insert(&mut self, edge: TaskEdge) -> bool {
         let (task, edge) = edge.task_and_edge_entry();
         match self.edges.entry(task) {
             Entry::Occupied(mut entry) => {
                 let entry = entry.get_mut();
-                entry.insert(edge);
+                entry.insert(edge)
             }
             Entry::Vacant(entry) => {
                 entry.insert(EdgesEntry::from(edge));
+                true
             }
         }
     }
@@ -560,6 +527,23 @@ impl TaskEdgesSet {
             false
         }
     }
+
+    pub fn children(&self) -> impl Iterator<Item = TaskId> + '_ {
+        self.edges.iter().filter_map(|(task, entry)| match entry {
+            EdgesEntry::Child => Some(*task),
+            EdgesEntry::ChildAndOutput => Some(*task),
+            EdgesEntry::ChildAndCell0(_) => Some(*task),
+            EdgesEntry::ChildOutputAndCell0(_) => Some(*task),
+            EdgesEntry::Complex(set) => {
+                if set.contains(&EdgeEntry::Child) {
+                    Some(*task)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        })
+    }
 }
 
 impl IntoIterator for TaskEdgesSet {
@@ -587,6 +571,23 @@ impl TaskEdgesList {
 
     pub fn is_empty(&self) -> bool {
         self.edges.is_empty()
+    }
+
+    pub fn children(&self) -> impl Iterator<Item = TaskId> + '_ {
+        self.edges.iter().filter_map(|(task, entry)| match entry {
+            EdgesEntry::Child => Some(*task),
+            EdgesEntry::ChildAndOutput => Some(*task),
+            EdgesEntry::ChildAndCell0(_) => Some(*task),
+            EdgesEntry::ChildOutputAndCell0(_) => Some(*task),
+            EdgesEntry::Complex(set) => {
+                if set.contains(&EdgeEntry::Child) {
+                    Some(*task)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        })
     }
 }
 
