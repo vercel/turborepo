@@ -20,6 +20,7 @@ use crate::{
         aggregation_data, AggregationContext, AggregationDataGuard, AggregationNode,
         AggregationNodeGuard, RootQuery,
     },
+    edges_set::TaskDependency,
     MemoryBackend,
 };
 
@@ -459,28 +460,28 @@ impl<'l> AggregationNodeGuard for TaskGuard<'l> {
     fn children(&self) -> Self::ChildrenIter<'_> {
         match self.guard {
             TaskMetaStateWriteGuard::Full(ref guard) => {
-                #[cfg(feature = "lazy_remove_children")]
-                {
-                    let outdated_children = match &guard.state_type {
-                        TaskStateType::InProgress {
-                            outdated_children, ..
-                        } => Some(outdated_children.iter().copied()),
-                        _ => None,
-                    };
-                    Some(
-                        guard
-                            .children
-                            .iter()
-                            .copied()
-                            .chain(outdated_children.into_iter().flatten()),
-                    )
-                    .into_iter()
-                    .flatten()
-                }
-                #[cfg(not(feature = "lazy_remove_children"))]
-                {
-                    Some(guard.children.iter().copied()).into_iter().flatten()
-                }
+                let outdated_children = match &guard.state_type {
+                    TaskStateType::InProgress {
+                        outdated_dependencies,
+                        ..
+                    } => Some(outdated_dependencies.iter().filter_map(|dep| {
+                        if let TaskDependency::Child(task) = dep {
+                            Some(task)
+                        } else {
+                            None
+                        }
+                    })),
+                    _ => None,
+                };
+                Some(
+                    guard
+                        .children
+                        .iter()
+                        .copied()
+                        .chain(outdated_children.into_iter().flatten()),
+                )
+                .into_iter()
+                .flatten()
             }
             TaskMetaStateWriteGuard::Partial(_) | TaskMetaStateWriteGuard::Unloaded(_) => {
                 None.into_iter().flatten()

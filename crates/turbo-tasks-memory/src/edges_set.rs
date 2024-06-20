@@ -6,6 +6,7 @@ use std::{
 
 use auto_hash_map::AutoSet;
 use rustc_hash::FxHasher;
+use smallvec::SmallVec;
 use turbo_tasks::{CellId, TaskId, TraitTypeId, ValueTypeId};
 
 enum IntoIters<A, B, C, D> {
@@ -350,9 +351,9 @@ impl EdgesEntry {
         self.into_complex().insert(entry);
     }
 
-    fn remove(&mut self, entry: EdgeEntry) {
+    fn remove(&mut self, entry: EdgeEntry) -> bool {
         if !self.has(entry) {
-            return;
+            return false;
         }
         // We verified that the entry is present, so any non-complex case is easier to
         // handle
@@ -360,64 +361,57 @@ impl EdgesEntry {
             EdgeEntry::Output => match self {
                 EdgesEntry::Output => {
                     *self = EdgesEntry::Empty;
-                    return;
+                    return true;
                 }
                 EdgesEntry::ChildAndOutput => {
                     *self = EdgesEntry::Child;
-                    return;
+                    return true;
                 }
                 EdgesEntry::OutputAndCell0(type_id) => {
                     *self = EdgesEntry::Cell0(*type_id);
-                    return;
+                    return true;
                 }
                 _ => {}
             },
             EdgeEntry::Child => match self {
                 EdgesEntry::Child => {
                     *self = EdgesEntry::Empty;
-                    return;
+                    return true;
                 }
                 EdgesEntry::ChildAndOutput => {
                     *self = EdgesEntry::Output;
-                    return;
+                    return true;
                 }
                 EdgesEntry::ChildAndCell0(type_id) => {
                     *self = EdgesEntry::Cell0(*type_id);
-                    return;
+                    return true;
                 }
                 _ => {}
             },
             EdgeEntry::Cell(_) => match self {
                 EdgesEntry::Cell0(_) => {
                     *self = EdgesEntry::Empty;
-                    return;
+                    return true;
                 }
                 EdgesEntry::OutputAndCell0(_) => {
                     *self = EdgesEntry::Output;
-                    return;
+                    return true;
                 }
                 EdgesEntry::ChildAndCell0(_) => {
                     *self = EdgesEntry::Child;
-                    return;
+                    return true;
                 }
                 _ => {}
             },
             EdgeEntry::Collectibles(_) => {}
         }
         if let EdgesEntry::Complex(set) = self {
-            set.remove(&entry);
-            if set.is_empty() {
-                *self = EdgesEntry::Empty;
-            } else if set.len() == 1 {
-                let entry = set.iter().next().unwrap();
-                if matches!(
-                    entry,
-                    EdgeEntry::Output | EdgeEntry::Child | EdgeEntry::Cell(CellId { index: 0, .. })
-                ) {
-                    *self = EdgesEntry::from(*entry);
-                }
+            if set.remove(&entry) {
+                self.simplify();
+                return true;
             }
         }
+        false
     }
 
     fn shrink_to_fit(&mut self) {
@@ -425,23 +419,45 @@ impl EdgesEntry {
             set.shrink_to_fit();
         }
     }
+
+    fn simplify(&mut self) {
+        if let EdgesEntry::Complex(set) = self {
+            match set.len() {
+                0 => {
+                    *self = EdgesEntry::Empty;
+                }
+                1 => {
+                    let entry = set.iter().next().unwrap();
+                    if matches!(
+                        entry,
+                        EdgeEntry::Output
+                            | EdgeEntry::Child
+                            | EdgeEntry::Cell(CellId { index: 0, .. })
+                    ) {
+                        *self = EdgesEntry::from(*entry);
+                    }
+                }
+                _ => (),
+            }
+        }
+    }
 }
 
 #[derive(Default)]
 pub struct TaskDependencySet {
-    map: HashMap<TaskId, EdgesEntry, BuildHasherDefault<FxHasher>>,
+    edges: HashMap<TaskId, EdgesEntry, BuildHasherDefault<FxHasher>>,
 }
 
 impl TaskDependencySet {
     pub fn new() -> Self {
         Self {
-            map: HashMap::default(),
+            edges: HashMap::default(),
         }
     }
 
     pub fn insert(&mut self, edge: TaskDependency) {
         let (task, edge) = edge.task_and_edge_entry();
-        match self.map.entry(task) {
+        match self.edges.entry(task) {
             Entry::Occupied(mut entry) => {
                 let entry = entry.get_mut();
                 entry.insert(edge);
@@ -453,24 +469,95 @@ impl TaskDependencySet {
     }
 
     pub fn shrink_to_fit(&mut self) {
-        for entry in self.map.values_mut() {
+        for entry in self.edges.values_mut() {
             entry.shrink_to_fit();
         }
-        self.map.shrink_to_fit();
+        self.edges.shrink_to_fit();
     }
 
     pub fn is_empty(&self) -> bool {
-        self.map.is_empty()
+        self.edges.is_empty()
     }
 
     pub fn len(&self) -> usize {
-        self.map.iter().map(|(_, entry)| entry.len()).sum()
+        self.edges.iter().map(|(_, entry)| entry.len()).sum()
     }
 
     pub fn into_list(self) -> TaskDependenciesList {
         let mut edges = Vec::with_capacity(self.len());
-        self.map.into_iter().for_each(|edge| edges.push(edge));
+        self.edges.into_iter().for_each(|edge| edges.push(edge));
         TaskDependenciesList { edges }
+    }
+
+    pub(crate) fn drain_children(&mut self) -> SmallVec<[TaskId; 64]> {
+        let mut children = SmallVec::new();
+        self.edges.retain(|&task, entry| match entry {
+            EdgesEntry::Child => {
+                children.push(task);
+                false
+            }
+            EdgesEntry::ChildAndOutput => {
+                children.push(task);
+                *entry = EdgesEntry::Output;
+                true
+            }
+            EdgesEntry::ChildAndCell0(type_id) => {
+                children.push(task);
+                *entry = EdgesEntry::Cell0(*type_id);
+                true
+            }
+            EdgesEntry::ChildOutputAndCell0(type_id) => {
+                children.push(task);
+                *entry = EdgesEntry::OutputAndCell0(*type_id);
+                true
+            }
+            EdgesEntry::Complex(set) => {
+                if set.remove(&EdgeEntry::Child) {
+                    children.push(task);
+                }
+                entry.simplify();
+                if matches!(entry, EdgesEntry::Empty) {
+                    false
+                } else {
+                    true
+                }
+            }
+            _ => true,
+        });
+        children
+    }
+
+    pub(crate) fn iter(&self) -> impl Iterator<Item = TaskDependency> + '_ {
+        self.edges
+            .iter()
+            .flat_map(|(task, entry)| entry.iter().map(move |e| e.into_dependency(*task)))
+    }
+
+    /// Removes all dependencies from the passed `dependencies` argument
+    pub(crate) fn remove_all(&mut self, dependencies: &TaskDependencySet) {
+        self.edges.retain(|task, entry| {
+            if let Some(other) = dependencies.edges.get(task) {
+                for item in other.iter() {
+                    entry.remove(item);
+                }
+                if matches!(entry, EdgesEntry::Empty) {
+                    false
+                } else {
+                    true
+                }
+            } else {
+                true
+            }
+        });
+    }
+
+    pub(crate) fn remove(&mut self, child_id: TaskDependency) -> bool {
+        let (task, edge) = child_id.task_and_edge_entry();
+        let Entry::Occupied(mut entry) = self.edges.entry(task) else {
+            return false;
+        };
+        let entry = entry.get_mut();
+        entry.remove(edge)
     }
 }
 
@@ -479,7 +566,7 @@ impl IntoIterator for TaskDependencySet {
     type IntoIter = impl Iterator<Item = TaskDependency>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.map
+        self.edges
             .into_iter()
             .flat_map(|(task, entry)| entry.into_iter().map(move |e| e.into_dependency(task)))
     }
@@ -491,25 +578,14 @@ pub struct TaskDependenciesList {
 }
 
 impl TaskDependenciesList {
-    pub fn is_empty(&self) -> bool {
-        self.edges.is_empty()
+    pub fn into_set(self) -> TaskDependencySet {
+        TaskDependencySet {
+            edges: self.edges.into_iter().collect(),
+        }
     }
 
-    pub(crate) fn remove(&mut self, dependencies: &TaskDependencySet) {
-        self.edges.retain_mut(|(task, entry)| {
-            if let Some(other) = dependencies.map.get(task) {
-                for item in other.iter() {
-                    entry.remove(item)
-                }
-                if matches!(entry, EdgesEntry::Empty) {
-                    false
-                } else {
-                    true
-                }
-            } else {
-                true
-            }
-        });
+    pub fn is_empty(&self) -> bool {
+        self.edges.is_empty()
     }
 }
 
