@@ -21,7 +21,7 @@ pub enum OutputContent {
     Empty,
     Link(RawVc),
     Error(SharedError),
-    Panic(Option<Cow<'static, str>>),
+    Panic(Option<Box<Cow<'static, str>>>),
 }
 
 impl Display for OutputContent {
@@ -72,7 +72,7 @@ impl Output {
         message: Option<Cow<'static, str>>,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
-        self.content = OutputContent::Panic(message);
+        self.content = OutputContent::Panic(message.map(Box::new));
         // notify
         if !self.dependent_tasks.is_empty() {
             turbo_tasks.schedule_notify_tasks_set(&take(&mut self.dependent_tasks));
