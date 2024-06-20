@@ -307,7 +307,7 @@ graph TD
     Item14 -.-> Item6;
     Item14 -.-> Item9;
     Item14 -.-> Item17;
-    Item14 -.-> Item5;
+    Item14 --> Item5;
 ```
 # Phase 4
 ```mermaid
@@ -375,7 +375,7 @@ graph TD
     Item14 -.-> Item6;
     Item14 -.-> Item9;
     Item14 -.-> Item17;
-    Item14 -.-> Item5;
+    Item14 --> Item5;
     Item15 --> Item1;
     Item15 --> Item2;
     Item15 --> Item11;
@@ -761,6 +761,9 @@ export { foo } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 4
 ```js
+import { foobar } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
 export { external2 };
 function external2() {
     foobar += ".";
