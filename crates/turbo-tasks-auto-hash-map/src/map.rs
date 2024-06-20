@@ -213,6 +213,36 @@ impl<K: Eq + Hash, V, H: BuildHasher + Default, const I: usize> AutoMap<K, V, H,
         }
     }
 
+    /// see [HashMap::retain](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.retain)
+    pub fn retain<F>(&mut self, mut f: F)
+    where
+        F: FnMut(&K, &mut V) -> bool,
+    {
+        match self {
+            AutoMap::List(list) => {
+                let mut len = list.len();
+                let mut i = 0;
+                while i < len {
+                    let (key, value) = &mut list[i];
+                    if !f(key, value) {
+                        list.swap_remove(i);
+                        len -= 1;
+                    } else {
+                        i += 1;
+                    }
+                }
+            }
+            AutoMap::Map(map) => {
+                map.retain(f);
+                if map.len() <= MIN_HASH_SIZE {
+                    let mut list = SmallVec::with_capacity(map.len());
+                    list.extend(map.drain());
+                    *self = AutoMap::List(list);
+                }
+            }
+        }
+    }
+
     /// see [HashMap::shrink_to_fit](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.shrink_to_fit)
     pub fn shrink_to_fit(&mut self) {
         match self {
