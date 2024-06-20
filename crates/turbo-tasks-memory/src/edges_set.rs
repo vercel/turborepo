@@ -342,6 +342,8 @@ impl EdgesEntry {
         if !self.has(entry) {
             return;
         }
+        // We verified that the entry is present, so any non-complex case is easier to
+        // handle
         match entry {
             EdgeEntry::Output => match self {
                 EdgesEntry::Output => {
@@ -373,32 +375,35 @@ impl EdgesEntry {
                 }
                 _ => {}
             },
-            EdgeEntry::Cell(type_id) => {
-                let CellId { type_id, index } = type_id;
-                if index == 0 {
-                    match self {
-                        EdgesEntry::Cell0(_) => {
-                            *self = EdgesEntry::Empty;
-                            return;
-                        }
-                        EdgesEntry::OutputAndCell0(_) => {
-                            *self = EdgesEntry::Output;
-                            return;
-                        }
-                        EdgesEntry::ChildAndCell0(_) => {
-                            *self = EdgesEntry::Child;
-                            return;
-                        }
-                        _ => {}
-                    }
+            EdgeEntry::Cell(type_id) => match self {
+                EdgesEntry::Cell0(_) => {
+                    *self = EdgesEntry::Empty;
+                    return;
                 }
-            }
+                EdgesEntry::OutputAndCell0(_) => {
+                    *self = EdgesEntry::Output;
+                    return;
+                }
+                EdgesEntry::ChildAndCell0(_) => {
+                    *self = EdgesEntry::Child;
+                    return;
+                }
+                _ => {}
+            },
             EdgeEntry::Collectibles(_) => {}
         }
         if let EdgesEntry::Complex(set) = self {
             set.remove(&entry);
             if set.is_empty() {
                 *self = EdgesEntry::Empty;
+            } else if set.len() == 1 {
+                let entry = set.iter().next().unwrap();
+                if matches!(
+                    entry,
+                    EdgeEntry::Output | EdgeEntry::Child | EdgeEntry::Cell(CellId { index: 0, .. })
+                ) {
+                    *self = EdgesEntry::from(*entry);
+                }
             }
         }
     }
