@@ -431,7 +431,7 @@ impl DepGraph {
             let ix = self.g.get_node(id);
 
             if let ItemId::Group(_) = id {
-                groups.push((vec![id.clone()], FxHashSet::default()));
+                groups.push((vec![id.clone()], FxHashSet::default(), 1));
                 global_done.insert(ix);
             }
         }
@@ -449,7 +449,8 @@ impl DepGraph {
 
                     global_done.extend(cycle.iter().copied());
 
-                    groups.push((ids, Default::default()));
+                    let len = ids.len();
+                    groups.push((ids, Default::default(), len));
                 }
             }
         }
@@ -484,7 +485,7 @@ impl DepGraph {
                 .count();
 
             if dependant_count >= 2 && count_of_startings >= 2 {
-                groups.push((vec![id.clone()], FxHashSet::default()));
+                groups.push((vec![id.clone()], FxHashSet::default(), 1));
                 global_done.insert(ix as u32);
             }
         }
@@ -492,11 +493,15 @@ impl DepGraph {
         loop {
             let mut changed = false;
 
-            for (group, group_done) in &mut groups {
-                let start = &group[0];
-                let start_ix = self.g.get_node(start);
-                changed |=
-                    add_to_group(&self.g, data, group, start_ix, &mut global_done, group_done);
+            for (group, group_done, init_len) in &mut groups {
+                // Cycle group
+
+                for i in 0..*init_len {
+                    let start = &group[i];
+                    let start_ix = self.g.get_node(start);
+                    changed |=
+                        add_to_group(&self.g, data, group, start_ix, &mut global_done, group_done);
+                }
             }
 
             if !changed {
