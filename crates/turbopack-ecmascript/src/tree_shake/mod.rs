@@ -291,12 +291,8 @@ impl Analyzer<'_> {
                     if let Some(declarator) = &state.declarator {
                         if declarator != item_id {
                             // A write also depends on the declaration.
-                            if item.side_effects {
-                                self.g
-                                    .add_strong_deps(item_id, [declarator].iter().copied());
-                            } else {
-                                self.g.add_weak_deps(item_id, [declarator].iter().copied());
-                            }
+                            self.g
+                                .add_strong_deps(item_id, [declarator].iter().copied());
                         }
                     }
                 }
