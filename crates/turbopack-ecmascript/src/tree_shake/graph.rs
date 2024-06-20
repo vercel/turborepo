@@ -700,19 +700,32 @@ impl DepGraph {
                         });
 
                         {
-                            let mut used_ids = ids_used_by_ignoring_nested(
-                                &export.decl,
-                                unresolved_ctxt,
-                                top_level_ctxt,
-                                &top_level_vars,
-                            );
+                            let mut used_ids = if export.decl.is_fn_expr() {
+                                ids_used_by_ignoring_nested(
+                                    &export.decl,
+                                    unresolved_ctxt,
+                                    top_level_ctxt,
+                                    &top_level_vars,
+                                )
+                            } else {
+                                ids_used_by(
+                                    &export.decl,
+                                    unresolved_ctxt,
+                                    top_level_ctxt,
+                                    &top_level_vars,
+                                )
+                            };
                             used_ids.write.insert(default_var.to_id());
-                            let captured_ids = ids_captured_by(
-                                &export.decl,
-                                unresolved_ctxt,
-                                top_level_ctxt,
-                                &top_level_vars,
-                            );
+                            let captured_ids = if export.decl.is_fn_expr() {
+                                ids_captured_by(
+                                    &export.decl,
+                                    unresolved_ctxt,
+                                    top_level_ctxt,
+                                    &top_level_vars,
+                                )
+                            } else {
+                                Vars::default()
+                            };
                             let data = ItemData {
                                 read_vars: used_ids.read,
                                 eventual_read_vars: captured_ids.read,
