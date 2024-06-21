@@ -494,7 +494,7 @@ pub(super) async fn split(
                 }
                 let code = String::from_utf8(buf).unwrap();
 
-                println!("# Program:\n{code}");
+                eprintln!("# Program:\n{code}");
             }
 
             let module = match program {
@@ -535,7 +535,7 @@ pub(super) async fn split(
                 }
                 let code = String::from_utf8(buf).unwrap();
 
-                println!("# Module #{i}:\n{code}");
+                eprintln!("# Module #{i}:\n{code}");
             }
             assert_ne!(modules.len(), 0, "modules.len() == 0;\nModule: {module:?}",);
 
