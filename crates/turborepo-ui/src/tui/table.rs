@@ -203,11 +203,12 @@ impl TaskTable {
         self.get(i)
     }
 
-    pub fn tasks_started(&self) -> impl Iterator<Item = &str> + '_ {
+    pub fn tasks_started(&self) -> Vec<&str> {
         self.finished
             .iter()
             .map(|task| task.name())
             .chain(self.running.iter().map(|task| task.name()))
+            .collect()
     }
 
     fn finished_rows(&self) -> impl Iterator<Item = Row> + '_ {

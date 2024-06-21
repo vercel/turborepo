@@ -20,6 +20,7 @@ pub struct App<I> {
     pane: TerminalPane<I>,
     done: bool,
     input_options: InputOptions,
+    started_tasks: Vec<String>,
 }
 
 pub enum Direction {
@@ -30,6 +31,7 @@ pub enum Direction {
 impl<I> App<I> {
     pub fn new(rows: u16, cols: u16, tasks: Vec<String>) -> Self {
         debug!("tasks: {tasks:?}");
+        let num_of_tasks = tasks.len();
         let mut this = Self {
             table: TaskTable::new(tasks.clone()),
             pane: TerminalPane::new(rows, cols, tasks),
@@ -39,6 +41,7 @@ impl<I> App<I> {
                 // Check if stdin is a tty that we should read input from
                 tty_stdin: atty::is(atty::Stream::Stdin),
             },
+            started_tasks: Vec::with_capacity(num_of_tasks),
         };
         // Start with first task selected
         this.next();
@@ -202,8 +205,8 @@ fn cleanup<B: Backend + io::Write, I>(
         crossterm::event::DisableMouseCapture,
         crossterm::terminal::LeaveAlternateScreen,
     )?;
-    let started_tasks = app.table.tasks_started().collect();
-    app.pane.persist_tasks(started_tasks)?;
+    let started_tasks = app.table.tasks_started();
+    app.pane.persist_tasks(&started_tasks)?;
     crossterm::terminal::disable_raw_mode()?;
     terminal.show_cursor()?;
     Ok(())
@@ -216,6 +219,7 @@ fn update(
     match event {
         Event::StartTask { task } => {
             app.table.start_task(&task)?;
+            app.started_tasks.push(task);
         }
         Event::TaskOutput { task, output } => {
             app.pane.process_output(&task, &output)?;
