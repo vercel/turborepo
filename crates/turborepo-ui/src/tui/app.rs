@@ -203,7 +203,7 @@ fn cleanup<B: Backend + io::Write, I>(
         crossterm::terminal::LeaveAlternateScreen,
     )?;
     let started_tasks = app.table.tasks_started().collect();
-    app.pane.render_remaining(started_tasks)?;
+    app.pane.persist_tasks(started_tasks)?;
     crossterm::terminal::disable_raw_mode()?;
     terminal.show_cursor()?;
     Ok(())

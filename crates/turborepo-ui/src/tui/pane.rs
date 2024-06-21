@@ -30,7 +30,6 @@ struct TerminalOutput<W> {
     cols: u16,
     parser: vt100::Parser,
     stdin: Option<W>,
-    has_been_persisted: bool,
     status: Option<String>,
 }
 
@@ -117,9 +116,10 @@ impl<W> TerminalPane<W> {
         Ok(())
     }
 
-    pub fn render_remaining(&mut self, started_tasks: HashSet<&str>) -> std::io::Result<()> {
+    /// Persist all task output to the terminal
+    pub fn persist_tasks(&mut self, started_tasks: HashSet<&str>) -> std::io::Result<()> {
         for (task_name, task) in self.tasks.iter_mut() {
-            if !task.has_been_persisted && started_tasks.contains(task_name.as_str()) {
+            if started_tasks.contains(task_name.as_str()) {
                 task.persist_screen(task_name)?;
             }
         }
@@ -169,7 +169,6 @@ impl<W> TerminalOutput<W> {
             stdin,
             rows,
             cols,
-            has_been_persisted: false,
             status: None,
         }
     }
@@ -203,7 +202,6 @@ impl<W> TerminalOutput<W> {
             stdout.write_all(b"\r\n")?;
         }
         stdout.write_all("└────>\r\n".as_bytes())?;
-        self.has_been_persisted = true;
 
         Ok(())
     }
