@@ -660,7 +660,7 @@ mod tests {
 
     struct TestCase {
         name: String,
-        package_manager: String,
+        package_manager: Spanned<String>,
         expected_manager: String,
         expected_version: String,
         expected_error: bool,
@@ -758,70 +758,70 @@ mod tests {
         let tests = vec![
             TestCase {
                 name: "errors with a tag version".to_owned(),
-                package_manager: "npm@latest".to_owned(),
+                package_manager: Spanned::new("npm@latest".to_owned()),
                 expected_manager: "".to_owned(),
                 expected_version: "".to_owned(),
                 expected_error: true,
             },
             TestCase {
                 name: "errors with no version".to_owned(),
-                package_manager: "npm".to_owned(),
+                package_manager: Spanned::new("npm".to_owned()),
                 expected_manager: "".to_owned(),
                 expected_version: "".to_owned(),
                 expected_error: true,
             },
             TestCase {
                 name: "requires fully-qualified semver versions (one digit)".to_owned(),
-                package_manager: "npm@1".to_owned(),
+                package_manager: Spanned::new("npm@1".to_owned()),
                 expected_manager: "".to_owned(),
                 expected_version: "".to_owned(),
                 expected_error: true,
             },
             TestCase {
                 name: "requires fully-qualified semver versions (two digits)".to_owned(),
-                package_manager: "npm@1.2".to_owned(),
+                package_manager: Spanned::new("npm@1.2".to_owned()),
                 expected_manager: "".to_owned(),
                 expected_version: "".to_owned(),
                 expected_error: true,
             },
             TestCase {
                 name: "supports custom labels".to_owned(),
-                package_manager: "npm@1.2.3-alpha.1".to_owned(),
+                package_manager: Spanned::new("npm@1.2.3-alpha.1".to_owned()),
                 expected_manager: "npm".to_owned(),
                 expected_version: "1.2.3-alpha.1".to_owned(),
                 expected_error: false,
             },
             TestCase {
                 name: "only supports specified package managers".to_owned(),
-                package_manager: "pip@1.2.3".to_owned(),
+                package_manager: Spanned::new("pip@1.2.3".to_owned()),
                 expected_manager: "".to_owned(),
                 expected_version: "".to_owned(),
                 expected_error: true,
             },
             TestCase {
                 name: "supports npm".to_owned(),
-                package_manager: "npm@0.0.1".to_owned(),
+                package_manager: Spanned::new("npm@0.0.1".to_owned()),
                 expected_manager: "npm".to_owned(),
                 expected_version: "0.0.1".to_owned(),
                 expected_error: false,
             },
             TestCase {
                 name: "supports pnpm".to_owned(),
-                package_manager: "pnpm@0.0.1".to_owned(),
+                package_manager: Spanned::new("pnpm@0.0.1".to_owned()),
                 expected_manager: "pnpm".to_owned(),
                 expected_version: "0.0.1".to_owned(),
                 expected_error: false,
             },
             TestCase {
                 name: "supports yarn".to_owned(),
-                package_manager: "yarn@111.0.1".to_owned(),
+                package_manager: Spanned::new("yarn@111.0.1".to_owned()),
                 expected_manager: "yarn".to_owned(),
                 expected_version: "111.0.1".to_owned(),
                 expected_error: false,
             },
             TestCase {
                 name: "supports bun".to_owned(),
-                package_manager: "bun@1.0.1".to_owned(),
+                package_manager: Spanned::new("bun@1.0.1".to_owned()),
                 expected_manager: "bun".to_owned(),
                 expected_version: "1.0.1".to_owned(),
                 expected_error: false,
@@ -844,29 +844,29 @@ mod tests {
     #[test]
     fn test_read_package_manager() -> Result<(), Error> {
         let mut package_json = PackageJson {
-            package_manager: Some("npm@8.19.4".to_string()),
+            package_manager: Some(Spanned::new("npm@8.19.4".to_string())),
             ..Default::default()
         };
         let package_manager = PackageManager::read_package_manager(&package_json)?;
         assert_eq!(package_manager, PackageManager::Npm);
 
-        package_json.package_manager = Some("yarn@2.0.0".to_string());
+        package_json.package_manager = Some(Spanned::new("yarn@2.0.0".to_string()));
         let package_manager = PackageManager::read_package_manager(&package_json)?;
         assert_eq!(package_manager, PackageManager::Berry);
 
-        package_json.package_manager = Some("yarn@1.9.0".to_string());
+        package_json.package_manager = Some(Spanned::new("yarn@1.9.0".to_string()));
         let package_manager = PackageManager::read_package_manager(&package_json)?;
         assert_eq!(package_manager, PackageManager::Yarn);
 
-        package_json.package_manager = Some("pnpm@6.0.0".to_string());
+        package_json.package_manager = Some(Spanned::new("pnpm@6.0.0".to_string()));
         let package_manager = PackageManager::read_package_manager(&package_json)?;
         assert_eq!(package_manager, PackageManager::Pnpm6);
 
-        package_json.package_manager = Some("pnpm@7.2.0".to_string());
+        package_json.package_manager = Some(Spanned::new("pnpm@7.2.0".to_string()));
         let package_manager = PackageManager::read_package_manager(&package_json)?;
         assert_eq!(package_manager, PackageManager::Pnpm);
 
-        package_json.package_manager = Some("bun@1.0.1".to_string());
+        package_json.package_manager = Some(Spanned::new("bun@1.0.1".to_string()));
         let package_manager = PackageManager::read_package_manager(&package_json)?;
         assert_eq!(package_manager, PackageManager::Bun);
 
