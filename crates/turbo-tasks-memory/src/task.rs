@@ -1625,7 +1625,11 @@ impl Task {
         match state_type {
             Done {
                 ref mut dependencies,
+                stateful,
             } => {
+                if *stateful {
+                    return false;
+                }
                 change_job = aggregation_node.apply_change(
                     &aggregation_context,
                     TaskChange {
