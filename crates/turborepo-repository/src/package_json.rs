@@ -90,18 +90,18 @@ pub enum Error {
 
 impl WithMetadata for RawPackageJson {
     fn add_text(&mut self, text: Arc<str>) {
-        self.package_manager
-            .as_mut()
-            .map(|p| p.add_text(text.clone()));
+        if let Some(ref mut package_manager) = self.package_manager {
+            package_manager.add_text(text.clone());
+        }
         self.scripts
             .iter_mut()
             .for_each(|(_, v)| v.add_text(text.clone()));
     }
 
     fn add_path(&mut self, path: Arc<str>) {
-        self.package_manager
-            .as_mut()
-            .map(|p| p.add_path(path.clone()));
+        if let Some(ref mut package_manager) = self.package_manager {
+            package_manager.add_path(path.clone());
+        }
         self.scripts
             .iter_mut()
             .for_each(|(_, v)| v.add_path(path.clone()));
