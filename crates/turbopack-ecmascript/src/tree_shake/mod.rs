@@ -470,7 +470,7 @@ pub(super) async fn split(
             ..
         } => {
             // If the script file is a common js file, we cannot split the module
-            if cjs_finder::contains_cjs(program) {
+            if cjs_finder::should_skip_tree_shaking(program) {
                 return Ok(SplitResult::Failed {
                     parse_result: parsed,
                 }

@@ -1,6 +1,6 @@
 use swc_core::ecma::ast::*;
 
-pub fn contains_cjs(m: &Program) -> bool {
+pub fn should_skip_tree_shaking(m: &Program) -> bool {
     if let Program::Module(m) = m {
         if m.body.iter().any(|s| s.is_module_decl()) {
             return false;
