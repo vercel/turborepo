@@ -1,5 +1,6 @@
 use std::{
     io::{self, Stdout, Write},
+    sync::mpsc,
     time::{Duration, Instant},
 };
 
@@ -120,9 +121,12 @@ pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
     let mut app: App<Box<dyn io::Write + Send>> =
         App::new(size.height, full_task_width.max(ratio_pane_width), tasks);
 
-    let result = run_app_inner(&mut terminal, &mut app, receiver);
+    let (result, callback) = match run_app_inner(&mut terminal, &mut app, receiver) {
+        Ok(callback) => (Ok(()), callback),
+        Err(err) => (Err(err), None),
+    };
 
-    cleanup(terminal, app)?;
+    cleanup(terminal, app, callback)?;
 
     result
 }
@@ -133,12 +137,13 @@ fn run_app_inner<B: Backend + std::io::Write>(
     terminal: &mut Terminal<B>,
     app: &mut App<Box<dyn io::Write + Send>>,
     receiver: AppReceiver,
-) -> Result<(), Error> {
+) -> Result<Option<mpsc::SyncSender<()>>, Error> {
     // Render initial state to paint the screen
     terminal.draw(|f| view(app, f))?;
     let mut last_render = Instant::now();
+    let mut callback = None;
     while let Some(event) = poll(app.input_options, &receiver, last_render + FRAMERATE) {
-        update(app, event)?;
+        callback = update(app, event)?;
         if app.done {
             break;
         }
@@ -148,7 +153,7 @@ fn run_app_inner<B: Backend + std::io::Write>(
         }
     }
 
-    Ok(())
+    Ok(callback)
 }
 
 /// Blocking poll for events, will only return None if app handle has been
@@ -158,7 +163,7 @@ fn poll(input_options: InputOptions, receiver: &AppReceiver, deadline: Instant) 
         Ok(Some(event)) => Some(event),
         Ok(None) => receiver.recv(deadline).ok(),
         // Unable to read from stdin, shut down and attempt to clean up
-        Err(_) => Some(Event::Stop),
+        Err(_) => Some(Event::InternalStop),
     }
 }
 
@@ -198,6 +203,7 @@ fn startup() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
 fn cleanup<B: Backend + io::Write, I>(
     mut terminal: Terminal<B>,
     mut app: App<I>,
+    callback: Option<mpsc::SyncSender<()>>,
 ) -> io::Result<()> {
     terminal.clear()?;
     crossterm::execute!(
@@ -209,13 +215,15 @@ fn cleanup<B: Backend + io::Write, I>(
     app.pane.persist_tasks(&started_tasks)?;
     crossterm::terminal::disable_raw_mode()?;
     terminal.show_cursor()?;
+    // We can close the channel now that terminal is back restored to a normal state
+    drop(callback);
     Ok(())
 }
 
 fn update(
     app: &mut App<Box<dyn io::Write + Send>>,
     event: Event,
-) -> Result<Option<Vec<u8>>, Error> {
+) -> Result<Option<mpsc::SyncSender<()>>, Error> {
     match event {
         Event::StartTask { task } => {
             app.table.start_task(&task)?;
@@ -227,8 +235,12 @@ fn update(
         Event::Status { task, status } => {
             app.pane.set_status(&task, status)?;
         }
-        Event::Stop => {
+        Event::InternalStop => {
             app.done = true;
+        }
+        Event::Stop(callback) => {
+            app.done = true;
+            return Ok(Some(callback));
         }
         Event::Tick => {
             app.table.tick();

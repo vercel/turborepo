@@ -77,7 +77,7 @@ fn ctrl_c() -> Option<Event> {
     match signal::raise(signal::SIGINT) {
         Ok(_) => None,
         // We're unable to send the signal, stop rendering to force shutdown
-        Err(_) => Some(Event::Stop),
+        Err(_) => Some(Event::InternalStop),
     }
 }
 
