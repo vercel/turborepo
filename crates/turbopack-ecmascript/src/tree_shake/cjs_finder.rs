@@ -20,7 +20,7 @@ pub fn should_skip_tree_shaking(m: &Program) -> bool {
                 }
             }
 
-            true
+            item.is_module_decl()
         }) {
             return false;
         }
