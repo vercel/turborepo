@@ -109,7 +109,6 @@ impl Visit for AbortFinder {
         if let Expr::Lit(Lit::Str(Str { value, .. })) = &*e.expr {
             if value == "use server" {
                 self.abort = true;
-                return;
             }
         }
     }
