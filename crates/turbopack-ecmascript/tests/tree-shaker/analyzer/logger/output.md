@@ -68,7 +68,7 @@ export function wrapClientComponentLoader(ComponentMod) {
 
 - Hoisted
 - Declares: `wrapClientComponentLoader`
-- Reads (eventual): `clientComponentLoadStart`, `clientComponentLoadCount`, `clientComponentLoadTimes`
+- Reads (eventual): `clientComponentLoadStart`
 - Write: `wrapClientComponentLoader`
 - Write (eventual): `clientComponentLoadStart`, `clientComponentLoadCount`, `clientComponentLoadTimes`
 
