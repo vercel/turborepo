@@ -13,13 +13,14 @@ pub fn should_skip_tree_shaking(m: &Program) -> bool {
                 if let Some(with) = with {
                     for item in with.values.iter() {
                         if item.key.sym == *TURBOPACK_HELPER {
+                            // Skip tree shaking if the import is from turbopack-helper
                             return false;
                         }
                     }
                 }
             }
 
-            return true;
+            true
         }) {
             return false;
         }
