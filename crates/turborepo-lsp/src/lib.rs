@@ -101,7 +101,7 @@ impl LanguageServer for Backend {
                             MessageType::ERROR,
                             "Pre-2.0 versions of turborepo are not compatible with 2.0 or later \
                              of the extension. If you do not plan to update to turbo 2.0, please \
-                             ensure you install the lastest 1.0 version of the extension in this \
+                             ensure you install the latest 1.0 version of the extension in this \
                              workspace.",
                         )
                         .await;
