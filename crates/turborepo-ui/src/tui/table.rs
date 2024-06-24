@@ -203,11 +203,19 @@ impl TaskTable {
         self.get(i)
     }
 
-    pub fn tasks_started(&self) -> impl Iterator<Item = &str> + '_ {
-        self.finished
+    pub fn tasks_started(&self) -> Vec<&str> {
+        let (errors, success): (Vec<_>, Vec<_>) = self
+            .finished
             .iter()
+            .partition(|task| matches!(task.result(), TaskResult::Failure));
+
+        // We return errors last as they most likely have information users want to see
+        success
+            .into_iter()
             .map(|task| task.name())
             .chain(self.running.iter().map(|task| task.name()))
+            .chain(errors.into_iter().map(|task| task.name()))
+            .collect()
     }
 
     fn finished_rows(&self) -> impl Iterator<Item = Row> + '_ {

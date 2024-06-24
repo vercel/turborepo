@@ -1,7 +1,4 @@
-use std::{
-    collections::{BTreeMap, HashSet},
-    io::Write,
-};
+use std::{collections::BTreeMap, io::Write};
 
 use ratatui::{
     style::Style,
@@ -30,7 +27,6 @@ struct TerminalOutput<W> {
     cols: u16,
     parser: vt100::Parser,
     stdin: Option<W>,
-    has_been_persisted: bool,
     status: Option<String>,
 }
 
@@ -117,11 +113,14 @@ impl<W> TerminalPane<W> {
         Ok(())
     }
 
-    pub fn render_remaining(&mut self, started_tasks: HashSet<&str>) -> std::io::Result<()> {
-        for (task_name, task) in self.tasks.iter_mut() {
-            if !task.has_been_persisted && started_tasks.contains(task_name.as_str()) {
-                task.persist_screen(task_name)?;
-            }
+    /// Persist all task output to the terminal
+    pub fn persist_tasks(&mut self, started_tasks: &[&str]) -> std::io::Result<()> {
+        for (task_name, task) in started_tasks
+            .iter()
+            .copied()
+            .filter_map(|started_task| (Some(started_task)).zip(self.tasks.get(started_task)))
+        {
+            task.persist_screen(task_name)?;
         }
         Ok(())
     }
@@ -169,7 +168,6 @@ impl<W> TerminalOutput<W> {
             stdin,
             rows,
             cols,
-            has_been_persisted: false,
             status: None,
         }
     }
@@ -190,7 +188,7 @@ impl<W> TerminalOutput<W> {
     }
 
     #[tracing::instrument(skip(self))]
-    fn persist_screen(&mut self, task_name: &str) -> std::io::Result<()> {
+    fn persist_screen(&self, task_name: &str) -> std::io::Result<()> {
         let screen = self.parser.entire_screen();
         let title = self.title(task_name);
         let mut stdout = std::io::stdout().lock();
@@ -203,7 +201,6 @@ impl<W> TerminalOutput<W> {
             stdout.write_all(b"\r\n")?;
         }
         stdout.write_all("└────>\r\n".as_bytes())?;
-        self.has_been_persisted = true;
 
         Ok(())
     }
