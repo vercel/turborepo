@@ -1,4 +1,7 @@
-use swc_core::ecma::ast::*;
+use swc_core::ecma::{
+    ast::*,
+    visit::{noop_visit_type, Visit, VisitWith},
+};
 
 use crate::TURBOPACK_HELPER;
 
@@ -60,7 +63,25 @@ pub fn should_skip_tree_shaking(m: &Program) -> bool {
                     ..
                 }))) => return true,
 
+                // Skip sever actions
+                ModuleItem::Stmt(Stmt::Expr(ExprStmt {
+                    expr: box Expr::Lit(Lit::Str(Str { value, .. })),
+                    ..
+                })) => {
+                    if value == "use server" {
+                        return true;
+                    }
+                }
+
                 _ => {}
+            }
+        }
+
+        {
+            let mut visitor = AbortFinder::default();
+            m.visit_with(&mut visitor);
+            if visitor.abort {
+                return true;
             }
         }
 
@@ -72,4 +93,24 @@ pub fn should_skip_tree_shaking(m: &Program) -> bool {
     }
 
     true
+}
+
+#[derive(Default)]
+struct AbortFinder {
+    abort: bool,
+}
+
+impl Visit for AbortFinder {
+    noop_visit_type!();
+
+    fn visit_expr_stmt(&mut self, e: &ExprStmt) {
+        e.visit_children_with(self);
+
+        if let Expr::Lit(Lit::Str(Str { value, .. })) = &*e.expr {
+            if value == "use server" {
+                self.abort = true;
+                return;
+            }
+        }
+    }
 }
