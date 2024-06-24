@@ -455,7 +455,8 @@ pub(super) async fn split_module(asset: Vc<EcmascriptModuleAsset>) -> Result<Vc<
 #[turbo_tasks::function]
 async fn should_skip(ident: Vc<AssetIdent>, _: Vc<Box<dyn Source>>) -> Result<Vc<bool>> {
     // Skip `@swc/helpers`
-    if ident.to_string().await?.contains("@swc/helpers") {
+    let s = ident.to_string().await?;
+    if s.contains("@swc/helpers") {
         return Ok(Vc::cell(true));
     }
 
