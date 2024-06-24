@@ -32,7 +32,7 @@ struct Workspace {
 impl Workspace {
     #[async_recursion]
     async fn start_scope(&mut self, entry: Vc<Box<dyn Module>>) -> Result<()> {
-        let entry = entry.resolve().await?;
+        let entry = entry.resolve_strongly_consistent().await?;
         if !self.done.insert(entry) {
             return Ok(());
         }
@@ -53,17 +53,18 @@ impl Workspace {
 
     #[async_recursion]
     async fn walk(&mut self, from: Item, start: Item) -> Result<Vec<Item>> {
+        let start = start.resolve_strongly_consistent().await?;
         let deps = self.dep_graph.deps(from);
         let mut modules = vec![from];
 
         for &dep in deps.await?.iter() {
-            let dep = dep.resolve().await?;
+            let dep = dep.resolve_strongly_consistent().await?;
             let dependants = self.dep_graph.depandants(dep);
 
             let dependants = {
                 let mut buf = vec![];
                 for dep in dependants.await?.iter() {
-                    buf.push(dep.resolve().await?);
+                    buf.push(dep.resolve_strongly_consistent().await?);
                 }
                 buf
             };
@@ -86,7 +87,7 @@ impl Workspace {
                 let v = self.walk(dep, start).await?;
 
                 for vc in v.iter() {
-                    let vc = vc.resolve().await?;
+                    let vc = vc.resolve_strongly_consistent().await?;
                     modules.push(vc);
 
                     self.grouped.entry(start).or_default().insert(vc);
