@@ -1,5 +1,4 @@
-import { Link } from "@repo/ui/link";
-import { CounterButton } from "@repo/ui/counter-button";
+import { CounterButton, Link } from "@repo/ui";
 
 export default function Index(): JSX.Element {
   return (

@@ -4,23 +4,16 @@
   "private": true,
   "license": "MIT",
   "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
   "files": [
     "dist/**"
   ],
-  "exports": {
-    "./link": {
-      "types": "./src/link.index.tsx",
-      "default": "./dist/link/index.js"
-    },
-    "./counter-button": {
-      "types": "./src/counter-button.index.tsx",
-      "default": "./dist/counter-button/index.js"
-    }
-  },
   "scripts": {
-    "build": "tsc",
+    "build": "tsup",
     "clean": "rm -rf dist",
-    "dev": "tsc --watch",
+    "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "test": "jest"
@@ -37,10 +30,6 @@
     "@types/react": "^18.2.62",
     "@types/react-dom": "^18.2.19",
     "jest": "^29.7.0",
-    "typescript": "^5.3.3"
-  },
-  "dependencies": {
-    "next": "^14.2.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "tsup": "^8.0.2",
