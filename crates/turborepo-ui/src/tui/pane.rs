@@ -11,8 +11,8 @@ use turborepo_vt100 as vt100;
 
 use super::{app::Direction, Error};
 
-const FOOTER_TEXT: &str = "Use arrow keys to navigate. Press `Enter` to interact with a task and \
-                           `Ctrl-Z` to stop interacting";
+const FOOTER_TEXT_ACTIVE: &str = "Press`Ctrl-Z` to stop interacting.";
+const FOOTER_TEXT_INACTIVE: &str = "Press `Enter` to interact.";
 
 pub struct TerminalPane<W> {
     tasks: BTreeMap<String, TerminalOutput<W>>,
@@ -216,11 +216,13 @@ impl<W> Widget for &TerminalPane<W> {
         };
         let screen = task.parser.screen();
         let mut block = Block::default()
-            .borders(Borders::ALL)
-            .title(task.title(task_name))
-            .title_bottom(Line::from(FOOTER_TEXT).centered());
+            .borders(Borders::LEFT)
+            .title(task.title(task_name));
         if self.highlight {
+            block = block.title_bottom(Line::from(FOOTER_TEXT_ACTIVE).centered());
             block = block.border_style(Style::new().fg(ratatui::style::Color::Yellow));
+        } else {
+            block = block.title_bottom(Line::from(FOOTER_TEXT_INACTIVE).centered());
         }
         let term = PseudoTerminal::new(screen).block(block);
         term.render(area, buf)
@@ -251,12 +253,12 @@ mod test {
         assert_buffer_eq!(
             buffer,
             Buffer::with_lines(vec![
-                "┌ foo >┐",
-                "│3     │",
-                "│4     │",
-                "│5     │",
-                "│█     │",
-                "└Use ar┘",
+                "│ foo > ",
+                "│3      ",
+                "│4      ",
+                "│5      ",
+                "│█      ",
+                "│Press `",
             ])
         );
     }
