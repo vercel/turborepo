@@ -20,6 +20,11 @@ pub fn should_skip_tree_shaking(m: &Program) -> bool {
                 }
             }
 
+            // We don't have logic to tree shake export * from
+            if let ModuleItem::ModuleDecl(ModuleDecl::ExportAll(..)) = item {
+                return false;
+            }
+
             item.is_module_decl()
         }) {
             return false;
