@@ -19,6 +19,7 @@ use turbopack_ecmascript::{
         EcmascriptChunkPlaceable, EcmascriptChunkType, EcmascriptExports,
     },
     references::async_module::OptionAsyncModule,
+    tree_shake::asset::EcmascriptModulePartAsset,
     EcmascriptModuleAsset,
 };
 
@@ -77,6 +78,12 @@ impl WebAssemblyModuleAsset {
                 "WASM_PATH".into() => Vc::upcast(RawWebAssemblyModuleAsset::new(self.source, self.asset_context)),
             }))),
         ).module();
+
+        if let Some(esm_asset) =
+            Vc::try_resolve_downcast_type::<EcmascriptModulePartAsset>(module).await?
+        {
+            return Ok(esm_asset.await?.full_module);
+        }
 
         let Some(esm_asset) =
             Vc::try_resolve_downcast_type::<EcmascriptModuleAsset>(module).await?
