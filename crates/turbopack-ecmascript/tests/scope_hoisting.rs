@@ -95,7 +95,7 @@ async fn split(deps: Deps) -> Result<Vec<Vec<usize>>> {
 
     let tt = TurboTasks::new(MemoryBackend::default());
     tt.run_once(async move {
-        let fs = DiskFileSystem::new("test".to_owned(), "test".to_owned(), Default::default());
+        let fs = DiskFileSystem::new("test".into(), "test".into(), Default::default());
 
         let graph = test_dep_graph(fs, deps);
 
@@ -155,7 +155,7 @@ pub struct TestDepGraph {
 }
 
 fn to_module(fs: Vc<DiskFileSystem>, id: usize) -> Vc<Box<dyn Module>> {
-    let vc = TestModule::new(fs.root().join(format!("{}", id)));
+    let vc = TestModule::new(fs.root().join(format!("{}", id).into()));
 
     Vc::upcast(vc)
 }
