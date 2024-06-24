@@ -6,10 +6,10 @@ use swc_core::{
     common::SyntaxContext,
     ecma::{
         ast::{
-            ArrowExpr, AssignPatProp, AssignTarget, ClassDecl, ClassExpr, Constructor, DefaultDecl,
-            ExportDefaultDecl, ExportNamedSpecifier, ExportSpecifier, Expr, FnDecl, FnExpr,
-            Function, Id, Ident, ImportSpecifier, MemberExpr, MemberProp, NamedExport, Param, Pat,
-            PropName, VarDeclarator,
+            op, ArrowExpr, AssignExpr, AssignPatProp, ClassDecl, ClassExpr, Constructor,
+            DefaultDecl, ExportDefaultDecl, ExportNamedSpecifier, ExportSpecifier, Expr, FnDecl,
+            FnExpr, Function, Id, Ident, ImportSpecifier, MemberExpr, MemberProp, NamedExport,
+            Param, Pat, PropName, VarDeclarator,
         },
         visit::{noop_visit_type, Visit, VisitWith},
     },
@@ -62,10 +62,17 @@ impl IdentUsageCollector<'_> {
 }
 
 impl Visit for IdentUsageCollector<'_> {
-    fn visit_assign_target(&mut self, n: &AssignTarget) {
-        self.with_mode(Some(Mode::Write), |this| {
-            n.visit_children_with(this);
-        })
+    fn visit_assign_expr(&mut self, n: &AssignExpr) {
+        self.with_mode(
+            if n.op == op!("=") {
+                Some(Mode::Write)
+            } else {
+                None
+            },
+            |this| {
+                n.visit_children_with(this);
+            },
+        )
     }
 
     fn visit_constructor(&mut self, n: &Constructor) {
