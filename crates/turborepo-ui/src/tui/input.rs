@@ -101,7 +101,7 @@ fn ctrl_c() -> Option<Event> {
         None
     } else {
         // We're unable to send the Ctrl-C event, stop rendering to force shutdown
-        Some(Event::Stop)
+        Some(Event::InternalStop)
     }
 }
 
