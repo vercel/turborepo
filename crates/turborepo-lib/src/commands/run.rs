@@ -46,7 +46,7 @@ pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i3
 
         let (sender, handle) = run.start_experimental_ui()?.unzip();
 
-        let result = run.run(sender.clone()).await;
+        let result = run.run(sender.clone(), false).await;
 
         if let Some(analytics_handle) = analytics_handle {
             analytics_handle.close_with_timeout().await;

@@ -64,6 +64,7 @@ pub struct Visitor<'a> {
     task_hasher: TaskHasher<'a>,
     ui: UI,
     experimental_ui_sender: Option<AppSender>,
+    is_watch: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -109,6 +110,7 @@ impl<'a> Visitor<'a> {
         repo_root: &'a AbsoluteSystemPath,
         global_env: EnvironmentVariableMap,
         experimental_ui_sender: Option<AppSender>,
+        is_watch: bool,
     ) -> Self {
         let task_hasher = TaskHasher::new(
             package_inputs_hashes,
@@ -136,6 +138,7 @@ impl<'a> Visitor<'a> {
             ui,
             global_env,
             experimental_ui_sender,
+            is_watch,
         }
     }
 
@@ -301,6 +304,12 @@ impl<'a> Visitor<'a> {
         }
         drop(factory);
 
+        if !self.is_watch {
+            if let Some(handle) = &self.experimental_ui_sender {
+                handle.stop();
+            }
+        }
+
         if !internal_errors.is_empty() {
             return Err(Error::InternalErrors(
                 internal_errors.into_iter().map(|e| e.to_string()).join(","),
@@ -337,7 +346,6 @@ impl<'a> Visitor<'a> {
         engine: &Engine,
         env_at_execution_start: &EnvironmentVariableMap,
         pkg_inference_root: Option<&AnchoredSystemPath>,
-        has_experimental_ui: bool,
     ) -> Result<(), Error> {
         let Self {
             package_graph,
@@ -346,6 +354,7 @@ impl<'a> Visitor<'a> {
             repo_root,
             global_env_mode,
             task_hasher,
+            is_watch,
             ..
         } = self;
 
@@ -366,7 +375,7 @@ impl<'a> Visitor<'a> {
                 engine,
                 task_hasher.task_hash_tracker(),
                 env_at_execution_start,
-                has_experimental_ui,
+                is_watch,
             )
             .await?)
     }
