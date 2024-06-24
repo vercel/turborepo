@@ -51,9 +51,9 @@ impl TaskTable {
             .map(|task| task.len())
             .max()
             .unwrap_or_default()
-            // Task column width should be large enough to fit "Task" title
+            // Task column width should be large enough to fit "↑ ↓ to select task" instructions
             // and truncate tasks with more than 40 chars.
-            .clamp(4, 40) as u16;
+            .clamp(13, 40) as u16;
         // Add space for column divider and status emoji
         task_name_width + 1
     }
@@ -255,7 +255,7 @@ impl<'a> StatefulWidget for &'a TaskTable {
                 .chain(self.running_rows())
                 .chain(self.planned_rows()),
             [
-                Constraint::Min(4),
+                Constraint::Min(14),
                 // Status takes one cell to render
                 Constraint::Length(1),
             ],
@@ -263,7 +263,14 @@ impl<'a> StatefulWidget for &'a TaskTable {
         .highlight_style(Style::default().fg(Color::Yellow))
         .column_spacing(0)
         .header(
-            vec![format!("Task\n{bar}"), "\n─".to_owned()]
+            vec![format!("Tasks\n{bar}"), " \n─".to_owned()]
+                .into_iter()
+                .map(Cell::from)
+                .collect::<Row>()
+                .height(2),
+        )
+        .footer(
+            vec![format!("{bar}\n↑ ↓ to navigate"), "─\n ".to_owned()]
                 .into_iter()
                 .map(Cell::from)
                 .collect::<Row>()
