@@ -256,12 +256,12 @@ mod test {
         assert_buffer_eq!(
             buffer,
             Buffer::with_lines(vec![
-                "┌ foo >┐",
-                "│3     │",
-                "│4     │",
-                "│5     │",
-                "│█     │",
-                "└Use ar┘",
+                "│ foo > ",
+                "│3      ",
+                "│4      ",
+                "│5      ",
+                "│█      ",
+                "│Press `",
             ])
         );
     }
