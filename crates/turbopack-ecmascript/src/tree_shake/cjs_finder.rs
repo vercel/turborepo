@@ -52,6 +52,14 @@ pub fn should_skip_tree_shaking(m: &Program) -> bool {
                     }
                 }
 
+                // Turbopack has a bug related to top-level `let` declarations.
+                // Tree shaking result is correct, but it seems like some steps after tree shaking
+                // are not working correctly.
+                ModuleItem::Stmt(Stmt::Decl(Decl::Var(box VarDecl {
+                    kind: VarDeclKind::Let,
+                    ..
+                }))) => return false,
+
                 _ => (),
             }
 
