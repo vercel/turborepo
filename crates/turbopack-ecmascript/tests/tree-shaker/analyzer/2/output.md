@@ -74,7 +74,7 @@ foobar += bar;
 
 ```
 
-- Reads: `bar`, `foobar`
+- Reads: `foobar`, `bar`
 - Write: `foobar`
 
 ## Item 8: Stmt 6, `VarDeclarator(0)`
@@ -143,6 +143,7 @@ export function external2() {
 
 - Hoisted
 - Declares: `external2`
+- Reads (eventual): `foobar`
 - Write: `external2`
 - Write (eventual): `foobar`
 
@@ -214,8 +215,8 @@ graph TD
     Item19["export external2"];
     Item2 --> Item1;
     Item6 --> Item5;
-    Item8 --> Item7;
     Item8 --> Item5;
+    Item8 --> Item7;
     Item8 -.-> Item6;
     Item9 --> Item5;
     Item9 --> Item8;
@@ -270,8 +271,8 @@ graph TD
     Item19["export external2"];
     Item2 --> Item1;
     Item6 --> Item5;
-    Item8 --> Item7;
     Item8 --> Item5;
+    Item8 --> Item7;
     Item8 -.-> Item6;
     Item9 --> Item5;
     Item9 --> Item8;
@@ -304,10 +305,12 @@ graph TD
     Item13 --> Item5;
     Item13 --> Item8;
     Item13 --> Item10;
+    Item14 --> Item5;
+    Item14 --> Item8;
+    Item14 --> Item10;
     Item14 -.-> Item6;
     Item14 -.-> Item9;
     Item14 -.-> Item17;
-    Item14 --> Item5;
 ```
 # Phase 4
 ```mermaid
@@ -338,8 +341,8 @@ graph TD
     Item19["export external2"];
     Item2 --> Item1;
     Item6 --> Item5;
-    Item8 --> Item7;
     Item8 --> Item5;
+    Item8 --> Item7;
     Item8 -.-> Item6;
     Item9 --> Item5;
     Item9 --> Item8;
@@ -372,10 +375,12 @@ graph TD
     Item13 --> Item5;
     Item13 --> Item8;
     Item13 --> Item10;
+    Item14 --> Item5;
+    Item14 --> Item8;
+    Item14 --> Item10;
     Item14 -.-> Item6;
     Item14 -.-> Item9;
     Item14 -.-> Item17;
-    Item14 --> Item5;
     Item15 --> Item1;
     Item15 --> Item2;
     Item15 --> Item11;
@@ -408,10 +413,12 @@ graph TD
     N2 --> N7;
     N2 --> N9;
     N3 --> N6;
+    N4 --> N5;
+    N4 --> N7;
+    N4 --> N9;
     N4 --> N6;
     N4 --> N8;
     N4 --> N2;
-    N4 --> N5;
     N6 --> N5;
     N7 --> N5;
     N7 --> N6;
@@ -524,6 +531,15 @@ export { foo };
 ```
 ## Part 4
 ```js
+import { foobar } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
+};
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
@@ -532,9 +548,6 @@ import "__TURBOPACK_PART__" assert {
 };
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
-};
-import { foobar } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
 };
 export { external2 };
 function external2() {
@@ -763,6 +776,12 @@ export { foo } from "__TURBOPACK_VAR__" assert {
 ```js
 import { foobar } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 6
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
 };
 export { external2 };
 function external2() {
