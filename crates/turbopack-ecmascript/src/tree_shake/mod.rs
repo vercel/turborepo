@@ -511,7 +511,7 @@ pub(super) async fn split(
                 emitter.emit_program(program).unwrap();
             }
             let code = String::from_utf8(buf).unwrap();
-            eprintln!("# Program: {code}");
+            eprintln!("# Program:\n{code}");
 
             let module = match program {
                 Program::Module(module) => module,
@@ -551,7 +551,7 @@ pub(super) async fn split(
                     emitter.emit_module(m).unwrap();
                 }
                 let code = String::from_utf8(buf).unwrap();
-                eprintln!("# Module {i}: {code}");
+                eprintln!("# Module {i}:\n{code}");
             }
 
             for &v in entrypoints.values() {
