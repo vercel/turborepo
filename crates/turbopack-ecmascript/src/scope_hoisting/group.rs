@@ -17,7 +17,7 @@ pub struct ModuleScope {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Item(pub usize);
 
-pub fn split_scopes(dep_graph: &dyn DepGraph, entry: Item) -> ModuleScopeGroup {
+pub fn split_scopes(dep_graph: &mut dyn DepGraph, entry: Item) -> ModuleScopeGroup {
     // If a module is imported only as lazy, it should be in a separate scope
 
     let entries = determine_entries(dep_graph, entry);
@@ -25,11 +25,9 @@ pub fn split_scopes(dep_graph: &dyn DepGraph, entry: Item) -> ModuleScopeGroup {
     let items = entries
         .iter()
         .map(|entry| {
-            let modules = follow_single_edge(dep_graph, entry, &entries)
+            follow_single_edge(dep_graph, entry, &entries)
                 .into_iter()
-                .collect();
-
-            modules
+                .collect()
         })
         .collect::<Vec<_>>();
 
@@ -54,6 +52,8 @@ pub trait DepGraph {
     fn get_edge(&self, from: Item, to: Item) -> EdgeData;
 
     fn has_path_connecting(&self, from: Item, to: Item) -> bool;
+
+    fn remove_edge(&mut self, from: Item, to: Item);
 }
 
 #[derive(Debug)]
@@ -61,7 +61,7 @@ pub struct EdgeData {
     pub is_lazy: bool,
 }
 
-fn determine_entries(dep_graph: &dyn DepGraph, entry: Item) -> IndexSet<Item> {
+fn determine_entries(dep_graph: &mut dyn DepGraph, entry: Item) -> IndexSet<Item> {
     let mut entries = IndexSet::default();
 
     let mut queue = VecDeque::default();
@@ -78,6 +78,7 @@ fn determine_entries(dep_graph: &dyn DepGraph, entry: Item) -> IndexSet<Item> {
             // If lazy, it should be in a separate scope.
             if dep_graph.get_edge(cur, dep).is_lazy {
                 queue.push_back((dep, true));
+                dep_graph.remove_edge(cur, dep);
                 continue;
             }
 

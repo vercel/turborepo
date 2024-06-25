@@ -83,9 +83,9 @@ type Deps = Vec<(usize, Vec<(usize, bool)>)>;
 fn split(deps: Deps) -> Vec<Vec<usize>> {
     register();
 
-    let graph = test_dep_graph(deps);
+    let mut graph = test_dep_graph(deps);
 
-    let group = split_scopes(&*graph, Item(0));
+    let group = split_scopes(&mut *graph, Item(0));
 
     let mut data = vec![];
 
@@ -167,6 +167,13 @@ impl DepGraph for TestDepGraph {
         let to = self.graph.get_node(&to);
 
         has_path_connecting(&self.graph.idx_graph, from, to, None)
+    }
+
+    fn remove_edge(&mut self, from: Item, to: Item) {
+        let from = self.graph.get_node(&from);
+        let to = self.graph.get_node(&to);
+
+        self.graph.idx_graph.remove_edge(from, to);
     }
 }
 
