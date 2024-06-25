@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_recursion::async_recursion;
 use indexmap::IndexSet;
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashSet;
 use turbo_tasks::{debug::ValueDebugFormat, vdbg, Vc};
 use turbopack_core::module::Module;
 
@@ -26,10 +26,6 @@ struct Workspace {
     scopes: Vec<Vc<ModuleScope>>,
     done: FxHashSet<Item>,
     entries: IndexSet<Item>,
-}
-
-async fn hashed(item: Item) -> Result<String> {
-    item.value_debug_format(10).try_to_string().await
 }
 
 impl Workspace {
