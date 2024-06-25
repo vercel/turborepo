@@ -77,16 +77,9 @@ fn determine_entries(dep_graph: &dyn DepGraph, entry: Item) -> FxHashSet<Item> {
             }
 
             let dependants = dep_graph.depandants(dep);
-            let mut filtered = vec![];
-            for &dependant in dependants.iter() {
-                if done.contains(&dependant) {
-                    continue;
-                }
-                filtered.push(dependant);
-            }
 
             // If there are multiple dependants, it's an entry.
-            if !filtered.is_empty() {
+            if dependants.len() >= 2 {
                 queue.push_back((dep, true));
                 continue;
             }
