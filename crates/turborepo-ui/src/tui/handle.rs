@@ -3,7 +3,10 @@ use std::{
     time::Instant,
 };
 
-use super::{event::CacheResult, Event, TaskResult};
+use super::{
+    event::{CacheResult, OutputLogs},
+    Event, TaskResult,
+};
 
 /// Struct for sending app events to TUI rendering
 #[derive(Debug, Clone)]
@@ -85,11 +88,12 @@ impl TuiTask {
     }
 
     /// Mark the task as started
-    pub fn start(&self) {
+    pub fn start(&self, output_logs: OutputLogs) {
         self.handle
             .primary
             .send(Event::StartTask {
                 task: self.name.clone(),
+                output_logs,
             })
             .ok();
     }

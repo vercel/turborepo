@@ -854,7 +854,9 @@ impl ExecContext {
 
         if self.experimental_ui {
             if let TaskOutput::UI(task) = output_client {
-                task.start();
+                // We should send over the output mode for the task here :)
+                let output_logs = self.task_cache.output_logs().into();
+                task.start(output_logs);
             }
         }
 
