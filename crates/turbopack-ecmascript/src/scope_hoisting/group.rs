@@ -1,5 +1,6 @@
 use anyhow::Result;
 use async_recursion::async_recursion;
+use indexmap::IndexSet;
 use rustc_hash::{FxHashMap, FxHashSet};
 use turbo_tasks::{debug::ValueDebugFormat, vdbg, Vc};
 use turbopack_core::module::Module;
@@ -24,6 +25,7 @@ struct Workspace {
 
     scopes: Vec<Vc<ModuleScope>>,
     done: FxHashSet<Item>,
+    entries: IndexSet<Item>,
 }
 
 async fn hashed(item: Item) -> Result<String> {
@@ -31,6 +33,27 @@ async fn hashed(item: Item) -> Result<String> {
 }
 
 impl Workspace {
+    #[async_recursion]
+    async fn entries_from_lazy(&mut self, entry: Vc<Box<dyn Module>>) -> Result<()> {
+        if !self.entries.insert(entry) {
+            return Ok(());
+        }
+
+        let deps = self.dep_graph.deps(entry);
+
+        for &dep in deps.await?.iter() {
+            let dep = dep.resolve_strongly_consistent().await?;
+            let dependants = self.dep_graph.depandants(dep);
+
+            if dependants.await?.len() != 1 || self.dep_graph.get_edge(entry, dep).await?.is_lazy {
+                self.entries_from_lazy(dep).await?;
+                continue;
+            }
+        }
+
+        Ok(())
+    }
+
     #[async_recursion]
     async fn start_scope(&mut self, entry: Vc<Box<dyn Module>>) -> Result<()> {
         let entry = entry.resolve_strongly_consistent().await?;
@@ -78,14 +101,11 @@ impl Workspace {
             let should_start_scope = if dependants.len() == 1 {
                 self.dep_graph.get_edge(from, dep).await?.is_lazy
             } else {
-                // If all dependants start from the same scope, we can merge them
+                // If dep is reachable from multiple entries, it should be in a separate
+                // scope
+
                 let mut all = true;
-                for &dep in dependants.iter() {
-                    if !*self.dep_graph.has_path_connecting(dep, start).await? {
-                        all = false;
-                        break;
-                    }
-                }
+
                 !all
             };
 
@@ -107,8 +127,8 @@ impl Workspace {
 
 #[turbo_tasks::function]
 pub async fn split_scopes(
-    entry: Vc<Box<dyn Module>>,
     dep_graph: Vc<Box<dyn DepGraph>>,
+    entry: Vc<Box<dyn Module>>,
 ) -> Result<Vc<ModuleScopeGroup>> {
     // If a module is imported only as lazy, it should be in a separate scope
 
@@ -116,7 +136,10 @@ pub async fn split_scopes(
         dep_graph,
         scopes: Default::default(),
         done: Default::default(),
+        entries: Default::default(),
     };
+
+    workspace.entries_from_lazy(entry).await?;
 
     workspace.start_scope(entry).await?;
 

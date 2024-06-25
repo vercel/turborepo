@@ -99,7 +99,7 @@ async fn split(deps: Deps) -> Result<Vec<Vec<usize>>> {
 
         let graph = test_dep_graph(fs, deps);
 
-        let group = split_scopes(Vc::upcast(TestModule::new_from(fs, 0)), graph);
+        let group = split_scopes(graph, Vc::upcast(TestModule::new_from(fs, 0)));
 
         let group = group.await?;
 
