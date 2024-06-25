@@ -20,6 +20,7 @@ pub mod minify;
 pub mod parse;
 mod path_visitor;
 pub mod references;
+pub mod scope_hoisting;
 pub mod side_effect_optimization;
 pub(crate) mod special_cases;
 pub(crate) mod static_code;
