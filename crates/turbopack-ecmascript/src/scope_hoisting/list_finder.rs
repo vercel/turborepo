@@ -74,76 +74,76 @@ pub async fn find_list(entrypoints: Vc<Vec<Vc<Item>>>) -> Result<Vc<Vec<Vc<Item>
 
         // Enqueue all items from S for processing
         queue.extend(set.iter().map(|vc| (*vc, ItemKind::Enter)));
-
-        // Gather all lists from X.
-        let mut lists = vec![];
-        for &item in done.iter() {
-            lists.push(item.await?.shallow_list.clone());
-        }
-
-        // Create a reverse mapping from item → (list, index)[] (sorted by
-        // smallest index first)
-        //
-        // So we can cheaply determine in which lists an item is and at which
-        // index.
-        let mut reverse_mapping = FxHashMap::default();
-        for (i, list) in lists.iter().enumerate() {
-            for (j, item) in list.await?.iter().enumerate() {
-                reverse_mapping
-                    .entry(*item)
-                    .or_insert_with(Vec::new)
-                    .push((i, j));
-            }
-        }
-
-        // Remove all mappings that only point to a single list-index tuple.
-        //
-        // They are already done and we don’t want to sort them.*
-        for (item, list_indices) in reverse_mapping.iter_mut() {
-            if list_indices.len() == 1 {
-                reverse_mapping.remove(item);
-            }
-        }
-
-        // Sort the mapping by smallest index
-        //
-        // This is important to be able to find the longest common slice in the
-        // following*
-        for (_, list_indices) in reverse_mapping.iter_mut() {
-            list_indices.sort_by_key(|(list, index)| (*list, *index));
-        }
-
-        // For each item in the mappings:
-
-        for (item, list_indices) in reverse_mapping {
-            // We need to split the item into a separate list. We want the list
-            // to be as long as possible.
-
-            // Create a new list L.
-            let mut list = vec![];
-
-            // TODO
-            // Walk all lists at the same item as long as the items in these
-            // lists are common (starting by current index):
-            {
-                // Put item into L
-                list.push(item);
-
-                // Remove item from the mapping.
-                reverse_mapping.remove(&item);
-            }
-
-            // Put L into the set of all lists.
-            lists.push(Vc::cell(list));
-
-            // TODO
-            // Put all remaining items in the lists (starting by current index)
-            // into new lists and update mappings correctly. (No need to
-            // updating sorting, Items might not have a mapping)
-        }
-
-        // At this point every item is exactly in one list.
     }
+
+    // Gather all lists from X.
+    let mut lists = vec![];
+    for &item in done.iter() {
+        lists.push(item.await?.shallow_list.clone());
+    }
+
+    // Create a reverse mapping from item → (list, index)[] (sorted by
+    // smallest index first)
+    //
+    // So we can cheaply determine in which lists an item is and at which
+    // index.
+    let mut reverse_mapping = FxHashMap::default();
+    for (i, list) in lists.iter().enumerate() {
+        for (j, item) in list.await?.iter().enumerate() {
+            reverse_mapping
+                .entry(*item)
+                .or_insert_with(Vec::new)
+                .push((i, j));
+        }
+    }
+
+    // Remove all mappings that only point to a single list-index tuple.
+    //
+    // They are already done and we don’t want to sort them.*
+    for (item, list_indices) in reverse_mapping.iter_mut() {
+        if list_indices.len() == 1 {
+            reverse_mapping.remove(item);
+        }
+    }
+
+    // Sort the mapping by smallest index
+    //
+    // This is important to be able to find the longest common slice in the
+    // following*
+    for (_, list_indices) in reverse_mapping.iter_mut() {
+        list_indices.sort_by_key(|(list, index)| (*list, *index));
+    }
+
+    // For each item in the mappings:
+
+    for (item, list_indices) in reverse_mapping {
+        // We need to split the item into a separate list. We want the list
+        // to be as long as possible.
+
+        // Create a new list L.
+        let mut list = vec![];
+
+        // TODO
+        // Walk all lists at the same item as long as the items in these
+        // lists are common (starting by current index):
+        {
+            // Put item into L
+            list.push(item);
+
+            // Remove item from the mapping.
+            reverse_mapping.remove(&item);
+        }
+
+        // Put L into the set of all lists.
+        lists.push(Vc::cell(list));
+
+        // TODO
+        // Put all remaining items in the lists (starting by current index)
+        // into new lists and update mappings correctly. (No need to
+        // updating sorting, Items might not have a mapping)
+    }
+
+    // At this point every item is exactly in one list.
 
     Ok(Vc::cell(list))
 }
