@@ -140,24 +140,37 @@ impl Run {
         self.experimental_ui
     }
 
-    pub fn start_experimental_ui(&self) -> Option<(AppSender, JoinHandle<Result<(), tui::Error>>)> {
+    pub fn should_start_ui(&self) -> Result<bool, Error> {
+        Ok(self.experimental_ui
+            && self.opts.run_opts.dry_run.is_none()
+            && tui::terminal_big_enough()?)
+    }
+
+    #[allow(clippy::type_complexity)]
+    pub fn start_experimental_ui(
+        &self,
+    ) -> Result<Option<(AppSender, JoinHandle<Result<(), tui::Error>>)>, Error> {
         // Print prelude here as this needs to happen before the UI is started
         if self.should_print_prelude {
             self.print_run_prelude();
         }
-        // Don't start UI if doing a dry run
-        if !self.experimental_ui || self.opts.run_opts.dry_run.is_some() {
-            return None;
+
+        if !self.should_start_ui()? {
+            return Ok(None);
         }
 
         let task_names = self.engine.tasks_with_command(&self.pkg_dep_graph);
         let (sender, receiver) = AppSender::new();
         let handle = tokio::task::spawn_blocking(move || tui::run_app(task_names, receiver));
 
-        Some((sender, handle))
+        Ok(Some((sender, handle)))
     }
 
-    pub async fn run(&mut self, experimental_ui_sender: Option<AppSender>) -> Result<i32, Error> {
+    pub async fn run(
+        &mut self,
+        experimental_ui_sender: Option<AppSender>,
+        is_watch: bool,
+    ) -> Result<i32, Error> {
         if let Some(subscriber) = self.signal_handler.subscribe() {
             let run_cache = self.run_cache.clone();
             tokio::spawn(async move {
@@ -340,6 +353,7 @@ impl Run {
             &self.repo_root,
             global_env,
             experimental_ui_sender,
+            is_watch,
         );
 
         if self.opts.run_opts.dry_run.is_some() {
@@ -378,7 +392,6 @@ impl Run {
                 &self.engine,
                 &self.env_at_execution_start,
                 self.opts.scope_opts.pkg_inference_root.as_deref(),
-                self.experimental_ui,
             )
             .await?;
 

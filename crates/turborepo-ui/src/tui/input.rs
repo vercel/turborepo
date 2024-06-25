@@ -77,7 +77,7 @@ fn ctrl_c() -> Option<Event> {
     match signal::raise(signal::SIGINT) {
         Ok(_) => None,
         // We're unable to send the signal, stop rendering to force shutdown
-        Err(_) => Some(Event::Stop),
+        Err(_) => Some(Event::InternalStop),
     }
 }
 
@@ -101,7 +101,7 @@ fn ctrl_c() -> Option<Event> {
         None
     } else {
         // We're unable to send the Ctrl-C event, stop rendering to force shutdown
-        Some(Event::Stop)
+        Some(Event::InternalStop)
     }
 }
 

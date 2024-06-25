@@ -21,6 +21,13 @@ export async function transformer({
     options,
   });
 
+  const rootPackageJsonPath = path.join(root, "package.json");
+  const rootPackageJson = readJsonSync(rootPackageJsonPath) as PackageJson;
+  if ("packageManager" in rootPackageJson) {
+    log.info(`"packageManager" already set in root "package.json"`);
+    return runner.finish();
+  }
+
   log.info(`Set "packageManager" key in root "package.json" file...`);
   let project: Project;
   try {
@@ -41,8 +48,6 @@ export async function transformer({
   }
 
   const pkgManagerString = `${packageManager}@${version}`;
-  const rootPackageJsonPath = path.join(root, "package.json");
-  const rootPackageJson = readJsonSync(rootPackageJsonPath) as PackageJson;
   const allWorkspaces = [
     {
       name: "package.json",

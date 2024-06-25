@@ -8,9 +8,6 @@ importers:
 
   .:
     devDependencies:
-      eslint:
-        specifier: ^8.57.0
-        version: 8.57.0
       prettier:
         specifier: ^3.2.5
         version: 3.2.5
@@ -125,6 +122,10 @@ importers:
   packages/typescript-config: {}
 
   packages/ui:
+    dependencies:
+      react:
+        specifier: ^18.2.0
+        version: 18.2.0
     devDependencies:
       '@repo/eslint-config':
         specifier: workspace:*
@@ -141,9 +142,6 @@ importers:
       eslint:
         specifier: ^8.57.0
         version: 8.57.0
-      react:
-        specifier: ^18.2.0
-        version: 18.2.0
       typescript:
         specifier: ^5.3.3
         version: 5.4.4
@@ -9923,6 +9921,7 @@ packages:
 
   /string_decoder@1.3.0:
     resolution: {integrity: sha512-hkRX8U1WjJFd8LsDJ2yQ/wWWxaopEsABU1XfkM8A+j0+85JAGppt16cr1Whg6KIbb4okU6Mql6BOj+uup/wKeA==}
+    requiresBuild: true
     dependencies:
       safe-buffer: 5.2.1
 

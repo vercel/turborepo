@@ -14,7 +14,9 @@ pub enum Event {
         task: String,
         status: String,
     },
-    Stop,
+    Stop(std::sync::mpsc::SyncSender<()>),
+    // Stop initiated by the TUI itself
+    InternalStop,
     Tick,
     Up,
     Down,

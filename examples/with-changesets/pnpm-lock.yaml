@@ -8,9 +8,6 @@ importers:
 
   .:
     devDependencies:
-      '@acme/eslint-config':
-        specifier: workspace:*
-        version: link:packages/eslint-config
       '@changesets/cli':
         specifier: ^2.27.1
         version: 2.27.1
@@ -65,6 +62,10 @@ importers:
         version: 5.3.3
 
   packages/acme-core:
+    dependencies:
+      react:
+        specifier: ^18.2.0
+        version: 18.2.0
     devDependencies:
       '@acme/eslint-config':
         specifier: workspace:*
@@ -81,9 +82,6 @@ importers:
       eslint:
         specifier: ^8.57.0
         version: 8.57.0
-      react:
-        specifier: ^18.2.0
-        version: 18.2.0
       tsup:
         specifier: ^8.0.2
         version: 8.0.2(typescript@5.3.3)
@@ -94,6 +92,10 @@ importers:
   packages/acme-tsconfig: {}
 
   packages/acme-utils:
+    dependencies:
+      react:
+        specifier: ^18.2.0
+        version: 18.2.0
     devDependencies:
       '@acme/eslint-config':
         specifier: workspace:*
@@ -110,9 +112,6 @@ importers:
       eslint:
         specifier: ^8.57.0
         version: 8.57.0
-      react:
-        specifier: ^18.2.0
-        version: 18.2.0
       tsup:
         specifier: ^8.0.2
         version: 8.0.2(typescript@5.3.3)
@@ -4156,6 +4155,7 @@ packages:
     engines: {node: '>=0.10.0'}
     dependencies:
       loose-envify: 1.4.0
+    dev: false
 
   /read-pkg-up@7.0.1:
     resolution: {integrity: sha512-zK0TB7Xd6JpCLmlLmufqykGE+/TlOePD6qKClNW7hHDKFh/J7/7gCWGR7joEQEW1bKq3a3yUZSObOoWLFQ4ohg==}

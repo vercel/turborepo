@@ -1,5 +1,6 @@
 use std::{
     io::{self, Stdout, Write},
+    sync::mpsc,
     time::{Duration, Instant},
 };
 
@@ -20,6 +21,7 @@ pub struct App<I> {
     pane: TerminalPane<I>,
     done: bool,
     input_options: InputOptions,
+    started_tasks: Vec<String>,
 }
 
 pub enum Direction {
@@ -30,6 +32,7 @@ pub enum Direction {
 impl<I> App<I> {
     pub fn new(rows: u16, cols: u16, tasks: Vec<String>) -> Self {
         debug!("tasks: {tasks:?}");
+        let num_of_tasks = tasks.len();
         let mut this = Self {
             table: TaskTable::new(tasks.clone()),
             pane: TerminalPane::new(rows, cols, tasks),
@@ -39,6 +42,7 @@ impl<I> App<I> {
                 // Check if stdin is a tty that we should read input from
                 tty_stdin: atty::is(atty::Stream::Stdin),
             },
+            started_tasks: Vec::with_capacity(num_of_tasks),
         };
         // Start with first task selected
         this.next();
@@ -108,7 +112,6 @@ impl<I: std::io::Write> App<I> {
 pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
     let mut terminal = startup()?;
     let size = terminal.size()?;
-
     // Figure out pane width?
     let task_width_hint = TaskTable::width_hint(tasks.iter().map(|s| s.as_str()));
     // Want to maximize pane width
@@ -118,9 +121,12 @@ pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
     let mut app: App<Box<dyn io::Write + Send>> =
         App::new(size.height, full_task_width.max(ratio_pane_width), tasks);
 
-    let result = run_app_inner(&mut terminal, &mut app, receiver);
+    let (result, callback) = match run_app_inner(&mut terminal, &mut app, receiver) {
+        Ok(callback) => (Ok(()), callback),
+        Err(err) => (Err(err), None),
+    };
 
-    cleanup(terminal, app)?;
+    cleanup(terminal, app, callback)?;
 
     result
 }
@@ -131,12 +137,13 @@ fn run_app_inner<B: Backend + std::io::Write>(
     terminal: &mut Terminal<B>,
     app: &mut App<Box<dyn io::Write + Send>>,
     receiver: AppReceiver,
-) -> Result<(), Error> {
+) -> Result<Option<mpsc::SyncSender<()>>, Error> {
     // Render initial state to paint the screen
     terminal.draw(|f| view(app, f))?;
     let mut last_render = Instant::now();
+    let mut callback = None;
     while let Some(event) = poll(app.input_options, &receiver, last_render + FRAMERATE) {
-        update(app, event)?;
+        callback = update(app, event)?;
         if app.done {
             break;
         }
@@ -146,7 +153,7 @@ fn run_app_inner<B: Backend + std::io::Write>(
         }
     }
 
-    Ok(())
+    Ok(callback)
 }
 
 /// Blocking poll for events, will only return None if app handle has been
@@ -156,8 +163,16 @@ fn poll(input_options: InputOptions, receiver: &AppReceiver, deadline: Instant) 
         Ok(Some(event)) => Some(event),
         Ok(None) => receiver.recv(deadline).ok(),
         // Unable to read from stdin, shut down and attempt to clean up
-        Err(_) => Some(Event::Stop),
+        Err(_) => Some(Event::InternalStop),
     }
+}
+
+const MIN_HEIGHT: u16 = 10;
+const MIN_WIDTH: u16 = 20;
+
+pub fn terminal_big_enough() -> Result<bool, Error> {
+    let (width, height) = crossterm::terminal::size()?;
+    Ok(width >= MIN_WIDTH && height >= MIN_HEIGHT)
 }
 
 /// Configures terminal for rendering App
@@ -188,6 +203,7 @@ fn startup() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
 fn cleanup<B: Backend + io::Write, I>(
     mut terminal: Terminal<B>,
     mut app: App<I>,
+    callback: Option<mpsc::SyncSender<()>>,
 ) -> io::Result<()> {
     terminal.clear()?;
     crossterm::execute!(
@@ -195,20 +211,23 @@ fn cleanup<B: Backend + io::Write, I>(
         crossterm::event::DisableMouseCapture,
         crossterm::terminal::LeaveAlternateScreen,
     )?;
-    let started_tasks = app.table.tasks_started().collect();
-    app.pane.render_remaining(started_tasks)?;
+    let started_tasks = app.table.tasks_started();
+    app.pane.persist_tasks(&started_tasks)?;
     crossterm::terminal::disable_raw_mode()?;
     terminal.show_cursor()?;
+    // We can close the channel now that terminal is back restored to a normal state
+    drop(callback);
     Ok(())
 }
 
 fn update(
     app: &mut App<Box<dyn io::Write + Send>>,
     event: Event,
-) -> Result<Option<Vec<u8>>, Error> {
+) -> Result<Option<mpsc::SyncSender<()>>, Error> {
     match event {
         Event::StartTask { task } => {
             app.table.start_task(&task)?;
+            app.started_tasks.push(task);
         }
         Event::TaskOutput { task, output } => {
             app.pane.process_output(&task, &output)?;
@@ -216,8 +235,12 @@ fn update(
         Event::Status { task, status } => {
             app.pane.set_status(&task, status)?;
         }
-        Event::Stop => {
+        Event::InternalStop => {
             app.done = true;
+        }
+        Event::Stop(callback) => {
+            app.done = true;
+            return Ok(Some(callback));
         }
         Event::Tick => {
             app.table.tick();

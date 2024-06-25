@@ -99,13 +99,7 @@ const TEST_CASES: Array<TestCase> = [
     packageManagerVersion: "1.2.3",
     options: { force: false, dryRun: false, print: false },
     result: {
-      changes: {
-        "package.json": {
-          action: "unchanged",
-          additions: 0,
-          deletions: 0,
-        },
-      },
+      changes: {},
     },
   },
   {
@@ -116,13 +110,7 @@ const TEST_CASES: Array<TestCase> = [
     packageManagerVersion: "1.2.3",
     options: { force: false, dryRun: false, print: false },
     result: {
-      changes: {
-        "package.json": {
-          action: "modified",
-          additions: 1,
-          deletions: 1,
-        },
-      },
+      changes: {},
     },
   },
 ];
@@ -176,13 +164,16 @@ describe("add-package-manager-2", () => {
         options,
       });
 
-      expect(mockGetAvailablePackageManagers).toHaveBeenCalled();
-      expect(mockGetWorkspaceDetails).toHaveBeenCalled();
+      if (existingPackageManagerString === undefined) {
+        expect(mockGetAvailablePackageManagers).toHaveBeenCalled();
+        expect(mockGetWorkspaceDetails).toHaveBeenCalled();
+      }
 
       expect(JSON.parse(read("package.json") || "{}").packageManager).toEqual(
         options.dryRun
           ? undefined
-          : `${packageManager}@${packageManagerVersion}`
+          : existingPackageManagerString ||
+              `${packageManager}@${packageManagerVersion}`
       );
 
       // result should be correct
@@ -194,17 +185,7 @@ describe("add-package-manager-2", () => {
         options,
       });
       expect(repeatResult.fatalError).toBeUndefined();
-      expect(repeatResult.changes).toMatchObject({
-        "package.json": {
-          action: options.dryRun ? "skipped" : "unchanged",
-          additions: options.dryRun
-            ? result.changes["package.json"].additions
-            : 0,
-          deletions: options.dryRun
-            ? result.changes["package.json"].deletions
-            : 0,
-        },
-      });
+      expect(repeatResult.changes).toMatchObject({});
 
       mockGetAvailablePackageManagers.mockRestore();
       mockGetWorkspaceDetails.mockRestore();

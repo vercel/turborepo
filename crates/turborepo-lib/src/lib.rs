@@ -4,6 +4,7 @@
 #![feature(hash_extract_if)]
 #![feature(option_get_or_insert_default)]
 #![feature(once_cell_try)]
+#![feature(panic_info_message)]
 #![feature(try_blocks)]
 #![feature(impl_trait_in_assoc_type)]
 #![deny(clippy::all)]
@@ -26,6 +27,7 @@ pub(crate) mod globwatcher;
 mod hash;
 mod opts;
 mod package_changes_watcher;
+mod panic_handler;
 mod process;
 mod rewrite_json;
 mod run;
@@ -35,12 +37,14 @@ mod task_graph;
 mod task_hash;
 mod tracing;
 mod turbo_json;
-mod unescape;
 
 pub use crate::{
     child::spawn_child,
     cli::Args,
-    daemon::{DaemonClient, DaemonConnector, Paths as DaemonPaths},
+    daemon::{
+        DaemonClient, DaemonConnector, DaemonConnectorError, DaemonError, Paths as DaemonPaths,
+    },
+    panic_handler::panic_handler,
     run::package_discovery::DaemonPackageDiscovery,
 };
 

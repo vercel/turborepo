@@ -118,7 +118,7 @@ impl WatchClient {
 
         let watched_packages = run.get_relevant_packages();
 
-        let (sender, handle) = run.start_experimental_ui().unzip();
+        let (sender, handle) = run.start_experimental_ui()?.unzip();
 
         let connector = DaemonConnector {
             can_start_server: true,
@@ -270,7 +270,7 @@ impl WatchClient {
                     .build(&signal_handler, telemetry)
                     .await?;
 
-                Ok(run.run(self.ui_sender.clone()).await?)
+                Ok(run.run(self.ui_sender.clone(), true).await?)
             }
             ChangedPackages::All => {
                 let mut args = self.base.args().clone();
@@ -321,16 +321,15 @@ impl WatchClient {
                     let ui_sender = self.ui_sender.clone();
                     // If we have persistent tasks, we run them on a separate thread
                     // since persistent tasks don't finish
-                    self.persistent_tasks_handle =
-                        Some(tokio::spawn(
-                            async move { persistent_run.run(ui_sender).await },
-                        ));
+                    self.persistent_tasks_handle = Some(tokio::spawn(async move {
+                        persistent_run.run(ui_sender, true).await
+                    }));
 
                     // But we still run the regular tasks blocking
                     let mut non_persistent_run = self.run.create_run_without_persistent_tasks();
-                    Ok(non_persistent_run.run(self.ui_sender.clone()).await?)
+                    Ok(non_persistent_run.run(self.ui_sender.clone(), true).await?)
                 } else {
-                    Ok(self.run.run(self.ui_sender.clone()).await?)
+                    Ok(self.run.run(self.ui_sender.clone(), true).await?)
                 }
             }
         }

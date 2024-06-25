@@ -37,7 +37,6 @@ function getSocketProtocol(assetPrefix) {
 
 - Hoisted
 - Declares: `getSocketProtocol`
-- Reads (eventual): `location`, `URL`
 - Write: `getSocketProtocol`
 
 ## Item 4: Stmt 3, `Normal`
@@ -53,6 +52,7 @@ export function addMessageListener(cb) {
 - Declares: `addMessageListener`
 - Reads (eventual): `eventCallbacks`
 - Write: `addMessageListener`
+- Write (eventual): `eventCallbacks`
 
 ## Item 5: Stmt 4, `Normal`
 
@@ -68,6 +68,7 @@ export function sendMessage(data) {
 - Declares: `sendMessage`
 - Reads (eventual): `source`
 - Write: `sendMessage`
+- Write (eventual): `source`
 
 ## Item 6: Stmt 5, `Normal`
 
@@ -118,9 +119,9 @@ export function connectHMR(options) {
 
 - Hoisted
 - Declares: `connectHMR`
-- Reads (eventual): `source`, `console`, `eventCallbacks`, `JSON`, `setTimeout`, `location`, `getSocketProtocol`, `window`
+- Reads (eventual): `source`, `eventCallbacks`, `getSocketProtocol`
 - Write: `connectHMR`
-- Write (eventual): `source`
+- Write (eventual): `source`, `eventCallbacks`
 
 # Phase 1
 ```mermaid
@@ -157,6 +158,9 @@ graph TD
     Item9["export sendMessage"];
     Item10;
     Item10["export connectHMR"];
+    Item8 --> Item4;
+    Item9 --> Item5;
+    Item10 --> Item6;
 ```
 # Phase 3
 ```mermaid
@@ -175,6 +179,9 @@ graph TD
     Item9["export sendMessage"];
     Item10;
     Item10["export connectHMR"];
+    Item8 --> Item4;
+    Item9 --> Item5;
+    Item10 --> Item6;
     Item4 --> Item2;
     Item5 --> Item1;
     Item6 --> Item1;
@@ -198,14 +205,14 @@ graph TD
     Item9["export sendMessage"];
     Item10;
     Item10["export connectHMR"];
+    Item8 --> Item4;
+    Item9 --> Item5;
+    Item10 --> Item6;
     Item4 --> Item2;
     Item5 --> Item1;
     Item6 --> Item1;
     Item6 --> Item2;
     Item6 --> Item3;
-    Item8 --> Item4;
-    Item9 --> Item5;
-    Item10 --> Item6;
 ```
 # Final
 ```mermaid

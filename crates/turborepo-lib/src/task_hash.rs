@@ -469,7 +469,18 @@ impl<'a> TaskHasher<'a> {
                         "LANG",
                         "SHELL",
                         "PWD",
+                        "CI",
                         "NODE_OPTIONS",
+                        "LD_LIBRARY_PATH",
+                        "DYLD_FALLBACK_LIBRARY_PATH",
+                        "LIBPATH",
+                        "COLORTERM",
+                        "TERM",
+                        "TERM_PROGRAM",
+                        // Jetbrains IDE
+                        "JB_IDE_*",
+                        "JB_INTERPRETER",
+                        "_JETBRAINS_TEST_RUNNER_RUN_SCOPE_TYPE",
                         // Vercel specific
                         "VERCEL_*",
                         "NEXT_*",

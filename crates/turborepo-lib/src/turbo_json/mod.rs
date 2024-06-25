@@ -13,6 +13,7 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
 use turborepo_errors::Spanned;
 use turborepo_repository::{package_graph::ROOT_PKG_NAME, package_json::PackageJson};
+use turborepo_unescape::UnescapedString;
 
 use crate::{
     cli::OutputLogsMode,
@@ -22,7 +23,6 @@ use crate::{
         task_id::{TaskId, TaskName},
     },
     task_graph::{TaskDefinition, TaskOutputs},
-    unescape::UnescapedString,
 };
 
 pub mod parser;
@@ -735,6 +735,7 @@ mod tests {
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
     use turborepo_repository::package_json::PackageJson;
+    use turborepo_unescape::UnescapedString;
 
     use super::{Pipeline, RawTurboJson, Spanned, UI};
     use crate::{
@@ -742,7 +743,6 @@ mod tests {
         run::task_id::TaskName,
         task_graph::{TaskDefinition, TaskOutputs},
         turbo_json::{RawTaskDefinition, TurboJson},
-        unescape::UnescapedString,
     };
 
     #[test_case(r"{}", TurboJson::default() ; "empty")]

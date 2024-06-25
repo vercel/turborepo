@@ -260,6 +260,9 @@ impl PackageGraph {
     pub fn dependencies<'a>(&'a self, node: &PackageNode) -> HashSet<&'a PackageNode> {
         let mut dependencies =
             self.transitive_closure_inner(Some(node), petgraph::Direction::Outgoing);
+        // Add in all root dependencies as they're implied dependencies for every
+        // package in the graph.
+        dependencies.extend(self.root_internal_dependencies());
         dependencies.remove(node);
         dependencies
     }
@@ -273,14 +276,18 @@ impl PackageGraph {
     ///
     /// ancestors(c) = {a, b}
     pub fn ancestors(&self, node: &PackageNode) -> HashSet<&PackageNode> {
-        let mut dependents =
-            self.transitive_closure_inner(Some(node), petgraph::Direction::Incoming);
+        // If node is a root dep, then *every* package is an ancestor of this one
+        let mut dependents = if self.root_internal_dependencies().contains(node) {
+            return self.graph.node_weights().collect();
+        } else {
+            self.transitive_closure_inner(Some(node), petgraph::Direction::Incoming)
+        };
         dependents.remove(node);
         dependents
     }
 
     pub fn root_internal_package_dependencies(&self) -> HashSet<WorkspacePackage> {
-        let dependencies = self.dependencies(&PackageNode::Workspace(PackageName::Root));
+        let dependencies = self.root_internal_dependencies();
         dependencies
             .into_iter()
             .filter_map(|package| match package {
@@ -299,7 +306,7 @@ impl PackageGraph {
     }
 
     pub fn root_internal_package_dependencies_paths(&self) -> Vec<&AnchoredSystemPath> {
-        let dependencies = self.dependencies(&PackageNode::Workspace(PackageName::Root));
+        let dependencies = self.root_internal_dependencies();
         dependencies
             .into_iter()
             .filter_map(|package| match package {
@@ -311,6 +318,17 @@ impl PackageGraph {
             })
             .sorted()
             .collect()
+    }
+
+    fn root_internal_dependencies(&self) -> HashSet<&PackageNode> {
+        // We cannot call self.dependencies(&PackageNode::Workspace(PackageName::Root))
+        // as it will infinitely recurse.
+        let mut dependencies = self.transitive_closure_inner(
+            Some(&PackageNode::Workspace(PackageName::Root)),
+            petgraph::Direction::Outgoing,
+        );
+        dependencies.remove(&PackageNode::Workspace(PackageName::Root));
+        dependencies
     }
 
     /// Returns the transitive closure of the given nodes in the package
@@ -679,6 +697,10 @@ mod test {
 
         fn global_change(&self, _other: &dyn Lockfile) -> bool {
             unreachable!("global change detection not necessary for package graph construction")
+        }
+
+        fn turbo_version(&self) -> Option<String> {
+            None
         }
     }
 
