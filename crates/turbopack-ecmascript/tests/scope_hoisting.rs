@@ -83,12 +83,12 @@ fn to_num_deps(deps: Vec<(&str, Vec<(&str, bool)>)>) -> Deps {
 
 type Deps = Vec<(usize, Vec<(usize, bool)>)>;
 
-fn split(deps: Deps) -> Result<Vec<Vec<usize>>> {
+fn split(deps: Deps) -> Vec<Vec<usize>> {
     register();
 
     let graph = test_dep_graph(deps);
 
-    let group = split_scopes(&graph, Item(0));
+    let group = split_scopes(&*graph, Item(0));
 
     let mut data = vec![];
 
@@ -96,7 +96,6 @@ fn split(deps: Deps) -> Result<Vec<Vec<usize>>> {
         let mut scope_data = vec![];
 
         for &module in scope.modules.iter() {
-            let module = from_module(module);
             scope_data.push(module);
         }
 
@@ -104,7 +103,9 @@ fn split(deps: Deps) -> Result<Vec<Vec<usize>>> {
     }
 
     data.sort();
-    Ok(data)
+    data.into_iter()
+        .map(|x| x.into_iter().map(|v| v.0).collect())
+        .collect()
 }
 
 fn test_dep_graph(deps: Deps) -> Box<dyn DepGraph> {
@@ -135,9 +136,10 @@ impl DepGraph for TestDepGraph {
             .graph
             .idx_graph
             .neighbors_directed(from, petgraph::Direction::Outgoing)
+            .map(|ix| *self.graph.graph_ix.get_index(ix as usize).unwrap())
             .collect();
 
-        Ok(Vc::cell(dependencies))
+        dependencies
     }
 
     fn depandants(&self, module: Item) -> Vec<Item> {
@@ -147,9 +149,10 @@ impl DepGraph for TestDepGraph {
             .graph
             .idx_graph
             .neighbors_directed(from, petgraph::Direction::Incoming)
+            .map(|ix| *self.graph.graph_ix.get_index(ix as usize).unwrap())
             .collect();
 
-        Ok(dependants)
+        dependants
     }
 
     fn get_edge(&self, from: Item, to: Item) -> EdgeData {
@@ -160,14 +163,14 @@ impl DepGraph for TestDepGraph {
 
         let is_lazy = edge_data.is_lazy;
 
-        Ok(EdgeData { is_lazy })
+        EdgeData { is_lazy }
     }
 
     fn has_path_connecting(&self, from: Item, to: Item) -> bool {
         let from = self.graph.get_node(&from);
         let to = self.graph.get_node(&to);
 
-        Ok(has_path_connecting(&self.graph.idx_graph, from, to, None))
+        has_path_connecting(&self.graph.idx_graph, from, to, None)
     }
 }
 

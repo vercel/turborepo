@@ -15,7 +15,7 @@ pub struct ModuleScope {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Item(pub u32);
+pub struct Item(pub usize);
 
 pub fn split_scopes(dep_graph: &dyn DepGraph, entry: Item) -> ModuleScopeGroup {
     // If a module is imported only as lazy, it should be in a separate scope
