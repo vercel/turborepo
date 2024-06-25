@@ -39,13 +39,13 @@ pub async fn find_list(entrypoints: Vc<Vec<Vc<Item>>>) -> Result<Vc<Vec<Vc<Item>
             ItemKind::Enter => {
                 // Put all items from the shallow list of the dequeued item at the front of the
                 // queue Q with type ENTER
-                for shallow_item in item.shallow_list.iter() {
-                    queue.push_front((shallow_item, ItemKind::Enter));
+                for shallow_item in item.await?.shallow_list.await?.iter() {
+                    queue.push_front((*shallow_item, ItemKind::Enter));
                 }
 
                 // Put all items from conditional loaded modules into set S.
-                for cond_loaded_module in item.cond_loaded_modules.iter() {
-                    set.insert(cond_loaded_module);
+                for cond_loaded_module in item.await?.cond_loaded_modules.await?.iter() {
+                    set.insert(*cond_loaded_module);
                 }
 
                 // Put the current item into the queue with type LEAVE
