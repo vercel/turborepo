@@ -1,6 +1,5 @@
 use std::collections::VecDeque;
 
-use anyhow::Result;
 use rustc_hash::FxHashSet;
 
 /// Counterpart of `Chunk` in webpack scope hoisting
@@ -63,11 +62,10 @@ fn determine_entries(dep_graph: &dyn DepGraph, entry: Item) -> FxHashSet<Item> {
             continue;
         }
 
-        let group = follow_single_edge(dep_graph, cur);
-        for &group_item in group.iter() {
-            dbg!(group_item);
+        if is_entry {
+            let group = follow_single_edge(dep_graph, cur);
+            done.extend(group.iter().copied());
         }
-        done.extend(group.iter().copied());
 
         let deps = dep_graph.deps(cur);
 
@@ -83,7 +81,7 @@ fn determine_entries(dep_graph: &dyn DepGraph, entry: Item) -> FxHashSet<Item> {
             let dependants = dep_graph.depandants(dep);
             let mut filtered = vec![];
             for &dependant in dependants.iter() {
-                if group.contains(&dependant) {
+                if done.contains(&dependant) {
                     continue;
                 }
                 filtered.push(dependant);
