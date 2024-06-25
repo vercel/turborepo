@@ -24,10 +24,13 @@ pub fn split_scopes(dep_graph: &dyn DepGraph, entry: Item) -> ModuleScopeGroup {
 
     let mut scopes = vec![];
 
+    let mut done = FxHashSet::default();
     for &entry in entries.iter() {
-        let modules = follow_single_edge(dep_graph, entry)
+        let modules = follow_single_edge(dep_graph, entry, &done)
             .into_iter()
             .collect::<Vec<_>>();
+
+        done.extend(modules.iter().copied());
 
         scopes.push(ModuleScope { modules });
     }
@@ -63,7 +66,7 @@ fn determine_entries(dep_graph: &dyn DepGraph, entry: Item) -> FxHashSet<Item> {
         }
 
         if is_entry {
-            let group = follow_single_edge(dep_graph, cur);
+            let group = follow_single_edge(dep_graph, cur, &done);
             done.extend(group.iter().copied());
         }
 
@@ -93,7 +96,11 @@ fn determine_entries(dep_graph: &dyn DepGraph, entry: Item) -> FxHashSet<Item> {
     entries
 }
 
-fn follow_single_edge(dep_graph: &dyn DepGraph, entry: Item) -> FxHashSet<Item> {
+fn follow_single_edge(
+    dep_graph: &dyn DepGraph,
+    entry: Item,
+    exclude: &FxHashSet<Item>,
+) -> FxHashSet<Item> {
     let mut done = FxHashSet::default();
 
     let mut queue = VecDeque::<Item>::default();
@@ -107,10 +114,7 @@ fn follow_single_edge(dep_graph: &dyn DepGraph, entry: Item) -> FxHashSet<Item> 
         let deps = dep_graph.deps(cur);
 
         for dep in deps {
-            // If there are multiple dependeants, ignore.
-            let dependants = dep_graph.depandants(dep);
-
-            if dependants.len() > 1 {
+            if exclude.contains(&dep) {
                 continue;
             }
 
