@@ -57,7 +57,6 @@ fn determine_entries(dep_graph: &dyn DepGraph, entry: Item) -> FxHashSet<Item> {
     queue.push_back((entry, true));
 
     while let Some((cur, is_entry)) = queue.pop_front() {
-        dbg!(cur);
         if is_entry && !entries.insert(cur) {
             continue;
         }
@@ -70,8 +69,6 @@ fn determine_entries(dep_graph: &dyn DepGraph, entry: Item) -> FxHashSet<Item> {
         let deps = dep_graph.deps(cur);
 
         for dep in deps {
-            dbg!(dep);
-
             // If lazy, it should be in a separate scope.
             if dep_graph.get_edge(cur, dep).is_lazy {
                 queue.push_back((dep, true));
