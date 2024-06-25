@@ -80,6 +80,8 @@ fn determine_entries(dep_graph: &dyn DepGraph, entry: Item) -> FxHashSet<Item> {
 
             // If there are multiple dependants, it's an entry.
             if dependants.len() >= 2 {
+                // TODO: Optimization: If all of the dependants are from the same entrypoint, it
+                // should be in the same scope.
                 queue.push_back((dep, true));
                 continue;
             }
