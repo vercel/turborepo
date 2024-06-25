@@ -17,7 +17,7 @@ enum ItemKind {
     Leave,
 }
 
-pub async fn find_list(entrypoints: Vc<Vec<Vc<Item>>>) -> Result<()> {
+pub async fn find_list(entrypoints: Vc<Vec<Vc<Item>>>) -> Result<Vc<Vec<Vc<Item>>>> {
     // Create an empty set X for items that have been processed.
     let mut done = FxHashSet::default();
     let mut queue = VecDeque::<(_, ItemKind)>::new();
@@ -144,4 +144,6 @@ pub async fn find_list(entrypoints: Vc<Vec<Vc<Item>>>) -> Result<()> {
 
         // At this point every item is exactly in one list.
     }
+
+    Ok(Vc::cell(list))
 }
