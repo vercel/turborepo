@@ -54,12 +54,12 @@ fn determine_entries(dep_graph: &dyn DepGraph, entry: Item) -> FxHashSet<Item> {
     let mut entries = FxHashSet::default();
 
     let mut done = FxHashSet::<Item>::default();
-    let mut queue = VecDeque::<Item>::default();
-    queue.push_back(entry);
+    let mut queue = VecDeque::default();
+    queue.push_back((entry, true));
 
-    while let Some(cur) = queue.pop_front() {
+    while let Some((cur, is_entry)) = queue.pop_front() {
         dbg!(cur);
-        if !entries.insert(cur) {
+        if is_entry && !entries.insert(cur) {
             continue;
         }
 
@@ -76,7 +76,7 @@ fn determine_entries(dep_graph: &dyn DepGraph, entry: Item) -> FxHashSet<Item> {
 
             // If lazy, it should be in a separate scope.
             if dep_graph.get_edge(cur, dep).is_lazy {
-                queue.push_back(dep);
+                queue.push_back((dep, true));
                 continue;
             }
 
@@ -91,8 +91,11 @@ fn determine_entries(dep_graph: &dyn DepGraph, entry: Item) -> FxHashSet<Item> {
 
             // If there are multiple dependants, it's an entry.
             if filtered.len() > 1 {
-                queue.push_back(dep);
+                queue.push_back((dep, true));
+                continue;
             }
+
+            queue.push_back((dep, false))
         }
     }
 
