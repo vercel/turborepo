@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_recursion::async_recursion;
 use rustc_hash::{FxHashMap, FxHashSet};
-use turbo_tasks::{vdbg, Vc};
+use turbo_tasks::{debug::ValueDebugFormat, vdbg, Vc};
 use turbopack_core::module::Module;
 
 /// Counterpart of `Chunk` in webpack scope hoisting
@@ -26,7 +26,11 @@ struct Workspace {
     done: FxHashSet<Item>,
 
     /// The modules that are in the same scope, by the start
-    grouped: FxHashMap<Item, FxHashSet<Item>>,
+    grouped: FxHashMap<String, FxHashSet<String>>,
+}
+
+async fn hashed(item: Item) -> Result<String> {
+    item.value_debug_format(10).try_to_string().await
 }
 
 impl Workspace {
@@ -37,7 +41,10 @@ impl Workspace {
             return Ok(());
         }
 
-        self.grouped.entry(entry).or_default().insert(entry);
+        self.grouped
+            .entry(hashed(entry).await?)
+            .or_default()
+            .insert(hashed(entry).await?);
 
         let modules = self.walk(entry, entry).await?;
 
@@ -73,12 +80,20 @@ impl Workspace {
                 self.dep_graph.get_edge(from, dep).await?.is_lazy
             } else {
                 vdbg!(start);
-                let cur_group = self.grouped.entry(start).or_default();
+                let cur_group = self.grouped.entry(hashed(start).await?).or_default();
                 for group_item in cur_group.iter() {
                     vdbg!(group_item);
                 }
+
                 // If all dependants start from the same scope, we can merge them
-                !dependants.iter().all(|dep| cur_group.contains(dep))
+                let mut all = true;
+                for &dep in dependants.iter() {
+                    if !cur_group.contains(hashed(dep).await?.as_str()) {
+                        all = false;
+                        break;
+                    }
+                }
+                !all
             };
 
             if should_start_scope {
@@ -90,7 +105,10 @@ impl Workspace {
                     let vc = vc.resolve_strongly_consistent().await?;
                     modules.push(vc);
 
-                    self.grouped.entry(start).or_default().insert(vc);
+                    self.grouped
+                        .entry(hashed(start).await?)
+                        .or_default()
+                        .insert(hashed(vc).await?);
                 }
             }
         }
