@@ -82,21 +82,21 @@ async fn determine_entries(
     while let Some(c) = queue.pop_front() {
         let cur = c.resolve_strongly_consistent().await?;
 
-        vdbg!(cur);
+        dbg!(cur);
         if !entries.insert(cur) {
             continue;
         }
 
         let group = follow_single_edge(dep_graph, cur).await?;
         for &group_item in group.iter() {
-            vdbg!(group_item);
+            dbg!(group_item);
         }
         done.extend(group.iter().copied());
 
         let deps = dep_graph.deps(cur).await?;
 
         for &dep in deps {
-            vdbg!(dep);
+            dbg!(dep);
 
             // If lazy, it should be in a separate scope.
             if dep_graph.get_edge(cur, dep).await?.is_lazy {
