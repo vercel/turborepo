@@ -34,8 +34,6 @@ pub async fn split_scopes(
     let mut scopes = vec![];
 
     for &entry in entries.iter() {
-        vdbg!(entry);
-
         let modules = follow_single_edge(dep_graph, entry)
             .await?
             .into_iter()
@@ -78,12 +76,13 @@ async fn determine_entries(
     let mut entries = FxHashSet::default();
 
     let mut done = FxHashSet::default();
-    let mut queue = VecDeque::<Item>::new();
+    let mut queue = VecDeque::<Item>::default();
     queue.push_back(entry);
 
     while let Some(c) = queue.pop_front() {
         let cur = c.resolve_strongly_consistent().await?;
 
+        vdbg!(cur);
         if !entries.insert(cur) {
             continue;
         }
@@ -93,7 +92,7 @@ async fn determine_entries(
         for &dep in deps {
             // If lazy, it should be in a separate scope.
             if dep_graph.get_edge(cur, dep).await?.is_lazy {
-                entries.insert(dep);
+                queue.push_back(dep);
                 continue;
             }
 
@@ -110,7 +109,7 @@ async fn determine_entries(
 
             // If there are multiple dependants, it's an entry.
             if filtered.len() > 1 {
-                entries.insert(dep);
+                queue.push_back(dep);
             }
         }
     }
