@@ -37,7 +37,7 @@ pub fn split_scopes(dep_graph: &mut dyn DepGraph, entry: Item) -> ModuleScopeGro
 
     let mut scopes = vec![];
 
-    for (entry, modules) in entries {
+    for (_, modules) in entries {
         scopes.push(ModuleScope { modules });
     }
 
