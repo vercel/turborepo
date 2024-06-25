@@ -11,7 +11,7 @@ pub struct ModuleScopeGroup {
 /// Counterpart of `Scope` in webpack scope hoisting
 pub struct ModuleScope {
     /// The modules in this scope.
-    pub modules: Vec<Item>,
+    pub modules: IndexSet<Item>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -39,11 +39,7 @@ pub fn split_scopes(dep_graph: &dyn DepGraph, entry: Item) -> ModuleScopeGroup {
 
     let mut scopes = vec![];
 
-    for &entry in entries.iter() {
-        let modules = follow_single_edge(dep_graph, &entry, &entries)
-            .into_iter()
-            .collect::<Vec<_>>();
-
+    for (entry, modules) in entries {
         scopes.push(ModuleScope { modules });
     }
 
@@ -104,16 +100,45 @@ fn determine_entries(dep_graph: &dyn DepGraph, entry: Item) -> IndexSet<Item> {
 
 fn merge_entries(
     dep_graph: &dyn DepGraph,
-    mut entries: IndexMap<Item, IndexSet<Item>>,
-) -> IndexSet<Item> {
-    let mut new = IndexSet::default();
+    entries: IndexMap<Item, IndexSet<Item>>,
+) -> IndexMap<Item, IndexSet<Item>> {
+    let mut new = IndexMap::<Item, IndexSet<Item>>::default();
 
-    for (entry, items) in entries.iter() {
+    let keys = entries
+        .keys()
+        .filter(|entry| {
+            let dependants = dep_graph.depandants(**entry);
+            dependants.len() < 2
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+
+    for (entry, items) in entries.into_iter() {
         // An entry is a target of check if there are two or more dependant nodes.
 
-        let dependants = dep_graph.depandants(*entry);
-        if dependants.len() >= 2 {
-            // If an entry is
+        let dependants = dep_graph.depandants(entry);
+        if dependants.len() < 2 {
+            new.entry(entry).or_default().extend(items);
+            continue;
+        }
+        dbg!(&entry);
+        dbg!(&keys);
+        dbg!(&dependants);
+
+        // If an entry is
+
+        let real_start = keys.iter().find(|start| {
+            dependants
+                .iter()
+                .all(|dep| dep_graph.has_path_connecting(**start, *dep))
+        });
+
+        dbg!(real_start);
+
+        if let Some(real_start) = real_start {
+            new.entry(*real_start).or_default().extend(items);
+        } else {
+            new.entry(entry).or_default().extend(items);
         }
     }
 
