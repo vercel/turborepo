@@ -34,7 +34,7 @@ async fn hashed(item: Item) -> Result<String> {
 
 impl Workspace {
     #[async_recursion]
-    async fn entries_from_lazy(&mut self, entry: Vc<Box<dyn Module>>) -> Result<()> {
+    async fn fill_entries(&mut self, entry: Vc<Box<dyn Module>>) -> Result<()> {
         if !self.entries.insert(entry) {
             return Ok(());
         }
@@ -46,7 +46,7 @@ impl Workspace {
             let dependants = self.dep_graph.depandants(dep);
 
             if dependants.await?.len() != 1 || self.dep_graph.get_edge(entry, dep).await?.is_lazy {
-                self.entries_from_lazy(dep).await?;
+                self.fill_entries(dep).await?;
                 continue;
             }
         }
@@ -98,26 +98,15 @@ impl Workspace {
                 buf
             };
 
-            let should_start_scope = if dependants.len() == 1 {
-                self.dep_graph.get_edge(from, dep).await?.is_lazy
-            } else {
-                // If dep is reachable from multiple entries, it should be in a separate
-                // scope
+            if dependants.len() != 1 {
+                continue;
+            }
 
-                let mut all = true;
+            let v = self.walk(dep, start).await?;
 
-                !all
-            };
-
-            if should_start_scope {
-                self.start_scope(dep).await?;
-            } else {
-                let v = self.walk(dep, start).await?;
-
-                for vc in v.iter() {
-                    let vc = vc.resolve_strongly_consistent().await?;
-                    modules.push(vc);
-                }
+            for vc in v.iter() {
+                let vc = vc.resolve_strongly_consistent().await?;
+                modules.push(vc);
             }
         }
 
@@ -139,9 +128,14 @@ pub async fn split_scopes(
         entries: Default::default(),
     };
 
-    workspace.entries_from_lazy(entry).await?;
+    workspace.fill_entries(entry).await?;
+    workspace.fill_entries(entry).await?;
 
-    workspace.start_scope(entry).await?;
+    let entries = workspace.entries.clone();
+
+    for &entry in entries.iter() {
+        workspace.start_scope(entry).await?;
+    }
 
     Ok(ModuleScopeGroup {
         scopes: Vc::cell(workspace.scopes),
