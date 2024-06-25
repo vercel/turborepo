@@ -22,134 +22,6 @@ pub struct ModuleScope {
 
 type Item = Vc<Box<dyn Module>>;
 
-struct Workspace {
-    dep_graph: Vc<Box<dyn DepGraph>>,
-
-    scopes: Vec<Vc<ModuleScope>>,
-    done: FxHashSet<Item>,
-    entries: IndexSet<Item>,
-}
-
-impl Workspace {
-    #[async_recursion]
-    async fn fill_entries_lazy(
-        &mut self,
-        entry: Vc<Box<dyn Module>>,
-        is_entry: bool,
-    ) -> Result<()> {
-        let entry = entry.resolve_strongly_consistent().await?;
-        if !self.done.insert(entry) {
-            return Ok(());
-        }
-        if is_entry {
-            self.entries.insert(entry);
-        }
-
-        let deps = self.dep_graph.deps(entry);
-
-        for &dep in deps.await?.iter() {
-            let dep = dep.resolve_strongly_consistent().await?;
-
-            if self.dep_graph.get_edge(entry, dep).await?.is_lazy {
-                self.fill_entries_lazy(dep, true).await?;
-            } else {
-                self.fill_entries_lazy(dep, false).await?;
-            }
-        }
-
-        Ok(())
-    }
-
-    #[async_recursion]
-    async fn fill_entries_multi(
-        &mut self,
-        entry: Vc<Box<dyn Module>>,
-        is_init: bool,
-        is_entry: bool,
-    ) -> Result<()> {
-        let entry = entry.resolve_strongly_consistent().await?;
-
-        if !is_init && !self.done.insert(entry) {
-            return Ok(());
-        }
-
-        if is_entry {
-            self.entries.insert(entry);
-        }
-
-        let deps = self.dep_graph.deps(entry);
-
-        for &dep in deps.await?.iter() {
-            let dep = dep.resolve_strongly_consistent().await?;
-
-            let dependants = self.dep_graph.depandants(dep);
-
-            let mut count = 0;
-
-            for dependant in dependants.await?.iter() {
-                let dependant = dependant.resolve_strongly_consistent().await?;
-                if self.done.contains(&dependant) {
-                    continue;
-                }
-
-                count += 1;
-            }
-
-            if count > 1 {
-                self.fill_entries_multi(dep, false, true).await?;
-            } else {
-                self.fill_entries_multi(dep, false, false).await?;
-            }
-        }
-
-        Ok(())
-    }
-
-    #[async_recursion]
-    async fn start_scope(&mut self, entry: Vc<Box<dyn Module>>) -> Result<()> {
-        let entry = entry.resolve_strongly_consistent().await?;
-
-        let modules = self.collect(entry, true).await?;
-        if modules.is_empty() {
-            return Ok(());
-        }
-
-        let module_scope = ModuleScope {
-            modules: Vc::cell(modules),
-        }
-        .cell();
-
-        self.scopes.push(module_scope);
-
-        Ok(())
-    }
-
-    #[async_recursion]
-    async fn collect(&mut self, from: Item, is_start: bool) -> Result<Vec<Item>> {
-        let from = from.resolve_strongly_consistent().await?;
-        if !is_start && !self.done.insert(from) {
-            return Ok(vec![]);
-        }
-
-        let deps = self.dep_graph.deps(from);
-        let mut modules = vec![from];
-
-        for &dep in deps.await?.iter() {
-            let dep = dep.resolve_strongly_consistent().await?;
-
-            // Collect dependencies in the same scope.
-            let v = self.collect(dep, false).await?;
-
-            for vc in v.iter() {
-                let vc = vc.resolve_strongly_consistent().await?;
-                modules.push(vc);
-            }
-        }
-
-        Ok(modules)
-    }
-}
-
 #[turbo_tasks::function]
 pub async fn split_scopes(
     dep_graph: Vc<Box<dyn DepGraph>>,
@@ -157,11 +29,13 @@ pub async fn split_scopes(
 ) -> Result<Vc<ModuleScopeGroup>> {
     // If a module is imported only as lazy, it should be in a separate scope
 
-    let entries = determine_entries(dep_graph.clone(), entry.clone()).await?;
+    let entries = determine_entries(dep_graph, entry).await?;
 
     let mut scopes = vec![];
 
     for &entry in entries.iter() {
+        vdbg!(entry);
+
         let modules = follow_single_edge(dep_graph, entry)
             .await?
             .into_iter()
@@ -250,7 +124,7 @@ async fn follow_single_edge(
 ) -> Result<FxHashSet<Item>> {
     let mut done = FxHashSet::default();
 
-    let mut queue = VecDeque::<Item>::new();
+    let mut queue = VecDeque::<Item>::default();
     queue.push_back(entry);
 
     while let Some(c) = queue.pop_front() {
@@ -267,6 +141,10 @@ async fn follow_single_edge(
         }
 
         for &dep in deps {
+            if dep_graph.get_edge(cur, dep).await?.is_lazy {
+                continue;
+            }
+
             // If there are multiple dependeants, ignore.
             let dependants = dep_graph.depandants(dep).await?;
 
