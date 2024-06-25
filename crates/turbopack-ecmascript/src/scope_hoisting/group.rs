@@ -39,8 +39,11 @@ impl Workspace {
         entry: Vc<Box<dyn Module>>,
         is_entry: bool,
     ) -> Result<()> {
-        self.entries.insert(entry);
-        if is_entry && !self.done.insert(entry) {
+        vdbg!("lazy entry", entry);
+        if is_entry {
+            self.entries.insert(entry);
+        }
+        if !self.done.insert(entry) {
             return Ok(());
         }
 
@@ -51,10 +54,9 @@ impl Workspace {
 
             if self.dep_graph.get_edge(entry, dep).await?.is_lazy {
                 self.fill_entries_lazy(dep, true).await?;
-                continue;
+            } else {
+                self.fill_entries_lazy(dep, false).await?;
             }
-
-            self.fill_entries_lazy(dep, false).await?;
         }
 
         Ok(())
@@ -66,8 +68,12 @@ impl Workspace {
         entry: Vc<Box<dyn Module>>,
         is_entry: bool,
     ) -> Result<()> {
-        self.entries.insert(entry);
-        if is_entry && !self.done.insert(entry) {
+        vdbg!("multi entry", entry);
+
+        if is_entry {
+            self.entries.insert(entry);
+        }
+        if !self.done.insert(entry) {
             return Ok(());
         }
 
