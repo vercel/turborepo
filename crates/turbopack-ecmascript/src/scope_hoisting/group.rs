@@ -34,8 +34,40 @@ async fn hashed(item: Item) -> Result<String> {
 
 impl Workspace {
     #[async_recursion]
-    async fn fill_entries(&mut self, entry: Vc<Box<dyn Module>>, is_entry: bool) -> Result<()> {
-        if is_entry && !self.entries.insert(entry) {
+    async fn fill_entries_lazy(
+        &mut self,
+        entry: Vc<Box<dyn Module>>,
+        is_entry: bool,
+    ) -> Result<()> {
+        self.entries.insert(entry);
+        if is_entry && !self.done.insert(entry) {
+            return Ok(());
+        }
+
+        let deps = self.dep_graph.deps(entry);
+
+        for &dep in deps.await?.iter() {
+            let dep = dep.resolve_strongly_consistent().await?;
+
+            if self.dep_graph.get_edge(entry, dep).await?.is_lazy {
+                self.fill_entries_lazy(dep, true).await?;
+                continue;
+            }
+
+            self.fill_entries_lazy(dep, false).await?;
+        }
+
+        Ok(())
+    }
+
+    #[async_recursion]
+    async fn fill_entries_multi(
+        &mut self,
+        entry: Vc<Box<dyn Module>>,
+        is_entry: bool,
+    ) -> Result<()> {
+        self.entries.insert(entry);
+        if is_entry && !self.done.insert(entry) {
             return Ok(());
         }
 
@@ -45,12 +77,23 @@ impl Workspace {
             let dep = dep.resolve_strongly_consistent().await?;
             let dependants = self.dep_graph.depandants(dep);
 
-            if dependants.await?.len() != 1 || self.dep_graph.get_edge(entry, dep).await?.is_lazy {
-                self.fill_entries(dep, true).await?;
-                continue;
+            let mut count = 0;
+
+            // Exclude lazy dependency.
+
+            for dependant in dependants.await?.iter() {
+                let dependant = dependant.resolve_strongly_consistent().await?;
+                if self.dep_graph.get_edge(dependant, dep).await?.is_lazy {
+                    continue;
+                }
+                count += 1;
             }
 
-            self.fill_entries(dep, false).await?;
+            if count > 1 {
+                self.fill_entries_multi(dep, true).await?;
+            } else {
+                self.fill_entries_multi(dep, false).await?;
+            }
         }
 
         Ok(())
@@ -130,8 +173,11 @@ pub async fn split_scopes(
         entries: Default::default(),
     };
 
-    workspace.fill_entries(entry, true).await?;
-    workspace.fill_entries(entry, true).await?;
+    workspace.fill_entries_lazy(entry, true).await?;
+    workspace.done.clear();
+
+    workspace.fill_entries_multi(entry, true).await?;
+    workspace.done.clear();
 
     let entries = workspace.entries.clone();
 
