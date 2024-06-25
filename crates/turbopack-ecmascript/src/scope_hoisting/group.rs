@@ -20,17 +20,13 @@ pub fn split_scopes(dep_graph: &dyn DepGraph, entry: Item) -> ModuleScopeGroup {
     // If a module is imported only as lazy, it should be in a separate scope
 
     let entries = determine_entries(dep_graph, entry);
-    dbg!(&entries);
 
     let mut scopes = vec![];
 
-    let mut done = FxHashSet::default();
     for &entry in entries.iter() {
-        let modules = follow_single_edge(dep_graph, entry, &done)
+        let modules = follow_single_edge(dep_graph, entry, &entries)
             .into_iter()
             .collect::<Vec<_>>();
-
-        done.extend(modules.iter().copied());
 
         scopes.push(ModuleScope { modules });
     }
