@@ -1,6 +1,10 @@
-use std::sync::{Arc, OnceLock};
+use std::{
+    hash::BuildHasherDefault,
+    sync::{Arc, OnceLock},
+};
 
 use dashmap::DashMap;
+use rustc_hash::FxHasher;
 use serde::{ser::SerializeMap, Serialize, Serializer};
 use turbo_tasks::{registry, FunctionId};
 
@@ -12,11 +16,11 @@ pub struct TaskStatisticsApi {
 
 impl TaskStatisticsApi {
     pub fn enable(&self) -> &Arc<TaskStatistics> {
-        // ignore error: potentially already initialized, that's okay
-        let _ = self.inner.set(Arc::new(TaskStatistics {
-            inner: DashMap::new(),
-        }));
-        self.inner.get().unwrap()
+        self.inner.get_or_init(|| {
+            Arc::new(TaskStatistics {
+                inner: DashMap::with_hasher(Default::default()),
+            })
+        })
     }
 
     pub fn is_enabled(&self) -> bool {
@@ -39,7 +43,7 @@ impl TaskStatisticsApi {
 /// A type representing the enabled state of [`TaskStatisticsApi`]. Implements
 /// [`serde::Serialize`].
 pub struct TaskStatistics {
-    inner: DashMap<FunctionId, TaskFunctionStatistics>,
+    inner: DashMap<FunctionId, TaskFunctionStatistics, BuildHasherDefault<FxHasher>>,
 }
 
 impl TaskStatistics {
