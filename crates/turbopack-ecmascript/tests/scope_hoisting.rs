@@ -34,7 +34,7 @@ async fn test_1() -> Result<()> {
     ]))
     .await?;
 
-    assert_eq!(result, vec![vec![6, 8], vec![3, 4, 7, 5], vec![0, 1, 2]]);
+    assert_eq!(result, vec![vec![0, 1, 2], vec![3, 4, 7, 5], vec![6, 8]]);
 
     Ok(())
 }
@@ -116,6 +116,7 @@ async fn split(deps: Deps) -> Result<Vec<Vec<usize>>> {
             data.push(scope_data);
         }
 
+        data.sort();
         Ok(data)
     })
     .await
