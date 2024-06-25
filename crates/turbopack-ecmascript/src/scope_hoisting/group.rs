@@ -20,6 +20,7 @@ pub fn split_scopes(dep_graph: &dyn DepGraph, entry: Item) -> ModuleScopeGroup {
     // If a module is imported only as lazy, it should be in a separate scope
 
     let entries = determine_entries(dep_graph, entry);
+    dbg!(&entries);
 
     let mut scopes = vec![];
 
@@ -57,7 +58,6 @@ fn determine_entries(dep_graph: &dyn DepGraph, entry: Item) -> FxHashSet<Item> {
     queue.push_back((entry, true));
 
     while let Some((cur, is_entry)) = queue.pop_front() {
-        dbg!(is_entry, cur);
         if is_entry && !entries.insert(cur) {
             continue;
         }
