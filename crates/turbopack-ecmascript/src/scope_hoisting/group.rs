@@ -39,12 +39,13 @@ impl Workspace {
         entry: Vc<Box<dyn Module>>,
         is_entry: bool,
     ) -> Result<()> {
-        vdbg!("lazy entry", entry);
-        if is_entry {
-            self.entries.insert(entry);
-        }
+        let entry = entry.resolve_strongly_consistent().await?;
         if !self.done.insert(entry) {
             return Ok(());
+        }
+        if is_entry {
+            vdbg!("lazy entry", entry);
+            self.entries.insert(entry);
         }
 
         let deps = self.dep_graph.deps(entry);
@@ -68,13 +69,13 @@ impl Workspace {
         entry: Vc<Box<dyn Module>>,
         is_entry: bool,
     ) -> Result<()> {
-        vdbg!("multi entry", entry);
-
-        if is_entry {
-            self.entries.insert(entry);
-        }
+        let entry = entry.resolve_strongly_consistent().await?;
         if !self.done.insert(entry) {
             return Ok(());
+        }
+        if is_entry {
+            vdbg!("multi entry", entry);
+            self.entries.insert(entry);
         }
 
         let deps = self.dep_graph.deps(entry);
