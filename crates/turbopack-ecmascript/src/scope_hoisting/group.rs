@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 
+use indexmap::IndexSet;
 use rustc_hash::FxHashSet;
 
 /// Counterpart of `Chunk` in webpack scope hoisting
@@ -20,6 +21,8 @@ pub fn split_scopes(dep_graph: &dyn DepGraph, entry: Item) -> ModuleScopeGroup {
     // If a module is imported only as lazy, it should be in a separate scope
 
     let entries = determine_entries(dep_graph, entry);
+
+    let merge_entries = merge_entries(dep_graph, entries);
 
     let mut scopes = vec![];
 
@@ -49,21 +52,15 @@ pub struct EdgeData {
     pub is_lazy: bool,
 }
 
-fn determine_entries(dep_graph: &dyn DepGraph, entry: Item) -> FxHashSet<Item> {
-    let mut entries = FxHashSet::default();
+fn determine_entries(dep_graph: &dyn DepGraph, entry: Item) -> IndexSet<Item> {
+    let mut entries = IndexSet::default();
 
-    let mut done = FxHashSet::<Item>::default();
     let mut queue = VecDeque::default();
     queue.push_back((entry, true));
 
     while let Some((cur, is_entry)) = queue.pop_front() {
         if is_entry && !entries.insert(cur) {
             continue;
-        }
-
-        if is_entry {
-            let group = follow_single_edge(dep_graph, cur, &done);
-            done.extend(group.iter().copied());
         }
 
         let deps = dep_graph.deps(cur);
@@ -92,10 +89,14 @@ fn determine_entries(dep_graph: &dyn DepGraph, entry: Item) -> FxHashSet<Item> {
     entries
 }
 
+fn merge_entries(dep_graph: &dyn DepGraph, mut entries: IndexSet<Item>) -> IndexSet<Item> {
+    entries
+}
+
 fn follow_single_edge(
     dep_graph: &dyn DepGraph,
     entry: Item,
-    exclude: &FxHashSet<Item>,
+    exclude: &IndexSet<Item>,
 ) -> FxHashSet<Item> {
     let mut done = FxHashSet::default();
 
