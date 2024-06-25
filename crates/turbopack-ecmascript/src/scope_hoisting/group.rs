@@ -1,67 +1,48 @@
 use std::collections::VecDeque;
 
 use anyhow::Result;
-use async_recursion::async_recursion;
-use indexmap::IndexSet;
 use rustc_hash::FxHashSet;
-use turbo_tasks::{vdbg, Vc};
-use turbopack_core::module::Module;
 
 /// Counterpart of `Chunk` in webpack scope hoisting
-#[turbo_tasks::value]
 pub struct ModuleScopeGroup {
-    pub scopes: Vc<Vec<Vc<ModuleScope>>>,
+    pub scopes: Vec<ModuleScope>,
 }
 
 /// Counterpart of `Scope` in webpack scope hoisting
-#[turbo_tasks::value]
 pub struct ModuleScope {
     /// The modules in this scope.
-    pub modules: Vc<Vec<Vc<Box<dyn Module>>>>,
+    pub modules: Vec<Item>,
 }
 
-type Item = Vc<Box<dyn Module>>;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Item(pub u32);
 
-#[turbo_tasks::function]
-pub async fn split_scopes(
-    dep_graph: Vc<Box<dyn DepGraph>>,
-    entry: Vc<Box<dyn Module>>,
-) -> Result<Vc<ModuleScopeGroup>> {
+pub fn split_scopes(dep_graph: &dyn DepGraph, entry: Item) -> Result<ModuleScopeGroup> {
     // If a module is imported only as lazy, it should be in a separate scope
 
-    let entries = determine_entries(dep_graph, entry).await?;
+    let entries = determine_entries(dep_graph, entry);
 
     let mut scopes = vec![];
 
     for &entry in entries.iter() {
         let modules = follow_single_edge(dep_graph, entry)
-            .await?
             .into_iter()
             .collect::<Vec<_>>();
 
-        scopes.push(
-            ModuleScope {
-                modules: Vc::cell(modules),
-            }
-            .cell(),
-        );
+        scopes.push(ModuleScope { modules });
     }
 
-    Ok(ModuleScopeGroup {
-        scopes: Vc::cell(scopes),
-    }
-    .cell())
+    Ok(ModuleScopeGroup { scopes })
 }
 
-#[turbo_tasks::value_trait]
 pub trait DepGraph {
-    fn deps(&self, module: Vc<Box<dyn Module>>) -> Vc<Vec<Vc<Box<dyn Module>>>>;
+    fn deps(&self, module: Item) -> Vec<Item>;
 
-    fn depandants(&self, module: Vc<Box<dyn Module>>) -> Vc<Vec<Vc<Box<dyn Module>>>>;
+    fn depandants(&self, module: Item) -> Vec<Item>;
 
-    fn get_edge(&self, from: Vc<Box<dyn Module>>, to: Vc<Box<dyn Module>>) -> Vc<EdgeData>;
+    fn get_edge(&self, from: Item, to: Item) -> EdgeData;
 
-    fn has_path_connecting(&self, from: Vc<Box<dyn Module>>, to: Vc<Box<dyn Module>>) -> Vc<bool>;
+    fn has_path_connecting(&self, from: Item, to: Item) -> bool;
 }
 
 #[turbo_tasks::value(shared)]
@@ -69,45 +50,39 @@ pub struct EdgeData {
     pub is_lazy: bool,
 }
 
-async fn determine_entries(
-    dep_graph: Vc<Box<dyn DepGraph>>,
-    entry: Item,
-) -> Result<FxHashSet<Item>> {
+fn determine_entries(dep_graph: &dyn DepGraph, entry: Item) -> FxHashSet<Item> {
     let mut entries = FxHashSet::default();
 
     let mut done = FxHashSet::<Item>::default();
     let mut queue = VecDeque::<Item>::default();
     queue.push_back(entry);
 
-    while let Some(c) = queue.pop_front() {
-        let cur = c.resolve_strongly_consistent().await?;
-
+    while let Some(cur) = queue.pop_front() {
         dbg!(cur);
         if !entries.insert(cur) {
             continue;
         }
 
-        let group = follow_single_edge(dep_graph, cur).await?;
+        let group = follow_single_edge(dep_graph, cur);
         for &group_item in group.iter() {
             dbg!(group_item);
         }
         done.extend(group.iter().copied());
 
-        let deps = dep_graph.deps(cur).await?;
+        let deps = dep_graph.deps(cur);
 
-        for &dep in deps {
+        for dep in deps {
             dbg!(dep);
 
             // If lazy, it should be in a separate scope.
-            if dep_graph.get_edge(cur, dep).await?.is_lazy {
+            if dep_graph.get_edge(cur, dep).is_lazy {
                 queue.push_back(dep);
                 continue;
             }
 
-            let dependants = dep_graph.depandants(dep).await?;
+            let dependants = dep_graph.depandants(dep);
             let mut filtered = vec![];
             for &dependant in dependants.iter() {
-                let dependant = dependant.resolve_strongly_consistent().await?;
                 if group.contains(&dependant) {
                     continue;
                 }
@@ -121,38 +96,33 @@ async fn determine_entries(
         }
     }
 
-    Ok(entries)
+    entries
 }
 
-async fn follow_single_edge(
-    dep_graph: Vc<Box<dyn DepGraph>>,
-    entry: Item,
-) -> Result<FxHashSet<Item>> {
+fn follow_single_edge(dep_graph: &dyn DepGraph, entry: Item) -> FxHashSet<Item> {
     let mut done = FxHashSet::default();
 
     let mut queue = VecDeque::<Item>::default();
     queue.push_back(entry);
 
-    while let Some(c) = queue.pop_front() {
-        let cur = c.resolve_strongly_consistent().await?;
-
+    while let Some(cur) = queue.pop_front() {
         if !done.insert(cur) {
             continue;
         }
 
-        let deps = dep_graph.deps(cur).await?;
+        let deps = dep_graph.deps(cur);
 
         if deps.is_empty() {
             break;
         }
 
-        for &dep in deps {
-            if dep_graph.get_edge(cur, dep).await?.is_lazy {
+        for dep in deps {
+            if dep_graph.get_edge(cur, dep).is_lazy {
                 continue;
             }
 
             // If there are multiple dependeants, ignore.
-            let dependants = dep_graph.depandants(dep).await?;
+            let dependants = dep_graph.depandants(dep);
 
             if dependants.len() > 1 {
                 continue;
@@ -162,5 +132,5 @@ async fn follow_single_edge(
         }
     }
 
-    Ok(done)
+    done
 }
