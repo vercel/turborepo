@@ -20,7 +20,6 @@ fn register() {
     include!(concat!(env!("OUT_DIR"), "/register_test_scope_hoisting.rs"));
 }
 
-#[tokio::test]
 fn test_1() -> Result<()> {
     let result = split(to_num_deps(vec![
         ("example", vec![("a", false), ("b", false), ("lazy", true)]),
@@ -35,7 +34,6 @@ fn test_1() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
 fn test_2() -> Result<()> {
     // a => b
     // a => c
@@ -151,7 +149,7 @@ impl DepGraph for TestDepGraph {
             .neighbors_directed(from, petgraph::Direction::Incoming)
             .collect();
 
-        Ok(Vc::cell(dependants))
+        Ok(dependants)
     }
 
     fn get_edge(&self, from: Item, to: Item) -> EdgeData {
@@ -162,19 +160,14 @@ impl DepGraph for TestDepGraph {
 
         let is_lazy = edge_data.is_lazy;
 
-        Ok(EdgeData { is_lazy }.cell())
+        Ok(EdgeData { is_lazy })
     }
 
     fn has_path_connecting(&self, from: Item, to: Item) -> bool {
         let from = self.graph.get_node(&from);
         let to = self.graph.get_node(&to);
 
-        Ok(Vc::cell(has_path_connecting(
-            &self.graph.idx_graph,
-            from,
-            to,
-            None,
-        )))
+        Ok(has_path_connecting(&self.graph.idx_graph, from, to, None))
     }
 }
 
