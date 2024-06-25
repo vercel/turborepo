@@ -84,9 +84,8 @@ impl Workspace {
             let dep = dep.resolve_strongly_consistent().await?;
             let dependants = self.dep_graph.depandants(dep);
 
-            let mut count = 0;
-
             // Exclude lazy dependency.
+            let mut count = 0;
 
             for dependant in dependants.await?.iter() {
                 let dependant = dependant.resolve_strongly_consistent().await?;
@@ -110,7 +109,7 @@ impl Workspace {
     async fn start_scope(&mut self, entry: Vc<Box<dyn Module>>) -> Result<()> {
         let entry = entry.resolve_strongly_consistent().await?;
 
-        let modules = self.walk(entry, entry).await?;
+        let modules = self.walk(entry, true).await?;
         if modules.is_empty() {
             return Ok(());
         }
@@ -128,33 +127,20 @@ impl Workspace {
     }
 
     #[async_recursion]
-    async fn walk(&mut self, from: Item, start: Item) -> Result<Vec<Item>> {
+    async fn walk(&mut self, from: Item, is_start: bool) -> Result<Vec<Item>> {
         let from = from.resolve_strongly_consistent().await?;
-        if !self.done.insert(from) {
+        if !is_start && !self.done.insert(from) {
             return Ok(vec![]);
         }
 
-        let start = start.resolve_strongly_consistent().await?;
         let deps = self.dep_graph.deps(from);
         let mut modules = vec![from];
 
         for &dep in deps.await?.iter() {
             let dep = dep.resolve_strongly_consistent().await?;
-            let dependants = self.dep_graph.depandants(dep);
 
-            let dependants = {
-                let mut buf = vec![];
-                for dep in dependants.await?.iter() {
-                    buf.push(dep.resolve_strongly_consistent().await?);
-                }
-                buf
-            };
-
-            if dependants.len() != 1 {
-                continue;
-            }
-
-            let v = self.walk(dep, start).await?;
+            // Collect dependencies in the same scope.
+            let v = self.walk(dep, false).await?;
 
             for vc in v.iter() {
                 let vc = vc.resolve_strongly_consistent().await?;
@@ -187,6 +173,8 @@ pub async fn split_scopes(
     workspace.done.clear();
 
     let entries = workspace.entries.clone();
+
+    workspace.done.extend(entries.iter().copied());
 
     for &entry in entries.iter() {
         workspace.start_scope(entry).await?;
