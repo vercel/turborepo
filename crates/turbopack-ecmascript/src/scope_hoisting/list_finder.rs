@@ -115,7 +115,7 @@ pub async fn find_list(entrypoints: Vc<Vec<Vc<Item>>>) -> Result<Vc<Vec<Vc<Item>
 
         // For each item in the mappings:
 
-        for mapping in reverse_mapping {
+        for (item, mapping) in reverse_mapping {
             // We need to split the item into a separate list. We want the list
             // to be as long as possible.
 
@@ -126,8 +126,8 @@ pub async fn find_list(entrypoints: Vc<Vec<Vc<Item>>>) -> Result<Vc<Vec<Vc<Item>
             // Walk all lists at the same item as long as the items in these
             // lists are common (starting by current index):
             {
-                // TODO
                 // Put item into L
+                list.push(item);
 
                 // TODO
                 // Remove item from the mapping.
