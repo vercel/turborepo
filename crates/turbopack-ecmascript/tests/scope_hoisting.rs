@@ -217,7 +217,7 @@ impl DepGraph for TestDepGraph {
     }
 }
 
-#[turbo_tasks::value]
+#[turbo_tasks::value(shared)]
 struct TestModule {
     path: Vc<FileSystemPath>,
 }
