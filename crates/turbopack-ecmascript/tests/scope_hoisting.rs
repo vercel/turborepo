@@ -20,6 +20,7 @@ fn register() {
     include!(concat!(env!("OUT_DIR"), "/register_test_scope_hoisting.rs"));
 }
 
+#[test]
 fn test_1() -> Result<()> {
     let result = split(to_num_deps(vec![
         ("example", vec![("a", false), ("b", false), ("lazy", true)]),
@@ -34,6 +35,7 @@ fn test_1() -> Result<()> {
     Ok(())
 }
 
+#[test]
 fn test_2() -> Result<()> {
     // a => b
     // a => c
