@@ -5,11 +5,6 @@ use anyhow::Result;
 use indexmap::IndexSet;
 use petgraph::{algo::has_path_connecting, graphmap::DiGraphMap};
 use rustc_hash::FxHasher;
-use turbopack_core::{
-    asset::{Asset, AssetContent},
-    ident::AssetIdent,
-    module::Module,
-};
 use turbopack_ecmascript::scope_hoisting::group::{split_scopes, DepGraph, EdgeData, Item};
 
 fn register() {
@@ -104,7 +99,6 @@ fn split(deps: Deps) -> Vec<Vec<usize>> {
         data.push(scope_data);
     }
 
-    data.sort();
     data.into_iter()
         .map(|x| x.into_iter().map(|v| v.0).collect())
         .collect()

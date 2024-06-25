@@ -44,7 +44,7 @@ pub trait DepGraph {
     fn has_path_connecting(&self, from: Item, to: Item) -> bool;
 }
 
-#[turbo_tasks::value(shared)]
+#[derive(Debug)]
 pub struct EdgeData {
     pub is_lazy: bool,
 }
@@ -57,6 +57,7 @@ fn determine_entries(dep_graph: &dyn DepGraph, entry: Item) -> FxHashSet<Item> {
     queue.push_back((entry, true));
 
     while let Some((cur, is_entry)) = queue.pop_front() {
+        dbg!(is_entry, cur);
         if is_entry && !entries.insert(cur) {
             continue;
         }
@@ -85,7 +86,7 @@ fn determine_entries(dep_graph: &dyn DepGraph, entry: Item) -> FxHashSet<Item> {
             }
 
             // If there are multiple dependants, it's an entry.
-            if filtered.len() > 1 {
+            if !filtered.is_empty() {
                 queue.push_back((dep, true));
                 continue;
             }
