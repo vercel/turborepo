@@ -152,6 +152,13 @@ pub async fn find_list(entrypoints: Vc<Vec<Vc<Item>>>) -> Result<Vc<Vec<Vc<Item>
         // Put all remaining items in the lists (starting by current index)
         // into new lists and update mappings correctly. (No need to
         // updating sorting, Items might not have a mapping)
+
+        let mut new_lists = vec![];
+
+        new_lists.extend(lists[current_index..].iter().map(|list| *list));
+
+        lists = new_lists;
+        reverse_mapping = reverse_map!(lists);
     }
 
     // At this point every item is exactly in one list.
