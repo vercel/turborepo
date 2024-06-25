@@ -5,15 +5,12 @@ use anyhow::Result;
 use indexmap::IndexSet;
 use petgraph::{algo::has_path_connecting, graphmap::DiGraphMap};
 use rustc_hash::FxHasher;
-use turbo_tasks::{TurboTasks, Vc};
-use turbo_tasks_fs::{DiskFileSystem, FileContent, FileSystem, FileSystemPath};
-use turbo_tasks_memory::MemoryBackend;
 use turbopack_core::{
     asset::{Asset, AssetContent},
     ident::AssetIdent,
     module::Module,
 };
-use turbopack_ecmascript::scope_hoisting::group::{split_scopes, DepGraph, EdgeData};
+use turbopack_ecmascript::scope_hoisting::group::{split_scopes, DepGraph, EdgeData, Item};
 
 fn register() {
     turbo_tasks::register();
@@ -93,36 +90,28 @@ type Deps = Vec<(usize, Vec<(usize, bool)>)>;
 async fn split(deps: Deps) -> Result<Vec<Vec<usize>>> {
     register();
 
-    let tt = TurboTasks::new(MemoryBackend::default());
-    tt.run_once(async move {
-        let fs = DiskFileSystem::new("test".into(), "test".into(), Default::default());
+    let graph = test_dep_graph(deps);
 
-        let graph = test_dep_graph(fs, deps);
+    let group = split_scopes(&graph, Item(0));
 
-        let group = split_scopes(graph, Vc::upcast(TestModule::new_from(fs, 0)));
+    let mut data = vec![];
 
-        let group = group.await?;
+    for scope in group.scopes.iter() {
+        let mut scope_data = vec![];
 
-        let mut data = vec![];
-
-        for scope in group.scopes.await?.iter() {
-            let mut scope_data = vec![];
-
-            for &module in scope.await?.modules.await?.iter() {
-                let module = from_module(module).await?;
-                scope_data.push(module);
-            }
-
-            data.push(scope_data);
+        for &module in scope.modules.iter() {
+            let module = from_module(module);
+            scope_data.push(module);
         }
 
-        data.sort();
-        Ok(data)
-    })
-    .await
+        data.push(scope_data);
+    }
+
+    data.sort();
+    Ok(data)
 }
 
-fn test_dep_graph(fs: Vc<DiskFileSystem>, deps: Deps) -> Vc<Box<dyn DepGraph>> {
+fn test_dep_graph(deps: Deps) -> Box<TestDepGraph> {
     let mut g = InternedGraph::default();
 
     for (from, to) in deps {
@@ -135,31 +124,15 @@ fn test_dep_graph(fs: Vc<DiskFileSystem>, deps: Deps) -> Vc<Box<dyn DepGraph>> {
         }
     }
 
-    Vc::upcast(TestDepGraph { fs, graph: g }.cell())
+    TestDepGraph { graph: g }.into()
 }
 
-#[turbo_tasks::value(serialization = "none")]
 pub struct TestDepGraph {
-    fs: Vc<DiskFileSystem>,
-    #[turbo_tasks(trace_ignore)]
-    graph: InternedGraph<usize>,
+    graph: InternedGraph<Item>,
 }
 
-async fn from_module(module: Vc<Box<dyn Module>>) -> Result<usize> {
-    let module: Vc<TestModule> = Vc::try_resolve_downcast_type(module).await?.unwrap();
-    let path = module.await?.path.await?;
-    path.to_string()
-        .split('/')
-        .last()
-        .unwrap()
-        .parse()
-        .map_err(Into::into)
-}
-
-#[turbo_tasks::value_impl]
 impl DepGraph for TestDepGraph {
-    #[turbo_tasks::function]
-    async fn deps(&self, module: Vc<Box<dyn Module>>) -> Result<Vc<Vec<Vc<Box<dyn Module>>>>> {
+    async fn deps(&self, module: Item) -> Result<Vc<Vec<Item>>> {
         let from = self.graph.get_node(&from_module(module).await?);
 
         let dependencies = self
@@ -172,11 +145,7 @@ impl DepGraph for TestDepGraph {
         Ok(Vc::cell(dependencies))
     }
 
-    #[turbo_tasks::function]
-    async fn depandants(
-        &self,
-        module: Vc<Box<dyn Module>>,
-    ) -> Result<Vc<Vec<Vc<Box<dyn Module>>>>> {
+    async fn depandants(&self, module: Item) -> Result<Vc<Vec<Item>>> {
         let from = self.graph.get_node(&from_module(module).await?);
 
         let dependants = self
@@ -189,12 +158,7 @@ impl DepGraph for TestDepGraph {
         Ok(Vc::cell(dependants))
     }
 
-    #[turbo_tasks::function]
-    async fn get_edge(
-        &self,
-        from: Vc<Box<dyn Module>>,
-        to: Vc<Box<dyn Module>>,
-    ) -> Result<Vc<EdgeData>> {
+    async fn get_edge(&self, from: Item, to: Item) -> Result<Vc<EdgeData>> {
         let from = self.graph.get_node(&from_module(from).await?);
         let to = self.graph.get_node(&from_module(to).await?);
 
@@ -205,12 +169,7 @@ impl DepGraph for TestDepGraph {
         Ok(EdgeData { is_lazy }.cell())
     }
 
-    #[turbo_tasks::function]
-    async fn has_path_connecting(
-        &self,
-        from: Vc<Box<dyn Module>>,
-        to: Vc<Box<dyn Module>>,
-    ) -> Result<Vc<bool>> {
+    async fn has_path_connecting(&self, from: Item, to: Item) -> Result<Vc<bool>> {
         let from = self.graph.get_node(&from_module(from).await?);
         let to = self.graph.get_node(&from_module(to).await?);
 
@@ -220,43 +179,6 @@ impl DepGraph for TestDepGraph {
             to,
             None,
         )))
-    }
-}
-
-#[turbo_tasks::value(shared)]
-struct TestModule {
-    path: Vc<FileSystemPath>,
-}
-
-#[turbo_tasks::value_impl]
-impl TestModule {
-    #[turbo_tasks::function]
-    fn new(path: Vc<FileSystemPath>) -> Vc<Self> {
-        Self { path }.cell()
-    }
-
-    #[turbo_tasks::function]
-    fn new_from(fs: Vc<DiskFileSystem>, id: usize) -> Vc<Self> {
-        Self {
-            path: fs.root().join(format!("{}", id).into()),
-        }
-        .cell()
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl Asset for TestModule {
-    #[turbo_tasks::function]
-    fn content(self: Vc<Self>) -> Vc<AssetContent> {
-        AssetContent::File(FileContent::NotFound.cell()).cell()
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl Module for TestModule {
-    #[turbo_tasks::function]
-    fn ident(&self) -> Vc<AssetIdent> {
-        AssetIdent::from_path(self.path)
     }
 }
 
