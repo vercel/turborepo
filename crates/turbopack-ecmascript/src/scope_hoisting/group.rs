@@ -2,7 +2,7 @@ use anyhow::Result;
 use async_recursion::async_recursion;
 use indexmap::IndexSet;
 use rustc_hash::FxHashSet;
-use turbo_tasks::{debug::ValueDebugFormat, vdbg, Vc};
+use turbo_tasks::Vc;
 use turbopack_core::module::Module;
 
 /// Counterpart of `Chunk` in webpack scope hoisting
@@ -40,7 +40,6 @@ impl Workspace {
             return Ok(());
         }
         if is_entry {
-            vdbg!("lazy entry", entry);
             self.entries.insert(entry);
         }
 
@@ -68,7 +67,6 @@ impl Workspace {
         let entry = entry.resolve_strongly_consistent().await?;
 
         if is_entry {
-            vdbg!("multi entry", entry);
             self.entries.insert(entry);
         }
 
@@ -114,8 +112,6 @@ impl Workspace {
         if modules.is_empty() {
             return Ok(());
         }
-
-        vdbg!(entry);
 
         let module_scope = ModuleScope {
             modules: Vc::cell(modules),
