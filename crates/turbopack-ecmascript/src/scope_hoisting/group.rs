@@ -157,41 +157,26 @@ pub async fn split_scopes(
 ) -> Result<Vc<ModuleScopeGroup>> {
     // If a module is imported only as lazy, it should be in a separate scope
 
-    let mut w = Workspace {
-        dep_graph,
-        scopes: Default::default(),
-        done: Default::default(),
-        entries: Default::default(),
-    };
+    let entries = determine_entries(dep_graph.clone(), entry.clone()).await?;
 
-    w.fill_entries_lazy(entry, true).await?;
-    debug_assert_eq!(w.done.len(), 9);
-
-    w.done.clear();
-
-    let entries = w.entries.clone();
-
-    for done in w.done.iter() {
-        vdbg!(done);
-    }
+    let mut scopes = vec![];
 
     for &entry in entries.iter() {
-        vdbg!(entry);
-        w.fill_entries_multi(entry, true, true).await?;
-    }
+        let modules = follow_single_edge(dep_graph, entry)
+            .await?
+            .into_iter()
+            .collect::<Vec<_>>();
 
-    w.done.clear();
-
-    let entries = w.entries.clone();
-
-    w.done.extend(entries.iter().copied());
-
-    for &entry in entries.iter() {
-        w.start_scope(entry).await?;
+        scopes.push(
+            ModuleScope {
+                modules: Vc::cell(modules),
+            }
+            .cell(),
+        );
     }
 
     Ok(ModuleScopeGroup {
-        scopes: Vc::cell(w.scopes),
+        scopes: Vc::cell(scopes),
     }
     .cell())
 }
@@ -210,6 +195,53 @@ pub trait DepGraph {
 #[turbo_tasks::value(shared)]
 pub struct EdgeData {
     pub is_lazy: bool,
+}
+
+async fn determine_entries(
+    dep_graph: Vc<Box<dyn DepGraph>>,
+    entry: Item,
+) -> Result<FxHashSet<Item>> {
+    let mut entries = FxHashSet::default();
+
+    let mut done = FxHashSet::default();
+    let mut queue = VecDeque::<Item>::new();
+    queue.push_back(entry);
+
+    while let Some(c) = queue.pop_front() {
+        let cur = c.resolve_strongly_consistent().await?;
+
+        if !entries.insert(cur) {
+            continue;
+        }
+
+        let deps = dep_graph.deps(cur).await?;
+
+        for &dep in deps {
+            // If lazy, it should be in a separate scope.
+            if dep_graph.get_edge(cur, dep).await?.is_lazy {
+                entries.insert(dep);
+                continue;
+            }
+
+            done.extend(follow_single_edge(dep_graph, dep).await?);
+
+            let dependants = dep_graph.depandants(dep).await?;
+            let mut filtered = vec![];
+            for &dependant in dependants.iter() {
+                if done.contains(&dependant) {
+                    continue;
+                }
+                filtered.push(dependant);
+            }
+
+            // If there are multiple dependants, it's an entry.
+            if filtered.len() > 1 {
+                entries.insert(dep);
+            }
+        }
+    }
+
+    Ok(entries)
 }
 
 async fn follow_single_edge(
