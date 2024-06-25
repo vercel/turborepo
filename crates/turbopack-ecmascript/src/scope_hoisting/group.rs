@@ -122,9 +122,6 @@ fn merge_entries(
             new.entry(entry).or_default().extend(items);
             continue;
         }
-        dbg!(&entry);
-        dbg!(&keys);
-        dbg!(&dependants);
 
         // If an entry is
 
@@ -133,8 +130,6 @@ fn merge_entries(
                 .iter()
                 .all(|dep| dep_graph.has_path_connecting(**start, *dep))
         });
-
-        dbg!(real_start);
 
         if let Some(real_start) = real_start {
             new.entry(*real_start).or_default().extend(items);
