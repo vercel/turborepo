@@ -81,26 +81,34 @@ pub async fn find_list(entrypoints: Vc<Vec<Vc<Item>>>) -> Result<Vc<Vec<Vc<Item>
         );
     }
 
+    // Create a reverse mapping from item → (list, index)[] (sorted by
+    // smallest index first)
+    //
+    // So we can cheaply determine in which lists an item is and at which
+    // index.
+    macro_rules! reverse_map {
+        ($list:expr) => {{
+            let mut reverse_mapping = FxHashMap::default();
+            for (i, list) in $list.iter().enumerate() {
+                for (j, item) in list.await?.iter().enumerate() {
+                    reverse_mapping
+                        .entry(*item)
+                        .or_insert_with(Vec::new)
+                        .push((i, j));
+                }
+            }
+
+            reverse_mapping
+        }};
+    }
+
     // Gather all lists from X.
     let mut lists = vec![];
     for &item in done.iter() {
         lists.push(item.await?.shallow_list.clone());
     }
 
-    // Create a reverse mapping from item → (list, index)[] (sorted by
-    // smallest index first)
-    //
-    // So we can cheaply determine in which lists an item is and at which
-    // index.
-    let mut reverse_mapping = FxHashMap::default();
-    for (i, list) in lists.iter().enumerate() {
-        for (j, item) in list.await?.iter().enumerate() {
-            reverse_mapping
-                .entry(*item)
-                .or_insert_with(Vec::new)
-                .push((i, j));
-        }
-    }
+    let mut reverse_mapping = reverse_map!(lists);
 
     // Remove all mappings that only point to a single list-index tuple.
     //
@@ -127,6 +135,8 @@ pub async fn find_list(entrypoints: Vc<Vec<Vc<Item>>>) -> Result<Vc<Vec<Vc<Item>
         // TODO
         // Walk all lists at the same item as long as the items in these
         // lists are common (starting by current index):
+
+        let mut current_index = 0;
         {
             // Put item into L
             list.push(item);
