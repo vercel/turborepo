@@ -99,7 +99,7 @@ async fn split(deps: Deps) -> Result<Vec<Vec<usize>>> {
 
         let graph = test_dep_graph(fs, deps);
 
-        let group = split_scopes(to_module(fs, 0), graph);
+        let group = split_scopes(Vc::upcast(TestModule::new_from(fs, 0)), graph);
 
         let group = group.await?;
 
@@ -154,12 +154,6 @@ pub struct TestDepGraph {
     lazy: HashSet<(usize, usize)>,
 }
 
-fn to_module(fs: Vc<DiskFileSystem>, id: usize) -> Vc<Box<dyn Module>> {
-    let vc = TestModule::new(fs.root().join(format!("{}", id).into()));
-
-    Vc::upcast(vc)
-}
-
 async fn from_module(module: Vc<Box<dyn Module>>) -> Result<usize> {
     let module: Vc<TestModule> = Vc::try_resolve_downcast_type(module).await?.unwrap();
     let path = module.await?.path.await?;
@@ -182,7 +176,7 @@ impl DepGraph for TestDepGraph {
                 .get(&module)
                 .map(|deps| {
                     deps.iter()
-                        .map(|(id, _)| Vc::upcast(to_module(self.fs, *id)))
+                        .map(|(id, _)| Vc::upcast(TestModule::new_from(self.fs, *id)))
                         .collect()
                 })
                 .unwrap_or_default(),
@@ -201,7 +195,7 @@ impl DepGraph for TestDepGraph {
                 .get(&module)
                 .map(|deps| {
                     deps.iter()
-                        .map(|&id| Vc::upcast(to_module(self.fs, id)))
+                        .map(|&id| Vc::upcast(TestModule::new_from(self.fs, id)))
                         .collect()
                 })
                 .unwrap_or_default(),
@@ -233,6 +227,14 @@ impl TestModule {
     #[turbo_tasks::function]
     fn new(path: Vc<FileSystemPath>) -> Vc<Self> {
         Self { path }.cell()
+    }
+
+    #[turbo_tasks::function]
+    fn new_from(fs: Vc<DiskFileSystem>, id: usize) -> Vc<Self> {
+        Self {
+            path: fs.root().join(format!("{}", id).into()),
+        }
+        .cell()
     }
 }
 
