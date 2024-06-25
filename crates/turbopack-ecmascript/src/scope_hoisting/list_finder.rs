@@ -1,14 +1,14 @@
 use std::collections::VecDeque;
 
 use anyhow::Result;
-use rustc_hash::{FxHashMap, FxHashSet};
+use indexmap::IndexSet;
+use rustc_hash::FxHashMap;
 use turbo_tasks::Vc;
-use turbopack_core::module::Module;
 
 #[turbo_tasks::value]
 pub struct Item {
     pub shallow_list: Vc<Vec<Vc<Item>>>,
-    pub cond_loaded_modules: Vc<FxHashSet<Vc<Item>>>,
+    pub cond_loaded_modules: Vc<IndexSet<Vc<Item>>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -19,7 +19,7 @@ enum ItemKind {
 
 pub async fn find_list(entrypoints: Vc<Vec<Vc<Item>>>) -> Result<Vc<Vec<Vc<Item>>>> {
     // Create an empty set X for items that have been processed.
-    let mut done = FxHashSet::default();
+    let mut done = IndexSet::default();
     let mut queue = VecDeque::<(_, ItemKind)>::new();
     queue.extend(entrypoints.await?.iter().map(|vc| (*vc, ItemKind::Enter)));
 
@@ -27,7 +27,7 @@ pub async fn find_list(entrypoints: Vc<Vec<Vc<Item>>>) -> Result<Vc<Vec<Vc<Item>
     let mut list = vec![];
 
     // Create an empty set S.
-    let mut set = FxHashSet::default();
+    let mut set = IndexSet::default();
 
     while let Some((item, kind)) = queue.pop_front() {
         // Add item to X.
@@ -68,8 +68,8 @@ pub async fn find_list(entrypoints: Vc<Vec<Vc<Item>>>) -> Result<Vc<Vec<Vc<Item>
         // Set the item’s shallow list to L and the conditionally loaded modules
         // to S.
         let item = Item {
-            shallow_list: list,
-            cond_loaded_modules: set,
+            shallow_list: Vc::cell(list),
+            cond_loaded_modules: Vc::cell(set),
         };
 
         // Enqueue all items from S for processing
