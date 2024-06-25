@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use rustc_hash::FxHashSet;
 
 /// Counterpart of `Chunk` in webpack scope hoisting
@@ -22,12 +22,25 @@ pub fn split_scopes(dep_graph: &dyn DepGraph, entry: Item) -> ModuleScopeGroup {
 
     let entries = determine_entries(dep_graph, entry);
 
-    let merge_entries = merge_entries(dep_graph, entries);
+    let items = entries
+        .iter()
+        .map(|entry| {
+            let modules = follow_single_edge(dep_graph, entry, &entries)
+                .into_iter()
+                .collect();
+
+            modules
+        })
+        .collect::<Vec<_>>();
+
+    let initial = entries.into_iter().zip(items).collect();
+
+    let entries = merge_entries(dep_graph, initial);
 
     let mut scopes = vec![];
 
     for &entry in entries.iter() {
-        let modules = follow_single_edge(dep_graph, entry, &entries)
+        let modules = follow_single_edge(dep_graph, &entry, &entries)
             .into_iter()
             .collect::<Vec<_>>();
 
@@ -89,19 +102,33 @@ fn determine_entries(dep_graph: &dyn DepGraph, entry: Item) -> IndexSet<Item> {
     entries
 }
 
-fn merge_entries(dep_graph: &dyn DepGraph, mut entries: IndexSet<Item>) -> IndexSet<Item> {
-    entries
+fn merge_entries(
+    dep_graph: &dyn DepGraph,
+    mut entries: IndexMap<Item, IndexSet<Item>>,
+) -> IndexSet<Item> {
+    let mut new = IndexSet::default();
+
+    for (entry, items) in entries.iter() {
+        // An entry is a target of check if there are two or more dependant nodes.
+
+        let dependants = dep_graph.depandants(*entry);
+        if dependants.len() >= 2 {
+            // If an entry is
+        }
+    }
+
+    new
 }
 
 fn follow_single_edge(
     dep_graph: &dyn DepGraph,
-    entry: Item,
+    entry: &Item,
     exclude: &IndexSet<Item>,
 ) -> FxHashSet<Item> {
     let mut done = FxHashSet::default();
 
     let mut queue = VecDeque::<Item>::default();
-    queue.push_back(entry);
+    queue.push_back(*entry);
 
     while let Some(cur) = queue.pop_front() {
         if !done.insert(cur) {
