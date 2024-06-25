@@ -24,9 +24,6 @@ struct Workspace {
 
     scopes: Vec<Vc<ModuleScope>>,
     done: FxHashSet<Item>,
-
-    /// The modules that are in the same scope, by the start
-    grouped: FxHashMap<String, FxHashSet<String>>,
 }
 
 async fn hashed(item: Item) -> Result<String> {
@@ -38,15 +35,12 @@ impl Workspace {
     async fn start_scope(&mut self, entry: Vc<Box<dyn Module>>) -> Result<()> {
         let entry = entry.resolve_strongly_consistent().await?;
 
-        self.grouped
-            .entry(hashed(entry).await?)
-            .or_default()
-            .insert(hashed(entry).await?);
-
         let modules = self.walk(entry, entry).await?;
         if modules.is_empty() {
             return Ok(());
         }
+
+        vdbg!(entry);
 
         let module_scope = ModuleScope {
             modules: Vc::cell(modules),
@@ -84,16 +78,10 @@ impl Workspace {
             let should_start_scope = if dependants.len() == 1 {
                 self.dep_graph.get_edge(from, dep).await?.is_lazy
             } else {
-                vdbg!(start);
-                let cur_group = self.grouped.entry(hashed(start).await?).or_default();
-                for group_item in cur_group.iter() {
-                    vdbg!(group_item);
-                }
-
                 // If all dependants start from the same scope, we can merge them
                 let mut all = true;
                 for &dep in dependants.iter() {
-                    if !cur_group.contains(hashed(dep).await?.as_str()) {
+                    if !*self.dep_graph.has_path_connecting(dep, start).await? {
                         all = false;
                         break;
                     }
@@ -109,11 +97,6 @@ impl Workspace {
                 for vc in v.iter() {
                     let vc = vc.resolve_strongly_consistent().await?;
                     modules.push(vc);
-
-                    self.grouped
-                        .entry(hashed(start).await?)
-                        .or_default()
-                        .insert(hashed(vc).await?);
                 }
             }
         }
@@ -133,7 +116,6 @@ pub async fn split_scopes(
         dep_graph,
         scopes: Default::default(),
         done: Default::default(),
-        grouped: Default::default(),
     };
 
     workspace.start_scope(entry).await?;
@@ -151,6 +133,8 @@ pub trait DepGraph {
     fn depandants(&self, module: Vc<Box<dyn Module>>) -> Vc<Vec<Vc<Box<dyn Module>>>>;
 
     fn get_edge(&self, from: Vc<Box<dyn Module>>, to: Vc<Box<dyn Module>>) -> Vc<EdgeData>;
+
+    fn has_path_connecting(&self, from: Vc<Box<dyn Module>>, to: Vc<Box<dyn Module>>) -> Vc<bool>;
 }
 
 #[turbo_tasks::value(shared)]
