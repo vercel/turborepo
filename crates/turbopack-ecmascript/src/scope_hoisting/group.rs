@@ -118,10 +118,6 @@ fn follow_single_edge(dep_graph: &dyn DepGraph, entry: Item) -> FxHashSet<Item> 
         }
 
         for dep in deps {
-            if dep_graph.get_edge(cur, dep).is_lazy {
-                continue;
-            }
-
             // If there are multiple dependeants, ignore.
             let dependants = dep_graph.depandants(dep);
 
