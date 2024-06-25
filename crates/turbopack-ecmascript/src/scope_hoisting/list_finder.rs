@@ -129,8 +129,8 @@ pub async fn find_list(entrypoints: Vc<Vec<Vc<Item>>>) -> Result<Vc<Vec<Vc<Item>
                 // Put item into L
                 list.push(item);
 
-                // TODO
                 // Remove item from the mapping.
+                reverse_mapping.remove(&item);
             }
 
             // Put L into the set of all lists.
