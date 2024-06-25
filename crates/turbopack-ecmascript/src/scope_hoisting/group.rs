@@ -1,8 +1,10 @@
+use std::collections::VecDeque;
+
 use anyhow::Result;
 use async_recursion::async_recursion;
 use indexmap::IndexSet;
 use rustc_hash::FxHashSet;
-use turbo_tasks::Vc;
+use turbo_tasks::{vdbg, Vc};
 use turbopack_core::module::Module;
 
 /// Counterpart of `Chunk` in webpack scope hoisting
@@ -62,9 +64,14 @@ impl Workspace {
     async fn fill_entries_multi(
         &mut self,
         entry: Vc<Box<dyn Module>>,
+        is_init: bool,
         is_entry: bool,
     ) -> Result<()> {
         let entry = entry.resolve_strongly_consistent().await?;
+
+        if !is_init && !self.done.insert(entry) {
+            return Ok(());
+        }
 
         if is_entry {
             self.entries.insert(entry);
@@ -74,20 +81,14 @@ impl Workspace {
 
         for &dep in deps.await?.iter() {
             let dep = dep.resolve_strongly_consistent().await?;
+
             let dependants = self.dep_graph.depandants(dep);
 
-            if !self.done.insert(dep) {
-                return Ok(());
-            }
-
-            // Exclude lazy dependency.
             let mut count = 0;
 
             for dependant in dependants.await?.iter() {
                 let dependant = dependant.resolve_strongly_consistent().await?;
-                if self.done.contains(&dependant)
-                    || self.dep_graph.get_edge(dependant, dep).await?.is_lazy
-                {
+                if self.done.contains(&dependant) {
                     continue;
                 }
 
@@ -95,9 +96,9 @@ impl Workspace {
             }
 
             if count > 1 {
-                self.fill_entries_multi(dep, true).await?;
+                self.fill_entries_multi(dep, false, true).await?;
             } else {
-                self.fill_entries_multi(dep, false).await?;
+                self.fill_entries_multi(dep, false, false).await?;
             }
         }
 
@@ -108,7 +109,7 @@ impl Workspace {
     async fn start_scope(&mut self, entry: Vc<Box<dyn Module>>) -> Result<()> {
         let entry = entry.resolve_strongly_consistent().await?;
 
-        let modules = self.walk(entry, true).await?;
+        let modules = self.collect(entry, true).await?;
         if modules.is_empty() {
             return Ok(());
         }
@@ -124,7 +125,7 @@ impl Workspace {
     }
 
     #[async_recursion]
-    async fn walk(&mut self, from: Item, is_start: bool) -> Result<Vec<Item>> {
+    async fn collect(&mut self, from: Item, is_start: bool) -> Result<Vec<Item>> {
         let from = from.resolve_strongly_consistent().await?;
         if !is_start && !self.done.insert(from) {
             return Ok(vec![]);
@@ -137,7 +138,7 @@ impl Workspace {
             let dep = dep.resolve_strongly_consistent().await?;
 
             // Collect dependencies in the same scope.
-            let v = self.walk(dep, false).await?;
+            let v = self.collect(dep, false).await?;
 
             for vc in v.iter() {
                 let vc = vc.resolve_strongly_consistent().await?;
@@ -164,10 +165,21 @@ pub async fn split_scopes(
     };
 
     w.fill_entries_lazy(entry, true).await?;
+    debug_assert_eq!(w.done.len(), 9);
+
     w.done.clear();
 
-    w.done.extend(w.entries.iter().copied());
-    w.fill_entries_multi(entry, true).await?;
+    let entries = w.entries.clone();
+
+    for done in w.done.iter() {
+        vdbg!(done);
+    }
+
+    for &entry in entries.iter() {
+        vdbg!(entry);
+        w.fill_entries_multi(entry, true, true).await?;
+    }
+
     w.done.clear();
 
     let entries = w.entries.clone();
@@ -198,4 +210,41 @@ pub trait DepGraph {
 #[turbo_tasks::value(shared)]
 pub struct EdgeData {
     pub is_lazy: bool,
+}
+
+async fn follow_single_edge(
+    dep_graph: Vc<Box<dyn DepGraph>>,
+    entry: Item,
+) -> Result<FxHashSet<Item>> {
+    let mut done = FxHashSet::default();
+
+    let mut queue = VecDeque::<Item>::new();
+    queue.push_back(entry);
+
+    while let Some(c) = queue.pop_front() {
+        let cur = c.resolve_strongly_consistent().await?;
+
+        if !done.insert(cur) {
+            continue;
+        }
+
+        let deps = dep_graph.deps(cur).await?;
+
+        if deps.is_empty() {
+            break;
+        }
+
+        for &dep in deps {
+            // If there are multiple dependeants, ignore.
+            let dependants = dep_graph.depandants(dep).await?;
+
+            if dependants.len() > 1 {
+                continue;
+            }
+
+            queue.push_back(dep);
+        }
+    }
+
+    Ok(done)
 }
