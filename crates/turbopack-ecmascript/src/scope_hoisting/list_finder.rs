@@ -115,7 +115,7 @@ pub async fn find_list(entrypoints: Vc<Vec<Vc<Item>>>) -> Result<Vc<Vec<Vc<Item>
 
         // For each item in the mappings:
 
-        for (item, mapping) in reverse_mapping {
+        for (item, list_indices) in reverse_mapping {
             // We need to split the item into a separate list. We want the list
             // to be as long as possible.
 
