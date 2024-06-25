@@ -37,9 +37,6 @@ impl Workspace {
     #[async_recursion]
     async fn start_scope(&mut self, entry: Vc<Box<dyn Module>>) -> Result<()> {
         let entry = entry.resolve_strongly_consistent().await?;
-        if !self.done.insert(entry) {
-            return Ok(());
-        }
 
         self.grouped
             .entry(hashed(entry).await?)
@@ -47,6 +44,9 @@ impl Workspace {
             .insert(hashed(entry).await?);
 
         let modules = self.walk(entry, entry).await?;
+        if modules.is_empty() {
+            return Ok(());
+        }
 
         let module_scope = ModuleScope {
             modules: Vc::cell(modules),
@@ -60,6 +60,11 @@ impl Workspace {
 
     #[async_recursion]
     async fn walk(&mut self, from: Item, start: Item) -> Result<Vec<Item>> {
+        let from = from.resolve_strongly_consistent().await?;
+        if !self.done.insert(from) {
+            return Ok(vec![]);
+        }
+
         let start = start.resolve_strongly_consistent().await?;
         let deps = self.dep_graph.deps(from);
         let mut modules = vec![from];
