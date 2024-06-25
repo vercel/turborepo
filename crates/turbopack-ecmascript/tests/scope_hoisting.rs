@@ -1,10 +1,10 @@
 #![feature(arbitrary_self_types)]
-
-use std::collections::{HashMap, HashSet};
+use std::hash::{BuildHasherDefault, Hash};
 
 use anyhow::Result;
 use indexmap::IndexSet;
-use rustc_hash::FxHashMap;
+use petgraph::{algo::has_path_connecting, graphmap::DiGraphMap};
+use rustc_hash::FxHasher;
 use turbo_tasks::{TurboTasks, Vc};
 use turbo_tasks_fs::{DiskFileSystem, FileContent, FileSystem, FileSystemPath};
 use turbo_tasks_memory::MemoryBackend;
@@ -122,36 +122,26 @@ async fn split(deps: Deps) -> Result<Vec<Vec<usize>>> {
 }
 
 fn test_dep_graph(fs: Vc<DiskFileSystem>, deps: Deps) -> Vc<Box<dyn DepGraph>> {
-    let mut dependants = HashMap::new();
-    let mut lazy = HashSet::new();
+    let mut g = InternedGraph::default();
 
-    for (from, to) in &deps {
-        for &(to, is_lazy) in to {
-            dependants.entry(to).or_insert_with(Vec::new).push(*from);
+    for (from, to) in deps {
+        let from = g.node(&from);
 
-            if is_lazy {
-                lazy.insert((*from, to));
-            }
+        for (to, is_lazy) in to {
+            let to = g.node(&to);
+
+            g.idx_graph.add_edge(from, to, TestEdgeData { is_lazy });
         }
     }
 
-    Vc::upcast(
-        TestDepGraph {
-            fs,
-            deps: deps.into_iter().collect(),
-            dependants,
-            lazy,
-        }
-        .cell(),
-    )
+    Vc::upcast(TestDepGraph { fs, graph: g }.cell())
 }
 
-#[turbo_tasks::value]
+#[turbo_tasks::value(serialization = "none")]
 pub struct TestDepGraph {
     fs: Vc<DiskFileSystem>,
-    deps: HashMap<usize, Vec<(usize, bool)>>,
-    dependants: HashMap<usize, Vec<usize>>,
-    lazy: HashSet<(usize, usize)>,
+    #[turbo_tasks(trace_ignore)]
+    graph: InternedGraph<usize>,
 }
 
 async fn from_module(module: Vc<Box<dyn Module>>) -> Result<usize> {
@@ -169,18 +159,16 @@ async fn from_module(module: Vc<Box<dyn Module>>) -> Result<usize> {
 impl DepGraph for TestDepGraph {
     #[turbo_tasks::function]
     async fn deps(&self, module: Vc<Box<dyn Module>>) -> Result<Vc<Vec<Vc<Box<dyn Module>>>>> {
-        let module = from_module(module).await?;
+        let from = self.graph.get_node(&from_module(module).await?);
 
-        Ok(Vc::cell(
-            self.deps
-                .get(&module)
-                .map(|deps| {
-                    deps.iter()
-                        .map(|(id, _)| Vc::upcast(TestModule::new_from(self.fs, *id)))
-                        .collect()
-                })
-                .unwrap_or_default(),
-        ))
+        let dependencies = self
+            .graph
+            .idx_graph
+            .neighbors_directed(from, petgraph::Direction::Outgoing)
+            .map(|id| Vc::upcast(TestModule::new_from(self.fs, id as usize)))
+            .collect();
+
+        Ok(Vc::cell(dependencies))
     }
 
     #[turbo_tasks::function]
@@ -188,18 +176,16 @@ impl DepGraph for TestDepGraph {
         &self,
         module: Vc<Box<dyn Module>>,
     ) -> Result<Vc<Vec<Vc<Box<dyn Module>>>>> {
-        let module = from_module(module).await?;
+        let from = self.graph.get_node(&from_module(module).await?);
 
-        Ok(Vc::cell(
-            self.dependants
-                .get(&module)
-                .map(|deps| {
-                    deps.iter()
-                        .map(|&id| Vc::upcast(TestModule::new_from(self.fs, id)))
-                        .collect()
-                })
-                .unwrap_or_default(),
-        ))
+        let dependants = self
+            .graph
+            .idx_graph
+            .neighbors_directed(from, petgraph::Direction::Incoming)
+            .map(|id| Vc::upcast(TestModule::new_from(self.fs, id as usize)))
+            .collect();
+
+        Ok(Vc::cell(dependants))
     }
 
     #[turbo_tasks::function]
@@ -208,12 +194,31 @@ impl DepGraph for TestDepGraph {
         from: Vc<Box<dyn Module>>,
         to: Vc<Box<dyn Module>>,
     ) -> Result<Vc<EdgeData>> {
-        let from = from_module(from).await?;
-        let to = from_module(to).await?;
+        let from = self.graph.get_node(&from_module(from).await?);
+        let to = self.graph.get_node(&from_module(to).await?);
 
-        let is_lazy = self.lazy.contains(&(from, to));
+        let edge_data = self.graph.idx_graph.edge_weight(from, to).unwrap();
+
+        let is_lazy = edge_data.is_lazy;
 
         Ok(EdgeData { is_lazy }.cell())
+    }
+
+    #[turbo_tasks::function]
+    async fn has_path_connecting(
+        &self,
+        from: Vc<Box<dyn Module>>,
+        to: Vc<Box<dyn Module>>,
+    ) -> Result<Vc<bool>> {
+        let from = self.graph.get_node(&from_module(from).await?);
+        let to = self.graph.get_node(&from_module(to).await?);
+
+        Ok(Vc::cell(has_path_connecting(
+            &self.graph.idx_graph,
+            from,
+            to,
+            None,
+        )))
     }
 }
 
@@ -251,5 +256,60 @@ impl Module for TestModule {
     #[turbo_tasks::function]
     fn ident(&self) -> Vc<AssetIdent> {
         AssetIdent::from_path(self.path)
+    }
+}
+
+#[derive(Debug)]
+struct TestEdgeData {
+    is_lazy: bool,
+}
+
+impl<T> PartialEq for InternedGraph<T>
+where
+    T: Eq + Hash + Clone,
+{
+    fn eq(&self, _: &Self) -> bool {
+        false
+    }
+}
+
+impl<T> Eq for InternedGraph<T> where T: Eq + Hash + Clone {}
+
+#[derive(Debug)]
+pub struct InternedGraph<T>
+where
+    T: Eq + Hash + Clone,
+{
+    idx_graph: DiGraphMap<u32, TestEdgeData>,
+    graph_ix: IndexSet<T, BuildHasherDefault<FxHasher>>,
+}
+
+impl<T> Default for InternedGraph<T>
+where
+    T: Eq + Hash + Clone,
+{
+    fn default() -> Self {
+        Self {
+            idx_graph: Default::default(),
+            graph_ix: Default::default(),
+        }
+    }
+}
+
+impl<T> InternedGraph<T>
+where
+    T: Eq + Hash + Clone,
+{
+    fn node(&mut self, id: &T) -> u32 {
+        self.graph_ix.get_index_of(id).unwrap_or_else(|| {
+            let ix = self.graph_ix.len();
+            self.graph_ix.insert_full(id.clone());
+            ix
+        }) as _
+    }
+
+    /// Panics if `id` is not found.
+    fn get_node(&self, id: &T) -> u32 {
+        self.graph_ix.get_index_of(id).unwrap() as _
     }
 }
