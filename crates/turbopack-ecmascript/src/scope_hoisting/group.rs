@@ -75,7 +75,7 @@ async fn determine_entries(
 ) -> Result<FxHashSet<Item>> {
     let mut entries = FxHashSet::default();
 
-    let mut done = FxHashSet::default();
+    let mut done = FxHashSet::<Item>::default();
     let mut queue = VecDeque::<Item>::default();
     queue.push_back(entry);
 
@@ -87,21 +87,28 @@ async fn determine_entries(
             continue;
         }
 
+        let group = follow_single_edge(dep_graph, cur).await?;
+        for &group_item in group.iter() {
+            vdbg!(group_item);
+        }
+        done.extend(group.iter().copied());
+
         let deps = dep_graph.deps(cur).await?;
 
         for &dep in deps {
+            vdbg!(dep);
+
             // If lazy, it should be in a separate scope.
             if dep_graph.get_edge(cur, dep).await?.is_lazy {
                 queue.push_back(dep);
                 continue;
             }
 
-            done.extend(follow_single_edge(dep_graph, dep).await?);
-
             let dependants = dep_graph.depandants(dep).await?;
             let mut filtered = vec![];
             for &dependant in dependants.iter() {
-                if done.contains(&dependant) {
+                let dependant = dependant.resolve_strongly_consistent().await?;
+                if group.contains(&dependant) {
                     continue;
                 }
                 filtered.push(dependant);
