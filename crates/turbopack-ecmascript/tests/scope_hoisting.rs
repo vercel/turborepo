@@ -25,17 +25,19 @@ fn test_1() -> Result<()> {
         ("shared", vec![("shared2", false)]),
     ]));
 
-    assert_eq!(result, vec![vec![0, 1, 2], vec![3, 4, 7, 5], vec![6, 8]]);
+    assert_eq!(result, vec![vec![0, 1, 2], vec![5, 7, 4, 3], vec![8, 6]]);
 
     Ok(())
 }
 
+// Test that all of a, b, c, and d are in the same scope
+//
+// a => b
+// a => c
+// b => d
+// c => d
 #[test]
 fn test_2() -> Result<()> {
-    // a => b
-    // a => c
-    // b => d
-    // c => d
     let result = split(to_num_deps(vec![
         ("example", vec![("a", false), ("b", false), ("lazy", true)]),
         ("lazy", vec![("shared", false)]),
@@ -46,7 +48,7 @@ fn test_2() -> Result<()> {
         ("shared", vec![("shared2", false)]),
     ]));
 
-    assert_eq!(result, vec![vec![0, 1, 2, 6, 5], vec![3], vec![4, 7]]);
+    assert_eq!(result, vec![vec![0, 1, 5, 2, 6], vec![3], vec![4, 7]]);
 
     Ok(())
 }
