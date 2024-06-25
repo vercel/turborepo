@@ -48,7 +48,7 @@ impl<'b> TaskTable<'b> {
             Row::new(vec![
                 Cell::new(task.name()),
                 Cell::new(match task.result() {
-                    TaskResult::Success => Text::raw("✔").style(Style::default().light_green()),
+                    TaskResult::Success(_) => Text::raw("✔").style(Style::default().light_green()),
                     TaskResult::Failure => Text::raw("✘").style(Style::default().red()),
                 }),
             ])

@@ -38,8 +38,14 @@ pub enum Event {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum TaskResult {
-    Success,
+    Success(CacheResult),
     Failure,
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub enum CacheResult {
+    Hit,
+    Miss,
 }
 
 #[cfg(test)]

@@ -3,7 +3,7 @@ use std::{
     time::Instant,
 };
 
-use super::{Event, TaskResult};
+use super::{event::CacheResult, Event, TaskResult};
 
 /// Struct for sending app events to TUI rendering
 #[derive(Debug, Clone)]
@@ -95,8 +95,11 @@ impl TuiTask {
     }
 
     /// Mark the task as finished
-    pub fn succeeded(&self) -> Vec<u8> {
-        self.finish(TaskResult::Success)
+    pub fn succeeded(&self, cache_hit: bool) -> Vec<u8> {
+        self.finish(TaskResult::Success(match cache_hit {
+            true => CacheResult::Hit,
+            false => CacheResult::Miss,
+        }))
     }
 
     /// Mark the task as finished
