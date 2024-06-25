@@ -134,7 +134,7 @@ pub async fn find_list(entrypoints: Vc<Vec<Vc<Item>>>) -> Result<Vc<Vec<Vc<Item>
             }
 
             // Put L into the set of all lists.
-            lists.push(list);
+            lists.push(Vc::cell(list));
 
             // TODO
             // Put all remaining items in the lists (starting by current index)
