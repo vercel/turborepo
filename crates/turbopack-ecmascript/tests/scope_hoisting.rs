@@ -21,15 +21,14 @@ fn register() {
 }
 
 #[tokio::test]
-async fn test_1() -> Result<()> {
+fn test_1() -> Result<()> {
     let result = split(to_num_deps(vec![
         ("example", vec![("a", false), ("b", false), ("lazy", true)]),
         ("lazy", vec![("c", false), ("d", false)]),
         ("a", vec![("shared", false)]),
         ("c", vec![("shared", false), ("cjs", false)]),
         ("shared", vec![("shared2", false)]),
-    ]))
-    .await?;
+    ]));
 
     assert_eq!(result, vec![vec![0, 1, 2], vec![3, 4, 7, 5], vec![6, 8]]);
 
@@ -37,7 +36,7 @@ async fn test_1() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_2() -> Result<()> {
+fn test_2() -> Result<()> {
     // a => b
     // a => c
     // b => d
@@ -50,8 +49,7 @@ async fn test_2() -> Result<()> {
         ("c", vec![("shared", false), ("d", false)]),
         ("d", vec![("shared", false)]),
         ("shared", vec![("shared2", false)]),
-    ]))
-    .await?;
+    ]));
 
     assert_eq!(result, vec![vec![0, 1, 2, 6, 5], vec![3], vec![4, 7]]);
 
@@ -87,7 +85,7 @@ fn to_num_deps(deps: Vec<(&str, Vec<(&str, bool)>)>) -> Deps {
 
 type Deps = Vec<(usize, Vec<(usize, bool)>)>;
 
-async fn split(deps: Deps) -> Result<Vec<Vec<usize>>> {
+fn split(deps: Deps) -> Result<Vec<Vec<usize>>> {
     register();
 
     let graph = test_dep_graph(deps);
@@ -111,20 +109,20 @@ async fn split(deps: Deps) -> Result<Vec<Vec<usize>>> {
     Ok(data)
 }
 
-fn test_dep_graph(deps: Deps) -> Box<TestDepGraph> {
+fn test_dep_graph(deps: Deps) -> Box<dyn DepGraph> {
     let mut g = InternedGraph::default();
 
     for (from, to) in deps {
-        let from = g.node(&from);
+        let from = g.node(&Item(from));
 
         for (to, is_lazy) in to {
-            let to = g.node(&to);
+            let to = g.node(&Item(to));
 
             g.idx_graph.add_edge(from, to, TestEdgeData { is_lazy });
         }
     }
 
-    TestDepGraph { graph: g }.into()
+    Box::new(TestDepGraph { graph: g })
 }
 
 pub struct TestDepGraph {
@@ -132,35 +130,33 @@ pub struct TestDepGraph {
 }
 
 impl DepGraph for TestDepGraph {
-    async fn deps(&self, module: Item) -> Result<Vc<Vec<Item>>> {
-        let from = self.graph.get_node(&from_module(module).await?);
+    fn deps(&self, module: Item) -> Vec<Item> {
+        let from = self.graph.get_node(&module);
 
         let dependencies = self
             .graph
             .idx_graph
             .neighbors_directed(from, petgraph::Direction::Outgoing)
-            .map(|id| Vc::upcast(TestModule::new_from(self.fs, id as usize)))
             .collect();
 
         Ok(Vc::cell(dependencies))
     }
 
-    async fn depandants(&self, module: Item) -> Result<Vc<Vec<Item>>> {
-        let from = self.graph.get_node(&from_module(module).await?);
+    fn depandants(&self, module: Item) -> Vec<Item> {
+        let from = self.graph.get_node(&module);
 
         let dependants = self
             .graph
             .idx_graph
             .neighbors_directed(from, petgraph::Direction::Incoming)
-            .map(|id| Vc::upcast(TestModule::new_from(self.fs, id as usize)))
             .collect();
 
         Ok(Vc::cell(dependants))
     }
 
-    async fn get_edge(&self, from: Item, to: Item) -> Result<Vc<EdgeData>> {
-        let from = self.graph.get_node(&from_module(from).await?);
-        let to = self.graph.get_node(&from_module(to).await?);
+    fn get_edge(&self, from: Item, to: Item) -> EdgeData {
+        let from = self.graph.get_node(&from);
+        let to = self.graph.get_node(&to);
 
         let edge_data = self.graph.idx_graph.edge_weight(from, to).unwrap();
 
@@ -169,9 +165,9 @@ impl DepGraph for TestDepGraph {
         Ok(EdgeData { is_lazy }.cell())
     }
 
-    async fn has_path_connecting(&self, from: Item, to: Item) -> Result<Vc<bool>> {
-        let from = self.graph.get_node(&from_module(from).await?);
-        let to = self.graph.get_node(&from_module(to).await?);
+    fn has_path_connecting(&self, from: Item, to: Item) -> bool {
+        let from = self.graph.get_node(&from);
+        let to = self.graph.get_node(&to);
 
         Ok(Vc::cell(has_path_connecting(
             &self.graph.idx_graph,
