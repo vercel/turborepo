@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, mem::take};
 
 use anyhow::Result;
 use indexmap::IndexSet;
@@ -19,7 +19,7 @@ enum ItemKind {
 
 pub async fn find_list(entrypoints: Vc<Vec<Vc<Item>>>) -> Result<Vc<Vec<Vc<Item>>>> {
     // Create an empty set X for items that have been processed.
-    let mut done = IndexSet::default();
+    let mut done = IndexSet::new();
     let mut queue = VecDeque::<(_, ItemKind)>::new();
     queue.extend(entrypoints.await?.iter().map(|vc| (*vc, ItemKind::Enter)));
 
@@ -61,19 +61,24 @@ pub async fn find_list(entrypoints: Vc<Vec<Vc<Item>>>) -> Result<Vc<Vec<Vc<Item>
         //
         // An item is already loaded by an import and conditionally loading won’t have
         // an evaluation effect anymore
-        for item in list {
+        for &item in &list {
             set.remove(&item);
         }
 
         // Set the item’s shallow list to L and the conditionally loaded modules
         // to S.
         let item = Item {
-            shallow_list: Vc::cell(list),
-            cond_loaded_modules: Vc::cell(set),
+            shallow_list: Vc::cell(take(&mut list)),
+            cond_loaded_modules: Vc::cell(take(&mut set)),
         };
 
         // Enqueue all items from S for processing
-        queue.extend(set.iter().map(|vc| (*vc, ItemKind::Enter)));
+        queue.extend(
+            item.cond_loaded_modules
+                .await?
+                .iter()
+                .map(|vc| (*vc, ItemKind::Enter)),
+        );
     }
 
     // Gather all lists from X.
@@ -100,11 +105,7 @@ pub async fn find_list(entrypoints: Vc<Vec<Vc<Item>>>) -> Result<Vc<Vec<Vc<Item>
     // Remove all mappings that only point to a single list-index tuple.
     //
     // They are already done and we don’t want to sort them.*
-    for (item, list_indices) in reverse_mapping.iter_mut() {
-        if list_indices.len() == 1 {
-            reverse_mapping.remove(item);
-        }
-    }
+    reverse_mapping.retain(|_item, list_indices| list_indices.len() != 1);
 
     // Sort the mapping by smallest index
     //
