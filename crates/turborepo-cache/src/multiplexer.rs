@@ -3,7 +3,7 @@ use std::sync::{
     Arc, Mutex,
 };
 
-use tracing::{debug, warn};
+use tracing::warn;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{APIAuth, APIClient};
