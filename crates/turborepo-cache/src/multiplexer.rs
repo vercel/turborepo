@@ -183,7 +183,7 @@ impl CacheMultiplexer {
                     return cache_hit;
                 }
                 Ok(None) => {}
-                Err(err) => debug!("failed to check fs cache: {:?}", err),
+                Err(err) => warn!("failed to check fs cache: {:?}", err),
             }
         }
 
@@ -193,7 +193,7 @@ impl CacheMultiplexer {
                     return cache_hit;
                 }
                 Ok(None) => {}
-                Err(err) => debug!("failed to check http cache: {:?}", err),
+                Err(err) => warn!("failed to check http cache: {:?}", err),
             }
         }
 
