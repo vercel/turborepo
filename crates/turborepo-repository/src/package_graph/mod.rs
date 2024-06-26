@@ -6,6 +6,7 @@ use std::{
 use itertools::Itertools;
 use petgraph::visit::{depth_first_search, Reversed};
 use serde::Serialize;
+use tracing::debug;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };

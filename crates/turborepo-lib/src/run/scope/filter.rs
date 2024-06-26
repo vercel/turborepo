@@ -238,6 +238,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             selectors.into_iter().partition::<Vec<_>, _>(|t| !t.exclude);
 
         let mut include = if !include_selectors.is_empty() {
+            // TODO: add telemetry for each selector
             self.filter_graph_with_selectors(include_selectors)?
         } else {
             self.pkg_graph

@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use regex::Regex;
 use thiserror::Error;
+use tracing::debug;
 use turbopath::AnchoredSystemPathBuf;
 
 #[derive(Debug, PartialEq)]
