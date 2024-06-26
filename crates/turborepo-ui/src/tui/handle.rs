@@ -52,9 +52,12 @@ impl AppSender {
 
     /// Stop rendering TUI and restore terminal to default configuration
     pub fn stop(&self) {
+        let (callback_tx, callback_rx) = mpsc::sync_channel(1);
         // Send stop event, if receiver has dropped ignore error as
         // it'll be a no-op.
-        self.primary.send(Event::Stop).ok();
+        self.primary.send(Event::Stop(callback_tx)).ok();
+        // Wait for callback to be sent or the channel closed.
+        callback_rx.recv().ok();
     }
 
     /// Update the list of tasks displayed in the TUI
