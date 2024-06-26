@@ -4927,12 +4927,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nohash-hasher"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bf50223579dc7cdcfb3bfcacf7069ff68243f8c363f62ffa99cf000a6b9c451"
-
-[[package]]
 name = "nom"
 version = "7.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10138,11 +10132,11 @@ dependencies = [
  "futures",
  "indexmap 1.9.3",
  "mopa",
- "nohash-hasher",
  "once_cell",
  "parking_lot",
  "pin-project-lite",
  "regex",
+ "rustc-hash",
  "serde",
  "serde_json",
  "serde_regex",
@@ -10313,7 +10307,6 @@ dependencies = [
  "indexmap 1.9.3",
  "lazy_static",
  "loom",
- "nohash-hasher",
  "num_cpus",
  "once_cell",
  "parking_lot",
