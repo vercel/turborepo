@@ -33,6 +33,7 @@ use crate::{
     cell::Cell,
     edges_set::{TaskEdge, TaskEdgesList, TaskEdgesSet},
     gc::{GcQueue, GcTaskState},
+    multi_iter::IntoIters3,
     output::{Output, OutputContent},
     task::aggregation::{TaskAggregationContext, TaskChange},
     MemoryBackend,
@@ -365,6 +366,59 @@ enum TaskStateType {
         event: Event,
         outdated_edges: TaskEdgesSet,
     },
+}
+
+impl TaskStateType {
+    fn children(&self) -> impl Iterator<Item = TaskId> + '_ {
+        match self {
+            TaskStateType::Done { edges, .. } => IntoIters3::One(edges.children()),
+            TaskStateType::InProgress {
+                outdated_edges,
+                new_children,
+                ..
+            } => IntoIters3::Two(
+                outdated_edges
+                    .children()
+                    .chain(new_children.iter().copied()),
+            ),
+            TaskStateType::Dirty { outdated_edges, .. } => {
+                IntoIters3::Three(outdated_edges.children())
+            }
+            TaskStateType::InProgressDirty { outdated_edges, .. } => {
+                IntoIters3::Three(outdated_edges.children())
+            }
+            TaskStateType::Scheduled { outdated_edges, .. } => {
+                IntoIters3::Three(outdated_edges.children())
+            }
+        }
+    }
+
+    fn into_dependencies_and_children(self) -> (TaskEdgesSet, SmallVec<[TaskId; 64]>) {
+        match self {
+            TaskStateType::Done { edges, .. } => {
+                let mut edges = edges.into_set();
+                let children = edges.drain_children();
+                (edges, children)
+            }
+            TaskStateType::InProgress {
+                outdated_edges,
+                new_children,
+                ..
+            } => {
+                let mut edges = outdated_edges;
+                let mut children = edges.drain_children();
+                children.extend(new_children.iter().copied());
+                (edges, children)
+            }
+            TaskStateType::Dirty { outdated_edges, .. }
+            | TaskStateType::InProgressDirty { outdated_edges, .. }
+            | TaskStateType::Scheduled { outdated_edges, .. } => {
+                let mut edges = outdated_edges;
+                let children = edges.drain_children();
+                (edges, children)
+            }
+        }
+    }
 }
 
 use TaskStateType::*;

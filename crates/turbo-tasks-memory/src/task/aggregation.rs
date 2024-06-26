@@ -20,7 +20,7 @@ use crate::{
         aggregation_data, AggregationContext, AggregationDataGuard, AggregationNode,
         AggregationNodeGuard, RootQuery,
     },
-    multi_iter::IntoIters,
+    multi_iter::IntoIters2,
     MemoryBackend,
 };
 
@@ -459,29 +459,11 @@ impl<'l> AggregationNodeGuard for TaskGuard<'l> {
 
     fn children(&self) -> Self::ChildrenIter<'_> {
         match self.guard {
-            TaskMetaStateWriteGuard::Full(ref guard) => match &guard.state_type {
-                TaskStateType::Done { edges, .. } => IntoIters::One(edges.children()),
-                TaskStateType::InProgress {
-                    outdated_edges,
-                    new_children,
-                    ..
-                } => IntoIters::Two(
-                    outdated_edges
-                        .children()
-                        .chain(new_children.iter().copied()),
-                ),
-                TaskStateType::Dirty { outdated_edges, .. } => {
-                    IntoIters::Three(outdated_edges.children())
-                }
-                TaskStateType::InProgressDirty { outdated_edges, .. } => {
-                    IntoIters::Three(outdated_edges.children())
-                }
-                TaskStateType::Scheduled { outdated_edges, .. } => {
-                    IntoIters::Three(outdated_edges.children())
-                }
-            },
+            TaskMetaStateWriteGuard::Full(ref guard) => {
+                IntoIters2::One(guard.state_type.children())
+            }
             TaskMetaStateWriteGuard::Partial(_) | TaskMetaStateWriteGuard::Unloaded(_) => {
-                IntoIters::Four(std::iter::empty())
+                IntoIters2::Two(std::iter::empty())
             }
             TaskMetaStateWriteGuard::TemporaryFiller => unreachable!(),
         }
