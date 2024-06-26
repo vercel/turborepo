@@ -1,15 +1,33 @@
+import type { ESLint } from "eslint";
+import { version } from "../package.json";
 import { RULES } from "./constants";
-// rules
 import noUndeclaredEnvVars from "./rules/no-undeclared-env-vars";
-// configs
 import recommended from "./configs/recommended";
+import flatRecommended from "./configs/flat/recommended";
 
-const rules = {
+export const rules = {
   [RULES.noUndeclaredEnvVars]: noUndeclaredEnvVars,
 };
 
-const configs = {
-  recommended,
-};
+const plugin = {
+  meta: {
+    name: "turbo",
+    version,
+  },
+  rules,
+  configs: {
+    recommended,
+    "flat/recommended": {
+      ...flatRecommended,
+      plugins: {
+        get turbo(): ESLint.Plugin {
+          return plugin;
+        },
+      },
+    },
+  },
+} satisfies ESLint.Plugin;
 
-export { rules, configs };
+export const { configs } = plugin;
+
+export default plugin;

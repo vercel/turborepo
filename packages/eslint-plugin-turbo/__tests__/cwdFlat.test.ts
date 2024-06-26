@@ -6,10 +6,10 @@ import { setupTestFixtures } from "@turbo/test-utils";
 
 const env: NodeJS.ProcessEnv = {
   ...process.env,
-  ESLINT_USE_FLAT_CONFIG: "false",
+  ESLINT_USE_FLAT_CONFIG: "true",
 };
 
-describe("eslint settings check", () => {
+describe("flat eslint settings check", () => {
   const { useFixture } = setupTestFixtures({
     directory: path.join(__dirname, "../"),
   });
@@ -19,7 +19,7 @@ describe("eslint settings check", () => {
     execSync(`npm install`, { cwd });
 
     const configString = execSync(
-      `npm exec eslint -- -c .eslintrc.js --print-config peer.js`,
+      `npm exec eslint -- -c eslint.config.js --print-config peer.js`,
       {
         cwd,
         encoding: "utf8",
@@ -80,7 +80,7 @@ describe("eslint settings check", () => {
 
     const cwd = path.join(root, "child");
     const configString = execSync(
-      `npm exec eslint -- -c ../.eslintrc.js --print-config child.js`,
+      `npm exec eslint -- -c ../eslint.config.js --print-config child.js`,
       {
         cwd,
         encoding: "utf8",
@@ -136,7 +136,7 @@ describe("eslint settings check", () => {
   });
 });
 
-describe("eslint cache is busted", () => {
+describe("flat eslint cache is busted", () => {
   const { useFixture } = setupTestFixtures({
     directory: path.join(__dirname, "../"),
   });
@@ -150,11 +150,14 @@ describe("eslint cache is busted", () => {
 
     const cwd = path.join(root, "child");
     try {
-      execSync(`npm exec eslint -- -c ../.eslintrc.js --format=json child.js`, {
-        cwd,
-        encoding: "utf8",
-        env,
-      });
+      execSync(
+        `npm exec eslint -- -c ../eslint.config.js --format=json child.js`,
+        {
+          cwd,
+          encoding: "utf8",
+          env,
+        }
+      );
     } catch (error: any) {
       const outputJson = JSON5.parse(error.stdout);
       expect(outputJson).toMatchObject([
@@ -178,7 +181,7 @@ describe("eslint cache is busted", () => {
 
     // test that we invalidated the eslint cache
     const output = execSync(
-      `npm exec eslint -- -c ../.eslintrc.js --format=json child.js`,
+      `npm exec eslint -- -c ../eslint.config.js --format=json child.js`,
       {
         cwd,
         encoding: "utf8",
