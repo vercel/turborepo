@@ -102,7 +102,7 @@ fn get_frameworks() -> &'static [Framework] {
             },
             Framework {
                 slug: "nuxtjs",
-                env_wildcards: vec!["NUXT_ENV_*"],
+                env_wildcards: vec!["NUXT_*"],
                 dependency_match: Matcher {
                     strategy: Strategy::Some,
                     dependencies: vec!["nuxt", "nuxt-edge", "nuxt3", "nuxt3-edge"],
