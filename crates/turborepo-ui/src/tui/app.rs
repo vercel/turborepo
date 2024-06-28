@@ -181,11 +181,7 @@ fn startup() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
     let mut stdout = io::stdout();
     // Ensure all pending writes are flushed before we switch to alternative screen
     stdout.flush()?;
-    crossterm::execute!(
-        stdout,
-        crossterm::event::EnableMouseCapture,
-        crossterm::terminal::EnterAlternateScreen
-    )?;
+    crossterm::execute!(stdout, crossterm::terminal::EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
 
     let mut terminal = Terminal::with_options(
@@ -208,7 +204,6 @@ fn cleanup<B: Backend + io::Write, I>(
     terminal.clear()?;
     crossterm::execute!(
         terminal.backend_mut(),
-        crossterm::event::DisableMouseCapture,
         crossterm::terminal::LeaveAlternateScreen,
     )?;
     let started_tasks = app.table.tasks_started();
