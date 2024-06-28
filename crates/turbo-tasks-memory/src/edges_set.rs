@@ -556,8 +556,15 @@ impl TaskDependencySet {
         let Entry::Occupied(mut entry) = self.edges.entry(task) else {
             return false;
         };
-        let entry = entry.get_mut();
-        entry.remove(edge)
+        let edge_entry = entry.get_mut();
+        if edge_entry.remove(edge) {
+            if matches!(edge_entry, EdgesEntry::Empty) {
+                entry.remove();
+            }
+            true
+        } else {
+            false
+        }
     }
 }
 
