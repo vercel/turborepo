@@ -1571,8 +1571,6 @@ impl Task {
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> bool {
         let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
-        let mut clear_dependencies = None;
-        let mut clear_dependencies_set = None;
         let mut change_job = None;
         let TaskState {
             ref mut aggregation_node,
@@ -1580,10 +1578,7 @@ impl Task {
             ..
         } = *full_state;
         match state_type {
-            Done {
-                edges: ref mut dependencies,
-                stateful,
-            } => {
+            Done { edges: _, stateful } => {
                 if *stateful {
                     return false;
                 }
@@ -1595,17 +1590,13 @@ impl Task {
                         ..Default::default()
                     },
                 );
-                clear_dependencies = Some(take(dependencies));
             }
             Dirty {
                 ref event,
-                ref mut outdated_edges,
+                outdated_edges: _,
             } => {
                 // We want to get rid of this Event, so notify it to make sure it's empty.
                 event.notify(usize::MAX);
-                if !outdated_edges.is_empty() {
-                    clear_dependencies_set = Some(take(outdated_edges));
-                }
             }
             _ => {
                 // Any other state is not unloadable.
@@ -1631,7 +1622,7 @@ impl Task {
             gc: _,
         } = old_state.into_full().unwrap();
 
-        let children: Vec<TaskId> = todo!("Should handle edges in state_type");
+        let (dependencies, children) = state_type.into_dependencies_and_children();
 
         // Remove all children, as they will be added again when this task is executed
         // again
@@ -1680,14 +1671,9 @@ impl Task {
         output.gc_drop(turbo_tasks);
 
         // TODO This is a race condition, the task might be executed again while
-        // removing dependencies We can clear the dependencies as we are already
-        // marked as dirty
-        if let Some(dependencies) = clear_dependencies {
-            self.clear_dependencies_list(dependencies, backend, turbo_tasks);
-        }
-        if let Some(dependencies) = clear_dependencies_set {
-            self.clear_dependencies(dependencies, backend, turbo_tasks);
-        }
+        // removing dependencies.
+        // We can clear the dependencies as we are already marked as dirty
+        self.clear_dependencies(dependencies, backend, turbo_tasks);
 
         aggregation_context.apply_queued_updates();
 
