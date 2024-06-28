@@ -636,17 +636,6 @@ impl Task {
         }
     }
 
-    fn clear_dependencies_list(
-        &self,
-        dependencies: TaskEdgesList,
-        backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
-    ) {
-        for dep in dependencies.into_iter() {
-            Task::remove_dependency(dep, self.id, backend, turbo_tasks);
-        }
-    }
-
     fn state(&self) -> TaskMetaStateReadGuard<'_> {
         self.state.read().into()
     }

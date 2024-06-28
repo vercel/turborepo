@@ -237,7 +237,7 @@ impl EdgesEntry {
         }
     }
 
-    fn into_complex(&mut self) -> &mut ComplexSet {
+    fn as_complex(&mut self) -> &mut ComplexSet {
         match self {
             EdgesEntry::Complex(set) => set,
             _ => {
@@ -308,7 +308,7 @@ impl EdgesEntry {
             }
             EdgeEntry::Collectibles(_) => {}
         }
-        self.into_complex().insert(entry)
+        self.as_complex().insert(entry)
     }
 
     fn remove(&mut self, entry: EdgeEntry) -> bool {
@@ -479,21 +479,11 @@ impl TaskEdgesSet {
                     children.push(task);
                 }
                 entry.simplify();
-                if matches!(entry, EdgesEntry::Empty) {
-                    false
-                } else {
-                    true
-                }
+                !matches!(entry, EdgesEntry::Empty)
             }
             _ => true,
         });
         children
-    }
-
-    pub(crate) fn iter(&self) -> impl Iterator<Item = TaskEdge> + '_ {
-        self.edges
-            .iter()
-            .flat_map(|(task, entry)| entry.iter().map(move |e| e.into_dependency(*task)))
     }
 
     /// Removes all dependencies from the passed `dependencies` argument
@@ -503,11 +493,7 @@ impl TaskEdgesSet {
                 for item in other.iter() {
                     entry.remove(item);
                 }
-                if matches!(entry, EdgesEntry::Empty) {
-                    false
-                } else {
-                    true
-                }
+                !matches!(entry, EdgesEntry::Empty)
             } else {
                 true
             }
