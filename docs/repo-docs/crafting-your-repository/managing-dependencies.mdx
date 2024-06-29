@@ -67,13 +67,26 @@ npm install jest --workspace=web --workspace=@repo/ui --save-dev
 </Tab>
 
 <Tab>
+Yarn 1:
 
 ```bash title="Terminal"
 yarn workspace web add jest --dev
 yarn workspace @repo/ui add jest --dev
 ```
 
-<LinkToDocumentation href="https://classic.yarnpkg.com/en/docs/cli/add">yarn 1 documentation</LinkToDocumentation>
+<LinkToDocumentation href="https://classic.yarnpkg.com/en/docs/cli/add">
+  Yarn 1 documentation
+</LinkToDocumentation>
+
+Yarn 2+:
+
+```bash title="Terminal"
+yarn workspaces foreach -R --from '{web,@repo/ui}' add jest --dev
+```
+
+<LinkToDocumentation href="https://yarnpkg.com/cli/workspaces/foreach#usage">
+  Yarn 2+ documentation
+</LinkToDocumentation>
 </Tab>
 
 <Tab>
