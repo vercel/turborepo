@@ -15,6 +15,12 @@ const PANE_SIZE_RATIO: f32 = 3.0 / 4.0;
 const FRAMERATE: Duration = Duration::from_millis(3);
 
 use super::{input, AppReceiver, Error, Event, InputOptions, TaskTable, TerminalPane};
+use crate::tui::task::Task;
+
+pub enum LayoutSections {
+    Pane,
+    TaskList,
+}
 
 pub struct App<I> {
     table: TaskTable,
@@ -22,6 +28,9 @@ pub struct App<I> {
     done: bool,
     input_options: InputOptions,
     started_tasks: Vec<String>,
+    task_list: Vec<String>,
+    selected_task_index: usize,
+    layout_focus: LayoutSections,
 }
 
 pub enum Direction {
@@ -32,9 +41,17 @@ pub enum Direction {
 impl<I> App<I> {
     pub fn new(rows: u16, cols: u16, tasks: Vec<String>) -> Self {
         debug!("tasks: {tasks:?}");
+
         let num_of_tasks = tasks.len();
-        let mut this = Self {
-            table: TaskTable::new(tasks.clone()),
+        // TODO: Probably can manage this better?
+        let task_list = tasks.clone();
+
+        let mut planned_task_list = tasks.into_iter().map(Task::new).collect::<Vec<_>>();
+        planned_task_list.sort_unstable();
+        planned_task_list.dedup();
+
+        Self {
+            table: TaskTable::new(planned_task_list.clone()),
             pane: TerminalPane::new(rows, cols, tasks),
             done: false,
             input_options: InputOptions {
@@ -43,24 +60,31 @@ impl<I> App<I> {
                 tty_stdin: atty::is(atty::Stream::Stdin),
             },
             started_tasks: Vec::with_capacity(num_of_tasks),
-        };
-        // Start with first task selected
-        this.next();
-        this
+            task_list,
+            selected_task_index: 0,
+            layout_focus: LayoutSections::Pane,
+        }
     }
 
     pub fn next(&mut self) {
-        self.table.next();
-        if let Some(task) = self.table.selected() {
-            self.pane.select(task).unwrap();
-        }
+        let num_rows = self.table.len();
+        let i = match self.table.scroll.selected() {
+            Some(i) => (i + 1).clamp(0, num_rows - 1),
+            None => 0,
+        };
+        self.table.scroll.select(Some(i));
+        let task = self.task_list[i].as_str();
+        self.pane.select(task).unwrap();
     }
 
     pub fn previous(&mut self) {
-        self.table.previous();
-        if let Some(task) = self.table.selected() {
-            self.pane.select(task).unwrap();
-        }
+        let i = match self.selected_task_index {
+            0 => 0,
+            i => i - 1,
+        };
+        self.table.scroll.select(Some(i));
+        let task = self.task_list[i].as_str();
+        self.pane.select(task).unwrap();
     }
 
     pub fn interact(&mut self, interact: bool) {
