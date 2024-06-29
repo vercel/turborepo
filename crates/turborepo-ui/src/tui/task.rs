@@ -24,6 +24,12 @@ pub struct Task<S> {
     state: S,
 }
 
+pub enum TaskType {
+    Planned,
+    Running,
+    Finished,
+}
+
 impl<S> Task<S> {
     pub fn name(&self) -> &str {
         &self.name

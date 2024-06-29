@@ -43,15 +43,24 @@ impl<I> App<I> {
         debug!("tasks: {tasks:?}");
 
         let num_of_tasks = tasks.len();
-        // TODO: Probably can manage this better?
-        let task_list = tasks.clone();
 
-        let mut planned_task_list = tasks.into_iter().map(Task::new).collect::<Vec<_>>();
-        planned_task_list.sort_unstable();
-        planned_task_list.dedup();
+        // Initializes with the planned tasks
+        // and will mutate as tasks change their stateful_render
+        // to running, finished, etc.
+        let mut task_list = tasks
+            // TODO: Is cloning bad?
+            .clone()
+            .into_iter()
+            .map(Task::new)
+            .map(|task| task.name().to_string())
+            .collect::<Vec<_>>();
+        task_list.sort_unstable();
+        task_list.dedup();
+
+        let mut selected_task_index = 0;
 
         Self {
-            table: TaskTable::new(planned_task_list.clone()),
+            table: TaskTable::new(task_list.clone(), selected_task_index),
             pane: TerminalPane::new(rows, cols, tasks),
             done: false,
             input_options: InputOptions {
@@ -61,19 +70,17 @@ impl<I> App<I> {
             },
             started_tasks: Vec::with_capacity(num_of_tasks),
             task_list,
-            selected_task_index: 0,
+            selected_task_index,
             layout_focus: LayoutSections::Pane,
         }
     }
 
     pub fn next(&mut self) {
-        let num_rows = self.table.len();
-        let i = match self.table.scroll.selected() {
-            Some(i) => (i + 1).clamp(0, num_rows - 1),
-            None => 0,
-        };
-        self.table.scroll.select(Some(i));
-        let task = self.task_list[i].as_str();
+        let num_rows = self.task_list.len();
+        let next_index = (self.selected_task_index + 1).clamp(0, num_rows - 1);
+        self.selected_task_index = next_index;
+        self.table.scroll.select(Some(next_index));
+        let task = self.task_list[next_index].as_str();
         self.pane.select(task).unwrap();
     }
 
@@ -82,27 +89,25 @@ impl<I> App<I> {
             0 => 0,
             i => i - 1,
         };
+        self.selected_task_index = i;
         self.table.scroll.select(Some(i));
         let task = self.task_list[i].as_str();
         self.pane.select(task).unwrap();
     }
 
     pub fn interact(&mut self, interact: bool) {
-        let Some(selected_task) = self.table.selected() else {
-            return;
-        };
-        if self.pane.has_stdin(selected_task) {
+        if self
+            .pane
+            .has_stdin(self.task_list[self.selected_task_index].as_str())
+        {
             self.input_options.interact = interact;
             self.pane.highlight(interact);
         }
     }
 
     pub fn scroll(&mut self, direction: Direction) {
-        let Some(selected_task) = self.table.selected() else {
-            return;
-        };
         self.pane
-            .scroll(selected_task, direction)
+            .scroll(self.task_list[self.selected_task_index].as_str(), direction)
             .expect("selected task should be in pane");
     }
 
@@ -111,7 +116,7 @@ impl<I> App<I> {
     }
 
     pub fn update_tasks(&mut self, tasks: Vec<String>) {
-        self.table = TaskTable::new(tasks.clone());
+        self.table = TaskTable::new(tasks.clone(), self.selected_task_index);
         self.next();
     }
 }

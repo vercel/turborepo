@@ -28,15 +28,17 @@ pub struct TaskTable {
     // State used for showing things
     pub scroll: TableState,
     spinner: SpinnerState,
+    selected_index: usize,
 }
 
 impl TaskTable {
     /// Construct a new table with all of the planned tasks
-    pub fn new(tasks: impl IntoIterator<Item = String>) -> Self {
+    pub fn new(tasks: Vec<String>, selected_index: usize) -> Self {
         let mut planned = tasks.into_iter().map(Task::new).collect::<Vec<_>>();
         planned.sort_unstable();
         planned.dedup();
         Self {
+            selected_index,
             planned,
             running: Vec::new(),
             finished: Vec::new(),
@@ -237,6 +239,7 @@ impl<'a> StatefulWidget for &'a TaskTable {
 
     fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer, state: &mut Self::State) {
         let width = area.width;
+        let active_index = self.selected_index;
         let bar = "─".repeat(usize::from(width));
         let table = Table::new(
             self.finished_rows()
@@ -251,7 +254,7 @@ impl<'a> StatefulWidget for &'a TaskTable {
         .highlight_style(Style::default().fg(Color::Yellow))
         .column_spacing(0)
         .header(
-            vec![format!("Tasks\n{bar}"), " \n─".to_owned()]
+            vec![format!("Tasks {active_index}\n{bar}"), " \n─".to_owned()]
                 .into_iter()
                 .map(Cell::from)
                 .collect::<Row>()
