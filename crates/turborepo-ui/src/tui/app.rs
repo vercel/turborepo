@@ -44,23 +44,24 @@ impl<I> App<I> {
             },
             started_tasks: Vec::with_capacity(num_of_tasks),
         };
-        // Start with first task selected
-        this.next();
+        this.sync_pane_with_table();
         this
+    }
+
+    pub fn sync_pane_with_table(&mut self) {
+        if let Some(task) = self.table.selected() {
+            self.pane.select(task).unwrap();
+        }
     }
 
     pub fn next(&mut self) {
         self.table.next();
-        if let Some(task) = self.table.selected() {
-            self.pane.select(task).unwrap();
-        }
+        self.sync_pane_with_table()
     }
 
     pub fn previous(&mut self) {
         self.table.previous();
-        if let Some(task) = self.table.selected() {
-            self.pane.select(task).unwrap();
-        }
+        self.sync_pane_with_table()
     }
 
     pub fn interact(&mut self, interact: bool) {
@@ -227,6 +228,7 @@ fn update(
     match event {
         Event::StartTask { task } => {
             app.table.start_task(&task)?;
+            app.sync_pane_with_table();
             app.started_tasks.push(task);
         }
         Event::TaskOutput { task, output } => {
@@ -247,6 +249,7 @@ fn update(
         }
         Event::EndTask { task, result } => {
             app.table.finish_task(&task, result)?;
+            app.sync_pane_with_table();
         }
         Event::Up => {
             app.previous();

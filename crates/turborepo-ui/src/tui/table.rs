@@ -28,6 +28,7 @@ pub struct TaskTable {
     // State used for showing things
     scroll: TableState,
     spinner: SpinnerState,
+    user_has_interacted: bool,
 }
 
 impl TaskTable {
@@ -40,8 +41,9 @@ impl TaskTable {
             planned,
             running: Vec::new(),
             finished: Vec::new(),
-            scroll: TableState::default(),
+            scroll: TableState::new().with_selected(Some(0)),
             spinner: SpinnerState::default(),
+            user_has_interacted: false,
         }
     }
 
@@ -72,21 +74,25 @@ impl TaskTable {
     /// If planned, pulls it from planned tasks and starts it.
     /// If finished, removes from finished and starts again as new task.
     pub fn start_task(&mut self, task: &str) -> Result<(), Error> {
+        if !self.user_has_interacted {
+            self.scroll.select(Some(0));
+        }
+
         if let Ok(planned_idx) = self
             .planned
             .binary_search_by(|planned_task| planned_task.name().cmp(task))
         {
             let planned = self.planned.remove(planned_idx);
-            let old_row_idx = self.finished.len() + self.running.len() + planned_idx;
-            let new_row_idx = self.finished.len() + self.running.len();
+            let old_row_idx = self.running.len() + planned_idx;
+            let new_row_idx = self.running.len();
             let running = planned.start();
             self.running.push(running);
 
             if let Some(selected_idx) = self.scroll.selected() {
                 // If task that was just started is selected, then update selection to follow
                 // task
+                self.scroll.select(Some(new_row_idx));
                 if selected_idx == old_row_idx {
-                    self.scroll.select(Some(new_row_idx));
                 } else if new_row_idx <= selected_idx && selected_idx < old_row_idx {
                     // If the selected task is between the old and new row positions
                     // then increment the selection index to keep selection the same.
@@ -104,12 +110,16 @@ impl TaskTable {
             let running = Task::new(finished.name().to_string()).start();
             self.running.push(running);
 
+            // Watch Mode
             if let Some(selected_idx) = self.scroll.selected() {
                 // If task that was just started is selected, then update selection to follow
                 // task
-                if selected_idx == old_row_idx {
+                if self.user_has_interacted && selected_idx == old_row_idx {
                     self.scroll.select(Some(new_row_idx));
-                } else if new_row_idx <= selected_idx && selected_idx < old_row_idx {
+                } else if self.user_has_interacted
+                    && new_row_idx <= selected_idx
+                    && selected_idx < old_row_idx
+                {
                     // If the selected task is between the old and new row positions
                     // then increment the selection index to keep selection the same.
                     self.scroll.select(Some(selected_idx + 1));
@@ -135,7 +145,7 @@ impl TaskTable {
                 debug!("could not find '{task}' to finish");
                 Error::TaskNotFound { name: task.into() }
             })?;
-        let old_row_idx = self.finished.len() + running_idx;
+        let old_row_idx = running_idx;
         let new_row_idx = self.finished.len();
         let running = self.running.remove(running_idx);
         self.finished.push(running.finish(result));
@@ -143,9 +153,13 @@ impl TaskTable {
         if let Some(selected_row) = self.scroll.selected() {
             // If task that was just started is selected, then update selection to follow
             // task
-            if selected_row == old_row_idx {
+
+            if self.user_has_interacted && selected_row == old_row_idx {
                 self.scroll.select(Some(new_row_idx));
-            } else if new_row_idx <= selected_row && selected_row < old_row_idx {
+            } else if self.user_has_interacted
+                && new_row_idx <= selected_row
+                && selected_row < old_row_idx
+            {
                 // If the selected task is between the old and new row positions then increment
                 // the selection index to keep selection the same.
                 self.scroll.select(Some(selected_row + 1));
@@ -168,6 +182,7 @@ impl TaskTable {
             Some(i) => (i + 1).clamp(0, num_rows - 1),
             None => 0,
         };
+        self.user_has_interacted = true;
         self.scroll.select(Some(i));
     }
 
@@ -178,20 +193,21 @@ impl TaskTable {
             Some(i) => i - 1,
             None => 0,
         };
+        self.user_has_interacted = true;
         self.scroll.select(Some(i));
     }
 
     pub fn get(&self, i: usize) -> Option<&str> {
-        if i < self.finished.len() {
-            let task = self.finished.get(i)?;
+        if i < self.running.len() {
+            let task = self.running.get(i)?;
             Some(task.name())
-        } else if i < self.finished.len() + self.running.len() {
-            let task = self.running.get(i - self.finished.len())?;
+        } else if i < self.running.len() + self.planned.len() {
+            let task = self.planned.get(i - self.running.len())?;
             Some(task.name())
-        } else if i < self.finished.len() + self.running.len() + self.planned.len() {
+        } else if i < self.running.len() + self.planned.len() + self.finished.len() {
             let task = self
-                .planned
-                .get(i - (self.finished.len() + self.running.len()))?;
+                .finished
+                .get(i - (self.running.len() + self.planned.len()))?;
             Some(task.name())
         } else {
             None
@@ -259,9 +275,9 @@ impl<'a> StatefulWidget for &'a TaskTable {
         let width = area.width;
         let bar = "─".repeat(usize::from(width));
         let table = Table::new(
-            self.finished_rows()
-                .chain(self.running_rows())
-                .chain(self.planned_rows()),
+            self.running_rows()
+                .chain(self.planned_rows())
+                .chain(self.finished_rows()),
             [
                 Constraint::Min(14),
                 // Status takes one cell to render
