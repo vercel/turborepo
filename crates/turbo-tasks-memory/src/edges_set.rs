@@ -455,9 +455,11 @@ impl TaskEdgesSet {
             EdgesDataEntry::Complex(set) => {
                 if set.remove(&EdgeEntry::Child) {
                     children.push(task);
+                    entry.simplify();
+                    !matches!(entry, EdgesDataEntry::Empty)
+                } else {
+                    true
                 }
-                entry.simplify();
-                !matches!(entry, EdgesDataEntry::Empty)
             }
             _ => true,
         });
