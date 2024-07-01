@@ -5,8 +5,6 @@ use rustc_hash::FxHasher;
 use smallvec::SmallVec;
 use turbo_tasks::{CellId, TaskId, TraitTypeId, ValueTypeId};
 
-use crate::multi_iter::IntoIters4;
-
 #[derive(Hash, Copy, Clone, PartialEq, Eq)]
 pub enum TaskEdge {
     Output(TaskId),
@@ -88,56 +86,56 @@ impl EdgesEntry {
     fn into_iter(self) -> impl Iterator<Item = EdgeEntry> {
         match self {
             EdgesEntry::Empty => unreachable!(),
-            EdgesEntry::Output => IntoIters4::One([EdgeEntry::Output].into_iter()),
-            EdgesEntry::Child => IntoIters4::One([EdgeEntry::Child].into_iter()),
-            EdgesEntry::Cell0(type_id) => {
-                IntoIters4::One([EdgeEntry::Cell(CellId { type_id, index: 0 })].into_iter())
-            }
-            EdgesEntry::ChildAndOutput => {
-                IntoIters4::Two([EdgeEntry::Child, EdgeEntry::Output].into_iter())
-            }
-            EdgesEntry::ChildAndCell0(type_id) => IntoIters4::Two(
+            EdgesEntry::Output => Either::Left(Either::Left([EdgeEntry::Output].into_iter())),
+            EdgesEntry::Child => Either::Left(Either::Left([EdgeEntry::Child].into_iter())),
+            EdgesEntry::Cell0(type_id) => Either::Left(Either::Left(
+                [EdgeEntry::Cell(CellId { type_id, index: 0 })].into_iter(),
+            )),
+            EdgesEntry::ChildAndOutput => Either::Left(Either::Right(
+                [EdgeEntry::Child, EdgeEntry::Output].into_iter(),
+            )),
+            EdgesEntry::ChildAndCell0(type_id) => Either::Left(Either::Right(
                 [
                     EdgeEntry::Child,
                     EdgeEntry::Cell(CellId { type_id, index: 0 }),
                 ]
                 .into_iter(),
-            ),
-            EdgesEntry::OutputAndCell0(type_id) => IntoIters4::Two(
+            )),
+            EdgesEntry::OutputAndCell0(type_id) => Either::Left(Either::Right(
                 [
                     EdgeEntry::Output,
                     EdgeEntry::Cell(CellId { type_id, index: 0 }),
                 ]
                 .into_iter(),
-            ),
-            EdgesEntry::ChildOutputAndCell0(type_id) => IntoIters4::Three(
+            )),
+            EdgesEntry::ChildOutputAndCell0(type_id) => Either::Right(Either::Left(
                 [
                     EdgeEntry::Child,
                     EdgeEntry::Output,
                     EdgeEntry::Cell(CellId { type_id, index: 0 }),
                 ]
                 .into_iter(),
-            ),
-            EdgesEntry::Complex(set) => IntoIters4::Four(set.into_iter()),
+            )),
+            EdgesEntry::Complex(set) => Either::Right(Either::Right(set.into_iter())),
         }
     }
 
     fn iter(&self) -> impl Iterator<Item = EdgeEntry> + '_ {
         match self {
             EdgesEntry::Empty => unreachable!(),
-            EdgesEntry::Output => IntoIters4::One([EdgeEntry::Output].into_iter()),
-            EdgesEntry::Child => IntoIters4::One([EdgeEntry::Child].into_iter()),
-            EdgesEntry::Cell0(type_id) => IntoIters4::One(
+            EdgesEntry::Output => Either::Left(Either::Left([EdgeEntry::Output].into_iter())),
+            EdgesEntry::Child => Either::Left(Either::Left([EdgeEntry::Child].into_iter())),
+            EdgesEntry::Cell0(type_id) => Either::Left(Either::Left(
                 [EdgeEntry::Cell(CellId {
                     type_id: *type_id,
                     index: 0,
                 })]
                 .into_iter(),
-            ),
-            EdgesEntry::ChildAndOutput => {
-                IntoIters4::Two([EdgeEntry::Child, EdgeEntry::Output].into_iter())
-            }
-            EdgesEntry::ChildAndCell0(type_id) => IntoIters4::Two(
+            )),
+            EdgesEntry::ChildAndOutput => Either::Left(Either::Right(
+                [EdgeEntry::Child, EdgeEntry::Output].into_iter(),
+            )),
+            EdgesEntry::ChildAndCell0(type_id) => Either::Left(Either::Right(
                 [
                     EdgeEntry::Child,
                     EdgeEntry::Cell(CellId {
@@ -146,8 +144,8 @@ impl EdgesEntry {
                     }),
                 ]
                 .into_iter(),
-            ),
-            EdgesEntry::OutputAndCell0(type_id) => IntoIters4::Two(
+            )),
+            EdgesEntry::OutputAndCell0(type_id) => Either::Left(Either::Right(
                 [
                     EdgeEntry::Output,
                     EdgeEntry::Cell(CellId {
@@ -156,8 +154,8 @@ impl EdgesEntry {
                     }),
                 ]
                 .into_iter(),
-            ),
-            EdgesEntry::ChildOutputAndCell0(type_id) => IntoIters4::Three(
+            )),
+            EdgesEntry::ChildOutputAndCell0(type_id) => Either::Right(Either::Left(
                 [
                     EdgeEntry::Child,
                     EdgeEntry::Output,
@@ -167,8 +165,8 @@ impl EdgesEntry {
                     }),
                 ]
                 .into_iter(),
-            ),
-            EdgesEntry::Complex(set) => IntoIters4::Four(set.iter().copied()),
+            )),
+            EdgesEntry::Complex(set) => Either::Right(Either::Right(set.iter().copied())),
         }
     }
 

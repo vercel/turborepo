@@ -7,6 +7,7 @@ use std::{
 };
 
 use auto_hash_map::{map::Entry, AutoMap};
+use either::Either;
 use parking_lot::Mutex;
 use rustc_hash::FxHasher;
 use turbo_tasks::{event::Event, RawVc, TaskId, TaskIdSet, TraitTypeId, TurboTasksBackendApi};
@@ -20,7 +21,6 @@ use crate::{
         aggregation_data, AggregationContext, AggregationDataGuard, AggregationNode,
         AggregationNodeGuard, RootQuery,
     },
-    multi_iter::IntoIters2,
     MemoryBackend,
 };
 
@@ -459,11 +459,9 @@ impl<'l> AggregationNodeGuard for TaskGuard<'l> {
 
     fn children(&self) -> Self::ChildrenIter<'_> {
         match self.guard {
-            TaskMetaStateWriteGuard::Full(ref guard) => {
-                IntoIters2::One(guard.state_type.children())
-            }
+            TaskMetaStateWriteGuard::Full(ref guard) => Either::Left(guard.state_type.children()),
             TaskMetaStateWriteGuard::Partial(_) | TaskMetaStateWriteGuard::Unloaded(_) => {
-                IntoIters2::Two(std::iter::empty())
+                Either::Right(std::iter::empty())
             }
             TaskMetaStateWriteGuard::TemporaryFiller => unreachable!(),
         }
