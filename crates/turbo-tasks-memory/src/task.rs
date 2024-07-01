@@ -894,6 +894,7 @@ impl Task {
                         outdated_edges.remove_all(&new_edges);
                         for child in take(new_children) {
                             new_edges.insert(TaskEdge::Child(child));
+                            outdated_edges.remove(TaskEdge::Child(child));
                         }
                         if !backend.has_gc() {
                             // This will stay here for longer, so make sure to not consume too much
