@@ -9,7 +9,7 @@ use swc_core::{
             ArrowExpr, AssignPatProp, AssignTarget, ClassDecl, ClassExpr, Constructor, DefaultDecl,
             ExportDefaultDecl, ExportNamedSpecifier, ExportSpecifier, Expr, FnDecl, FnExpr,
             Function, Id, Ident, ImportSpecifier, MemberExpr, MemberProp, NamedExport, Param, Pat,
-            PropName, VarDeclarator,
+            Prop, PropName, VarDeclarator,
         },
         visit::{noop_visit_type, Visit, VisitWith},
     },
@@ -163,6 +163,16 @@ impl Visit for IdentUsageCollector<'_> {
     fn visit_prop_name(&mut self, n: &PropName) {
         if let PropName::Computed(..) = n {
             n.visit_children_with(self);
+        }
+    }
+
+    fn visit_prop(&mut self, n: &Prop) {
+        match n {
+            Prop::Shorthand(v) => {
+                self.with_mode(None, |c| c.visit_ident(v));
+            }
+
+            _ => n.visit_children_with(self),
         }
     }
 
