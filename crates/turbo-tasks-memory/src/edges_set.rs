@@ -85,20 +85,6 @@ impl EdgesEntry {
         }
     }
 
-    fn len(&self) -> usize {
-        match self {
-            EdgesEntry::Empty => unreachable!(),
-            EdgesEntry::Output => 1,
-            EdgesEntry::Child => 1,
-            EdgesEntry::Cell0(_) => 1,
-            EdgesEntry::OutputAndCell0(_) => 2,
-            EdgesEntry::ChildAndCell0(_) => 2,
-            EdgesEntry::ChildAndOutput => 2,
-            EdgesEntry::ChildOutputAndCell0(_) => 3,
-            EdgesEntry::Complex(set) => set.len(),
-        }
-    }
-
     fn into_iter(self) -> impl Iterator<Item = EdgeEntry> {
         match self {
             EdgesEntry::Empty => unreachable!(),
