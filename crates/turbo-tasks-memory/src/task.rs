@@ -359,6 +359,7 @@ enum TaskStateType {
     InProgressDirty {
         event: Event,
         outdated_edges: Box<TaskEdgesSet>,
+        children_count: usize,
     },
 }
 
@@ -939,6 +940,7 @@ impl Task {
                     InProgressDirty {
                         ref mut event,
                         ref mut outdated_edges,
+                        children_count: _,
                     } => {
                         let event = event.take();
                         for dep in take(outdated_edges).into_iter() {
@@ -1089,6 +1091,7 @@ impl Task {
                 } => {
                     let event = event.take();
                     let mut outdated_edges = take(outdated_edges);
+                    let children_count = new_children.len();
                     for child in take(new_children) {
                         outdated_edges.insert(TaskEdge::Child(child));
                     }
@@ -1123,6 +1126,7 @@ impl Task {
                     state.state_type = InProgressDirty {
                         event,
                         outdated_edges,
+                        children_count,
                     };
                     drop(state);
                     change_job.apply(&aggregation_context);
@@ -1323,11 +1327,14 @@ impl Task {
                             ));
                         }
                     }
-                    TaskStateType::InProgressDirty { outdated_edges, .. } => {
+                    TaskStateType::InProgressDirty {
+                        outdated_edges,
+                        children_count,
+                        ..
+                    } => {
                         if outdated_edges.insert(TaskEdge::Child(child_id)) {
-                            // TODO we need the number of children for correct optimization, maybe
-                            // keep a counter
-                            let number_of_children = 0;
+                            *children_count += 1;
+                            let number_of_children = *children_count;
                             let mut guard = TaskGuard::from_full(self.id, state);
                             add_job = Some(handle_new_edge(
                                 &aggregation_context,
