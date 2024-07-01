@@ -166,11 +166,10 @@ struct TaskState {
 }
 
 impl TaskState {
-    fn new(description: impl Fn() -> String + Send + Sync + 'static) -> Self {
+    fn new() -> Self {
         Self {
             aggregation_node: TaskAggregationNode::new(),
             state_type: Dirty {
-                event: Event::new(move || format!("TaskState({})::event", description())),
                 outdated_edges: Default::default(),
             },
             collectibles: Default::default(),
@@ -209,11 +208,10 @@ struct PartialTaskState {
 }
 
 impl PartialTaskState {
-    fn into_full(self, description: impl Fn() -> String + Send + Sync + 'static) -> TaskState {
+    fn into_full(self) -> TaskState {
         TaskState {
             aggregation_node: self.aggregation_node,
             state_type: Dirty {
-                event: Event::new(move || format!("TaskState({})::event", description())),
                 outdated_edges: Default::default(),
             },
             collectibles: Default::default(),
@@ -237,11 +235,10 @@ fn test_unloaded_task_state_size() {
 }
 
 impl UnloadedTaskState {
-    fn into_full(self, description: impl Fn() -> String + Send + Sync + 'static) -> TaskState {
+    fn into_full(self) -> TaskState {
         TaskState {
             aggregation_node: TaskAggregationNode::new(),
             state_type: Dirty {
-                event: Event::new(move || format!("TaskState({})::event", description())),
                 outdated_edges: Default::default(),
             },
             collectibles: Default::default(),
@@ -331,10 +328,7 @@ enum TaskStateType {
     /// Execution is invalid, but not yet scheduled
     ///
     /// on activation this will move to Scheduled
-    Dirty {
-        event: Event,
-        outdated_edges: Box<TaskEdgesSet>,
-    },
+    Dirty { outdated_edges: Box<TaskEdgesSet> },
 
     /// Execution is invalid and scheduled
     ///
@@ -436,11 +430,10 @@ impl Task {
         task_type: Arc<PreHashed<PersistentTaskType>>,
     ) -> Self {
         let ty = TaskType::Persistent { ty: task_type };
-        let description = Self::get_event_description_static(id, &ty);
         Self {
             id,
             ty,
-            state: RwLock::new(TaskMetaState::Full(Box::new(TaskState::new(description)))),
+            state: RwLock::new(TaskMetaState::Full(Box::new(TaskState::new()))),
             graph_modification_in_progress_counter: AtomicU32::new(0),
         }
     }
@@ -649,7 +642,7 @@ impl Task {
     }
 
     fn full_state_mut(&self) -> FullTaskWriteGuard<'_> {
-        TaskMetaStateWriteGuard::full_from(self.state.write(), self)
+        TaskMetaStateWriteGuard::full_from(self.state.write())
     }
 
     #[allow(dead_code, reason = "We need this in future")]
@@ -1016,11 +1009,13 @@ impl Task {
                 }
                 Dirty {
                     ref mut outdated_edges,
-                    ref mut event,
                 } => {
                     if force_schedule {
+                        let description = self.get_event_description();
                         state.state_type = Scheduled {
-                            event: event.take(),
+                            event: Event::new(move || {
+                                format!("TaskState({})::event", description())
+                            }),
                             outdated_edges: take(outdated_edges),
                         };
                         let change_job = state.aggregation_node.apply_change(
@@ -1081,9 +1076,6 @@ impl Task {
                             },
                         );
                         state.state_type = Dirty {
-                            event: Event::new(move || {
-                                format!("TaskState({})::event", description())
-                            }),
                             outdated_edges: Box::new(outdated_edges),
                         };
                         drop(state);
@@ -1149,13 +1141,13 @@ impl Task {
     ) {
         let mut state = self.full_state_mut();
         if let TaskStateType::Dirty {
-            ref mut event,
             ref mut outdated_edges,
         } = state.state_type
         {
             let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
+            let description = self.get_event_description();
             state.state_type = Scheduled {
-                event: event.take(),
+                event: Event::new(move || format!("TaskState({})::event", description())),
                 outdated_edges: take(outdated_edges),
             };
             let job = state.aggregation_node.apply_change(
@@ -1405,7 +1397,7 @@ impl Task {
                 aggregation.root_type = None;
             }
             let state = aggregation.into_inner().into_inner().into_inner();
-            TaskMetaStateWriteGuard::full_from(state, self)
+            TaskMetaStateWriteGuard::full_from(state)
         } else {
             self.full_state_mut()
         };
@@ -1417,11 +1409,11 @@ impl Task {
                 Ok(Ok(result))
             }
             Dirty {
-                ref mut event,
                 ref mut outdated_edges,
             } => {
                 turbo_tasks.schedule(self.id);
-                let event = event.take();
+                let description = self.get_event_description();
+                let event = Event::new(move || format!("TaskState({})::event", description()));
                 let listener = event.listen_with_note(note);
                 state.state_type = Scheduled {
                     event,
@@ -1589,13 +1581,7 @@ impl Task {
                     },
                 );
             }
-            Dirty {
-                ref event,
-                outdated_edges: _,
-            } => {
-                // We want to get rid of this Event, so notify it to make sure it's empty.
-                event.notify(usize::MAX);
-            }
+            Dirty { outdated_edges: _ } => {}
             _ => {
                 // Any other state is not unloadable.
                 return false;
