@@ -995,7 +995,8 @@ impl Task {
         }
 
         let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
-        let active = query_root_info(&aggregation_context, ActiveQuery::default(), self.id);
+        let should_schedule = force_schedule
+            || query_root_info(&aggregation_context, ActiveQuery::default(), self.id);
 
         let state = if force_schedule {
             TaskMetaStateWriteGuard::Full(self.full_state_mut())
@@ -1034,14 +1035,10 @@ impl Task {
                         drop(state);
                     }
                 }
-                Done {
-                    edges: ref mut dependencies,
-                    ..
-                } => {
-                    let outdated_edges = take(dependencies).into_set();
+                Done { ref mut edges, .. } => {
+                    let outdated_edges = take(edges).into_set();
                     // add to dirty lists and potentially schedule
                     let description = self.get_event_description();
-                    let should_schedule = force_schedule || active;
                     if should_schedule {
                         let change_job = state.aggregation_node.apply_change(
                             &aggregation_context,
