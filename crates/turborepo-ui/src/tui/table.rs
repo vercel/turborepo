@@ -17,25 +17,23 @@ use super::{
 ///
 /// The table contains finished tasks, running tasks, and planned tasks rendered
 /// in that order.
-pub struct TaskTable {
-    tasks_by_type: &TasksByStatus,
-    pub scroll: TableState,
+pub struct TaskTable<'b> {
+    tasks_by_type: &'b TasksByStatus,
     spinner: SpinnerState,
-    selected_index: &usize,
-    user_has_interacted: &bool,
+    selected_index: &'b usize,
+    user_has_interacted: &'b bool,
 }
 
-impl TaskTable {
+impl<'b> TaskTable<'b> {
     /// Construct a new table with all of the planned tasks
     pub fn new(
-        tasks_by_type: &TasksByStatus,
-        selected_index: &usize,
-        user_has_interacted: &bool,
+        tasks_by_type: &'b TasksByStatus,
+        selected_index: &'b usize,
+        user_has_interacted: &'b bool,
     ) -> Self {
         Self {
             selected_index,
             tasks_by_type,
-            scroll: TableState::default(),
             spinner: SpinnerState::default(),
             user_has_interacted,
         }
@@ -57,22 +55,6 @@ impl TaskTable {
     /// Update the current time of the table
     pub fn tick(&mut self) {
         self.spinner.update();
-    }
-
-    pub fn tasks_started(&self) -> Vec<&str> {
-        let (errors, success): (Vec<_>, Vec<_>) = self
-            .tasks_by_type
-            .finished
-            .iter()
-            .partition(|task| matches!(task.result(), TaskResult::Failure));
-
-        // We return errors last as they most likely have information users want to see
-        success
-            .into_iter()
-            .map(|task| task.name())
-            .chain(self.tasks_by_type.running.iter().map(|task| task.name()))
-            .chain(errors.into_iter().map(|task| task.name()))
-            .collect()
     }
 
     fn finished_rows(&self) -> impl Iterator<Item = Row> + '_ {
@@ -101,17 +83,9 @@ impl TaskTable {
             .iter()
             .map(move |task| Row::new(vec![Cell::new(task.name()), Cell::new(" ")]))
     }
-
-    /// Convenience method which renders and updates scroll state
-    pub fn stateful_render(&mut self, frame: &mut ratatui::Frame, area: Rect) {
-        let mut scroll = self.scroll.clone();
-        self.spinner.update();
-        frame.render_stateful_widget(&*self, area, &mut scroll);
-        self.scroll = scroll;
-    }
 }
 
-impl<'a> StatefulWidget for &'a TaskTable {
+impl<'a> StatefulWidget for &'a TaskTable<'a> {
     type State = TableState;
 
     fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer, state: &mut Self::State) {

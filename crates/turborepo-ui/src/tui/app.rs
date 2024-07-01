@@ -7,6 +7,7 @@ use std::{
 use ratatui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Layout},
+    widgets::TableState,
     Frame, Terminal,
 };
 use tracing::debug;
@@ -25,12 +26,12 @@ pub enum LayoutSections {
 }
 
 pub struct App<I> {
-    table: TaskTable,
     pane: TerminalPane<I>,
     done: bool,
     input_options: InputOptions,
     started_tasks: Vec<String>,
     task_list: Vec<String>,
+    scroll: TableState,
     tasks_by_status: TasksByStatus,
     selected_task_index: usize,
     has_user_interacted: bool,
@@ -72,7 +73,6 @@ impl<I> App<I> {
         let selected_task_index: usize = 0;
 
         Self {
-            table: TaskTable::new(&tasks_by_status, &selected_task_index, &has_user_interacted),
             pane: TerminalPane::new(rows, cols, tasks),
             done: false,
             input_options: InputOptions {
@@ -83,6 +83,7 @@ impl<I> App<I> {
             started_tasks: Vec::with_capacity(num_of_tasks),
             task_list: task_list_as_strings,
             tasks_by_status,
+            scroll: TableState::default().with_selected(selected_task_index),
             selected_task_index,
             has_user_interacted,
             layout_focus: LayoutSections::Pane,
@@ -93,9 +94,10 @@ impl<I> App<I> {
         let num_rows = self.task_list.len();
         let next_index = (self.selected_task_index + 1).clamp(0, num_rows - 1);
         self.selected_task_index = next_index;
-        self.table.scroll.select(Some(next_index));
+        self.scroll.select(Some(next_index));
         let task = self.task_list[next_index].as_str();
         self.pane.select(task).unwrap();
+        self.has_user_interacted = true;
     }
 
     pub fn previous(&mut self) {
@@ -104,9 +106,10 @@ impl<I> App<I> {
             i => i - 1,
         };
         self.selected_task_index = i;
-        self.table.scroll.select(Some(i));
+        self.scroll.select(Some(i));
         let task = self.task_list[i].as_str();
         self.pane.select(task).unwrap();
+        self.has_user_interacted = true;
     }
 
     /// Mark the given task as started.
@@ -138,12 +141,14 @@ impl<I> App<I> {
         }
 
         // Find the highlighted task from before the list movement in the new list.
-        if let Ok(new_index_to_highlight) = self
+        if let Some(new_index_to_highlight) = self
             .tasks_by_status
             .task_names_in_displayed_order()
-            .binary_search_by(|task| task.cmp(highlighted_task))
+            .iter()
+            .position(|running| running == highlighted_task)
         {
-            self.selected_task_index = new_index_to_highlight
+            self.selected_task_index = new_index_to_highlight;
+            self.scroll.select(Some(new_index_to_highlight));
         }
 
         Ok(())
@@ -164,6 +169,7 @@ impl<I> App<I> {
             .position(|running| running.name() == task)
             .ok_or_else(|| {
                 debug!("could not find '{task}' to finish");
+                println!("{:#?}", highlighted_task);
                 Error::TaskNotFound { name: task.into() }
             })?;
 
@@ -176,12 +182,14 @@ impl<I> App<I> {
         }
 
         // Find the highlighted task from before the list movement in the new list.
-        if let Ok(new_index_to_highlight) = self
+        if let Some(new_index_to_highlight) = self
             .tasks_by_status
             .task_names_in_displayed_order()
-            .binary_search_by(|task| task.cmp(highlighted_task))
+            .iter()
+            .position(|running| running == highlighted_task)
         {
-            self.selected_task_index = new_index_to_highlight
+            self.selected_task_index = new_index_to_highlight;
+            self.scroll.select(Some(new_index_to_highlight));
         }
 
         Ok(())
@@ -212,11 +220,6 @@ impl<I> App<I> {
         task_list.sort_unstable();
         task_list.dedup();
 
-        self.table = TaskTable::new(
-            &self.tasks_by_status,
-            &self.selected_task_index,
-            &self.has_user_interacted,
-        );
         self.next();
     }
 }
@@ -337,8 +340,8 @@ fn cleanup<B: Backend + io::Write, I>(
         crossterm::event::DisableMouseCapture,
         crossterm::terminal::LeaveAlternateScreen,
     )?;
-    let started_tasks = app.table.tasks_started();
-    app.pane.persist_tasks(&started_tasks)?;
+    app.pane
+        .persist_tasks(&app.tasks_by_status.tasks_started())?;
     crossterm::terminal::disable_raw_mode()?;
     terminal.show_cursor()?;
     // We can close the channel now that terminal is back restored to a normal state
@@ -369,7 +372,7 @@ fn update(
             return Ok(Some(callback));
         }
         Event::Tick => {
-            app.table.tick();
+            // app.table.tick();
         }
         Event::EndTask { task, result } => {
             app.finish_task(&task, result)?;
@@ -404,7 +407,7 @@ fn update(
         }
         Event::UpdateTasks { tasks } => {
             app.update_tasks(tasks);
-            app.table.tick();
+            // app.table.tick();
         }
     }
     Ok(None)
@@ -412,8 +415,15 @@ fn update(
 
 fn view<I>(app: &mut App<I>, f: &mut Frame) {
     let (_, width) = app.term_size();
-    let vertical = Layout::horizontal([Constraint::Fill(1), Constraint::Length(width)]);
-    let [table, pane] = vertical.areas(f.size());
-    app.table.stateful_render(f, table);
+    let horizontal = Layout::horizontal([Constraint::Fill(1), Constraint::Length(width)]);
+    let [table, pane] = horizontal.areas(f.size());
+
+    let tabley_boi = TaskTable::new(
+        &app.tasks_by_status,
+        &app.selected_task_index,
+        &app.has_user_interacted,
+    );
+
+    f.render_stateful_widget(&tabley_boi, table, &mut app.scroll);
     f.render_widget(&app.pane, pane);
 }

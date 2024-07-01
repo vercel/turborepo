@@ -59,12 +59,27 @@ impl TasksByStatus {
             .map(|task| task.name().to_string())
             .collect::<Vec<_>>();
 
-        vec![
+        [
             running_names.as_slice(),
             planned_names.as_slice(),
             finished_names.as_slice(),
         ]
         .concat()
+    }
+
+    pub fn tasks_started(&self) -> Vec<&str> {
+        let (errors, success): (Vec<_>, Vec<_>) = self
+            .finished
+            .iter()
+            .partition(|task| matches!(task.result(), TaskResult::Failure));
+
+        // We return errors last as they most likely have information users want to see
+        success
+            .into_iter()
+            .map(|task| task.name())
+            .chain(self.running.iter().map(|task| task.name()))
+            .chain(errors.into_iter().map(|task| task.name()))
+            .collect()
     }
 }
 
