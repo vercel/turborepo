@@ -575,7 +575,7 @@ impl<'a, K: Eq + Hash, V, H: BuildHasher + Default, const I: usize> OccupiedEntr
     pub fn remove(self) -> V {
         match self {
             OccupiedEntry::List { list, index } => list.swap_remove(index).1,
-            OccupiedEntry::Map { entry, this } => entry.remove(),
+            OccupiedEntry::Map { entry, this: _ } => entry.remove(),
         }
     }
 }
@@ -650,7 +650,7 @@ impl<'a, K: Eq + Hash, V, H: BuildHasher + Default, const I: usize>
     pub fn remove(self) -> V {
         match self {
             OccupiedRawEntry::List { list, index } => list.swap_remove(index).1,
-            OccupiedRawEntry::Map { entry, this } => entry.remove(),
+            OccupiedRawEntry::Map { entry, this: _ } => entry.remove(),
         }
     }
 }
