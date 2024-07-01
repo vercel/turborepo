@@ -393,7 +393,7 @@ impl TaskStateType {
         }
     }
 
-    fn into_dependencies_and_children(self) -> (TaskEdgesSet, SmallVec<[TaskId; 64]>) {
+    fn into_dependencies_and_children(self) -> (TaskEdgesSet, SmallVec<[TaskId; 6]>) {
         match self {
             TaskStateType::Done { edges, .. } => {
                 let mut edges = edges.into_set();

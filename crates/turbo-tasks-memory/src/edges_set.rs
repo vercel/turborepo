@@ -425,7 +425,7 @@ impl TaskEdgesSet {
         }
     }
 
-    pub(crate) fn drain_children(&mut self) -> SmallVec<[TaskId; 64]> {
+    pub(crate) fn drain_children(&mut self) -> SmallVec<[TaskId; 6]> {
         let mut children = SmallVec::new();
         self.edges.retain(|&task, entry| match entry {
             EdgesDataEntry::Child => {
