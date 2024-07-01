@@ -1016,14 +1016,11 @@ impl Task {
                 }
                 Dirty {
                     ref mut outdated_edges,
-                    ..
+                    ref mut event,
                 } => {
                     if force_schedule {
-                        let description = self.get_event_description();
                         state.state_type = Scheduled {
-                            event: Event::new(move || {
-                                format!("TaskState({})::event", description())
-                            }),
+                            event: event.take(),
                             outdated_edges: take(outdated_edges),
                         };
                         let change_job = state.aggregation_node.apply_change(
