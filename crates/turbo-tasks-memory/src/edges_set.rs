@@ -47,7 +47,7 @@ impl EdgeEntry {
     }
 }
 
-type ComplexSet = AutoSet<EdgeEntry, BuildHasherDefault<FxHasher>, 3>;
+type ComplexSet = AutoSet<EdgeEntry, BuildHasherDefault<FxHasher>, 9>;
 
 /// Represents a set of [`EdgeEntry`]s for an individual task, where common cases are stored using compact representations.
 enum EdgesEntry {
