@@ -49,7 +49,7 @@ type ComplexSet = AutoSet<EdgeEntry, BuildHasherDefault<FxHasher>, 9>;
 
 /// Represents a set of [`EdgeEntry`]s for an individual task, where common
 /// cases are stored using compact representations.
-enum EdgesEntry {
+enum EdgesDataEntry {
     Empty,
     Output,
     Child,
@@ -61,54 +61,54 @@ enum EdgesEntry {
     Complex(Box<ComplexSet>),
 }
 
-impl EdgesEntry {
+impl EdgesDataEntry {
     fn from(entry: EdgeEntry) -> Self {
         match entry {
-            EdgeEntry::Output => EdgesEntry::Output,
-            EdgeEntry::Child => EdgesEntry::Child,
+            EdgeEntry::Output => EdgesDataEntry::Output,
+            EdgeEntry::Child => EdgesDataEntry::Child,
             EdgeEntry::Cell(CellId { type_id, index }) => {
                 if index == 0 {
-                    EdgesEntry::Cell0(type_id)
+                    EdgesDataEntry::Cell0(type_id)
                 } else {
                     let mut set = AutoSet::default();
                     set.insert(EdgeEntry::Cell(CellId { type_id, index }));
-                    EdgesEntry::Complex(Box::new(set))
+                    EdgesDataEntry::Complex(Box::new(set))
                 }
             }
             EdgeEntry::Collectibles(trait_type_id) => {
                 let mut set = AutoSet::default();
                 set.insert(EdgeEntry::Collectibles(trait_type_id));
-                EdgesEntry::Complex(Box::new(set))
+                EdgesDataEntry::Complex(Box::new(set))
             }
         }
     }
 
     fn into_iter(self) -> impl Iterator<Item = EdgeEntry> {
         match self {
-            EdgesEntry::Empty => unreachable!(),
-            EdgesEntry::Output => Either::Left(Either::Left([EdgeEntry::Output].into_iter())),
-            EdgesEntry::Child => Either::Left(Either::Left([EdgeEntry::Child].into_iter())),
-            EdgesEntry::Cell0(type_id) => Either::Left(Either::Left(
+            EdgesDataEntry::Empty => unreachable!(),
+            EdgesDataEntry::Output => Either::Left(Either::Left([EdgeEntry::Output].into_iter())),
+            EdgesDataEntry::Child => Either::Left(Either::Left([EdgeEntry::Child].into_iter())),
+            EdgesDataEntry::Cell0(type_id) => Either::Left(Either::Left(
                 [EdgeEntry::Cell(CellId { type_id, index: 0 })].into_iter(),
             )),
-            EdgesEntry::ChildAndOutput => Either::Left(Either::Right(
+            EdgesDataEntry::ChildAndOutput => Either::Left(Either::Right(
                 [EdgeEntry::Child, EdgeEntry::Output].into_iter(),
             )),
-            EdgesEntry::ChildAndCell0(type_id) => Either::Left(Either::Right(
+            EdgesDataEntry::ChildAndCell0(type_id) => Either::Left(Either::Right(
                 [
                     EdgeEntry::Child,
                     EdgeEntry::Cell(CellId { type_id, index: 0 }),
                 ]
                 .into_iter(),
             )),
-            EdgesEntry::OutputAndCell0(type_id) => Either::Left(Either::Right(
+            EdgesDataEntry::OutputAndCell0(type_id) => Either::Left(Either::Right(
                 [
                     EdgeEntry::Output,
                     EdgeEntry::Cell(CellId { type_id, index: 0 }),
                 ]
                 .into_iter(),
             )),
-            EdgesEntry::ChildOutputAndCell0(type_id) => Either::Right(Either::Left(
+            EdgesDataEntry::ChildOutputAndCell0(type_id) => Either::Right(Either::Left(
                 [
                     EdgeEntry::Child,
                     EdgeEntry::Output,
@@ -116,26 +116,26 @@ impl EdgesEntry {
                 ]
                 .into_iter(),
             )),
-            EdgesEntry::Complex(set) => Either::Right(Either::Right(set.into_iter())),
+            EdgesDataEntry::Complex(set) => Either::Right(Either::Right(set.into_iter())),
         }
     }
 
     fn iter(&self) -> impl Iterator<Item = EdgeEntry> + '_ {
         match self {
-            EdgesEntry::Empty => unreachable!(),
-            EdgesEntry::Output => Either::Left(Either::Left([EdgeEntry::Output].into_iter())),
-            EdgesEntry::Child => Either::Left(Either::Left([EdgeEntry::Child].into_iter())),
-            EdgesEntry::Cell0(type_id) => Either::Left(Either::Left(
+            EdgesDataEntry::Empty => unreachable!(),
+            EdgesDataEntry::Output => Either::Left(Either::Left([EdgeEntry::Output].into_iter())),
+            EdgesDataEntry::Child => Either::Left(Either::Left([EdgeEntry::Child].into_iter())),
+            EdgesDataEntry::Cell0(type_id) => Either::Left(Either::Left(
                 [EdgeEntry::Cell(CellId {
                     type_id: *type_id,
                     index: 0,
                 })]
                 .into_iter(),
             )),
-            EdgesEntry::ChildAndOutput => Either::Left(Either::Right(
+            EdgesDataEntry::ChildAndOutput => Either::Left(Either::Right(
                 [EdgeEntry::Child, EdgeEntry::Output].into_iter(),
             )),
-            EdgesEntry::ChildAndCell0(type_id) => Either::Left(Either::Right(
+            EdgesDataEntry::ChildAndCell0(type_id) => Either::Left(Either::Right(
                 [
                     EdgeEntry::Child,
                     EdgeEntry::Cell(CellId {
@@ -145,7 +145,7 @@ impl EdgesEntry {
                 ]
                 .into_iter(),
             )),
-            EdgesEntry::OutputAndCell0(type_id) => Either::Left(Either::Right(
+            EdgesDataEntry::OutputAndCell0(type_id) => Either::Left(Either::Right(
                 [
                     EdgeEntry::Output,
                     EdgeEntry::Cell(CellId {
@@ -155,7 +155,7 @@ impl EdgesEntry {
                 ]
                 .into_iter(),
             )),
-            EdgesEntry::ChildOutputAndCell0(type_id) => Either::Right(Either::Left(
+            EdgesDataEntry::ChildOutputAndCell0(type_id) => Either::Right(Either::Left(
                 [
                     EdgeEntry::Child,
                     EdgeEntry::Output,
@@ -166,7 +166,7 @@ impl EdgesEntry {
                 ]
                 .into_iter(),
             )),
-            EdgesEntry::Complex(set) => Either::Right(Either::Right(set.iter().copied())),
+            EdgesDataEntry::Complex(set) => Either::Right(Either::Right(set.iter().copied())),
         }
     }
 
@@ -174,37 +174,37 @@ impl EdgesEntry {
         match (entry, self) {
             (
                 EdgeEntry::Output,
-                EdgesEntry::Output
-                | EdgesEntry::OutputAndCell0(_)
-                | EdgesEntry::ChildAndOutput
-                | EdgesEntry::ChildOutputAndCell0(_),
+                EdgesDataEntry::Output
+                | EdgesDataEntry::OutputAndCell0(_)
+                | EdgesDataEntry::ChildAndOutput
+                | EdgesDataEntry::ChildOutputAndCell0(_),
             ) => true,
             (
                 EdgeEntry::Child,
-                EdgesEntry::Child
-                | EdgesEntry::ChildAndOutput
-                | EdgesEntry::ChildAndCell0(_)
-                | EdgesEntry::ChildOutputAndCell0(_),
+                EdgesDataEntry::Child
+                | EdgesDataEntry::ChildAndOutput
+                | EdgesDataEntry::ChildAndCell0(_)
+                | EdgesDataEntry::ChildOutputAndCell0(_),
             ) => true,
             (
                 EdgeEntry::Cell(cell_id),
-                EdgesEntry::Cell0(type_id)
-                | EdgesEntry::OutputAndCell0(type_id)
-                | EdgesEntry::ChildAndCell0(type_id)
-                | EdgesEntry::ChildOutputAndCell0(type_id),
+                EdgesDataEntry::Cell0(type_id)
+                | EdgesDataEntry::OutputAndCell0(type_id)
+                | EdgesDataEntry::ChildAndCell0(type_id)
+                | EdgesDataEntry::ChildOutputAndCell0(type_id),
             ) => *type_id == cell_id.type_id,
-            (entry, EdgesEntry::Complex(set)) => set.contains(&entry),
+            (entry, EdgesDataEntry::Complex(set)) => set.contains(&entry),
             _ => false,
         }
     }
 
     fn as_complex(&mut self) -> &mut ComplexSet {
         match self {
-            EdgesEntry::Complex(set) => set,
+            EdgesDataEntry::Complex(set) => set,
             _ => {
-                let items = replace(self, EdgesEntry::Output).into_iter().collect();
-                *self = EdgesEntry::Complex(Box::new(items));
-                let EdgesEntry::Complex(set) = self else {
+                let items = replace(self, EdgesDataEntry::Output).into_iter().collect();
+                *self = EdgesDataEntry::Complex(Box::new(items));
+                let EdgesDataEntry::Complex(set) = self else {
                     unreachable!();
                 };
                 set
@@ -218,31 +218,31 @@ impl EdgesEntry {
         }
         match entry {
             EdgeEntry::Output => match self {
-                EdgesEntry::Child => {
-                    *self = EdgesEntry::ChildAndOutput;
+                EdgesDataEntry::Child => {
+                    *self = EdgesDataEntry::ChildAndOutput;
                     return Ok(true);
                 }
-                EdgesEntry::Cell0(type_id) => {
-                    *self = EdgesEntry::OutputAndCell0(*type_id);
+                EdgesDataEntry::Cell0(type_id) => {
+                    *self = EdgesDataEntry::OutputAndCell0(*type_id);
                     return Ok(true);
                 }
-                EdgesEntry::ChildAndCell0(type_id) => {
-                    *self = EdgesEntry::ChildOutputAndCell0(*type_id);
+                EdgesDataEntry::ChildAndCell0(type_id) => {
+                    *self = EdgesDataEntry::ChildOutputAndCell0(*type_id);
                     return Ok(true);
                 }
                 _ => {}
             },
             EdgeEntry::Child => match self {
-                EdgesEntry::Output => {
-                    *self = EdgesEntry::ChildAndOutput;
+                EdgesDataEntry::Output => {
+                    *self = EdgesDataEntry::ChildAndOutput;
                     return Ok(true);
                 }
-                EdgesEntry::Cell0(type_id) => {
-                    *self = EdgesEntry::ChildAndCell0(*type_id);
+                EdgesDataEntry::Cell0(type_id) => {
+                    *self = EdgesDataEntry::ChildAndCell0(*type_id);
                     return Ok(true);
                 }
-                EdgesEntry::OutputAndCell0(type_id) => {
-                    *self = EdgesEntry::ChildOutputAndCell0(*type_id);
+                EdgesDataEntry::OutputAndCell0(type_id) => {
+                    *self = EdgesDataEntry::ChildOutputAndCell0(*type_id);
                     return Ok(true);
                 }
                 _ => {}
@@ -251,16 +251,16 @@ impl EdgesEntry {
                 let CellId { type_id, index } = type_id;
                 if index == 0 {
                     match self {
-                        EdgesEntry::Output => {
-                            *self = EdgesEntry::OutputAndCell0(type_id);
+                        EdgesDataEntry::Output => {
+                            *self = EdgesDataEntry::OutputAndCell0(type_id);
                             return Ok(true);
                         }
-                        EdgesEntry::Child => {
-                            *self = EdgesEntry::ChildAndCell0(type_id);
+                        EdgesDataEntry::Child => {
+                            *self = EdgesDataEntry::ChildAndCell0(type_id);
                             return Ok(true);
                         }
-                        EdgesEntry::ChildAndOutput => {
-                            *self = EdgesEntry::ChildOutputAndCell0(type_id);
+                        EdgesDataEntry::ChildAndOutput => {
+                            *self = EdgesDataEntry::ChildOutputAndCell0(type_id);
                             return Ok(true);
                         }
                         _ => {}
@@ -288,53 +288,53 @@ impl EdgesEntry {
         // handle
         match entry {
             EdgeEntry::Output => match self {
-                EdgesEntry::Output => {
-                    *self = EdgesEntry::Empty;
+                EdgesDataEntry::Output => {
+                    *self = EdgesDataEntry::Empty;
                     return true;
                 }
-                EdgesEntry::ChildAndOutput => {
-                    *self = EdgesEntry::Child;
+                EdgesDataEntry::ChildAndOutput => {
+                    *self = EdgesDataEntry::Child;
                     return true;
                 }
-                EdgesEntry::OutputAndCell0(type_id) => {
-                    *self = EdgesEntry::Cell0(*type_id);
+                EdgesDataEntry::OutputAndCell0(type_id) => {
+                    *self = EdgesDataEntry::Cell0(*type_id);
                     return true;
                 }
                 _ => {}
             },
             EdgeEntry::Child => match self {
-                EdgesEntry::Child => {
-                    *self = EdgesEntry::Empty;
+                EdgesDataEntry::Child => {
+                    *self = EdgesDataEntry::Empty;
                     return true;
                 }
-                EdgesEntry::ChildAndOutput => {
-                    *self = EdgesEntry::Output;
+                EdgesDataEntry::ChildAndOutput => {
+                    *self = EdgesDataEntry::Output;
                     return true;
                 }
-                EdgesEntry::ChildAndCell0(type_id) => {
-                    *self = EdgesEntry::Cell0(*type_id);
+                EdgesDataEntry::ChildAndCell0(type_id) => {
+                    *self = EdgesDataEntry::Cell0(*type_id);
                     return true;
                 }
                 _ => {}
             },
             EdgeEntry::Cell(_) => match self {
-                EdgesEntry::Cell0(_) => {
-                    *self = EdgesEntry::Empty;
+                EdgesDataEntry::Cell0(_) => {
+                    *self = EdgesDataEntry::Empty;
                     return true;
                 }
-                EdgesEntry::OutputAndCell0(_) => {
-                    *self = EdgesEntry::Output;
+                EdgesDataEntry::OutputAndCell0(_) => {
+                    *self = EdgesDataEntry::Output;
                     return true;
                 }
-                EdgesEntry::ChildAndCell0(_) => {
-                    *self = EdgesEntry::Child;
+                EdgesDataEntry::ChildAndCell0(_) => {
+                    *self = EdgesDataEntry::Child;
                     return true;
                 }
                 _ => {}
             },
             EdgeEntry::Collectibles(_) => {}
         }
-        if let EdgesEntry::Complex(set) = self {
+        if let EdgesDataEntry::Complex(set) = self {
             if set.remove(&entry) {
                 self.simplify();
                 return true;
@@ -344,16 +344,16 @@ impl EdgesEntry {
     }
 
     fn shrink_to_fit(&mut self) {
-        if let EdgesEntry::Complex(set) = self {
+        if let EdgesDataEntry::Complex(set) = self {
             set.shrink_to_fit();
         }
     }
 
     fn simplify(&mut self) {
-        if let EdgesEntry::Complex(set) = self {
+        if let EdgesDataEntry::Complex(set) = self {
             match set.len() {
                 0 => {
-                    *self = EdgesEntry::Empty;
+                    *self = EdgesDataEntry::Empty;
                 }
                 1 | 2 | 3 => {
                     let mut iter = set.iter();
@@ -364,7 +364,7 @@ impl EdgesEntry {
                             | EdgeEntry::Child
                             | EdgeEntry::Cell(CellId { index: 0, .. })
                     ) {
-                        let mut new = EdgesEntry::from(*first);
+                        let mut new = EdgesDataEntry::from(*first);
                         for entry in iter {
                             if new.try_insert_without_complex(*entry).is_err() {
                                 return;
@@ -381,7 +381,7 @@ impl EdgesEntry {
 
 #[derive(Default)]
 pub struct TaskEdgesSet {
-    edges: AutoMap<TaskId, EdgesEntry, BuildHasherDefault<FxHasher>>,
+    edges: AutoMap<TaskId, EdgesDataEntry, BuildHasherDefault<FxHasher>>,
 }
 
 impl TaskEdgesSet {
@@ -399,7 +399,7 @@ impl TaskEdgesSet {
                 entry.insert(edge)
             }
             Entry::Vacant(entry) => {
-                entry.insert(EdgesEntry::from(edge));
+                entry.insert(EdgesDataEntry::from(edge));
                 true
             }
         }
@@ -427,31 +427,31 @@ impl TaskEdgesSet {
     pub(crate) fn drain_children(&mut self) -> SmallVec<[TaskId; 64]> {
         let mut children = SmallVec::new();
         self.edges.retain(|&task, entry| match entry {
-            EdgesEntry::Child => {
+            EdgesDataEntry::Child => {
                 children.push(task);
                 false
             }
-            EdgesEntry::ChildAndOutput => {
+            EdgesDataEntry::ChildAndOutput => {
                 children.push(task);
-                *entry = EdgesEntry::Output;
+                *entry = EdgesDataEntry::Output;
                 true
             }
-            EdgesEntry::ChildAndCell0(type_id) => {
+            EdgesDataEntry::ChildAndCell0(type_id) => {
                 children.push(task);
-                *entry = EdgesEntry::Cell0(*type_id);
+                *entry = EdgesDataEntry::Cell0(*type_id);
                 true
             }
-            EdgesEntry::ChildOutputAndCell0(type_id) => {
+            EdgesDataEntry::ChildOutputAndCell0(type_id) => {
                 children.push(task);
-                *entry = EdgesEntry::OutputAndCell0(*type_id);
+                *entry = EdgesDataEntry::OutputAndCell0(*type_id);
                 true
             }
-            EdgesEntry::Complex(set) => {
+            EdgesDataEntry::Complex(set) => {
                 if set.remove(&EdgeEntry::Child) {
                     children.push(task);
                 }
                 entry.simplify();
-                !matches!(entry, EdgesEntry::Empty)
+                !matches!(entry, EdgesDataEntry::Empty)
             }
             _ => true,
         });
@@ -465,7 +465,7 @@ impl TaskEdgesSet {
                 for item in other.iter() {
                     entry.remove(item);
                 }
-                !matches!(entry, EdgesEntry::Empty)
+                !matches!(entry, EdgesDataEntry::Empty)
             } else {
                 true
             }
@@ -479,7 +479,7 @@ impl TaskEdgesSet {
         };
         let edge_entry = entry.get_mut();
         if edge_entry.remove(edge) {
-            if matches!(edge_entry, EdgesEntry::Empty) {
+            if matches!(edge_entry, EdgesDataEntry::Empty) {
                 entry.remove();
             }
             true
@@ -490,11 +490,11 @@ impl TaskEdgesSet {
 
     pub fn children(&self) -> impl Iterator<Item = TaskId> + '_ {
         self.edges.iter().filter_map(|(task, entry)| match entry {
-            EdgesEntry::Child => Some(*task),
-            EdgesEntry::ChildAndOutput => Some(*task),
-            EdgesEntry::ChildAndCell0(_) => Some(*task),
-            EdgesEntry::ChildOutputAndCell0(_) => Some(*task),
-            EdgesEntry::Complex(set) => {
+            EdgesDataEntry::Child => Some(*task),
+            EdgesDataEntry::ChildAndOutput => Some(*task),
+            EdgesDataEntry::ChildAndCell0(_) => Some(*task),
+            EdgesDataEntry::ChildOutputAndCell0(_) => Some(*task),
+            EdgesDataEntry::Complex(set) => {
                 if set.contains(&EdgeEntry::Child) {
                     Some(*task)
                 } else {
@@ -519,7 +519,7 @@ impl IntoIterator for TaskEdgesSet {
 
 #[derive(Default)]
 pub struct TaskEdgesList {
-    edges: Box<[(TaskId, EdgesEntry)]>,
+    edges: Box<[(TaskId, EdgesDataEntry)]>,
 }
 
 impl TaskEdgesList {
@@ -535,11 +535,11 @@ impl TaskEdgesList {
 
     pub fn children(&self) -> impl Iterator<Item = TaskId> + '_ {
         self.edges.iter().filter_map(|(task, entry)| match entry {
-            EdgesEntry::Child => Some(*task),
-            EdgesEntry::ChildAndOutput => Some(*task),
-            EdgesEntry::ChildAndCell0(_) => Some(*task),
-            EdgesEntry::ChildOutputAndCell0(_) => Some(*task),
-            EdgesEntry::Complex(set) => {
+            EdgesDataEntry::Child => Some(*task),
+            EdgesDataEntry::ChildAndOutput => Some(*task),
+            EdgesDataEntry::ChildAndCell0(_) => Some(*task),
+            EdgesDataEntry::ChildOutputAndCell0(_) => Some(*task),
+            EdgesDataEntry::Complex(set) => {
                 if set.contains(&EdgeEntry::Child) {
                     Some(*task)
                 } else {
