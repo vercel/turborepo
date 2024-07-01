@@ -25,8 +25,7 @@ pub enum LayoutSections {
     TaskList,
 }
 
-pub struct App<I> {
-    pane: TerminalPane<I>,
+pub struct App {
     done: bool,
     input_options: InputOptions,
     started_tasks: Vec<String>,
@@ -43,7 +42,7 @@ pub enum Direction {
     Down,
 }
 
-impl<I> App<I> {
+impl App {
     pub fn new(rows: u16, cols: u16, tasks: Vec<String>) -> Self {
         debug!("tasks: {tasks:?}");
 
@@ -73,7 +72,6 @@ impl<I> App<I> {
         let selected_task_index: usize = 0;
 
         Self {
-            pane: TerminalPane::new(rows, cols, tasks),
             done: false,
             input_options: InputOptions {
                 interact: false,
@@ -95,8 +93,6 @@ impl<I> App<I> {
         let next_index = (self.selected_task_index + 1).clamp(0, num_rows - 1);
         self.selected_task_index = next_index;
         self.scroll.select(Some(next_index));
-        let task = self.task_list[next_index].as_str();
-        self.pane.select(task).unwrap();
         self.has_user_interacted = true;
     }
 
@@ -107,8 +103,6 @@ impl<I> App<I> {
         };
         self.selected_task_index = i;
         self.scroll.select(Some(i));
-        let task = self.task_list[i].as_str();
-        self.pane.select(task).unwrap();
         self.has_user_interacted = true;
     }
 
@@ -196,12 +190,12 @@ impl<I> App<I> {
     }
 
     pub fn interact(&mut self, interact: bool) {
+        self.layout_focus = LayoutSections::Pane;
         if self
             .pane
             .has_stdin(self.task_list[self.selected_task_index].as_str())
         {
             self.input_options.interact = interact;
-            self.pane.highlight(interact);
         }
     }
 
@@ -224,7 +218,7 @@ impl<I> App<I> {
     }
 }
 
-impl<I: std::io::Write> App<I> {
+impl App {
     pub fn forward_input(&mut self, bytes: &[u8]) -> Result<(), Error> {
         // If we aren't in interactive mode, ignore input
         if !self.input_options.interact {
@@ -247,10 +241,15 @@ pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
     let ratio_pane_width = (f32::from(size.width) * PANE_SIZE_RATIO) as u16;
     let full_task_width = size.width.saturating_sub(task_width_hint);
 
-    let mut app: App<Box<dyn io::Write + Send>> =
-        App::new(size.height, full_task_width.max(ratio_pane_width), tasks);
+    let mut app: App = App::new(size.height, full_task_width.max(ratio_pane_width), tasks);
 
-    let (result, callback) = match run_app_inner(&mut terminal, &mut app, receiver) {
+    let (result, callback) = match run_app_inner(
+        &mut terminal,
+        &mut app,
+        receiver,
+        size.height,
+        full_task_width.max(ratio_pane_width),
+    ) {
         Ok(callback) => (Ok(()), callback),
         Err(err) => (Err(err), None),
     };
@@ -264,11 +263,13 @@ pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
 // terminal.
 fn run_app_inner<B: Backend + std::io::Write>(
     terminal: &mut Terminal<B>,
-    app: &mut App<Box<dyn io::Write + Send>>,
+    app: &mut App,
     receiver: AppReceiver,
+    rows: u16,
+    cols: u16,
 ) -> Result<Option<mpsc::SyncSender<()>>, Error> {
     // Render initial state to paint the screen
-    terminal.draw(|f| view(app, f))?;
+    terminal.draw(|f| view(app, f, rows, cols))?;
     let mut last_render = Instant::now();
     let mut callback = None;
     while let Some(event) = poll(app.input_options, &receiver, last_render + FRAMERATE) {
@@ -277,7 +278,7 @@ fn run_app_inner<B: Backend + std::io::Write>(
             break;
         }
         if FRAMERATE <= last_render.elapsed() {
-            terminal.draw(|f| view(app, f))?;
+            terminal.draw(|f| view(app, f, rows, cols))?;
             last_render = Instant::now();
         }
     }
@@ -329,9 +330,9 @@ fn startup() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
 }
 
 /// Restores terminal to expected state
-fn cleanup<B: Backend + io::Write, I>(
+fn cleanup<B: Backend + io::Write>(
     mut terminal: Terminal<B>,
-    mut app: App<I>,
+    mut app: App,
     callback: Option<mpsc::SyncSender<()>>,
 ) -> io::Result<()> {
     terminal.clear()?;
@@ -340,8 +341,7 @@ fn cleanup<B: Backend + io::Write, I>(
         crossterm::event::DisableMouseCapture,
         crossterm::terminal::LeaveAlternateScreen,
     )?;
-    app.pane
-        .persist_tasks(&app.tasks_by_status.tasks_started())?;
+    app.persist_tasks(&app.tasks_by_status.tasks_started())?;
     crossterm::terminal::disable_raw_mode()?;
     terminal.show_cursor()?;
     // We can close the channel now that terminal is back restored to a normal state
@@ -349,10 +349,7 @@ fn cleanup<B: Backend + io::Write, I>(
     Ok(())
 }
 
-fn update(
-    app: &mut App<Box<dyn io::Write + Send>>,
-    event: Event,
-) -> Result<Option<mpsc::SyncSender<()>>, Error> {
+fn update(app: &mut App, event: Event) -> Result<Option<mpsc::SyncSender<()>>, Error> {
     match event {
         Event::StartTask { task } => {
             app.start_task(&task)?;
@@ -413,17 +410,27 @@ fn update(
     Ok(None)
 }
 
-fn view<I>(app: &mut App<I>, f: &mut Frame) {
+fn view(app: &mut App, f: &mut Frame, rows: u16, cols: u16) {
     let (_, width) = app.term_size();
     let horizontal = Layout::horizontal([Constraint::Fill(1), Constraint::Length(width)]);
     let [table, pane] = horizontal.areas(f.size());
 
-    let tabley_boi = TaskTable::new(
+    let pane_to_render: TerminalPane<bool> = TerminalPane::new(
+        rows,
+        cols,
+        app.tasks_by_status.task_names_in_displayed_order(),
+        match app.layout_focus {
+            LayoutSections::Pane => true,
+            LayoutSections::TaskList => false,
+        },
+    );
+
+    let table_to_render = TaskTable::new(
         &app.tasks_by_status,
         &app.selected_task_index,
         &app.has_user_interacted,
     );
 
-    f.render_stateful_widget(&tabley_boi, table, &mut app.scroll);
-    f.render_widget(&app.pane, pane);
+    f.render_stateful_widget(&table_to_render, table, &mut app.scroll);
+    f.render_widget(&pane_to_render, pane);
 }

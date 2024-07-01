@@ -16,7 +16,7 @@ const FOOTER_TEXT_INACTIVE: &str = "Press `Enter` to interact.";
 
 pub struct TerminalPane<W> {
     tasks: BTreeMap<String, TerminalOutput<W>>,
-    displayed: Option<String>,
+    displayed_task: Option<String>,
     rows: u16,
     cols: u16,
     highlight: bool,
@@ -31,7 +31,12 @@ struct TerminalOutput<W> {
 }
 
 impl<W> TerminalPane<W> {
-    pub fn new(rows: u16, cols: u16, tasks: impl IntoIterator<Item = String>) -> Self {
+    pub fn new(
+        rows: u16,
+        cols: u16,
+        tasks: impl IntoIterator<Item = String>,
+        highlight: bool,
+    ) -> Self {
         // We trim 2 from rows and cols as we use them for borders
         let rows = rows.saturating_sub(2);
         let cols = cols.saturating_sub(2);
@@ -40,10 +45,10 @@ impl<W> TerminalPane<W> {
                 .into_iter()
                 .map(|name| (name, TerminalOutput::new(rows, cols, None)))
                 .collect(),
-            displayed: None,
+            displayed_task: None,
             rows,
             cols,
-            highlight: false,
+            highlight,
         }
     }
 
@@ -72,7 +77,7 @@ impl<W> TerminalPane<W> {
         self.cols = cols;
         if changed {
             // Eagerly resize currently displayed terminal
-            if let Some(task_name) = self.displayed.as_deref() {
+            if let Some(task_name) = self.displayed_task.as_deref() {
                 let task = self
                     .tasks
                     .get_mut(task_name)
@@ -91,7 +96,7 @@ impl<W> TerminalPane<W> {
             let terminal = self.task_mut(task)?;
             terminal.resize(rows, cols);
         }
-        self.displayed = Some(task.into());
+        self.displayed_task = Some(task.into());
 
         Ok(())
     }
@@ -130,7 +135,7 @@ impl<W> TerminalPane<W> {
     }
 
     fn selected(&self) -> Option<(&String, &TerminalOutput<W>)> {
-        let task_name = self.displayed.as_deref()?;
+        let task_name = self.displayed_task.as_deref()?;
         self.tasks.get_key_value(task_name)
     }
 
@@ -240,7 +245,7 @@ mod test {
 
     #[test]
     fn test_basic() {
-        let mut pane: TerminalPane<()> = TerminalPane::new(6, 8, vec!["foo".into()]);
+        let mut pane: TerminalPane<()> = TerminalPane::new(6, 8, vec!["foo".into()], false);
         pane.select("foo").unwrap();
         pane.process_output("foo", b"1\r\n2\r\n3\r\n4\r\n5\r\n")
             .unwrap();
