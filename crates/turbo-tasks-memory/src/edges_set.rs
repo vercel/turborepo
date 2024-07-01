@@ -281,6 +281,9 @@ impl EdgesDataEntry {
         }
     }
 
+    /// Removes the entry from the set, returning `true` if the entry was
+    /// present. When the entry was removed, `self` might become `Empty` and
+    /// must be removed.
     fn remove(&mut self, entry: EdgeEntry) -> bool {
         if !self.has(entry) {
             return false;
@@ -350,6 +353,8 @@ impl EdgesDataEntry {
         }
     }
 
+    /// Simplifies the set by converting it to a more compact representation.
+    /// When `self` becomes `Empty`, it must be removed.
     fn simplify(&mut self) {
         if let EdgesDataEntry::Complex(set) = self {
             match set.len() {
