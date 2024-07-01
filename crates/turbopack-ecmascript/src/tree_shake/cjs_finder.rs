@@ -32,9 +32,6 @@ pub fn should_skip_tree_shaking(m: &Program) -> bool {
                     }
                 }
 
-                // We don't have logic to tree shake export * from
-                ModuleItem::ModuleDecl(ModuleDecl::ExportAll(..)) => return true,
-
                 // Tree shaking has a bug related to ModuleExportName::Str
                 ModuleItem::ModuleDecl(ModuleDecl::ExportNamed(NamedExport {
                     src: Some(..),
