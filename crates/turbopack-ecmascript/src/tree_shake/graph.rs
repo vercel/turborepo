@@ -1062,7 +1062,8 @@ impl DepGraph {
                 ModuleItem::ModuleDecl(
                     ModuleDecl::ExportDefaultDecl(..)
                     | ModuleDecl::ExportDefaultExpr(..)
-                    | ModuleDecl::ExportNamed(NamedExport { .. }),
+                    | ModuleDecl::ExportNamed(NamedExport { .. })
+                    | ModuleDecl::ExportAll(..),
                 ) => {}
 
                 _ => {
