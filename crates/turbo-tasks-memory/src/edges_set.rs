@@ -27,7 +27,7 @@ impl TaskEdge {
     }
 }
 
-#[derive(Hash, Copy, Clone, PartialEq, Eq)]
+#[derive(Hash, Copy, Clone, PartialEq, Eq, Debug)]
 enum EdgeEntry {
     Output,
     Child,
@@ -50,6 +50,7 @@ type ComplexSet = AutoSet<EdgeEntry, BuildHasherDefault<FxHasher>, 9>;
 
 /// Represents a set of [`EdgeEntry`]s for an individual task, where common
 /// cases are stored using compact representations.
+#[derive(Debug)]
 enum EdgesDataEntry {
     Empty,
     Output,
@@ -304,6 +305,10 @@ impl EdgesDataEntry {
                     *self = EdgesDataEntry::Cell0(*type_id);
                     return true;
                 }
+                EdgesDataEntry::ChildOutputAndCell0(type_id) => {
+                    *self = EdgesDataEntry::ChildAndCell0(*type_id);
+                    return true;
+                }
                 _ => {}
             },
             EdgeEntry::Child => match self {
@@ -319,6 +324,10 @@ impl EdgesDataEntry {
                     *self = EdgesDataEntry::Cell0(*type_id);
                     return true;
                 }
+                EdgesDataEntry::ChildOutputAndCell0(type_id) => {
+                    *self = EdgesDataEntry::OutputAndCell0(*type_id);
+                    return true;
+                }
                 _ => {}
             },
             EdgeEntry::Cell(_) => match self {
@@ -332,6 +341,10 @@ impl EdgesDataEntry {
                 }
                 EdgesDataEntry::ChildAndCell0(_) => {
                     *self = EdgesDataEntry::Child;
+                    return true;
+                }
+                EdgesDataEntry::ChildOutputAndCell0(_) => {
+                    *self = EdgesDataEntry::ChildAndOutput;
                     return true;
                 }
                 _ => {}
@@ -385,7 +398,7 @@ impl EdgesDataEntry {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct TaskEdgesSet {
     edges: AutoMap<TaskId, EdgesDataEntry, BuildHasherDefault<FxHasher>>,
 }
