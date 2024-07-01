@@ -30,6 +30,44 @@ pub enum TaskType {
     Finished,
 }
 
+#[derive(Clone)]
+pub struct TasksByStatus {
+    pub running: Vec<Task<Running>>,
+    pub planned: Vec<Task<Planned>>,
+    pub finished: Vec<Task<Finished>>,
+}
+
+impl TasksByStatus {
+    pub fn all_empty(&self) -> bool {
+        self.planned.is_empty() && self.finished.is_empty() && self.running.is_empty()
+    }
+
+    pub fn task_names_in_displayed_order(&self) -> Vec<String> {
+        let running_names = self
+            .running
+            .iter()
+            .map(|task| task.name().to_string())
+            .collect::<Vec<_>>();
+        let planned_names = self
+            .planned
+            .iter()
+            .map(|task| task.name().to_string())
+            .collect::<Vec<_>>();
+        let finished_names = self
+            .finished
+            .iter()
+            .map(|task| task.name().to_string())
+            .collect::<Vec<_>>();
+
+        vec![
+            running_names.as_slice(),
+            planned_names.as_slice(),
+            finished_names.as_slice(),
+        ]
+        .concat()
+    }
+}
+
 impl<S> Task<S> {
     pub fn name(&self) -> &str {
         &self.name

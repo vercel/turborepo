@@ -14,8 +14,10 @@ use tracing::debug;
 const PANE_SIZE_RATIO: f32 = 3.0 / 4.0;
 const FRAMERATE: Duration = Duration::from_millis(3);
 
-use super::{input, AppReceiver, Error, Event, InputOptions, TaskTable, TerminalPane};
-use crate::tui::task::Task;
+use super::{
+    event::TaskResult, input, AppReceiver, Error, Event, InputOptions, TaskTable, TerminalPane,
+};
+use crate::tui::task::{Task, TasksByStatus};
 
 pub enum LayoutSections {
     Pane,
@@ -29,7 +31,9 @@ pub struct App<I> {
     input_options: InputOptions,
     started_tasks: Vec<String>,
     task_list: Vec<String>,
+    tasks_by_status: TasksByStatus,
     selected_task_index: usize,
+    has_user_interacted: bool,
     layout_focus: LayoutSections,
 }
 
@@ -45,22 +49,30 @@ impl<I> App<I> {
         let num_of_tasks = tasks.len();
 
         // Initializes with the planned tasks
-        // and will mutate as tasks change their stateful_render
+        // and will mutate as tasks change
         // to running, finished, etc.
-        let mut task_list = tasks
-            // TODO: Is cloning bad?
-            .clone()
-            .into_iter()
-            .map(Task::new)
-            .map(|task| task.name().to_string())
-            .collect::<Vec<_>>();
+        let mut task_list = tasks.clone().into_iter().map(Task::new).collect::<Vec<_>>();
         task_list.sort_unstable();
         task_list.dedup();
 
-        let mut selected_task_index = 0;
+        // TODO: WIP, I shouldn't need this when I'm done?
+        let task_list_as_strings = task_list
+            .clone()
+            .into_iter()
+            .map(|task| task.name().to_string())
+            .collect::<Vec<_>>();
+
+        let tasks_by_status = TasksByStatus {
+            planned: task_list,
+            finished: Vec::new(),
+            running: Vec::new(),
+        };
+
+        let has_user_interacted = false;
+        let selected_task_index: usize = 0;
 
         Self {
-            table: TaskTable::new(task_list.clone(), selected_task_index),
+            table: TaskTable::new(&tasks_by_status, &selected_task_index, &has_user_interacted),
             pane: TerminalPane::new(rows, cols, tasks),
             done: false,
             input_options: InputOptions {
@@ -69,8 +81,10 @@ impl<I> App<I> {
                 tty_stdin: atty::is(atty::Stream::Stdin),
             },
             started_tasks: Vec::with_capacity(num_of_tasks),
-            task_list,
+            task_list: task_list_as_strings,
+            tasks_by_status,
             selected_task_index,
+            has_user_interacted,
             layout_focus: LayoutSections::Pane,
         }
     }
@@ -95,6 +109,84 @@ impl<I> App<I> {
         self.pane.select(task).unwrap();
     }
 
+    /// Mark the given task as started.
+    /// If planned, pulls it from planned tasks and starts it.
+    /// If finished, removes from finished and starts again as new task.
+    pub fn start_task(&mut self, task: &str) -> Result<(), Error> {
+        // Name of currently highlighted task.
+        // We will use this after the order switches.
+        let highlighted_task =
+            &self.tasks_by_status.task_names_in_displayed_order()[self.selected_task_index];
+
+        let planned_idx = self
+            .tasks_by_status
+            .planned
+            .iter()
+            .position(|planned| planned.name() == task)
+            .ok_or_else(|| {
+                debug!("could not find '{task}' to start");
+                Error::TaskNotFound { name: task.into() }
+            })?;
+
+        let planned = self.tasks_by_status.planned.remove(planned_idx);
+        let running = planned.start();
+        self.tasks_by_status.running.push(running);
+
+        // If user hasn't interacted, keep highlighting top-most task in list.
+        if !self.has_user_interacted {
+            return Ok(());
+        }
+
+        // Find the highlighted task from before the list movement in the new list.
+        if let Ok(new_index_to_highlight) = self
+            .tasks_by_status
+            .task_names_in_displayed_order()
+            .binary_search_by(|task| task.cmp(highlighted_task))
+        {
+            self.selected_task_index = new_index_to_highlight
+        }
+
+        Ok(())
+    }
+
+    /// Mark the given running task as finished
+    /// Errors if given task wasn't a running task
+    pub fn finish_task(&mut self, task: &str, result: TaskResult) -> Result<(), Error> {
+        // Name of currently highlighted task.
+        // We will use this after the order switches.
+        let highlighted_task =
+            &self.tasks_by_status.task_names_in_displayed_order()[self.selected_task_index];
+
+        let running_idx = self
+            .tasks_by_status
+            .running
+            .iter()
+            .position(|running| running.name() == task)
+            .ok_or_else(|| {
+                debug!("could not find '{task}' to finish");
+                Error::TaskNotFound { name: task.into() }
+            })?;
+
+        let running = self.tasks_by_status.running.remove(running_idx);
+        self.tasks_by_status.finished.push(running.finish(result));
+
+        // If user hasn't interacted, keep highlighting top-most task in list.
+        if !self.has_user_interacted {
+            return Ok(());
+        }
+
+        // Find the highlighted task from before the list movement in the new list.
+        if let Ok(new_index_to_highlight) = self
+            .tasks_by_status
+            .task_names_in_displayed_order()
+            .binary_search_by(|task| task.cmp(highlighted_task))
+        {
+            self.selected_task_index = new_index_to_highlight
+        }
+
+        Ok(())
+    }
+
     pub fn interact(&mut self, interact: bool) {
         if self
             .pane
@@ -116,7 +208,15 @@ impl<I> App<I> {
     }
 
     pub fn update_tasks(&mut self, tasks: Vec<String>) {
-        self.table = TaskTable::new(tasks.clone(), self.selected_task_index);
+        let mut task_list = tasks.into_iter().map(Task::new).collect::<Vec<_>>();
+        task_list.sort_unstable();
+        task_list.dedup();
+
+        self.table = TaskTable::new(
+            &self.tasks_by_status,
+            &self.selected_task_index,
+            &self.has_user_interacted,
+        );
         self.next();
     }
 }
@@ -127,10 +227,7 @@ impl<I: std::io::Write> App<I> {
         if !self.input_options.interact {
             return Ok(());
         }
-        let selected_task = self
-            .table
-            .selected()
-            .expect("table should always have task selected");
+        let selected_task = self.task_list[self.selected_task_index].as_str();
         self.pane.process_input(selected_task, bytes)?;
         Ok(())
     }
@@ -255,7 +352,7 @@ fn update(
 ) -> Result<Option<mpsc::SyncSender<()>>, Error> {
     match event {
         Event::StartTask { task } => {
-            app.table.start_task(&task)?;
+            app.start_task(&task)?;
             app.started_tasks.push(task);
         }
         Event::TaskOutput { task, output } => {
@@ -275,7 +372,7 @@ fn update(
             app.table.tick();
         }
         Event::EndTask { task, result } => {
-            app.table.finish_task(&task, result)?;
+            app.finish_task(&task, result)?;
         }
         Event::Up => {
             app.previous();
@@ -284,15 +381,19 @@ fn update(
             app.next();
         }
         Event::ScrollUp => {
+            app.has_user_interacted = true;
             app.scroll(Direction::Up);
         }
         Event::ScrollDown => {
+            app.has_user_interacted = true;
             app.scroll(Direction::Down);
         }
         Event::EnterInteractive => {
+            app.has_user_interacted = true;
             app.interact(true);
         }
         Event::ExitInteractive => {
+            app.has_user_interacted = true;
             app.interact(false);
         }
         Event::Input { bytes } => {

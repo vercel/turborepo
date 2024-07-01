@@ -9,7 +9,7 @@ use tracing::debug;
 use super::{
     event::TaskResult,
     spinner::SpinnerState,
-    task::{Finished, Planned, Running, Task},
+    task::{Task, TasksByStatus},
     Error,
 };
 
@@ -18,32 +18,26 @@ use super::{
 /// The table contains finished tasks, running tasks, and planned tasks rendered
 /// in that order.
 pub struct TaskTable {
-    // Tasks to be displayed
-    // Ordered by when they finished
-    finished: Vec<Task<Finished>>,
-    // Ordered by when they started
-    running: Vec<Task<Running>>,
-    // Ordered by task name
-    planned: Vec<Task<Planned>>,
-    // State used for showing things
+    tasks_by_type: &TasksByStatus,
     pub scroll: TableState,
     spinner: SpinnerState,
-    selected_index: usize,
+    selected_index: &usize,
+    user_has_interacted: &bool,
 }
 
 impl TaskTable {
     /// Construct a new table with all of the planned tasks
-    pub fn new(tasks: Vec<String>, selected_index: usize) -> Self {
-        let mut planned = tasks.into_iter().map(Task::new).collect::<Vec<_>>();
-        planned.sort_unstable();
-        planned.dedup();
+    pub fn new(
+        tasks_by_type: &TasksByStatus,
+        selected_index: &usize,
+        user_has_interacted: &bool,
+    ) -> Self {
         Self {
             selected_index,
-            planned,
-            running: Vec::new(),
-            finished: Vec::new(),
+            tasks_by_type,
             scroll: TableState::default(),
             spinner: SpinnerState::default(),
+            user_has_interacted,
         }
     }
 
@@ -60,133 +54,14 @@ impl TaskTable {
         task_name_width + 1
     }
 
-    /// Number of rows in the table
-    pub fn len(&self) -> usize {
-        self.finished.len() + self.running.len() + self.planned.len()
-    }
-
-    /// If there are no tasks in the table
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    /// Mark the given task as started.
-    /// If planned, pulls it from planned tasks and starts it.
-    /// If finished, removes from finished and starts again as new task.
-    pub fn start_task(&mut self, task: &str) -> Result<(), Error> {
-        if let Ok(planned_idx) = self
-            .planned
-            .binary_search_by(|planned_task| planned_task.name().cmp(task))
-        {
-            let planned = self.planned.remove(planned_idx);
-            let old_row_idx = self.finished.len() + self.running.len() + planned_idx;
-            let new_row_idx = self.finished.len() + self.running.len();
-            let running = planned.start();
-            self.running.push(running);
-
-            if let Some(selected_idx) = self.scroll.selected() {
-                // If task that was just started is selected, then update selection to follow
-                // task
-                if selected_idx == old_row_idx {
-                    self.scroll.select(Some(new_row_idx));
-                } else if new_row_idx <= selected_idx && selected_idx < old_row_idx {
-                    // If the selected task is between the old and new row positions
-                    // then increment the selection index to keep selection the same.
-                    self.scroll.select(Some(selected_idx + 1));
-                }
-            }
-        } else if let Some(finished_idx) = self
-            .finished
-            .iter()
-            .position(|finished_task| finished_task.name() == task)
-        {
-            let finished = self.finished.remove(finished_idx);
-            let old_row_idx = finished_idx;
-            let new_row_idx = self.finished.len() + self.running.len();
-            let running = Task::new(finished.name().to_string()).start();
-            self.running.push(running);
-
-            if let Some(selected_idx) = self.scroll.selected() {
-                // If task that was just started is selected, then update selection to follow
-                // task
-                if selected_idx == old_row_idx {
-                    self.scroll.select(Some(new_row_idx));
-                } else if new_row_idx <= selected_idx && selected_idx < old_row_idx {
-                    // If the selected task is between the old and new row positions
-                    // then increment the selection index to keep selection the same.
-                    self.scroll.select(Some(selected_idx + 1));
-                }
-            }
-        } else {
-            debug!("could not find '{task}' to start");
-            return Err(Error::TaskNotFound { name: task.into() });
-        }
-
-        self.tick();
-        Ok(())
-    }
-
-    /// Mark the given running task as finished
-    /// Errors if given task wasn't a running task
-    pub fn finish_task(&mut self, task: &str, result: TaskResult) -> Result<(), Error> {
-        let running_idx = self
-            .running
-            .iter()
-            .position(|running| running.name() == task)
-            .ok_or_else(|| {
-                debug!("could not find '{task}' to finish");
-                Error::TaskNotFound { name: task.into() }
-            })?;
-        let old_row_idx = self.finished.len() + running_idx;
-        let new_row_idx = self.finished.len();
-        let running = self.running.remove(running_idx);
-        self.finished.push(running.finish(result));
-
-        if let Some(selected_row) = self.scroll.selected() {
-            // If task that was just started is selected, then update selection to follow
-            // task
-            if selected_row == old_row_idx {
-                self.scroll.select(Some(new_row_idx));
-            } else if new_row_idx <= selected_row && selected_row < old_row_idx {
-                // If the selected task is between the old and new row positions then increment
-                // the selection index to keep selection the same.
-                self.scroll.select(Some(selected_row + 1));
-            }
-        }
-
-        self.tick();
-        Ok(())
-    }
-
     /// Update the current time of the table
     pub fn tick(&mut self) {
         self.spinner.update();
     }
 
-    pub fn get(&self, i: usize) -> Option<&str> {
-        if i < self.finished.len() {
-            let task = self.finished.get(i)?;
-            Some(task.name())
-        } else if i < self.finished.len() + self.running.len() {
-            let task = self.running.get(i - self.finished.len())?;
-            Some(task.name())
-        } else if i < self.finished.len() + self.running.len() + self.planned.len() {
-            let task = self
-                .planned
-                .get(i - (self.finished.len() + self.running.len()))?;
-            Some(task.name())
-        } else {
-            None
-        }
-    }
-
-    pub fn selected(&self) -> Option<&str> {
-        let i = self.scroll.selected()?;
-        self.get(i)
-    }
-
     pub fn tasks_started(&self) -> Vec<&str> {
         let (errors, success): (Vec<_>, Vec<_>) = self
+            .tasks_by_type
             .finished
             .iter()
             .partition(|task| matches!(task.result(), TaskResult::Failure));
@@ -195,13 +70,13 @@ impl TaskTable {
         success
             .into_iter()
             .map(|task| task.name())
-            .chain(self.running.iter().map(|task| task.name()))
+            .chain(self.tasks_by_type.running.iter().map(|task| task.name()))
             .chain(errors.into_iter().map(|task| task.name()))
             .collect()
     }
 
     fn finished_rows(&self) -> impl Iterator<Item = Row> + '_ {
-        self.finished.iter().map(move |task| {
+        self.tasks_by_type.finished.iter().map(move |task| {
             Row::new(vec![
                 Cell::new(task.name()),
                 Cell::new(match task.result() {
@@ -214,13 +89,15 @@ impl TaskTable {
 
     fn running_rows(&self) -> impl Iterator<Item = Row> + '_ {
         let spinner = self.spinner.current();
-        self.running
+        self.tasks_by_type
+            .running
             .iter()
             .map(move |task| Row::new(vec![Cell::new(task.name()), Cell::new(Text::raw(spinner))]))
     }
 
     fn planned_rows(&self) -> impl Iterator<Item = Row> + '_ {
-        self.planned
+        self.tasks_by_type
+            .planned
             .iter()
             .map(move |task| Row::new(vec![Cell::new(task.name()), Cell::new(" ")]))
     }
@@ -240,11 +117,12 @@ impl<'a> StatefulWidget for &'a TaskTable {
     fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer, state: &mut Self::State) {
         let width = area.width;
         let active_index = self.selected_index;
+        let user_has_interacted = self.user_has_interacted;
         let bar = "─".repeat(usize::from(width));
         let table = Table::new(
-            self.finished_rows()
-                .chain(self.running_rows())
-                .chain(self.planned_rows()),
+            self.running_rows()
+                .chain(self.planned_rows())
+                .chain(self.finished_rows()),
             [
                 Constraint::Min(14),
                 // Status takes one cell to render
@@ -254,11 +132,14 @@ impl<'a> StatefulWidget for &'a TaskTable {
         .highlight_style(Style::default().fg(Color::Yellow))
         .column_spacing(0)
         .header(
-            vec![format!("Tasks {active_index}\n{bar}"), " \n─".to_owned()]
-                .into_iter()
-                .map(Cell::from)
-                .collect::<Row>()
-                .height(2),
+            vec![
+                format!("Tasks {active_index} {user_has_interacted}\n{bar}"),
+                " \n─".to_owned(),
+            ]
+            .into_iter()
+            .map(Cell::from)
+            .collect::<Row>()
+            .height(2),
         )
         .footer(
             vec![format!("{bar}\n↑ ↓ to navigate"), "─\n ".to_owned()]
