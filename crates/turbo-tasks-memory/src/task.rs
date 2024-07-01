@@ -770,6 +770,7 @@ impl Task {
         let TaskStateType::InProgress {
             ref mut count_as_finished,
             ref mut outdated_collectibles,
+            ref mut outdated_edges,
             ..
         } = state.state_type
         else {
@@ -781,6 +782,7 @@ impl Task {
         *count_as_finished = true;
         let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
         {
+            let outdated_children = outdated_edges.drain_children();
             let outdated_collectibles = outdated_collectibles.take_collectibles();
 
             let mut change = TaskChange {
@@ -797,8 +799,18 @@ impl Task {
             let change_job = state
                 .aggregation_node
                 .apply_change(&aggregation_context, change);
+            let remove_job = if outdated_children.is_empty() {
+                None
+            } else {
+                Some(state.aggregation_node.handle_lost_edges(
+                    &aggregation_context,
+                    &self.id,
+                    outdated_children,
+                ))
+            };
             drop(state);
             change_job.apply(&aggregation_context);
+            remove_job.apply(&aggregation_context);
         }
         aggregation_context.apply_queued_updates();
     }
