@@ -356,7 +356,7 @@ impl EdgesDataEntry {
                 0 => {
                     *self = EdgesDataEntry::Empty;
                 }
-                1 | 2 | 3 => {
+                1..=3 => {
                     let mut iter = set.iter();
                     let first = iter.next().unwrap();
                     if matches!(
