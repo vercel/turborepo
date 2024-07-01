@@ -220,6 +220,7 @@ impl<K: Eq + Hash, V, H: BuildHasher + Default, const I: usize> AutoMap<K, V, H,
     {
         match self {
             AutoMap::List(list) => {
+                // Don't use `Vec::retain`, as that uses a slower algorithm to maintain order, which we don't care about
                 let mut len = list.len();
                 let mut i = 0;
                 while i < len {
