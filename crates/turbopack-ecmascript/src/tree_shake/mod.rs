@@ -502,6 +502,23 @@ pub(super) async fn split(
                 .cell());
             }
 
+            let mut buf = vec![];
+
+            {
+                let wr = JsWriter::new(Default::default(), "\n", &mut buf, None);
+
+                let mut emitter = Emitter {
+                    cfg: Default::default(),
+                    comments: None,
+                    cm: source_map.clone(),
+                    wr,
+                };
+
+                emitter.emit_program(program).unwrap();
+            }
+            let code = String::from_utf8(buf).unwrap();
+            eprintln!("# Program:\n{code}");
+
             let module = match program {
                 Program::Module(module) => module,
                 Program::Script(..) => unreachable!("CJS is already handled"),
@@ -524,6 +541,24 @@ pub(super) async fn split(
             } = dep_graph.split_module(&items);
 
             assert_ne!(modules.len(), 0, "modules.len() == 0;\nModule: {module:?}",);
+
+            for (i, m) in modules.iter().enumerate() {
+                let mut buf = vec![];
+                {
+                    let wr = JsWriter::new(Default::default(), "\n", &mut buf, None);
+
+                    let mut emitter = Emitter {
+                        cfg: Default::default(),
+                        comments: None,
+                        cm: source_map.clone(),
+                        wr,
+                    };
+
+                    emitter.emit_module(m).unwrap();
+                }
+                let code = String::from_utf8(buf).unwrap();
+                eprintln!("# Module {i}:\n{code}");
+            }
 
             for &v in entrypoints.values() {
                 debug_assert!(
