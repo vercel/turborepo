@@ -333,7 +333,7 @@ enum TaskStateType {
     /// on activation this will move to Scheduled
     Dirty {
         event: Event,
-        outdated_edges: TaskEdgesSet,
+        outdated_edges: Box<TaskEdgesSet>,
     },
 
     /// Execution is invalid and scheduled
@@ -341,7 +341,7 @@ enum TaskStateType {
     /// on start this will move to InProgress or Dirty depending on active flag
     Scheduled {
         event: Event,
-        outdated_edges: TaskEdgesSet,
+        outdated_edges: Box<TaskEdgesSet>,
     },
 
     /// Execution is happening
@@ -354,7 +354,7 @@ enum TaskStateType {
         count_as_finished: bool,
         /// Dependencies and children that need to be disconnected once leaving
         /// this state
-        outdated_edges: TaskEdgesSet,
+        outdated_edges: Box<TaskEdgesSet>,
         new_children: TaskIdSet,
         outdated_collectibles: MaybeCollectibles,
     },
@@ -364,7 +364,7 @@ enum TaskStateType {
     /// on finish this will move to Scheduled
     InProgressDirty {
         event: Event,
-        outdated_edges: TaskEdgesSet,
+        outdated_edges: Box<TaskEdgesSet>,
     },
 }
 
@@ -405,7 +405,7 @@ impl TaskStateType {
                 new_children,
                 ..
             } => {
-                let mut edges = outdated_edges;
+                let mut edges = *outdated_edges;
                 let mut children = edges.drain_children();
                 children.extend(new_children.iter().copied());
                 (edges, children)
@@ -413,7 +413,7 @@ impl TaskStateType {
             TaskStateType::Dirty { outdated_edges, .. }
             | TaskStateType::InProgressDirty { outdated_edges, .. }
             | TaskStateType::Scheduled { outdated_edges, .. } => {
-                let mut edges = outdated_edges;
+                let mut edges = *outdated_edges;
                 let children = edges.drain_children();
                 (edges, children)
             }
@@ -883,7 +883,7 @@ impl Task {
                         ref mut new_children,
                     } => {
                         let event = event.take();
-                        let mut outdated_edges = take(outdated_edges);
+                        let mut outdated_edges = *take(outdated_edges);
                         let outdated_collectibles = outdated_collectibles.take_collectibles();
                         let mut new_edges = take(&mut dependencies);
                         outdated_edges.remove_all(&new_edges);
@@ -942,7 +942,7 @@ impl Task {
                         let outdated_edges = take(&mut dependencies);
                         state.state_type = Scheduled {
                             event,
-                            outdated_edges,
+                            outdated_edges: Box::new(outdated_edges),
                         };
                         schedule_task = true;
                     }
@@ -1051,7 +1051,7 @@ impl Task {
                             event: Event::new(move || {
                                 format!("TaskState({})::event", description())
                             }),
-                            outdated_edges,
+                            outdated_edges: Box::new(outdated_edges),
                         };
                         drop(state);
                         change_job.apply(&aggregation_context);
@@ -1075,7 +1075,7 @@ impl Task {
                             event: Event::new(move || {
                                 format!("TaskState({})::event", description())
                             }),
-                            outdated_edges,
+                            outdated_edges: Box::new(outdated_edges),
                         };
                         drop(state);
                         change_job.apply(&aggregation_context);

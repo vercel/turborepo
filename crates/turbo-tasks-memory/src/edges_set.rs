@@ -397,7 +397,7 @@ impl EdgesEntry {
 
 #[derive(Default)]
 pub struct TaskEdgesSet {
-    edges: Box<AutoMap<TaskId, EdgesEntry, BuildHasherDefault<FxHasher>>>,
+    edges: AutoMap<TaskId, EdgesEntry, BuildHasherDefault<FxHasher>>,
 }
 
 impl TaskEdgesSet {
@@ -430,10 +430,6 @@ impl TaskEdgesSet {
 
     pub fn is_empty(&self) -> bool {
         self.edges.is_empty()
-    }
-
-    pub fn len(&self) -> usize {
-        self.edges.iter().map(|(_, entry)| entry.len()).sum()
     }
 
     pub fn into_list(self) -> TaskEdgesList {
@@ -545,7 +541,7 @@ pub struct TaskEdgesList {
 impl TaskEdgesList {
     pub fn into_set(self) -> TaskEdgesSet {
         TaskEdgesSet {
-            edges: Box::new(self.edges.into_vec().into_iter().collect()),
+            edges: self.edges.into_vec().into_iter().collect(),
         }
     }
 
