@@ -49,7 +49,8 @@ impl EdgeEntry {
 
 type ComplexSet = AutoSet<EdgeEntry, BuildHasherDefault<FxHasher>, 9>;
 
-/// Represents a set of [`EdgeEntry`]s for an individual task, where common cases are stored using compact representations.
+/// Represents a set of [`EdgeEntry`]s for an individual task, where common
+/// cases are stored using compact representations.
 enum EdgesEntry {
     Empty,
     Output,
@@ -192,23 +193,23 @@ impl EdgesEntry {
                 EdgesEntry::Output
                 | EdgesEntry::OutputAndCell0(_)
                 | EdgesEntry::ChildAndOutput
-                | EdgesEntry::ChildOutputAndCell0(_)
+                | EdgesEntry::ChildOutputAndCell0(_),
             ) => true,
             (
                 EdgeEntry::Child,
                 EdgesEntry::Child
                 | EdgesEntry::ChildAndOutput
                 | EdgesEntry::ChildAndCell0(_)
-                | EdgesEntry::ChildOutputAndCell0(_)
+                | EdgesEntry::ChildOutputAndCell0(_),
             ) => true,
             (
                 EdgeEntry::Cell(cell_id),
                 EdgesEntry::Cell0(type_id)
                 | EdgesEntry::OutputAndCell0(type_id)
                 | EdgesEntry::ChildAndCell0(type_id)
-                | EdgesEntry::ChildOutputAndCell0(type_id)
+                | EdgesEntry::ChildOutputAndCell0(type_id),
             ) => *type_id == cell_id.type_id,
-            (entry, EdgesEntry::Complex(set)) => set.contains(entry),
+            (entry, EdgesEntry::Complex(set)) => set.contains(&entry),
             _ => false,
         }
     }
@@ -227,38 +228,38 @@ impl EdgesEntry {
         }
     }
 
-    fn insert(&mut self, entry: EdgeEntry) -> bool {
+    fn try_insert_without_complex(&mut self, entry: EdgeEntry) -> Result<bool, ()> {
         if self.has(entry) {
-            return false;
+            return Ok(false);
         }
         match entry {
             EdgeEntry::Output => match self {
                 EdgesEntry::Child => {
                     *self = EdgesEntry::ChildAndOutput;
-                    return true;
+                    return Ok(true);
                 }
                 EdgesEntry::Cell0(type_id) => {
                     *self = EdgesEntry::OutputAndCell0(*type_id);
-                    return true;
+                    return Ok(true);
                 }
                 EdgesEntry::ChildAndCell0(type_id) => {
                     *self = EdgesEntry::ChildOutputAndCell0(*type_id);
-                    return true;
+                    return Ok(true);
                 }
                 _ => {}
             },
             EdgeEntry::Child => match self {
                 EdgesEntry::Output => {
                     *self = EdgesEntry::ChildAndOutput;
-                    return true;
+                    return Ok(true);
                 }
                 EdgesEntry::Cell0(type_id) => {
                     *self = EdgesEntry::ChildAndCell0(*type_id);
-                    return true;
+                    return Ok(true);
                 }
                 EdgesEntry::OutputAndCell0(type_id) => {
                     *self = EdgesEntry::ChildOutputAndCell0(*type_id);
-                    return true;
+                    return Ok(true);
                 }
                 _ => {}
             },
@@ -268,15 +269,15 @@ impl EdgesEntry {
                     match self {
                         EdgesEntry::Output => {
                             *self = EdgesEntry::OutputAndCell0(type_id);
-                            return true;
+                            return Ok(true);
                         }
                         EdgesEntry::Child => {
                             *self = EdgesEntry::ChildAndCell0(type_id);
-                            return true;
+                            return Ok(true);
                         }
                         EdgesEntry::ChildAndOutput => {
                             *self = EdgesEntry::ChildOutputAndCell0(type_id);
-                            return true;
+                            return Ok(true);
                         }
                         _ => {}
                     }
@@ -284,7 +285,15 @@ impl EdgesEntry {
             }
             EdgeEntry::Collectibles(_) => {}
         }
-        self.as_complex().insert(entry)
+        Err(())
+    }
+
+    fn insert(&mut self, entry: EdgeEntry) -> bool {
+        match self.try_insert_without_complex(entry) {
+            Ok(true) => true,
+            Ok(false) => false,
+            Err(()) => self.as_complex().insert(entry),
+        }
     }
 
     fn remove(&mut self, entry: EdgeEntry) -> bool {
@@ -362,15 +371,22 @@ impl EdgesEntry {
                 0 => {
                     *self = EdgesEntry::Empty;
                 }
-                1 => {
-                    let entry = set.iter().next().unwrap();
+                1 | 2 | 3 => {
+                    let mut iter = set.iter();
+                    let first = iter.next().unwrap();
                     if matches!(
-                        entry,
+                        first,
                         EdgeEntry::Output
                             | EdgeEntry::Child
                             | EdgeEntry::Cell(CellId { index: 0, .. })
                     ) {
-                        *self = EdgesEntry::from(*entry);
+                        let mut new = EdgesEntry::from(*first);
+                        for entry in iter {
+                            if new.try_insert_without_complex(*entry).is_err() {
+                                return;
+                            }
+                        }
+                        *self = new;
                     }
                 }
                 _ => (),
