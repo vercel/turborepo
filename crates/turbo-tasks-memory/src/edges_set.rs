@@ -1,6 +1,7 @@
 use std::{hash::BuildHasherDefault, mem::replace};
 
 use auto_hash_map::{map::Entry, AutoMap, AutoSet};
+use either::Either;
 use rustc_hash::FxHasher;
 use smallvec::SmallVec;
 use turbo_tasks::{CellId, TaskId, TraitTypeId, ValueTypeId};
