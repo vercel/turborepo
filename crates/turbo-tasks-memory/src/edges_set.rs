@@ -49,6 +49,7 @@ impl EdgeEntry {
 
 type ComplexSet = AutoSet<EdgeEntry, BuildHasherDefault<FxHasher>, 3>;
 
+/// Represents a set of [`EdgeEntry`]s for an individual task, where common cases are stored using compact representations.
 enum EdgesEntry {
     Empty,
     Output,
@@ -185,55 +186,30 @@ impl EdgesEntry {
     }
 
     fn has(&self, entry: EdgeEntry) -> bool {
-        match entry {
-            EdgeEntry::Output => {
-                if let EdgesEntry::Complex(set) = self {
-                    set.contains(&EdgeEntry::Output)
-                } else {
-                    matches!(
-                        self,
-                        EdgesEntry::Output
-                            | EdgesEntry::OutputAndCell0(_)
-                            | EdgesEntry::ChildAndOutput
-                            | EdgesEntry::ChildOutputAndCell0(_)
-                    )
-                }
-            }
-            EdgeEntry::Child => {
-                if let EdgesEntry::Complex(set) = self {
-                    set.contains(&EdgeEntry::Child)
-                } else {
-                    matches!(
-                        self,
-                        EdgesEntry::Child
-                            | EdgesEntry::ChildAndOutput
-                            | EdgesEntry::ChildAndCell0(_)
-                            | EdgesEntry::ChildOutputAndCell0(_)
-                    )
-                }
-            }
-            EdgeEntry::Cell(cell_id) => {
-                if let EdgesEntry::Complex(set) = self {
-                    set.contains(&EdgeEntry::Cell(cell_id))
-                } else if cell_id.index == 0 {
-                    match self {
-                        EdgesEntry::Cell0(type_id) => *type_id == cell_id.type_id,
-                        EdgesEntry::OutputAndCell0(type_id) => *type_id == cell_id.type_id,
-                        EdgesEntry::ChildAndCell0(type_id) => *type_id == cell_id.type_id,
-                        EdgesEntry::ChildOutputAndCell0(type_id) => *type_id == cell_id.type_id,
-                        _ => false,
-                    }
-                } else {
-                    false
-                }
-            }
-            EdgeEntry::Collectibles(trait_type_id) => {
-                if let EdgesEntry::Complex(set) = self {
-                    set.contains(&EdgeEntry::Collectibles(trait_type_id))
-                } else {
-                    false
-                }
-            }
+        match (entry, self) {
+            (
+                EdgeEntry::Output,
+                EdgesEntry::Output
+                | EdgesEntry::OutputAndCell0(_)
+                | EdgesEntry::ChildAndOutput
+                | EdgesEntry::ChildOutputAndCell0(_)
+            ) => true,
+            (
+                EdgeEntry::Child,
+                EdgesEntry::Child
+                | EdgesEntry::ChildAndOutput
+                | EdgesEntry::ChildAndCell0(_)
+                | EdgesEntry::ChildOutputAndCell0(_)
+            ) => true,
+            (
+                EdgeEntry::Cell(cell_id),
+                EdgesEntry::Cell0(type_id)
+                | EdgesEntry::OutputAndCell0(type_id)
+                | EdgesEntry::ChildAndCell0(type_id)
+                | EdgesEntry::ChildOutputAndCell0(type_id)
+            ) => *type_id == cell_id.type_id,
+            (entry, EdgesEntry::Complex(set)) => set.contains(entry),
+            _ => false,
         }
     }
 
