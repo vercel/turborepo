@@ -460,9 +460,8 @@ async fn should_skip(ident: Vc<AssetIdent>, _: Vc<Box<dyn Source>>) -> Result<Vc
         return Ok(Vc::cell(true));
     }
 
-    // We should not transform files outside of node_modules.
-    // User may specify `export const runtime = 'edge'` in their code.
-    if !s.contains("/node_modules/") {
+    // TODO: Fix bug and remove this
+    if s.contains("client-component-renderer-logger") {
         return Ok(Vc::cell(true));
     }
 
