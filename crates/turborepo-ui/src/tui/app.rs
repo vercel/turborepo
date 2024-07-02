@@ -30,8 +30,6 @@ pub enum LayoutSections {
 }
 
 pub struct App<W> {
-    rows: u16,
-    cols: u16,
     tasks: BTreeMap<String, TerminalOutput<W>>,
     done: bool,
     input_options: InputOptions,
@@ -72,8 +70,6 @@ impl<W> App<W> {
         let selected_task_index: usize = 0;
 
         Self {
-            cols,
-            rows,
             done: false,
             input_options: InputOptions {
                 focus: LayoutSections::TaskList,
@@ -100,10 +96,6 @@ impl<W> App<W> {
         self.tasks_by_status
             .task_names_in_displayed_order()
             .remove(self.selected_task_index)
-    }
-
-    pub fn get_full_task(&self) -> &TerminalOutput<W> {
-        self.tasks.get(&self.active_task()).unwrap()
     }
 
     pub fn get_full_task_mut(&mut self) -> &mut TerminalOutput<W> {
@@ -266,7 +258,7 @@ impl<W: Write> App<W> {
             let task_output = self.get_full_task_mut();
             if let Some(stdin) = &mut task_output.stdin {
                 stdin.write_all(bytes).map_err(|e| Error::Stdin {
-                    name: self.active_task().into(),
+                    name: self.active_task(),
                     e,
                 })?;
             }
@@ -274,17 +266,6 @@ impl<W: Write> App<W> {
         } else {
             Ok(())
         }
-    }
-
-    pub fn process_input(&mut self, task: &str, input: &[u8]) -> Result<(), Error> {
-        let task_output = self.get_full_task_mut();
-        if let Some(stdin) = &mut task_output.stdin {
-            stdin.write_all(input).map_err(|e| Error::Stdin {
-                name: task.into(),
-                e,
-            })?;
-        }
-        Ok(())
     }
 
     pub fn process_output(&mut self, task: &str, output: &[u8]) -> Result<(), Error> {
@@ -453,14 +434,16 @@ fn update(
             app.tasks
                 .get_mut(&app.active_task())
                 .unwrap()
-                .scroll(Direction::Up);
+                .scroll(Direction::Up)
+                .unwrap_or_default();
         }
         Event::ScrollDown => {
             app.has_user_interacted = true;
             app.tasks
                 .get_mut(&app.active_task())
                 .unwrap()
-                .scroll(Direction::Down);
+                .scroll(Direction::Down)
+                .unwrap_or_default();
         }
         Event::EnterInteractive => {
             app.has_user_interacted = true;

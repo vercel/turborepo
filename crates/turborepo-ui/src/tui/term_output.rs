@@ -4,9 +4,6 @@ use turborepo_vt100 as vt100;
 
 use super::{app::Direction, Error};
 
-const FOOTER_TEXT_ACTIVE: &str = "Press`Ctrl-Z` to stop interacting.";
-const FOOTER_TEXT_INACTIVE: &str = "Press `Enter` to interact.";
-
 pub struct TerminalOutput<W> {
     rows: u16,
     cols: u16,
