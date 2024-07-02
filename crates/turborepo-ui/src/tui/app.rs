@@ -485,3 +485,180 @@ fn view(app: &mut App<Box<dyn io::Write + Send>>, f: &mut Frame, rows: u16, cols
     f.render_stateful_widget(&table_to_render, table, &mut app.scroll);
     f.render_widget(&pane_to_render, pane);
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_scroll() {
+        let mut app: App<bool> = App::new(
+            100,
+            100,
+            vec!["foo".to_string(), "bar".to_string(), "baz".to_string()],
+        );
+        assert_eq!(
+            app.scroll.selected(),
+            Some(0),
+            "starts with first selection"
+        );
+        app.next();
+        assert_eq!(
+            app.scroll.selected(),
+            Some(1),
+            "scroll starts from 0 and goes to 1"
+        );
+        app.previous();
+        assert_eq!(app.scroll.selected(), Some(0), "scroll stays in bounds");
+        app.next();
+        app.next();
+        assert_eq!(app.scroll.selected(), Some(2), "scroll moves forwards");
+        app.next();
+        assert_eq!(app.scroll.selected(), Some(2), "scroll stays in bounds");
+    }
+
+    #[test]
+    fn test_selection_follows() {
+        let mut app: App<bool> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string(), "c".to_string()],
+        );
+        app.next();
+        assert_eq!(app.scroll.selected(), Some(1), "selected b");
+        assert_eq!(app.active_task(), "b", "selected b");
+        app.start_task("b").unwrap();
+        assert_eq!(app.scroll.selected(), Some(0), "b stays selected");
+        assert_eq!(app.active_task(), "b", "selected b");
+        app.start_task("a").unwrap();
+        assert_eq!(app.scroll.selected(), Some(0), "b stays selected");
+        assert_eq!(app.active_task(), "b", "selected b");
+        app.finish_task("a", TaskResult::Success).unwrap();
+        assert_eq!(app.scroll.selected(), Some(0), "b stays selected");
+        assert_eq!(app.active_task(), "b", "selected b");
+    }
+
+    #[test]
+    fn test_restart_task() {
+        let mut app: App<()> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string(), "c".to_string()],
+        );
+        app.next();
+        app.next();
+        // Start all tasks
+        app.start_task("b").unwrap();
+        app.start_task("a").unwrap();
+        app.start_task("c").unwrap();
+        assert_eq!(
+            app.tasks_by_status.task_names_in_displayed_order()[0],
+            "b",
+            "b is on top (running)"
+        );
+        app.finish_task("a", TaskResult::Success).unwrap();
+        assert_eq!(
+            (
+                &app.tasks_by_status.task_names_in_displayed_order()[2],
+                &app.tasks_by_status.task_names_in_displayed_order()[0]
+            ),
+            (&"a".to_string(), &"b".to_string()),
+            "a is on bottom (done), b is second (running)"
+        );
+
+        app.finish_task("b", TaskResult::Success).unwrap();
+        assert_eq!(
+            (
+                &app.tasks_by_status.task_names_in_displayed_order()[1],
+                &app.tasks_by_status.task_names_in_displayed_order()[2]
+            ),
+            (&"a".to_string(), &"b".to_string()),
+            "a is second (done), b is last (done)"
+        );
+
+        // Restart b
+        app.start_task("b").unwrap();
+        assert_eq!(
+            (
+                &app.tasks_by_status.task_names_in_displayed_order()[1],
+                &app.tasks_by_status.task_names_in_displayed_order()[0]
+            ),
+            (&"b".to_string(), &"c".to_string()),
+            "b is second (running), c is first (running)"
+        );
+
+        // Restart a
+        app.start_task("a").unwrap();
+        assert_eq!(
+            (
+                &app.tasks_by_status.task_names_in_displayed_order()[0],
+                &app.tasks_by_status.task_names_in_displayed_order()[1],
+                &app.tasks_by_status.task_names_in_displayed_order()[2]
+            ),
+            (&"c".to_string(), &"b".to_string(), &"a".to_string()),
+            "c is on top (running), b is second (running), a is third
+        (running)"
+        );
+    }
+
+    #[test]
+    fn test_selection_stable() {
+        let mut app: App<bool> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string(), "c".to_string()],
+        );
+        app.next();
+        app.next();
+        assert_eq!(app.scroll.selected(), Some(2), "selected c");
+        assert_eq!(
+            app.tasks_by_status.task_names_in_displayed_order()[2],
+            "c",
+            "selected c"
+        );
+        // start c which moves it to "running" which is before "planned"
+        app.start_task("c").unwrap();
+        assert_eq!(app.scroll.selected(), Some(0), "selection stays on c");
+        assert_eq!(
+            app.tasks_by_status.task_names_in_displayed_order()[0],
+            "c",
+            "selected c"
+        );
+        app.start_task("a").unwrap();
+        assert_eq!(app.scroll.selected(), Some(0), "selection stays on c");
+        assert_eq!(
+            app.tasks_by_status.task_names_in_displayed_order()[0],
+            "c",
+            "selected c"
+        );
+        // c
+        // a
+        // b <-
+        app.next();
+        app.next();
+        assert_eq!(app.scroll.selected(), Some(2), "selected b");
+        assert_eq!(
+            app.tasks_by_status.task_names_in_displayed_order()[2],
+            "b",
+            "selected b"
+        );
+        app.finish_task("a", TaskResult::Success).unwrap();
+        assert_eq!(app.scroll.selected(), Some(1), "b stays selected");
+        assert_eq!(
+            app.tasks_by_status.task_names_in_displayed_order()[1],
+            "b",
+            "selected b"
+        );
+        // c <-
+        // b
+        // a
+        app.previous();
+        app.finish_task("c", TaskResult::Success).unwrap();
+        assert_eq!(app.scroll.selected(), Some(2), "c stays selected");
+        assert_eq!(
+            app.tasks_by_status.task_names_in_displayed_order()[2],
+            "c",
+            "selected c"
+        );
+    }
+}
