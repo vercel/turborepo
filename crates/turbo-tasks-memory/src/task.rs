@@ -427,6 +427,13 @@ use self::{
     },
 };
 
+pub enum GcResult {
+    NotPossible,
+    Stale,
+    ContentDropped,
+    Unloaded,
+}
+
 impl Task {
     pub(crate) fn new_persistent(
         id: TaskId,
@@ -478,6 +485,14 @@ impl Task {
             TaskType::Persistent { .. } => true,
             TaskType::Root(_) => false,
             TaskType::Once(_) => false,
+        }
+    }
+
+    pub(crate) fn is_once(&self) -> bool {
+        match &self.ty {
+            TaskType::Persistent { .. } => false,
+            TaskType::Root(_) => false,
+            TaskType::Once(_) => true,
         }
     }
 
@@ -1225,7 +1240,7 @@ impl Task {
         if let Some(gc_queue) = gc_queue {
             let generation = gc_queue.generation();
             if state.gc.on_read(generation) {
-                gc_queue.task_accessed(self.id);
+                let _ = gc_queue.task_accessed(self.id);
             }
         }
         let list = state.cells.entry(index.type_id).or_default();
@@ -1260,6 +1275,30 @@ impl Task {
         } else {
             func(&Default::default())
         }
+    }
+
+    /// Checks if the task is inactive. Returns false if it's still active.
+    pub(crate) fn potentially_become_inactive(
+        &self,
+        gc_queue: &GcQueue,
+        backend: &MemoryBackend,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
+    ) -> bool {
+        let aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
+        let active = query_root_info(&aggregation_context, ActiveQuery::default(), self.id);
+        if active {
+            return false;
+        }
+        if let TaskMetaStateWriteGuard::Full(mut state) = self.state_mut() {
+            if state.gc.generation != 0 {
+                let generation = gc_queue.task_inactive(self.id);
+                state.gc.generation = generation;
+            }
+            for child in state.state_type.children() {
+                gc_queue.task_potentially_no_longer_active(child);
+            }
+        }
+        true
     }
 
     pub fn is_pending(&self) -> bool {
@@ -1506,57 +1545,75 @@ impl Task {
         aggregation_context.apply_queued_updates();
     }
 
-    pub(crate) fn run_gc(&self, generation: u32) -> bool {
+    pub(crate) fn run_gc(
+        &self,
+        generation: u32,
+        gc_queue: &GcQueue,
+        backend: &MemoryBackend,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
+    ) -> GcResult {
         if !self.is_pure() {
-            return false;
+            return GcResult::NotPossible;
         }
 
-        let mut cells_to_drop = Vec::new();
+        let aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
+        let active = query_root_info(&aggregation_context, ActiveQuery::default(), self.id);
 
         match self.state_mut() {
             TaskMetaStateWriteGuard::Full(mut state) => {
-                if state.gc.generation > generation {
-                    return false;
-                }
+                if active {
+                    let mut cells_to_drop = Vec::new();
 
-                match &mut state.state_type {
-                    TaskStateType::Done { stateful, edges: _ } => {
-                        if *stateful {
-                            return false;
+                    if state.gc.generation == 0 || state.gc.generation > generation {
+                        return GcResult::Stale;
+                    }
+                    state.gc.generation = 0;
+
+                    match &mut state.state_type {
+                        TaskStateType::Done { stateful, edges: _ } => {
+                            if *stateful {
+                                return GcResult::NotPossible;
+                            }
+                        }
+                        TaskStateType::Dirty { .. } => {}
+                        _ => {
+                            // GC can't run in this state. We will reschedule it when the execution
+                            // completes.
+                            return GcResult::NotPossible;
                         }
                     }
-                    TaskStateType::Dirty { .. } => {}
-                    _ => {
-                        // GC can't run in this state. We will reschedule it when the execution
-                        // completes.
-                        return false;
+
+                    // shrinking memory and dropping cells
+                    state.aggregation_node.shrink_to_fit();
+                    state.output.dependent_tasks.shrink_to_fit();
+                    state.cells.shrink_to_fit();
+                    for cells in state.cells.values_mut() {
+                        cells.shrink_to_fit();
+                        for cell in cells.iter_mut() {
+                            cells_to_drop.extend(cell.gc_content());
+                            cell.shrink_to_fit();
+                        }
                     }
+
+                    drop(state);
+
+                    gc_queue.task_gc_active(self.id);
+
+                    // Dropping cells outside of the lock
+                    drop(cells_to_drop);
+
+                    GcResult::ContentDropped
+                } else {
+                    // Task is inactive, unload task
+                    self.unload(state, backend, turbo_tasks);
+                    GcResult::Unloaded
                 }
-
-                // shrinking memory and dropping cells
-                state.aggregation_node.shrink_to_fit();
-                state.output.dependent_tasks.shrink_to_fit();
-                state.cells.shrink_to_fit();
-                for cells in state.cells.values_mut() {
-                    cells.shrink_to_fit();
-                    for cell in cells.iter_mut() {
-                        cells_to_drop.extend(cell.gc_content());
-                        cell.shrink_to_fit();
-                    }
-                }
-
-                drop(state);
-
-                // Dropping cells outside of the lock
-                drop(cells_to_drop);
-
-                true
             }
             TaskMetaStateWriteGuard::Partial(mut state) => {
                 state.aggregation_node.shrink_to_fit();
-                false
+                GcResult::Unloaded
             }
-            _ => false,
+            _ => GcResult::Unloaded,
         }
     }
 
@@ -1568,8 +1625,6 @@ impl Task {
         }
     }
 
-    // TODO not used yet, but planned
-    #[allow(dead_code)]
     fn unload(
         &self,
         mut full_state: FullTaskWriteGuard<'_>,
