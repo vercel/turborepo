@@ -411,8 +411,8 @@ impl PersistentTaskType {
         Ok(turbo_tasks.dynamic_call(native_fn, resolved_inputs))
     }
 
-    /// Shared helper used by [`resolve_trait_method`] and
-    /// [`run_resolve_trait`].
+    /// Shared helper used by [`Self::resolve_trait_method`] and
+    /// [`Self::run_resolve_trait`].
     fn resolve_trait_method_from_value(
         trait_type: TraitTypeId,
         this_value: ConcreteTaskInput,

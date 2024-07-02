@@ -252,12 +252,12 @@ pub struct TurboTasks<B: Backend + 'static> {
 
 #[derive(Default)]
 struct CurrentTaskState {
-    /// Affected [Task]s, that are tracked during task execution
-    /// These tasks will be invalidated when the execution finishes
-    /// or before reading a cell value
+    /// Affected tasks, that are tracked during task execution. These tasks will
+    /// be invalidated when the execution finishes or before reading a cell
+    /// value.
     tasks_to_notify: Vec<TaskId>,
 
-    // true, if the current task has state in cells
+    /// True if the current task has state in cells
     stateful: bool,
 }
 
@@ -1283,12 +1283,12 @@ pub async fn run_once_with_reason<T: Send + 'static>(
     Ok(rx.await?)
 }
 
-/// see [TurboTasks] `dynamic_call`
+/// Calls [`TurboTasks::dynamic_call`] for the current turbo tasks instance.
 pub fn dynamic_call(func: FunctionId, inputs: Vec<ConcreteTaskInput>) -> RawVc {
     with_turbo_tasks(|tt| tt.dynamic_call(func, inputs))
 }
 
-/// see [TurboTasks] `trait_call`
+/// Calls [`TurboTasks::trait_call`] for the current turbo tasks instance.
 pub fn trait_call(
     trait_type: TraitTypeId,
     trait_fn_name: Cow<'static, str>,
