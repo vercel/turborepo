@@ -378,7 +378,7 @@ impl<B: Backend + 'static> TurboTasks<B> {
     }
 
     /// Calls a native function with arguments. Resolves arguments when needed
-    /// with a wrapper [Task].
+    /// with a wrapper task.
     pub fn dynamic_call(&self, func: FunctionId, inputs: Vec<ConcreteTaskInput>) -> RawVc {
         if inputs.iter().all(|i| i.is_resolved()) {
             self.native_call(func, inputs)
@@ -1332,7 +1332,7 @@ pub fn current_task_for_testing() -> TaskId {
     CURRENT_TASK_ID.with(|id| *id)
 }
 
-/// Get an [Invalidator] that can be used to invalidate the current [Task]
+/// Get an [`Invalidator`] that can be used to invalidate the current task
 /// based on external events.
 pub fn get_invalidator() -> Invalidator {
     let handle = Handle::current();

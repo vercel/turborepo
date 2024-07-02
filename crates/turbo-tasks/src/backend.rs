@@ -121,7 +121,7 @@ impl PersistentTaskType {
     }
 
     /// Returns the name of the function in the code. Trait methods are
-    /// formatted as [`TraitName::method_name`].
+    /// formatted as `TraitName::method_name`.
     ///
     /// Equivalent to [`ToString::to_string`], but potentially more efficient as
     /// it can return a `&'static str` in many cases.
