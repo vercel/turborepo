@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeMap,
     io::{self, Stdout, Write},
     sync::mpsc,
     time::{Duration, Instant},
@@ -18,14 +19,20 @@ const FRAMERATE: Duration = Duration::from_millis(3);
 use super::{
     event::TaskResult, input, AppReceiver, Error, Event, InputOptions, TaskTable, TerminalPane,
 };
-use crate::tui::task::{Task, TasksByStatus};
+use crate::tui::{
+    task::{Task, TasksByStatus},
+    term_output::TerminalOutput,
+};
 
 pub enum LayoutSections {
     Pane,
     TaskList,
 }
 
-pub struct App {
+pub struct App<W> {
+    rows: u16,
+    cols: u16,
+    tasks: BTreeMap<String, TerminalOutput<W>>,
     done: bool,
     input_options: InputOptions,
     started_tasks: Vec<String>,
@@ -42,7 +49,7 @@ pub enum Direction {
     Down,
 }
 
-impl App {
+impl<W> App<W> {
     pub fn new(rows: u16, cols: u16, tasks: Vec<String>) -> Self {
         debug!("tasks: {tasks:?}");
 
@@ -55,13 +62,6 @@ impl App {
         task_list.sort_unstable();
         task_list.dedup();
 
-        // TODO: WIP, I shouldn't need this when I'm done?
-        let task_list_as_strings = task_list
-            .clone()
-            .into_iter()
-            .map(|task| task.name().to_string())
-            .collect::<Vec<_>>();
-
         let tasks_by_status = TasksByStatus {
             planned: task_list,
             finished: Vec::new(),
@@ -72,20 +72,42 @@ impl App {
         let selected_task_index: usize = 0;
 
         Self {
+            cols,
+            rows,
             done: false,
             input_options: InputOptions {
-                interact: false,
+                focus: LayoutSections::TaskList,
                 // Check if stdin is a tty that we should read input from
                 tty_stdin: atty::is(atty::Stream::Stdin),
             },
             started_tasks: Vec::with_capacity(num_of_tasks),
-            task_list: task_list_as_strings,
+            // TODO: WIP, this should be able to disappear once I'm done?
+            task_list: tasks_by_status.task_names_in_displayed_order(),
+            tasks: tasks_by_status
+                .task_names_in_displayed_order()
+                .into_iter()
+                .map(|task_name| (task_name, TerminalOutput::new(rows, cols, None)))
+                .collect(),
             tasks_by_status,
             scroll: TableState::default().with_selected(selected_task_index),
             selected_task_index,
             has_user_interacted,
             layout_focus: LayoutSections::Pane,
         }
+    }
+
+    pub fn active_task(&self) -> String {
+        self.tasks_by_status
+            .task_names_in_displayed_order()
+            .remove(self.selected_task_index)
+    }
+
+    pub fn get_full_task(&self) -> &TerminalOutput<W> {
+        self.tasks.get(&self.active_task()).unwrap()
+    }
+
+    pub fn get_full_task_mut(&mut self) -> &mut TerminalOutput<W> {
+        self.tasks.get_mut(&self.active_task()).unwrap()
     }
 
     pub fn next(&mut self) {
@@ -189,24 +211,21 @@ impl App {
         Ok(())
     }
 
-    pub fn interact(&mut self, interact: bool) {
-        self.layout_focus = LayoutSections::Pane;
-        if self
-            .pane
-            .has_stdin(self.task_list[self.selected_task_index].as_str())
-        {
-            self.input_options.interact = interact;
+    pub fn has_stdin(&self) -> bool {
+        let active_task = self.active_task();
+        if let Some(term) = self.tasks.get(&active_task) {
+            term.stdin.is_some()
+        } else {
+            false
         }
     }
 
-    pub fn scroll(&mut self, direction: Direction) {
-        self.pane
-            .scroll(self.task_list[self.selected_task_index].as_str(), direction)
-            .expect("selected task should be in pane");
-    }
-
-    pub fn term_size(&self) -> (u16, u16) {
-        self.pane.term_size()
+    pub fn interact(&mut self) {
+        if matches!(self.input_options.focus, LayoutSections::Pane) {
+            self.input_options.focus = LayoutSections::TaskList
+        } else if self.has_stdin() {
+            self.input_options.focus = LayoutSections::Pane;
+        }
     }
 
     pub fn update_tasks(&mut self, tasks: Vec<String>) {
@@ -216,16 +235,61 @@ impl App {
 
         self.next();
     }
+
+    /// Persist all task output to the after closing the TUI
+    pub fn persist_tasks(&mut self, started_tasks: Vec<String>) -> std::io::Result<()> {
+        for (task_name, task) in started_tasks.into_iter().filter_map(|started_task| {
+            (Some(started_task.clone())).zip(self.tasks.get(&started_task))
+        }) {
+            task.persist_screen(&task_name)?;
+        }
+        Ok(())
+    }
+
+    pub fn set_status(&mut self, status: String) -> Result<(), Error> {
+        let task = self.get_full_task_mut();
+        task.status = Some(status);
+        Ok(())
+    }
 }
 
-impl App {
+impl<W: Write> App<W> {
+    /// Insert a stdin to be associated with a task
+    pub fn insert_stdin(&mut self, stdin: Option<W>) -> Result<(), Error> {
+        let task = self.get_full_task_mut();
+        task.stdin = stdin;
+        Ok(())
+    }
+
     pub fn forward_input(&mut self, bytes: &[u8]) -> Result<(), Error> {
-        // If we aren't in interactive mode, ignore input
-        if !self.input_options.interact {
-            return Ok(());
+        if matches!(self.input_options.focus, LayoutSections::Pane) {
+            let task_output = self.get_full_task_mut();
+            if let Some(stdin) = &mut task_output.stdin {
+                stdin.write_all(bytes).map_err(|e| Error::Stdin {
+                    name: self.active_task().into(),
+                    e,
+                })?;
+            }
+            Ok(())
+        } else {
+            Ok(())
         }
-        let selected_task = self.task_list[self.selected_task_index].as_str();
-        self.pane.process_input(selected_task, bytes)?;
+    }
+
+    pub fn process_input(&mut self, task: &str, input: &[u8]) -> Result<(), Error> {
+        let task_output = self.get_full_task_mut();
+        if let Some(stdin) = &mut task_output.stdin {
+            stdin.write_all(input).map_err(|e| Error::Stdin {
+                name: task.into(),
+                e,
+            })?;
+        }
+        Ok(())
+    }
+
+    pub fn process_output(&mut self, task: &str, output: &[u8]) -> Result<(), Error> {
+        let task_output = self.tasks.get_mut(task).unwrap();
+        task_output.parser.process(output);
         Ok(())
     }
 }
@@ -241,7 +305,7 @@ pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
     let ratio_pane_width = (f32::from(size.width) * PANE_SIZE_RATIO) as u16;
     let full_task_width = size.width.saturating_sub(task_width_hint);
 
-    let mut app: App = App::new(size.height, full_task_width.max(ratio_pane_width), tasks);
+    let mut app: App<Box<dyn io::Write + Send>> = App::new(size.height, size.width, tasks);
 
     let (result, callback) = match run_app_inner(
         &mut terminal,
@@ -263,7 +327,7 @@ pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
 // terminal.
 fn run_app_inner<B: Backend + std::io::Write>(
     terminal: &mut Terminal<B>,
-    app: &mut App,
+    app: &mut App<Box<dyn io::Write + Send>>,
     receiver: AppReceiver,
     rows: u16,
     cols: u16,
@@ -272,7 +336,7 @@ fn run_app_inner<B: Backend + std::io::Write>(
     terminal.draw(|f| view(app, f, rows, cols))?;
     let mut last_render = Instant::now();
     let mut callback = None;
-    while let Some(event) = poll(app.input_options, &receiver, last_render + FRAMERATE) {
+    while let Some(event) = poll(&app.input_options, &receiver, last_render + FRAMERATE) {
         callback = update(app, event)?;
         if app.done {
             break;
@@ -288,7 +352,7 @@ fn run_app_inner<B: Backend + std::io::Write>(
 
 /// Blocking poll for events, will only return None if app handle has been
 /// dropped
-fn poll(input_options: InputOptions, receiver: &AppReceiver, deadline: Instant) -> Option<Event> {
+fn poll(input_options: &InputOptions, receiver: &AppReceiver, deadline: Instant) -> Option<Event> {
     match input(input_options) {
         Ok(Some(event)) => Some(event),
         Ok(None) => receiver.recv(deadline).ok(),
@@ -332,7 +396,7 @@ fn startup() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
 /// Restores terminal to expected state
 fn cleanup<B: Backend + io::Write>(
     mut terminal: Terminal<B>,
-    mut app: App,
+    mut app: App<Box<dyn io::Write + Send>>,
     callback: Option<mpsc::SyncSender<()>>,
 ) -> io::Result<()> {
     terminal.clear()?;
@@ -341,7 +405,8 @@ fn cleanup<B: Backend + io::Write>(
         crossterm::event::DisableMouseCapture,
         crossterm::terminal::LeaveAlternateScreen,
     )?;
-    app.persist_tasks(&app.tasks_by_status.tasks_started())?;
+    let tasks_started = app.tasks_by_status.tasks_started();
+    app.persist_tasks(tasks_started)?;
     crossterm::terminal::disable_raw_mode()?;
     terminal.show_cursor()?;
     // We can close the channel now that terminal is back restored to a normal state
@@ -349,17 +414,20 @@ fn cleanup<B: Backend + io::Write>(
     Ok(())
 }
 
-fn update(app: &mut App, event: Event) -> Result<Option<mpsc::SyncSender<()>>, Error> {
+fn update(
+    app: &mut App<Box<dyn io::Write + Send>>,
+    event: Event,
+) -> Result<Option<mpsc::SyncSender<()>>, Error> {
     match event {
         Event::StartTask { task } => {
             app.start_task(&task)?;
             app.started_tasks.push(task);
         }
         Event::TaskOutput { task, output } => {
-            app.pane.process_output(&task, &output)?;
+            app.process_output(&task, &output)?;
         }
         Event::Status { task, status } => {
-            app.pane.set_status(&task, status)?;
+            app.set_status(status)?;
         }
         Event::InternalStop => {
             app.done = true;
@@ -390,11 +458,11 @@ fn update(app: &mut App, event: Event) -> Result<Option<mpsc::SyncSender<()>>, E
         }
         Event::EnterInteractive => {
             app.has_user_interacted = true;
-            app.interact(true);
+            app.interact();
         }
         Event::ExitInteractive => {
             app.has_user_interacted = true;
-            app.interact(false);
+            app.interact();
         }
         Event::Input { bytes } => {
             app.forward_input(&bytes)?;
@@ -410,15 +478,14 @@ fn update(app: &mut App, event: Event) -> Result<Option<mpsc::SyncSender<()>>, E
     Ok(None)
 }
 
-fn view(app: &mut App, f: &mut Frame, rows: u16, cols: u16) {
-    let (_, width) = app.term_size();
-    let horizontal = Layout::horizontal([Constraint::Fill(1), Constraint::Length(width)]);
+fn view(app: &mut App<Box<dyn io::Write + Send>>, f: &mut Frame, rows: u16, cols: u16) {
+    let horizontal = Layout::horizontal([Constraint::Fill(1), Constraint::Length(cols)]);
     let [table, pane] = horizontal.areas(f.size());
 
-    let pane_to_render: TerminalPane<bool> = TerminalPane::new(
+    let pane_to_render: TerminalPane<Box<dyn io::Write + Send>> = TerminalPane::new(
         rows,
         cols,
-        app.tasks_by_status.task_names_in_displayed_order(),
+        terms,
         match app.layout_focus {
             LayoutSections::Pane => true,
             LayoutSections::TaskList => false,

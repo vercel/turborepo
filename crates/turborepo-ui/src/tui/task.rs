@@ -67,7 +67,7 @@ impl TasksByStatus {
         .concat()
     }
 
-    pub fn tasks_started(&self) -> Vec<&str> {
+    pub fn tasks_started(&self) -> Vec<String> {
         let (errors, success): (Vec<_>, Vec<_>) = self
             .finished
             .iter()
@@ -79,6 +79,7 @@ impl TasksByStatus {
             .map(|task| task.name())
             .chain(self.running.iter().map(|task| task.name()))
             .chain(errors.into_iter().map(|task| task.name()))
+            .map(|task| task.to_string())
             .collect()
     }
 }

@@ -7,48 +7,31 @@ use ratatui::{
 };
 use tracing::debug;
 use tui_term::widget::PseudoTerminal;
-use turborepo_vt100 as vt100;
 
-use super::{app::Direction, Error};
+use super::{app::Direction, Error, TerminalOutput};
 
 const FOOTER_TEXT_ACTIVE: &str = "Press`Ctrl-Z` to stop interacting.";
 const FOOTER_TEXT_INACTIVE: &str = "Press `Enter` to interact.";
 
-pub struct TerminalPane<W> {
-    tasks: BTreeMap<String, TerminalOutput<W>>,
+pub struct TerminalPane<'a, W> {
+    logs_output: &'a TerminalOutput<W>,
     displayed_task: Option<String>,
     rows: u16,
     cols: u16,
     highlight: bool,
 }
 
-struct TerminalOutput<W> {
-    rows: u16,
-    cols: u16,
-    parser: vt100::Parser,
-    stdin: Option<W>,
-    status: Option<String>,
-}
-
-impl<W> TerminalPane<W> {
-    pub fn new(
-        rows: u16,
-        cols: u16,
-        tasks: impl IntoIterator<Item = String>,
-        highlight: bool,
-    ) -> Self {
+impl<'a, W> TerminalPane<'a, W> {
+    pub fn new(rows: u16, cols: u16, highlight: bool, logs_output: &'a TerminalOutput<W>) -> Self {
         // We trim 2 from rows and cols as we use them for borders
         let rows = rows.saturating_sub(2);
         let cols = cols.saturating_sub(2);
         Self {
-            tasks: tasks
-                .into_iter()
-                .map(|name| (name, TerminalOutput::new(rows, cols, None)))
-                .collect(),
             displayed_task: None,
             rows,
             cols,
             highlight,
+            logs_output,
         }
     }
 
@@ -64,11 +47,8 @@ impl<W> TerminalPane<W> {
         Ok(())
     }
 
-    pub fn has_stdin(&self, task: &str) -> bool {
-        self.tasks
-            .get(task)
-            .map(|task| task.stdin.is_some())
-            .unwrap_or_default()
+    pub fn has_stdin(&self, task: &str) -> Option<W> {
+        &self.logs_output.stdin
     }
 
     pub fn resize(&mut self, rows: u16, cols: u16) -> Result<(), Error> {
@@ -162,51 +142,6 @@ impl<W: Write> TerminalPane<W> {
                 e,
             })?;
         }
-        Ok(())
-    }
-}
-
-impl<W> TerminalOutput<W> {
-    fn new(rows: u16, cols: u16, stdin: Option<W>) -> Self {
-        Self {
-            parser: vt100::Parser::new(rows, cols, 1024),
-            stdin,
-            rows,
-            cols,
-            status: None,
-        }
-    }
-
-    fn title(&self, task_name: &str) -> String {
-        match self.status.as_deref() {
-            Some(status) => format!(" {task_name} > {status} "),
-            None => format!(" {task_name} > "),
-        }
-    }
-
-    fn resize(&mut self, rows: u16, cols: u16) {
-        if self.rows != rows || self.cols != cols {
-            self.parser.screen_mut().set_size(rows, cols);
-        }
-        self.rows = rows;
-        self.cols = cols;
-    }
-
-    #[tracing::instrument(skip(self))]
-    fn persist_screen(&self, task_name: &str) -> std::io::Result<()> {
-        let screen = self.parser.entire_screen();
-        let title = self.title(task_name);
-        let mut stdout = std::io::stdout().lock();
-        stdout.write_all("┌".as_bytes())?;
-        stdout.write_all(title.as_bytes())?;
-        stdout.write_all(b"\r\n")?;
-        for row in screen.rows_formatted(0, self.cols) {
-            stdout.write_all("│ ".as_bytes())?;
-            stdout.write_all(&row)?;
-            stdout.write_all(b"\r\n")?;
-        }
-        stdout.write_all("└────>\r\n".as_bytes())?;
-
         Ok(())
     }
 }
