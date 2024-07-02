@@ -39,7 +39,6 @@ pub struct App<W> {
     tasks_by_status: TasksByStatus,
     selected_task_index: usize,
     has_user_interacted: bool,
-    layout_focus: LayoutSections,
 }
 
 pub enum Direction {
@@ -88,7 +87,13 @@ impl<W> App<W> {
             scroll: TableState::default().with_selected(selected_task_index),
             selected_task_index,
             has_user_interacted,
-            layout_focus: LayoutSections::TaskList,
+        }
+    }
+
+    pub fn is_focusing_pane(&self) -> bool {
+        match self.input_options.focus {
+            LayoutSections::Pane => true,
+            LayoutSections::TaskList => false,
         }
     }
 
@@ -148,7 +153,6 @@ impl<W> App<W> {
             return Ok(());
         }
 
-        // Find the highlighted task from before the list movement in the new list.
         if let Some(new_index_to_highlight) = self
             .tasks_by_status
             .task_names_in_displayed_order()
@@ -476,10 +480,7 @@ fn view(app: &mut App<Box<dyn io::Write + Send>>, f: &mut Frame, rows: u16, cols
     let pane_to_render: TerminalPane<Box<dyn io::Write + Send>> = TerminalPane::new(
         rows,
         cols,
-        match app.layout_focus {
-            LayoutSections::Pane => true,
-            LayoutSections::TaskList => false,
-        },
+        app.is_focusing_pane(),
         &mut app.tasks,
         &active_task,
     );
