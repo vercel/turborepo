@@ -1701,6 +1701,8 @@ impl Task {
             None
         };
 
+        aggregation_node.shrink_to_fit();
+
         // TODO aggregation_node
         let unset = false;
 
