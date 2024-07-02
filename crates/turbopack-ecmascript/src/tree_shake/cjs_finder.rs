@@ -108,7 +108,8 @@ pub fn should_skip_tree_shaking(m: &Program) -> bool {
 fn is_next_js_special_export(sym: &str) -> bool {
     matches!(
         sym,
-        "runtime"
+        "config"
+            | "runtime"
             | "revalidate"
             | "dynamic"
             | "dynamicParams"
