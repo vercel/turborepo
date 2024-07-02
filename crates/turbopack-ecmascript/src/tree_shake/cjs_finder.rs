@@ -59,6 +59,22 @@ pub fn should_skip_tree_shaking(m: &Program) -> bool {
                     }
                 }
 
+                // Skip special reexports that are recognized by next.js
+                ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
+                    decl: Decl::Var(box VarDecl { decls, .. }),
+                    ..
+                })) => {
+                    for decl in decls {
+                        if let Pat::Ident(name) = &decl.name {
+                            match &*name.sym {
+                                "runtime" | "revalidate" => return true,
+
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+
                 _ => {}
             }
         }
