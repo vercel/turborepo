@@ -30,15 +30,14 @@ pub enum LayoutSections {
 }
 
 pub struct App<W> {
+    // TODO: Could I reasonably get to only one representation of the tasks?
     tasks: BTreeMap<String, TerminalOutput<W>>,
-    done: bool,
-    input_options: InputOptions,
-    started_tasks: Vec<String>,
-    task_list: Vec<String>,
-    scroll: TableState,
     tasks_by_status: TasksByStatus,
+    input_options: InputOptions,
+    scroll: TableState,
     selected_task_index: usize,
-    has_user_interacted: bool,
+    has_user_scrolled: bool,
+    done: bool,
 }
 
 pub enum Direction {
@@ -49,8 +48,6 @@ pub enum Direction {
 impl<W> App<W> {
     pub fn new(rows: u16, cols: u16, tasks: Vec<String>) -> Self {
         debug!("tasks: {tasks:?}");
-
-        let num_of_tasks = tasks.len();
 
         // Initializes with the planned tasks
         // and will mutate as tasks change
@@ -75,9 +72,6 @@ impl<W> App<W> {
                 // Check if stdin is a tty that we should read input from
                 tty_stdin: atty::is(atty::Stream::Stdin),
             },
-            started_tasks: Vec::with_capacity(num_of_tasks),
-            // TODO: WIP, this should be able to disappear once I'm done?
-            task_list: tasks_by_status.task_names_in_displayed_order(),
             tasks: tasks_by_status
                 .task_names_in_displayed_order()
                 .into_iter()
@@ -86,7 +80,7 @@ impl<W> App<W> {
             tasks_by_status,
             scroll: TableState::default().with_selected(selected_task_index),
             selected_task_index,
-            has_user_interacted,
+            has_user_scrolled: has_user_interacted,
         }
     }
 
@@ -108,11 +102,11 @@ impl<W> App<W> {
     }
 
     pub fn next(&mut self) {
-        let num_rows = self.task_list.len();
+        let num_rows = self.tasks_by_status.count_all();
         let next_index = (self.selected_task_index + 1).clamp(0, num_rows - 1);
         self.selected_task_index = next_index;
         self.scroll.select(Some(next_index));
-        self.has_user_interacted = true;
+        self.has_user_scrolled = true;
     }
 
     pub fn previous(&mut self) {
@@ -122,7 +116,7 @@ impl<W> App<W> {
         };
         self.selected_task_index = i;
         self.scroll.select(Some(i));
-        self.has_user_interacted = true;
+        self.has_user_scrolled = true;
     }
 
     /// Mark the given task as started.
@@ -149,7 +143,7 @@ impl<W> App<W> {
         self.tasks_by_status.running.push(running);
 
         // If user hasn't interacted, keep highlighting top-most task in list.
-        if !self.has_user_interacted {
+        if !self.has_user_scrolled {
             return Ok(());
         }
 
@@ -189,7 +183,7 @@ impl<W> App<W> {
         self.tasks_by_status.finished.push(running.finish(result));
 
         // If user hasn't interacted, keep highlighting top-most task in list.
-        if !self.has_user_interacted {
+        if !self.has_user_scrolled {
             return Ok(());
         }
 
@@ -404,7 +398,10 @@ fn update(
     match event {
         Event::StartTask { task } => {
             app.start_task(&task)?;
-            app.started_tasks.push(task);
+            app.tasks_by_status
+                .groups_as_task_names()
+                .running
+                .push(task);
         }
         Event::TaskOutput { task, output } => {
             app.process_output(&task, &output)?;
@@ -432,7 +429,7 @@ fn update(
             app.next();
         }
         Event::ScrollUp => {
-            app.has_user_interacted = true;
+            app.has_user_scrolled = true;
             app.tasks
                 .get_mut(&app.active_task())
                 .unwrap()
@@ -440,7 +437,7 @@ fn update(
                 .unwrap_or_default();
         }
         Event::ScrollDown => {
-            app.has_user_interacted = true;
+            app.has_user_scrolled = true;
             app.tasks
                 .get_mut(&app.active_task())
                 .unwrap()
@@ -448,11 +445,11 @@ fn update(
                 .unwrap_or_default();
         }
         Event::EnterInteractive => {
-            app.has_user_interacted = true;
+            app.has_user_scrolled = true;
             app.interact();
         }
         Event::ExitInteractive => {
-            app.has_user_interacted = true;
+            app.has_user_scrolled = true;
             app.interact();
         }
         Event::Input { bytes } => {
