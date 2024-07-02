@@ -66,10 +66,8 @@ pub fn should_skip_tree_shaking(m: &Program) -> bool {
                 })) => {
                     for decl in decls {
                         if let Pat::Ident(name) = &decl.name {
-                            match &*name.sym {
-                                "runtime" | "revalidate" => return true,
-
-                                _ => {}
+                            if is_next_js_special_export(&name.sym) {
+                                return true;
                             }
                         }
                     }
@@ -95,6 +93,23 @@ pub fn should_skip_tree_shaking(m: &Program) -> bool {
     }
 
     true
+}
+
+fn is_next_js_special_export(sym: &str) -> bool {
+    matches!(
+        sym,
+        "runtime"
+            | "revalidate"
+            | "dynamic"
+            | "dynamicParams"
+            | "fetchCache"
+            | "preferredRegion"
+            | "maxDuration"
+            | "generateStaticParams"
+            | "getServerSideProps"
+            | "getInitialProps"
+            | "getStaticProps"
+    )
 }
 
 #[derive(Default)]
