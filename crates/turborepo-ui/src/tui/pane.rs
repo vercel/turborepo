@@ -14,7 +14,7 @@ const FOOTER_TEXT_ACTIVE: &str = "Press`Ctrl-Z` to stop interacting.";
 const FOOTER_TEXT_INACTIVE: &str = "Press `Enter` to interact.";
 
 pub struct TerminalPane<'a, W> {
-    displayed_task: Option<String>,
+    displayed_task: &'a String,
     rows: u16,
     cols: u16,
     highlight: bool,
@@ -27,16 +27,17 @@ impl<'a, W> TerminalPane<'a, W> {
         cols: u16,
         highlight: bool,
         tasks: &'a mut BTreeMap<String, TerminalOutput<W>>,
+        displayed_task: &'a String,
     ) -> Self {
         // We trim 2 from rows and cols as we use them for borders
         let rows = rows.saturating_sub(2);
         let cols = cols.saturating_sub(2);
         Self {
-            displayed_task: None,
             rows,
             cols,
             highlight,
             tasks,
+            displayed_task,
         }
     }
 
@@ -72,13 +73,11 @@ impl<'a, W> TerminalPane<'a, W> {
         self.cols = cols;
         if changed {
             // Eagerly resize currently displayed terminal
-            if let Some(task_name) = self.displayed_task.as_deref() {
-                let task = self
-                    .tasks
-                    .get_mut(task_name)
-                    .expect("displayed should always point to valid task");
-                task.resize(rows, cols);
-            }
+            let task = self
+                .tasks
+                .get_mut(self.displayed_task)
+                .expect("displayed should always point to valid task");
+            task.resize(rows, cols);
         }
 
         Ok(())
@@ -91,7 +90,7 @@ impl<'a, W> TerminalPane<'a, W> {
             let terminal = self.task_mut(task)?;
             terminal.resize(rows, cols);
         }
-        self.displayed_task = Some(task.into());
+        self.displayed_task;
 
         Ok(())
     }
@@ -130,8 +129,7 @@ impl<'a, W> TerminalPane<'a, W> {
     }
 
     fn selected(&self) -> Option<(&String, &TerminalOutput<W>)> {
-        let task_name = self.displayed_task.as_deref()?;
-        self.tasks.get_key_value(task_name)
+        self.tasks.get_key_value(self.displayed_task)
     }
 
     fn task_mut(&mut self, task: &str) -> Result<&mut TerminalOutput<W>, Error> {

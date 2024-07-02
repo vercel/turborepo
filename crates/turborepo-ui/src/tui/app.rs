@@ -471,6 +471,8 @@ fn view(app: &mut App<Box<dyn io::Write + Send>>, f: &mut Frame, rows: u16, cols
     let horizontal = Layout::horizontal([Constraint::Fill(1), Constraint::Length(cols)]);
     let [table, pane] = horizontal.areas(f.size());
 
+    let active_task = app.active_task();
+
     let pane_to_render: TerminalPane<Box<dyn io::Write + Send>> = TerminalPane::new(
         rows,
         cols,
@@ -479,6 +481,7 @@ fn view(app: &mut App<Box<dyn io::Write + Send>>, f: &mut Frame, rows: u16, cols
             LayoutSections::TaskList => false,
         },
         &mut app.tasks,
+        &active_task,
     );
 
     let table_to_render = TaskTable::new(
