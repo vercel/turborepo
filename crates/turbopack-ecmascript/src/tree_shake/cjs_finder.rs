@@ -73,6 +73,16 @@ pub fn should_skip_tree_shaking(m: &Program) -> bool {
                     }
                 }
 
+                // Skip special reexports that are recognized by next.js
+                ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
+                    decl: Decl::Fn(f),
+                    ..
+                })) => {
+                    if is_next_js_special_export(&f.ident.sym) {
+                        return true;
+                    }
+                }
+
                 _ => {}
             }
         }
@@ -106,6 +116,8 @@ fn is_next_js_special_export(sym: &str) -> bool {
             | "preferredRegion"
             | "maxDuration"
             | "generateStaticParams"
+            | "metadata"
+            | "generateMetadata"
             | "getServerSideProps"
             | "getInitialProps"
             | "getStaticProps"
