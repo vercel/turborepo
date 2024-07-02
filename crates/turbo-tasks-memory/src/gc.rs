@@ -74,10 +74,12 @@ struct OldGeneration {
     generation: u32,
 }
 
+#[derive(Default)]
 struct ProcessGenerationResult {
     priority: Option<GcPriority>,
     content_dropped_count: usize,
     unloaded_count: usize,
+    already_unloaded_count: usize,
 }
 
 struct ProcessDeactivationsResult {
@@ -220,11 +222,7 @@ impl GcQueue {
         }) = old_generation
         else {
             // No old generation to process
-            return ProcessGenerationResult {
-                priority: None,
-                content_dropped_count: 0,
-                unloaded_count: 0,
-            };
+            return ProcessGenerationResult::default();
         };
         // Check all tasks for the correct generation
         let mut indices = Vec::with_capacity(tasks.len());
@@ -241,11 +239,7 @@ impl GcQueue {
 
         if indices.is_empty() {
             // No valid tasks in old generation to process
-            return ProcessGenerationResult {
-                priority: None,
-                content_dropped_count: 0,
-                unloaded_count: 0,
-            };
+            return ProcessGenerationResult::default();
         }
 
         // Sorting based on sort_by_cached_key from std lib
@@ -301,6 +295,7 @@ impl GcQueue {
         // GC the tasks
         let mut content_dropped_count = 0;
         let mut unloaded_count = 0;
+        let mut already_unloaded_count = 0;
         for task in tasks[..tasks_to_collect].iter() {
             backend.with_task(*task, |task| {
                 match task.run_gc(generation, self, backend, turbo_tasks) {
@@ -312,6 +307,9 @@ impl GcQueue {
                     GcResult::Unloaded => {
                         unloaded_count += 1;
                     }
+                    GcResult::AlreadyUnloaded => {
+                        already_unloaded_count += 1;
+                    }
                 }
             });
         }
@@ -320,6 +318,7 @@ impl GcQueue {
             priority: Some(max_priority),
             content_dropped_count,
             unloaded_count,
+            already_unloaded_count,
         }
     }
 
@@ -340,11 +339,13 @@ impl GcQueue {
             priority,
             content_dropped_count,
             unloaded_count,
+            already_unloaded_count,
         } = self.process_old_generation(backend, turbo_tasks);
 
         span.record("deactivations_count", deactivations_count);
         span.record("content_dropped_count", content_dropped_count);
         span.record("unloaded_count", unloaded_count);
+        span.record("already_unloaded_count", already_unloaded_count);
         if let Some(priority) = &priority {
             span.record("priority", debug(priority));
         } else {

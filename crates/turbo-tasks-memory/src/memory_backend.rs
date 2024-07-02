@@ -171,18 +171,19 @@ impl MemoryBackend {
     pub fn gc_all_tasks(
         &self,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
-    ) -> (usize, usize, usize) {
+    ) -> (usize, usize, usize, usize) {
         let all_ids = self
             .task_cache
             .iter()
             .map(|entry| *entry.value())
             .collect::<Vec<_>>();
         let task_count = all_ids.len();
-        let (content_dropped_count, unloaded_count) = all_ids
+        let (content_dropped_count, unloaded_count, already_unloaded_count) = all_ids
             .into_par_iter()
             .fold(
-                || (0, 0),
-                |(mut content_dropped_count, mut unloaded_count), task_id| {
+                || (0, 0, 0),
+                |(mut content_dropped_count, mut unloaded_count, mut already_unloaded_count),
+                 task_id| {
                     self.with_task(task_id, |task| {
                         match task.run_gc(
                             u32::MAX,
@@ -198,13 +199,25 @@ impl MemoryBackend {
                             GcResult::Unloaded => {
                                 unloaded_count += 1;
                             }
+                            GcResult::AlreadyUnloaded => {
+                                already_unloaded_count += 1;
+                            }
                         }
                     });
-                    (content_dropped_count, unloaded_count)
+                    (
+                        content_dropped_count,
+                        unloaded_count,
+                        already_unloaded_count,
+                    )
                 },
             )
-            .reduce(|| (0, 0), |(a, b), (c, d)| (a + c, b + d));
-        (task_count, content_dropped_count, unloaded_count)
+            .reduce(|| (0, 0, 0), |a, b| (a.0 + b.0, a.1 + b.1, a.2 + b.2));
+        (
+            task_count,
+            content_dropped_count,
+            unloaded_count,
+            already_unloaded_count,
+        )
     }
 
     fn insert_and_connect_fresh_task<K: Eq + Hash, H: BuildHasher + Clone>(
