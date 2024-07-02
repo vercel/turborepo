@@ -461,7 +461,7 @@ async fn should_skip(ident: Vc<AssetIdent>, _: Vc<Box<dyn Source>>) -> Result<Vc
     }
 
     // TODO: Fix bug and remove this
-    if s.contains("client-component-renderer-logger") {
+    if s.contains("client-component-renderer-logger") || s.contains("nanoid") {
         return Ok(Vc::cell(true));
     }
 
