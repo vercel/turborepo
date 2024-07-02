@@ -2,6 +2,8 @@ use std::io::Write;
 
 use turborepo_vt100 as vt100;
 
+use super::{app::Direction, Error};
+
 const FOOTER_TEXT_ACTIVE: &str = "Press`Ctrl-Z` to stop interacting.";
 const FOOTER_TEXT_INACTIVE: &str = "Press `Enter` to interact.";
 
@@ -37,6 +39,16 @@ impl<W> TerminalOutput<W> {
         }
         self.rows = rows;
         self.cols = cols;
+    }
+
+    pub fn scroll(&mut self, direction: Direction) -> Result<(), Error> {
+        let scrollback = self.parser.screen().scrollback();
+        let new_scrollback = match direction {
+            Direction::Up => scrollback + 1,
+            Direction::Down => scrollback.saturating_sub(1),
+        };
+        self.parser.screen_mut().set_scrollback(new_scrollback);
+        Ok(())
     }
 
     #[tracing::instrument(skip(self))]

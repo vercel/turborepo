@@ -426,7 +426,7 @@ fn update(
         Event::TaskOutput { task, output } => {
             app.process_output(&task, &output)?;
         }
-        Event::Status { task, status } => {
+        Event::Status { status } => {
             app.set_status(status)?;
         }
         Event::InternalStop => {
@@ -450,11 +450,17 @@ fn update(
         }
         Event::ScrollUp => {
             app.has_user_interacted = true;
-            app.scroll(Direction::Up);
+            app.tasks
+                .get_mut(&app.active_task())
+                .unwrap()
+                .scroll(Direction::Up);
         }
         Event::ScrollDown => {
             app.has_user_interacted = true;
-            app.scroll(Direction::Down);
+            app.tasks
+                .get_mut(&app.active_task())
+                .unwrap()
+                .scroll(Direction::Down);
         }
         Event::EnterInteractive => {
             app.has_user_interacted = true;
@@ -467,8 +473,8 @@ fn update(
         Event::Input { bytes } => {
             app.forward_input(&bytes)?;
         }
-        Event::SetStdin { task, stdin } => {
-            app.pane.insert_stdin(&task, Some(stdin))?;
+        Event::SetStdin { stdin } => {
+            app.insert_stdin(Some(stdin))?;
         }
         Event::UpdateTasks { tasks } => {
             app.update_tasks(tasks);
@@ -485,11 +491,11 @@ fn view(app: &mut App<Box<dyn io::Write + Send>>, f: &mut Frame, rows: u16, cols
     let pane_to_render: TerminalPane<Box<dyn io::Write + Send>> = TerminalPane::new(
         rows,
         cols,
-        terms,
         match app.layout_focus {
             LayoutSections::Pane => true,
             LayoutSections::TaskList => false,
         },
+        &mut app.tasks,
     );
 
     let table_to_render = TaskTable::new(
