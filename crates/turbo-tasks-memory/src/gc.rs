@@ -66,8 +66,8 @@ const MAX_TASKS_PER_OLD_GENERATION: usize = 200_000;
 const PERCENTAGE_TO_COLLECT: usize = 30;
 const TASK_BASE_MEMORY_USAGE: usize = 1_000;
 const TASK_BASE_COMPUTE_DURATION_IN_MICROS: u64 = 1_000;
-pub const PERCENTAGE_TARGET_MEMORY: usize = 88;
-pub const PERCENTAGE_IDLE_TARGET_MEMORY: usize = 75;
+pub const PERCENTAGE_TARGET_MEMORY: usize = 75;
+pub const PERCENTAGE_IDLE_TARGET_MEMORY: usize = 50;
 
 struct OldGeneration {
     tasks: Vec<TaskId>,
@@ -352,6 +352,6 @@ impl GcQueue {
             span.record("priority", "");
         }
 
-        priority.map(|p| (p, content_dropped_count))
+        priority.map(|p| (p, content_dropped_count + unloaded_count))
     }
 }
