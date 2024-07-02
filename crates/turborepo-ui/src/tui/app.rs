@@ -228,8 +228,6 @@ impl<W> App<W> {
         let mut task_list = tasks.into_iter().map(Task::new).collect::<Vec<_>>();
         task_list.sort_unstable();
         task_list.dedup();
-
-        self.next();
     }
 
     /// Persist all task output to the after closing the TUI
