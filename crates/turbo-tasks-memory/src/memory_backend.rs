@@ -167,17 +167,19 @@ impl MemoryBackend {
         false
     }
 
-    pub fn gc_all_tasks(&self, turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>) {
+    pub fn gc_all_tasks(&self, turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>) -> usize {
         let all_ids = self
             .task_cache
             .iter()
             .map(|entry| *entry.value())
             .collect::<Vec<_>>();
+        let len = all_ids.len();
         for task_id in all_ids {
             self.with_task(task_id, |task| {
                 task.run_gc(u32::MAX, self.gc_queue.as_ref().unwrap(), self, turbo_tasks)
             });
         }
+        len
     }
 
     fn insert_and_connect_fresh_task<K: Eq + Hash, H: BuildHasher + Clone>(
