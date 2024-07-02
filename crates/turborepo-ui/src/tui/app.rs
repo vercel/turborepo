@@ -484,11 +484,7 @@ fn view(app: &mut App<Box<dyn io::Write + Send>>, f: &mut Frame, rows: u16, cols
         &active_task,
     );
 
-    let table_to_render = TaskTable::new(
-        &app.tasks_by_status,
-        &app.selected_task_index,
-        &app.has_user_interacted,
-    );
+    let table_to_render = TaskTable::new(&app.tasks_by_status);
 
     f.render_stateful_widget(&table_to_render, table, &mut app.scroll);
     f.render_widget(&pane_to_render, pane);

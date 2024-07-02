@@ -4,14 +4,8 @@ use ratatui::{
     text::Text,
     widgets::{Cell, Row, StatefulWidget, Table, TableState},
 };
-use tracing::debug;
 
-use super::{
-    event::TaskResult,
-    spinner::SpinnerState,
-    task::{Task, TasksByStatus},
-    Error,
-};
+use super::{event::TaskResult, spinner::SpinnerState, task::TasksByStatus};
 
 /// A widget that renders a table of their tasks and their current status
 ///
@@ -20,22 +14,14 @@ use super::{
 pub struct TaskTable<'b> {
     tasks_by_type: &'b TasksByStatus,
     spinner: SpinnerState,
-    selected_index: &'b usize,
-    user_has_interacted: &'b bool,
 }
 
 impl<'b> TaskTable<'b> {
     /// Construct a new table with all of the planned tasks
-    pub fn new(
-        tasks_by_type: &'b TasksByStatus,
-        selected_index: &'b usize,
-        user_has_interacted: &'b bool,
-    ) -> Self {
+    pub fn new(tasks_by_type: &'b TasksByStatus) -> Self {
         Self {
-            selected_index,
             tasks_by_type,
             spinner: SpinnerState::default(),
-            user_has_interacted,
         }
     }
 
@@ -90,8 +76,6 @@ impl<'a> StatefulWidget for &'a TaskTable<'a> {
 
     fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer, state: &mut Self::State) {
         let width = area.width;
-        let active_index = self.selected_index;
-        let user_has_interacted = self.user_has_interacted;
         let bar = "─".repeat(usize::from(width));
         let table = Table::new(
             self.running_rows()
@@ -106,14 +90,11 @@ impl<'a> StatefulWidget for &'a TaskTable<'a> {
         .highlight_style(Style::default().fg(Color::Yellow))
         .column_spacing(0)
         .header(
-            vec![
-                format!("Tasks {active_index} {user_has_interacted}\n{bar}"),
-                " \n─".to_owned(),
-            ]
-            .into_iter()
-            .map(Cell::from)
-            .collect::<Row>()
-            .height(2),
+            vec![format!("Tasks\n{bar}"), " \n─".to_owned()]
+                .into_iter()
+                .map(Cell::from)
+                .collect::<Row>()
+                .height(2),
         )
         .footer(
             vec![format!("{bar}\n↑ ↓ to navigate"), "─\n ".to_owned()]
