@@ -41,10 +41,6 @@ impl<'a, W> TerminalPane<'a, W> {
         }
     }
 
-    pub fn highlight(&mut self, highlight: bool) {
-        self.highlight = highlight;
-    }
-
     pub fn process_output(&mut self, task: &str, output: &[u8]) -> Result<(), Error> {
         let task = self
             .task_mut(task)

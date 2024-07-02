@@ -88,7 +88,7 @@ impl<W> App<W> {
             scroll: TableState::default().with_selected(selected_task_index),
             selected_task_index,
             has_user_interacted,
-            layout_focus: LayoutSections::Pane,
+            layout_focus: LayoutSections::TaskList,
         }
     }
 
