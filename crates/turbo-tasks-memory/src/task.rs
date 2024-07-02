@@ -312,7 +312,7 @@ struct InProgressState {
     count_as_finished: bool,
     /// Dependencies and children that need to be disconnected once leaving
     /// this state
-    outdated_edges: Box<TaskEdgesSet>,
+    outdated_edges: TaskEdgesSet,
     new_children: TaskIdSet,
     outdated_collectibles: MaybeCollectibles,
 }
@@ -402,7 +402,7 @@ impl TaskStateType {
                 new_children,
                 ..
             }) => {
-                let mut edges = *outdated_edges;
+                let mut edges = outdated_edges;
                 let mut children = edges.drain_children();
                 children.extend(new_children.iter().copied());
                 (edges, children)
@@ -671,7 +671,7 @@ impl Task {
                     ref mut outdated_edges,
                 } => {
                     let event = event.take();
-                    let outdated_edges = take(outdated_edges);
+                    let outdated_edges = *take(outdated_edges);
                     let outdated_collectibles = take(&mut state.collectibles);
                     state.state_type = InProgress(Box::new(InProgressState {
                         event,
@@ -891,7 +891,7 @@ impl Task {
                         ref mut new_children,
                     }) => {
                         let event = event.take();
-                        let mut outdated_edges = *take(outdated_edges);
+                        let mut outdated_edges = take(outdated_edges);
                         let outdated_collectibles = outdated_collectibles.take_collectibles();
                         let mut new_edges = take(&mut dependencies);
                         outdated_edges.remove_all(&new_edges);
@@ -1127,7 +1127,7 @@ impl Task {
                     });
                     state.state_type = InProgressDirty {
                         event,
-                        outdated_edges,
+                        outdated_edges: Box::new(outdated_edges),
                         children_count,
                     };
                     drop(state);
