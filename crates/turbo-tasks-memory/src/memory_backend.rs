@@ -14,6 +14,7 @@ use std::{
 use anyhow::{bail, Result};
 use auto_hash_map::AutoMap;
 use dashmap::{mapref::entry::Entry, DashMap};
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rustc_hash::FxHasher;
 use tokio::task::futures::TaskLocalFuture;
 use tracing::trace_span;
@@ -177,22 +178,32 @@ impl MemoryBackend {
             .map(|entry| *entry.value())
             .collect::<Vec<_>>();
         let task_count = all_ids.len();
-        let mut content_dropped_count = 0;
-        let mut unloaded_count = 0;
-        for task_id in all_ids {
-            self.with_task(task_id, |task| {
-                match task.run_gc(u32::MAX, self.gc_queue.as_ref().unwrap(), self, turbo_tasks) {
-                    GcResult::NotPossible => {}
-                    GcResult::Stale => {}
-                    GcResult::ContentDropped => {
-                        content_dropped_count += 1;
-                    }
-                    GcResult::Unloaded => {
-                        unloaded_count += 1;
-                    }
-                }
-            });
-        }
+        let (content_dropped_count, unloaded_count) = all_ids
+            .into_par_iter()
+            .fold(
+                || (0, 0),
+                |(mut content_dropped_count, mut unloaded_count), task_id| {
+                    self.with_task(task_id, |task| {
+                        match task.run_gc(
+                            u32::MAX,
+                            self.gc_queue.as_ref().unwrap(),
+                            self,
+                            turbo_tasks,
+                        ) {
+                            GcResult::NotPossible => {}
+                            GcResult::Stale => {}
+                            GcResult::ContentDropped => {
+                                content_dropped_count += 1;
+                            }
+                            GcResult::Unloaded => {
+                                unloaded_count += 1;
+                            }
+                        }
+                    });
+                    (content_dropped_count, unloaded_count)
+                },
+            )
+            .reduce(|| (0, 0), |(a, b), (c, d)| (a + c, b + d));
         (task_count, content_dropped_count, unloaded_count)
     }
 
