@@ -1613,7 +1613,8 @@ impl Task {
                 state.aggregation_node.shrink_to_fit();
                 GcResult::Unloaded
             }
-            _ => GcResult::Unloaded,
+            TaskMetaStateWriteGuard::Unloaded(_) => GcResult::Unloaded,
+            TaskMetaStateWriteGuard::TemporaryFiller => unreachable!(),
         }
     }
 
