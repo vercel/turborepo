@@ -1,0 +1,64 @@
+*arrow function 173* = (...) => (undefined | ???*0*)
+- *0* spread in function calls is not supported
+  ⚠️  This value might have side effects
+
+ComponentMod = ???*0*
+- *0* arguments[0]
+  ⚠️  function calls are not analysed yet
+
+args = ???*0*
+- *0* args
+  ⚠️  pattern without value
+
+clientComponentLoadTimes = (0 | ((0 | ???*0* | ???*3*) + ???*4*) | ???*5*)
+- *0* (???*1* + ???*2*)
+  ⚠️  nested operation
+- *1* clientComponentLoadTimes
+  ⚠️  circular variable reference
+- *2* unsupported expression
+  ⚠️  This value might have side effects
+- *3* clientComponentLoadTimes
+  ⚠️  pattern without value
+- *4* unsupported expression
+  ⚠️  This value might have side effects
+- *5* clientComponentLoadTimes
+  ⚠️  pattern without value
+
+getClientComponentLoaderMetrics = (...) => metrics
+
+metrics = (???*0* ? ???*5* : {"clientComponentLoadTimes": (0 | ???*6* | ???*9*)})
+- *0* ((0 | ???*1* | ???*4*) === 0)
+  ⚠️  nested operation
+- *1* (???*2* + ???*3*)
+  ⚠️  nested operation
+- *2* clientComponentLoadTimes
+  ⚠️  circular variable reference
+- *3* unsupported expression
+  ⚠️  This value might have side effects
+- *4* clientComponentLoadTimes
+  ⚠️  pattern without value
+- *5* FreeVar(undefined)
+  ⚠️  unknown global
+  ⚠️  This value might have side effects
+- *6* (???*7* + ???*8*)
+  ⚠️  nested operation
+- *7* clientComponentLoadTimes
+  ⚠️  circular variable reference
+- *8* unsupported expression
+  ⚠️  This value might have side effects
+- *9* clientComponentLoadTimes
+  ⚠️  pattern without value
+
+options = ???*0*
+- *0* options
+  ⚠️  pattern without value
+
+startTime = ???*0*()
+- *0* ???*1*["now"]
+  ⚠️  unknown object
+  ⚠️  This value might have side effects
+- *1* FreeVar(performance)
+  ⚠️  unknown global
+  ⚠️  This value might have side effects
+
+wrapClientComponentLoader = (...) => {"loadChunk": *arrow function 173*}
