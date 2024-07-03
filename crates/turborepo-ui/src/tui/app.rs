@@ -140,7 +140,7 @@ impl<W> App<W> {
         let highlighted_task =
             &self.tasks_by_status.task_names_in_displayed_order()[self.selected_task_index];
 
-        let found_task = false;
+        let mut found_task = false;
 
         if let Some(planned_idx) = self
             .tasks_by_status
@@ -159,9 +159,10 @@ impl<W> App<W> {
             .iter()
             .position(|finished| finished.name() == task)
         {
-            let finished = self.tasks_by_status.finished.remove(finished_idx);
-            let finished = finished.start();
-            self.tasks_by_status.running.push(finished);
+            let _finished = self.tasks_by_status.finished.remove(finished_idx);
+            self.tasks_by_status
+                .running
+                .push(Task::new(task.to_owned()).start());
 
             found_task = true;
         }
