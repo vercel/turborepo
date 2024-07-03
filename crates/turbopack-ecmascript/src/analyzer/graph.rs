@@ -1048,9 +1048,7 @@ impl VisitAstPath for Analyzer<'_> {
                             self.add_value(key.to_id(), value);
                         }
                     }
-                    if n.left.as_ident().is_none() {
-                        n.left.visit_children_with_path(self, &mut ast_path);
-                    }
+                    n.left.visit_children_with_path(self, &mut ast_path);
                 }
             }
         }
