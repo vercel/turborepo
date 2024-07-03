@@ -73,21 +73,20 @@ impl CustomTransformer for RelayTransformer {
                 .context("Expected relative path to relay artifact")?,
         );
 
-        let (root, config) = if self.config.artifact_directory.is_some() {
-            (path_to_proj, None)
+        let config = if self.config.artifact_directory.is_some() {
+            self.config.clone()
         } else {
-            let config = swc_relay::Config {
+            swc_relay::Config {
                 artifact_directory: Some(PathBuf::from("__generated__")),
                 ..self.config
-            };
-            (path_to_proj, Some(config))
+            }
         };
 
         let p = std::mem::replace(program, Program::Module(Module::dummy()));
         *program = p.fold_with(&mut swc_relay::relay(
-            config.as_ref().unwrap_or(&self.config),
+            &config,
             FileName::Real(PathBuf::from(ctx.file_name_str)),
-            root,
+            path_to_proj,
             // [TODO]: pages_dir comes through next-swc-loader
             // https://github.com/vercel/next.js/blob/ea472e8058faea8ebdab2ef6d3aab257a1f0d11c/packages/next/src/build/webpack-config.ts#L792
             None,
