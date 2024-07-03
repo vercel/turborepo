@@ -109,6 +109,7 @@ fn is_next_js_special_export(sym: &str) -> bool {
     matches!(
         sym,
         "config"
+            | "middleware"
             | "runtime"
             | "revalidate"
             | "dynamic"
