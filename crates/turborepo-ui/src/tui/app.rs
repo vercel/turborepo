@@ -289,7 +289,6 @@ pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
         &mut terminal,
         &mut app,
         receiver,
-        size.height,
         full_task_width.max(ratio_pane_width),
     ) {
         Ok(callback) => (Ok(()), callback),
@@ -307,11 +306,10 @@ fn run_app_inner<B: Backend + std::io::Write>(
     terminal: &mut Terminal<B>,
     app: &mut App<Box<dyn io::Write + Send>>,
     receiver: AppReceiver,
-    rows: u16,
     cols: u16,
 ) -> Result<Option<mpsc::SyncSender<()>>, Error> {
     // Render initial state to paint the screen
-    terminal.draw(|f| view(app, f, rows, cols))?;
+    terminal.draw(|f| view(app, f, cols))?;
     let mut last_render = Instant::now();
     let mut callback = None;
     while let Some(event) = poll(app.input_options, &receiver, last_render + FRAMERATE) {
@@ -320,7 +318,7 @@ fn run_app_inner<B: Backend + std::io::Write>(
             break;
         }
         if FRAMERATE <= last_render.elapsed() {
-            terminal.draw(|f| view(app, f, rows, cols))?;
+            terminal.draw(|f| view(app, f, cols))?;
             last_render = Instant::now();
         }
     }
@@ -463,19 +461,15 @@ fn update(
     Ok(None)
 }
 
-fn view(app: &mut App<Box<dyn io::Write + Send>>, f: &mut Frame, rows: u16, cols: u16) {
+fn view(app: &mut App<Box<dyn io::Write + Send>>, f: &mut Frame, cols: u16) {
     let horizontal = Layout::horizontal([Constraint::Fill(1), Constraint::Length(cols)]);
     let [table, pane] = horizontal.areas(f.size());
 
     let active_task = app.active_task();
 
-    let pane_to_render: TerminalPane<Box<dyn io::Write + Send>> = TerminalPane::new(
-        rows,
-        cols,
-        app.is_focusing_pane(),
-        &mut app.tasks,
-        &active_task,
-    );
+    let output_logs = app.tasks.get(&active_task).unwrap();
+    let pane_to_render: TerminalPane<Box<dyn io::Write + Send>> =
+        TerminalPane::new(output_logs, &active_task, app.is_focusing_pane());
 
     let table_to_render = TaskTable::new(&app.tasks_by_status);
 
