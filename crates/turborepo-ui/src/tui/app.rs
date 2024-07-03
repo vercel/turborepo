@@ -31,6 +31,8 @@ pub enum LayoutSections {
 }
 
 pub struct App<W> {
+    rows: u16,
+    cols: u16,
     tasks: BTreeMap<String, TerminalOutput<W>>,
     tasks_by_status: TasksByStatus,
     input_options: InputOptions,
@@ -66,6 +68,8 @@ impl<W> App<W> {
         let selected_task_index: usize = 0;
 
         Self {
+            rows,
+            cols,
             done: false,
             input_options: InputOptions {
                 focus: LayoutSections::TaskList,
@@ -227,9 +231,23 @@ impl<W> App<W> {
     }
 
     pub fn update_tasks(&mut self, tasks: Vec<String>) {
+        // Make sure all tasks have a terminal output
+        for task in &tasks {
+            self.tasks
+                .entry(task.clone())
+                .or_insert_with(|| TerminalOutput::new(self.rows, self.cols, None));
+        }
+        // Trim the terminal output to only tasks that exist in new list
+        self.tasks.retain(|name, _| tasks.contains(name));
+        // Update task list
         let mut task_list = tasks.into_iter().map(Task::new).collect::<Vec<_>>();
         task_list.sort_unstable();
         task_list.dedup();
+        self.tasks_by_status = TasksByStatus {
+            planned: task_list,
+            running: Default::default(),
+            finished: Default::default(),
+        };
     }
 
     /// Persist all task output to the after closing the TUI
