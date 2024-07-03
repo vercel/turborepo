@@ -78,7 +78,6 @@ impl<W> App<W> {
             },
             tasks: tasks_by_status
                 .task_names_in_displayed_order()
-                .into_iter()
                 .map(|task_name| (task_name.to_owned(), TerminalOutput::new(rows, cols, None)))
                 .collect(),
             tasks_by_status,
