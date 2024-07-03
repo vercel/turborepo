@@ -140,19 +140,35 @@ impl<W> App<W> {
         let highlighted_task =
             &self.tasks_by_status.task_names_in_displayed_order()[self.selected_task_index];
 
-        let planned_idx = self
+        let found_task = false;
+
+        if let Some(planned_idx) = self
             .tasks_by_status
             .planned
             .iter()
             .position(|planned| planned.name() == task)
-            .ok_or_else(|| {
-                debug!("could not find '{task}' to start");
-                Error::TaskNotFound { name: task.into() }
-            })?;
+        {
+            let planned = self.tasks_by_status.planned.remove(planned_idx);
+            let running = planned.start();
+            self.tasks_by_status.running.push(running);
 
-        let planned = self.tasks_by_status.planned.remove(planned_idx);
-        let running = planned.start();
-        self.tasks_by_status.running.push(running);
+            found_task = true;
+        } else if let Some(finished_idx) = self
+            .tasks_by_status
+            .finished
+            .iter()
+            .position(|finished| finished.name() == task)
+        {
+            let finished = self.tasks_by_status.finished.remove(finished_idx);
+            let finished = finished.start();
+            self.tasks_by_status.running.push(finished);
+
+            found_task = true;
+        }
+
+        if !found_task {
+            return Err(Error::TaskNotFound { name: task.into() });
+        }
 
         // If user hasn't interacted, keep highlighting top-most task in list.
         if !self.has_user_scrolled {
