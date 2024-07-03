@@ -1029,8 +1029,6 @@ impl VisitAstPath for Analyzer<'_> {
                 }
 
                 _ => {
-                    let mut need_visit = true;
-
                     if let Some(key) = n.left.as_ident() {
                         let value = match n.op {
                             AssignOp::AndAssign | AssignOp::OrAssign | AssignOp::NullishAssign => {
@@ -1042,12 +1040,13 @@ impl VisitAstPath for Analyzer<'_> {
                             AssignOp::AddAssign => {
                                 let left = self.eval_context.eval(&Expr::Ident(key.clone()));
 
-                                if !matches!(left, JsValue::Variable(..)) {
-                                    need_visit = false;
-                                }
-
                                 let right = self.eval_context.eval(&n.right);
-                                Some(JsValue::add(vec![left, right]))
+
+                                if right.is_unknown() {
+                                    Some(JsValue::unknown_empty(true, "add to unknown"))
+                                } else {
+                                    Some(JsValue::add(vec![left, right]))
+                                }
                             }
                             _ => Some(JsValue::unknown_empty(true, "unsupported assign operation")),
                         };
@@ -1058,7 +1057,7 @@ impl VisitAstPath for Analyzer<'_> {
                     // We should visit this to handle `+=` like
                     //
                     // clientComponentLoadTimes += performance.now() - startTime
-                    if need_visit {
+                    if n.left.as_ident().is_none() {
                         n.left.visit_children_with_path(self, &mut ast_path);
                     }
                 }
