@@ -10,44 +10,22 @@ args = ???*0*
 - *0* args
   ⚠️  pattern without value
 
-clientComponentLoadTimes = (0 | ((0 | ???*0* | ???*3*) + ???*4*) | ???*5*)
-- *0* (???*1* + ???*2*)
-  ⚠️  nested operation
-- *1* clientComponentLoadTimes
-  ⚠️  circular variable reference
-- *2* unsupported expression
+clientComponentLoadTimes = (0 | ???*0*)
+- *0* add to unknown
   ⚠️  This value might have side effects
-- *3* clientComponentLoadTimes
-  ⚠️  pattern without value
-- *4* unsupported expression
-  ⚠️  This value might have side effects
-- *5* clientComponentLoadTimes
-  ⚠️  pattern without value
 
 getClientComponentLoaderMetrics = (...) => metrics
 
-metrics = (???*0* ? ???*5* : {"clientComponentLoadTimes": (0 | ???*6* | ???*9*)})
-- *0* ((0 | ???*1* | ???*4*) === 0)
+metrics = (???*0* ? ???*2* : {"clientComponentLoadTimes": (0 | ???*3*)})
+- *0* ((0 | ???*1*) === 0)
   ⚠️  nested operation
-- *1* (???*2* + ???*3*)
-  ⚠️  nested operation
-- *2* clientComponentLoadTimes
-  ⚠️  circular variable reference
-- *3* unsupported expression
+- *1* add to unknown
   ⚠️  This value might have side effects
-- *4* clientComponentLoadTimes
-  ⚠️  pattern without value
-- *5* FreeVar(undefined)
+- *2* FreeVar(undefined)
   ⚠️  unknown global
   ⚠️  This value might have side effects
-- *6* (???*7* + ???*8*)
-  ⚠️  nested operation
-- *7* clientComponentLoadTimes
-  ⚠️  circular variable reference
-- *8* unsupported expression
+- *3* add to unknown
   ⚠️  This value might have side effects
-- *9* clientComponentLoadTimes
-  ⚠️  pattern without value
 
 options = ???*0*
 - *0* options

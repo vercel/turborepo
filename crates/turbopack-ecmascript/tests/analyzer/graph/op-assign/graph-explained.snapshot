@@ -8,11 +8,9 @@ args = ???*0*
 - *0* args
   ⚠️  pattern without value
 
-clientComponentLoadTimes = (0 | (clientComponentLoadTimes + ???*0*) | ???*1*)
-- *0* unsupported expression
+clientComponentLoadTimes = (0 | ???*0*)
+- *0* add to unknown
   ⚠️  This value might have side effects
-- *1* clientComponentLoadTimes
-  ⚠️  pattern without value
 
 getClientComponentLoaderMetrics = (...) => metrics
 
