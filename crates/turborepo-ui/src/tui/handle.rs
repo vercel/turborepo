@@ -116,7 +116,13 @@ impl TuiTask {
     }
 
     pub fn set_stdin(&self, stdin: Box<dyn std::io::Write + Send>) {
-        self.handle.primary.send(Event::SetStdin { stdin }).ok();
+        self.handle
+            .primary
+            .send(Event::SetStdin {
+                task: self.name.clone(),
+                stdin,
+            })
+            .ok();
     }
 
     pub fn status(&self, status: &str) {
@@ -124,7 +130,13 @@ impl TuiTask {
         // handled.
         // TODO: prevent the status from having ANSI codes in this scenario
         let status = console::strip_ansi_codes(status).into_owned();
-        self.handle.primary.send(Event::Status { status }).ok();
+        self.handle
+            .primary
+            .send(Event::Status {
+                task: self.name.clone(),
+                status,
+            })
+            .ok();
     }
 }
 

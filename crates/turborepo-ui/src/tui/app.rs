@@ -278,8 +278,13 @@ impl<W> App<W> {
         Ok(())
     }
 
-    pub fn set_status(&mut self, status: String) -> Result<(), Error> {
-        let task = self.get_full_task_mut();
+    pub fn set_status(&mut self, task: String, status: String) -> Result<(), Error> {
+        let task = self
+            .tasks
+            .get_mut(&task)
+            .ok_or_else(|| Error::TaskNotFound {
+                name: task.to_owned(),
+            })?;
         task.status = Some(status);
         Ok(())
     }
@@ -287,8 +292,13 @@ impl<W> App<W> {
 
 impl<W: Write> App<W> {
     /// Insert a stdin to be associated with a task
-    pub fn insert_stdin(&mut self, stdin: Option<W>) -> Result<(), Error> {
-        let task = self.get_full_task_mut();
+    pub fn insert_stdin(&mut self, task: &str, stdin: Option<W>) -> Result<(), Error> {
+        let task = self
+            .tasks
+            .get_mut(task)
+            .ok_or_else(|| Error::TaskNotFound {
+                name: task.to_owned(),
+            })?;
         task.stdin = stdin;
         Ok(())
     }
@@ -445,8 +455,8 @@ fn update(
         Event::TaskOutput { task, output } => {
             app.process_output(&task, &output)?;
         }
-        Event::Status { status } => {
-            app.set_status(status)?;
+        Event::Status { task, status } => {
+            app.set_status(task, status)?;
         }
         Event::InternalStop => {
             app.done = true;
@@ -486,8 +496,8 @@ fn update(
         Event::Input { bytes } => {
             app.forward_input(&bytes)?;
         }
-        Event::SetStdin { stdin } => {
-            app.insert_stdin(Some(stdin))?;
+        Event::SetStdin { task, stdin } => {
+            app.insert_stdin(&task, Some(stdin))?;
         }
         Event::UpdateTasks { tasks } => {
             app.update_tasks(tasks);
@@ -663,5 +673,58 @@ mod test {
         app.finish_task("c", TaskResult::Success).unwrap();
         assert_eq!(app.scroll.selected(), Some(2), "c stays selected");
         assert_eq!(app.tasks_by_status.task_name(2), "c", "selected c");
+    }
+
+    #[test]
+    fn test_forward_stdin() {
+        let mut app: App<Vec<u8>> = App::new(100, 100, vec!["a".to_string(), "b".to_string()]);
+        app.next();
+        assert_eq!(app.scroll.selected(), Some(1), "selected b");
+        assert_eq!(app.tasks_by_status.task_name(1), "b", "selected b");
+        // start c which moves it to "running" which is before "planned"
+        app.start_task("a").unwrap();
+        app.start_task("b").unwrap();
+        app.insert_stdin("a", Some(Vec::new())).unwrap();
+        app.insert_stdin("b", Some(Vec::new())).unwrap();
+
+        // Interact and type "hello"
+        app.interact();
+        app.forward_input(b"hello!").unwrap();
+
+        // Exit interaction and move up
+        app.interact();
+        app.previous();
+        app.interact();
+        app.forward_input(b"world").unwrap();
+
+        assert_eq!(
+            app.tasks.get("b").unwrap().stdin.as_deref().unwrap(),
+            b"hello!"
+        );
+        assert_eq!(
+            app.tasks.get("a").unwrap().stdin.as_deref().unwrap(),
+            b"world"
+        );
+    }
+
+    #[test]
+    fn test_interact() {
+        let mut app: App<Vec<u8>> = App::new(100, 100, vec!["a".to_string(), "b".to_string()]);
+        assert!(!app.is_focusing_pane(), "app starts focused on table");
+        app.insert_stdin("a", Some(Vec::new())).unwrap();
+
+        app.interact();
+        assert!(app.is_focusing_pane(), "can focus pane when task has stdin");
+
+        app.interact();
+        assert!(
+            !app.is_focusing_pane(),
+            "interact changes focus to table if focused on pane"
+        );
+
+        app.next();
+        assert!(!app.is_focusing_pane(), "pane isn't focused after move");
+        app.interact();
+        assert!(!app.is_focusing_pane(), "cannot focus task without stdin");
     }
 }

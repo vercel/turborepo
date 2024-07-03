@@ -11,6 +11,7 @@ pub enum Event {
         result: TaskResult,
     },
     Status {
+        task: String,
         status: String,
     },
     Stop(std::sync::mpsc::SyncSender<()>),
@@ -22,6 +23,7 @@ pub enum Event {
     ScrollUp,
     ScrollDown,
     SetStdin {
+        task: String,
         stdin: Box<dyn std::io::Write + Send>,
     },
     EnterInteractive,
