@@ -1048,6 +1048,9 @@ impl VisitAstPath for Analyzer<'_> {
                             self.add_value(key.to_id(), value);
                         }
                     }
+                    // We should visit this to handle `+=` like
+                    //
+                    // clientComponentLoadTimes += performance.now() - startTime
                     n.left.visit_children_with_path(self, &mut ast_path);
                 }
             }
