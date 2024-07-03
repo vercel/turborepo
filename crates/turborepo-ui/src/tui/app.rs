@@ -79,7 +79,7 @@ impl<W> App<W> {
             tasks: tasks_by_status
                 .task_names_in_displayed_order()
                 .into_iter()
-                .map(|task_name| (task_name, TerminalOutput::new(rows, cols, None)))
+                .map(|task_name| (task_name.to_owned(), TerminalOutput::new(rows, cols, None)))
                 .collect(),
             tasks_by_status,
             scroll: TableState::default().with_selected(selected_task_index),
@@ -97,8 +97,8 @@ impl<W> App<W> {
 
     pub fn active_task(&self) -> String {
         self.tasks_by_status
-            .task_names_in_displayed_order()
-            .remove(self.selected_task_index)
+            .task_name(self.selected_task_index)
+            .to_string()
     }
 
     pub fn get_full_task_mut(&mut self) -> &mut TerminalOutput<W> {
@@ -137,8 +137,10 @@ impl<W> App<W> {
     pub fn start_task(&mut self, task: &str) -> Result<(), Error> {
         // Name of currently highlighted task.
         // We will use this after the order switches.
-        let highlighted_task =
-            &self.tasks_by_status.task_names_in_displayed_order()[self.selected_task_index];
+        let highlighted_task = self
+            .tasks_by_status
+            .task_name(self.selected_task_index)
+            .to_string();
 
         let mut found_task = false;
 
@@ -179,7 +181,6 @@ impl<W> App<W> {
         if let Some(new_index_to_highlight) = self
             .tasks_by_status
             .task_names_in_displayed_order()
-            .iter()
             .position(|running| running == highlighted_task)
         {
             self.selected_task_index = new_index_to_highlight;
@@ -194,8 +195,10 @@ impl<W> App<W> {
     pub fn finish_task(&mut self, task: &str, result: TaskResult) -> Result<(), Error> {
         // Name of currently highlighted task.
         // We will use this after the order switches.
-        let highlighted_task =
-            &self.tasks_by_status.task_names_in_displayed_order()[self.selected_task_index];
+        let highlighted_task = self
+            .tasks_by_status
+            .task_name(self.selected_task_index)
+            .to_string();
 
         let running_idx = self
             .tasks_by_status
@@ -220,8 +223,7 @@ impl<W> App<W> {
         if let Some(new_index_to_highlight) = self
             .tasks_by_status
             .task_names_in_displayed_order()
-            .iter()
-            .position(|running| running == highlighted_task)
+            .position(|running| running == highlighted_task.as_str())
         {
             self.selected_task_index = new_index_to_highlight;
             self.scroll.select(Some(new_index_to_highlight));
@@ -578,27 +580,27 @@ mod test {
         app.start_task("a").unwrap();
         app.start_task("c").unwrap();
         assert_eq!(
-            app.tasks_by_status.task_names_in_displayed_order()[0],
+            app.tasks_by_status.task_name(0),
             "b",
             "b is on top (running)"
         );
         app.finish_task("a", TaskResult::Success).unwrap();
         assert_eq!(
             (
-                &app.tasks_by_status.task_names_in_displayed_order()[2],
-                &app.tasks_by_status.task_names_in_displayed_order()[0]
+                app.tasks_by_status.task_name(2),
+                app.tasks_by_status.task_name(0)
             ),
-            (&"a".to_string(), &"b".to_string()),
+            ("a", "b"),
             "a is on bottom (done), b is second (running)"
         );
 
         app.finish_task("b", TaskResult::Success).unwrap();
         assert_eq!(
             (
-                &app.tasks_by_status.task_names_in_displayed_order()[1],
-                &app.tasks_by_status.task_names_in_displayed_order()[2]
+                app.tasks_by_status.task_name(1),
+                app.tasks_by_status.task_name(2)
             ),
-            (&"a".to_string(), &"b".to_string()),
+            ("a", "b"),
             "a is second (done), b is last (done)"
         );
 
@@ -606,10 +608,10 @@ mod test {
         app.start_task("b").unwrap();
         assert_eq!(
             (
-                &app.tasks_by_status.task_names_in_displayed_order()[1],
-                &app.tasks_by_status.task_names_in_displayed_order()[0]
+                app.tasks_by_status.task_name(1),
+                app.tasks_by_status.task_name(0)
             ),
-            (&"b".to_string(), &"c".to_string()),
+            ("b", "c"),
             "b is second (running), c is first (running)"
         );
 
@@ -617,11 +619,11 @@ mod test {
         app.start_task("a").unwrap();
         assert_eq!(
             (
-                &app.tasks_by_status.task_names_in_displayed_order()[0],
-                &app.tasks_by_status.task_names_in_displayed_order()[1],
-                &app.tasks_by_status.task_names_in_displayed_order()[2]
+                app.tasks_by_status.task_name(0),
+                app.tasks_by_status.task_name(1),
+                app.tasks_by_status.task_name(2)
             ),
-            (&"c".to_string(), &"b".to_string(), &"a".to_string()),
+            ("c", "b", "a"),
             "c is on top (running), b is second (running), a is third
         (running)"
         );
@@ -637,54 +639,30 @@ mod test {
         app.next();
         app.next();
         assert_eq!(app.scroll.selected(), Some(2), "selected c");
-        assert_eq!(
-            app.tasks_by_status.task_names_in_displayed_order()[2],
-            "c",
-            "selected c"
-        );
+        assert_eq!(app.tasks_by_status.task_name(2), "c", "selected c");
         // start c which moves it to "running" which is before "planned"
         app.start_task("c").unwrap();
         assert_eq!(app.scroll.selected(), Some(0), "selection stays on c");
-        assert_eq!(
-            app.tasks_by_status.task_names_in_displayed_order()[0],
-            "c",
-            "selected c"
-        );
+        assert_eq!(app.tasks_by_status.task_name(0), "c", "selected c");
         app.start_task("a").unwrap();
         assert_eq!(app.scroll.selected(), Some(0), "selection stays on c");
-        assert_eq!(
-            app.tasks_by_status.task_names_in_displayed_order()[0],
-            "c",
-            "selected c"
-        );
+        assert_eq!(app.tasks_by_status.task_name(0), "c", "selected c");
         // c
         // a
         // b <-
         app.next();
         app.next();
         assert_eq!(app.scroll.selected(), Some(2), "selected b");
-        assert_eq!(
-            app.tasks_by_status.task_names_in_displayed_order()[2],
-            "b",
-            "selected b"
-        );
+        assert_eq!(app.tasks_by_status.task_name(2), "b", "selected b");
         app.finish_task("a", TaskResult::Success).unwrap();
         assert_eq!(app.scroll.selected(), Some(1), "b stays selected");
-        assert_eq!(
-            app.tasks_by_status.task_names_in_displayed_order()[1],
-            "b",
-            "selected b"
-        );
+        assert_eq!(app.tasks_by_status.task_name(1), "b", "selected b");
         // c <-
         // b
         // a
         app.previous();
         app.finish_task("c", TaskResult::Success).unwrap();
         assert_eq!(app.scroll.selected(), Some(2), "c stays selected");
-        assert_eq!(
-            app.tasks_by_status.task_names_in_displayed_order()[2],
-            "c",
-            "selected c"
-        );
+        assert_eq!(app.tasks_by_status.task_name(2), "c", "selected c");
     }
 }

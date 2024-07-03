@@ -108,32 +108,19 @@ impl TasksByStatus {
     }
 
     pub fn count_all(&self) -> usize {
-        self.task_names_in_displayed_order().len()
+        self.task_names_in_displayed_order().count()
     }
 
-    pub fn task_names_in_displayed_order(&self) -> Vec<String> {
-        let running_names = self
-            .running
-            .iter()
-            .map(|task| task.name().to_string())
-            .collect::<Vec<_>>();
-        let planned_names = self
-            .planned
-            .iter()
-            .map(|task| task.name().to_string())
-            .collect::<Vec<_>>();
-        let finished_names = self
-            .finished
-            .iter()
-            .map(|task| task.name().to_string())
-            .collect::<Vec<_>>();
+    pub fn task_names_in_displayed_order(&self) -> impl Iterator<Item = &str> + '_ {
+        let running_names = self.running.iter().map(|task| task.name());
+        let planned_names = self.planned.iter().map(|task| task.name());
+        let finished_names = self.finished.iter().map(|task| task.name());
 
-        [
-            running_names.as_slice(),
-            planned_names.as_slice(),
-            finished_names.as_slice(),
-        ]
-        .concat()
+        running_names.chain(planned_names).chain(finished_names)
+    }
+
+    pub fn task_name(&self, index: usize) -> &str {
+        self.task_names_in_displayed_order().nth(index).unwrap()
     }
 
     pub fn tasks_started(&self) -> Vec<String> {
