@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use swc_core::{
@@ -70,7 +70,7 @@ impl CustomTransformer for RelayTransformer {
                 .parent()
                 .await?
                 .get_relative_path_to(&self.project_path)
-                .unwrap(),
+                .context("Expected relative path to relay artifact")?,
         );
 
         let (root, config) = if self.config.artifact_directory.is_some() {
