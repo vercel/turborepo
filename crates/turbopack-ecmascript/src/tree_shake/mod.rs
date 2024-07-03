@@ -463,14 +463,6 @@ async fn should_skip(ident: Vc<AssetIdent>, _: Vc<Box<dyn Source>>) -> Result<Vc
         return Ok(Vc::cell(true));
     }
 
-    // TODO: Fix bug and remove this
-    if s.contains("client-component-renderer-logger")
-        || s.contains("nanoid")
-        || s.contains("@opentelemetry/core")
-    {
-        return Ok(Vc::cell(true));
-    }
-
     Ok(Vc::cell(false))
 }
 
