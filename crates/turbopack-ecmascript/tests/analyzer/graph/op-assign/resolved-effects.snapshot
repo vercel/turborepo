@@ -21,7 +21,11 @@
   ⚠️  This value might have side effects
 
 0 -> 10 conditional = ((0 | ???*0*) === 0)
-- *0* add to unknown
+- *0* (???*1* + ???*2*)
+  ⚠️  nested operation
+- *1* clientComponentLoadTimes
+  ⚠️  circular variable reference
+- *2* unsupported expression
   ⚠️  This value might have side effects
 
 10 -> 11 free var = FreeVar(undefined)

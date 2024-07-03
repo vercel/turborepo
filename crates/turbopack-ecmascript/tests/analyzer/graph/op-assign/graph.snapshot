@@ -44,7 +44,7 @@
     (
         "clientComponentLoadTimes",
         Alternatives(
-            3,
+            5,
             [
                 Constant(
                     Num(
@@ -53,11 +53,22 @@
                         ),
                     ),
                 ),
-                Unknown {
-                    original_value: None,
-                    reason: "add to unknown",
-                    has_side_effects: true,
-                },
+                Add(
+                    3,
+                    [
+                        Variable(
+                            (
+                                "clientComponentLoadTimes",
+                                #2,
+                            ),
+                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
+                    ],
+                ),
             ],
         ),
     ),
