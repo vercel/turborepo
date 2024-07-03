@@ -1046,12 +1046,15 @@ impl VisitAstPath for Analyzer<'_> {
                         };
                         if let Some(value) = value {
                             self.add_value(key.to_id(), value);
+                        } else {
+                            // We should visit this to handle `+=` like
+                            //
+                            // clientComponentLoadTimes += performance.now() - startTime
+                            n.left.visit_children_with_path(self, &mut ast_path);
                         }
+                    } else {
+                        n.left.visit_children_with_path(self, &mut ast_path);
                     }
-                    // We should visit this to handle `+=` like
-                    //
-                    // clientComponentLoadTimes += performance.now() - startTime
-                    n.left.visit_children_with_path(self, &mut ast_path);
                 }
             }
         }
