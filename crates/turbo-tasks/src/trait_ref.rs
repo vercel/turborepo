@@ -5,13 +5,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     manager::find_cell_by_type,
-    vc::{cast::VcCast, VcValueTraitCast},
-    RawVc, ReadRawVcFuture, SharedReference, Vc, VcValueTrait,
+    vc::{cast::VcCast, ReadVcFuture, VcValueTraitCast},
+    RawVc, SharedReference, Vc, VcValueTrait,
 };
 
-/// Similar to a [`ReadRef<T>`], but contains a value trait object instead. The
-/// only way to interact with a `TraitRef<T>` is by passing it around or turning
-/// it back into a value trait vc by calling [`ReadRef::cell`].
+/// Similar to a [`ReadRef<T>`][crate::ReadRef], but contains a value trait
+/// object instead. The only way to interact with a `TraitRef<T>` is by passing
+/// it around or turning it back into a value trait vc by calling
+/// [`ReadRef::cell`][crate::ReadRef::cell].
 ///
 /// Internally it stores a reference counted reference to a value on the heap.
 pub struct TraitRef<T>
@@ -140,18 +141,17 @@ where
 {
     type ValueTrait = T;
 
-    type Future = ReadRawVcFuture<T, VcValueTraitCast<T>>;
+    type Future = ReadVcFuture<T, VcValueTraitCast<T>>;
 
     fn into_trait_ref(self) -> Self::Future {
-        self.node.into_trait_read::<T>()
+        self.node.into_read().into()
     }
 
     fn into_trait_ref_untracked(self) -> Self::Future {
-        self.node.into_trait_read_untracked::<T>()
+        self.node.into_read_untracked().into()
     }
 
     fn into_trait_ref_strongly_consistent_untracked(self) -> Self::Future {
-        self.node
-            .into_strongly_consistent_trait_read_untracked::<T>()
+        self.node.into_strongly_consistent_read_untracked().into()
     }
 }

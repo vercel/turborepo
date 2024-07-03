@@ -25,9 +25,7 @@ use turbo_tasks_malloc::TurboMalloc;
 
 use crate::{
     backend::{Backend, CellContent, PersistentTaskType, TaskExecutionSpec, TransientTaskType},
-    capture_future::{
-        CaptureFuture, {self},
-    },
+    capture_future::{self, CaptureFuture},
     event::{Event, EventListener},
     id::{BackendJobId, FunctionId, TraitTypeId},
     id_factory::IdFactory,
@@ -35,6 +33,7 @@ use crate::{
     registry,
     trace::TraceRawVcs,
     util::StaticOrArc,
+    vc::ReadVcFuture,
     Completion, ConcreteTaskInput, InvalidationReason, InvalidationReasonSet, SharedReference,
     TaskId, TaskIdSet, ValueTypeId, Vc, VcRead, VcValueTrait, VcValueType,
 };
@@ -252,12 +251,12 @@ pub struct TurboTasks<B: Backend + 'static> {
 
 #[derive(Default)]
 struct CurrentTaskState {
-    /// Affected [Task]s, that are tracked during task execution
-    /// These tasks will be invalidated when the execution finishes
-    /// or before reading a cell value
+    /// Affected tasks, that are tracked during task execution. These tasks will
+    /// be invalidated when the execution finishes or before reading a cell
+    /// value.
     tasks_to_notify: Vec<TaskId>,
 
-    // true, if the current task has state in cells
+    /// True if the current task has state in cells
     stateful: bool,
 }
 
@@ -360,8 +359,7 @@ impl<B: Backend + 'static> TurboTasks<B> {
         // INVALIDATION: A Once task will never invalidate, therefore we don't need to
         // track a dependency
         let raw_result = read_task_output_untracked(self, task_id, false).await?;
-        raw_result
-            .into_read_untracked_with_turbo_tasks::<Completion>(self)
+        ReadVcFuture::<Completion>::from(raw_result.into_read_untracked_with_turbo_tasks(self))
             .await?;
 
         Ok(rx.await?)
@@ -378,7 +376,7 @@ impl<B: Backend + 'static> TurboTasks<B> {
     }
 
     /// Calls a native function with arguments. Resolves arguments when needed
-    /// with a wrapper [Task].
+    /// with a wrapper task.
     pub fn dynamic_call(&self, func: FunctionId, inputs: Vec<ConcreteTaskInput>) -> RawVc {
         if inputs.iter().all(|i| i.is_resolved()) {
             self.native_call(func, inputs)
@@ -1249,9 +1247,7 @@ pub async fn run_once<T: Send + 'static>(
     // INVALIDATION: A Once task will never invalidate, therefore we don't need to
     // track a dependency
     let raw_result = read_task_output_untracked(&*tt, task_id, false).await?;
-    raw_result
-        .into_read_untracked_with_turbo_tasks::<Completion>(&*tt)
-        .await?;
+    ReadVcFuture::<Completion>::from(raw_result.into_read_untracked_with_turbo_tasks(&*tt)).await?;
 
     Ok(rx.await?)
 }
@@ -1276,19 +1272,17 @@ pub async fn run_once_with_reason<T: Send + 'static>(
     // INVALIDATION: A Once task will never invalidate, therefore we don't need to
     // track a dependency
     let raw_result = read_task_output_untracked(&*tt, task_id, false).await?;
-    raw_result
-        .into_read_untracked_with_turbo_tasks::<Completion>(&*tt)
-        .await?;
+    ReadVcFuture::<Completion>::from(raw_result.into_read_untracked_with_turbo_tasks(&*tt)).await?;
 
     Ok(rx.await?)
 }
 
-/// see [TurboTasks] `dynamic_call`
+/// Calls [`TurboTasks::dynamic_call`] for the current turbo tasks instance.
 pub fn dynamic_call(func: FunctionId, inputs: Vec<ConcreteTaskInput>) -> RawVc {
     with_turbo_tasks(|tt| tt.dynamic_call(func, inputs))
 }
 
-/// see [TurboTasks] `trait_call`
+/// Calls [`TurboTasks::trait_call`] for the current turbo tasks instance.
 pub fn trait_call(
     trait_type: TraitTypeId,
     trait_fn_name: Cow<'static, str>,
@@ -1332,7 +1326,7 @@ pub fn current_task_for_testing() -> TaskId {
     CURRENT_TASK_ID.with(|id| *id)
 }
 
-/// Get an [Invalidator] that can be used to invalidate the current [Task]
+/// Get an [`Invalidator`] that can be used to invalidate the current task
 /// based on external events.
 pub fn get_invalidator() -> Invalidator {
     let handle = Handle::current();
