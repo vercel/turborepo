@@ -282,7 +282,7 @@ pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
     let ratio_pane_width = (f32::from(size.width) * PANE_SIZE_RATIO) as u16;
     let full_task_width = size.width.saturating_sub(task_width_hint);
 
-    let mut app: App<Box<dyn io::Write + Send>> = App::new(size.height, size.width, tasks);
+    let mut app: App<Box<dyn io::Write + Send>> = App::new(size.height, full_task_width.max(ratio_pane_width), tasks);
 
     let (result, callback) = match run_app_inner(
         &mut terminal,
