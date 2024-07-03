@@ -230,23 +230,18 @@ impl DepGraph {
         let mut exports = FxHashMap::default();
         let mut part_deps = FxHashMap::<_, Vec<_>>::default();
 
-        let mut star_reexports = vec![];
+        let star_reexports: Vec<_> = data
+            .values()
+            .filter_map(|v| v.content.as_module_decl()?.as_export_all())
+            .cloned()
+            .collect();
         let mut modules = vec![];
 
         if groups.graph_ix.is_empty() {
             // If there's no dependency, all nodes are in the module evaluaiotn group.
             modules.push(Module {
                 span: DUMMY_SP,
-                body: data
-                    .values()
-                    .map(|v| {
-                        if let ModuleItem::ModuleDecl(ModuleDecl::ExportAll(export)) = &v.content {
-                            star_reexports.push(export.clone());
-                        }
-
-                        v.content.clone()
-                    })
-                    .collect(),
+                body: data.values().map(|v| v.content.clone()).collect(),
                 shebang: None,
             });
             exports.insert(Key::ModuleEvaluation, 0);
@@ -337,9 +332,6 @@ impl DepGraph {
             }
 
             for g in group {
-                if let ModuleItem::ModuleDecl(ModuleDecl::ExportAll(export)) = &data[g].content {
-                    star_reexports.push(export.clone());
-                }
                 chunk.body.push(data[g].content.clone());
             }
 
