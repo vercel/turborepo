@@ -727,4 +727,21 @@ mod test {
         app.interact();
         assert!(!app.is_focusing_pane(), "cannot focus task without stdin");
     }
+
+    #[test]
+    fn test_task_status() {
+        let mut app: App<Vec<u8>> = App::new(100, 100, vec!["a".to_string(), "b".to_string()]);
+        app.next();
+        assert_eq!(app.scroll.selected(), Some(1), "selected b");
+        assert_eq!(app.tasks_by_status.task_name(1), "b", "selected b");
+        // set status for a
+        app.set_status("a".to_string(), "building".to_string())
+            .unwrap();
+
+        assert_eq!(
+            app.tasks.get("a").unwrap().status.as_deref(),
+            Some("building")
+        );
+        assert!(app.tasks.get("b").unwrap().status.is_none());
+    }
 }
