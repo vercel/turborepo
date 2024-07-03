@@ -7,7 +7,7 @@ use std::{
 
 use ratatui::{
     backend::{Backend, CrosstermBackend},
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Layout},
     widgets::TableState,
     Frame, Terminal,
 };
