@@ -13,6 +13,13 @@ pub struct Grid {
     scrollback: std::collections::VecDeque<crate::row::Row>,
     scrollback_len: usize,
     scrollback_offset: usize,
+    selection: Option<Selection>,
+}
+
+#[derive(Clone, Debug, Copy)]
+pub struct Selection {
+    pub start: AbsPos,
+    pub end: AbsPos,
 }
 
 impl Grid {
@@ -29,6 +36,7 @@ impl Grid {
             scrollback: std::collections::VecDeque::with_capacity(0),
             scrollback_len,
             scrollback_offset: 0,
+            selection: None,
         }
     }
 
@@ -137,7 +145,8 @@ impl Grid {
         let rows_len = self.rows.len();
         self.scrollback
             .iter()
-            .skip(scrollback_len - self.scrollback_offset)
+            // Saturating sub to avoid underflow if user passes a scrollback that's too large
+            .skip(scrollback_len.saturating_sub(self.scrollback_offset))
             // when scrollback_offset > rows_len (e.g. rows = 3,
             // scrollback_len = 10, offset = 9) the skip(10 - 9)
             // will take 9 rows instead of 3. we need to set
@@ -221,6 +230,47 @@ impl Grid {
 
     pub fn set_scrollback(&mut self, rows: usize) {
         self.scrollback_offset = rows.min(self.scrollback.len());
+    }
+
+    pub fn clear_selection(&mut self) {
+        self.selection = None;
+    }
+
+    pub fn set_selection(
+        &mut self,
+        start_row: u16,
+        start_col: u16,
+        end_row: u16,
+        end_col: u16,
+    ) {
+        let start = self.translate_pos(start_row, start_col);
+        let end = self.translate_pos(end_row, end_col);
+        let (start, end) = match start.row.cmp(&end.row) {
+            // Keep
+            std::cmp::Ordering::Less => (start, end),
+            std::cmp::Ordering::Equal if start.col < end.col => (start, end),
+            // Flip
+            std::cmp::Ordering::Equal | std::cmp::Ordering::Greater => {
+                (end, start)
+            }
+        };
+
+        self.selection = Some(Selection { start, end });
+    }
+
+    fn translate_pos(&self, row: u16, col: u16) -> AbsPos {
+        let Size { rows, cols } = self.size();
+        let (row, col) = (row.clamp(0, rows), col.clamp(0, cols));
+        // Add current scrollback length to make the row position absolute
+        AbsPos {
+            row: self.scrollback.len().saturating_sub(self.scrollback_offset)
+                + usize::from(row),
+            col,
+        }
+    }
+
+    pub fn selection(&self) -> Option<Selection> {
+        self.selection
     }
 
     pub fn write_contents(&self, contents: &mut String) {
@@ -781,5 +831,11 @@ pub struct Size {
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
 pub struct Pos {
     pub row: u16,
+    pub col: u16,
+}
+
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+pub struct AbsPos {
+    pub row: usize,
     pub col: u16,
 }
