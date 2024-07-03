@@ -24,13 +24,13 @@ use crate::tui::{
     term_output::TerminalOutput,
 };
 
+#[derive(Debug, Clone, Copy)]
 pub enum LayoutSections {
     Pane,
     TaskList,
 }
 
 pub struct App<W> {
-    // TODO: Could I reasonably get to only one representation of the tasks?
     tasks: BTreeMap<String, TerminalOutput<W>>,
     tasks_by_status: TasksByStatus,
     input_options: InputOptions,
@@ -282,7 +282,8 @@ pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
     let ratio_pane_width = (f32::from(size.width) * PANE_SIZE_RATIO) as u16;
     let full_task_width = size.width.saturating_sub(task_width_hint);
 
-    let mut app: App<Box<dyn io::Write + Send>> = App::new(size.height, full_task_width.max(ratio_pane_width), tasks);
+    let mut app: App<Box<dyn io::Write + Send>> =
+        App::new(size.height, full_task_width.max(ratio_pane_width), tasks);
 
     let (result, callback) = match run_app_inner(
         &mut terminal,
@@ -313,7 +314,7 @@ fn run_app_inner<B: Backend + std::io::Write>(
     terminal.draw(|f| view(app, f, rows, cols))?;
     let mut last_render = Instant::now();
     let mut callback = None;
-    while let Some(event) = poll(&app.input_options, &receiver, last_render + FRAMERATE) {
+    while let Some(event) = poll(app.input_options, &receiver, last_render + FRAMERATE) {
         callback = update(app, event)?;
         if app.done {
             break;
@@ -329,7 +330,7 @@ fn run_app_inner<B: Backend + std::io::Write>(
 
 /// Blocking poll for events, will only return None if app handle has been
 /// dropped
-fn poll(input_options: &InputOptions, receiver: &AppReceiver, deadline: Instant) -> Option<Event> {
+fn poll(input_options: InputOptions, receiver: &AppReceiver, deadline: Instant) -> Option<Event> {
     match input(input_options) {
         Ok(Some(event)) => Some(event),
         Ok(None) => receiver.recv(deadline).ok(),
@@ -398,10 +399,6 @@ fn update(
     match event {
         Event::StartTask { task } => {
             app.start_task(&task)?;
-            app.tasks_by_status
-                .groups_as_task_names()
-                .running
-                .push(task);
         }
         Event::TaskOutput { task, output } => {
             app.process_output(&task, &output)?;

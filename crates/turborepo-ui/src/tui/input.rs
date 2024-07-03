@@ -4,12 +4,13 @@ use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use super::{app::LayoutSections, event::Event, Error};
 
+#[derive(Debug, Clone, Copy)]
 pub struct InputOptions {
     pub focus: LayoutSections,
     pub tty_stdin: bool,
 }
 /// Return any immediately available event
-pub fn input(options: &InputOptions) -> Result<Option<Event>, Error> {
+pub fn input(options: InputOptions) -> Result<Option<Event>, Error> {
     let InputOptions { focus, tty_stdin } = options;
     // If stdin is not a tty, then we do not attempt to read from it
     if !tty_stdin {

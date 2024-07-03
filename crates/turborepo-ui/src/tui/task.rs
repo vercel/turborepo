@@ -111,30 +111,6 @@ impl TasksByStatus {
         self.task_names_in_displayed_order().len()
     }
 
-    pub fn groups_as_task_names(&self) -> TaskNamesByStatus {
-        let running = self
-            .running
-            .iter()
-            .map(|task| task.name().to_string())
-            .collect::<Vec<_>>();
-        let planned = self
-            .planned
-            .iter()
-            .map(|task| task.name().to_string())
-            .collect::<Vec<_>>();
-        let finished = self
-            .finished
-            .iter()
-            .map(|task| task.name().to_string())
-            .collect::<Vec<_>>();
-
-        TaskNamesByStatus {
-            running,
-            planned,
-            finished,
-        }
-    }
-
     pub fn task_names_in_displayed_order(&self) -> Vec<String> {
         let running_names = self
             .running
