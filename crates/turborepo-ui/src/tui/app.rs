@@ -461,14 +461,14 @@ fn update(
     Ok(None)
 }
 
-fn view(app: &mut App<Box<dyn io::Write + Send>>, f: &mut Frame, cols: u16) {
+fn view<W>(app: &mut App<W>, f: &mut Frame, cols: u16) {
     let horizontal = Layout::horizontal([Constraint::Fill(1), Constraint::Length(cols)]);
     let [table, pane] = horizontal.areas(f.size());
 
     let active_task = app.active_task();
 
     let output_logs = app.tasks.get(&active_task).unwrap();
-    let pane_to_render: TerminalPane<Box<dyn io::Write + Send>> =
+    let pane_to_render: TerminalPane<W> =
         TerminalPane::new(output_logs, &active_task, app.is_focusing_pane());
 
     let table_to_render = TaskTable::new(&app.tasks_by_status);
