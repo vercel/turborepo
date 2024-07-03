@@ -7,7 +7,7 @@ use std::{
 
 use ratatui::{
     backend::{Backend, CrosstermBackend},
-    layout::{Constraint, Layout},
+    layout::{Constraint, Direction, Layout},
     widgets::TableState,
     Frame, Terminal,
 };
@@ -117,6 +117,14 @@ impl<W> App<W> {
         self.selected_task_index = i;
         self.scroll.select(Some(i));
         self.has_user_scrolled = true;
+    }
+
+    pub fn scroll_terminal_output(&mut self, direction: Direction) {
+        self.tasks
+            .get_mut(&self.active_task())
+            .unwrap()
+            .scroll(direction)
+            .unwrap_or_default();
     }
 
     /// Mark the given task as started.
@@ -425,19 +433,11 @@ fn update(
         }
         Event::ScrollUp => {
             app.has_user_scrolled = true;
-            app.tasks
-                .get_mut(&app.active_task())
-                .unwrap()
-                .scroll(Direction::Up)
-                .unwrap_or_default();
+            app.scroll_terminal_output(Direction::Up)
         }
         Event::ScrollDown => {
             app.has_user_scrolled = true;
-            app.tasks
-                .get_mut(&app.active_task())
-                .unwrap()
-                .scroll(Direction::Down)
-                .unwrap_or_default();
+            app.scroll_terminal_output(Direction::Down)
         }
         Event::EnterInteractive => {
             app.has_user_scrolled = true;
