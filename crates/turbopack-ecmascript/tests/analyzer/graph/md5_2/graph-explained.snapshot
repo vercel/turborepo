@@ -250,11 +250,9 @@ dd = d
 
 digestbytes = crypt["wordsToBytes"](md5(message, options))
 
-i = (0 | ???*0* | (i + 16) | ???*1*)
+i = (0 | ???*0* | (i + 16))
 - *0* updated with update expression
   ⚠️  This value might have side effects
-- *1* i
-  ⚠️  pattern without value
 
 isBuffer = FreeVar(require)("is-buffer")
 

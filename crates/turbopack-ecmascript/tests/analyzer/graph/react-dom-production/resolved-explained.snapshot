@@ -537,11 +537,9 @@ Cj = (???*0* | (...) => undefined)
 - *0* Cj
   ⚠️  pattern without value
 
-Ck = (0 | 64 | ???*0* | ???*1*)
+Ck = (0 | 64 | ???*0*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
-- *1* rc
-  ⚠️  pattern without value
 
 D = (...) => undefined
 
@@ -1920,13 +1918,11 @@ Rf = `__reactHandles$${???*0*}`
 
 Rg = (...) => undefined
 
-Rh = (0 | ???*0* | (???*1* + 1) | ???*2*)
+Rh = (0 | ???*0* | (???*1* + 1))
 - *0* arguments[5]
   ⚠️  function calls are not analysed yet
 - *1* f
   ⚠️  circular variable reference
-- *2* f
-  ⚠️  pattern without value
 
 Ri = (...) => c
 
@@ -2671,13 +2667,11 @@ a#154 = ???*0*
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 
-a#157 = (???*0* | ???*1* | ???*2*)
+a#157 = (???*0* | ???*1*)
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 - *1* unsupported assign operation
   ⚠️  This value might have side effects
-- *2* a
-  ⚠️  pattern without value
 
 a#158 = ???*0*
 - *0* arguments[0]
@@ -2709,11 +2703,9 @@ a#165 = (???*0* | ???*1*)
 - *1* unsupported expression
   ⚠️  This value might have side effects
 
-a#166 = (64 | ???*0* | ???*1*)
+a#166 = (64 | ???*0*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
-- *1* rc
-  ⚠️  pattern without value
 
 a#167 = ???*0*
 - *0* arguments[0]
@@ -2747,13 +2739,11 @@ a#171 = (???*0* | ???*1*)
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
 
-a#173 = (???*0* | ???*1* | ???*2*)
+a#173 = (???*0* | ???*1*)
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 - *1* unsupported assign operation
   ⚠️  This value might have side effects
-- *2* a
-  ⚠️  pattern without value
 
 a#174 = ???*0*
 - *0* arguments[0]
@@ -5895,7 +5885,7 @@ b#156 = ???*0*
 - *0* b
   ⚠️  pattern without value
 
-b#159 = (???*0* | ???*1* | ???*3* | ???*4*)
+b#159 = (???*0* | ???*1* | ???*3*)
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
 - *1* ???*2*["entangledLanes"]
@@ -5904,8 +5894,6 @@ b#159 = (???*0* | ???*1* | ???*3* | ???*4*)
   ⚠️  function calls are not analysed yet
 - *3* unsupported assign operation
   ⚠️  This value might have side effects
-- *4* b
-  ⚠️  pattern without value
 
 b#161 = ???*0*
 - *0* arguments[1]
@@ -6361,8 +6349,7 @@ b#286 = ???*0*
 
 b#3 = (
   | `https://reactjs.org/docs/error-decoder.html?invariant=${???*0*}`
-  | `${(???*1* | ???*3*)}&args[]=${???*4*}`
-  | ???*6*
+  | `${???*1*}&args[]=${???*3*}`
 )
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
@@ -6370,16 +6357,12 @@ b#3 = (
   ⚠️  nested operation
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
-- *3* b
-  ⚠️  pattern without value
-- *4* ???*5*(FreeVar(arguments)[c])
+- *3* ???*4*(FreeVar(arguments)[c])
   ⚠️  unknown callee
   ⚠️  This value might have side effects
-- *5* FreeVar(encodeURIComponent)
+- *4* FreeVar(encodeURIComponent)
   ⚠️  unknown global
   ⚠️  This value might have side effects
-- *6* b
-  ⚠️  pattern without value
 
 b#30 = (???*0* | (...) => undefined)
 - *0* arguments[1]
@@ -8524,19 +8507,16 @@ b#82 = ???*0*
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
 
-b#827 = (???*0* | ???*1* | ???*2*)
+b#827 = (???*0* | ???*1*)
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
 - *1* unsupported assign operation
   ⚠️  This value might have side effects
-- *2* b
-  ⚠️  pattern without value
 
 b#829 = (
   | 0
   | ???*0*
   | ???*2*
-  | ???*3*
   | undefined
   | 1
   | 2
@@ -8544,12 +8524,12 @@ b#829 = (
   | 8
   | 16
   | 32
-  | ???*4*
+  | ???*3*
   | 134217728
   | 268435456
   | 536870912
   | 1073741824
-  | (???*5* ? (???*8* | ???*9*) : ???*10*)
+  | (???*4* ? (???*7* | ???*8*) : ???*9*)
 )
 - *0* ???*1*["entangledLanes"]
   ⚠️  unknown object
@@ -8557,23 +8537,21 @@ b#829 = (
   ⚠️  function calls are not analysed yet
 - *2* unsupported assign operation
   ⚠️  This value might have side effects
-- *3* b
-  ⚠️  pattern without value
-- *4* unsupported expression
+- *3* unsupported expression
   ⚠️  This value might have side effects
-- *5* (0 !== (???*6* | ???*7*))
+- *4* (0 !== (???*5* | ???*6*))
   ⚠️  nested operation
-- *6* arguments[0]
+- *5* arguments[0]
   ⚠️  function calls are not analysed yet
-- *7* unsupported expression
+- *6* unsupported expression
   ⚠️  This value might have side effects
-- *8* arguments[0]
+- *7* arguments[0]
   ⚠️  function calls are not analysed yet
-- *9* unsupported expression
+- *8* unsupported expression
   ⚠️  This value might have side effects
-- *10* (???*11* ? 1073741824 : 0)
+- *9* (???*10* ? 1073741824 : 0)
   ⚠️  nested operation
-- *11* unsupported expression
+- *10* unsupported expression
   ⚠️  This value might have side effects
 
 b#83 = (???*0* | ???*1* | ""["defaultValue"] | ""["value"] | ""["children"] | ???*3* | "")
@@ -8700,13 +8678,11 @@ b#915 = (???*0* | (???*1* ? ???*3* : ???*4*))
 - *11* unsupported expression
   ⚠️  This value might have side effects
 
-b#916 = (???*0* | 1 | 4194304 | ???*1* | ???*2*)
+b#916 = (???*0* | 1 | 4194304 | ???*1*)
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
 - *1* unsupported assign operation
   ⚠️  This value might have side effects
-- *2* sc
-  ⚠️  pattern without value
 
 b#917 = ???*0*
 - *0* ???*1*["memoizedState"]
@@ -8791,13 +8767,11 @@ b#952 = ???*0*
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
 
-b#953 = (???*0* | 1 | ???*1* | ???*2* | 0)
+b#953 = (???*0* | 1 | ???*1* | 0)
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
 - *1* unsupported assign operation
   ⚠️  This value might have side effects
-- *2* b
-  ⚠️  pattern without value
 
 b#954 = ???*0*
 - *0* arguments[1]
@@ -9422,21 +9396,17 @@ c#168 = ???*0*
 - *0* arguments[2]
   ⚠️  function calls are not analysed yet
 
-c#169 = (???*0* | ???*1* | ???*2*)
+c#169 = (???*0* | ???*1*)
 - *0* unsupported expression
   ⚠️  This value might have side effects
 - *1* unsupported assign operation
   ⚠️  This value might have side effects
-- *2* c
-  ⚠️  pattern without value
 
-c#171 = (???*0* | ???*1* | ???*2*)
+c#171 = (???*0* | ???*1*)
 - *0* unsupported expression
   ⚠️  This value might have side effects
 - *1* unsupported assign operation
   ⚠️  This value might have side effects
-- *2* c
-  ⚠️  pattern without value
 
 c#175 = ???*0*
 - *0* arguments[2]
@@ -9957,7 +9927,7 @@ c#350 = (null | [???*0*] | ???*1*)
 - *2* eg
   ⚠️  circular variable reference
 
-c#357 = (???*0* | ((???*1* | ???*2* | ???*4*) + 1) | ???*5*)
+c#357 = (???*0* | ((???*1* | ???*2*) + 1))
 - *0* arguments[2]
   ⚠️  function calls are not analysed yet
 - *1* arguments[2]
@@ -9966,10 +9936,6 @@ c#357 = (???*0* | ((???*1* | ???*2* | ???*4*) + 1) | ???*5*)
   ⚠️  nested operation
 - *3* c
   ⚠️  circular variable reference
-- *4* c
-  ⚠️  pattern without value
-- *5* c
-  ⚠️  pattern without value
 
 c#361 = ???*0*
 - *0* unknown new expression
@@ -10021,13 +9987,11 @@ c#396 = ???*0*
 - *0* arguments[2]
   ⚠️  function calls are not analysed yet
 
-c#398 = (???*0* | ???*1* | ???*2*)
+c#398 = (???*0* | ???*1*)
 - *0* arguments[2]
   ⚠️  function calls are not analysed yet
 - *1* unsupported assign operation
   ⚠️  This value might have side effects
-- *2* c
-  ⚠️  pattern without value
 
 c#400 = ???*0*
 - *0* max number of linking steps reached
@@ -10739,13 +10703,11 @@ c#531 = (
 - *36* a
   ⚠️  circular variable reference
 
-c#532 = (???*0* | 64 | ???*1* | ???*2*)
+c#532 = (???*0* | 64 | ???*1*)
 - *0* arguments[2]
   ⚠️  function calls are not analysed yet
 - *1* unsupported assign operation
   ⚠️  This value might have side effects
-- *2* rc
-  ⚠️  pattern without value
 
 c#533 = (
   | 0
@@ -10805,13 +10767,11 @@ c#546 = ???*0*
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
-c#547 = (???*0* | ???*1* | ???*2*)
+c#547 = (???*0* | ???*1*)
 - *0* arguments[2]
   ⚠️  function calls are not analysed yet
 - *1* unsupported assign operation
   ⚠️  This value might have side effects
-- *2* c
-  ⚠️  pattern without value
 
 c#550 = (???*0* | (???*1* ? (???*8* | ???*11*) : null))
 - *0* arguments[2]
@@ -11320,11 +11280,9 @@ c#645 = (null | ???*0* | ???*1* | null["sibling"])
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
 
-c#646 = (0 | ???*0* | ???*1*)
+c#646 = (0 | ???*0*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
-- *1* c
-  ⚠️  pattern without value
 
 c#647 = ???*0*
 - *0* max number of linking steps reached
@@ -12133,7 +12091,6 @@ d#159 = (
   | 1073741824
   | ???*1*
   | ???*3*
-  | ???*4*
 )
 - *0* unsupported expression
   ⚠️  This value might have side effects
@@ -12143,8 +12100,6 @@ d#159 = (
   ⚠️  function calls are not analysed yet
 - *3* unsupported assign operation
   ⚠️  This value might have side effects
-- *4* f
-  ⚠️  pattern without value
 
 d#162 = ???*0*
 - *0* ???*1*["pingedLanes"]
@@ -12334,11 +12289,9 @@ d#280 = `${???*0*}__bubble`
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 
-d#281 = (0 | ???*0* | ???*1*)
+d#281 = (0 | ???*0*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
-- *1* d
-  ⚠️  pattern without value
 
 d#285 = ???*0*
 - *0* arguments[3]
@@ -12481,15 +12434,13 @@ d#396 = ???*0*
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
-d#398 = (???*0* | ???*2* | ???*3*)
+d#398 = (???*0* | ???*2*)
 - *0* ???*1*["lanes"]
   ⚠️  unknown object
 - *1* arguments[1]
   ⚠️  function calls are not analysed yet
 - *2* unsupported assign operation
   ⚠️  This value might have side effects
-- *3* d
-  ⚠️  pattern without value
 
 d#400 = (???*0* | null["alternate"] | ???*2* | ???*3* | ???*4* | null["alternate"]["updateQueue"])
 - *0* ???*1*["alternate"]
@@ -13063,15 +13014,13 @@ d#539 = (
 - *23* a
   ⚠️  circular variable reference
 
-d#547 = (???*0* | ???*2* | ???*3*)
+d#547 = (???*0* | ???*2*)
 - *0* ???*1*["lanes"]
   ⚠️  unknown object
 - *1* arguments[1]
   ⚠️  function calls are not analysed yet
 - *2* unsupported assign operation
   ⚠️  This value might have side effects
-- *3* d
-  ⚠️  pattern without value
 
 d#554 = (
   | null
@@ -13422,7 +13371,7 @@ d#620 = ???*0*
 - *0* arguments[3]
   ⚠️  function calls are not analysed yet
 
-d#621 = (???*0* | 0 | ???*2* | ???*3* | ???*4* | ???*5*)
+d#621 = (???*0* | 0 | ???*2* | ???*3* | ???*4*)
 - *0* ???*1*["pendingProps"]
   ⚠️  unknown object
 - *1* arguments[1]
@@ -13433,8 +13382,6 @@ d#621 = (???*0* | 0 | ???*2* | ???*3* | ???*4* | ???*5*)
   ⚠️  This value might have side effects
 - *4* unsupported assign operation
   ⚠️  This value might have side effects
-- *5* d
-  ⚠️  pattern without value
 
 d#631 = (???*0* | (0 !== ???*3*))
 - *0* ???*1*["_context"]
@@ -13490,11 +13437,9 @@ d#645 = (null | ???*0* | ???*1*)
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
 
-d#646 = (0 | ???*0* | ???*1*)
+d#646 = (0 | ???*0*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
-- *1* d
-  ⚠️  pattern without value
 
 d#647 = ???*0*
 - *0* max number of linking steps reached
@@ -13658,7 +13603,6 @@ d#803 = (
   | (???*0* ? (0 | ???*7*) : 0)
   | ???*8*
   | ???*10*
-  | ???*11*
   | undefined
   | 1
   | 2
@@ -13666,7 +13610,7 @@ d#803 = (
   | 8
   | 16
   | 32
-  | ???*12*
+  | ???*11*
   | 134217728
   | 268435456
   | 536870912
@@ -13694,9 +13638,7 @@ d#803 = (
   ⚠️  function calls are not analysed yet
 - *10* unsupported assign operation
   ⚠️  This value might have side effects
-- *11* b
-  ⚠️  pattern without value
-- *12* unsupported expression
+- *11* unsupported expression
   ⚠️  This value might have side effects
 
 d#807 = ???*0*
@@ -14850,13 +14792,11 @@ e#354 = ???*0*
 - *0* e
   ⚠️  pattern without value
 
-e#357 = (???*0* | ???*1* | ???*2*)
+e#357 = (???*0* | ???*1*)
 - *0* unsupported expression
   ⚠️  This value might have side effects
 - *1* unsupported assign operation
   ⚠️  This value might have side effects
-- *2* e
-  ⚠️  pattern without value
 
 e#391 = ???*0*
 - *0* ???*1*["interleaved"]
@@ -15707,9 +15647,35 @@ e#620 = ???*0*
 - *0* arguments[4]
   ⚠️  function calls are not analysed yet
 
-e#621 = ???*0*
-- *0* max number of linking steps reached
+e#621 = (
+  | ???*0*
+  | 0["revealOrder"]
+  | ???*3*
+  | null
+  | ???*5*
+  | ???*6*
+  | 0["revealOrder"]["sibling"]
+  | null["sibling"]
+  | 0["revealOrder"]["alternate"]
+  | null["alternate"]
+  | null["sibling"]["alternate"]
+  | null["sibling"]["sibling"]
+)
+- *0* ???*1*["revealOrder"]
+  ⚠️  unknown object
+- *1* ???*2*["pendingProps"]
+  ⚠️  unknown object
+- *2* arguments[1]
+  ⚠️  function calls are not analysed yet
+- *3* ???*4*["revealOrder"]
+  ⚠️  unknown object
   ⚠️  This value might have side effects
+- *4* unknown mutation
+  ⚠️  This value might have side effects
+- *5* arguments[2]
+  ⚠️  function calls are not analysed yet
+- *6* c
+  ⚠️  circular variable reference
 
 e#631 = ???*0*
 - *0* ???*1*["value"]
@@ -16013,13 +15979,11 @@ e#92 = ???*0*
 - *0* arguments[3]
   ⚠️  function calls are not analysed yet
 
-e#947 = (???*0* | ???*1* | ???*2*)
+e#947 = (???*0* | ???*1*)
 - *0* arguments[4]
   ⚠️  function calls are not analysed yet
 - *1* unsupported assign operation
   ⚠️  This value might have side effects
-- *2* e
-  ⚠️  pattern without value
 
 e#952 = ???*0*
 - *0* arguments[4]
@@ -16171,27 +16135,23 @@ f#136 = ???*0*
 - *0* max number of linking steps reached
   ⚠️  This value might have side effects
 
-f#159 = (???*0* | ???*2* | ???*3* | ???*4*)
+f#159 = (???*0* | ???*2* | ???*3*)
 - *0* ???*1*["pingedLanes"]
   ⚠️  unknown object
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 - *2* unsupported assign operation
   ⚠️  This value might have side effects
-- *3* f
-  ⚠️  pattern without value
-- *4* unsupported expression
+- *3* unsupported expression
   ⚠️  This value might have side effects
 
-f#162 = (???*0* | ???*2* | ???*3*)
+f#162 = (???*0* | ???*2*)
 - *0* ???*1*["pendingLanes"]
   ⚠️  unknown object
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 - *2* unsupported assign operation
   ⚠️  This value might have side effects
-- *3* f
-  ⚠️  pattern without value
 
 f#169 = ???*0*
 - *0* unsupported expression
@@ -16371,19 +16331,17 @@ f#341 = ???*0*
 - *0* f
   ⚠️  pattern without value
 
-f#357 = ((???*0* + (???*1* | ???*2* | ???*3*)) | ???*4*)
+f#357 = ((???*0* + (???*1* | ???*2*)) | ???*3*)
 - *0* unsupported expression
   ⚠️  This value might have side effects
 - *1* unsupported expression
   ⚠️  This value might have side effects
 - *2* unsupported assign operation
   ⚠️  This value might have side effects
-- *3* e
-  ⚠️  pattern without value
-- *4* ???*5*["toString"](32)
+- *3* ???*4*["toString"](32)
   ⚠️  unknown callee object
   ⚠️  This value might have side effects
-- *5* unsupported expression
+- *4* unsupported expression
   ⚠️  This value might have side effects
 
 f#400 = ???*0*
@@ -16696,7 +16654,7 @@ f#459 = (???*0* | ???*1* | ???*4*)
 - *4* f
   ⚠️  circular variable reference
 
-f#485 = (???*0* | 0 | ((???*1* | 0 | ???*2* | ???*4*) + 1) | ???*5*)
+f#485 = (???*0* | 0 | ((???*1* | 0 | ???*2*) + 1))
 - *0* arguments[5]
   ⚠️  function calls are not analysed yet
 - *1* arguments[5]
@@ -16705,10 +16663,6 @@ f#485 = (???*0* | 0 | ((???*1* | 0 | ???*2* | ???*4*) + 1) | ???*5*)
   ⚠️  nested operation
 - *3* f
   ⚠️  circular variable reference
-- *4* f
-  ⚠️  pattern without value
-- *5* f
-  ⚠️  pattern without value
 
 f#494 = ???*0*
 - *0* max number of linking steps reached
@@ -17780,16 +17734,14 @@ gh = (...) => undefined
 
 gi = (...) => [f, d]
 
-gj = (???*0* | ???*1* | 0 | ???*2* | ???*3* | ???*4*)
+gj = (???*0* | 0 | ???*1* | ???*2* | ???*3*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
-- *1* gj
-  ⚠️  pattern without value
-- *2* unknown mutation
+- *1* unknown mutation
   ⚠️  This value might have side effects
-- *3* arguments[1]
+- *2* arguments[1]
   ⚠️  function calls are not analysed yet
-- *4* updated with update expression
+- *3* updated with update expression
   ⚠️  This value might have side effects
 
 gk = (module<scheduler, {}>["unstable_now"]() | 0)
@@ -18061,11 +18013,9 @@ hf = "abort auxClick cancel canPlay canPlayThrough click close contextMenu copy 
 
 hg = (...) => undefined
 
-hh = (???*0* | ???*1* | 0)
+hh = (???*0* | 0)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
-- *1* hh
-  ⚠️  pattern without value
 
 hi = (...) => undefined
 
@@ -19612,11 +19562,9 @@ ra = /[\-:]([a-z])/g
 
 rb = (...) => (((null == b) || ("boolean" === typeof(b)) || ("" === b)) ? "" : ((c || ("number" !== typeof(b)) || (0 === b) || (pb["hasOwnProperty"](a) && pb[a])) ? b["trim"]() : `${b}px`))
 
-rc = (64 | ???*0* | ???*1*)
+rc = (64 | ???*0*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
-- *1* rc
-  ⚠️  pattern without value
 
 rd = (...) => b
 
@@ -19647,12 +19595,10 @@ rj = (...) => ???*0*
 - *0* unsupported expression
   ⚠️  This value might have side effects
 
-rk = (0 | ???*0* | ???*1* | ???*2*)
+rk = (0 | ???*0* | ???*1*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
-- *1* rk
-  ⚠️  pattern without value
-- *2* unsupported expression
+- *1* unsupported expression
   ⚠️  This value might have side effects
 
 rl = (...) => (g | k)
@@ -19661,11 +19607,9 @@ sa = (...) => a[1]["toUpperCase"]()
 
 sb = (...) => undefined
 
-sc = (4194304 | ???*0* | ???*1*)
+sc = (4194304 | ???*0*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
-- *1* sc
-  ⚠️  pattern without value
 
 sd = {
     "eventPhase": 0,
@@ -19693,13 +19637,11 @@ sj = (...) => (???*0* | f | tj(a, b, g, null) | tj(a, b, g, d) | b)
   ⚠️  sequence with side effects
   ⚠️  This value might have side effects
 
-sk = (0 | ???*0* | ???*1* | ???*2*)
+sk = (0 | ???*0* | ???*1*)
 - *0* unsupported expression
   ⚠️  This value might have side effects
 - *1* unsupported assign operation
   ⚠️  This value might have side effects
-- *2* sk
-  ⚠️  pattern without value
 
 sl = (...) => hl(g)
 
