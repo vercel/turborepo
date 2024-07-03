@@ -1042,21 +1042,21 @@ impl VisitAstPath for Analyzer<'_> {
 
                                 let right = self.eval_context.eval(&n.right);
 
-                                if right.is_unknown() {
-                                    Some(JsValue::unknown_empty(true, "add to unknown"))
-                                } else {
-                                    Some(JsValue::add(vec![left, right]))
-                                }
+                                Some(JsValue::add(vec![left, right]))
                             }
                             _ => Some(JsValue::unknown_empty(true, "unsupported assign operation")),
                         };
                         if let Some(value) = value {
-                            self.add_value(key.to_id(), value);
+                            // We should visit this to handle `+=` like
+                            //
+                            // clientComponentLoadTimes += performance.now() - startTime
+
+                            self.current_value = Some(value);
+                            n.left.visit_children_with_path(self, &mut ast_path);
+                            self.current_value = None;
                         }
                     }
-                    // We should visit this to handle `+=` like
-                    //
-                    // clientComponentLoadTimes += performance.now() - startTime
+
                     if n.left.as_ident().is_none() {
                         n.left.visit_children_with_path(self, &mut ast_path);
                     }
