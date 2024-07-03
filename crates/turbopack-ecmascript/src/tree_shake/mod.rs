@@ -7,8 +7,8 @@ use swc_core::{
     common::{util::take::Take, SyntaxContext, DUMMY_SP, GLOBALS},
     ecma::{
         ast::{
-            ExportNamedSpecifier, Id, Ident, ImportDecl, Module, ModuleDecl, ModuleExportName,
-            ModuleItem, NamedExport, Program,
+            ExportAll, ExportNamedSpecifier, Id, Ident, ImportDecl, Module, ModuleDecl,
+            ModuleExportName, ModuleItem, NamedExport, Program,
         },
         codegen::{text_writer::JsWriter, Emitter},
     },
@@ -432,6 +432,9 @@ pub(crate) enum SplitResult {
 
         #[turbo_tasks(trace_ignore)]
         deps: FxHashMap<u32, Vec<u32>>,
+
+        #[turbo_tasks(debug_ignore, trace_ignore)]
+        star_reexports: Vec<ExportAll>,
     },
     Failed {
         parse_result: Vc<ParseResult>,
@@ -540,6 +543,7 @@ pub(super) async fn split(
                 entrypoints,
                 part_deps,
                 modules,
+                star_reexports,
             } = dep_graph.split_module(&items);
 
             assert_ne!(modules.len(), 0, "modules.len() == 0;\nModule: {module:?}",);
@@ -598,6 +602,7 @@ pub(super) async fn split(
                 entrypoints,
                 deps: part_deps,
                 modules,
+                star_reexports,
             }
             .cell())
         }
@@ -622,6 +627,7 @@ pub(super) async fn part_of_module(
             modules,
             entrypoints,
             deps,
+            star_reexports,
             ..
         } => {
             debug_assert_ne!(modules.len(), 0, "modules.len() == 0");
@@ -690,6 +696,10 @@ pub(super) async fn part_of_module(
                                 ))),
                             },
                         )));
+
+                    module.body.extend(star_reexports.iter().map(|export_all| {
+                        ModuleItem::ModuleDecl(ModuleDecl::ExportAll(export_all.clone()))
+                    }));
 
                     let program = Program::Module(module);
                     let eval_context = EvalContext::new(
@@ -762,6 +772,10 @@ pub(super) async fn part_of_module(
                                 },
                             )));
                     }
+
+                    module.body.extend(star_reexports.iter().map(|export_all| {
+                        ModuleItem::ModuleDecl(ModuleDecl::ExportAll(export_all.clone()))
+                    }));
 
                     let program = Program::Module(module);
                     let eval_context = EvalContext::new(

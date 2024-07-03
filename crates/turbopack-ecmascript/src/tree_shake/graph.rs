@@ -13,11 +13,11 @@ use swc_core::{
     common::{util::take::Take, SyntaxContext, DUMMY_SP},
     ecma::{
         ast::{
-            op, ClassDecl, Decl, DefaultDecl, ExportDecl, ExportNamedSpecifier, ExportSpecifier,
-            Expr, ExprStmt, FnDecl, Id, Ident, ImportDecl, ImportNamedSpecifier, ImportSpecifier,
-            ImportStarAsSpecifier, KeyValueProp, Lit, Module, ModuleDecl, ModuleExportName,
-            ModuleItem, NamedExport, ObjectLit, Prop, PropName, PropOrSpread, Stmt, VarDecl,
-            VarDeclKind, VarDeclarator,
+            op, ClassDecl, Decl, DefaultDecl, ExportAll, ExportDecl, ExportNamedSpecifier,
+            ExportSpecifier, Expr, ExprStmt, FnDecl, Id, Ident, ImportDecl, ImportNamedSpecifier,
+            ImportSpecifier, ImportStarAsSpecifier, KeyValueProp, Lit, Module, ModuleDecl,
+            ModuleExportName, ModuleItem, NamedExport, ObjectLit, Prop, PropName, PropOrSpread,
+            Stmt, VarDecl, VarDeclKind, VarDeclarator,
         },
         atoms::JsWord,
         utils::{find_pat_ids, private_ident, quote_ident},
@@ -193,6 +193,8 @@ pub(super) struct SplitModuleResult {
     /// Dependency between parts.
     pub part_deps: FxHashMap<u32, Vec<u32>>,
     pub modules: Vec<Module>,
+
+    pub star_reexports: Vec<ExportAll>,
 }
 
 impl DepGraph {
@@ -228,6 +230,7 @@ impl DepGraph {
         let mut exports = FxHashMap::default();
         let mut part_deps = FxHashMap::<_, Vec<_>>::default();
 
+        let mut star_reexports = vec![];
         let mut modules = vec![];
 
         if groups.graph_ix.is_empty() {
@@ -325,6 +328,9 @@ impl DepGraph {
             }
 
             for g in group {
+                if let ModuleItem::ModuleDecl(ModuleDecl::ExportAll(export)) = &data[g].content {
+                    star_reexports.push(export.clone());
+                }
                 chunk.body.push(data[g].content.clone());
             }
 
@@ -372,6 +378,7 @@ impl DepGraph {
             entrypoints: exports,
             part_deps,
             modules,
+            star_reexports,
         }
     }
 
