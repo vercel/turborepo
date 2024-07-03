@@ -199,10 +199,7 @@ impl MemoryBackend {
                             .is_ok()
                         {
                             println!(
-                                "Ineffective GC {} MB > {} MB, increasing memory limit {} MB -> \
-                                 {} MB",
-                                usage / 1024 / 1024,
-                                max / 1024 / 1024,
+                                "Ineffective GC, increasing memory limit {} MB -> {} MB",
                                 mem_limit / 1024 / 1024,
                                 new_mem_limit / 1024 / 1024
                             );
