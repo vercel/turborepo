@@ -237,7 +237,16 @@ impl DepGraph {
             // If there's no dependency, all nodes are in the module evaluaiotn group.
             modules.push(Module {
                 span: DUMMY_SP,
-                body: data.values().map(|v| v.content.clone()).collect(),
+                body: data
+                    .values()
+                    .map(|v| {
+                        if let ModuleItem::ModuleDecl(ModuleDecl::ExportAll(export)) = &v.content {
+                            star_reexports.push(export.clone());
+                        }
+
+                        v.content.clone()
+                    })
+                    .collect(),
                 shebang: None,
             });
             exports.insert(Key::ModuleEvaluation, 0);
