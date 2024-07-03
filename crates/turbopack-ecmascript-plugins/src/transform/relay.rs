@@ -12,6 +12,7 @@ use swc_core::{
 };
 use swc_relay::RelayLanguageConfig;
 use turbo_tasks::trace::TraceRawVcs;
+use turbo_tasks_fs::FileSystemPath;
 use turbopack_ecmascript::{CustomTransformer, TransformContext};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TraceRawVcs)]
@@ -33,10 +34,11 @@ pub enum RelayLanguage {
 #[derive(Debug)]
 pub struct RelayTransformer {
     config: swc_relay::Config,
+    project_path: FileSystemPath,
 }
 
 impl RelayTransformer {
-    pub fn new(config: &RelayConfig) -> Self {
+    pub fn new(config: &RelayConfig, project_path: &FileSystemPath) -> Self {
         let options = swc_relay::Config {
             artifact_directory: config.artifact_directory.as_ref().map(PathBuf::from),
             language: config.language.as_ref().map_or(
@@ -49,7 +51,11 @@ impl RelayTransformer {
             ),
             ..Default::default()
         };
-        Self { config: options }
+
+        Self {
+            config: options,
+            project_path: project_path.clone(),
+        }
     }
 }
 
@@ -59,14 +65,22 @@ impl CustomTransformer for RelayTransformer {
     async fn transform(&self, program: &mut Program, ctx: &TransformContext<'_>) -> Result<()> {
         // If user supplied artifact_directory, it should be resolvable already.
         // Otherwise, supply default relative path (./__generated__)
+        let path_to_proj = PathBuf::from(
+            ctx.file_path
+                .parent()
+                .await?
+                .get_relative_path_to(&self.project_path)
+                .unwrap(),
+        );
+
         let (root, config) = if self.config.artifact_directory.is_some() {
-            (PathBuf::new(), None)
+            (path_to_proj, None)
         } else {
             let config = swc_relay::Config {
                 artifact_directory: Some(PathBuf::from("__generated__")),
                 ..self.config
             };
-            (PathBuf::from("."), Some(config))
+            (path_to_proj, Some(config))
         };
 
         let p = std::mem::replace(program, Program::Module(Module::dummy()));
