@@ -297,9 +297,12 @@ escapedParts = (
       + escapedParts
       + (???*0* ? `${classEscape(expectation["parts"][i][0])}-${classEscape(expectation["parts"][i][1])}` : classEscape(expectation["parts"][i]))
     )
+  | ???*1*
 )
 - *0* unsupported expression
   ⚠️  This value might have side effects
+- *1* escapedParts
+  ⚠️  pattern without value
 
 expectation#11 = arguments[0]
 
@@ -968,6 +971,7 @@ peg$currPos = (
   | s0
   | s0
   | (peg$currPos + 9)
+  | ???*1*
   | (peg$currPos + 2)
   | s4
   | s0
@@ -1082,6 +1086,8 @@ peg$currPos = (
 )
 - *0* updated with update expression
   ⚠️  This value might have side effects
+- *1* peg$currPos
+  ⚠️  pattern without value
 
 peg$endExpectation = (...) => {"type": "end"}
 

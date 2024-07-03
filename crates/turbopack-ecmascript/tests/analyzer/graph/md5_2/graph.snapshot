@@ -5428,7 +5428,7 @@
     (
         "i",
         Alternatives(
-            6,
+            7,
             [
                 Constant(
                     Num(
@@ -5460,6 +5460,18 @@
                         ),
                     ],
                 ),
+                Unknown {
+                    original_value: Some(
+                        Variable(
+                            (
+                                "i",
+                                #4,
+                            ),
+                        ),
+                    ),
+                    reason: "pattern without value",
+                    has_side_effects: false,
+                },
             ],
         ),
     ),

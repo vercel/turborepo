@@ -745,9 +745,11 @@ Jj = (...) => (undefined | ???*0* | null | (???*3* ? ???*4* : null))
 
 Jk = (...) => T
 
-K = (0 | ???*0* | e | c | b | c | h | e)
+K = (0 | ???*0* | ???*1* | e | c | b | c | h | e)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
+- *1* K
+  ⚠️  pattern without value
 
 Ka = (...) => (null | (("function" === typeof(a)) ? a : null))
 
@@ -1588,9 +1590,11 @@ a#152 = (arguments[0] | a["child"] | a["sibling"])
 
 a#154 = arguments[0]
 
-a#157 = (arguments[0] | ???*0*)
+a#157 = (arguments[0] | ???*0* | ???*1*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
+- *1* a
+  ⚠️  pattern without value
 
 a#158 = arguments[0]
 
@@ -1618,9 +1622,11 @@ a#17 = arguments[0]
 
 a#171 = (arguments[0] | a["entanglements"])
 
-a#173 = (arguments[0] | ???*0*)
+a#173 = (arguments[0] | ???*0* | ???*1*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
+- *1* a
+  ⚠️  pattern without value
 
 a#174 = arguments[0]
 
@@ -2623,9 +2629,11 @@ b#156 = ???*0*
 - *0* b
   ⚠️  pattern without value
 
-b#159 = (arguments[1] | a["entangledLanes"] | ???*0*)
+b#159 = (arguments[1] | a["entangledLanes"] | ???*0* | ???*1*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
+- *1* b
+  ⚠️  pattern without value
 
 b#161 = arguments[1]
 
@@ -2760,7 +2768,10 @@ b#286 = arguments[1]
 b#3 = (
   | `https://reactjs.org/docs/error-decoder.html?invariant=${a}`
   | `${b}${`&args[]=${FreeVar(encodeURIComponent)(FreeVar(arguments)[c])}`}`
+  | ???*0*
 )
+- *0* b
+  ⚠️  pattern without value
 
 b#30 = (arguments[1] | *anonymous function 6811*)
 
@@ -3032,9 +3043,12 @@ b#562 = (
   | R["identifierPrefix"]
   | `:${b}R${c}`
   | `${b}${`H${c["toString"](32)}`}`
+  | ???*0*
   | `${b}:`
   | `:${b}r${c["toString"](32)}:`
 )
+- *0* b
+  ⚠️  pattern without value
 
 b#565 = di()
 
@@ -3210,9 +3224,11 @@ b#819 = (a | c | b["return"] | b["sibling"])
 
 b#82 = arguments[1]
 
-b#827 = (arguments[1] | ???*0*)
+b#827 = (arguments[1] | ???*0* | ???*1*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
+- *1* b
+  ⚠️  pattern without value
 
 b#829 = (uc(a, 0) | d)
 
@@ -3226,9 +3242,11 @@ b#838 = (arguments[1] | 0 | ???*0*)
 - *0* updated with update expression
   ⚠️  This value might have side effects
 
-b#843 = (arguments[1] | Z | y | ???*0* | na)
+b#843 = (arguments[1] | Z | y | ???*0* | ???*1* | na)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
+- *1* b
+  ⚠️  pattern without value
 
 b#863 = arguments[1]
 
@@ -3301,9 +3319,11 @@ b#951 = (
 
 b#952 = arguments[1]
 
-b#953 = (arguments[1] | 1 | ???*0* | 0)
+b#953 = (arguments[1] | 1 | ???*0* | ???*1* | 0)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
+- *1* b
+  ⚠️  pattern without value
 
 b#954 = arguments[1]
 
@@ -3431,17 +3451,21 @@ c#167 = (0 | ???*0*)
 
 c#168 = arguments[2]
 
-c#169 = (???*0* | ???*1*)
+c#169 = (???*0* | ???*1* | ???*2*)
 - *0* unsupported expression
   ⚠️  This value might have side effects
 - *1* unsupported assign operation
   ⚠️  This value might have side effects
+- *2* c
+  ⚠️  pattern without value
 
-c#171 = (???*0* | ???*1*)
+c#171 = (???*0* | ???*1* | ???*2*)
 - *0* unsupported expression
   ⚠️  This value might have side effects
 - *1* unsupported assign operation
   ⚠️  This value might have side effects
+- *2* c
+  ⚠️  pattern without value
 
 c#175 = arguments[2]
 
@@ -3559,7 +3583,9 @@ c#347 = arguments[2]
 
 c#350 = eg
 
-c#357 = (arguments[2] | (c + 1))
+c#357 = (arguments[2] | (c + 1) | ???*0*)
+- *0* c
+  ⚠️  pattern without value
 
 c#361 = Bg(5, null, null, 0)
 
@@ -3585,9 +3611,11 @@ c#392 = (a["alternate"] | a)
 
 c#396 = arguments[2]
 
-c#398 = (arguments[2] | ???*0*)
+c#398 = (arguments[2] | ???*0* | ???*1*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
+- *1* c
+  ⚠️  pattern without value
 
 c#400 = (
   | a["updateQueue"]
@@ -3714,9 +3742,11 @@ c#539 = (arguments[2] | Yg(a, b, e, d))
 
 c#546 = a["pending"]
 
-c#547 = (arguments[2] | ???*0*)
+c#547 = (arguments[2] | ???*0* | ???*1*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
+- *1* c
+  ⚠️  pattern without value
 
 c#550 = (
   | arguments[2]
@@ -3739,7 +3769,9 @@ c#562 = (sg | (???*0*["toString"](32) + c) | ???*1*)
 - *1* unsupported expression
   ⚠️  This value might have side effects
 
-c#570 = ("" | (c + Pa(d)))
+c#570 = ("" | (c + Pa(d)) | ???*0*)
+- *0* c
+  ⚠️  pattern without value
 
 c#573 = arguments[2]
 
@@ -3809,9 +3841,11 @@ c#644 = arguments[2]
 
 c#645 = (null | b | a["tail"] | c["sibling"])
 
-c#646 = (0 | ???*0*)
+c#646 = (0 | ???*0* | ???*1*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
+- *1* c
+  ⚠️  pattern without value
 
 c#647 = (
   | arguments[2]
@@ -4061,9 +4095,11 @@ d#128 = arguments[3]
 
 d#136 = (b | e["return"] | f | e)
 
-d#159 = (0 | tc(h) | tc(f) | tc(g) | ???*0*)
+d#159 = (0 | tc(h) | tc(f) | tc(g) | ???*0* | ???*1*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
+- *1* d
+  ⚠️  pattern without value
 
 d#162 = a["pingedLanes"]
 
@@ -4146,9 +4182,11 @@ d#275 = (a[c] | d["listeners"])
 
 d#280 = `${a}__bubble`
 
-d#281 = (0 | ???*0*)
+d#281 = (0 | ???*0* | ???*1*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
+- *1* d
+  ⚠️  pattern without value
 
 d#285 = arguments[3]
 
@@ -4176,9 +4214,11 @@ d#347 = a["stateNode"]
 
 d#350 = (c[a] | d(!(0)))
 
-d#357 = (rg | ???*0*)
+d#357 = (rg | ???*0* | ???*1*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
+- *1* d
+  ⚠️  pattern without value
 
 d#364 = xg
 
@@ -4188,9 +4228,11 @@ d#391 = arguments[3]
 
 d#396 = (a["updateQueue"] | d["shared"])
 
-d#398 = (b["lanes"] | ???*0*)
+d#398 = (b["lanes"] | ???*0* | ???*1*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
+- *1* d
+  ⚠️  pattern without value
 
 d#400 = (a["alternate"] | d["updateQueue"])
 
@@ -4292,9 +4334,11 @@ d#537 = lh(a)
 
 d#539 = lh(a)
 
-d#547 = (b["lanes"] | ???*0*)
+d#547 = (b["lanes"] | ???*0* | ???*1*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
+- *1* d
+  ⚠️  pattern without value
 
 d#554 = ci()
 
@@ -4364,11 +4408,13 @@ d#619 = a["alternate"]
 
 d#620 = arguments[3]
 
-d#621 = (b["pendingProps"] | M["current"] | ???*0* | ???*1*)
+d#621 = (b["pendingProps"] | M["current"] | ???*0* | ???*1* | ???*2*)
 - *0* unsupported expression
   ⚠️  This value might have side effects
 - *1* unsupported assign operation
   ⚠️  This value might have side effects
+- *2* d
+  ⚠️  pattern without value
 
 d#631 = (b["type"]["_context"] | b["memoizedState"] | (0 !== ???*0*))
 - *0* unsupported expression
@@ -4387,9 +4433,11 @@ d#644 = arguments[3]
 
 d#645 = (null | c)
 
-d#646 = (0 | ???*0*)
+d#646 = (0 | ???*0* | ???*1*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
+- *1* d
+  ⚠️  pattern without value
 
 d#647 = (
   | b["pendingProps"]
@@ -4463,10 +4511,12 @@ d#802 = arguments[3]
 
 d#803 = uc(a, ((a === R) ? Z : 0))
 
-d#807 = (uc(a, ((a === R) ? Z : 0)) | e | f | ???*0* | ???*1*)
+d#807 = (uc(a, ((a === R) ? Z : 0)) | e | f | ???*0* | ???*1* | ???*2*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
-- *1* unsupported expression
+- *1* d
+  ⚠️  pattern without value
+- *2* unsupported expression
   ⚠️  This value might have side effects
 
 d#819 = (0 | ???*0*)
@@ -4671,11 +4721,13 @@ e#354 = ???*0*
 - *0* e
   ⚠️  pattern without value
 
-e#357 = (???*0* | ???*1*)
+e#357 = (???*0* | ???*1* | ???*2*)
 - *0* unsupported expression
   ⚠️  This value might have side effects
 - *1* unsupported assign operation
   ⚠️  This value might have side effects
+- *2* e
+  ⚠️  pattern without value
 
 e#391 = b["interleaved"]
 
@@ -4767,9 +4819,11 @@ e#605 = arguments[4]
 
 e#607 = arguments[4]
 
-e#609 = (M["current"] | ???*0* | a["memoizedState"] | a["child"])
+e#609 = (M["current"] | ???*0* | ???*1* | a["memoizedState"] | a["child"])
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
+- *1* e
+  ⚠️  pattern without value
 
 e#614 = (arguments[4] | b["mode"] | 2 | 8 | 32 | 268435456 | 0 | ((0 !== ???*0*) ? 0 : e))
 - *0* unsupported expression
@@ -4874,9 +4928,11 @@ e#919 = (
 
 e#92 = arguments[3]
 
-e#947 = (arguments[4] | ???*0*)
+e#947 = (arguments[4] | ???*0* | ???*1*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
+- *1* e
+  ⚠️  pattern without value
 
 e#952 = arguments[4]
 
@@ -4927,15 +4983,19 @@ f#128 = arguments[5]
 
 f#136 = (e["alternate"] | e["child"] | f["sibling"])
 
-f#159 = (a["pingedLanes"] | ???*0* | ???*1*)
+f#159 = (a["pingedLanes"] | ???*0* | ???*1* | ???*2*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
-- *1* unsupported expression
+- *1* f
+  ⚠️  pattern without value
+- *2* unsupported expression
   ⚠️  This value might have side effects
 
-f#162 = (a["pendingLanes"] | ???*0*)
+f#162 = (a["pendingLanes"] | ???*0* | ???*1*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
+- *1* f
+  ⚠️  pattern without value
 
 f#169 = ???*0*
 - *0* unsupported expression
@@ -5012,7 +5072,9 @@ f#447 = d["_init"]
 
 f#459 = (arguments[2] | f["props"]["children"] | `${f}`)
 
-f#485 = (arguments[5] | 0 | (f + 1))
+f#485 = (arguments[5] | 0 | (f + 1) | ???*0*)
+- *0* f
+  ⚠️  pattern without value
 
 f#494 = (c["pending"] | e["next"] | e["lane"])
 
@@ -5236,9 +5298,11 @@ g#400 = {
     "next": null
 }
 
-g#404 = (e["lastBaseUpdate"] | k | 0 | ???*0*)
+g#404 = (e["lastBaseUpdate"] | k | 0 | ???*0* | ???*1*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
+- *1* g
+  ⚠️  pattern without value
 
 g#420 = arguments[6]
 
@@ -5297,7 +5361,9 @@ g#647 = (
 - *0* g
   ⚠️  pattern without value
 
-g#673 = (0 | (g + q["nodeValue"]["length"]))
+g#673 = (0 | (g + q["nodeValue"]["length"]) | ???*0*)
+- *0* g
+  ⚠️  pattern without value
 
 g#706 = f["destroy"]
 
@@ -5307,9 +5373,12 @@ g#721 = (
   | ((null !== c) ? c["memoizedProps"] : f)
   | 0
   | (g + 2)
-  | (((???*0* !== k) && (null !== k) && k["hasOwnProperty"]("display")) ? k["display"] : null)
+  | ???*0*
+  | (((???*1* !== k) && (null !== k) && k["hasOwnProperty"]("display")) ? k["display"] : null)
 )
-- *0* unsupported expression
+- *0* g
+  ⚠️  pattern without value
+- *1* unsupported expression
   ⚠️  This value might have side effects
 
 g#756 = d["stateNode"]["containerInfo"]
@@ -5395,9 +5464,11 @@ gh = (...) => undefined
 
 gi = (...) => [f, d]
 
-gj = (???*0* | 0 | fj["current"] | b)
+gj = (???*0* | ???*1* | 0 | fj["current"] | b)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
+- *1* gj
+  ⚠️  pattern without value
 
 gk = (B() | 0)
 
@@ -5557,9 +5628,11 @@ hf = ef[gf]
 
 hg = (...) => undefined
 
-hh = (???*0* | 0)
+hh = (???*0* | ???*1* | 0)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
+- *1* hh
+  ⚠️  pattern without value
 
 hi = (...) => undefined
 
@@ -6305,9 +6378,11 @@ ra = /[\-:]([a-z])/g
 
 rb = (...) => (((null == b) || ("boolean" === typeof(b)) || ("" === b)) ? "" : ((c || ("number" !== typeof(b)) || (0 === b) || (pb["hasOwnProperty"](a) && pb[a])) ? `${b}`["trim"]() : `${b}px`))
 
-rc = (64 | ???*0*)
+rc = (64 | ???*0* | ???*1*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
+- *1* rc
+  ⚠️  pattern without value
 
 rd = (...) => b
 
@@ -6329,10 +6404,12 @@ rj = (...) => ???*0*
 - *0* unsupported expression
   ⚠️  This value might have side effects
 
-rk = (0 | ???*0* | ???*1*)
+rk = (0 | ???*0* | ???*1* | ???*2*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
-- *1* unsupported expression
+- *1* rk
+  ⚠️  pattern without value
+- *2* unsupported expression
   ⚠️  This value might have side effects
 
 rl = (...) => (g | k)
@@ -6341,9 +6418,11 @@ sa = (...) => a[1]["toUpperCase"]()
 
 sb = (...) => undefined
 
-sc = (4194304 | ???*0*)
+sc = (4194304 | ???*0* | ???*1*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
+- *1* sc
+  ⚠️  pattern without value
 
 sd = {
     "eventPhase": 0,
@@ -6371,11 +6450,13 @@ sj = (...) => (???*0* | f | tj(a, b, g, null) | tj(a, b, g, d) | b)
   ⚠️  sequence with side effects
   ⚠️  This value might have side effects
 
-sk = (0 | ???*0* | ???*1*)
+sk = (0 | ???*0* | ???*1* | ???*2*)
 - *0* unsupported expression
   ⚠️  This value might have side effects
 - *1* unsupported assign operation
   ⚠️  This value might have side effects
+- *2* sk
+  ⚠️  pattern without value
 
 sl = (...) => hl(g)
 

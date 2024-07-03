@@ -379,7 +379,7 @@ endPosDetails = (undefined | {"line": 1, "column": 1} | ???*0* | {"line": ???*2*
 
 error = (...) => undefined
 
-escapedParts = ("" | (("" | ???*0*) + ???*12*))
+escapedParts = ("" | (("" | ???*0* | ???*12*) + ???*13*) | ???*26*)
 - *0* (???*1* + ???*2*)
   ⚠️  nested operation
 - *1* escapedParts
@@ -404,32 +404,36 @@ escapedParts = ("" | (("" | ???*0*) + ???*12*))
   ⚠️  unknown callee object
 - *11* ???["replace"](/\r/g, "\\r")
   ⚠️  unknown callee object
-- *12* (???*13* ? ???*14* : ???*21*)
+- *12* escapedParts
+  ⚠️  pattern without value
+- *13* (???*14* ? ???*15* : ???*22*)
   ⚠️  nested operation
-- *13* unsupported expression
+- *14* unsupported expression
   ⚠️  This value might have side effects
-- *14* `${???*15*}-${???*18*}`
+- *15* `${???*16*}-${???*19*}`
   ⚠️  nested operation
-- *15* ???*16*["replace"](/[\x10-\x1F\x7F-\x9F]/g, *anonymous function 2385*)
+- *16* ???*17*["replace"](/[\x10-\x1F\x7F-\x9F]/g, *anonymous function 2385*)
   ⚠️  unknown callee object
-- *16* ???*17*["replace"](/[\x00-\x0F]/g, *anonymous function 2287*)
+- *17* ???*18*["replace"](/[\x00-\x0F]/g, *anonymous function 2287*)
   ⚠️  unknown callee object
-- *17* ???["replace"](/\r/g, "\\r")
+- *18* ???["replace"](/\r/g, "\\r")
   ⚠️  unknown callee object
-- *18* ???*19*["replace"](/[\x10-\x1F\x7F-\x9F]/g, *anonymous function 2385*)
+- *19* ???*20*["replace"](/[\x10-\x1F\x7F-\x9F]/g, *anonymous function 2385*)
   ⚠️  unknown callee object
-- *19* ???*20*["replace"](/[\x00-\x0F]/g, *anonymous function 2287*)
+- *20* ???*21*["replace"](/[\x00-\x0F]/g, *anonymous function 2287*)
   ⚠️  unknown callee object
-- *20* ???["replace"](/\r/g, "\\r")
+- *21* ???["replace"](/\r/g, "\\r")
   ⚠️  unknown callee object
-- *21* ???*22*["replace"](/[\x10-\x1F\x7F-\x9F]/g, *anonymous function 2385*)
+- *22* ???*23*["replace"](/[\x10-\x1F\x7F-\x9F]/g, *anonymous function 2385*)
   ⚠️  unknown callee object
-- *22* ???*23*["replace"](/[\x00-\x0F]/g, *anonymous function 2287*)
+- *23* ???*24*["replace"](/[\x00-\x0F]/g, *anonymous function 2287*)
   ⚠️  unknown callee object
-- *23* ???*24*["replace"](/\r/g, "\\r")
+- *24* ???*25*["replace"](/\r/g, "\\r")
   ⚠️  unknown callee object
-- *24* ???["replace"](/\n/g, "\\n")
+- *25* ???["replace"](/\n/g, "\\n")
   ⚠️  unknown callee object
+- *26* escapedParts
+  ⚠️  pattern without value
 
 expectation#11 = ???*0*
 - *0* arguments[0]

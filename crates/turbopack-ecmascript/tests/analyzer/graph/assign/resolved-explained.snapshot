@@ -1,19 +1,31 @@
-a = ("" | `${("" | ???*0*)}x`)
+a = ("" | `${("" | ???*0* | ???*2*)}x` | ???*3*)
 - *0* `${???*1*}x`
   ⚠️  nested operation
 - *1* a
   ⚠️  circular variable reference
+- *2* a
+  ⚠️  pattern without value
+- *3* a
+  ⚠️  pattern without value
 
-b = (0 | ???*0*)
+b = (0 | ???*0* | ???*1*)
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
+- *1* b
+  ⚠️  pattern without value
 
 c = (0 | ???*0*)
 - *0* updated with update expression
   ⚠️  This value might have side effects
 
-d = (0 | 1)
+d = (0 | 1 | ???*0*)
+- *0* d
+  ⚠️  pattern without value
 
-e = (1 | 2)
+e = (1 | 2 | ???*0*)
+- *0* e
+  ⚠️  pattern without value
 
-f = (1 | 2)
+f = (1 | 2 | ???*0*)
+- *0* f
+  ⚠️  pattern without value

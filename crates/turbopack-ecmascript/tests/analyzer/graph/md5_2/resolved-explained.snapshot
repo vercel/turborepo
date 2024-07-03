@@ -130,7 +130,7 @@ digestbytes = ???*0*
 - *0* max number of linking steps reached
   ⚠️  This value might have side effects
 
-i = (0 | ???*0* | ((0 | ???*1* | ???*2*) + 16))
+i = (0 | ???*0* | ((0 | ???*1* | ???*2* | ???*4*) + 16) | ???*5*)
 - *0* updated with update expression
   ⚠️  This value might have side effects
 - *1* updated with update expression
@@ -139,6 +139,10 @@ i = (0 | ???*0* | ((0 | ???*1* | ???*2*) + 16))
   ⚠️  nested operation
 - *3* i
   ⚠️  circular variable reference
+- *4* i
+  ⚠️  pattern without value
+- *5* i
+  ⚠️  pattern without value
 
 isBuffer = module<is-buffer, {}>
 

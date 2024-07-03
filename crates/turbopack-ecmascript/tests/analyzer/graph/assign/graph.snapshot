@@ -2,7 +2,7 @@
     (
         "a",
         Alternatives(
-            5,
+            6,
             [
                 Constant(
                     Str(
@@ -29,13 +29,25 @@
                         ),
                     ],
                 ),
+                Unknown {
+                    original_value: Some(
+                        Variable(
+                            (
+                                "a",
+                                #2,
+                            ),
+                        ),
+                    ),
+                    reason: "pattern without value",
+                    has_side_effects: false,
+                },
             ],
         ),
     ),
     (
         "b",
         Alternatives(
-            3,
+            4,
             [
                 Constant(
                     Num(
@@ -48,6 +60,18 @@
                     original_value: None,
                     reason: "unsupported assign operation",
                     has_side_effects: true,
+                },
+                Unknown {
+                    original_value: Some(
+                        Variable(
+                            (
+                                "b",
+                                #2,
+                            ),
+                        ),
+                    ),
+                    reason: "pattern without value",
+                    has_side_effects: false,
                 },
             ],
         ),
@@ -75,7 +99,7 @@
     (
         "d",
         Alternatives(
-            3,
+            4,
             [
                 Constant(
                     Num(
@@ -91,13 +115,25 @@
                         ),
                     ),
                 ),
+                Unknown {
+                    original_value: Some(
+                        Variable(
+                            (
+                                "d",
+                                #2,
+                            ),
+                        ),
+                    ),
+                    reason: "pattern without value",
+                    has_side_effects: false,
+                },
             ],
         ),
     ),
     (
         "e",
         Alternatives(
-            3,
+            4,
             [
                 Constant(
                     Num(
@@ -113,13 +149,25 @@
                         ),
                     ),
                 ),
+                Unknown {
+                    original_value: Some(
+                        Variable(
+                            (
+                                "e",
+                                #2,
+                            ),
+                        ),
+                    ),
+                    reason: "pattern without value",
+                    has_side_effects: false,
+                },
             ],
         ),
     ),
     (
         "f",
         Alternatives(
-            3,
+            4,
             [
                 Constant(
                     Num(
@@ -135,6 +183,18 @@
                         ),
                     ),
                 ),
+                Unknown {
+                    original_value: Some(
+                        Variable(
+                            (
+                                "f",
+                                #2,
+                            ),
+                        ),
+                    ),
+                    reason: "pattern without value",
+                    has_side_effects: false,
+                },
             ],
         ),
     ),

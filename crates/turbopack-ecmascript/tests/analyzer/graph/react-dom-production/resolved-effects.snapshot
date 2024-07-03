@@ -3075,13 +3075,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 519 -> 521 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(91)
 
 519 -> 522 call = ???*0*(
-    `Minified React error #${91}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${91}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${91}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 525 call = ???*0*(
     {},
@@ -3142,13 +3144,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 531 -> 533 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(92)
 
 531 -> 534 call = ???*0*(
-    `Minified React error #${92}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${92}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${92}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 530 -> 535 call = ???*0*(
     (???*2* | ""["value"] | ""["children"] | ???*4* | ???*5* | "")
@@ -3184,13 +3188,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 536 -> 539 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(93)
 
 536 -> 540 call = ???*0*(
-    `Minified React error #${93}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${93}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${93}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 543 call = (...) => (undefined | a | "")(
     (???*0* | ""["value"] | ""["children"] | ???*2* | ???*3* | "")
@@ -3661,13 +3667,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  function calls are not analysed yet
 
 635 -> 638 call = ???*0*(
-    `Minified React error #${137}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${137}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${137}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 631 -> 640 conditional = (null != ???*0*)
 - *0* ???*1*["dangerouslySetInnerHTML"]
@@ -3686,13 +3694,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 642 -> 644 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(60)
 
 642 -> 645 call = ???*0*(
-    `Minified React error #${60}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${60}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${60}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 640 -> 648 conditional = (("object" !== ???*0*) | !(???*3*))
 - *0* typeof(???*1*)
@@ -3709,13 +3719,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 648 -> 650 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(61)
 
 648 -> 651 call = ???*0*(
-    `Minified React error #${61}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${61}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${61}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 631 -> 654 conditional = ((null != ???*0*) | ("object" !== ???*2*))
 - *0* ???*1*["style"]
@@ -3734,13 +3746,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 654 -> 656 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(62)
 
 654 -> 657 call = ???*0*(
-    `Minified React error #${62}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${62}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${62}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 659 member call = ???*0*["indexOf"]("-")
 - *0* arguments[0]
@@ -3798,13 +3812,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 671 -> 673 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(280)
 
 671 -> 674 call = ???*0*(
-    `Minified React error #${280}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${280}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${280}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 676 call = (...) => (a[Pf] || null)(
     (???*0* | (???*2* ? null : (???*6* | ???*7*))["stateNode"] | null)
@@ -4101,13 +4117,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  function calls are not analysed yet
 
 701 -> 704 call = ???*0*(
-    `Minified React error #${231}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${231}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${231}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 705 conditional = !(???*0*)
 - *0* ("undefined" === ???*1*)
@@ -4206,13 +4224,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 732 -> 734 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(198)
 
 732 -> 735 call = ???*0*(
-    `Minified React error #${198}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${198}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${198}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 737 conditional = ???*0*
 - *0* ???*1*["alternate"]
@@ -4267,13 +4287,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 753 -> 755 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(188)
 
 753 -> 756 call = ???*0*(
-    `Minified React error #${188}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${188}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${188}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 758 conditional = !((???*0* | ???*2*))
 - *0* ???*1*["alternate"]
@@ -4328,13 +4350,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 760 -> 762 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(188)
 
 760 -> 763 call = ???*0*(
-    `Minified React error #${188}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${188}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${188}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 758 -> 764 conditional = ((???*0* | ???*2*) !== ???*10*)
 - *0* ???*1*["alternate"]
@@ -4497,13 +4521,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 771 -> 779 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(188)
 
 771 -> 780 call = ???*0*(
-    `Minified React error #${188}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${188}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${188}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 783 conditional = (???*0* !== ???*2*)
 - *0* ???*1*["return"]
@@ -4526,13 +4552,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 789 -> 791 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(189)
 
 789 -> 792 call = ???*0*(
-    `Minified React error #${189}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${189}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${189}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 794 conditional = (???*0* !== (???*2* | ???*4*))
 - *0* ???*1*["alternate"]
@@ -4565,13 +4593,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 794 -> 796 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(190)
 
 794 -> 797 call = ???*0*(
-    `Minified React error #${190}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${190}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${190}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 799 conditional = (3 !== ???*0*)
 - *0* ???*1*["tag"]
@@ -4584,13 +4614,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 799 -> 801 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(188)
 
 799 -> 802 call = ???*0*(
-    `Minified React error #${188}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${188}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${188}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 805 conditional = (???*0* === (???*3* | ???*4* | ???*6*))
 - *0* ???*1*["current"]
@@ -4688,13 +4720,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 
 0 -> 839 free var = FreeVar(Math)
 
-0 -> 840 conditional = (0 === (???*0* | ???*1*))
+0 -> 840 conditional = (0 === (???*0* | ???*1* | ???*2*))
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 - *1* unsupported assign operation
   ⚠️  This value might have side effects
+- *2* a
+  ⚠️  pattern without value
 
-840 -> 841 call = ???*0*((???*2* | ???*3*))
+840 -> 841 call = ???*0*((???*2* | ???*3* | ???*4*))
 - *0* ???*1*["log"]
   ⚠️  unknown object
   ⚠️  This value might have side effects
@@ -4705,6 +4739,8 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  function calls are not analysed yet
 - *3* unsupported assign operation
   ⚠️  This value might have side effects
+- *4* a
+  ⚠️  pattern without value
 
 0 -> 845 conditional = (0 !== ???*0*)
 - *0* unsupported expression
@@ -4720,7 +4756,7 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 - *1* unsupported expression
   ⚠️  This value might have side effects
 
-846 -> 848 call = (...) => (undefined | 1 | 2 | 4 | 8 | 16 | 32 | ???*0* | 134217728 | 268435456 | 536870912 | 1073741824 | a)((???*1* | ???*3* | ???*4*))
+846 -> 848 call = (...) => (undefined | 1 | 2 | 4 | 8 | 16 | 32 | ???*0* | 134217728 | 268435456 | 536870912 | 1073741824 | a)((???*1* | ???*3* | ???*4* | ???*5*))
 - *0* unsupported expression
   ⚠️  This value might have side effects
 - *1* ???*2*["pingedLanes"]
@@ -4729,7 +4765,9 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  function calls are not analysed yet
 - *3* unsupported assign operation
   ⚠️  This value might have side effects
-- *4* unsupported expression
+- *4* f
+  ⚠️  pattern without value
+- *5* unsupported expression
   ⚠️  This value might have side effects
 
 845 -> 849 conditional = (0 !== ???*0*)
@@ -4742,7 +4780,7 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 - *1* unsupported expression
   ⚠️  This value might have side effects
 
-849 -> 851 call = (...) => (undefined | 1 | 2 | 4 | 8 | 16 | 32 | ???*0* | 134217728 | 268435456 | 536870912 | 1073741824 | a)((???*1* | ???*3* | ???*4*))
+849 -> 851 call = (...) => (undefined | 1 | 2 | 4 | 8 | 16 | 32 | ???*0* | 134217728 | 268435456 | 536870912 | 1073741824 | a)((???*1* | ???*3* | ???*4* | ???*5*))
 - *0* unsupported expression
   ⚠️  This value might have side effects
 - *1* ???*2*["pingedLanes"]
@@ -4751,10 +4789,12 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  function calls are not analysed yet
 - *3* unsupported assign operation
   ⚠️  This value might have side effects
-- *4* unsupported expression
+- *4* f
+  ⚠️  pattern without value
+- *5* unsupported expression
   ⚠️  This value might have side effects
 
-0 -> 853 conditional = (0 !== (???*0* | ???*1* | ???*3*))
+0 -> 853 conditional = (0 !== (???*0* | ???*1* | ???*3* | ???*4*))
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
 - *1* ???*2*["entangledLanes"]
@@ -4763,8 +4803,10 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  function calls are not analysed yet
 - *3* unsupported assign operation
   ⚠️  This value might have side effects
+- *4* b
+  ⚠️  pattern without value
 
-853 -> 855 call = (???*0* ? ???*2* : (...) => ???*4*)((???*6* | ???*7* | ???*9*))
+853 -> 855 call = (???*0* ? ???*2* : (...) => ???*4*)((???*6* | ???*7* | ???*9* | ???*10*))
 - *0* ???*1*["clz32"]
   ⚠️  unknown object
   ⚠️  This value might have side effects
@@ -4789,8 +4831,10 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  function calls are not analysed yet
 - *9* unsupported assign operation
   ⚠️  This value might have side effects
+- *10* b
+  ⚠️  pattern without value
 
-0 -> 861 call = (???*0* ? ???*2* : (...) => ???*4*)((???*6* | ???*8*))
+0 -> 861 call = (???*0* ? ???*2* : (...) => ???*4*)((???*6* | ???*8* | ???*9*))
 - *0* ???*1*["clz32"]
   ⚠️  unknown object
   ⚠️  This value might have side effects
@@ -4813,6 +4857,8 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  function calls are not analysed yet
 - *8* unsupported assign operation
   ⚠️  This value might have side effects
+- *9* f
+  ⚠️  pattern without value
 
 0 -> 863 conditional = (???*0* === ???*1*)
 - *0* unsupported expression
@@ -4870,7 +4916,7 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 - *7* unsupported expression
   ⚠️  This value might have side effects
 
-0 -> 888 call = (???*0* ? ???*2* : (...) => ???*4*)((???*6* | ???*7*))
+0 -> 888 call = (???*0* ? ???*2* : (...) => ???*4*)((???*6* | ???*7* | ???*8*))
 - *0* ???*1*["clz32"]
   ⚠️  unknown object
   ⚠️  This value might have side effects
@@ -4891,8 +4937,10 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  This value might have side effects
 - *7* unsupported assign operation
   ⚠️  This value might have side effects
+- *8* c
+  ⚠️  pattern without value
 
-0 -> 894 call = (???*0* ? ???*2* : (...) => ???*4*)((???*6* | ???*7*))
+0 -> 894 call = (???*0* ? ???*2* : (...) => ???*4*)((???*6* | ???*7* | ???*8*))
 - *0* ???*1*["clz32"]
   ⚠️  unknown object
   ⚠️  This value might have side effects
@@ -4913,6 +4961,8 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  This value might have side effects
 - *7* unsupported assign operation
   ⚠️  This value might have side effects
+- *8* c
+  ⚠️  pattern without value
 
 0 -> 897 conditional = (0 !== ???*0*)
 - *0* unsupported expression
@@ -8659,14 +8709,16 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 - *3* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 1603 call = (...) => undefined(???*0*, ???*1*, (0 | ???*2*), ???*3*)
+0 -> 1603 call = (...) => undefined(???*0*, ???*1*, (0 | ???*2* | ???*3*), ???*4*)
 - *0* arguments[2]
   ⚠️  function calls are not analysed yet
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 - *2* unsupported assign operation
   ⚠️  This value might have side effects
-- *3* arguments[1]
+- *3* d
+  ⚠️  pattern without value
+- *4* arguments[1]
   ⚠️  function calls are not analysed yet
 
 0 -> 1607 free var = FreeVar(Math)
@@ -10417,13 +10469,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 1815 -> 1817 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(425)
 
 1815 -> 1818 call = ???*0*(
-    `Minified React error #${425}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${425}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${425}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 1825 free var = FreeVar(setTimeout)
 
@@ -10692,13 +10746,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 0 -> 1897 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(33)
 
 0 -> 1898 call = ???*0*(
-    `Minified React error #${33}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${33}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${33}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 1906 call = (...) => {"current": a}({})
 
@@ -10731,13 +10787,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 1923 -> 1925 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(168)
 
 1923 -> 1926 call = ???*0*(
-    `Minified React error #${168}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${168}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${168}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 1927 call = (...) => undefined({"current": {}}, ???*0*)
 - *0* arguments[1]
@@ -10860,13 +10918,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 1947 -> 1949 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(169)
 
 1947 -> 1950 call = ???*0*(
-    `Minified React error #${169}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${169}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${169}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 1951 conditional = ???*0*
 - *0* arguments[2]
@@ -11168,13 +11228,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 2037 -> 2039 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(418)
 
 2037 -> 2040 call = ???*0*(
-    `Minified React error #${418}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${418}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${418}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 2035 -> 2042 call = (...) => (null | a)(???*0*)
 - *0* max number of linking steps reached
@@ -11224,13 +11286,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 2049 -> 2051 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(418)
 
 2049 -> 2052 call = ???*0*(
-    `Minified React error #${418}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${418}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${418}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 2060 conditional = !((false | true))
 
@@ -11326,13 +11390,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 2070 -> 2073 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(418)
 
 2070 -> 2074 call = ???*0*(
-    `Minified React error #${418}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${418}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${418}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 2068 -> 2075 call = (...) => undefined((???*0* | ???*1* | (???*3* ? ???*5* : null)), ???*7*)
 - *0* arguments[0]
@@ -11419,13 +11485,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 2084 -> 2086 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(317)
 
 2084 -> 2087 call = ???*0*(
-    `Minified React error #${317}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${317}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${317}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 2080 -> 2090 conditional = (8 === ???*0*)
 - *0* ???*1*["nodeType"]
@@ -11561,13 +11629,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 2132 -> 2134 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(308)
 
 2132 -> 2135 call = ???*0*(
-    `Minified React error #${308}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${308}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${308}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 2138 conditional = (null === (null | [???*0*]))
 - *0* arguments[0]
@@ -11654,13 +11724,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 - *4* unsupported expression
   ⚠️  This value might have side effects
 
-2193 -> 2197 call = (...) => undefined(???*0*, (???*1* | ???*2*))
+2193 -> 2197 call = (...) => undefined(???*0*, (???*1* | ???*2* | ???*3*))
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 - *1* arguments[2]
   ⚠️  function calls are not analysed yet
 - *2* unsupported assign operation
   ⚠️  This value might have side effects
+- *3* c
+  ⚠️  pattern without value
 
 0 -> 2201 conditional = (
   | (null !== (???*0* | null["alternate"] | ???*2* | ???*3* | ???*4*))
@@ -12096,13 +12168,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  function calls are not analysed yet
 
 2305 -> 2308 call = ???*0*(
-    `Minified React error #${191}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${191}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${191}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 2303 -> 2310 member call = (???*0* | 0["effects"][(???*5* | 0 | ???*6*)]["callback"] | ???*7*)["call"](
     (???*9* | 0["effects"][(???*13* | 0 | ???*14*)] | ???*15*)
@@ -14289,13 +14363,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 2440 -> 2442 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(309)
 
 2440 -> 2443 call = ???*0*(
-    `Minified React error #${309}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${309}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${309}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 2436 -> 2445 conditional = !(???*0*)
 - *0* ???*1*["stateNode"]
@@ -14314,13 +14390,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  function calls are not analysed yet
 
 2445 -> 2448 call = ???*0*(
-    `Minified React error #${147}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${147}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${147}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 2436 -> 2453 conditional = (
   | (null !== (???*0* | (...) => undefined))
@@ -14372,13 +14450,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 2461 -> 2463 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(284)
 
 2461 -> 2464 call = ???*0*(
-    `Minified React error #${284}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${284}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${284}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 2434 -> 2466 conditional = !(???*0*)
 - *0* ???*1*["_owner"]
@@ -14397,13 +14477,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  function calls are not analysed yet
 
 2466 -> 2469 call = ???*0*(
-    `Minified React error #${290}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${290}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${290}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 2473 free var = FreeVar(Object)
 
@@ -14499,13 +14581,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  This value might have side effects
 
 0 -> 2483 call = ???*0*(
-    `Minified React error #${31}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${31}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${31}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 2486 call = ???*0*(???*2*)
 - *0* ???*1*["_init"]
@@ -15981,13 +16065,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 2691 -> 2693 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(150)
 
 2691 -> 2694 call = ???*0*(
-    `Minified React error #${150}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${150}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${150}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 2696 member call = ???*0*["call"](???*1*)
 - *0* max number of linking steps reached
@@ -16004,13 +16090,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 2697 -> 2699 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(151)
 
 2697 -> 2700 call = ???*0*(
-    `Minified React error #${151}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${151}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${151}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 2702 member call = ???*0*["next"]()
 - *0* max number of linking steps reached
@@ -16705,13 +16793,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 2851 -> 2853 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(174)
 
 2851 -> 2854 call = ???*0*(
-    `Minified React error #${174}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${174}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${174}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 2855 call = (...) => undefined(
     {"current": {}},
@@ -17182,13 +17272,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 0 -> 2915 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(321)
 
 0 -> 2916 call = ???*0*(
-    `Minified React error #${321}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${321}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${321}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 2921 call = (???*0* ? ???*4* : (...) => ???*6*)(???*9*, ???*11*)
 - *0* ("function" === ???*1*)
@@ -17251,13 +17343,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 2929 -> 2931 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(301)
 
 2929 -> 2932 call = ???*0*(
-    `Minified React error #${301}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${301}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${301}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 2929 -> 2935 call = ???*0*(???*1*, ???*2*)
 - *0* arguments[2]
@@ -17338,13 +17432,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 2938 -> 2940 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(300)
 
 2938 -> 2941 call = ???*0*(
-    `Minified React error #${300}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${300}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${300}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 2942 conditional = (null === (
   | null
@@ -17700,13 +17796,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 2954 -> 2956 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(310)
 
 2954 -> 2957 call = ???*0*(
-    `Minified React error #${310}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${310}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${310}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 2953 -> 2962 conditional = (null === (
   | null
@@ -17810,13 +17908,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 2969 -> 2971 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(311)
 
 2969 -> 2972 call = ???*0*(
-    `Minified React error #${311}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${311}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${311}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 2976 conditional = ???*0*
 - *0* max number of linking steps reached
@@ -17897,13 +17997,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 3023 -> 3025 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(311)
 
 3023 -> 3026 call = ???*0*(
-    `Minified React error #${311}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${311}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${311}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 3031 conditional = ???*0*
 - *0* max number of linking steps reached
@@ -18368,13 +18470,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 3060 -> 3062 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(349)
 
 3060 -> 3063 call = ???*0*(
-    `Minified React error #${349}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${349}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${349}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 3055 -> 3064 call = (...) => undefined(
     (
@@ -19262,7 +19366,7 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 - *0* unsupported expression
   ⚠️  This value might have side effects
 
-0 -> 3169 call = (???*0* ? ???*4* : (...) => ???*6*)((???*9* | 64 | ???*10*), ???*11*)
+0 -> 3169 call = (???*0* ? ???*4* : (...) => ???*6*)((???*9* | 64 | ???*10* | ???*11*), ???*12*)
 - *0* ("function" === ???*1*)
   ⚠️  nested operation
 - *1* typeof(???*2*)
@@ -19289,7 +19393,9 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  function calls are not analysed yet
 - *10* unsupported assign operation
   ⚠️  This value might have side effects
-- *11* arguments[1]
+- *11* rc
+  ⚠️  pattern without value
+- *12* arguments[1]
   ⚠️  function calls are not analysed yet
 
 0 -> 3170 call = (...) => a()
@@ -20916,13 +21022,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 - *0* unsupported expression
   ⚠️  This value might have side effects
 
-3225 -> 3229 call = (...) => undefined(???*0*, (???*1* | ???*2*))
+3225 -> 3229 call = (...) => undefined(???*0*, (???*1* | ???*2* | ???*3*))
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 - *1* arguments[2]
   ⚠️  function calls are not analysed yet
 - *2* unsupported assign operation
   ⚠️  This value might have side effects
+- *3* c
+  ⚠️  pattern without value
 
 0 -> 3231 call = (...) => P()
 
@@ -21201,13 +21309,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 3268 -> 3270 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(407)
 
 3268 -> 3271 call = ???*0*(
-    `Minified React error #${407}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${407}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${407}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 3267 -> 3272 call = (???*0* | ???*1*() | ???*2*())()
 - *0* arguments[2]
@@ -21238,13 +21348,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 3274 -> 3276 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(349)
 
 3274 -> 3277 call = ???*0*(
-    `Minified React error #${349}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${349}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${349}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 3267 -> 3278 call = (...) => undefined(
     (
@@ -23073,14 +23185,16 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 - *0* unsupported expression
   ⚠️  This value might have side effects
 
-3479 -> 3481 call = (...) => undefined({"current": 0}, (???*0* | 0 | ???*1* | ???*2* | ???*3*))
+3479 -> 3481 call = (...) => undefined({"current": 0}, (???*0* | ???*1* | 0 | ???*2* | ???*3* | ???*4*))
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
-- *1* unknown mutation
+- *1* gj
+  ⚠️  pattern without value
+- *2* unknown mutation
   ⚠️  This value might have side effects
-- *2* arguments[1]
+- *3* arguments[1]
   ⚠️  function calls are not analysed yet
-- *3* updated with update expression
+- *4* updated with update expression
   ⚠️  This value might have side effects
 
 3479 -> 3482 conditional = (0 === ???*0*)
@@ -23109,14 +23223,16 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 - *9* arguments[0]
   ⚠️  function calls are not analysed yet
 
-3482 -> 3489 call = (...) => undefined({"current": 0}, (???*0* | 0 | ???*1* | ???*2* | ???*3*))
+3482 -> 3489 call = (...) => undefined({"current": 0}, (???*0* | ???*1* | 0 | ???*2* | ???*3* | ???*4*))
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
-- *1* unknown mutation
+- *1* gj
+  ⚠️  pattern without value
+- *2* unknown mutation
   ⚠️  This value might have side effects
-- *2* arguments[1]
+- *3* arguments[1]
   ⚠️  function calls are not analysed yet
-- *3* updated with update expression
+- *4* updated with update expression
   ⚠️  This value might have side effects
 
 3479 -> 3491 conditional = (null !== ???*0*)
@@ -23141,14 +23257,16 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 - *9* arguments[0]
   ⚠️  function calls are not analysed yet
 
-3479 -> 3493 call = (...) => undefined({"current": 0}, (???*0* | 0 | ???*1* | ???*2* | ???*3*))
+3479 -> 3493 call = (...) => undefined({"current": 0}, (???*0* | ???*1* | 0 | ???*2* | ???*3* | ???*4*))
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
-- *1* unknown mutation
+- *1* gj
+  ⚠️  pattern without value
+- *2* unknown mutation
   ⚠️  This value might have side effects
-- *2* arguments[1]
+- *3* arguments[1]
   ⚠️  function calls are not analysed yet
-- *3* updated with update expression
+- *4* updated with update expression
   ⚠️  This value might have side effects
 
 3477 -> 3494 conditional = (null !== ???*0*)
@@ -23173,14 +23291,16 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 - *9* arguments[0]
   ⚠️  function calls are not analysed yet
 
-3477 -> 3497 call = (...) => undefined({"current": 0}, (???*0* | 0 | ???*1* | ???*2* | ???*3*))
+3477 -> 3497 call = (...) => undefined({"current": 0}, (???*0* | ???*1* | 0 | ???*2* | ???*3* | ???*4*))
 - *0* unsupported assign operation
   ⚠️  This value might have side effects
-- *1* unknown mutation
+- *1* gj
+  ⚠️  pattern without value
+- *2* unknown mutation
   ⚠️  This value might have side effects
-- *2* arguments[1]
+- *3* arguments[1]
   ⚠️  function calls are not analysed yet
-- *3* updated with update expression
+- *4* updated with update expression
   ⚠️  This value might have side effects
 
 0 -> 3498 call = (...) => undefined(
@@ -24450,13 +24570,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 3788 -> 3792 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(422)
 
 3788 -> 3793 call = ???*0*(
-    `Minified React error #${422}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${422}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${422}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 3788 -> 3794 call = (...) => {"value": a, "source": null, "stack": ((null != c) ? c : null), "digest": ((null != b) ? b : null)}(???*0*)
 - *0* ???*1*(p(422))
@@ -24543,13 +24665,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 3822 -> 3829 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(419)
 
 3822 -> 3830 call = ???*0*(
-    `Minified React error #${419}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${419}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${419}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 3822 -> 3831 call = (...) => {"value": a, "source": null, "stack": ((null != c) ? c : null), "digest": ((null != b) ? b : null)}(???*0*, ???*1*, ???*2*)
 - *0* max number of linking steps reached
@@ -24604,13 +24728,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 3834 -> 3844 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(421)
 
 3834 -> 3845 call = ???*0*(
-    `Minified React error #${421}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${421}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${421}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 3834 -> 3846 call = (...) => {"value": a, "source": null, "stack": ((null != c) ? c : null), "digest": ((null != b) ? b : null)}(???*0*)
 - *0* ???*1*(p(421))
@@ -24926,7 +25052,7 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 - *5* unknown mutation
   ⚠️  This value might have side effects
 
-0 -> 3912 call = (...) => undefined({"current": 0}, (???*0* | 0 | ???*2* | ???*3* | ???*4*))
+0 -> 3912 call = (...) => undefined({"current": 0}, (???*0* | 0 | ???*2* | ???*3* | ???*4* | ???*5*))
 - *0* ???*1*["pendingProps"]
   ⚠️  unknown object
 - *1* arguments[1]
@@ -24937,6 +25063,8 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  This value might have side effects
 - *4* unsupported assign operation
   ⚠️  This value might have side effects
+- *5* d
+  ⚠️  pattern without value
 
 0 -> 3914 conditional = (0 === ???*0*)
 - *0* unsupported expression
@@ -25127,13 +25255,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 3948 -> 3950 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(153)
 
 3948 -> 3951 call = ???*0*(
-    `Minified React error #${153}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${153}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${153}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 3953 conditional = (null !== ???*0*)
 - *0* ???*1*["child"]
@@ -27197,13 +27327,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 4192 -> 4194 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(166)
 
 4192 -> 4195 call = ???*0*(
-    `Minified React error #${166}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${166}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${166}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 4190 -> 4196 call = (...) => b(???*0*)
 - *0* max number of linking steps reached
@@ -27695,13 +27827,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 4354 -> 4356 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(166)
 
 4354 -> 4357 call = ???*0*(
-    `Minified React error #${166}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${166}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${166}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 4350 -> 4359 call = (...) => a(({} | ???*0*))
 - *0* unknown mutation
@@ -27786,13 +27920,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 4401 -> 4403 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(318)
 
 4401 -> 4404 call = ???*0*(
-    `Minified React error #${318}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${318}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${318}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 4400 -> 4406 conditional = ???*0*
 - *0* max number of linking steps reached
@@ -27807,13 +27943,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 4408 -> 4410 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(317)
 
 4408 -> 4411 call = ???*0*(
-    `Minified React error #${317}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${317}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${317}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 4400 -> 4413 call = (...) => undefined()
 
@@ -28069,13 +28207,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 4585 -> 4587 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(340)
 
 4585 -> 4588 call = ???*0*(
-    `Minified React error #${340}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${340}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${340}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 4583 -> 4589 call = (...) => undefined()
 
@@ -28227,13 +28367,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 4643 -> 4668 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(163)
 
 4643 -> 4669 call = ???*0*(
-    `Minified React error #${163}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${163}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${163}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 4671 call = (...) => undefined(???*0*, ???*1*, ???*2*)
 - *0* max number of linking steps reached
@@ -29014,13 +29156,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 4884 -> 4886 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(160)
 
 4884 -> 4887 call = ???*0*(
-    `Minified React error #${160}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${160}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${160}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 4874 -> 4888 call = (...) => undefined(???*0*, (???*1* | ???*2*), ???*4*)
 - *0* arguments[0]
@@ -29689,13 +29833,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 4975 -> 4977 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(162)
 
 4975 -> 4978 call = ???*0*(
-    `Minified React error #${162}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${162}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${162}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 4983 call = (...) => undefined(???*0*, ???*1*, ???*3*)
 - *0* arguments[0]
@@ -30132,13 +30278,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 0 -> 5102 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(160)
 
 0 -> 5103 call = ???*0*(
-    `Minified React error #${160}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${160}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${160}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 5107 call = (...) => (undefined | FreeVar(undefined))(???*0*, "")
 - *0* ???*1*["stateNode"]
@@ -30191,13 +30339,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 0 -> 5116 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(161)
 
 0 -> 5117 call = ???*0*(
-    `Minified React error #${161}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${161}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${161}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 5119 call = (...) => undefined(???*0*, ???*1*, ???*3*)
 - *0* arguments[0]
@@ -30370,13 +30520,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 5151 -> 5204 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(163)
 
 5151 -> 5205 call = ???*0*(
-    `Minified React error #${163}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${163}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${163}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 5148 -> 5207 call = (...) => undefined(???*0*)
 - *0* max number of linking steps reached
@@ -30581,13 +30733,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 0 -> 5265 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(185)
 
 0 -> 5266 call = ???*0*(
-    `Minified React error #${185}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${185}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${185}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 5267 call = (...) => undefined(???*0*, ???*1*, ???*2*)
 - *0* arguments[0]
@@ -30676,6 +30830,7 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   | ???*0*
   | ???*9*
   | ???*11*
+  | ???*12*
   | undefined
   | 1
   | 2
@@ -30683,7 +30838,7 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   | 8
   | 16
   | 32
-  | ???*12*
+  | ???*13*
   | 134217728
   | 268435456
   | 536870912
@@ -30713,7 +30868,9 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  function calls are not analysed yet
 - *11* unsupported assign operation
   ⚠️  This value might have side effects
-- *12* unsupported expression
+- *12* b
+  ⚠️  pattern without value
+- *13* unsupported expression
   ⚠️  This value might have side effects
 
 5278 -> 5279 call = module<scheduler, {}>["unstable_cancelCallback"](
@@ -30843,6 +31000,7 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
       | (???*3* ? (0 | ???*10*) : 0)
       | ???*11*
       | ???*13*
+      | ???*14*
       | undefined
       | 1
       | 2
@@ -30850,7 +31008,7 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
       | 8
       | 16
       | 32
-      | ???*14*
+      | ???*15*
       | 134217728
       | 268435456
       | 536870912
@@ -30885,7 +31043,9 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  function calls are not analysed yet
 - *13* unsupported assign operation
   ⚠️  This value might have side effects
-- *14* unsupported expression
+- *14* b
+  ⚠️  pattern without value
+- *15* unsupported expression
   ⚠️  This value might have side effects
 
 5284 -> 5297 member call = (...) => (
@@ -30933,13 +31093,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 5301 -> 5303 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(327)
 
 5301 -> 5304 call = ???*0*(
-    `Minified React error #${327}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${327}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${327}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 5306 call = (...) => (d | !(1))()
 
@@ -31150,13 +31312,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 5330 -> 5346 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(345)
 
 5330 -> 5347 call = ???*0*(
-    `Minified React error #${345}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${345}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${345}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 5330 -> 5348 call = (...) => null(???*0*, ???*1*, null)
 - *0* arguments[0]
@@ -31301,13 +31465,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 5330 -> 5376 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(329)
 
 5330 -> 5377 call = ???*0*(
-    `Minified React error #${329}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${329}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${329}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 5378 call = module<scheduler, {}>["unstable_now"]()
 
@@ -31419,7 +31585,7 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 5420 call = (???*0* ? ???*2* : (...) => ???*4*)((???*6* | ???*7*))
+0 -> 5420 call = (???*0* ? ???*2* : (...) => ???*4*)((???*6* | ???*7* | ???*8*))
 - *0* ???*1*["clz32"]
   ⚠️  unknown object
   ⚠️  This value might have side effects
@@ -31440,6 +31606,8 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  function calls are not analysed yet
 - *7* unsupported assign operation
   ⚠️  This value might have side effects
+- *8* b
+  ⚠️  pattern without value
 
 0 -> 5422 conditional = (0 !== ???*0*)
 - *0* unsupported expression
@@ -31450,13 +31618,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 5422 -> 5424 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(327)
 
 5422 -> 5425 call = ???*0*(
-    `Minified React error #${327}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${327}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${327}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 5426 call = (...) => (d | !(1))()
 
@@ -31480,6 +31650,7 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
       | 0
       | ???*1*
       | ???*3*
+      | ???*4*
       | undefined
       | 1
       | 2
@@ -31487,12 +31658,12 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
       | 8
       | 16
       | 32
-      | ???*4*
+      | ???*5*
       | 134217728
       | 268435456
       | 536870912
       | 1073741824
-      | (???*5* ? (???*8* | ???*9*) : ???*10*)
+      | (???*6* ? (???*9* | ???*10*) : ???*11*)
     )
 )
 - *0* arguments[0]
@@ -31503,21 +31674,23 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  function calls are not analysed yet
 - *3* unsupported assign operation
   ⚠️  This value might have side effects
-- *4* unsupported expression
+- *4* b
+  ⚠️  pattern without value
+- *5* unsupported expression
   ⚠️  This value might have side effects
-- *5* (0 !== (???*6* | ???*7*))
+- *6* (0 !== (???*7* | ???*8*))
   ⚠️  nested operation
-- *6* arguments[0]
+- *7* arguments[0]
   ⚠️  function calls are not analysed yet
-- *7* unsupported expression
+- *8* unsupported expression
   ⚠️  This value might have side effects
-- *8* arguments[0]
+- *9* arguments[0]
   ⚠️  function calls are not analysed yet
-- *9* unsupported expression
+- *10* unsupported expression
   ⚠️  This value might have side effects
-- *10* (???*11* ? 1073741824 : 0)
+- *11* (???*12* ? 1073741824 : 0)
   ⚠️  nested operation
-- *11* unsupported expression
+- *12* unsupported expression
   ⚠️  This value might have side effects
 
 0 -> 5433 conditional = ???*0*
@@ -31562,6 +31735,7 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
       | 0
       | ???*1*
       | ???*3*
+      | ???*4*
       | undefined
       | 1
       | 2
@@ -31569,12 +31743,12 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
       | 8
       | 16
       | 32
-      | ???*4*
+      | ???*5*
       | 134217728
       | 268435456
       | 536870912
       | 1073741824
-      | (???*5* ? (???*8* | ???*9*) : ???*10*)
+      | (???*6* ? (???*9* | ???*10*) : ???*11*)
     )
 )
 - *0* arguments[0]
@@ -31585,21 +31759,23 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  function calls are not analysed yet
 - *3* unsupported assign operation
   ⚠️  This value might have side effects
-- *4* unsupported expression
+- *4* b
+  ⚠️  pattern without value
+- *5* unsupported expression
   ⚠️  This value might have side effects
-- *5* (0 !== (???*6* | ???*7*))
+- *6* (0 !== (???*7* | ???*8*))
   ⚠️  nested operation
-- *6* arguments[0]
+- *7* arguments[0]
   ⚠️  function calls are not analysed yet
-- *7* unsupported expression
+- *8* unsupported expression
   ⚠️  This value might have side effects
-- *8* arguments[0]
+- *9* arguments[0]
   ⚠️  function calls are not analysed yet
-- *9* unsupported expression
+- *10* unsupported expression
   ⚠️  This value might have side effects
-- *10* (???*11* ? 1073741824 : 0)
+- *11* (???*12* ? 1073741824 : 0)
   ⚠️  nested operation
-- *11* unsupported expression
+- *12* unsupported expression
   ⚠️  This value might have side effects
 
 5436 -> 5439 call = module<scheduler, {}>["unstable_now"]()
@@ -31617,13 +31793,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 5441 -> 5443 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(345)
 
 5441 -> 5444 call = ???*0*(
-    `Minified React error #${345}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${345}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${345}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 5449 call = (...) => null(???*0*, ???*1*, null)
 - *0* arguments[0]
@@ -31810,13 +31988,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 5530 -> 5547 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(426)
 
 5530 -> 5548 call = ???*0*(
-    `Minified React error #${426}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${426}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${426}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 5515 -> 5550 conditional = (false | true | ???*0*)
 - *0* unsupported expression
@@ -31974,13 +32154,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 5593 -> 5595 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(261)
 
 5593 -> 5596 call = ???*0*(
-    `Minified React error #${261}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${261}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${261}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 5597 call = (...) => undefined(???*0*)
 - *0* max number of linking steps reached
@@ -32005,7 +32187,7 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
       | yj(a, b, c)
       | ej(a, b, c)
     )
-)(???*2*, ???*4*, (???*5* | 0 | ???*6* | ???*7* | ???*8*))
+)(???*2*, ???*4*, (???*5* | ???*6* | 0 | ???*7* | ???*8* | ???*9*))
 - *0* Wk
   ⚠️  pattern without value
 - *1* zj(a, b, c)
@@ -32019,11 +32201,13 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  function calls are not analysed yet
 - *5* unsupported assign operation
   ⚠️  This value might have side effects
-- *6* unknown mutation
+- *6* gj
+  ⚠️  pattern without value
+- *7* unknown mutation
   ⚠️  This value might have side effects
-- *7* arguments[1]
+- *8* arguments[1]
   ⚠️  function calls are not analysed yet
-- *8* updated with update expression
+- *9* updated with update expression
   ⚠️  This value might have side effects
 
 0 -> 5604 conditional = (null === ???*0*)
@@ -32056,7 +32240,7 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 - *0* unsupported expression
   ⚠️  This value might have side effects
 
-5610 -> 5611 call = (...) => (undefined | null | (???*0* ? b : null) | ???*1* | b["child"])(???*2*, (???*3* | ???*4*), (???*6* | 0 | ???*7* | ???*8* | ???*9*))
+5610 -> 5611 call = (...) => (undefined | null | (???*0* ? b : null) | ???*1* | b["child"])(???*2*, (???*3* | ???*4*), (???*6* | ???*7* | 0 | ???*8* | ???*9* | ???*10*))
 - *0* unsupported expression
   ⚠️  This value might have side effects
 - *1* b
@@ -32072,11 +32256,13 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  circular variable reference
 - *6* unsupported assign operation
   ⚠️  This value might have side effects
-- *7* unknown mutation
+- *7* gj
+  ⚠️  pattern without value
+- *8* unknown mutation
   ⚠️  This value might have side effects
-- *8* arguments[1]
+- *9* arguments[1]
   ⚠️  function calls are not analysed yet
-- *9* updated with update expression
+- *10* updated with update expression
   ⚠️  This value might have side effects
 
 5610 -> 5612 call = (...) => (undefined | ???*0* | null | (???*3* ? ???*4* : null))(???*5*, (???*6* | ???*7*))
@@ -32180,13 +32366,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 5625 -> 5627 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(327)
 
 5625 -> 5628 call = ???*0*(
-    `Minified React error #${327}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${327}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${327}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 5634 conditional = ((???*0* | ???*1* | null["finishedWork"] | 0 | ???*3*) === (???*4* | null["current"]))
 - *0* arguments[2]
@@ -32207,13 +32395,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 5634 -> 5636 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(177)
 
 5634 -> 5637 call = ???*0*(
-    `Minified React error #${177}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${177}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${177}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 5642 call = (...) => undefined(
     (???*0* | ???*1* | null),
@@ -32453,13 +32643,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 5685 -> 5687 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(331)
 
 5685 -> 5688 call = ???*0*(
-    `Minified React error #${331}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${331}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${331}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 5684 -> 5692 conditional = (0 !== ???*0*)
 - *0* unsupported expression
@@ -32792,7 +32984,7 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 - *2* unsupported expression
   ⚠️  This value might have side effects
 
-0 -> 5790 call = (...) => ((3 === c["tag"]) ? c["stateNode"] : null)((???*0* | (???*1* ? ???*5* : null)), (???*8* | 1 | 4194304 | ???*9*))
+0 -> 5790 call = (...) => ((3 === c["tag"]) ? c["stateNode"] : null)((???*0* | (???*1* ? ???*5* : null)), (???*8* | 1 | 4194304 | ???*9* | ???*10*))
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 - *1* (3 === ???*2*)
@@ -32813,11 +33005,13 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  function calls are not analysed yet
 - *9* unsupported assign operation
   ⚠️  This value might have side effects
+- *10* sc
+  ⚠️  pattern without value
 
 0 -> 5791 call = (...) => undefined(
     (???*0* | (???*1* ? ???*5* : null)),
-    (???*8* | 1 | 4194304 | ???*9*),
-    (???*10* ? ???*12* : ???*13*)
+    (???*8* | 1 | 4194304 | ???*9* | ???*10*),
+    (???*11* ? ???*13* : ???*14*)
 )
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
@@ -32839,27 +33033,29 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  function calls are not analysed yet
 - *9* unsupported assign operation
   ⚠️  This value might have side effects
-- *10* (0 !== ???*11*)
+- *10* sc
+  ⚠️  pattern without value
+- *11* (0 !== ???*12*)
   ⚠️  nested operation
-- *11* unsupported expression
+- *12* unsupported expression
   ⚠️  This value might have side effects
-- *12* module<scheduler, {}>["unstable_now"]()
+- *13* module<scheduler, {}>["unstable_now"]()
   ⚠️  nested operation
-- *13* (???*14* ? (???*18* | ???*19*) : ???*20*)
+- *14* (???*15* ? (???*19* | ???*20*) : ???*21*)
   ⚠️  nested operation
-- *14* (???*15* !== (???*16* | ???*17*))
+- *15* (???*16* !== (???*17* | ???*18*))
   ⚠️  nested operation
-- *15* unsupported expression
-  ⚠️  This value might have side effects
 - *16* unsupported expression
   ⚠️  This value might have side effects
-- *17* module<scheduler, {}>["unstable_now"]()
-  ⚠️  nested operation
-- *18* unsupported expression
+- *17* unsupported expression
   ⚠️  This value might have side effects
-- *19* module<scheduler, {}>["unstable_now"]()
+- *18* module<scheduler, {}>["unstable_now"]()
   ⚠️  nested operation
-- *20* unsupported expression
+- *19* unsupported expression
+  ⚠️  This value might have side effects
+- *20* module<scheduler, {}>["unstable_now"]()
+  ⚠️  nested operation
+- *21* unsupported expression
   ⚠️  This value might have side effects
 
 0 -> 5792 call = (...) => undefined((???*0* | (???*1* ? ???*5* : null)), (???*8* ? ???*10* : ???*11*))
@@ -32917,13 +33113,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 0 -> 5802 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(314)
 
 0 -> 5803 call = ???*0*(
-    `Minified React error #${314}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${314}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${314}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 5805 member call = ???*0*["delete"](???*2*)
 - *0* ???*1*["stateNode"]
@@ -33224,13 +33422,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 5888 -> 5890 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(387)
 
 5888 -> 5891 call = ???*0*(
-    `Minified React error #${387}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${387}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${387}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 5895 call = (...) => undefined(???*0*, ???*1*)
 - *0* max number of linking steps reached
@@ -33255,13 +33455,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 5900 -> 5909 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(423)
 
 5900 -> 5910 call = ???*0*(
-    `Minified React error #${423}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${423}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${423}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 5900 -> 5911 call = (...) => {"value": a, "source": b, "stack": e, "digest": null}(???*0*, ???*2*)
 - *0* ???*1*(p(423))
@@ -33294,13 +33496,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 5913 -> 5915 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(424)
 
 5913 -> 5916 call = ???*0*(
-    `Minified React error #${424}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${424}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${424}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 5913 -> 5917 call = (...) => {"value": a, "source": b, "stack": e, "digest": null}(???*0*, ???*2*)
 - *0* ???*1*(p(424))
@@ -33656,13 +33860,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 6030 -> 6032 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(341)
 
 6030 -> 6033 call = ???*0*(
-    `Minified React error #${341}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${341}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${341}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 6028 -> 6037 call = (...) => undefined(???*0*, ???*1*, ???*2*)
 - *0* max number of linking steps reached
@@ -33966,7 +34172,7 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 - *2* unknown new expression
   ⚠️  This value might have side effects
 
-6165 -> 6167 call = (...) => a(???*0*, (???*2* | ???*3*), ???*4*, (???*5* | ???*6*))
+6165 -> 6167 call = (...) => a(???*0*, (???*2* | ???*3* | ???*4*), ???*5*, (???*6* | ???*7*))
 - *0* ???*1*["children"]
   ⚠️  unknown object
 - *1* arguments[2]
@@ -33975,11 +34181,13 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  function calls are not analysed yet
 - *3* unsupported assign operation
   ⚠️  This value might have side effects
-- *4* arguments[5]
+- *4* e
+  ⚠️  pattern without value
+- *5* arguments[5]
   ⚠️  function calls are not analysed yet
-- *5* arguments[1]
+- *6* arguments[1]
   ⚠️  function calls are not analysed yet
-- *6* unknown new expression
+- *7* unknown new expression
   ⚠️  This value might have side effects
 
 6165 -> 6168 call = (...) => ???*0*(12, ???*1*, (???*2* | ???*3*), ???*4*)
@@ -33994,7 +34202,7 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 - *4* unsupported expression
   ⚠️  This value might have side effects
 
-6165 -> 6171 call = (...) => ???*0*(13, ???*1*, (???*2* | ???*3*), (???*4* | ???*5*))
+6165 -> 6171 call = (...) => ???*0*(13, ???*1*, (???*2* | ???*3*), (???*4* | ???*5* | ???*6*))
 - *0* unknown new expression
   ⚠️  This value might have side effects
 - *1* arguments[2]
@@ -34007,8 +34215,10 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  function calls are not analysed yet
 - *5* unsupported assign operation
   ⚠️  This value might have side effects
+- *6* e
+  ⚠️  pattern without value
 
-6165 -> 6174 call = (...) => ???*0*(19, ???*1*, (???*2* | ???*3*), (???*4* | ???*5*))
+6165 -> 6174 call = (...) => ???*0*(19, ???*1*, (???*2* | ???*3*), (???*4* | ???*5* | ???*6*))
 - *0* unknown new expression
   ⚠️  This value might have side effects
 - *1* arguments[2]
@@ -34021,19 +34231,23 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  function calls are not analysed yet
 - *5* unsupported assign operation
   ⚠️  This value might have side effects
+- *6* e
+  ⚠️  pattern without value
 
-6165 -> 6177 call = (...) => a(???*0*, (???*1* | ???*2*), ???*3*, (???*4* | ???*5*))
+6165 -> 6177 call = (...) => a(???*0*, (???*1* | ???*2* | ???*3*), ???*4*, (???*5* | ???*6*))
 - *0* arguments[2]
   ⚠️  function calls are not analysed yet
 - *1* arguments[4]
   ⚠️  function calls are not analysed yet
 - *2* unsupported assign operation
   ⚠️  This value might have side effects
-- *3* arguments[5]
+- *3* e
+  ⚠️  pattern without value
+- *4* arguments[5]
   ⚠️  function calls are not analysed yet
-- *4* arguments[1]
+- *5* arguments[1]
   ⚠️  function calls are not analysed yet
-- *5* unknown new expression
+- *6* unknown new expression
   ⚠️  This value might have side effects
 
 6165 -> 6178 conditional = (("object" === ???*0*) | (null !== (???*3* | ???*4*)))
@@ -34075,15 +34289,17 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  This value might have side effects
 
 6165 -> 6183 call = ???*0*(
-    `Minified React error #${130}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${130}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${130}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
-0 -> 6184 call = (...) => ???*0*((2 | 1 | 5 | 8 | 10 | 9 | 11 | 14 | 16), ???*1*, (???*2* | ???*3*), (???*4* | ???*5*))
+0 -> 6184 call = (...) => ???*0*((2 | 1 | 5 | 8 | 10 | 9 | 11 | 14 | 16), ???*1*, (???*2* | ???*3*), (???*4* | ???*5* | ???*6*))
 - *0* unknown new expression
   ⚠️  This value might have side effects
 - *1* arguments[2]
@@ -34096,6 +34312,8 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
   ⚠️  function calls are not analysed yet
 - *5* unsupported assign operation
   ⚠️  This value might have side effects
+- *6* e
+  ⚠️  pattern without value
 
 0 -> 6188 call = (...) => ???*0*(7, (???*1* | ???*2*), ???*3*, ???*4*)
 - *0* unknown new expression
@@ -34167,19 +34385,23 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 
 0 -> 6228 call = (...) => b(0)
 
-0 -> 6232 conditional = (1 === (???*0* | 1 | ???*1* | 0))
+0 -> 6232 conditional = (1 === (???*0* | 1 | ???*1* | ???*2* | 0))
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
 - *1* unsupported assign operation
   ⚠️  This value might have side effects
+- *2* b
+  ⚠️  pattern without value
 
-0 -> 6233 call = (...) => ???*0*(3, null, null, (???*1* | 1 | ???*2* | 0))
+0 -> 6233 call = (...) => ???*0*(3, null, null, (???*1* | 1 | ???*2* | ???*3* | 0))
 - *0* unknown new expression
   ⚠️  This value might have side effects
 - *1* arguments[1]
   ⚠️  function calls are not analysed yet
 - *2* unsupported assign operation
   ⚠️  This value might have side effects
+- *3* b
+  ⚠️  pattern without value
 
 0 -> 6237 call = (...) => undefined((???*0* | ???*1*))
 - *0* arguments[5]
@@ -34268,13 +34490,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 6249 -> 6251 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(170)
 
 6249 -> 6252 call = ???*0*(
-    `Minified React error #${170}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${170}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${170}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 6257 call = (...) => ((null !== a) && (???*0* !== a))(???*1*)
 - *0* unsupported expression
@@ -34301,13 +34525,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 0 -> 6263 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(171)
 
 0 -> 6264 call = ???*0*(
-    `Minified React error #${171}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${171}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${171}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 6266 conditional = (1 === ???*0*)
 - *0* ???*1*["tag"]
@@ -35685,13 +35911,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 6329 -> 6331 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(409)
 
 6329 -> 6332 call = ???*0*(
-    `Minified React error #${409}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${409}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${409}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 6333 call = (...) => g(???*0*, ???*1*, null, null)
 - *0* arguments[0]
@@ -36721,13 +36949,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 6456 -> 6458 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(90)
 
 6456 -> 6459 call = ???*0*(
-    `Minified React error #${90}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${90}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${90}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 6454 -> 6460 call = (...) => (!(1) | !(0) | ((a !== c) ? !(0) : !(1)))(???*0*)
 - *0* ???*1*[(???*2* | ???*3* | 0 | ???*5*)]
@@ -36927,13 +37157,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 6495 -> 6497 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(200)
 
 6495 -> 6498 call = ???*0*(
-    `Minified React error #${200}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${200}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${200}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 6499 call = (...) => {
     "$$typeof": wa,
@@ -36987,13 +37219,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 6503 -> 6505 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(299)
 
 6503 -> 6506 call = ???*0*(
-    `Minified React error #${299}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${299}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${299}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 6512 call = (...) => a(
     ???*0*,
@@ -37072,13 +37306,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 6525 -> 6527 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(188)
 
 6525 -> 6528 call = ???*0*(
-    `Minified React error #${188}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${188}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${188}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 6523 -> 6531 free var = FreeVar(Object)
 
@@ -37154,13 +37390,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 6546 -> 6548 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(200)
 
 6546 -> 6549 call = ???*0*(
-    `Minified React error #${200}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${200}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${200}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 6550 call = (...) => hl(g)(null, ???*0*, ???*1*, true, ???*2*)
 - *0* arguments[0]
@@ -37196,13 +37434,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 6554 -> 6556 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(405)
 
 6554 -> 6557 call = ???*0*(
-    `Minified React error #${405}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${405}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${405}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 6564 conditional = (null != (???*0* | ???*1* | null[(???*6* | 0 | ???*7*)]))
 - *0* arguments[2]
@@ -37594,13 +37834,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 6584 -> 6586 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(200)
 
 6584 -> 6587 call = ???*0*(
-    `Minified React error #${200}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${200}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${200}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 6588 call = (...) => hl(g)(null, ???*0*, ???*1*, false, ???*2*)
 - *0* arguments[0]
@@ -37640,13 +37882,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 6592 -> 6594 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(40)
 
 6592 -> 6595 call = ???*0*(
-    `Minified React error #${40}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${40}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${40}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 6597 conditional = ???*0*
 - *0* ???*1*["_reactRootContainer"]
@@ -37692,13 +37936,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 6607 -> 6609 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(200)
 
 6607 -> 6610 call = ???*0*(
-    `Minified React error #${200}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${200}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${200}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 6612 conditional = ((null == ???*0*) | (???*1* === ???*2*))
 - *0* arguments[0]
@@ -37715,13 +37961,15 @@ ${(???*45* | ???*46* | ???*50* | "")}${(???*54* | ???*56*)}`
 6612 -> 6614 call = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`(38)
 
 6612 -> 6615 call = ???*0*(
-    `Minified React error #${38}; visit ${???*1*} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+    `Minified React error #${38}; visit ${(???*1* | ???*2*)} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
   ⚠️  This value might have side effects
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${38}`
   ⚠️  nested operation
+- *2* b
+  ⚠️  pattern without value
 
 0 -> 6616 call = (...) => hl(g)(???*0*, ???*1*, ???*2*, false, ???*3*)
 - *0* arguments[0]
