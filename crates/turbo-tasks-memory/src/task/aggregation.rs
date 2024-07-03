@@ -643,16 +643,16 @@ fn update_count_entry<K: Eq + Hash, H: BuildHasher + Default, const I: usize>(
                 }
             }
         }
-        Entry::Vacant(e) => {
-            if update == 0 {
-                (0, UpdateCountEntryChange::Updated)
-            } else if update < 0 {
+        Entry::Vacant(e) => match update.cmp(&0) {
+            Ordering::Less => {
                 e.insert(update);
                 (update, UpdateCountEntryChange::Updated)
-            } else {
+            }
+            Ordering::Equal => (0, UpdateCountEntryChange::Updated),
+            Ordering::Greater => {
                 e.insert(update);
                 (update, UpdateCountEntryChange::Inserted)
             }
-        }
+        },
     }
 }
