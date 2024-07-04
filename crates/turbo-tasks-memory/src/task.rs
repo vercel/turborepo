@@ -187,6 +187,7 @@ impl TaskState {
             state_type: Scheduled {
                 event: Event::new(move || format!("TaskState({})::event", description())),
                 outdated_edges: Default::default(),
+                clean: true,
             },
             collectibles: Default::default(),
             output: Default::default(),
@@ -310,6 +311,8 @@ impl MaybeCollectibles {
 struct InProgressState {
     event: Event,
     count_as_finished: bool,
+    /// true, when the task wasn't changed since the last execution
+    clean: bool,
     /// Dependencies and children that need to be disconnected once leaving
     /// this state
     outdated_edges: TaskEdgesSet,
@@ -346,6 +349,8 @@ enum TaskStateType {
     Scheduled {
         event: Event,
         outdated_edges: Box<TaskEdgesSet>,
+        /// true, when the task wasn't changed since the last execution
+        clean: bool,
     },
 
     /// Execution is happening
@@ -684,6 +689,7 @@ impl Task {
                 Scheduled {
                     ref mut event,
                     ref mut outdated_edges,
+                    clean,
                 } => {
                     let event = event.take();
                     let outdated_edges = *take(outdated_edges);
@@ -691,6 +697,7 @@ impl Task {
                     state.state_type = InProgress(Box::new(InProgressState {
                         event,
                         count_as_finished: false,
+                        clean,
                         outdated_edges,
                         outdated_collectibles,
                         new_children: Default::default(),
@@ -904,6 +911,7 @@ impl Task {
                         ref mut outdated_edges,
                         ref mut outdated_collectibles,
                         ref mut new_children,
+                        clean: _,
                     }) => {
                         let event = event.take();
                         let mut outdated_edges = take(outdated_edges);
@@ -968,6 +976,7 @@ impl Task {
                         state.state_type = Scheduled {
                             event,
                             outdated_edges: Box::new(outdated_edges),
+                            clean: false,
                         };
                         schedule_task = true;
                     }
@@ -1004,7 +1013,7 @@ impl Task {
 
     fn make_dirty_internal(
         &self,
-        force_schedule: bool,
+        recomputing: bool,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
@@ -1014,10 +1023,10 @@ impl Task {
         }
 
         let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
-        let should_schedule = force_schedule
-            || query_root_info(&aggregation_context, ActiveQuery::default(), self.id);
+        let should_schedule =
+            recomputing || query_root_info(&aggregation_context, ActiveQuery::default(), self.id);
 
-        let state = if force_schedule {
+        let state = if recomputing {
             TaskMetaStateWriteGuard::Full(self.full_state_mut())
         } else {
             self.state_mut()
@@ -1031,13 +1040,14 @@ impl Task {
                 Dirty {
                     ref mut outdated_edges,
                 } => {
-                    if force_schedule {
+                    if recomputing {
                         let description = self.get_event_description();
                         state.state_type = Scheduled {
                             event: Event::new(move || {
                                 format!("TaskState({})::event", description())
                             }),
                             outdated_edges: take(outdated_edges),
+                            clean: false,
                         };
                         let change_job = state.aggregation_node.apply_change(
                             &aggregation_context,
@@ -1073,6 +1083,7 @@ impl Task {
                                 format!("TaskState({})::event", description())
                             }),
                             outdated_edges: Box::new(outdated_edges),
+                            clean: recomputing,
                         };
                         drop(state);
                         change_job.apply(&aggregation_context);
@@ -1105,6 +1116,7 @@ impl Task {
                     ref mut outdated_edges,
                     ref mut outdated_collectibles,
                     ref mut new_children,
+                    clean: _,
                 }) => {
                     let event = event.take();
                     let mut outdated_edges = take(outdated_edges);
@@ -1168,6 +1180,7 @@ impl Task {
             state.state_type = Scheduled {
                 event: Event::new(move || format!("TaskState({})::event", description())),
                 outdated_edges: take(outdated_edges),
+                clean: false,
             };
             let job = state.aggregation_node.apply_change(
                 &aggregation_context,
@@ -1234,7 +1247,7 @@ impl Task {
         &self,
         index: CellId,
         gc_queue: Option<&GcQueue>,
-        func: impl FnOnce(&mut Cell) -> T,
+        func: impl FnOnce(&mut Cell, bool) -> T,
     ) -> T {
         let mut state = self.full_state_mut();
         if let Some(gc_queue) = gc_queue {
@@ -1243,12 +1256,16 @@ impl Task {
                 let _ = gc_queue.task_accessed(self.id);
             }
         }
+        let clean = match state.state_type {
+            InProgress(box InProgressState { clean, .. }) => clean,
+            _ => false,
+        };
         let list = state.cells.entry(index.type_id).or_default();
         let i = index.index as usize;
         if list.len() <= i {
             list.resize_with(i + 1, Default::default);
         }
-        func(&mut list[i])
+        func(&mut list[i], clean)
     }
 
     /// Access to a cell.
@@ -1464,6 +1481,7 @@ impl Task {
                 state.state_type = Scheduled {
                     event,
                     outdated_edges: take(outdated_edges),
+                    clean: false,
                 };
                 let change_job = state.aggregation_node.apply_change(
                     &aggregation_context,

@@ -408,7 +408,7 @@ impl Backend for MemoryBackend {
         } else {
             Task::add_dependency_to_current(TaskEdge::Cell(task_id, index));
             self.with_task(task_id, |task| {
-                match task.with_cell_mut(index, self.gc_queue.as_ref(), |cell| {
+                match task.with_cell_mut(index, self.gc_queue.as_ref(), |cell, _| {
                     cell.read_content(
                         reader,
                         move || format!("{task_id} {index}"),
@@ -445,7 +445,7 @@ impl Backend for MemoryBackend {
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> Result<Result<CellContent, EventListener>> {
         self.with_task(task_id, |task| {
-            match task.with_cell_mut(index, self.gc_queue.as_ref(), |cell| {
+            match task.with_cell_mut(index, self.gc_queue.as_ref(), |cell, _| {
                 cell.read_content_untracked(
                     move || format!("{task_id}"),
                     move || format!("reading {} {} untracked", task_id, index),
@@ -505,8 +505,8 @@ impl Backend for MemoryBackend {
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         self.with_task(task, |task| {
-            task.with_cell_mut(index, self.gc_queue.as_ref(), |cell| {
-                cell.assign(content, turbo_tasks)
+            task.with_cell_mut(index, self.gc_queue.as_ref(), |cell, clean| {
+                cell.assign(content, clean, turbo_tasks)
             })
         })
     }
