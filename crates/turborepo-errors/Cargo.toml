@@ -1,4 +1,3 @@
-
 [package]
 name = "turborepo-errors"
 version = "0.1.0"
@@ -9,8 +8,10 @@ license = "MIT"
 
 [dependencies]
 biome_deserialize = { workspace = true }
+biome_diagnostics = { workspace = true }
 miette = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }

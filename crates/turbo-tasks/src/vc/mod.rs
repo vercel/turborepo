@@ -12,17 +12,17 @@ use serde::{Deserialize, Serialize};
 
 use self::cell_mode::VcCellMode;
 pub use self::{
-    cast::{VcValueTraitCast, VcValueTypeCast},
+    cast::{VcCast, VcValueTraitCast, VcValueTypeCast},
     cell_mode::{VcCellNewMode, VcCellSharedMode},
     default::ValueDefault,
-    read::{VcDefaultRead, VcRead, VcTransparentRead},
+    read::{ReadVcFuture, VcDefaultRead, VcRead, VcTransparentRead},
     traits::{Dynamic, TypedForInput, Upcast, VcValueTrait, VcValueType},
 };
 use crate::{
     debug::{ValueDebug, ValueDebugFormat, ValueDebugFormatString},
     registry,
     trace::{TraceRawVcs, TraceRawVcsContext},
-    CellId, CollectiblesSource, RawVc, ReadRawVcFuture, ResolveTypeError,
+    CellId, CollectiblesSource, RawVc, ResolveTypeError,
 };
 
 /// A Value Cell (`Vc` for short) is a reference to a memoized computation
@@ -30,7 +30,7 @@ use crate::{
 /// Turbo Engine backend implementation.
 ///
 /// In order to get a reference to the pointed value, you need to `.await` the
-/// [`Vc<T>`] to get a [`ReadRef<T>`]:
+/// [`Vc<T>`] to get a [`ReadRef<T>`][crate::ReadRef]:
 ///
 /// ```
 /// let some_vc: Vc<T>;
@@ -508,10 +508,10 @@ impl<T> std::future::IntoFuture for Vc<T>
 where
     T: VcValueType,
 {
-    type Output = <ReadRawVcFuture<T> as std::future::Future>::Output;
-    type IntoFuture = ReadRawVcFuture<T>;
+    type Output = <ReadVcFuture<T> as std::future::Future>::Output;
+    type IntoFuture = ReadVcFuture<T>;
     fn into_future(self) -> Self::IntoFuture {
-        self.node.into_read::<T>()
+        self.node.into_read().into()
     }
 }
 
@@ -533,8 +533,8 @@ where
     /// Returns a strongly consistent read of the value. This ensures that all
     /// internal tasks are finished before the read is returned.
     #[must_use]
-    pub fn strongly_consistent(self) -> ReadRawVcFuture<T> {
-        self.node.into_strongly_consistent_read::<T>()
+    pub fn strongly_consistent(self) -> ReadVcFuture<T> {
+        self.node.into_strongly_consistent_read().into()
     }
 }
 

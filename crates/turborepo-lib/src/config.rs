@@ -272,7 +272,7 @@ impl ConfigurationOptions {
     }
 
     pub fn ui(&self) -> bool {
-        self.ui.unwrap_or(true) && atty::is(atty::Stream::Stdout)
+        self.ui.unwrap_or(false) && atty::is(atty::Stream::Stdout)
     }
 }
 

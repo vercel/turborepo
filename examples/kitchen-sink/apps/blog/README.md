@@ -1,19 +1,25 @@
-# Welcome to Remix!
+# Remix
 
-- [Remix Docs](https://remix.run/docs)
+This directory is a brief example of a [Remix](https://remix.run/docs) site that can be deployed to Vercel with zero configuration.
 
-## Deployment
+To get started, run the Remix cli with this template
 
-After having run the `create-remix` command and selected "Vercel" as a deployment target, you only need to [import your Git repository](https://vercel.com/new) into Vercel, and it will be deployed.
+```sh
+npx create-remix@latest --template vercel/vercel/examples/remix
+```
 
-If you'd like to avoid using a Git repository, you can also deploy the directory by running [Vercel CLI](https://vercel.com/cli):
+## Deploy Your Own
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/vercel/vercel/tree/main/examples/remix&template=remix)
+
+_Live Example: https://remix-run-template.vercel.app_
+
+You can also deploy using the [Vercel CLI](https://vercel.com/docs/cli):
 
 ```sh
 npm i -g vercel
 vercel
 ```
-
-It is generally recommended to use a Git repository, because future commits will then automatically be deployed by Vercel, through its [Git Integration](https://vercel.com/docs/concepts/git).
 
 ## Development
 
@@ -29,6 +35,4 @@ Afterwards, start the Remix development server like so:
 npm run dev
 ```
 
-Open up [http://localhost:3000](http://localhost:3000) and you should be ready to go!
-
-If you're used to using the `vercel dev` command provided by [Vercel CLI](https://vercel.com/cli) instead, you can also use that, but it's not needed.
+Open up [http://localhost:5173](http://localhost:5173) and you should be ready to go!

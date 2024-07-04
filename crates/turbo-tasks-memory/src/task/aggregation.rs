@@ -1,19 +1,20 @@
 use std::{
     cmp::Ordering,
-    hash::{BuildHasher, Hash},
+    hash::{BuildHasher, BuildHasherDefault, Hash},
     mem::take,
     ops::{ControlFlow, Deref, DerefMut},
     sync::atomic::AtomicU32,
 };
 
 use auto_hash_map::{map::Entry, AutoMap};
-use nohash_hasher::BuildNoHashHasher;
+use either::Either;
 use parking_lot::Mutex;
+use rustc_hash::FxHasher;
 use turbo_tasks::{event::Event, RawVc, TaskId, TaskIdSet, TraitTypeId, TurboTasksBackendApi};
 
 use super::{
     meta_state::{FullTaskWriteGuard, TaskMetaStateWriteGuard},
-    TaskStateType,
+    InProgressState, TaskStateType,
 };
 use crate::{
     aggregation::{
@@ -50,14 +51,14 @@ pub struct Aggregated {
     pub unfinished_event: Event,
     /// A list of all tasks that are unfinished. Only for debugging.
     #[cfg(feature = "track_unfinished")]
-    pub unfinished_tasks: AutoMap<TaskId, i32, BuildNoHashHasher<TaskId>>,
+    pub unfinished_tasks: AutoMap<TaskId, i32, BuildHasherDefault<FxHasher>>,
     /// A list of all tasks that are dirty.
     /// When the it becomes active, these need to be scheduled.
     // TODO evaluate a more efficient data structure for this since we are copying the list on
     // every level.
-    pub dirty_tasks: AutoMap<TaskId, i32, BuildNoHashHasher<TaskId>>,
+    pub dirty_tasks: AutoMap<TaskId, i32, BuildHasherDefault<FxHasher>>,
     /// Emitted collectibles with count and dependent_tasks by trait type
-    pub collectibles: AutoMap<TraitTypeId, CollectiblesInfo, BuildNoHashHasher<TraitTypeId>>,
+    pub collectibles: AutoMap<TraitTypeId, CollectiblesInfo, BuildHasherDefault<FxHasher>>,
 
     /// Only used for the aggregation root. Which kind of root is this?
     /// [RootType::Once] for OnceTasks or [RootType::Root] for Root Tasks.
@@ -360,7 +361,9 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
             change.unfinished_tasks_update.push((task, -count));
         }
         for (&task, &count) in data.dirty_tasks.iter() {
-            change.dirty_tasks_update.push((task, -count));
+            if count > 0 {
+                change.dirty_tasks_update.push((task, -1));
+            }
         }
         for (trait_type_id, collectibles_info) in data.collectibles.iter() {
             for (collectible, count) in collectibles_info.collectibles.iter() {
@@ -458,32 +461,9 @@ impl<'l> AggregationNodeGuard for TaskGuard<'l> {
 
     fn children(&self) -> Self::ChildrenIter<'_> {
         match self.guard {
-            TaskMetaStateWriteGuard::Full(ref guard) => {
-                #[cfg(feature = "lazy_remove_children")]
-                {
-                    let outdated_children = match &guard.state_type {
-                        TaskStateType::InProgress {
-                            outdated_children, ..
-                        } => Some(outdated_children.iter().copied()),
-                        _ => None,
-                    };
-                    Some(
-                        guard
-                            .children
-                            .iter()
-                            .copied()
-                            .chain(outdated_children.into_iter().flatten()),
-                    )
-                    .into_iter()
-                    .flatten()
-                }
-                #[cfg(not(feature = "lazy_remove_children"))]
-                {
-                    Some(guard.children.iter().copied()).into_iter().flatten()
-                }
-            }
+            TaskMetaStateWriteGuard::Full(ref guard) => Either::Left(guard.state_type.children()),
             TaskMetaStateWriteGuard::Partial(_) | TaskMetaStateWriteGuard::Unloaded(_) => {
-                None.into_iter().flatten()
+                Either::Right(std::iter::empty())
             }
             TaskMetaStateWriteGuard::TemporaryFiller => unreachable!(),
         }
@@ -496,10 +476,10 @@ impl<'l> AggregationNodeGuard for TaskGuard<'l> {
                 if !matches!(
                     guard.state_type,
                     TaskStateType::Done { .. }
-                        | TaskStateType::InProgress {
+                        | TaskStateType::InProgress (box InProgressState{
                             count_as_finished: true,
                             ..
-                        }
+                        })
                 ) {
                     change.unfinished = 1;
                     #[cfg(feature = "track_unfinished")]
@@ -513,10 +493,10 @@ impl<'l> AggregationNodeGuard for TaskGuard<'l> {
                         change.collectibles.push((trait_type_id, collectible, 1));
                     }
                 }
-                if let TaskStateType::InProgress {
+                if let TaskStateType::InProgress(box InProgressState {
                     outdated_collectibles,
                     ..
-                } = &guard.state_type
+                }) = &guard.state_type
                 {
                     if let Some(collectibles) = outdated_collectibles.as_ref() {
                         for (&(trait_type_id, collectible), _) in collectibles.iter() {
@@ -530,7 +510,13 @@ impl<'l> AggregationNodeGuard for TaskGuard<'l> {
                     Some(change)
                 }
             }
-            TaskMetaStateWriteGuard::Partial(_) | TaskMetaStateWriteGuard::Unloaded(_) => None,
+            TaskMetaStateWriteGuard::Partial(_) | TaskMetaStateWriteGuard::Unloaded(_) => {
+                Some(TaskChange {
+                    unfinished: 1,
+                    dirty_tasks_update: vec![(self.id, 1)],
+                    collectibles: vec![],
+                })
+            }
             TaskMetaStateWriteGuard::TemporaryFiller => unreachable!(),
         }
     }
@@ -542,10 +528,10 @@ impl<'l> AggregationNodeGuard for TaskGuard<'l> {
                 if !matches!(
                     guard.state_type,
                     TaskStateType::Done { .. }
-                        | TaskStateType::InProgress {
+                        | TaskStateType::InProgress (box InProgressState{
                             count_as_finished: true,
                             ..
-                        }
+                        })
                 ) {
                     change.unfinished = -1;
                     #[cfg(feature = "track_unfinished")]
@@ -559,10 +545,10 @@ impl<'l> AggregationNodeGuard for TaskGuard<'l> {
                         change.collectibles.push((trait_type_id, collectible, -1));
                     }
                 }
-                if let TaskStateType::InProgress {
+                if let TaskStateType::InProgress(box InProgressState {
                     outdated_collectibles,
                     ..
-                } = &guard.state_type
+                }) = &guard.state_type
                 {
                     if let Some(collectibles) = outdated_collectibles.as_ref() {
                         for (&(trait_type_id, collectible), _) in collectibles.iter() {
@@ -576,7 +562,13 @@ impl<'l> AggregationNodeGuard for TaskGuard<'l> {
                     Some(change)
                 }
             }
-            TaskMetaStateWriteGuard::Partial(_) | TaskMetaStateWriteGuard::Unloaded(_) => None,
+            TaskMetaStateWriteGuard::Partial(_) | TaskMetaStateWriteGuard::Unloaded(_) => {
+                Some(TaskChange {
+                    unfinished: -1,
+                    dirty_tasks_update: vec![(self.id, -1)],
+                    collectibles: vec![],
+                })
+            }
             TaskMetaStateWriteGuard::TemporaryFiller => unreachable!(),
         }
     }
@@ -651,13 +643,16 @@ fn update_count_entry<K: Eq + Hash, H: BuildHasher + Default, const I: usize>(
                 }
             }
         }
-        Entry::Vacant(e) => {
-            if update == 0 {
-                (0, UpdateCountEntryChange::Updated)
-            } else {
+        Entry::Vacant(e) => match update.cmp(&0) {
+            Ordering::Less => {
+                e.insert(update);
+                (update, UpdateCountEntryChange::Updated)
+            }
+            Ordering::Equal => (0, UpdateCountEntryChange::Updated),
+            Ordering::Greater => {
                 e.insert(update);
                 (update, UpdateCountEntryChange::Inserted)
             }
-        }
+        },
     }
 }

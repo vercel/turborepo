@@ -22,11 +22,10 @@ jobs:
             target: "aarch64-apple-darwin"
             container-options: "--rm"
           - host: ubuntu-latest
-            container: ubuntu:xenial
             container-options: "--platform=linux/amd64 --rm"
-            container-setup: "apt-get update && apt-get install -y curl musl-tools sudo"
+            container-setup: "sudo apt-get update && sudo apt-get install -y curl musl-tools"
             target: "x86_64-unknown-linux-musl"
-            setup: "apt-get install -y build-essential clang-5.0 lldb-5.0 llvm-5.0-dev libclang-5.0-dev"
+            setup: "sudo apt-get install -y build-essential"
           - host: ubuntu-latest
             container-options: "--rm"
             target: "aarch64-unknown-linux-musl"
@@ -60,11 +59,10 @@ jobs:
         uses: ./.github/actions/setup-capnproto
 
       - name: Rust Setup
-        uses: actions-rs/toolchain@v1
+        uses: ./.github/actions/setup-rust
         with:
-          profile: minimal
-          override: true
-          target: ${{ matrix.settings.target }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          targets: ${{ matrix.settings.target }}
 
       - name: Build Setup
         shell: bash

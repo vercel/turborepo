@@ -83,7 +83,7 @@ Additionally, Turborepo has a built-in set of global passthrough variables for c
 
 ### ui
 
-Default: `"tui"`
+Default: `"stream"`
 
 Select a terminal UI for the repository.
 
@@ -107,21 +107,21 @@ In the example below, we've defined three tasks under the `tasks` key: `build`, 
 
 ```jsonc title="./turbo.json"
 {
-  "$schema": "https://turbo.build/schema.json"
+  "$schema": "https://turbo.build/schema.json",
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "test": {
       "outputs": ["coverage/**"],
-      "dependsOn": ["build"],
+      "dependsOn": ["build"]
     },
     "dev": {
       "cache": false,
-      "persistent": true,
-    },
-  },
+      "persistent": true
+    }
+  }
 }
 ```
 

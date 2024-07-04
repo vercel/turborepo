@@ -68,20 +68,20 @@ mod state;
 pub mod task;
 pub mod trace;
 mod trait_ref;
+mod triomphe_utils;
 pub mod util;
 mod value;
 mod value_type;
 mod vc;
+
+use std::hash::BuildHasherDefault;
 
 pub use anyhow::{Error, Result};
 use auto_hash_map::AutoSet;
 pub use collectibles::CollectiblesSource;
 pub use completion::{Completion, Completions};
 pub use display::ValueToString;
-pub use id::{
-    with_task_id_mapping, without_task_id_mapping, FunctionId, IdMapping, TaskId, TraitTypeId,
-    ValueTypeId,
-};
+pub use id::{FunctionId, TaskId, TraitTypeId, ValueTypeId};
 pub use invalidation::{
     DynamicEqHash, InvalidationReason, InvalidationReasonKind, InvalidationReasonSet,
 };
@@ -94,9 +94,9 @@ pub use manager::{
     TurboTasksCallApi, Unused, UpdateInfo,
 };
 pub use native_function::NativeFunction;
-use nohash_hasher::BuildNoHashHasher;
 pub use raw_vc::{CellId, RawVc, ReadRawVcFuture, ResolveTypeError};
 pub use read_ref::ReadRef;
+use rustc_hash::FxHasher;
 pub use state::State;
 pub use task::{
     concrete_task_input::{ConcreteTaskInput, SharedReference, SharedValue},
@@ -107,13 +107,14 @@ pub use turbo_tasks_macros::{function, value, value_impl, value_trait, TaskInput
 pub use value::{TransientInstance, TransientValue, Value};
 pub use value_type::{TraitMethod, TraitType, ValueType};
 pub use vc::{
-    Dynamic, TypedForInput, Upcast, ValueDefault, Vc, VcCellNewMode, VcCellSharedMode,
-    VcDefaultRead, VcRead, VcTransparentRead, VcValueTrait, VcValueType,
+    Dynamic, TypedForInput, Upcast, ValueDefault, Vc, VcCast, VcCellNewMode, VcCellSharedMode,
+    VcDefaultRead, VcRead, VcTransparentRead, VcValueTrait, VcValueTraitCast, VcValueType,
+    VcValueTypeCast,
 };
 
 pub use crate::rcstr::RcStr;
 
-pub type TaskIdSet = AutoSet<TaskId, BuildNoHashHasher<TaskId>, 2>;
+pub type TaskIdSet = AutoSet<TaskId, BuildHasherDefault<FxHasher>, 2>;
 
 pub mod test_helpers {
     pub use super::manager::{current_task_for_testing, with_turbo_tasks_for_testing};
