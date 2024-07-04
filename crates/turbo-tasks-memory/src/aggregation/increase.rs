@@ -4,7 +4,7 @@ use super::{
     balance_queue::BalanceQueue, AggegatingNode, AggregationContext, AggregationNode,
     AggregationNodeGuard, PreparedInternalOperation, PreparedOperation, StackVec,
 };
-pub(super) const LEAF_NUMBER: u32 = 64;
+pub(super) const LEAF_NUMBER: u32 = 16;
 
 #[derive(Debug)]
 pub enum IncreaseReason {
