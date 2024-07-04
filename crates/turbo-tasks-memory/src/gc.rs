@@ -329,8 +329,16 @@ impl GcQueue {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> Option<(GcPriority, usize)> {
-        let span =
-            tracing::trace_span!("garbage collection", priority = Empty, count = Empty).entered();
+        let span = tracing::trace_span!(
+            parent: None,
+            "garbage collection",
+            priority = Empty,
+            deactivations_count = Empty,
+            content_dropped_count = Empty,
+            unloaded_count = Empty,
+            already_unloaded_count = Empty
+        )
+        .entered();
 
         let ProcessDeactivationsResult {
             count: deactivations_count,
