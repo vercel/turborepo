@@ -1,10 +1,6 @@
 name: "Turbo Rust Setup"
 description: "Sets up the Rust toolchain for CI"
 inputs:
-  windows:
-    description: 'Set to "true" if setting up for Windows'
-    required: false
-    default: "false"
   targets:
     description: "Comma-separated list of target triples to install for this toolchain"
     required: false
