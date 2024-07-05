@@ -156,12 +156,12 @@ dependencies = [
 
 [[package]]
 name = "anstyle-wincon"
-version = "3.0.1"
+version = "3.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0699d10d2f4d628a98ee7b57b289abbc98ff3bad977cb3152709d4bf2330628"
+checksum = "1cd54b81ec8d6180e24654d0b371ad22fc3dd083b6ff8ba325b72e00c87660a7"
 dependencies = [
  "anstyle",
- "windows-sys 0.48.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1067,7 +1067,7 @@ dependencies = [
  "derive_more",
  "pipe-trait",
  "serde",
- "serde_yaml 0.9.27",
+ "serde_yaml 0.9.29",
  "text-block-macros",
 ]
 
@@ -3497,7 +3497,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.5.4",
+ "socket2 0.5.6",
  "tokio",
  "tower-service",
  "tracing",
@@ -4570,26 +4570,6 @@ dependencies = [
 
 [[package]]
 name = "miette"
-version = "4.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c90329e44f9208b55f45711f9558cec15d7ef8295cc65ecd6d4188ae8edc58c"
-dependencies = [
- "atty",
- "backtrace",
- "miette-derive 4.7.1",
- "once_cell",
- "owo-colors",
- "supports-color 1.3.1",
- "supports-hyperlinks 1.2.0",
- "supports-unicode 1.0.2",
- "terminal_size 0.1.17",
- "textwrap 0.15.2",
- "thiserror",
- "unicode-width",
-]
-
-[[package]]
-name = "miette"
 version = "5.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59bb584eaeeab6bd0226ccf3509a69d7936d148cf3d036ad350abe35e8c6856e"
@@ -4599,10 +4579,10 @@ dependencies = [
  "is-terminal",
  "miette-derive 5.10.0",
  "once_cell",
- "owo-colors",
- "supports-color 2.1.0",
- "supports-hyperlinks 2.1.0",
- "supports-unicode 2.0.0",
+ "owo-colors 3.5.0",
+ "supports-color",
+ "supports-hyperlinks",
+ "supports-unicode",
  "terminal_size 0.1.17",
  "textwrap 0.15.2",
  "thiserror",
@@ -4610,14 +4590,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "miette-derive"
-version = "4.7.1"
+name = "miette"
+version = "7.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b5bc45b761bcf1b5e6e6c4128cd93b84c218721a8d9b894aa0aff4ed180174c"
+checksum = "4edc8853320c2a0dab800fbda86253c8938f6ea88510dc92c5f1ed20e794afc1"
 dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
+ "cfg-if",
+ "miette-derive 7.2.0",
+ "owo-colors 4.0.0",
+ "textwrap 0.16.0",
+ "thiserror",
+ "unicode-width",
 ]
 
 [[package]]
@@ -4625,6 +4608,17 @@ name = "miette-derive"
 version = "5.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49e7bc1560b95a3c4a25d03de42fe76ca718ab92d1a22a55b9b4cf67b3ae635c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.58",
+]
+
+[[package]]
+name = "miette-derive"
+version = "7.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dcf09caffaac8068c346b6df2a7fc27a177fd20b39421a39ce0a211bde679a6c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5254,6 +5248,12 @@ name = "owo-colors"
 version = "3.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1b04fb49957986fdce4d6ee7a65027d55d4b6d2265e5848bbb507b58ccfdb6f"
+
+[[package]]
+name = "owo-colors"
+version = "4.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "caff54706df99d2a78a5a4e3455ff45448d81ef1bb63c22cd14052ca0e993a3f"
 
 [[package]]
 name = "oxc_resolver"
@@ -7069,9 +7069,9 @@ dependencies = [
 
 [[package]]
 name = "serde_yaml"
-version = "0.9.27"
+version = "0.9.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3cc7a1570e38322cfe4154732e5110f887ea57e22b76f4bfd32b5bdd3368666c"
+checksum = "a15e0ef66bf939a7c890a0bf6d5a733c70202225f9888a89ed5c62298b019129"
 dependencies = [
  "indexmap 2.2.6",
  "itoa",
@@ -7350,12 +7350,12 @@ dependencies = [
 
 [[package]]
 name = "socket2"
-version = "0.5.4"
+version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4031e820eb552adee9295814c0ced9e5cf38ddf1e8b7d566d6de8e2538ea989e"
+checksum = "05ffd9c0a93b7543e062e759284fcf5f5e3b098501104bfbdde4d404db792871"
 dependencies = [
  "libc",
- "windows-sys 0.48.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -7617,16 +7617,6 @@ checksum = "81cdd64d312baedb58e21336b31bc043b77e01cc99033ce76ef539f78e965ebc"
 
 [[package]]
 name = "supports-color"
-version = "1.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ba6faf2ca7ee42fdd458f4347ae0a9bd6bcc445ad7cb57ad82b383f18870d6f"
-dependencies = [
- "atty",
- "is_ci",
-]
-
-[[package]]
-name = "supports-color"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6398cde53adc3c4557306a96ce67b302968513830a77a95b2b17305d9719a89"
@@ -7637,29 +7627,11 @@ dependencies = [
 
 [[package]]
 name = "supports-hyperlinks"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "590b34f7c5f01ecc9d78dba4b3f445f31df750a67621cf31626f3b7441ce6406"
-dependencies = [
- "atty",
-]
-
-[[package]]
-name = "supports-hyperlinks"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f84231692eb0d4d41e4cdd0cabfdd2e6cd9e255e65f80c9aa7c98dd502b4233d"
 dependencies = [
  "is-terminal",
-]
-
-[[package]]
-name = "supports-unicode"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8b945e45b417b125a8ec51f1b7df2f8df7920367700d1f98aedd21e5735f8b2"
-dependencies = [
- "atty",
 ]
 
 [[package]]
@@ -7686,9 +7658,9 @@ dependencies = [
 
 [[package]]
 name = "swc"
-version = "0.279.0"
+version = "0.279.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "267d1595c1992901ff8d9b0b299b000c38c1f4bcc117c7a60652acaaac77e356"
+checksum = "e360f7055c05d58acf732bac714094f46556ee0d271f58fcd9f3683853d05e1a"
 dependencies = [
  "anyhow",
  "base64 0.21.4",
@@ -7745,7 +7717,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap 4.5.2",
- "owo-colors",
+ "owo-colors 3.5.0",
  "regex",
  "swc_core",
 ]
@@ -7899,9 +7871,9 @@ dependencies = [
 
 [[package]]
 name = "swc_core"
-version = "0.96.1"
+version = "0.96.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e6580d304e9780be6027527eb3a7108731948cf1f29d598685be10bc8f05209"
+checksum = "dd2c20bf289bbc4b6eb2ab21623b4db8ea5d269438fe34aff2df5223dbf562c8"
 dependencies = [
  "binding_macros",
  "swc",
@@ -8367,9 +8339,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_loader"
-version = "0.46.0"
+version = "0.46.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de65ea1e3f6fe8d62121eb5889ef98ca41b04425df85cd1a3b81637057a2b035"
+checksum = "5a9febebf047d1286e7b723fa2758f3229da2c103834f3eaee69833f46692612"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -8389,9 +8361,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_minifier"
-version = "0.197.2"
+version = "0.197.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f9852fc8849b5e0d442bd59b6054f908d03b1af4229a9adcf6aae9db2d366b7"
+checksum = "adde00302d7ddb37f312ee6d07078c7f3c7ede36c0f81c5050bae1d4c3fe501c"
 dependencies = [
  "arrayvec 0.7.4",
  "indexmap 2.2.6",
@@ -8424,9 +8396,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_parser"
-version = "0.146.8"
+version = "0.146.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5cb0661386d67b828093fe7e87381c0808298595ba38cd00101973e70ab66dd6"
+checksum = "95d2128fee5628aa6a205de62d38c7a3f1b901f4483ba3dfd73da29168c1b9ac"
 dependencies = [
  "either",
  "new_debug_unreachable",
@@ -8521,9 +8493,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_transforms_base"
-version = "0.140.1"
+version = "0.140.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4341c6272c4feaaf22cc8104f65ebcadac8ad2098dfacb6eb62e8c053698a40d"
+checksum = "d37dc505c92af56d0f77cf6f31a6ccd37ac40cad1e01ff77277e0b1c70e8f8ff"
 dependencies = [
  "better_scoped_tls",
  "bitflags 2.5.0",
@@ -8660,9 +8632,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_transforms_proposal"
-version = "0.174.2"
+version = "0.174.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "779a6d7db3524ab63f44ebc7944c96fd2b845475fef1411d1b211719f93980bf"
+checksum = "6df8aa6752cc2fcf3d78ac67827542fb666e52283f2b26802aa058906bb750d3"
 dependencies = [
  "either",
  "rustc-hash",
@@ -8731,9 +8703,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_transforms_typescript"
-version = "0.191.1"
+version = "0.191.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6a27f93ecb3e04591302628407878fca336a676829309d53bb3f7cd1b708cd7"
+checksum = "f1ce8af2865449e714ae56dacb6b54b3f6dc4cc25074da4e39b878bd93c5e39c"
 dependencies = [
  "ryu-js",
  "serde",
@@ -8765,9 +8737,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_utils"
-version = "0.130.2"
+version = "0.130.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "612fea1ef92ca438eebdd60c7969e6ee6191eb2e4306018584b9e82390c5e093"
+checksum = "13e62b199454a576c5fdbd7e1bef8ab88a395427456d8a713d994b7d469833aa"
 dependencies = [
  "indexmap 2.2.6",
  "num_cpus",
@@ -8835,12 +8807,12 @@ dependencies = [
 
 [[package]]
 name = "swc_error_reporters"
-version = "0.18.0"
+version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bd8f9a90efb59dc5d918b4470e5d152f34cac2f8733bfba141a96440cab3eff"
+checksum = "4689d9bb6092b5e6a0b79c0152336a8bd7f0acaf70dcf4133f86deb01775baa0"
 dependencies = [
  "anyhow",
- "miette 4.7.1",
+ "miette 7.2.0",
  "once_cell",
  "parking_lot",
  "swc_common",
@@ -9389,6 +9361,11 @@ name = "textwrap"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "222a222a5bfe1bba4a77b45ec488a741b3cb8872e5e499451fd7d0129c9c7c3d"
+dependencies = [
+ "smawk",
+ "unicode-linebreak",
+ "unicode-width",
+]
 
 [[package]]
 name = "thiserror"
@@ -9528,7 +9505,7 @@ dependencies = [
  "parking_lot",
  "pin-project-lite",
  "signal-hook-registry",
- "socket2 0.5.4",
+ "socket2 0.5.6",
  "tokio-macros",
  "tracing",
  "windows-sys 0.48.0",
@@ -10386,7 +10363,7 @@ dependencies = [
  "futures",
  "nix 0.26.2",
  "once_cell",
- "owo-colors",
+ "owo-colors 3.5.0",
  "parking_lot",
  "portpicker",
  "rand 0.8.5",
@@ -10487,7 +10464,7 @@ dependencies = [
  "dunce",
  "futures",
  "mime",
- "owo-colors",
+ "owo-colors 3.5.0",
  "regex",
  "serde",
  "tokio",
@@ -10524,7 +10501,7 @@ dependencies = [
  "anyhow",
  "clap 4.5.2",
  "crossterm 0.26.1",
- "owo-colors",
+ "owo-colors 3.5.0",
  "serde",
  "turbo-tasks",
  "turbo-tasks-build",
@@ -10800,7 +10777,7 @@ dependencies = [
  "indoc",
  "mime",
  "once_cell",
- "owo-colors",
+ "owo-colors 3.5.0",
  "parking_lot",
  "regex",
  "serde",
@@ -11251,7 +11228,7 @@ dependencies = [
  "nix 0.26.2",
  "notify",
  "num_cpus",
- "owo-colors",
+ "owo-colors 3.5.0",
  "path-clean 1.0.1",
  "petgraph",
  "pidlock",
@@ -11268,7 +11245,7 @@ dependencies = [
  "semver 1.0.23",
  "serde",
  "serde_json",
- "serde_yaml 0.9.27",
+ "serde_yaml 0.9.29",
  "sha2",
  "shared_child",
  "struct_iterable",
@@ -11335,7 +11312,7 @@ dependencies = [
  "semver 1.0.23",
  "serde",
  "serde_json",
- "serde_yaml 0.9.27",
+ "serde_yaml 0.9.29",
  "test-case",
  "thiserror",
  "tracing",
@@ -11395,7 +11372,7 @@ dependencies = [
  "rust-ini",
  "serde",
  "serde_json",
- "serde_yaml 0.9.27",
+ "serde_yaml 0.9.29",
  "tempfile",
  "test-case",
  "thiserror",
@@ -11690,9 +11667,9 @@ checksum = "1dd624098567895118886609431a7c3b8f516e41d30e0643f03d94592a147e36"
 
 [[package]]
 name = "unicode-width"
-version = "0.1.10"
+version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0edd1e5b14653f783770bce4a4dabb4a5108a5370a5f5d8cfe8710c361f6c8b"
+checksum = "0336d538f7abc86d282a4189614dfaa90810dfc2c6f6427eaf88e16311dd225d"
 
 [[package]]
 name = "unicode-xid"
@@ -11702,9 +11679,9 @@ checksum = "f962df74c8c05a667b5ee8bcf162993134c104e96440b663c8daa176dc772d8c"
 
 [[package]]
 name = "unsafe-libyaml"
-version = "0.2.8"
+version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1865806a559042e51ab5414598446a5871b561d21b6764f2eabb0dd481d880a6"
+checksum = "673aac59facbab8a9007c7f6108d11f63b603f7cabff99fabf650fea5c32b861"
 
 [[package]]
 name = "unsize"
@@ -12306,7 +12283,7 @@ dependencies = [
  "serde",
  "serde_cbor",
  "serde_json",
- "serde_yaml 0.9.27",
+ "serde_yaml 0.9.29",
  "thiserror",
  "toml 0.8.14",
 ]
@@ -13007,7 +12984,7 @@ dependencies = [
  "indexmap 1.9.3",
  "inquire",
  "num-format",
- "owo-colors",
+ "owo-colors 3.5.0",
  "plotters",
  "semver 1.0.23",
  "serde",
