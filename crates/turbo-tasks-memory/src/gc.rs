@@ -133,17 +133,19 @@ impl GcQueue {
         self.add_task(task)
     }
 
-    /// Notify the GC queue that a task is inactive
+    /// Notify the GC queue that a task should be enqueue for GC because it is
+    /// inactive.
     #[must_use]
     pub fn task_inactive(&self, task: TaskId) -> u32 {
         self.add_task(task)
     }
 
+    /// Notify the GC queue that a task was active during GC
     pub fn task_gc_active(&self, task: TaskId) {
         self.active_tasks.insert(task);
     }
 
-    /// Notify the GC queue that a task has become active.
+    /// Notify the GC queue that a task might be inactive now.
     pub fn task_potentially_no_longer_active(&self, task: TaskId) {
         if self.active_tasks.remove(&task).is_some() {
             let _ = self.deactivation_queue.push(task);
