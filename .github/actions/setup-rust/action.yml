@@ -39,11 +39,6 @@ runs:
       shell: bash
       run: sudo apt-get -y update && sudo apt-get install -y lld
 
-    - name: "Set Windows default host to MinGW"
-      if: ${{ inputs.windows == 'true' }}
-      shell: bash
-      run: rustup set default-host x86_64-pc-windows-gnu && rustup show
-
     - name: Set Up Protoc
       id: set-up-protoc
       continue-on-error: true
