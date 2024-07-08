@@ -33,7 +33,7 @@ use crate::{
     edges_set::{TaskEdge, TaskEdgesSet},
     gc::{GcQueue, PERCENTAGE_IDLE_TARGET_MEMORY, PERCENTAGE_TARGET_MEMORY},
     output::Output,
-    task::{GcResult, Task, DEPENDENCIES_TO_TRACK},
+    task::{Task, DEPENDENCIES_TO_TRACK},
     task_statistics::TaskStatisticsApi,
 };
 
