@@ -477,6 +477,9 @@ impl<'a> TaskHasher<'a> {
                         "COLORTERM",
                         "TERM",
                         "TERM_PROGRAM",
+                        // VSCode IDE
+                        "VSCODE_*",
+                        "ELECTRON_RUN_AS_NODE",
                         // Jetbrains IDE
                         "JB_IDE_*",
                         "JB_INTERPRETER",
