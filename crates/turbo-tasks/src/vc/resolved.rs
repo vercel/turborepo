@@ -2,6 +2,7 @@ use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     hash::{Hash, Hasher},
+    marker::PhantomData,
     ops::Deref,
     path::{Path, PathBuf},
     sync::{
@@ -83,7 +84,7 @@ impl_resolved!(
     AtomicBool,
     AtomicUsize
 );
-impl_resolved!((), String, Duration, anyhow::Error, RcStr);
+impl_resolved!((), &str, String, Duration, anyhow::Error, RcStr);
 impl_resolved!(Path, PathBuf);
 impl_resolved!(serde_json::Value);
 
@@ -105,6 +106,7 @@ impl_resolved_tuple!(E D C B A Z Y X W V U T);
 
 unsafe impl<T: ResolvedValue> ResolvedValue for Option<T> {}
 unsafe impl<T: ResolvedValue> ResolvedValue for Vec<T> {}
+unsafe impl<T: ResolvedValue, const N: usize> ResolvedValue for [T; N] {}
 unsafe impl<T: ResolvedValue, S> ResolvedValue for HashSet<T, S> {}
 unsafe impl<T: ResolvedValue, S, const I: usize> ResolvedValue for AutoSet<T, S, I> {}
 unsafe impl<T: ResolvedValue> ResolvedValue for BTreeSet<T> {}
@@ -121,3 +123,4 @@ unsafe impl<T: ResolvedValue + ?Sized> ResolvedValue for Arc<T> {}
 unsafe impl<T: ResolvedValue, E: ResolvedValue> ResolvedValue for Result<T, E> {}
 unsafe impl<T: ResolvedValue + ?Sized> ResolvedValue for Mutex<T> {}
 unsafe impl<T: ResolvedValue + ?Sized> ResolvedValue for RefCell<T> {}
+unsafe impl<T: ?Sized> ResolvedValue for PhantomData<T> {}

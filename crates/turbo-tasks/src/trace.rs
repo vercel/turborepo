@@ -1,6 +1,7 @@
 use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    marker::PhantomData,
     path::{Path, PathBuf},
     sync::{atomic::*, Arc, Mutex},
     time::Duration,
@@ -70,11 +71,11 @@ ignore!(
     AtomicBool,
     AtomicUsize
 );
-ignore!((), String, Duration, anyhow::Error, RcStr);
+ignore!((), &str, String, Duration, anyhow::Error, RcStr);
 ignore!(Path, PathBuf);
 ignore!(serde_json::Value);
 
-impl<'a> TraceRawVcs for &'a str {
+impl<T: ?Sized> TraceRawVcs for PhantomData<T> {
     fn trace_raw_vcs(&self, _trace_context: &mut TraceRawVcsContext) {}
 }
 
@@ -111,6 +112,14 @@ impl<T: TraceRawVcs> TraceRawVcs for Option<T> {
 }
 
 impl<T: TraceRawVcs> TraceRawVcs for Vec<T> {
+    fn trace_raw_vcs(&self, trace_context: &mut TraceRawVcsContext) {
+        for item in self.iter() {
+            TraceRawVcs::trace_raw_vcs(item, trace_context);
+        }
+    }
+}
+
+impl<T: TraceRawVcs, const N: usize> TraceRawVcs for [T; N] {
     fn trace_raw_vcs(&self, trace_context: &mut TraceRawVcsContext) {
         for item in self.iter() {
             TraceRawVcs::trace_raw_vcs(item, trace_context);
