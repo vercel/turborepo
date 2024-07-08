@@ -434,9 +434,17 @@ use self::{
 };
 
 pub enum GcResult {
+    /// The task is not allowed to GC, e. g. due to it being non-pure or having
+    /// state.
     NotPossible,
+    /// The task was rescheduled for GC and must not be GC'ed now but at a later
+    /// time.
     Stale,
+    /// Dropped the content of task cells to save memory.
     ContentDropped,
+    /// Unloaded the task completely to save memory. This disconnects the task
+    /// from the graph and only makes sense when the task isn't currently
+    /// active.
     Unloaded,
 }
 
@@ -1604,17 +1612,17 @@ impl Task {
 
         match self.state_mut() {
             TaskMetaStateWriteGuard::Full(mut state) => {
-                if active {
-                    let mut cells_to_drop = Vec::new();
-
-                    if let Some(old_gen) = state.gc.generation {
-                        if old_gen > generation {
-                            return GcResult::Stale;
-                        }
-                    } else {
+                if let Some(old_gen) = state.gc.generation {
+                    if old_gen > generation {
                         return GcResult::Stale;
                     }
-                    state.gc.generation = None;
+                } else {
+                    return GcResult::Stale;
+                }
+                state.gc.generation = None;
+
+                if active {
+                    let mut cells_to_drop = Vec::new();
 
                     match &mut state.state_type {
                         TaskStateType::Done { stateful, edges: _ } => {
