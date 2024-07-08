@@ -1008,15 +1008,6 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
-        self.make_dirty_internal(false, backend, turbo_tasks);
-    }
-
-    fn make_dirty_internal(
-        &self,
-        recomputing: bool,
-        backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
-    ) {
         if let TaskType::Once(_) = self.ty {
             // once task won't become dirty
             return;
@@ -1024,45 +1015,19 @@ impl Task {
 
         let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
         let should_schedule =
-            recomputing || query_root_info(&aggregation_context, ActiveQuery::default(), self.id);
+            query_root_info(&aggregation_context, ActiveQuery::default(), self.id);
 
-        let state = if recomputing {
-            TaskMetaStateWriteGuard::Full(self.full_state_mut())
-        } else {
-            self.state_mut()
-        };
-        if let TaskMetaStateWriteGuard::Full(mut state) = state {
+        if let TaskMetaStateWriteGuard::Full(mut state) = self.state_mut() {
             match state.state_type {
-                Scheduled { .. } | InProgressDirty { .. } => {
-                    // already dirty
+                Scheduled { ref mut clean, .. } => {
+                    *clean = false;
+
+                    // already scheduled
                     drop(state);
                 }
-                Dirty {
-                    ref mut outdated_edges,
-                } => {
-                    if recomputing {
-                        let description = self.get_event_description();
-                        state.state_type = Scheduled {
-                            event: Event::new(move || {
-                                format!("TaskState({})::event", description())
-                            }),
-                            outdated_edges: take(outdated_edges),
-                            clean: false,
-                        };
-                        let change_job = state.aggregation_node.apply_change(
-                            &aggregation_context,
-                            TaskChange {
-                                dirty_tasks_update: vec![(self.id, -1)],
-                                ..Default::default()
-                            },
-                        );
-                        drop(state);
-                        change_job.apply(&aggregation_context);
-                        turbo_tasks.schedule(self.id);
-                    } else {
-                        // already dirty
-                        drop(state);
-                    }
+                Dirty { .. } | InProgressDirty { .. } => {
+                    // already dirty
+                    drop(state);
                 }
                 Done { ref mut edges, .. } => {
                     let outdated_edges = take(edges).into_set();
@@ -1083,7 +1048,7 @@ impl Task {
                                 format!("TaskState({})::event", description())
                             }),
                             outdated_edges: Box::new(outdated_edges),
-                            clean: recomputing,
+                            clean: false,
                         };
                         drop(state);
                         change_job.apply(&aggregation_context);
@@ -1165,6 +1130,76 @@ impl Task {
         aggregation_context.apply_queued_updates();
     }
 
+    /// Called when the task need to be recomputed because a gc'ed cell was
+    /// read.
+    pub(crate) fn recompute(
+        &self,
+        backend: &MemoryBackend,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
+    ) {
+        let _span = tracing::trace_span!("turbo_tasks::recompute", id = *self.id).entered();
+
+        // Events that lead to recomputation of non-pure task must not happen
+        assert!(self.is_pure());
+
+        let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
+        let mut state = self.full_state_mut();
+        match state.state_type {
+            Scheduled { .. } => {
+                // already scheduled
+                drop(state);
+            }
+            InProgressDirty { .. } | InProgress(..) => {
+                // already in progress
+                drop(state);
+            }
+            Dirty {
+                ref mut outdated_edges,
+            } => {
+                let description = self.get_event_description();
+                state.state_type = Scheduled {
+                    event: Event::new(move || format!("TaskState({})::event", description())),
+                    outdated_edges: take(outdated_edges),
+                    clean: false,
+                };
+                let change_job = state.aggregation_node.apply_change(
+                    &aggregation_context,
+                    TaskChange {
+                        dirty_tasks_update: vec![(self.id, -1)],
+                        ..Default::default()
+                    },
+                );
+                drop(state);
+                change_job.apply(&aggregation_context);
+                turbo_tasks.schedule(self.id);
+            }
+            Done { ref mut edges, .. } => {
+                let outdated_edges = take(edges).into_set();
+                // add to dirty lists and potentially schedule
+                let description = self.get_event_description();
+                let change_job = state.aggregation_node.apply_change(
+                    &aggregation_context,
+                    TaskChange {
+                        unfinished: 1,
+                        #[cfg(feature = "track_unfinished")]
+                        unfinished_tasks_update: vec![(self.id, 1)],
+                        ..Default::default()
+                    },
+                );
+                state.state_type = Scheduled {
+                    event: Event::new(move || format!("TaskState({})::event", description())),
+                    outdated_edges: Box::new(outdated_edges),
+                    clean: true,
+                };
+                drop(state);
+                change_job.apply(&aggregation_context);
+
+                turbo_tasks.schedule(self.id);
+            }
+        }
+        aggregation_context.apply_queued_updates();
+    }
+
     pub(crate) fn schedule_when_dirty_from_aggregation(
         &self,
         backend: &MemoryBackend,
@@ -1217,17 +1252,6 @@ impl Task {
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         self.make_dirty(backend, turbo_tasks)
-    }
-
-    /// Called when the task need to be recomputed because a gc'ed cell was
-    /// read.
-    pub(crate) fn recompute(
-        &self,
-        backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
-    ) {
-        let _span = tracing::trace_span!("turbo_tasks::recompute", id = *self.id).entered();
-        self.make_dirty_internal(true, backend, turbo_tasks)
     }
 
     /// Access to the output cell.
