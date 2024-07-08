@@ -489,10 +489,12 @@ impl<'a> TaskHasher<'a> {
                         // Command Prompt casing of env variables
                         "APPDATA",
                         "PATH",
+                        "PROGRAMDATA",
                         "SYSTEMROOT",
                         "SYSTEMDRIVE",
                         // Powershell casing of env variables
                         "Path",
+                        "ProgramData",
                         "SystemRoot",
                         "AppData",
                         "SystemDrive",
