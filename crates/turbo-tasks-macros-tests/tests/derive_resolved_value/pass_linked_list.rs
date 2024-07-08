@@ -18,7 +18,7 @@ where
 }
 
 fn main() {
-    let _ll = LinkedList {
+    let ll = LinkedList {
         head: Some(Box::new(LinkedListNode {
             current: 1,
             next: Some(Box::new(LinkedListNode {
@@ -27,4 +27,5 @@ fn main() {
             })),
         })),
     };
+    let _last = ll.head.unwrap().next.unwrap().current;
 }
