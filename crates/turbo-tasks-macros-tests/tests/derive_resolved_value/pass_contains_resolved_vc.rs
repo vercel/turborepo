@@ -12,6 +12,7 @@ struct ContainsResolvedVcUnnamedStruct(ResolvedVc<i32>);
 
 #[derive(ResolvedValue)]
 enum ContainsResolvedVcEnum {
+    Unit,
     Unnamed(ResolvedVc<i32>),
     Named { a: ResolvedVc<i32> },
 }

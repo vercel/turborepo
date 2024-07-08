@@ -2,21 +2,19 @@ use either::Either;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, quote_spanned};
-use syn::{parse_macro_input, spanned::Spanned, Data, DeriveInput, Generics, Type};
+use syn::{parse_macro_input, spanned::Spanned, Data, DeriveInput, Generics};
 
 pub fn derive_resolved_value(input: TokenStream) -> TokenStream {
     let derive_input = parse_macro_input!(input as DeriveInput);
     let ident = &derive_input.ident;
 
-    let assertions: Vec<_> = iter_data_fields(&derive_input.data)
-        .map(|f| assert_field_resolved_value(&derive_input.generics, &f.ty))
-        .collect();
+    let assertions = assert_fields_impl_resolved_value(&derive_input.generics, &derive_input.data);
 
     let (impl_generics, ty_generics, where_clause) = derive_input.generics.split_for_impl();
     quote! {
         unsafe impl #impl_generics ::turbo_tasks::ResolvedValue
             for #ident #ty_generics #where_clause {}
-        #(#assertions)*
+        #assertions
     }
     .into()
 }
@@ -29,20 +27,29 @@ fn iter_data_fields(data: &Data) -> impl Iterator<Item = &syn::Field> {
     }
 }
 
-fn assert_field_resolved_value(generics: &Generics, ty: &Type) -> TokenStream2 {
+fn assert_fields_impl_resolved_value(generics: &Generics, data: &Data) -> TokenStream2 {
     // this technique is based on the trick used by
     // `static_assertions::assert_impl_all`, but extended to support generics.
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-    quote_spanned! {
-        ty.span() =>
+    let field_types: Vec<_> = iter_data_fields(data).map(|field| &field.ty).collect();
+    let assertion_calls = field_types.iter().map(|ty| {
+        quote_spanned! {
+            // attribute type assertion errors to the line where the field is defined
+            ty.span() =>
+            // this call is only valid if ty is a ResolvedValue
+            Self::assert_impl_resolved_value::<#ty>();
+        }
+    });
+    quote! {
         const _: fn() = || {
-            // create this struct just to hold onto our generics
-            struct StaticAssertion #impl_generics #where_clause;
-            impl #impl_generics StaticAssertion #ty_generics #where_clause {
+            // create this struct just to hold onto our generics...
+            // we reproduce the field types here to ensure any generics get used
+            struct DeriveResolvedValueAssertion #impl_generics (#(#field_types),*) #where_clause;
+
+            impl #impl_generics DeriveResolvedValueAssertion #ty_generics #where_clause {
                 fn assert_impl_resolved_value<ExpectedResolvedValue: ResolvedValue + ?Sized>() {}
-                fn call_site() {
-                    // this call is only valid if ty is a ResolvedValue
-                    Self::assert_impl_resolved_value::<#ty>();
+                fn field_types() {
+                    #(#assertion_calls)*
                 }
             }
         };
