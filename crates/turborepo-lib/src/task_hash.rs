@@ -477,6 +477,9 @@ impl<'a> TaskHasher<'a> {
                         "COLORTERM",
                         "TERM",
                         "TERM_PROGRAM",
+                        // Docker
+                        "DOCKER_*",
+                        "COMPOSE_*",
                         // Jetbrains IDE
                         "JB_IDE_*",
                         "JB_INTERPRETER",
