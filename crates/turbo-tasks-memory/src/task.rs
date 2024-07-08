@@ -590,7 +590,10 @@ impl Task {
                 } => {
                     format!("[{}] {}", id, registry::get_function(*native_fn).name)
                 }
-                PersistentTaskType::ResolveNative(native_fn, _) => {
+                PersistentTaskType::ResolveNative {
+                    fn_type: native_fn,
+                    args: _,
+                } => {
                     format!(
                         "[{}] [resolve] {}",
                         id,
@@ -756,7 +759,10 @@ impl Task {
                     drop(entered);
                     (future, span)
                 }
-                PersistentTaskType::ResolveNative(ref native_fn_id, inputs) => {
+                PersistentTaskType::ResolveNative {
+                    fn_type: ref native_fn_id,
+                    args: inputs,
+                } => {
                     let native_fn_id = *native_fn_id;
                     let func = registry::get_function(native_fn_id);
                     let span = func.resolve_span();

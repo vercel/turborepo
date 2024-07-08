@@ -385,7 +385,10 @@ impl<B: Backend + 'static> TurboTasks<B> {
             self.native_call(func, inputs)
         } else {
             RawVc::TaskOutput(self.backend.get_or_create_persistent_task(
-                PersistentTaskType::ResolveNative(func, inputs),
+                PersistentTaskType::ResolveNative {
+                    fn_type: func,
+                    args: inputs,
+                },
                 current_task("turbo_function calls"),
                 self,
             ))

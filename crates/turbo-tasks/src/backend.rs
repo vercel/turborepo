@@ -71,7 +71,10 @@ pub enum PersistentTaskType {
 
     /// A resolve task, which resolves arguments and calls the function with
     /// resolve arguments. The inner function call will do a cache lookup.
-    ResolveNative(FunctionId, Vec<ConcreteTaskInput>),
+    ResolveNative {
+        fn_type: FunctionId,
+        args: Vec<ConcreteTaskInput>,
+    },
 
     /// A trait method resolve task. It resolves the first (`self`) argument and
     /// looks up the trait method on that value. Then it calls that method.
@@ -93,7 +96,10 @@ impl PersistentTaskType {
                 fn_type: _,
                 args: inputs,
             } => inputs.shrink_to_fit(),
-            Self::ResolveNative(_, inputs) => inputs.shrink_to_fit(),
+            Self::ResolveNative {
+                fn_type: _,
+                args: inputs,
+            } => inputs.shrink_to_fit(),
             Self::ResolveTrait(_, _, inputs) => inputs.shrink_to_fit(),
         }
     }
@@ -104,7 +110,10 @@ impl PersistentTaskType {
                 fn_type: _,
                 args: v,
             }
-            | PersistentTaskType::ResolveNative(_, v)
+            | PersistentTaskType::ResolveNative {
+                fn_type: _,
+                args: v,
+            }
             | PersistentTaskType::ResolveTrait(_, _, v) => v.len(),
         }
     }
@@ -115,7 +124,10 @@ impl PersistentTaskType {
                 fn_type: _,
                 args: v,
             }
-            | PersistentTaskType::ResolveNative(_, v)
+            | PersistentTaskType::ResolveNative {
+                fn_type: _,
+                args: v,
+            }
             | PersistentTaskType::ResolveTrait(_, _, v) => v.is_empty(),
         }
     }
@@ -129,9 +141,13 @@ impl PersistentTaskType {
                 fn_type: *f,
                 args: v[..len].to_vec(),
             },
-            PersistentTaskType::ResolveNative(f, v) => {
-                PersistentTaskType::ResolveNative(*f, v[..len].to_vec())
-            }
+            PersistentTaskType::ResolveNative {
+                fn_type: f,
+                args: v,
+            } => PersistentTaskType::ResolveNative {
+                fn_type: *f,
+                args: v[..len].to_vec(),
+            },
             PersistentTaskType::ResolveTrait(f, n, v) => {
                 PersistentTaskType::ResolveTrait(*f, n.clone(), v[..len].to_vec())
             }
@@ -149,9 +165,10 @@ impl PersistentTaskType {
                 fn_type: native_fn,
                 args: _,
             }
-            | PersistentTaskType::ResolveNative(native_fn, _) => {
-                Cow::Borrowed(&registry::get_function(*native_fn).name)
-            }
+            | PersistentTaskType::ResolveNative {
+                fn_type: native_fn,
+                args: _,
+            } => Cow::Borrowed(&registry::get_function(*native_fn).name),
             PersistentTaskType::ResolveTrait(trait_id, fn_name, _) => {
                 format!("{}::{}", registry::get_trait(*trait_id).name, fn_name).into()
             }
@@ -481,9 +498,10 @@ impl PersistentTaskType {
                 let bound = native_fn.bind(&inputs);
                 (bound)()
             }
-            PersistentTaskType::ResolveNative(fn_id, inputs) => {
-                Box::pin(Self::run_resolve_native(fn_id, inputs, turbo_tasks))
-            }
+            PersistentTaskType::ResolveNative {
+                fn_type: fn_id,
+                args: inputs,
+            } => Box::pin(Self::run_resolve_native(fn_id, inputs, turbo_tasks)),
             PersistentTaskType::ResolveTrait(trait_type, name, inputs) => Box::pin(
                 Self::run_resolve_trait(trait_type, name, inputs, turbo_tasks),
             ),
