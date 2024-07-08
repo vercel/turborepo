@@ -369,7 +369,10 @@ impl<B: Backend + 'static> TurboTasks<B> {
     /// All inputs must be resolved.
     pub(crate) fn native_call(&self, func: FunctionId, inputs: Vec<ConcreteTaskInput>) -> RawVc {
         RawVc::TaskOutput(self.backend.get_or_create_persistent_task(
-            PersistentTaskType::Native(func, inputs),
+            PersistentTaskType::Native {
+                fn_type: func,
+                args: inputs,
+            },
             current_task("turbo_function calls"),
             self,
         ))

@@ -64,7 +64,10 @@ impl Debug for TransientTaskType {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum PersistentTaskType {
     /// A normal task execution a native (rust) function
-    Native(FunctionId, Vec<ConcreteTaskInput>),
+    Native {
+        fn_type: FunctionId,
+        args: Vec<ConcreteTaskInput>,
+    },
 
     /// A resolve task, which resolves arguments and calls the function with
     /// resolve arguments. The inner function call will do a cache lookup.
@@ -86,7 +89,10 @@ impl Display for PersistentTaskType {
 impl PersistentTaskType {
     pub fn shrink_to_fit(&mut self) {
         match self {
-            Self::Native(_, inputs) => inputs.shrink_to_fit(),
+            Self::Native {
+                fn_type: _,
+                args: inputs,
+            } => inputs.shrink_to_fit(),
             Self::ResolveNative(_, inputs) => inputs.shrink_to_fit(),
             Self::ResolveTrait(_, _, inputs) => inputs.shrink_to_fit(),
         }
@@ -94,7 +100,10 @@ impl PersistentTaskType {
 
     pub fn len(&self) -> usize {
         match self {
-            PersistentTaskType::Native(_, v)
+            PersistentTaskType::Native {
+                fn_type: _,
+                args: v,
+            }
             | PersistentTaskType::ResolveNative(_, v)
             | PersistentTaskType::ResolveTrait(_, _, v) => v.len(),
         }
@@ -102,7 +111,10 @@ impl PersistentTaskType {
 
     pub fn is_empty(&self) -> bool {
         match self {
-            PersistentTaskType::Native(_, v)
+            PersistentTaskType::Native {
+                fn_type: _,
+                args: v,
+            }
             | PersistentTaskType::ResolveNative(_, v)
             | PersistentTaskType::ResolveTrait(_, _, v) => v.is_empty(),
         }
@@ -110,7 +122,13 @@ impl PersistentTaskType {
 
     pub fn partial(&self, len: usize) -> Self {
         match self {
-            PersistentTaskType::Native(f, v) => PersistentTaskType::Native(*f, v[..len].to_vec()),
+            PersistentTaskType::Native {
+                fn_type: f,
+                args: v,
+            } => PersistentTaskType::Native {
+                fn_type: *f,
+                args: v[..len].to_vec(),
+            },
             PersistentTaskType::ResolveNative(f, v) => {
                 PersistentTaskType::ResolveNative(*f, v[..len].to_vec())
             }
@@ -127,7 +145,10 @@ impl PersistentTaskType {
     /// it can return a `&'static str` in many cases.
     pub fn get_name(&self) -> Cow<'static, str> {
         match self {
-            PersistentTaskType::Native(native_fn, _)
+            PersistentTaskType::Native {
+                fn_type: native_fn,
+                args: _,
+            }
             | PersistentTaskType::ResolveNative(native_fn, _) => {
                 Cow::Borrowed(&registry::get_function(*native_fn).name)
             }
@@ -452,7 +473,10 @@ impl PersistentTaskType {
         turbo_tasks: Arc<dyn TurboTasksBackendApi<B>>,
     ) -> Pin<Box<dyn Future<Output = Result<RawVc>> + Send>> {
         match self {
-            PersistentTaskType::Native(fn_id, inputs) => {
+            PersistentTaskType::Native {
+                fn_type: fn_id,
+                args: inputs,
+            } => {
                 let native_fn = registry::get_function(fn_id);
                 let bound = native_fn.bind(&inputs);
                 (bound)()
@@ -486,7 +510,11 @@ pub(crate) mod tests {
     fn test_get_name() {
         crate::register();
         assert_eq!(
-            PersistentTaskType::Native(*MOCK_FUNC_TASK_FUNCTION_ID, Vec::new()).get_name(),
+            PersistentTaskType::Native {
+                fn_type: *MOCK_FUNC_TASK_FUNCTION_ID,
+                args: Vec::new()
+            }
+            .get_name(),
             "mock_func_task",
         );
         assert_eq!(

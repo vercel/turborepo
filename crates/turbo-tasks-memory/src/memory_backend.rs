@@ -546,7 +546,10 @@ impl Backend for MemoryBackend {
             // fast pass without creating a new task
             self.task_statistics().map(|stats| match &*task_type {
                 PersistentTaskType::ResolveNative(function_id, ..)
-                | PersistentTaskType::Native(function_id, ..) => {
+                | PersistentTaskType::Native {
+                    fn_type: function_id,
+                    args: _,
+                } => {
                     stats.increment_cache_hit(*function_id);
                 }
                 PersistentTaskType::ResolveTrait(trait_type, name, inputs) => {
@@ -582,7 +585,10 @@ impl Backend for MemoryBackend {
             task
         } else {
             self.task_statistics().map(|stats| match &*task_type {
-                PersistentTaskType::Native(function_id, ..) => {
+                PersistentTaskType::Native {
+                    fn_type: function_id,
+                    args: _,
+                } => {
                     stats.increment_cache_miss(*function_id);
                 }
                 PersistentTaskType::ResolveTrait(..) | PersistentTaskType::ResolveNative(..) => {

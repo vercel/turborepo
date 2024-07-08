@@ -584,7 +584,10 @@ impl Task {
             TaskTypeForDescription::Root => format!("[{}] root", id),
             TaskTypeForDescription::Once => format!("[{}] once", id),
             TaskTypeForDescription::Persistent(ty) => match &***ty {
-                PersistentTaskType::Native(native_fn, _) => {
+                PersistentTaskType::Native {
+                    fn_type: native_fn,
+                    args: _,
+                } => {
                     format!("[{}] {}", id, registry::get_function(*native_fn).name)
                 }
                 PersistentTaskType::ResolveNative(native_fn, _) => {
@@ -741,7 +744,10 @@ impl Task {
                 tracing::trace_span!("turbo_tasks::once_task"),
             ),
             TaskType::Persistent { ty, .. } => match &***ty {
-                PersistentTaskType::Native(native_fn, inputs) => {
+                PersistentTaskType::Native {
+                    fn_type: native_fn,
+                    args: inputs,
+                } => {
                     let func = registry::get_function(*native_fn);
                     let span = func.span();
                     let entered = span.enter();
