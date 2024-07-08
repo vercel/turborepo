@@ -477,6 +477,11 @@ impl<'a> TaskHasher<'a> {
                         "COLORTERM",
                         "TERM",
                         "TERM_PROGRAM",
+                        // Docker - https://docs.docker.com/engine/reference/commandline/cli/#environment-variables
+                        "DOCKER_*",
+                        "BUILDKIT_*",
+                        // Docker compose - https://docs.docker.com/compose/environment-variables/envvars/
+                        "COMPOSE_*",
                         // Jetbrains IDE
                         "JB_IDE_*",
                         "JB_INTERPRETER",
