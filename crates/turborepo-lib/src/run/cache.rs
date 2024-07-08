@@ -13,7 +13,7 @@ use turborepo_cache::{http::UploadMap, AsyncCache, CacheError, CacheHitMetadata,
 use turborepo_repository::package_graph::PackageInfo;
 use turborepo_scm::SCM;
 use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
-use turborepo_ui::{color, ColorSelector, LogWriter, GREY, UI};
+use turborepo_ui::{color, tui::event::CacheResult, ColorSelector, LogWriter, GREY, UI};
 
 use crate::{
     cli::OutputLogsMode,
@@ -57,7 +57,7 @@ pub struct RunCache {
 
 /// Trait used to output cache information to user
 pub trait CacheOutput {
-    fn status(&mut self, message: &str);
+    fn status(&mut self, message: &str, result: CacheResult);
     fn error(&mut self, message: &str);
     fn replay_logs(&mut self, log_file: &AbsoluteSystemPath) -> Result<(), turborepo_ui::Error>;
 }
@@ -162,10 +162,13 @@ impl TaskCache {
 
     pub fn on_error(&self, terminal_output: &mut impl CacheOutput) -> Result<(), Error> {
         if self.task_output_logs == OutputLogsMode::ErrorsOnly {
-            terminal_output.status(&format!(
-                "cache miss, executing {}",
-                color!(self.ui, GREY, "{}", self.hash)
-            ));
+            terminal_output.status(
+                &format!(
+                    "cache miss, executing {}",
+                    color!(self.ui, GREY, "{}", self.hash)
+                ),
+                CacheResult::Miss,
+            );
             self.replay_log_file(terminal_output)?;
         }
 
@@ -206,10 +209,13 @@ impl TaskCache {
                 self.task_output_logs,
                 OutputLogsMode::None | OutputLogsMode::ErrorsOnly
             ) {
-                terminal_output.status(&format!(
-                    "cache bypass, force executing {}",
-                    color!(self.ui, GREY, "{}", self.hash)
-                ));
+                terminal_output.status(
+                    &format!(
+                        "cache bypass, force executing {}",
+                        color!(self.ui, GREY, "{}", self.hash)
+                    ),
+                    CacheResult::Miss,
+                );
             }
 
             return Ok(None);
@@ -254,10 +260,13 @@ impl TaskCache {
                     self.task_output_logs,
                     OutputLogsMode::None | OutputLogsMode::ErrorsOnly
                 ) {
-                    terminal_output.status(&format!(
-                        "cache miss, executing {}",
-                        color!(self.ui, GREY, "{}", self.hash)
-                    ));
+                    terminal_output.status(
+                        &format!(
+                            "cache miss, executing {}",
+                            color!(self.ui, GREY, "{}", self.hash)
+                        ),
+                        CacheResult::Miss,
+                    );
                 }
 
                 return Ok(None);
@@ -302,19 +311,25 @@ impl TaskCache {
 
         match self.task_output_logs {
             OutputLogsMode::HashOnly | OutputLogsMode::NewOnly => {
-                terminal_output.status(&format!(
-                    "cache hit{}, suppressing logs {}",
-                    more_context,
-                    color!(self.ui, GREY, "{}", self.hash)
-                ));
+                terminal_output.status(
+                    &format!(
+                        "cache hit{}, suppressing logs {}",
+                        more_context,
+                        color!(self.ui, GREY, "{}", self.hash)
+                    ),
+                    CacheResult::Hit,
+                );
             }
             OutputLogsMode::Full => {
                 debug!("log file path: {}", self.log_file_path);
-                terminal_output.status(&format!(
-                    "cache hit{}, replaying logs {}",
-                    more_context,
-                    color!(self.ui, GREY, "{}", self.hash)
-                ));
+                terminal_output.status(
+                    &format!(
+                        "cache hit{}, replaying logs {}",
+                        more_context,
+                        color!(self.ui, GREY, "{}", self.hash)
+                    ),
+                    CacheResult::Hit,
+                );
                 self.replay_log_file(terminal_output)?;
             }
             // Note that if we're restoring from cache, the task succeeded

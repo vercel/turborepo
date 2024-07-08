@@ -14,6 +14,7 @@ pub enum Event {
     Status {
         task: String,
         status: String,
+        result: CacheResult,
     },
     Stop(std::sync::mpsc::SyncSender<()>),
     // Stop initiated by the TUI itself
@@ -39,7 +40,7 @@ pub enum Event {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum TaskResult {
-    Success(CacheResult),
+    Success,
     Failure,
 }
 

@@ -24,7 +24,7 @@ use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,
 };
 use turborepo_ui::{
-    tui::{self, AppSender, TuiTask},
+    tui::{self, event::CacheResult, AppSender, TuiTask},
     ColorSelector, OutputClient, OutputSink, OutputWriter, PrefixedUI, UI,
 };
 use which::which;
@@ -755,8 +755,7 @@ impl ExecContext {
         // If the task resulted in an error, do not group in order to better highlight
         // the error.
         let is_error = matches!(result, Ok(ExecOutcome::Task { .. }));
-        let cache_hit = matches!(result, Ok(ExecOutcome::Success(SuccessOutcome::CacheHit)));
-        let logs = match output_client.finish(is_error, cache_hit) {
+        let logs = match output_client.finish(is_error) {
             Ok(logs) => logs,
             Err(e) => {
                 telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);
@@ -1091,10 +1090,10 @@ impl<W: Write> TaskCacheOutput<W> {
 }
 
 impl<W: Write> CacheOutput for TaskCacheOutput<W> {
-    fn status(&mut self, message: &str) {
+    fn status(&mut self, message: &str, result: CacheResult) {
         match self {
             TaskCacheOutput::Direct(direct) => direct.output(message),
-            TaskCacheOutput::UI(task) => task.status(message),
+            TaskCacheOutput::UI(task) => task.status(message, result),
         }
     }
 
@@ -1120,11 +1119,11 @@ impl<W: Write> CacheOutput for TaskCacheOutput<W> {
 
 /// Struct for displaying information about task
 impl<W: Write> TaskOutput<W> {
-    pub fn finish(self, use_error: bool, cache_hit: bool) -> std::io::Result<Option<Vec<u8>>> {
+    pub fn finish(self, use_error: bool) -> std::io::Result<Option<Vec<u8>>> {
         match self {
             TaskOutput::Direct(client) => client.finish(use_error),
             TaskOutput::UI(client) if use_error => Ok(Some(client.failed())),
-            TaskOutput::UI(client) => Ok(Some(client.succeeded(cache_hit))),
+            TaskOutput::UI(client) => Ok(Some(client.succeeded())),
         }
     }
 

@@ -2,7 +2,11 @@ use std::io::Write;
 
 use turborepo_vt100 as vt100;
 
-use super::{app::Direction, event::{OutputLogs, TaskResult}, Error};
+use super::{
+    app::Direction,
+    event::{CacheResult, OutputLogs, TaskResult},
+    Error,
+};
 
 pub struct TerminalOutput<W> {
     rows: u16,
@@ -12,6 +16,7 @@ pub struct TerminalOutput<W> {
     pub status: Option<String>,
     pub output_logs: Option<OutputLogs>,
     pub task_result: Option<TaskResult>,
+    pub cache_result: Option<CacheResult>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -31,6 +36,7 @@ impl<W> TerminalOutput<W> {
             status: None,
             output_logs: None,
             task_result: None,
+            cache_result: None,
         }
     }
 
@@ -65,14 +71,10 @@ impl<W> TerminalOutput<W> {
             OutputLogs::None => LogBehavior::Nothing,
             OutputLogs::HashOnly => LogBehavior::Status,
             OutputLogs::NewOnly => {
-                // TODO: we should print if there was a cache miss, but task didn't finish run
-                if matches!(
-                    self.task_result,
-                    Some(TaskResult::Success(super::event::CacheResult::Miss)),
-                ) {
+                if matches!(self.cache_result, Some(super::event::CacheResult::Miss),) {
                     LogBehavior::Full
                 } else {
-                    LogBehavior::Nothing
+                    LogBehavior::Status
                 }
             }
             OutputLogs::ErrorsOnly => {

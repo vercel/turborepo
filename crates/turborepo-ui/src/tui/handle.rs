@@ -99,11 +99,8 @@ impl TuiTask {
     }
 
     /// Mark the task as finished
-    pub fn succeeded(&self, cache_hit: bool) -> Vec<u8> {
-        self.finish(TaskResult::Success(match cache_hit {
-            true => CacheResult::Hit,
-            false => CacheResult::Miss,
-        }))
+    pub fn succeeded(&self) -> Vec<u8> {
+        self.finish(TaskResult::Success)
     }
 
     /// Mark the task as finished
@@ -132,7 +129,7 @@ impl TuiTask {
             .ok();
     }
 
-    pub fn status(&self, status: &str) {
+    pub fn status(&self, status: &str, result: CacheResult) {
         // Since this will be rendered via ratatui we any ANSI escape codes will not be
         // handled.
         // TODO: prevent the status from having ANSI codes in this scenario
@@ -142,6 +139,7 @@ impl TuiTask {
             .send(Event::Status {
                 task: self.name.clone(),
                 status,
+                result,
             })
             .ok();
     }

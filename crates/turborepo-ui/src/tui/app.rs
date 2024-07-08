@@ -17,7 +17,7 @@ const PANE_SIZE_RATIO: f32 = 3.0 / 4.0;
 const FRAMERATE: Duration = Duration::from_millis(3);
 
 use super::{
-    event::{OutputLogs, TaskResult},
+    event::{CacheResult, OutputLogs, TaskResult},
     input, AppReceiver, Error, Event, InputOptions, TaskTable, TerminalPane,
 };
 use crate::tui::{
@@ -288,7 +288,12 @@ impl<W> App<W> {
         Ok(())
     }
 
-    pub fn set_status(&mut self, task: String, status: String) -> Result<(), Error> {
+    pub fn set_status(
+        &mut self,
+        task: String,
+        status: String,
+        result: CacheResult,
+    ) -> Result<(), Error> {
         let task = self
             .tasks
             .get_mut(&task)
@@ -296,6 +301,7 @@ impl<W> App<W> {
                 name: task.to_owned(),
             })?;
         task.status = Some(status);
+        task.cache_result = Some(result);
         Ok(())
     }
 }
@@ -465,8 +471,12 @@ fn update(
         Event::TaskOutput { task, output } => {
             app.process_output(&task, &output)?;
         }
-        Event::Status { task, status } => {
-            app.set_status(task, status)?;
+        Event::Status {
+            task,
+            status,
+            result,
+        } => {
+            app.set_status(task, status, result)?;
         }
         Event::InternalStop => {
             app.done = true;
@@ -581,8 +591,7 @@ mod test {
         app.start_task("a", OutputLogs::Full).unwrap();
         assert_eq!(app.scroll.selected(), Some(0), "b stays selected");
         assert_eq!(app.active_task(), "b", "selected b");
-        app.finish_task("a", TaskResult::Success(CacheResult::Miss))
-            .unwrap();
+        app.finish_task("a", TaskResult::Success).unwrap();
         assert_eq!(app.scroll.selected(), Some(0), "b stays selected");
         assert_eq!(app.active_task(), "b", "selected b");
     }
@@ -605,8 +614,7 @@ mod test {
             "b",
             "b is on top (running)"
         );
-        app.finish_task("a", TaskResult::Success(CacheResult::Miss))
-            .unwrap();
+        app.finish_task("a", TaskResult::Success).unwrap();
         assert_eq!(
             (
                 app.tasks_by_status.task_name(2),
@@ -616,8 +624,7 @@ mod test {
             "a is on bottom (done), b is second (running)"
         );
 
-        app.finish_task("b", TaskResult::Success(CacheResult::Miss))
-            .unwrap();
+        app.finish_task("b", TaskResult::Success).unwrap();
         assert_eq!(
             (
                 app.tasks_by_status.task_name(1),
@@ -677,16 +684,14 @@ mod test {
         app.next();
         assert_eq!(app.scroll.selected(), Some(2), "selected b");
         assert_eq!(app.tasks_by_status.task_name(2), "b", "selected b");
-        app.finish_task("a", TaskResult::Success(CacheResult::Miss))
-            .unwrap();
+        app.finish_task("a", TaskResult::Success).unwrap();
         assert_eq!(app.scroll.selected(), Some(1), "b stays selected");
         assert_eq!(app.tasks_by_status.task_name(1), "b", "selected b");
         // c <-
         // b
         // a
         app.previous();
-        app.finish_task("c", TaskResult::Success(CacheResult::Miss))
-            .unwrap();
+        app.finish_task("c", TaskResult::Success).unwrap();
         assert_eq!(app.scroll.selected(), Some(2), "c stays selected");
         assert_eq!(app.tasks_by_status.task_name(2), "c", "selected c");
     }
@@ -751,7 +756,7 @@ mod test {
         assert_eq!(app.scroll.selected(), Some(1), "selected b");
         assert_eq!(app.tasks_by_status.task_name(1), "b", "selected b");
         // set status for a
-        app.set_status("a".to_string(), "building".to_string())
+        app.set_status("a".to_string(), "building".to_string(), CacheResult::Hit)
             .unwrap();
 
         assert_eq!(
