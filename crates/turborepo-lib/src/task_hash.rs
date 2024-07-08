@@ -477,9 +477,14 @@ impl<'a> TaskHasher<'a> {
                         "COLORTERM",
                         "TERM",
                         "TERM_PROGRAM",
-                        // VSCode IDE
+                        // VSCode IDE - https://github.com/microsoft/vscode-js-debug/blob/5b0f41dbe845d693a541c1fae30cec04c878216f/src/targets/node/nodeLauncherBase.ts#L320
                         "VSCODE_*",
                         "ELECTRON_RUN_AS_NODE",
+                        // Docker - https://docs.docker.com/engine/reference/commandline/cli/#environment-variables
+                        "DOCKER_*",
+                        "BUILDKIT_*",
+                        // Docker compose - https://docs.docker.com/compose/environment-variables/envvars/
+                        "COMPOSE_*",
                         // Jetbrains IDE
                         "JB_IDE_*",
                         "JB_INTERPRETER",
@@ -492,11 +497,15 @@ impl<'a> TaskHasher<'a> {
                         // Command Prompt casing of env variables
                         "APPDATA",
                         "PATH",
+                        "PROGRAMDATA",
                         "SYSTEMROOT",
+                        "SYSTEMDRIVE",
                         // Powershell casing of env variables
                         "Path",
+                        "ProgramData",
                         "SystemRoot",
                         "AppData",
+                        "SystemDrive",
                     ])?;
                 let tracker_env = self
                     .task_hash_tracker
