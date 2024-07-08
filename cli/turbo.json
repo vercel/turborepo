@@ -21,7 +21,8 @@
         "../target/release/turbo",
         "../target/release/turbo.exe"
       ],
-      "dependsOn": ["rust-src"]
+      "dependsOn": ["rust-src"],
+      "passThroughEnv": ["ProgramData"]
     }
   }
 }

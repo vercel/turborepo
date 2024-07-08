@@ -39,6 +39,7 @@ jobs:
           PATTERNS: |
             Cargo.*
             rust-toolchain
+            cli/turbo.json
 
       - name: Turborepo version changes
         id: turborepo_version
