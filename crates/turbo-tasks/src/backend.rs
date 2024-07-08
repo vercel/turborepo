@@ -80,7 +80,11 @@ pub enum PersistentTaskType {
     /// looks up the trait method on that value. Then it calls that method.
     /// The method call will do a cache lookup and might resolve arguments
     /// before.
-    ResolveTrait(TraitTypeId, Cow<'static, str>, Vec<ConcreteTaskInput>),
+    ResolveTrait {
+        trait_type: TraitTypeId,
+        method_name: Cow<'static, str>,
+        args: Vec<ConcreteTaskInput>,
+    },
 }
 
 impl Display for PersistentTaskType {
@@ -100,7 +104,11 @@ impl PersistentTaskType {
                 fn_type: _,
                 args: inputs,
             } => inputs.shrink_to_fit(),
-            Self::ResolveTrait(_, _, inputs) => inputs.shrink_to_fit(),
+            Self::ResolveTrait {
+                trait_type: _,
+                method_name: _,
+                args: inputs,
+            } => inputs.shrink_to_fit(),
         }
     }
 
@@ -114,7 +122,11 @@ impl PersistentTaskType {
                 fn_type: _,
                 args: v,
             }
-            | PersistentTaskType::ResolveTrait(_, _, v) => v.len(),
+            | PersistentTaskType::ResolveTrait {
+                trait_type: _,
+                method_name: _,
+                args: v,
+            } => v.len(),
         }
     }
 
@@ -128,7 +140,11 @@ impl PersistentTaskType {
                 fn_type: _,
                 args: v,
             }
-            | PersistentTaskType::ResolveTrait(_, _, v) => v.is_empty(),
+            | PersistentTaskType::ResolveTrait {
+                trait_type: _,
+                method_name: _,
+                args: v,
+            } => v.is_empty(),
         }
     }
 
@@ -148,9 +164,15 @@ impl PersistentTaskType {
                 fn_type: *f,
                 args: v[..len].to_vec(),
             },
-            PersistentTaskType::ResolveTrait(f, n, v) => {
-                PersistentTaskType::ResolveTrait(*f, n.clone(), v[..len].to_vec())
-            }
+            PersistentTaskType::ResolveTrait {
+                trait_type: f,
+                method_name: n,
+                args: v,
+            } => PersistentTaskType::ResolveTrait {
+                trait_type: *f,
+                method_name: n.clone(),
+                args: v[..len].to_vec(),
+            },
         }
     }
 
@@ -169,9 +191,11 @@ impl PersistentTaskType {
                 fn_type: native_fn,
                 args: _,
             } => Cow::Borrowed(&registry::get_function(*native_fn).name),
-            PersistentTaskType::ResolveTrait(trait_id, fn_name, _) => {
-                format!("{}::{}", registry::get_trait(*trait_id).name, fn_name).into()
-            }
+            PersistentTaskType::ResolveTrait {
+                trait_type: trait_id,
+                method_name: fn_name,
+                args: _,
+            } => format!("{}::{}", registry::get_trait(*trait_id).name, fn_name).into(),
         }
     }
 }
@@ -502,9 +526,16 @@ impl PersistentTaskType {
                 fn_type: fn_id,
                 args: inputs,
             } => Box::pin(Self::run_resolve_native(fn_id, inputs, turbo_tasks)),
-            PersistentTaskType::ResolveTrait(trait_type, name, inputs) => Box::pin(
-                Self::run_resolve_trait(trait_type, name, inputs, turbo_tasks),
-            ),
+            PersistentTaskType::ResolveTrait {
+                trait_type,
+                method_name: name,
+                args: inputs,
+            } => Box::pin(Self::run_resolve_trait(
+                trait_type,
+                name,
+                inputs,
+                turbo_tasks,
+            )),
         }
     }
 }
@@ -536,11 +567,11 @@ pub(crate) mod tests {
             "mock_func_task",
         );
         assert_eq!(
-            PersistentTaskType::ResolveTrait(
-                *MOCKTRAIT_TRAIT_TYPE_ID,
-                "mock_method_task".into(),
-                Vec::new()
-            )
+            PersistentTaskType::ResolveTrait {
+                trait_type: *MOCKTRAIT_TRAIT_TYPE_ID,
+                method_name: "mock_method_task".into(),
+                args: Vec::new()
+            }
             .get_name(),
             "MockTrait::mock_method_task",
         );

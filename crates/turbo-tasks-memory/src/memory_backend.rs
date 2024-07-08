@@ -555,7 +555,11 @@ impl Backend for MemoryBackend {
                 } => {
                     stats.increment_cache_hit(*function_id);
                 }
-                PersistentTaskType::ResolveTrait(trait_type, name, inputs) => {
+                PersistentTaskType::ResolveTrait {
+                    trait_type,
+                    method_name: name,
+                    args: inputs,
+                } => {
                     // HACK: Resolve the first argument (`self`) in order to attribute the cache hit
                     // to the concrete trait implementation, rather than the dynamic trait method.
                     // This ensures cache hits and misses are both attributed to the same thing.
@@ -594,7 +598,8 @@ impl Backend for MemoryBackend {
                 } => {
                     stats.increment_cache_miss(*function_id);
                 }
-                PersistentTaskType::ResolveTrait(..) | PersistentTaskType::ResolveNative { .. } => {
+                PersistentTaskType::ResolveTrait { .. }
+                | PersistentTaskType::ResolveNative { .. } => {
                     // these types re-execute themselves as `Native` after
                     // resolving their arguments, skip counting their
                     // executions here to avoid double-counting

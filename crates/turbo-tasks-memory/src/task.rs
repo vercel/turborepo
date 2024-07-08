@@ -600,7 +600,11 @@ impl Task {
                         registry::get_function(*native_fn).name
                     )
                 }
-                PersistentTaskType::ResolveTrait(trait_type, fn_name, _) => {
+                PersistentTaskType::ResolveTrait {
+                    trait_type,
+                    method_name: fn_name,
+                    args: _,
+                } => {
                     format!(
                         "[{}] [resolve trait] {} in trait {}",
                         id,
@@ -777,7 +781,11 @@ impl Task {
                     drop(entered);
                     (future, span)
                 }
-                PersistentTaskType::ResolveTrait(trait_type_id, name, inputs) => {
+                PersistentTaskType::ResolveTrait {
+                    trait_type: trait_type_id,
+                    method_name: name,
+                    args: inputs,
+                } => {
                     let trait_type_id = *trait_type_id;
                     let trait_type = registry::get_trait(trait_type_id);
                     let span = trait_type.resolve_span(name);

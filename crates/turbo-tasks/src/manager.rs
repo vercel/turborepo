@@ -418,7 +418,11 @@ impl<B: Backend + 'static> TurboTasks<B> {
 
         // create a wrapper task to resolve all inputs
         RawVc::TaskOutput(self.backend.get_or_create_persistent_task(
-            PersistentTaskType::ResolveTrait(trait_type, trait_fn_name, inputs),
+            PersistentTaskType::ResolveTrait {
+                trait_type,
+                method_name: trait_fn_name,
+                args: inputs,
+            },
             current_task("turbo_function calls"),
             self,
         ))
