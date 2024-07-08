@@ -5,6 +5,7 @@ use std::{
     future::Future,
     hash::{BuildHasherDefault, Hash},
     mem::{replace, take},
+    num::NonZeroU32,
     pin::Pin,
     sync::{atomic::AtomicU32, Arc},
     time::Duration,
@@ -887,7 +888,7 @@ impl Task {
         &self,
         duration: Duration,
         memory_usage: usize,
-        generation: u32,
+        generation: NonZeroU32,
         stateful: bool,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
@@ -1331,9 +1332,9 @@ impl Task {
             return false;
         }
         if let TaskMetaStateWriteGuard::Full(mut state) = self.state_mut() {
-            if state.gc.generation != 0 {
+            if state.gc.generation.is_none() {
                 let generation = gc_queue.task_inactive(self.id);
-                state.gc.generation = generation;
+                state.gc.generation = Some(generation);
             }
             for child in state.state_type.children() {
                 gc_queue.task_potentially_no_longer_active(child);
@@ -1589,7 +1590,7 @@ impl Task {
 
     pub(crate) fn run_gc(
         &self,
-        generation: u32,
+        generation: NonZeroU32,
         gc_queue: &GcQueue,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
@@ -1606,10 +1607,14 @@ impl Task {
                 if active {
                     let mut cells_to_drop = Vec::new();
 
-                    if state.gc.generation == 0 || state.gc.generation > generation {
+                    if let Some(old_gen) = state.gc.generation {
+                        if old_gen > generation {
+                            return GcResult::Stale;
+                        }
+                    } else {
                         return GcResult::Stale;
                     }
-                    state.gc.generation = 0;
+                    state.gc.generation = None;
 
                     match &mut state.state_type {
                         TaskStateType::Done { stateful, edges: _ } => {

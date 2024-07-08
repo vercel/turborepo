@@ -3,6 +3,7 @@ use std::{
     collections::VecDeque,
     fmt::Debug,
     mem::take,
+    num::NonZeroU32,
     sync::atomic::{AtomicU32, AtomicUsize, Ordering},
     time::Duration,
 };
@@ -31,7 +32,7 @@ pub struct GcPriority {
 pub struct GcTaskState {
     pub priority: GcPriority,
     /// The generation where the task was last accessed.
-    pub generation: u32,
+    pub generation: Option<NonZeroU32>,
 }
 
 impl GcTaskState {
@@ -39,9 +40,9 @@ impl GcTaskState {
         &mut self,
         duration: Duration,
         memory_usage: usize,
-        generation: u32,
+        generation: NonZeroU32,
     ) {
-        self.generation = generation;
+        self.generation = Some(generation);
         self.priority = GcPriority {
             memory_per_time: ((memory_usage + TASK_BASE_MEMORY_USAGE) as u64
                 / (duration.as_micros() as u64 + TASK_BASE_COMPUTE_DURATION_IN_MICROS))
@@ -50,12 +51,17 @@ impl GcTaskState {
         };
     }
 
-    pub(crate) fn on_read(&mut self, generation: u32) -> bool {
-        if self.generation < generation {
-            self.generation = generation;
-            true
+    pub(crate) fn on_read(&mut self, generation: NonZeroU32) -> bool {
+        if let Some(old_generation) = self.generation {
+            if old_generation < generation {
+                self.generation = Some(generation);
+                true
+            } else {
+                false
+            }
         } else {
-            false
+            self.generation = Some(generation);
+            true
         }
     }
 }
@@ -71,7 +77,7 @@ pub const PERCENTAGE_IDLE_TARGET_MEMORY: usize = 75;
 
 struct OldGeneration {
     tasks: Vec<TaskId>,
-    generation: u32,
+    generation: NonZeroU32,
 }
 
 struct ProcessGenerationResult {
@@ -107,6 +113,7 @@ pub struct GcQueue {
 impl GcQueue {
     pub fn new() -> Self {
         Self {
+            // SAFETY: Starting at 1 to produce NonZeroU32s
             generation: AtomicU32::new(1),
             incoming_tasks: ConcurrentQueue::unbounded(),
             incoming_tasks_count: AtomicUsize::new(0),
@@ -117,26 +124,27 @@ impl GcQueue {
     }
 
     /// Get the current generation number.
-    pub fn generation(&self) -> u32 {
-        self.generation.load(Ordering::Relaxed)
+    pub fn generation(&self) -> NonZeroU32 {
+        // SAFETY: We are sure that the generation is not 0, since we start at 1.
+        unsafe { NonZeroU32::new_unchecked(self.generation.load(Ordering::Relaxed)) }
     }
 
     /// Notify the GC queue that a task has been executed.
     #[must_use]
-    pub fn task_executed(&self, task: TaskId) -> u32 {
+    pub fn task_executed(&self, task: TaskId) -> NonZeroU32 {
         self.add_task(task)
     }
 
     /// Notify the GC queue that a task has been accessed.
     #[must_use]
-    pub fn task_accessed(&self, task: TaskId) -> u32 {
+    pub fn task_accessed(&self, task: TaskId) -> NonZeroU32 {
         self.add_task(task)
     }
 
     /// Notify the GC queue that a task should be enqueue for GC because it is
     /// inactive.
     #[must_use]
-    pub fn task_inactive(&self, task: TaskId) -> u32 {
+    pub fn task_inactive(&self, task: TaskId) -> NonZeroU32 {
         self.add_task(task)
     }
 
@@ -152,7 +160,7 @@ impl GcQueue {
         }
     }
 
-    fn add_task(&self, task: TaskId) -> u32 {
+    fn add_task(&self, task: TaskId) -> NonZeroU32 {
         let _ = self.incoming_tasks.push(task);
         if self.incoming_tasks_count.fetch_add(1, Ordering::Acquire) % TASKS_PER_NEW_GENERATION
             == TASKS_PER_NEW_GENERATION - 1
@@ -160,7 +168,10 @@ impl GcQueue {
             self.incoming_tasks_count
                 .fetch_sub(TASKS_PER_NEW_GENERATION, Ordering::Release);
             // We are selected to move TASKS_PER_NEW_GENERATION tasks into a generation
-            let gen = self.generation.fetch_add(1, Ordering::Relaxed);
+            let gen = unsafe {
+                // SAFETY: We are sure that the generation is not 0, since we start at 1.
+                NonZeroU32::new_unchecked(self.generation.fetch_add(1, Ordering::Relaxed))
+            };
             let mut tasks = Vec::with_capacity(TASKS_PER_NEW_GENERATION);
             for _ in 0..TASKS_PER_NEW_GENERATION {
                 match self.incoming_tasks.pop() {
@@ -180,7 +191,7 @@ impl GcQueue {
             });
             gen
         } else {
-            self.generation.load(Ordering::Relaxed)
+            self.generation()
         }
     }
 
@@ -234,8 +245,10 @@ impl GcQueue {
         for (i, task) in tasks.iter().enumerate() {
             backend.with_task(*task, |task| {
                 if let Some(state) = task.gc_state() {
-                    if state.generation != 0 && state.generation <= generation {
-                        indices.push((Reverse(state.priority), i as u32));
+                    if let Some(gen) = state.generation {
+                        if gen <= generation {
+                            indices.push((Reverse(state.priority), i as u32));
+                        }
                     }
                 }
             });

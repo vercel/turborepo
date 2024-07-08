@@ -3,6 +3,7 @@ use std::{
     cell::RefCell,
     future::Future,
     hash::{BuildHasher, BuildHasherDefault, Hash},
+    num::NonZeroU32,
     pin::Pin,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -330,7 +331,8 @@ impl Backend for MemoryBackend {
         let generation = if let Some(gc_queue) = &self.gc_queue {
             gc_queue.generation()
         } else {
-            0
+            // SAFETY: 1 is not zero
+            unsafe { NonZeroU32::new_unchecked(1) }
         };
         let (reexecute, once_task) = self.with_task(task_id, |task| {
             (
