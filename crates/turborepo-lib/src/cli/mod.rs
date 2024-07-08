@@ -77,9 +77,9 @@ impl Display for OutputLogsMode {
     }
 }
 
-impl Into<turborepo_ui::tui::event::OutputLogs> for OutputLogsMode {
-    fn into(self) -> turborepo_ui::tui::event::OutputLogs {
-        match self {
+impl From<OutputLogsMode> for turborepo_ui::tui::event::OutputLogs {
+    fn from(value: OutputLogsMode) -> Self {
+        match value {
             OutputLogsMode::Full => turborepo_ui::tui::event::OutputLogs::Full,
             OutputLogsMode::None => turborepo_ui::tui::event::OutputLogs::None,
             OutputLogsMode::HashOnly => turborepo_ui::tui::event::OutputLogs::HashOnly,
