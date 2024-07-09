@@ -9,7 +9,7 @@ use swc_core::{
         visit::fields::{CalleeField, PropField},
     },
 };
-use turbo_tasks::{RcStr, Vc};
+use turbo_tasks::{RcStr, TaskInput, Vc};
 use turbopack_core::chunk::ChunkingContext;
 
 use super::EsmAssetReference;
@@ -22,39 +22,35 @@ use crate::{
 #[turbo_tasks::value(shared)]
 #[derive(Hash, Debug)]
 pub struct EsmBindings {
-    pub bindings: Vc<Vec<Vc<EsmBinding>>>,
+    pub bindings: Vec<EsmBinding>,
 }
 
 #[turbo_tasks::value_impl]
 impl EsmBindings {
     #[turbo_tasks::function]
-    pub fn new(bindings: Vc<Vec<Vc<EsmBinding>>>) -> Vc<Self> {
+    pub fn new(bindings: Vec<EsmBinding>) -> Vc<Self> {
         EsmBindings { bindings }.cell()
     }
 }
 
-#[turbo_tasks::value(shared)]
-#[derive(Hash, Debug)]
+#[derive(Hash, Clone, Debug, TaskInput)]
 pub struct EsmBinding {
     pub reference: Vc<EsmAssetReference>,
     pub export: Option<RcStr>,
     pub ast_path: Vc<AstPath>,
 }
 
-#[turbo_tasks::value_impl]
 impl EsmBinding {
-    #[turbo_tasks::function]
     pub fn new(
         reference: Vc<EsmAssetReference>,
         export: Option<RcStr>,
         ast_path: Vc<AstPath>,
-    ) -> Vc<Self> {
+    ) -> Self {
         EsmBinding {
             reference,
             export,
             ast_path,
         }
-        .cell()
     }
 }
 
@@ -67,9 +63,9 @@ impl CodeGenerateable for EsmBindings {
     ) -> Result<Vc<CodeGeneration>> {
         let this = self.await?;
         let mut visitors = Vec::new();
+        let bindings = this.bindings.clone();
 
-        for binding in this.bindings.await?.iter() {
-            let item = binding.await?;
+        for item in bindings.into_iter() {
             let imported_module = item.reference.get_referenced_asset();
 
             let mut ast_path = item.ast_path.await?.clone_value();

@@ -164,7 +164,7 @@ pub struct AnalyzeEcmascriptModuleResultBuilder {
     async_module: Vc<OptionAsyncModule>,
     successful: bool,
     source_map: Option<Vc<OptionSourceMap>>,
-    bindings: Vec<Vc<EsmBinding>>,
+    bindings: Vec<EsmBinding>,
 }
 
 impl AnalyzeEcmascriptModuleResultBuilder {
@@ -240,7 +240,7 @@ impl AnalyzeEcmascriptModuleResultBuilder {
             )));
     }
 
-    pub fn add_binding(&mut self, binding: Vc<EsmBinding>) {
+    pub fn add_binding(&mut self, binding: EsmBinding) {
         self.bindings.push(binding);
     }
 
@@ -270,7 +270,7 @@ impl AnalyzeEcmascriptModuleResultBuilder {
         mut self,
         track_reexport_references: bool,
     ) -> Result<Vc<AnalyzeEcmascriptModuleResult>> {
-        let bindings = EsmBindings::new(Vc::cell(take(&mut self.bindings)));
+        let bindings = EsmBindings::new(take(&mut self.bindings));
         self.add_code_gen(bindings);
 
         let mut references: Vec<_> = self.references.into_iter().collect();
