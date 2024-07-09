@@ -51,7 +51,7 @@ impl EsmBinding {
 }
 
 #[turbo_tasks::value_impl]
-impl CodeGenerateable for EsmBinding {
+impl CodeGenerateable for EsmBindings {
     #[turbo_tasks::function]
     async fn code_generation(
         self: Vc<Self>,
@@ -60,45 +60,6 @@ impl CodeGenerateable for EsmBinding {
         let this = self.await?;
         let mut visitors = Vec::new();
         let imported_module = this.reference.get_referenced_asset();
-
-        fn make_expr(
-            imported_module: &str,
-            export: Option<&str>,
-            span: Span,
-            in_call: bool,
-        ) -> Expr {
-            let span = span.with_ctxt(SyntaxContext::empty());
-            if let Some(export) = export {
-                let mut expr = Expr::Member(MemberExpr {
-                    span,
-                    obj: Box::new(Expr::Ident(Ident::new(imported_module.into(), span))),
-                    prop: MemberProp::Computed(ComputedPropName {
-                        span,
-                        expr: Box::new(Expr::Lit(Lit::Str(Str {
-                            span,
-                            value: export.into(),
-                            raw: None,
-                        }))),
-                    }),
-                });
-                if in_call {
-                    expr = Expr::Seq(SeqExpr {
-                        exprs: vec![
-                            Box::new(Expr::Lit(Lit::Num(Number {
-                                span,
-                                value: 0.0,
-                                raw: None,
-                            }))),
-                            Box::new(expr),
-                        ],
-                        span,
-                    });
-                }
-                expr
-            } else {
-                Expr::Ident(Ident::new(imported_module.into(), span))
-            }
-        }
 
         let mut ast_path = this.ast_path.await?.clone_value();
         let imported_module = imported_module.await?.get_ident().await?;
@@ -184,5 +145,39 @@ impl CodeGenerateable for EsmBinding {
         }
 
         Ok(CodeGeneration { visitors }.into())
+    }
+}
+
+fn make_expr(imported_module: &str, export: Option<&str>, span: Span, in_call: bool) -> Expr {
+    let span = span.with_ctxt(SyntaxContext::empty());
+    if let Some(export) = export {
+        let mut expr = Expr::Member(MemberExpr {
+            span,
+            obj: Box::new(Expr::Ident(Ident::new(imported_module.into(), span))),
+            prop: MemberProp::Computed(ComputedPropName {
+                span,
+                expr: Box::new(Expr::Lit(Lit::Str(Str {
+                    span,
+                    value: export.into(),
+                    raw: None,
+                }))),
+            }),
+        });
+        if in_call {
+            expr = Expr::Seq(SeqExpr {
+                exprs: vec![
+                    Box::new(Expr::Lit(Lit::Num(Number {
+                        span,
+                        value: 0.0,
+                        raw: None,
+                    }))),
+                    Box::new(expr),
+                ],
+                span,
+            });
+        }
+        expr
+    } else {
+        Expr::Ident(Ident::new(imported_module.into(), span))
     }
 }
