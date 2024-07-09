@@ -21,6 +21,12 @@ use crate::{
 
 #[turbo_tasks::value(shared)]
 #[derive(Hash, Debug)]
+pub struct EsmBindings {
+    pub bindings: Vc<Vec<Vc<EsmBinding>>>,
+}
+
+#[turbo_tasks::value(shared)]
+#[derive(Hash, Debug)]
 pub struct EsmBinding {
     pub reference: Vc<EsmAssetReference>,
     pub export: Option<RcStr>,
