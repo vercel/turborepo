@@ -105,6 +105,7 @@ impl<W> App<W> {
         self.tasks.get_mut(&self.active_task()).unwrap()
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn next(&mut self) {
         let num_rows = self.tasks_by_status.count_all();
         let next_index = (self.selected_task_index + 1).clamp(0, num_rows - 1);
@@ -113,6 +114,7 @@ impl<W> App<W> {
         self.has_user_scrolled = true;
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn previous(&mut self) {
         let i = match self.selected_task_index {
             0 => 0,
@@ -123,6 +125,7 @@ impl<W> App<W> {
         self.has_user_scrolled = true;
     }
 
+    #[tracing::instrument(skip_all)]
     pub fn scroll_terminal_output(&mut self, direction: Direction) {
         self.tasks
             .get_mut(&self.active_task())
@@ -134,6 +137,7 @@ impl<W> App<W> {
     /// Mark the given task as started.
     /// If planned, pulls it from planned tasks and starts it.
     /// If finished, removes from finished and starts again as new task.
+    #[tracing::instrument(skip(self, output_logs))]
     pub fn start_task(&mut self, task: &str, output_logs: OutputLogs) -> Result<(), Error> {
         // Name of currently highlighted task.
         // We will use this after the order switches.
@@ -196,6 +200,7 @@ impl<W> App<W> {
 
     /// Mark the given running task as finished
     /// Errors if given task wasn't a running task
+    #[tracing::instrument(skip(self, result))]
     pub fn finish_task(&mut self, task: &str, result: TaskResult) -> Result<(), Error> {
         // Name of currently highlighted task.
         // We will use this after the order switches.
@@ -258,6 +263,7 @@ impl<W> App<W> {
         }
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn update_tasks(&mut self, tasks: Vec<String>) {
         // Make sure all tasks have a terminal output
         for task in &tasks {
@@ -288,6 +294,7 @@ impl<W> App<W> {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn set_status(
         &mut self,
         task: String,
@@ -319,6 +326,7 @@ impl<W: Write> App<W> {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all)]
     pub fn forward_input(&mut self, bytes: &[u8]) -> Result<(), Error> {
         if matches!(self.input_options.focus, LayoutSections::Pane) {
             let task_output = self.get_full_task_mut();
@@ -334,6 +342,7 @@ impl<W: Write> App<W> {
         }
     }
 
+    #[tracing::instrument(skip(self, output))]
     pub fn process_output(&mut self, task: &str, output: &[u8]) -> Result<(), Error> {
         let task_output = self.tasks.get_mut(task).unwrap();
         task_output.parser.process(output);
@@ -416,6 +425,7 @@ pub fn terminal_big_enough() -> Result<bool, Error> {
 }
 
 /// Configures terminal for rendering App
+#[tracing::instrument]
 fn startup() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
     crossterm::terminal::enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -440,6 +450,7 @@ fn startup() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
 }
 
 /// Restores terminal to expected state
+#[tracing::instrument(skip_all)]
 fn cleanup<B: Backend + io::Write>(
     mut terminal: Terminal<B>,
     mut app: App<Box<dyn io::Write + Send>>,
