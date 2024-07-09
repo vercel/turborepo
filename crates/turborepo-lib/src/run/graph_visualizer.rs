@@ -52,7 +52,7 @@ pub(crate) fn write_graph(
                 write_graphviz_warning(ui).map_err(Error::GraphOutput)?;
                 render_dot_graph(std::io::stdout(), engine, single_package)?;
             }
-            print!("\n✔ Generated task graph in ");
+            print!("\n✓ Generated task graph in ");
             cprintln!(ui, BOLD, "{filename}");
         }
     }

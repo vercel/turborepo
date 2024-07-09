@@ -25,7 +25,7 @@ impl<'b> TaskTable<'b> {
         }
     }
 
-    // Provides a suggested width for the task table
+    /// Provides a suggested width for the task table
     pub fn width_hint<'a>(tasks: impl Iterator<Item = &'a str>) -> u16 {
         let task_name_width = tasks
             .map(|task| task.len())
@@ -48,8 +48,9 @@ impl<'b> TaskTable<'b> {
             Row::new(vec![
                 Cell::new(task.name()),
                 Cell::new(match task.result() {
-                    TaskResult::Success => Text::raw("✔").style(Style::default().light_green()),
-                    TaskResult::Failure => Text::raw("✘").style(Style::default().red()),
+                    // matches Next.js (and many other CLI tools) https://github.com/vercel/next.js/blob/1a04d94aaec943d3cce93487fea3b8c8f8898f31/packages/next/src/build/output/log.ts
+                    TaskResult::Success => Text::styled("✓", Style::default().green().bold()),
+                    TaskResult::Failure => Text::styled("⨯", Style::default().red().bold()),
                 }),
             ])
         })
