@@ -25,6 +25,14 @@ pub struct EsmBindings {
     pub bindings: Vc<Vec<Vc<EsmBinding>>>,
 }
 
+#[turbo_tasks::value_impl]
+impl EsmBindings {
+    #[turbo_tasks::function]
+    pub fn new(bindings: Vc<Vec<Vc<EsmBinding>>>) -> Vc<Self> {
+        EsmBindings { bindings }.cell()
+    }
+}
+
 #[turbo_tasks::value(shared)]
 #[derive(Hash, Debug)]
 pub struct EsmBinding {
