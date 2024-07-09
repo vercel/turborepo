@@ -160,6 +160,11 @@ impl Run {
         }
 
         let task_names = self.engine.tasks_with_command(&self.pkg_dep_graph);
+        // If there aren't any tasks to run, then shouldn't start the UI
+        if task_names.is_empty() {
+            return Ok(None);
+        }
+
         let (sender, receiver) = AppSender::new();
         let handle = tokio::task::spawn_blocking(move || tui::run_app(task_names, receiver));
 
