@@ -71,7 +71,7 @@ ignore!(
     AtomicBool,
     AtomicUsize
 );
-ignore!((), &str, String, Duration, anyhow::Error, RcStr);
+ignore!((), str, String, Duration, anyhow::Error, RcStr);
 ignore!(Path, PathBuf);
 ignore!(serde_json::Value);
 
@@ -231,6 +231,17 @@ impl<T: TraceRawVcs + ?Sized> TraceRawVcs for Mutex<T> {
 impl<T: TraceRawVcs + ?Sized> TraceRawVcs for RefCell<T> {
     fn trace_raw_vcs(&self, trace_context: &mut TraceRawVcsContext) {
         self.borrow().trace_raw_vcs(trace_context);
+    }
+}
+
+impl<T: TraceRawVcs + ?Sized> TraceRawVcs for &T {
+    fn trace_raw_vcs(&self, trace_context: &mut TraceRawVcsContext) {
+        (**self).trace_raw_vcs(trace_context);
+    }
+}
+impl<T: TraceRawVcs + ?Sized> TraceRawVcs for &mut T {
+    fn trace_raw_vcs(&self, trace_context: &mut TraceRawVcsContext) {
+        (**self).trace_raw_vcs(trace_context);
     }
 }
 
