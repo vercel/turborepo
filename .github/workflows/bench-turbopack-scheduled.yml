@@ -86,7 +86,7 @@ jobs:
     name: Bench - ${{ matrix.bench.title }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: ./.github/actions/setup-node
 
@@ -144,7 +144,7 @@ jobs:
           echo "date=$(date +'%s')" >> $GITHUB_OUTPUT
           echo "pretty=$(date +'%Y-%m-%d %H:%M')" >> $GITHUB_OUTPUT
       - name: Checkout benchmark-data
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: benchmark-data
 
