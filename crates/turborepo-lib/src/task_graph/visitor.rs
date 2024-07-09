@@ -24,7 +24,7 @@ use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,
 };
 use turborepo_ui::{
-    tui::{self, AppSender, TuiTask},
+    tui::{self, event::CacheResult, AppSender, TuiTask},
     ColorSelector, OutputClient, OutputSink, OutputWriter, PrefixedUI, UI,
 };
 use which::which;
@@ -853,7 +853,8 @@ impl ExecContext {
 
         if self.experimental_ui {
             if let TaskOutput::UI(task) = output_client {
-                task.start();
+                let output_logs = self.task_cache.output_logs().into();
+                task.start(output_logs);
             }
         }
 
@@ -1088,10 +1089,10 @@ impl<W: Write> TaskCacheOutput<W> {
 }
 
 impl<W: Write> CacheOutput for TaskCacheOutput<W> {
-    fn status(&mut self, message: &str) {
+    fn status(&mut self, message: &str, result: CacheResult) {
         match self {
             TaskCacheOutput::Direct(direct) => direct.output(message),
-            TaskCacheOutput::UI(task) => task.status(message),
+            TaskCacheOutput::UI(task) => task.status(message, result),
         }
     }
 

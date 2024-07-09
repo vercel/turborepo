@@ -3,7 +3,10 @@ use std::{
     time::Instant,
 };
 
-use super::{Event, TaskResult};
+use super::{
+    event::{CacheResult, OutputLogs},
+    Event, TaskResult,
+};
 
 /// Struct for sending app events to TUI rendering
 #[derive(Debug, Clone)]
@@ -85,11 +88,12 @@ impl TuiTask {
     }
 
     /// Mark the task as started
-    pub fn start(&self) {
+    pub fn start(&self, output_logs: OutputLogs) {
         self.handle
             .primary
             .send(Event::StartTask {
                 task: self.name.clone(),
+                output_logs,
             })
             .ok();
     }
@@ -125,7 +129,7 @@ impl TuiTask {
             .ok();
     }
 
-    pub fn status(&self, status: &str) {
+    pub fn status(&self, status: &str, result: CacheResult) {
         // Since this will be rendered via ratatui we any ANSI escape codes will not be
         // handled.
         // TODO: prevent the status from having ANSI codes in this scenario
@@ -135,6 +139,7 @@ impl TuiTask {
             .send(Event::Status {
                 task: self.name.clone(),
                 status,
+                result,
             })
             .ok();
     }
