@@ -4,10 +4,10 @@ use std::{
     fmt::{Debug, Display},
     ops::Deref,
     path::{Path, PathBuf},
-    sync::Arc,
 };
 
 use serde::{Deserialize, Serialize};
+use triomphe::Arc;
 use turbo_tasks_hash::{DeterministicHash, DeterministicHasher};
 
 use crate::debug::{ValueDebugFormat, ValueDebugFormatString};
