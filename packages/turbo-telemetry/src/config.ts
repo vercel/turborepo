@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, rmSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { logger } from "@turbo/utils";
 import chalk from "chalk";
-import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
 import utils from "./utils";
 
@@ -71,8 +71,8 @@ export class TelemetryConfig {
   }: {
     configPath: string;
   }): TelemetryConfig | undefined {
-    const RawTelemetryId = uuidv4();
-    const telemetrySalt = uuidv4();
+    const RawTelemetryId = randomUUID();
+    const telemetrySalt = randomUUID();
     const telemetryId = utils.oneWayHashWithSalt({
       input: RawTelemetryId,
       salt: telemetrySalt,
