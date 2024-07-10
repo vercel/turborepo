@@ -17,9 +17,13 @@ use tracing::Span;
 
 pub use crate::id::{BackendJobId, ExecutionId};
 use crate::{
-    event::EventListener, manager::TurboTasksBackendApi, raw_vc::CellId, registry,
+    event::EventListener,
+    manager::TurboTasksBackendApi,
+    raw_vc::CellId,
+    registry,
+    trait_helpers::{get_trait_method, has_trait, traits},
     ConcreteTaskInput, FunctionId, RawVc, ReadRef, SharedReference, TaskId, TaskIdProvider,
-    TaskIdSet, TraitRef, TraitTypeId, VcValueTrait, VcValueType,
+    TaskIdSet, TraitRef, TraitTypeId, ValueTypeId, VcValueTrait, VcValueType,
 };
 
 pub enum TaskType {
@@ -66,6 +70,7 @@ pub enum PersistentTaskType {
     /// A normal task execution a native (rust) function
     Native {
         fn_type: FunctionId,
+        this: Option<RawVc>,
         args: Vec<ConcreteTaskInput>,
     },
 
@@ -73,6 +78,7 @@ pub enum PersistentTaskType {
     /// resolve arguments. The inner function call will do a cache lookup.
     ResolveNative {
         fn_type: FunctionId,
+        this: Option<RawVc>,
         args: Vec<ConcreteTaskInput>,
     },
 
@@ -83,6 +89,7 @@ pub enum PersistentTaskType {
     ResolveTrait {
         trait_type: TraitTypeId,
         method_name: Cow<'static, str>,
+        this: RawVc,
         args: Vec<ConcreteTaskInput>,
     },
 }
@@ -98,15 +105,18 @@ impl PersistentTaskType {
         match self {
             Self::Native {
                 fn_type: _,
+                this: _,
                 args: inputs,
             } => inputs.shrink_to_fit(),
             Self::ResolveNative {
                 fn_type: _,
+                this: _,
                 args: inputs,
             } => inputs.shrink_to_fit(),
             Self::ResolveTrait {
                 trait_type: _,
                 method_name: _,
+                this: _,
                 args: inputs,
             } => inputs.shrink_to_fit(),
         }
@@ -116,15 +126,18 @@ impl PersistentTaskType {
         match self {
             PersistentTaskType::Native {
                 fn_type: _,
+                this: _,
                 args: v,
             }
             | PersistentTaskType::ResolveNative {
                 fn_type: _,
+                this: _,
                 args: v,
             }
             | PersistentTaskType::ResolveTrait {
                 trait_type: _,
                 method_name: _,
+                this: _,
                 args: v,
             } => v.len(),
         }
@@ -134,15 +147,18 @@ impl PersistentTaskType {
         match self {
             PersistentTaskType::Native {
                 fn_type: _,
+                this: _,
                 args: v,
             }
             | PersistentTaskType::ResolveNative {
                 fn_type: _,
+                this: _,
                 args: v,
             }
             | PersistentTaskType::ResolveTrait {
                 trait_type: _,
                 method_name: _,
+                this: _,
                 args: v,
             } => v.is_empty(),
         }
@@ -152,25 +168,31 @@ impl PersistentTaskType {
         match self {
             PersistentTaskType::Native {
                 fn_type: f,
+                this,
                 args: v,
             } => PersistentTaskType::Native {
                 fn_type: *f,
+                this: *this,
                 args: v[..len].to_vec(),
             },
             PersistentTaskType::ResolveNative {
                 fn_type: f,
+                this,
                 args: v,
             } => PersistentTaskType::ResolveNative {
                 fn_type: *f,
+                this: *this,
                 args: v[..len].to_vec(),
             },
             PersistentTaskType::ResolveTrait {
                 trait_type: f,
                 method_name: n,
+                this,
                 args: v,
             } => PersistentTaskType::ResolveTrait {
                 trait_type: *f,
                 method_name: n.clone(),
+                this: *this,
                 args: v[..len].to_vec(),
             },
         }
@@ -185,15 +207,18 @@ impl PersistentTaskType {
         match self {
             PersistentTaskType::Native {
                 fn_type: native_fn,
+                this: _,
                 args: _,
             }
             | PersistentTaskType::ResolveNative {
                 fn_type: native_fn,
+                this: _,
                 args: _,
             } => Cow::Borrowed(&registry::get_function(*native_fn).name),
             PersistentTaskType::ResolveTrait {
                 trait_type: trait_id,
                 method_name: fn_name,
+                this: _,
                 args: _,
             } => format!("{}::{}", registry::get_trait(*trait_id).name, fn_name).into(),
         }
@@ -424,83 +449,82 @@ pub trait Backend: Sync + Send {
 impl PersistentTaskType {
     pub async fn run_resolve_native<B: Backend + 'static>(
         fn_id: FunctionId,
+        mut this: Option<RawVc>,
         mut inputs: Vec<ConcreteTaskInput>,
         turbo_tasks: Arc<dyn TurboTasksBackendApi<B>>,
     ) -> Result<RawVc> {
-        for i in 0..inputs.len() {
-            let input = unsafe { take(inputs.get_unchecked_mut(i)) };
-            let input = input.resolve().await?;
-            unsafe {
-                *inputs.get_unchecked_mut(i) = input;
-            }
+        if let Some(this) = this.as_mut() {
+            *this = this.resolve().await?;
         }
-        Ok(turbo_tasks.native_call(fn_id, inputs))
+        for input in inputs.iter_mut() {
+            *input = take(input).resolve().await?;
+        }
+        Ok(if let Some(this) = this {
+            turbo_tasks.this_call(fn_id, this, inputs)
+        } else {
+            turbo_tasks.native_call(fn_id, inputs)
+        })
     }
 
     pub async fn resolve_trait_method(
         trait_type: TraitTypeId,
         name: Cow<'static, str>,
-        this: ConcreteTaskInput,
+        this: RawVc,
     ) -> Result<FunctionId> {
-        Self::resolve_trait_method_from_value(
-            trait_type,
-            this.resolve().await?.resolve_to_value().await?,
-            name,
-        )
+        let CellContent(Some(SharedReference(Some(value_type), _))) = this.into_read().await?
+        else {
+            bail!("Cell is empty or untyped");
+        };
+        Self::resolve_trait_method_from_value(trait_type, value_type, name)
     }
 
     pub async fn run_resolve_trait<B: Backend + 'static>(
         trait_type: TraitTypeId,
         name: Cow<'static, str>,
-        inputs: Vec<ConcreteTaskInput>,
+        this: RawVc,
+        mut inputs: Vec<ConcreteTaskInput>,
         turbo_tasks: Arc<dyn TurboTasksBackendApi<B>>,
     ) -> Result<RawVc> {
-        let mut resolved_inputs = Vec::with_capacity(inputs.len());
-        let mut iter = inputs.into_iter();
+        let this = this.resolve().await?;
+        let CellContent(Some(SharedReference(this_ty, _))) = this.into_read().await? else {
+            bail!("Cell is empty");
+        };
+        let Some(this_ty) = this_ty else {
+            bail!("Cell is untyped");
+        };
 
-        let this = iter
-            .next()
-            .expect("No arguments for trait call")
-            .resolve()
-            .await?;
-        let this_value = this.clone().resolve_to_value().await?;
-
-        let native_fn = Self::resolve_trait_method_from_value(trait_type, this_value, name)?;
-        resolved_inputs.push(this);
-        for input in iter {
-            resolved_inputs.push(input)
+        let native_fn = Self::resolve_trait_method_from_value(trait_type, this_ty, name)?;
+        for input in inputs.iter_mut() {
+            *input = take(input).resolve().await?;
         }
-        Ok(turbo_tasks.dynamic_call(native_fn, resolved_inputs))
+        Ok(turbo_tasks.dynamic_this_call(native_fn, this, inputs))
     }
 
     /// Shared helper used by [`Self::resolve_trait_method`] and
     /// [`Self::run_resolve_trait`].
     fn resolve_trait_method_from_value(
         trait_type: TraitTypeId,
-        this_value: ConcreteTaskInput,
+        value_type: ValueTypeId,
         name: Cow<'static, str>,
     ) -> Result<FunctionId> {
-        match this_value.get_trait_method(trait_type, name) {
+        match get_trait_method(trait_type, value_type, name) {
             Ok(native_fn) => Ok(native_fn),
             Err(name) => {
-                if !this_value.has_trait(trait_type) {
-                    let traits = this_value
-                        .traits()
-                        .iter()
-                        .fold(String::new(), |mut out, t| {
-                            let _ = write!(out, " {}", t);
-                            out
-                        });
+                if !has_trait(value_type, trait_type) {
+                    let traits = traits(value_type).iter().fold(String::new(), |mut out, t| {
+                        let _ = write!(out, " {}", t);
+                        out
+                    });
                     Err(anyhow!(
                         "{} doesn't implement {} (only{})",
-                        this_value,
+                        registry::get_value_type(value_type),
                         registry::get_trait(trait_type),
                         traits,
                     ))
                 } else {
                     Err(anyhow!(
                         "{} implements trait {}, but method {} is missing",
-                        this_value,
+                        registry::get_value_type(value_type),
                         registry::get_trait(trait_type),
                         name
                     ))
@@ -516,23 +540,27 @@ impl PersistentTaskType {
         match self {
             PersistentTaskType::Native {
                 fn_type: fn_id,
+                this,
                 args: inputs,
             } => {
                 let native_fn = registry::get_function(fn_id);
-                let bound = native_fn.bind(&inputs);
+                let bound = native_fn.bind(this, &inputs);
                 (bound)()
             }
             PersistentTaskType::ResolveNative {
                 fn_type: fn_id,
+                this,
                 args: inputs,
-            } => Box::pin(Self::run_resolve_native(fn_id, inputs, turbo_tasks)),
+            } => Box::pin(Self::run_resolve_native(fn_id, this, inputs, turbo_tasks)),
             PersistentTaskType::ResolveTrait {
                 trait_type,
                 method_name: name,
+                this,
                 args: inputs,
             } => Box::pin(Self::run_resolve_trait(
                 trait_type,
                 name,
+                this,
                 inputs,
                 turbo_tasks,
             )),
@@ -561,6 +589,7 @@ pub(crate) mod tests {
         assert_eq!(
             PersistentTaskType::Native {
                 fn_type: *MOCK_FUNC_TASK_FUNCTION_ID,
+                this: None,
                 args: Vec::new()
             }
             .get_name(),
@@ -570,6 +599,7 @@ pub(crate) mod tests {
             PersistentTaskType::ResolveTrait {
                 trait_type: *MOCKTRAIT_TRAIT_TYPE_ID,
                 method_name: "mock_method_task".into(),
+                this: RawVc::TaskOutput(unsafe { TaskId::new_unchecked(1) }),
                 args: Vec::new()
             }
             .get_name(),

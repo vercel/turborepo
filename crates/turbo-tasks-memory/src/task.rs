@@ -586,12 +586,14 @@ impl Task {
             TaskTypeForDescription::Persistent(ty) => match &***ty {
                 PersistentTaskType::Native {
                     fn_type: native_fn,
+                    this: _,
                     args: _,
                 } => {
                     format!("[{}] {}", id, registry::get_function(*native_fn).name)
                 }
                 PersistentTaskType::ResolveNative {
                     fn_type: native_fn,
+                    this: _,
                     args: _,
                 } => {
                     format!(
@@ -603,6 +605,7 @@ impl Task {
                 PersistentTaskType::ResolveTrait {
                     trait_type,
                     method_name: fn_name,
+                    this: _,
                     args: _,
                 } => {
                     format!(
@@ -753,18 +756,20 @@ impl Task {
             TaskType::Persistent { ty, .. } => match &***ty {
                 PersistentTaskType::Native {
                     fn_type: native_fn,
+                    this,
                     args: inputs,
                 } => {
                     let func = registry::get_function(*native_fn);
                     let span = func.span();
                     let entered = span.enter();
-                    let bound_fn = func.bind(inputs);
+                    let bound_fn = func.bind(*this, inputs);
                     let future = bound_fn();
                     drop(entered);
                     (future, span)
                 }
                 PersistentTaskType::ResolveNative {
                     fn_type: ref native_fn_id,
+                    this,
                     args: inputs,
                 } => {
                     let native_fn_id = *native_fn_id;
@@ -775,6 +780,7 @@ impl Task {
                     let turbo_tasks = turbo_tasks.pin();
                     let future = Box::pin(PersistentTaskType::run_resolve_native(
                         native_fn_id,
+                        *this,
                         inputs,
                         turbo_tasks,
                     ));
@@ -784,6 +790,7 @@ impl Task {
                 PersistentTaskType::ResolveTrait {
                     trait_type: trait_type_id,
                     method_name: name,
+                    this,
                     args: inputs,
                 } => {
                     let trait_type_id = *trait_type_id;
@@ -796,6 +803,7 @@ impl Task {
                     let future = Box::pin(PersistentTaskType::run_resolve_trait(
                         trait_type_id,
                         name,
+                        *this,
                         inputs,
                         turbo_tasks,
                     ));
