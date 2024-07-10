@@ -24,6 +24,10 @@ pub fn input(options: InputOptions) -> Result<Option<Event>, Error> {
             crossterm::event::Event::Mouse(m) => match m.kind {
                 crossterm::event::MouseEventKind::ScrollDown => Ok(Some(Event::ScrollDown)),
                 crossterm::event::MouseEventKind::ScrollUp => Ok(Some(Event::ScrollUp)),
+                crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
+                | crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
+                    Ok(Some(Event::Mouse(m)))
+                }
                 _ => Ok(None),
             },
             _ => Ok(None),

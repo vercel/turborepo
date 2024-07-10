@@ -32,8 +32,9 @@ pub enum LayoutSections {
 }
 
 pub struct App<W> {
-    rows: u16,
-    cols: u16,
+    term_cols: u16,
+    pane_rows: u16,
+    pane_cols: u16,
     tasks: BTreeMap<String, TerminalOutput<W>>,
     tasks_by_status: TasksByStatus,
     input_options: InputOptions,
@@ -51,6 +52,12 @@ pub enum Direction {
 impl<W> App<W> {
     pub fn new(rows: u16, cols: u16, tasks: Vec<String>) -> Self {
         debug!("tasks: {tasks:?}");
+        let task_width_hint = TaskTable::width_hint(tasks.iter().map(|s| s.as_str()));
+
+        // Want to maximize pane width
+        let ratio_pane_width = (f32::from(cols) * PANE_SIZE_RATIO) as u16;
+        let full_task_width = cols.saturating_sub(task_width_hint);
+        let pane_cols = full_task_width.max(ratio_pane_width);
 
         // Initializes with the planned tasks
         // and will mutate as tasks change
@@ -69,8 +76,9 @@ impl<W> App<W> {
         let selected_task_index: usize = 0;
 
         Self {
-            rows,
-            cols,
+            term_cols: cols,
+            pane_rows: rows,
+            pane_cols,
             done: false,
             input_options: InputOptions {
                 focus: LayoutSections::TaskList,
@@ -269,7 +277,7 @@ impl<W> App<W> {
         for task in &tasks {
             self.tasks
                 .entry(task.clone())
-                .or_insert_with(|| TerminalOutput::new(self.rows, self.cols, None));
+                .or_insert_with(|| TerminalOutput::new(self.pane_rows, self.pane_cols, None));
         }
         // Trim the terminal output to only tasks that exist in new list
         self.tasks.retain(|name, _| tasks.contains(name));
@@ -309,6 +317,22 @@ impl<W> App<W> {
             })?;
         task.status = Some(status);
         task.cache_result = Some(result);
+        Ok(())
+    }
+
+    pub fn handle_mouse(&mut self, mut event: crossterm::event::MouseEvent) -> Result<(), Error> {
+        let table_width = self.term_cols - self.pane_cols;
+        // Only handle mouse event if it happens inside of pane
+        if event.row > 0 && event.column > table_width {
+            // Subtract 1 from the y axis due to the title of the pane
+            event.row -= 1;
+            // Subtract the width of the table
+            event.column -= table_width;
+
+            let task = self.get_full_task_mut();
+            task.handle_mouse(event)?;
+        }
+
         Ok(())
     }
 }
@@ -355,21 +379,10 @@ impl<W: Write> App<W> {
 pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
     let mut terminal = startup()?;
     let size = terminal.size()?;
-    // Figure out pane width?
-    let task_width_hint = TaskTable::width_hint(tasks.iter().map(|s| s.as_str()));
-    // Want to maximize pane width
-    let ratio_pane_width = (f32::from(size.width) * PANE_SIZE_RATIO) as u16;
-    let full_task_width = size.width.saturating_sub(task_width_hint);
 
-    let mut app: App<Box<dyn io::Write + Send>> =
-        App::new(size.height, full_task_width.max(ratio_pane_width), tasks);
+    let mut app: App<Box<dyn io::Write + Send>> = App::new(size.height, size.width, tasks);
 
-    let (result, callback) = match run_app_inner(
-        &mut terminal,
-        &mut app,
-        receiver,
-        full_task_width.max(ratio_pane_width),
-    ) {
+    let (result, callback) = match run_app_inner(&mut terminal, &mut app, receiver) {
         Ok(callback) => (Ok(()), callback),
         Err(err) => (Err(err), None),
     };
@@ -385,10 +398,9 @@ fn run_app_inner<B: Backend + std::io::Write>(
     terminal: &mut Terminal<B>,
     app: &mut App<Box<dyn io::Write + Send>>,
     receiver: AppReceiver,
-    cols: u16,
 ) -> Result<Option<mpsc::SyncSender<()>>, Error> {
     // Render initial state to paint the screen
-    terminal.draw(|f| view(app, f, cols))?;
+    terminal.draw(|f| view(app, f))?;
     let mut last_render = Instant::now();
     let mut callback = None;
     while let Some(event) = poll(app.input_options, &receiver, last_render + FRAMERATE) {
@@ -397,7 +409,7 @@ fn run_app_inner<B: Backend + std::io::Write>(
             break;
         }
         if FRAMERATE <= last_render.elapsed() {
-            terminal.draw(|f| view(app, f, cols))?;
+            terminal.draw(|f| view(app, f))?;
             last_render = Instant::now();
         }
     }
@@ -534,11 +546,15 @@ fn update(
             app.update_tasks(tasks);
             // app.table.tick();
         }
+        Event::Mouse(m) => {
+            app.handle_mouse(m)?;
+        }
     }
     Ok(None)
 }
 
-fn view<W>(app: &mut App<W>, f: &mut Frame, cols: u16) {
+fn view<W>(app: &mut App<W>, f: &mut Frame) {
+    let cols = app.pane_cols;
     let horizontal = Layout::horizontal([Constraint::Fill(1), Constraint::Length(cols)]);
     let [table, pane] = horizontal.areas(f.size());
 
