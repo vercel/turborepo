@@ -12,7 +12,7 @@ const BLUE = "#0099F7";
 const RED = "#F11712";
 const YELLOW = "#FFFF00";
 
-export const hex = (color: string): ((text: string) => string) => {
+const hex = (color: string): ((text: string) => string) => {
   const ansiColor = hexToAnsi256(color);
   return (text: string) => `\x1b[38;5;${ansiColor}m${text}${reset("")}`;
 };
