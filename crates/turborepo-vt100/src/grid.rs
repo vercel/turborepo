@@ -169,6 +169,12 @@ impl Grid {
         self.scrollback.iter().chain(self.rows.iter())
     }
 
+    pub fn all_rows_mut(
+        &mut self,
+    ) -> impl Iterator<Item = &mut crate::row::Row> {
+        self.scrollback.iter_mut().chain(self.rows.iter_mut())
+    }
+
     pub(crate) fn all_row(&self, row: u16) -> Option<&crate::row::Row> {
         let row = usize::from(row);
         if row < self.scrollback.len() {
@@ -233,6 +239,16 @@ impl Grid {
     }
 
     pub fn clear_selection(&mut self) {
+        // go through and make sure all selected cells are toggled deselected
+        if let Some(selected_cells) = self.selection_cells() {
+            for cell in selected_cells {
+                debug_assert!(
+                    cell.selected(),
+                    "selected cell should be selected"
+                );
+                cell.select(false);
+            }
+        };
         self.selection = None;
     }
 
@@ -243,6 +259,7 @@ impl Grid {
         end_row: u16,
         end_col: u16,
     ) {
+        self.clear_selection();
         let start = self.translate_pos(start_row, start_col);
         let end = self.translate_pos(end_row, end_col);
         let (start, end) = match start.row.cmp(&end.row) {
@@ -256,6 +273,15 @@ impl Grid {
         };
 
         self.selection = Some(Selection { start, end });
+        if let Some(selected_cells) = self.selection_cells() {
+            for cell in selected_cells {
+                debug_assert!(
+                    !cell.selected(),
+                    "cell shouldn't be selected at start"
+                );
+                cell.select(true);
+            }
+        };
     }
 
     fn translate_pos(&self, row: u16, col: u16) -> AbsPos {
@@ -267,6 +293,38 @@ impl Grid {
                 + usize::from(row),
             col,
         }
+    }
+
+    fn selection_cells(
+        &mut self,
+    ) -> Option<impl Iterator<Item = &mut crate::Cell> + '_> {
+        let Selection { start, end } = self.selection?;
+        let cols = self.size.cols;
+        Some(
+            self.all_rows_mut()
+                .enumerate()
+                .skip(start.row)
+                .take(end.row - start.row + 1)
+                .flat_map(move |(row_index, row)| {
+                    debug_assert!(
+                        start.row <= row_index && row_index <= end.row,
+                        "only rows in selection should be returned"
+                    );
+                    let (cells_to_skip, cells_to_take) =
+                        if row_index == start.row && row_index == end.row {
+                            (start.col, end.col - start.col)
+                        } else if row_index == start.row {
+                            (start.col, cols)
+                        } else if row_index == end.row {
+                            (0, end.col)
+                        } else {
+                            (0, cols)
+                        };
+                    row.cells_mut()
+                        .skip(usize::from(cells_to_skip))
+                        .take(usize::from(cells_to_take))
+                }),
+        )
     }
 
     pub fn selection(&self) -> Option<Selection> {
@@ -839,3 +897,5 @@ pub struct AbsPos {
     pub row: usize,
     pub col: u16,
 }
+
+// pub struct SelectionIterMut<'a> {}

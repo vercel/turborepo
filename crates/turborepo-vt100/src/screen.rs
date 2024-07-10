@@ -257,7 +257,7 @@ impl Screen {
                     .skip(start_row)
                     .take(end_row - start_row + 1)
                 {
-                    if i == usize::from(start_row) {
+                    if i == start_row {
                         row.write_contents(
                             &mut contents,
                             start_col,
@@ -267,7 +267,7 @@ impl Screen {
                         if !row.wrapped() {
                             contents.push('\n');
                         }
-                    } else if i == usize::from(end_row) {
+                    } else if i == end_row {
                         row.write_contents(&mut contents, 0, end_col, false);
                     } else {
                         row.write_contents(&mut contents, 0, cols, false);

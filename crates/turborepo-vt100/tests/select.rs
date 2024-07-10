@@ -77,3 +77,18 @@ fn too_large() {
         Some("bar\nbaz\n")
     );
 }
+
+#[test]
+fn selection_inversed_display() {
+    let mut parser = vt100::Parser::new(2, 4, 10);
+    parser.process(b"foo\r\nbar\r\nbaz");
+
+    // Make sure foo is off the screen
+    assert_eq!(parser.screen().contents(), "bar\nbaz");
+    parser.screen_mut().set_selection(0, 0, 0, 3);
+    assert_eq!(parser.screen().selected_text().as_deref(), Some("bar"));
+    assert!(parser.screen().cell(0, 0).unwrap().inverse());
+    assert!(parser.screen().cell(0, 1).unwrap().inverse());
+    assert!(parser.screen().cell(0, 2).unwrap().inverse());
+    assert!(!parser.screen().cell(0, 3).unwrap().inverse());
+}
