@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use tracing::debug;
 
 use super::{app::LayoutSections, event::Event, Error};
 
@@ -19,7 +20,9 @@ pub fn input(options: InputOptions) -> Result<Option<Event>, Error> {
     // poll with 0 duration will only return true if event::read won't need to wait
     // for input
     if crossterm::event::poll(Duration::from_millis(0))? {
-        match crossterm::event::read()? {
+        let event = crossterm::event::read()?;
+        debug!("Received event: {event:?}");
+        match event {
             crossterm::event::Event::Key(k) => Ok(translate_key_event(&focus, k)),
             crossterm::event::Event::Mouse(m) => match m.kind {
                 crossterm::event::MouseEventKind::ScrollDown => Ok(Some(Event::ScrollDown)),
@@ -27,6 +30,9 @@ pub fn input(options: InputOptions) -> Result<Option<Event>, Error> {
                 crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
                 | crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
                     Ok(Some(Event::Mouse(m)))
+                }
+                crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Right) => {
+                    Ok(Some(Event::CopySelection))
                 }
                 _ => Ok(None),
             },
@@ -49,6 +55,9 @@ fn translate_key_event(interact: &LayoutSections, key_event: KeyEvent) -> Option
     match key_event.code {
         KeyCode::Char('c') if key_event.modifiers == crossterm::event::KeyModifiers::CONTROL => {
             ctrl_c()
+        }
+        KeyCode::Char('c') if key_event.modifiers == crossterm::event::KeyModifiers::SUPER => {
+            return Some(Event::CopySelection);
         }
         // Interactive branches
         KeyCode::Char('z')
