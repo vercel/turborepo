@@ -6,7 +6,10 @@ use swc_core::{
             ComputedPropName, Expr, Ident, KeyValueProp, Lit, MemberExpr, MemberProp, Number, Prop,
             PropName, SeqExpr, SimpleAssignTarget, Str,
         },
-        visit::fields::{CalleeField, PropField},
+        visit::{
+            fields::{CalleeField, PropField},
+            AstParentKind,
+        },
     },
 };
 use turbo_tasks::{RcStr, TaskInput, Vc};
@@ -14,7 +17,7 @@ use turbopack_core::chunk::ChunkingContext;
 
 use super::EsmAssetReference;
 use crate::{
-    code_gen::{CodeGenerateable, CodeGeneration},
+    code_gen::{CodeGenerateable, CodeGeneration, VisitorFactory},
     create_visitor,
     references::AstPath,
 };
@@ -52,6 +55,95 @@ impl EsmBinding {
             ast_path,
         }
     }
+
+    async fn to_visitors(
+        &self,
+        visitors: &mut Vec<(Vec<AstParentKind>, Box<dyn VisitorFactory>)>,
+    ) -> Result<()> {
+        let item = self.clone();
+        let imported_module = self.reference.get_referenced_asset();
+
+        let mut ast_path = item.ast_path.await?.clone_value();
+        let imported_module = imported_module.await?.get_ident().await?;
+
+        loop {
+            match ast_path.last() {
+                // Shorthand properties get special treatment because we need to rewrite them to
+                // normal key-value pairs.
+                Some(swc_core::ecma::visit::AstParentKind::Prop(PropField::Shorthand)) => {
+                    ast_path.pop();
+                    visitors.push(
+                    create_visitor!(exact ast_path, visit_mut_prop(prop: &mut Prop) {
+                        if let Prop::Shorthand(ident) = prop {
+                            // TODO: Merge with the above condition when https://rust-lang.github.io/rfcs/2497-if-let-chains.html lands.
+                            if let Some(imported_ident) = imported_module.as_deref() {
+                                *prop = Prop::KeyValue(KeyValueProp {
+                                    key: PropName::Ident(ident.clone()),
+                                    value: Box::new(make_expr(imported_ident, item.export.as_deref(), ident.span, false))
+                                });
+                            }
+                        }
+                    }));
+                    break;
+                }
+                // Any other expression can be replaced with the import accessor.
+                Some(swc_core::ecma::visit::AstParentKind::Expr(_)) => {
+                    ast_path.pop();
+                    let in_call = matches!(
+                        ast_path.last(),
+                        Some(swc_core::ecma::visit::AstParentKind::Callee(
+                            CalleeField::Expr
+                        ))
+                    );
+
+                    visitors.push(
+                    create_visitor!(exact ast_path, visit_mut_expr(expr: &mut Expr) {
+                        if let Some(ident) = imported_module.as_deref() {
+                            use swc_core::common::Spanned;
+                            *expr = make_expr(ident, item.export.as_deref(), expr.span(), in_call);
+                        }
+                        // If there's no identifier for the imported module,
+                        // resolution failed and will insert code that throws
+                        // before this expression is reached. Leave behind the original identifier.
+                    }));
+                    break;
+                }
+                Some(swc_core::ecma::visit::AstParentKind::BindingIdent(
+                    swc_core::ecma::visit::fields::BindingIdentField::Id,
+                )) => {
+                    ast_path.pop();
+
+                    // We need to handle LHS because of code like
+                    // (function (RouteKind1){})(RouteKind || RouteKind = {})
+                    if let Some(swc_core::ecma::visit::AstParentKind::SimpleAssignTarget(
+                        swc_core::ecma::visit::fields::SimpleAssignTargetField::Ident,
+                    )) = ast_path.last()
+                    {
+                        ast_path.pop();
+
+                        visitors.push(
+                        create_visitor!(exact ast_path, visit_mut_simple_assign_target(l: &mut SimpleAssignTarget) {
+                                if let Some(ident) = imported_module.as_deref() {
+                                    use swc_core::common::Spanned;
+                                    *l = match make_expr(ident, item.export.as_deref(), l.span(), false) {
+                                        Expr::Ident(ident) => SimpleAssignTarget::Ident(ident.into()),
+                                        Expr::Member(member) => SimpleAssignTarget::Member(member),
+                                        _ => unreachable!(),
+                                    };
+                                }
+                        }));
+                        break;
+                    }
+                }
+                Some(_) => {
+                    ast_path.pop();
+                }
+                None => break,
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[turbo_tasks::value_impl]
@@ -66,90 +158,7 @@ impl CodeGenerateable for EsmBindings {
         let bindings = this.bindings.clone();
 
         for item in bindings.into_iter() {
-            let imported_module = item.reference.get_referenced_asset();
-
-            let mut ast_path = item.ast_path.await?.clone_value();
-            let imported_module = imported_module.await?.get_ident().await?;
-
-            loop {
-                match ast_path.last() {
-                    // Shorthand properties get special treatment because we need to rewrite them to
-                    // normal key-value pairs.
-                    Some(swc_core::ecma::visit::AstParentKind::Prop(PropField::Shorthand)) => {
-                        ast_path.pop();
-                        visitors.push(
-                        create_visitor!(exact ast_path, visit_mut_prop(prop: &mut Prop) {
-                            if let Prop::Shorthand(ident) = prop {
-                                // TODO: Merge with the above condition when https://rust-lang.github.io/rfcs/2497-if-let-chains.html lands.
-                                if let Some(imported_ident) = imported_module.as_deref() {
-                                    *prop = Prop::KeyValue(KeyValueProp {
-                                        key: PropName::Ident(ident.clone()),
-                                        value: Box::new(make_expr(imported_ident, item.export.as_deref(), ident.span, false))
-                                    });
-                                }
-                            }
-                        }),
-                    );
-                        break;
-                    }
-                    // Any other expression can be replaced with the import accessor.
-                    Some(swc_core::ecma::visit::AstParentKind::Expr(_)) => {
-                        ast_path.pop();
-                        let in_call = matches!(
-                            ast_path.last(),
-                            Some(swc_core::ecma::visit::AstParentKind::Callee(
-                                CalleeField::Expr
-                            ))
-                        );
-
-                        visitors.push(
-                        create_visitor!(exact ast_path, visit_mut_expr(expr: &mut Expr) {
-                            if let Some(ident) = imported_module.as_deref() {
-                                use swc_core::common::Spanned;
-                                *expr = make_expr(ident, item.export.as_deref(), expr.span(), in_call);
-                            }
-                            // If there's no identifier for the imported module,
-                            // resolution failed and will insert code that throws
-                            // before this expression is reached. Leave behind the original identifier.
-                        }),
-                    );
-                        break;
-                    }
-                    Some(swc_core::ecma::visit::AstParentKind::BindingIdent(
-                        swc_core::ecma::visit::fields::BindingIdentField::Id,
-                    )) => {
-                        ast_path.pop();
-
-                        // We need to handle LHS because of code like
-                        // (function (RouteKind1){})(RouteKind || RouteKind = {})
-                        if let Some(swc_core::ecma::visit::AstParentKind::SimpleAssignTarget(
-                            swc_core::ecma::visit::fields::SimpleAssignTargetField::Ident,
-                        )) = ast_path.last()
-                        {
-                            ast_path.pop();
-
-                            visitors.push(
-                            create_visitor!(exact ast_path, visit_mut_simple_assign_target(l: &mut SimpleAssignTarget) {
-                                    if let Some(ident) = imported_module.as_deref() {
-                                        use swc_core::common::Spanned;
-                                        *l = match make_expr(ident, item.export.as_deref(), l.span(), false) {
-                                            Expr::Ident(ident) => SimpleAssignTarget::Ident(ident.into()),
-                                            Expr::Member(member) => SimpleAssignTarget::Member(member),
-                                            _ => unreachable!(),
-                                        };
-                                    }
-                            }),
-                        );
-
-                            break;
-                        }
-                    }
-                    Some(_) => {
-                        ast_path.pop();
-                    }
-                    None => break,
-                }
-            }
+            item.to_visitors(&mut visitors).await?;
         }
 
         Ok(CodeGeneration { visitors }.into())
