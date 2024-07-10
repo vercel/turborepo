@@ -7,8 +7,7 @@ use turbopack_core::{
 use turbopack_ecmascript::{references::esm::UrlRewriteBehavior, TreeShakingMode};
 pub use turbopack_mdx::MdxTransformOptions;
 use turbopack_node::{
-    execution_context::ExecutionContext,
-    transforms::{postcss::PostCssTransformOptions, webpack::WebpackLoaderItems},
+    execution_context::ExecutionContext, transforms::webpack::WebpackLoaderItems,
 };
 
 use super::ModuleRule;
@@ -114,7 +113,6 @@ pub struct JsxTransformOptions {
 pub struct ModuleOptionsContext {
     pub enable_typeof_window_inlining: Option<TypeofWindow>,
     pub enable_jsx: Option<Vc<JsxTransformOptions>>,
-    pub enable_postcss_transform: Option<Vc<PostCssTransformOptions>>,
     pub enable_webpack_loaders: Option<Vc<WebpackLoadersOptions>>,
     /// Follow type references and resolve declaration files in additional to
     /// normal resolution.

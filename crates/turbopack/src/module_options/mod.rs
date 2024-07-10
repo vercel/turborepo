@@ -16,7 +16,7 @@ use turbopack_core::{
 };
 use turbopack_css::CssModuleAssetType;
 use turbopack_ecmascript::{EcmascriptInputTransform, EcmascriptOptions, SpecifiedModuleType};
-use turbopack_node::transforms::{postcss::PostCssTransform, webpack::WebpackLoaders};
+use turbopack_node::transforms::webpack::WebpackLoaders;
 use turbopack_wasm::source::WebAssemblySourceType;
 
 use crate::{
@@ -71,7 +71,6 @@ impl ModuleOptions {
             enable_mdx,
             enable_mdx_rs,
             enable_raw_css,
-            ref enable_postcss_transform,
             ref enable_webpack_loaders,
             preset_env_versions,
             ref custom_rules,
@@ -409,34 +408,6 @@ impl ModuleOptions {
                 ),
             ]);
         } else {
-            if let Some(options) = enable_postcss_transform {
-                let options = options.await?;
-                let execution_context = execution_context
-                    .context("execution_context is required for the postcss_transform")?;
-
-                let import_map = if let Some(postcss_package) = options.postcss_package {
-                    package_import_map_from_import_mapping("postcss".into(), postcss_package)
-                } else {
-                    package_import_map_from_context("postcss".into(), path)
-                };
-
-                rules.push(ModuleRule::new(
-                    ModuleRuleCondition::ResourcePathEndsWith(".css".to_string()),
-                    vec![ModuleRuleEffect::SourceTransforms(Vc::cell(vec![
-                        Vc::upcast(PostCssTransform::new(
-                            node_evaluate_asset_context(
-                                execution_context,
-                                Some(import_map),
-                                None,
-                                "postcss".into(),
-                            ),
-                            execution_context,
-                            options.config_location,
-                        )),
-                    ]))],
-                ));
-            }
-
             rules.extend([
                 ModuleRule::new(
                     ModuleRuleCondition::all(vec![
