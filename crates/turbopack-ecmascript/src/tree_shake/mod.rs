@@ -216,7 +216,7 @@ impl Analyzer<'_> {
 
                     // TODO(kdy1): Re-enable this optimization
                     // I disabled this optimization because it causes some issues while enabling
-                    // tree ahking in next.js
+                    // tree shaking in next.js
                     //
                     // state
                     //     .last_writes
