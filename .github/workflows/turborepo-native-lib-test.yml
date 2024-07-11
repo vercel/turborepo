@@ -1,4 +1,4 @@
-name: Turborepo Native Library Tests
+name: "@turborepo/repository tests"
 on:
   push:
     branches: [main]
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   js_native_packages:
-    name: "@turbo/repository ${{matrix.os.name}} / Node ${{matrix.node-version}}"
+    name: "@turbo/repository (${{matrix.os.name}}, Node ${{matrix.node-version}})"
     timeout-minutes: 30
     runs-on: ${{ matrix.os.runner }}
     strategy:
