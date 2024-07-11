@@ -11,9 +11,11 @@ use std::{
     str::FromStr,
 };
 
+use bun::BunDetector;
 use globwalk::{fix_glob_pattern, ValidatedGlob};
 use itertools::{Either, Itertools};
 use lazy_regex::{lazy_regex, Lazy};
+use npm::NpmDetector;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -451,6 +453,28 @@ impl PackageManager {
             "yarn" => Ok(YarnDetector::detect_berry_or_yarn(&version)?),
             "pnpm" => Ok(PnpmDetector::detect_pnpm6_or_pnpm(&version)?),
             _ => Err(Error::UnsupportedPackageManager(manager.to_owned())),
+        }
+    }
+
+    /// Detect package manager based on configuration files and binaries
+    /// installed on the system.
+    pub fn detect_package_manager(repo_root: &AbsoluteSystemPath) -> Result<Self, Error> {
+        let detected_package_managers = PnpmDetector::new(repo_root)
+            .chain(NpmDetector::new(repo_root))
+            .chain(YarnDetector::new(repo_root))
+            .chain(BunDetector::new(repo_root))
+            .collect::<Result<Vec<_>, Error>>()?;
+
+        match detected_package_managers.as_slice() {
+            [] => Err(NoPackageManager.into()),
+            [package_manager] => Ok(*package_manager),
+            _ => {
+                let managers = detected_package_managers
+                    .iter()
+                    .map(|mgr| mgr.to_string())
+                    .collect();
+                Err(Error::MultiplePackageManagers { managers })
+            }
         }
     }
 
