@@ -22,7 +22,7 @@ pub fn should_skip_tree_shaking(m: &Program) -> bool {
                         }
                     }
 
-                    // Tree shaking has a bug related to ModuleExportName::Str
+                    // TODO(PACK-3150): Tree shaking has a bug related to ModuleExportName::Str
                     for s in specifiers.iter() {
                         if let ImportSpecifier::Named(is) = s {
                             if matches!(is.imported, Some(ModuleExportName::Str(..))) {
