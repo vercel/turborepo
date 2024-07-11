@@ -12,7 +12,12 @@ pub mod task_access;
 pub mod task_id;
 pub mod watch;
 
-use std::{collections::HashSet, io::Write, sync::Arc, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    io::Write,
+    sync::Arc,
+    time::Duration,
+};
 
 pub use cache::{CacheOutput, ConfigCache, Error as CacheError, RunCache, TaskCache};
 use chrono::{DateTime, Local};
@@ -41,6 +46,25 @@ use crate::{
     turbo_json::TurboJson,
     DaemonClient, DaemonConnector,
 };
+
+#[derive(Debug, Default)]
+pub struct PotentialTask {
+    pub packages: Vec<String>,
+    pub rest: u32,
+}
+impl IntoIterator for PotentialTask {
+    type Item = String;
+    type IntoIter = Box<dyn Iterator<Item = Self::Item>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let iter = self.packages.into_iter();
+        if self.rest > 0 {
+            Box::new(iter.chain(std::iter::once(format!("{} more", self.rest))))
+        } else {
+            Box::new(iter)
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct Run {
@@ -134,6 +158,25 @@ impl Run {
                 PackageNode::Workspace(pkg) => Some(pkg.clone()),
             })
             .collect()
+    }
+
+    // Produces a map of tasks to the packages where they're defined.
+    // Used to print a list of potential tasks to run. Obeys the `--filter` flag
+    pub fn get_potential_tasks(&self) -> Result<HashMap<String, Vec<String>>, Error> {
+        let mut tasks = HashMap::new();
+        for (name, info) in self.pkg_dep_graph.packages() {
+            if !self.filtered_pkgs.contains(name) {
+                continue;
+            }
+            for task_name in info.package_json.scripts.keys() {
+                tasks
+                    .entry(task_name.clone())
+                    .or_insert_with(Vec::new)
+                    .push(name.to_string())
+            }
+        }
+
+        Ok(tasks)
     }
 
     pub fn has_experimental_ui(&self) -> bool {

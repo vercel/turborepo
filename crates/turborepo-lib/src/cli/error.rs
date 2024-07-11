@@ -1,15 +1,19 @@
 use std::backtrace;
 
+use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
 use turborepo_repository::package_graph;
+use turborepo_telemetry::events::command::CommandEventBuilder;
+use turborepo_ui::{color, BOLD, GREY};
 
 use crate::{
-    commands::{bin, generate, prune},
+    commands::{bin, generate, prune, run::get_signal, CommandBase},
     daemon::DaemonError,
     rewrite_json::RewriteError,
     run,
-    run::watch,
+    run::{builder::RunBuilder, watch},
+    signal::SignalHandler,
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -20,8 +24,6 @@ pub enum Error {
     Bin(#[from] bin::Error, #[backtrace] backtrace::Backtrace),
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
-    #[error("at least one task must be specified")]
-    NoTasks(#[backtrace] backtrace::Backtrace),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Config(#[from] crate::config::Error),
@@ -52,4 +54,62 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Watch(#[from] watch::Error),
+}
+
+const MAX_CHARS_PER_TASK_LINE: usize = 100;
+
+pub async fn print_potential_tasks(base: CommandBase, telemetry: CommandEventBuilder) {
+    let output: Result<_, Error> = try {
+        let signal = get_signal()?;
+        let handler = SignalHandler::new(signal);
+        let ui = base.ui;
+
+        let run_builder = RunBuilder::new(base)?;
+        let run = run_builder.build(&handler, telemetry).await?;
+        let potential_tasks = run.get_potential_tasks()?;
+
+        potential_tasks
+            .into_iter()
+            .sorted_by(|(a, _), (b, _)| a.cmp(b))
+            .map(|(task, packages)| {
+                let task = color!(ui, BOLD, "{}", task);
+                let mut line_length = 0;
+
+                let mut packages_str = String::with_capacity(80);
+                for (idx, package) in packages.iter().enumerate() {
+                    if line_length > MAX_CHARS_PER_TASK_LINE {
+                        if idx != packages.len() {
+                            packages_str.push_str(&format!(" and {} more", packages.len() - idx));
+                        }
+
+                        break;
+                    }
+
+                    line_length += package.len() + 2;
+                    if idx != 0 {
+                        packages_str.push_str(", ");
+                    }
+                    packages_str.push_str(&format!("{}", package));
+                }
+
+                let packages = color!(ui, GREY, "> {}", packages_str);
+
+                format!("{}\n  {}", task, packages)
+            })
+            .join("\n")
+    };
+
+    // We don't want to show a random error if someone is running `turbo run`
+    // without any tasks. Instead, we'll just show the no tasks error and exit.
+    match output {
+        Ok(output) => {
+            println!(
+                "No tasks provided, here are some potential ones to run\n\n{}",
+                output
+            );
+        }
+        Err(_) => {
+            println!("No tasks provided");
+        }
+    }
 }
