@@ -162,38 +162,19 @@ graph TD
     Item7 --> Item3;
     Item7 --> Item6;
     Item7 -.-> Item4;
-    Item8 --> Item1;
-    Item8 --> Item3;
-    Item8 --> Item6;
     Item8 --> Item7;
+    Item8 --> Item1;
     Item8 -.-> Item4;
-    Item9 --> Item1;
-    Item9 --> Item3;
-    Item9 --> Item6;
-    Item9 --> Item7;
     Item9 --> Item8;
+    Item9 --> Item1;
     Item9 -.-> Item4;
-    Item10 --> Item1;
-    Item10 --> Item3;
-    Item10 --> Item6;
-    Item10 --> Item7;
-    Item10 --> Item8;
     Item10 --> Item9;
+    Item10 --> Item1;
     Item10 -.-> Item4;
-    Item11 --> Item1;
-    Item11 --> Item3;
-    Item11 --> Item6;
-    Item11 --> Item7;
-    Item11 --> Item8;
-    Item11 --> Item9;
     Item11 --> Item10;
-    Item13 --> Item1;
-    Item13 --> Item3;
-    Item13 --> Item6;
-    Item13 --> Item7;
-    Item13 --> Item8;
-    Item13 --> Item9;
+    Item11 --> Item1;
     Item13 --> Item10;
+    Item13 --> Item1;
     Item14 --> Item11;
 ```
 # Phase 3
@@ -228,38 +209,19 @@ graph TD
     Item7 --> Item3;
     Item7 --> Item6;
     Item7 -.-> Item4;
-    Item8 --> Item1;
-    Item8 --> Item3;
-    Item8 --> Item6;
     Item8 --> Item7;
+    Item8 --> Item1;
     Item8 -.-> Item4;
-    Item9 --> Item1;
-    Item9 --> Item3;
-    Item9 --> Item6;
-    Item9 --> Item7;
     Item9 --> Item8;
+    Item9 --> Item1;
     Item9 -.-> Item4;
-    Item10 --> Item1;
-    Item10 --> Item3;
-    Item10 --> Item6;
-    Item10 --> Item7;
-    Item10 --> Item8;
     Item10 --> Item9;
+    Item10 --> Item1;
     Item10 -.-> Item4;
-    Item11 --> Item1;
-    Item11 --> Item3;
-    Item11 --> Item6;
-    Item11 --> Item7;
-    Item11 --> Item8;
-    Item11 --> Item9;
     Item11 --> Item10;
-    Item13 --> Item1;
-    Item13 --> Item3;
-    Item13 --> Item6;
-    Item13 --> Item7;
-    Item13 --> Item8;
-    Item13 --> Item9;
+    Item11 --> Item1;
     Item13 --> Item10;
+    Item13 --> Item1;
     Item14 --> Item11;
 ```
 # Phase 4
@@ -294,38 +256,19 @@ graph TD
     Item7 --> Item3;
     Item7 --> Item6;
     Item7 -.-> Item4;
-    Item8 --> Item1;
-    Item8 --> Item3;
-    Item8 --> Item6;
     Item8 --> Item7;
+    Item8 --> Item1;
     Item8 -.-> Item4;
-    Item9 --> Item1;
-    Item9 --> Item3;
-    Item9 --> Item6;
-    Item9 --> Item7;
     Item9 --> Item8;
+    Item9 --> Item1;
     Item9 -.-> Item4;
-    Item10 --> Item1;
-    Item10 --> Item3;
-    Item10 --> Item6;
-    Item10 --> Item7;
-    Item10 --> Item8;
     Item10 --> Item9;
+    Item10 --> Item1;
     Item10 -.-> Item4;
-    Item11 --> Item1;
-    Item11 --> Item3;
-    Item11 --> Item6;
-    Item11 --> Item7;
-    Item11 --> Item8;
-    Item11 --> Item9;
     Item11 --> Item10;
-    Item13 --> Item1;
-    Item13 --> Item3;
-    Item13 --> Item6;
-    Item13 --> Item7;
-    Item13 --> Item8;
-    Item13 --> Item9;
+    Item11 --> Item1;
     Item13 --> Item10;
+    Item13 --> Item1;
     Item14 --> Item11;
     Item12 --> Item4;
 ```
@@ -338,53 +281,18 @@ graph TD
     N3["Items: [ItemId(0, VarDeclarator(0))]"];
     N4["Items: [ItemId(2, Normal)]"];
     N5["Items: [ItemId(3, Normal)]"];
-    N6["Items: [ItemId(5, Normal)]"];
-    N7["Items: [ItemId(6, Normal)]"];
-    N8["Items: [ItemId(7, Normal)]"];
-    N9["Items: [ItemId(8, Normal)]"];
-    N10["Items: [ItemId(9, Normal)]"];
+    N6["Items: [ItemId(5, Normal), ItemId(6, Normal), ItemId(7, Normal), ItemId(8, Normal), ItemId(9, Normal)]"];
     N0 --> N5;
-    N1 --> N3;
-    N1 --> N4;
     N1 --> N6;
-    N1 --> N7;
-    N1 --> N8;
-    N1 --> N9;
-    N1 --> N10;
-    N2 --> N3;
-    N2 --> N4;
+    N1 --> N3;
     N2 --> N6;
-    N2 --> N7;
-    N2 --> N8;
-    N2 --> N9;
-    N2 --> N10;
+    N2 --> N3;
     N4 --> N3;
     N5 --> N3;
     N5 --> N4;
     N6 --> N5;
     N6 --> N3;
-    N7 --> N3;
-    N7 --> N4;
-    N7 --> N6;
-    N7 --> N5;
-    N8 --> N3;
-    N8 --> N4;
-    N8 --> N6;
-    N8 --> N7;
-    N8 --> N5;
-    N9 --> N3;
-    N9 --> N4;
-    N9 --> N6;
-    N9 --> N7;
-    N9 --> N8;
-    N9 --> N5;
-    N10 --> N3;
-    N10 --> N4;
-    N10 --> N6;
-    N10 --> N7;
-    N10 --> N8;
-    N10 --> N9;
-    N10 --> N5;
+    N6 --> N4;
 ```
 # Entrypoints
 
@@ -412,52 +320,22 @@ import "__TURBOPACK_PART__" assert {
 ```
 ## Part 1
 ```js
-import { x } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 10
+import { x } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
 };
 export { x as x };
 
 ```
 ## Part 2
 ```js
-import { x } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 10
+import { x } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
 };
 export { y };
 const y = x;
@@ -501,92 +379,13 @@ import "__TURBOPACK_PART__" assert {
 import { x } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
 x = 5;
-
-```
-## Part 7
-```js
-import { x } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
 x += 6;
-
-```
-## Part 8
-```js
-import { x } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
 x += 7;
-
-```
-## Part 9
-```js
-import { x } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
 x += 8;
-
-```
-## Part 10
-```js
-import { x } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
 x += 9;
 
 ```
@@ -628,52 +427,22 @@ console.log(x);
 ```
 ## Part 1
 ```js
-import { x } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
+import { x } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
 };
 export { x as x };
 
 ```
 ## Part 2
 ```js
-import { x } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
+import { x } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
 };
 export { y };
 const y = x;
@@ -697,80 +466,16 @@ x = 3;
 ```
 ## Part 5
 ```js
+import { x } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
 x = 5;
-
-```
-## Part 6
-```js
-import { x } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
 x += 6;
-
-```
-## Part 7
-```js
-import { x } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
-};
 x += 7;
-
-```
-## Part 8
-```js
-import { x } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
 x += 8;
-
-```
-## Part 9
-```js
-import { x } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
 x += 9;
 
 ```

@@ -427,15 +427,15 @@ graph TD
     Item23["export SpanKind"];
     Item5 --> Item4;
     Item5 --> Item1;
-    Item6 --> Item4;
     Item6 --> Item5;
+    Item6 --> Item4;
     Item10 --> Item9;
     Item10 --> Item6;
     Item11 --> Item1;
     Item11 --> Item5;
     Item11 -.-> Item8;
-    Item12 --> Item4;
     Item12 --> Item5;
+    Item12 --> Item4;
     Item12 -.-> Item6;
     Item14 --> Item13;
     Item16 --> Item6;
@@ -451,8 +451,8 @@ graph TD
     Item19 --> Item8;
     Item20 --> Item9;
     Item21 --> Item17;
-    Item22 --> Item6;
     Item22 --> Item10;
+    Item22 --> Item6;
     Item23 --> Item6;
 ```
 # Phase 3
@@ -489,15 +489,15 @@ graph TD
     Item23["export SpanKind"];
     Item5 --> Item4;
     Item5 --> Item1;
-    Item6 --> Item4;
     Item6 --> Item5;
+    Item6 --> Item4;
     Item10 --> Item9;
     Item10 --> Item6;
     Item11 --> Item1;
     Item11 --> Item5;
     Item11 -.-> Item8;
-    Item12 --> Item4;
     Item12 --> Item5;
+    Item12 --> Item4;
     Item12 -.-> Item6;
     Item14 --> Item13;
     Item16 --> Item6;
@@ -513,8 +513,8 @@ graph TD
     Item19 --> Item8;
     Item20 --> Item9;
     Item21 --> Item17;
-    Item22 --> Item6;
     Item22 --> Item10;
+    Item22 --> Item6;
     Item23 --> Item6;
     Item9 --> Item8;
 ```
@@ -552,15 +552,15 @@ graph TD
     Item23["export SpanKind"];
     Item5 --> Item4;
     Item5 --> Item1;
-    Item6 --> Item4;
     Item6 --> Item5;
+    Item6 --> Item4;
     Item10 --> Item9;
     Item10 --> Item6;
     Item11 --> Item1;
     Item11 --> Item5;
     Item11 -.-> Item8;
-    Item12 --> Item4;
     Item12 --> Item5;
+    Item12 --> Item4;
     Item12 -.-> Item6;
     Item14 --> Item13;
     Item16 --> Item6;
@@ -576,8 +576,8 @@ graph TD
     Item19 --> Item8;
     Item20 --> Item9;
     Item21 --> Item17;
-    Item22 --> Item6;
     Item22 --> Item10;
+    Item22 --> Item6;
     Item23 --> Item6;
     Item9 --> Item8;
     Item18 --> Item1;
@@ -606,18 +606,18 @@ graph TD
     N0 --> N13;
     N1 --> N10;
     N2 --> N11;
-    N3 --> N7;
     N3 --> N8;
+    N3 --> N7;
     N3 --> N9;
     N3 --> N13;
     N3 --> N12;
-    N4 --> N9;
     N4 --> N12;
+    N4 --> N9;
     N5 --> N9;
     N8 --> N7;
     N8 --> N6;
-    N9 --> N7;
     N9 --> N8;
+    N9 --> N7;
     N11 --> N10;
     N12 --> N11;
     N12 --> N9;
@@ -682,11 +682,11 @@ export { isBubbledError };
 ```
 ## Part 3
 ```js
-import { api } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
+};
+import { api } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
 };
 import { context, propagation, trace, ROOT_CONTEXT } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
@@ -887,11 +887,11 @@ export { getTracer } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 4
 ```js
-import { SpanStatusCode } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 12
+};
+import { SpanStatusCode } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
 };
 export { SpanStatusCode as SpanStatusCode };
 
@@ -938,11 +938,11 @@ if (process.env.NEXT_RUNTIME === 'edge') {
 ```
 ## Part 9
 ```js
-import { api } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
+};
+import { api } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
 };
 const { context, propagation, trace, SpanStatusCode, SpanKind, ROOT_CONTEXT } = api;
 export { context } from "__TURBOPACK_VAR__" assert {
@@ -1108,11 +1108,11 @@ export { isBubbledError };
 ```
 ## Part 3
 ```js
-import { api } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
+};
+import { api } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
 };
 import { context, propagation, trace, ROOT_CONTEXT } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
@@ -1313,11 +1313,11 @@ export { getTracer } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 4
 ```js
-import { SpanStatusCode } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 12
+};
+import { SpanStatusCode } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
 };
 export { SpanStatusCode as SpanStatusCode };
 
@@ -1364,11 +1364,11 @@ if (process.env.NEXT_RUNTIME === 'edge') {
 ```
 ## Part 9
 ```js
-import { api } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
+};
+import { api } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
 };
 const { context, propagation, trace, SpanStatusCode, SpanKind, ROOT_CONTEXT } = api;
 export { context } from "__TURBOPACK_VAR__" assert {

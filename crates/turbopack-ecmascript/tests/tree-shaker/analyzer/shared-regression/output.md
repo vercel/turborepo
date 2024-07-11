@@ -127,19 +127,17 @@ graph TD
     Item2 --> Item1;
     Item3 --> Item2;
     Item4 --> Item3;
-    Item4 --> Item1;
     Item4 --> Item2;
+    Item4 --> Item1;
+    Item5 --> Item4;
     Item5 --> Item1;
     Item5 --> Item2;
-    Item5 --> Item4;
     Item5 --> Item3;
     Item6 --> Item4;
-    Item7 --> Item4;
     Item7 --> Item6;
-    Item9 --> Item1;
-    Item9 --> Item2;
-    Item9 --> Item4;
+    Item7 --> Item4;
     Item9 --> Item5;
+    Item9 --> Item1;
     Item10 --> Item6;
     Item11 --> Item7;
 ```
@@ -164,19 +162,17 @@ graph TD
     Item2 --> Item1;
     Item3 --> Item2;
     Item4 --> Item3;
-    Item4 --> Item1;
     Item4 --> Item2;
+    Item4 --> Item1;
+    Item5 --> Item4;
     Item5 --> Item1;
     Item5 --> Item2;
-    Item5 --> Item4;
     Item5 --> Item3;
     Item6 --> Item4;
-    Item7 --> Item4;
     Item7 --> Item6;
-    Item9 --> Item1;
-    Item9 --> Item2;
-    Item9 --> Item4;
+    Item7 --> Item4;
     Item9 --> Item5;
+    Item9 --> Item1;
     Item10 --> Item6;
     Item11 --> Item7;
 ```
@@ -201,19 +197,17 @@ graph TD
     Item2 --> Item1;
     Item3 --> Item2;
     Item4 --> Item3;
-    Item4 --> Item1;
     Item4 --> Item2;
+    Item4 --> Item1;
+    Item5 --> Item4;
     Item5 --> Item1;
     Item5 --> Item2;
-    Item5 --> Item4;
     Item5 --> Item3;
     Item6 --> Item4;
-    Item7 --> Item4;
     Item7 --> Item6;
-    Item9 --> Item1;
-    Item9 --> Item2;
-    Item9 --> Item4;
+    Item7 --> Item4;
     Item9 --> Item5;
+    Item9 --> Item1;
     Item10 --> Item6;
     Item11 --> Item7;
     Item8 --> Item2;
@@ -236,21 +230,19 @@ graph TD
     N0 --> N5;
     N0 --> N6;
     N0 --> N8;
-    N1 --> N4;
-    N1 --> N5;
-    N1 --> N7;
     N1 --> N8;
+    N1 --> N4;
     N2 --> N9;
-    N3 --> N7;
     N3 --> N9;
+    N3 --> N7;
     N5 --> N4;
     N6 --> N5;
     N7 --> N6;
-    N7 --> N4;
     N7 --> N5;
+    N7 --> N4;
+    N8 --> N7;
     N8 --> N4;
     N8 --> N5;
-    N8 --> N7;
     N8 --> N6;
     N9 --> N7;
 ```
@@ -289,17 +281,11 @@ import "__TURBOPACK_PART__" assert {
 ```
 ## Part 1
 ```js
-import { order } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
+};
+import { order } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
 };
 export { order };
 
@@ -314,11 +300,11 @@ export { a };
 ```
 ## Part 3
 ```js
-import { shared } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
+};
+import { shared } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
 };
 export { b };
 const b = {
@@ -362,11 +348,11 @@ export { random } from "__TURBOPACK_VAR__" assert {
 import { random } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
-import { order } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
+};
+import { order } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
 };
 const shared = {
     random,
@@ -379,14 +365,14 @@ export { shared } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 8
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
+};
 import { order } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
 };
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
@@ -457,17 +443,11 @@ import "__TURBOPACK_PART__" assert {
 ```
 ## Part 1
 ```js
-import { order } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
+};
+import { order } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
 };
 export { order };
 
@@ -482,11 +462,11 @@ export { a };
 ```
 ## Part 3
 ```js
-import { shared } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
+};
+import { shared } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
 };
 export { b };
 const b = {
@@ -530,11 +510,11 @@ export { random } from "__TURBOPACK_VAR__" assert {
 import { random } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
-import { order } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
+};
+import { order } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
 };
 const shared = {
     random,
@@ -547,14 +527,14 @@ export { shared } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 8
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
+};
 import { order } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
 };
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6

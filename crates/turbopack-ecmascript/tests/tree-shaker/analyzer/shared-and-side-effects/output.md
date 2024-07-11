@@ -164,8 +164,8 @@ graph TD
     Item7 --> Item5;
     Item8 --> Item6;
     Item8 -.-> Item7;
-    Item9 --> Item6;
     Item9 --> Item8;
+    Item9 --> Item6;
     Item9 -.-> Item7;
     Item11 --> Item8;
     Item12 --> Item9;
@@ -209,8 +209,8 @@ graph TD
     Item7 --> Item5;
     Item8 --> Item6;
     Item8 -.-> Item7;
-    Item9 --> Item6;
     Item9 --> Item8;
+    Item9 --> Item6;
     Item9 -.-> Item7;
     Item11 --> Item8;
     Item12 --> Item9;
@@ -254,8 +254,8 @@ graph TD
     Item7 --> Item5;
     Item8 --> Item6;
     Item8 -.-> Item7;
-    Item9 --> Item6;
     Item9 --> Item8;
+    Item9 --> Item6;
     Item9 -.-> Item7;
     Item11 --> Item8;
     Item12 --> Item9;
@@ -287,8 +287,8 @@ graph TD
     N0 --> N7;
     N0 --> N9;
     N1 --> N10;
-    N2 --> N8;
     N2 --> N10;
+    N2 --> N8;
     N2 --> N9;
     N4 --> N3;
     N5 --> N3;
@@ -361,11 +361,11 @@ export { a };
 ```
 ## Part 2
 ```js
-import { shared } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 10
+};
+import { shared } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 8
 };
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
@@ -578,11 +578,11 @@ export { a };
 ```
 ## Part 2
 ```js
-import { shared } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
+};
+import { shared } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 8
 };
 export { b };
 const b = {

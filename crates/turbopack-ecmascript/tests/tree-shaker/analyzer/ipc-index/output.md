@@ -851,8 +851,8 @@ graph TD
     Item28 -.-> Item4;
     Item28 -.-> Item7;
     Item30 --> Item7;
-    Item31 --> Item10;
     Item31 --> Item11;
+    Item31 --> Item10;
 ```
 # Phase 3
 ```mermaid
@@ -1226,8 +1226,8 @@ graph TD
     Item28 -.-> Item4;
     Item28 -.-> Item7;
     Item30 --> Item7;
-    Item31 --> Item10;
     Item31 --> Item11;
+    Item31 --> Item10;
     Item7 --> Item6;
     Item7 --> Item5;
     Item8 --> Item4;
@@ -1605,8 +1605,8 @@ graph TD
     Item28 -.-> Item4;
     Item28 -.-> Item7;
     Item30 --> Item7;
-    Item31 --> Item10;
     Item31 --> Item11;
+    Item31 --> Item10;
     Item7 --> Item6;
     Item7 --> Item5;
     Item8 --> Item4;
@@ -1656,8 +1656,8 @@ graph TD
     N0 --> N9;
     N0 --> N6;
     N1 --> N6;
-    N2 --> N8;
     N2 --> N9;
+    N2 --> N8;
     N4 --> N3;
     N5 --> N3;
     N5 --> N4;
@@ -1777,11 +1777,11 @@ export { structuredError };
 ```
 ## Part 2
 ```js
-import { IPC } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
+};
+import { IPC } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 8
 };
 export { IPC };
 
@@ -2228,11 +2228,11 @@ export { structuredError };
 ```
 ## Part 2
 ```js
-import { IPC } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
+};
+import { IPC } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 8
 };
 export { IPC };
 
