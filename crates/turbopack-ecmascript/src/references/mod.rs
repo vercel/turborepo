@@ -33,7 +33,6 @@ use num_traits::Zero;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use regex::Regex;
-use rustc_hash::FxHashSet;
 use sourcemap::decode_data_url;
 use swc_core::{
     atoms::JsWord,
@@ -384,7 +383,6 @@ where
 pub(crate) async fn analyse_ecmascript_module(
     module: Vc<EcmascriptModuleAsset>,
     part: Option<Vc<ModulePart>>,
-    special_exports: Vc<Vec<RcStr>>,
 ) -> Result<Vc<AnalyzeEcmascriptModuleResult>> {
     let span = {
         let module = module.ident().to_string().await?.to_string();

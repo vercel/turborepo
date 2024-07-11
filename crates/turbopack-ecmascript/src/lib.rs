@@ -376,9 +376,7 @@ impl EcmascriptModuleAsset {
 
     #[turbo_tasks::function]
     pub async fn analyze(self: Vc<Self>) -> Result<Vc<AnalyzeEcmascriptModuleResult>> {
-        let this = self.await?;
-        let special_exports = this.options.await?.special_exports;
-        Ok(analyse_ecmascript_module(self, None, special_exports))
+        Ok(analyse_ecmascript_module(self, None))
     }
 
     #[turbo_tasks::function]

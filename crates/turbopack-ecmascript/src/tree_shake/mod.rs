@@ -2,7 +2,7 @@ use std::{borrow::Cow, fmt::Write};
 
 use anyhow::{bail, Result};
 use indexmap::IndexSet;
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 use swc_core::{
     common::{util::take::Take, SyntaxContext, DUMMY_SP, GLOBALS},
     ecma::{
@@ -456,31 +456,12 @@ pub(super) async fn split_module(
 }
 
 #[turbo_tasks::function]
-async fn should_skip(ident: Vc<AssetIdent>, _: Vc<Box<dyn Source>>) -> Result<Vc<bool>> {
-    // Skip `@swc/helpers`
-    let s = ident.to_string().await?;
-    if s.contains("@swc/helpers") {
-        return Ok(Vc::cell(true));
-    }
-
-    Ok(Vc::cell(false))
-}
-
-#[turbo_tasks::function]
 pub(super) async fn split(
     ident: Vc<AssetIdent>,
     source: Vc<Box<dyn Source>>,
     parsed: Vc<ParseResult>,
     special_exports: Vc<Vec<RcStr>>,
 ) -> Result<Vc<SplitResult>> {
-    // If the script file is a common js file, we cannot split the module
-    if *should_skip(ident, source).await? {
-        return Ok(SplitResult::Failed {
-            parse_result: parsed,
-        }
-        .cell());
-    }
-
     let parse_result = parsed.await?;
 
     match &*parse_result {

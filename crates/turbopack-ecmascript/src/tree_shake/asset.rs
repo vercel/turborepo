@@ -80,7 +80,7 @@ impl Module for EcmascriptModulePartAsset {
     async fn references(&self) -> Result<Vc<ModuleReferences>> {
         let split_data = split_module(self.full_module, self.special_exports).await?;
 
-        let analyze = analyze(self.full_module, self.part, self.special_exports).await?;
+        let analyze = analyze(self.full_module, self.part).await?;
 
         let (deps, entrypoints) = match &*split_data {
             SplitResult::Ok {
@@ -217,7 +217,7 @@ impl EcmascriptModulePartAsset {
     pub(super) async fn analyze(self: Vc<Self>) -> Result<Vc<AnalyzeEcmascriptModuleResult>> {
         let this = self.await?;
 
-        Ok(analyze(this.full_module, this.part, this.special_exports))
+        Ok(analyze(this.full_module, this.part))
     }
 }
 
@@ -225,13 +225,8 @@ impl EcmascriptModulePartAsset {
 async fn analyze(
     module: Vc<EcmascriptModuleAsset>,
     part: Vc<ModulePart>,
-    special_exports: Vc<Vec<RcStr>>,
 ) -> Result<Vc<AnalyzeEcmascriptModuleResult>> {
-    Ok(analyse_ecmascript_module(
-        module,
-        Some(part),
-        special_exports,
-    ))
+    Ok(analyse_ecmascript_module(module, Some(part)))
 }
 
 #[turbo_tasks::value_impl]
