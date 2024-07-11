@@ -86,7 +86,7 @@ fn get_frameworks() -> &'static [Framework] {
             },
             Framework {
                 slug: "sveltekit",
-                env_wildcards: vec!["VITE_*"],
+                env_wildcards: vec!["VITE_*", "PUBLIC_*"],
                 dependency_match: Matcher {
                     strategy: Strategy::All,
                     dependencies: vec!["@sveltejs/kit"],

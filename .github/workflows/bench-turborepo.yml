@@ -73,16 +73,9 @@ jobs:
         shell: bash
         run: echo "${{ steps.filename.outputs.filename }}"
 
-      # setup Rust on windows, because apparently setup-turborepo-environment doesn't do this
-      # TODO: put this logic in ./github/actions/setup-rust and use that instead
-      - name: Add rustup for windows
-        if: ${{ matrix.os.runner == 'windows-latest'}}
-        run: rustup target add x86_64-pc-windows-gnu
-
       - name: Setup Turborepo Environment
         uses: ./.github/actions/setup-turborepo-environment
         with:
-          windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Build Turborepo from source

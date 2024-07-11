@@ -17,7 +17,8 @@ const PANE_SIZE_RATIO: f32 = 3.0 / 4.0;
 const FRAMERATE: Duration = Duration::from_millis(3);
 
 use super::{
-    event::TaskResult, input, AppReceiver, Error, Event, InputOptions, TaskTable, TerminalPane,
+    event::{CacheResult, OutputLogs, TaskResult},
+    input, AppReceiver, Error, Event, InputOptions, TaskTable, TerminalPane,
 };
 use crate::tui::{
     task::{Task, TasksByStatus},
@@ -104,6 +105,7 @@ impl<W> App<W> {
         self.tasks.get_mut(&self.active_task()).unwrap()
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn next(&mut self) {
         let num_rows = self.tasks_by_status.count_all();
         let next_index = (self.selected_task_index + 1).clamp(0, num_rows - 1);
@@ -112,6 +114,7 @@ impl<W> App<W> {
         self.has_user_scrolled = true;
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn previous(&mut self) {
         let i = match self.selected_task_index {
             0 => 0,
@@ -122,6 +125,7 @@ impl<W> App<W> {
         self.has_user_scrolled = true;
     }
 
+    #[tracing::instrument(skip_all)]
     pub fn scroll_terminal_output(&mut self, direction: Direction) {
         self.tasks
             .get_mut(&self.active_task())
@@ -133,7 +137,8 @@ impl<W> App<W> {
     /// Mark the given task as started.
     /// If planned, pulls it from planned tasks and starts it.
     /// If finished, removes from finished and starts again as new task.
-    pub fn start_task(&mut self, task: &str) -> Result<(), Error> {
+    #[tracing::instrument(skip(self, output_logs))]
+    pub fn start_task(&mut self, task: &str, output_logs: OutputLogs) -> Result<(), Error> {
         // Name of currently highlighted task.
         // We will use this after the order switches.
         let highlighted_task = self
@@ -171,6 +176,10 @@ impl<W> App<W> {
         if !found_task {
             return Err(Error::TaskNotFound { name: task.into() });
         }
+        self.tasks
+            .get_mut(task)
+            .ok_or_else(|| Error::TaskNotFound { name: task.into() })?
+            .output_logs = Some(output_logs);
 
         // If user hasn't interacted, keep highlighting top-most task in list.
         if !self.has_user_scrolled {
@@ -191,6 +200,7 @@ impl<W> App<W> {
 
     /// Mark the given running task as finished
     /// Errors if given task wasn't a running task
+    #[tracing::instrument(skip(self, result))]
     pub fn finish_task(&mut self, task: &str, result: TaskResult) -> Result<(), Error> {
         // Name of currently highlighted task.
         // We will use this after the order switches.
@@ -212,6 +222,11 @@ impl<W> App<W> {
 
         let running = self.tasks_by_status.running.remove(running_idx);
         self.tasks_by_status.finished.push(running.finish(result));
+
+        self.tasks
+            .get_mut(task)
+            .ok_or_else(|| Error::TaskNotFound { name: task.into() })?
+            .task_result = Some(result);
 
         // If user hasn't interacted, keep highlighting top-most task in list.
         if !self.has_user_scrolled {
@@ -248,6 +263,7 @@ impl<W> App<W> {
         }
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn update_tasks(&mut self, tasks: Vec<String>) {
         // Make sure all tasks have a terminal output
         for task in &tasks {
@@ -278,7 +294,13 @@ impl<W> App<W> {
         Ok(())
     }
 
-    pub fn set_status(&mut self, task: String, status: String) -> Result<(), Error> {
+    #[tracing::instrument(skip(self))]
+    pub fn set_status(
+        &mut self,
+        task: String,
+        status: String,
+        result: CacheResult,
+    ) -> Result<(), Error> {
         let task = self
             .tasks
             .get_mut(&task)
@@ -286,6 +308,7 @@ impl<W> App<W> {
                 name: task.to_owned(),
             })?;
         task.status = Some(status);
+        task.cache_result = Some(result);
         Ok(())
     }
 }
@@ -303,6 +326,7 @@ impl<W: Write> App<W> {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all)]
     pub fn forward_input(&mut self, bytes: &[u8]) -> Result<(), Error> {
         if matches!(self.input_options.focus, LayoutSections::Pane) {
             let task_output = self.get_full_task_mut();
@@ -318,6 +342,7 @@ impl<W: Write> App<W> {
         }
     }
 
+    #[tracing::instrument(skip(self, output))]
     pub fn process_output(&mut self, task: &str, output: &[u8]) -> Result<(), Error> {
         let task_output = self.tasks.get_mut(task).unwrap();
         task_output.parser.process(output);
@@ -400,6 +425,7 @@ pub fn terminal_big_enough() -> Result<bool, Error> {
 }
 
 /// Configures terminal for rendering App
+#[tracing::instrument]
 fn startup() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
     crossterm::terminal::enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -424,6 +450,7 @@ fn startup() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
 }
 
 /// Restores terminal to expected state
+#[tracing::instrument(skip_all)]
 fn cleanup<B: Backend + io::Write>(
     mut terminal: Terminal<B>,
     mut app: App<Box<dyn io::Write + Send>>,
@@ -449,14 +476,18 @@ fn update(
     event: Event,
 ) -> Result<Option<mpsc::SyncSender<()>>, Error> {
     match event {
-        Event::StartTask { task } => {
-            app.start_task(&task)?;
+        Event::StartTask { task, output_logs } => {
+            app.start_task(&task, output_logs)?;
         }
         Event::TaskOutput { task, output } => {
             app.process_output(&task, &output)?;
         }
-        Event::Status { task, status } => {
-            app.set_status(task, status)?;
+        Event::Status {
+            task,
+            status,
+            result,
+        } => {
+            app.set_status(task, status, result)?;
         }
         Event::InternalStop => {
             app.done = true;
@@ -526,6 +557,7 @@ fn view<W>(app: &mut App<W>, f: &mut Frame, cols: u16) {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::tui::event::CacheResult;
 
     #[test]
     fn test_scroll() {
@@ -564,10 +596,10 @@ mod test {
         app.next();
         assert_eq!(app.scroll.selected(), Some(1), "selected b");
         assert_eq!(app.active_task(), "b", "selected b");
-        app.start_task("b").unwrap();
+        app.start_task("b", OutputLogs::Full).unwrap();
         assert_eq!(app.scroll.selected(), Some(0), "b stays selected");
         assert_eq!(app.active_task(), "b", "selected b");
-        app.start_task("a").unwrap();
+        app.start_task("a", OutputLogs::Full).unwrap();
         assert_eq!(app.scroll.selected(), Some(0), "b stays selected");
         assert_eq!(app.active_task(), "b", "selected b");
         app.finish_task("a", TaskResult::Success).unwrap();
@@ -585,9 +617,9 @@ mod test {
         app.next();
         app.next();
         // Start all tasks
-        app.start_task("b").unwrap();
-        app.start_task("a").unwrap();
-        app.start_task("c").unwrap();
+        app.start_task("b", OutputLogs::Full).unwrap();
+        app.start_task("a", OutputLogs::Full).unwrap();
+        app.start_task("c", OutputLogs::Full).unwrap();
         assert_eq!(
             app.tasks_by_status.task_name(0),
             "b",
@@ -614,7 +646,7 @@ mod test {
         );
 
         // Restart b
-        app.start_task("b").unwrap();
+        app.start_task("b", OutputLogs::Full).unwrap();
         assert_eq!(
             (
                 app.tasks_by_status.task_name(1),
@@ -625,7 +657,7 @@ mod test {
         );
 
         // Restart a
-        app.start_task("a").unwrap();
+        app.start_task("a", OutputLogs::Full).unwrap();
         assert_eq!(
             (
                 app.tasks_by_status.task_name(0),
@@ -650,10 +682,10 @@ mod test {
         assert_eq!(app.scroll.selected(), Some(2), "selected c");
         assert_eq!(app.tasks_by_status.task_name(2), "c", "selected c");
         // start c which moves it to "running" which is before "planned"
-        app.start_task("c").unwrap();
+        app.start_task("c", OutputLogs::Full).unwrap();
         assert_eq!(app.scroll.selected(), Some(0), "selection stays on c");
         assert_eq!(app.tasks_by_status.task_name(0), "c", "selected c");
-        app.start_task("a").unwrap();
+        app.start_task("a", OutputLogs::Full).unwrap();
         assert_eq!(app.scroll.selected(), Some(0), "selection stays on c");
         assert_eq!(app.tasks_by_status.task_name(0), "c", "selected c");
         // c
@@ -682,8 +714,8 @@ mod test {
         assert_eq!(app.scroll.selected(), Some(1), "selected b");
         assert_eq!(app.tasks_by_status.task_name(1), "b", "selected b");
         // start c which moves it to "running" which is before "planned"
-        app.start_task("a").unwrap();
-        app.start_task("b").unwrap();
+        app.start_task("a", OutputLogs::Full).unwrap();
+        app.start_task("b", OutputLogs::Full).unwrap();
         app.insert_stdin("a", Some(Vec::new())).unwrap();
         app.insert_stdin("b", Some(Vec::new())).unwrap();
 
@@ -735,7 +767,7 @@ mod test {
         assert_eq!(app.scroll.selected(), Some(1), "selected b");
         assert_eq!(app.tasks_by_status.task_name(1), "b", "selected b");
         // set status for a
-        app.set_status("a".to_string(), "building".to_string())
+        app.set_status("a".to_string(), "building".to_string(), CacheResult::Hit)
             .unwrap();
 
         assert_eq!(
