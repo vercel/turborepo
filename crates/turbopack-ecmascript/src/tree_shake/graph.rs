@@ -458,7 +458,7 @@ impl DepGraph {
                     global_done.extend(cycle.iter().copied());
 
                     let len = ids.len();
-                    groups.push((ids, Default::default(), len));
+                    groups.push((ids, FxHashSet::default(), len));
                 }
             }
         }
