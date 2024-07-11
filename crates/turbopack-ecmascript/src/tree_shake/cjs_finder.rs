@@ -87,7 +87,7 @@ pub fn should_skip_tree_shaking(m: &Program) -> bool {
             }
         }
 
-        let mut visitor = AbortFinder::default();
+        let mut visitor = UseServerFinder::default();
         m.visit_with(&mut visitor);
         if visitor.abort {
             return true;
@@ -123,15 +123,12 @@ fn is_next_js_special_export(sym: &str) -> bool {
             | "getStaticProps"
     )
 }
-
 #[derive(Default)]
-struct AbortFinder {
+struct UseServerFinder {
     abort: bool,
 }
 
-impl Visit for AbortFinder {
-    noop_visit_type!();
-
+impl Visit for UseServerFinder {
     fn visit_expr_stmt(&mut self, e: &ExprStmt) {
         e.visit_children_with(self);
 
@@ -141,4 +138,14 @@ impl Visit for AbortFinder {
             }
         }
     }
+
+    fn visit_stmt(&mut self, n: &Stmt) {
+        if self.abort {
+            return;
+        }
+
+        n.visit_children_with(self);
+    }
+
+    noop_visit_type!();
 }
