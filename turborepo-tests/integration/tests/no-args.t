@@ -115,22 +115,20 @@ Make sure exit code is 2 when no args are passed
   $ ${TURBO} run
   No tasks provided, here are some potential ones to run
   
-  
-  build
-    > my-app, util
-  maybefails
-    > my-app, util
+    maybefails
+      my-app, util
+    build
+      my-app, util
   [1]
 
 Run again with a filter and get only the packages that match
   $ ${TURBO} run --filter my-app
   No tasks provided, here are some potential ones to run
   
-  
-  build
-    > my-app
-  maybefails
-    > my-app
+    build
+      my-app
+    maybefails
+      my-app
   [1]
 
 

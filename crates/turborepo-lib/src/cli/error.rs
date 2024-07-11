@@ -74,7 +74,7 @@ pub async fn print_potential_tasks(
 
     for (task, packages) in potential_tasks
         .into_iter()
-        .sorted_by(|(a, _), (b, _)| a.cmp(b))
+        .sorted_by(|(_, a), (_, b)| b.len().cmp(&a.len()))
     {
         let task = color!(ui, BOLD, "{}", task);
         let mut line_length = 0;
@@ -96,9 +96,9 @@ pub async fn print_potential_tasks(
             packages_str.push_str(&format!("{}", package));
         }
 
-        let packages = color!(ui, GREY, "> {}", packages_str);
+        let packages = color!(ui, GREY, "{}", packages_str);
 
-        println!("{}\n  {}", task, packages)
+        println!("  {}\n    {}", task, packages)
     }
 
     Ok(())
