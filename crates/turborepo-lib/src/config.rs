@@ -276,6 +276,10 @@ impl ConfigurationOptions {
     pub fn ui(&self) -> bool {
         self.ui.unwrap_or(false) && atty::is(atty::Stream::Stdout)
     }
+
+    pub fn allow_no_package_manager(&self) -> bool {
+        self.allow_no_package_manager.unwrap_or_default()
+    }
 }
 
 // Maps Some("") to None to emulate how Go handles empty strings

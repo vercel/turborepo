@@ -64,6 +64,7 @@ pub struct RunBuilder {
     // this package.
     entrypoint_packages: Option<HashSet<PackageName>>,
     should_print_prelude_override: Option<bool>,
+    allow_missing_package_manager: bool,
 }
 
 impl RunBuilder {
@@ -73,6 +74,8 @@ impl RunBuilder {
 
         let mut opts: Opts = base.args().try_into()?;
         let config = base.config()?;
+        let allow_missing_package_manager = config.allow_no_package_manager();
+
         let is_linked = turborepo_api_client::is_linked(&api_auth);
         if !is_linked {
             opts.cache_opts.skip_remote = true;
@@ -116,6 +119,7 @@ impl RunBuilder {
             analytics_sender: None,
             entrypoint_packages: None,
             should_print_prelude_override: None,
+            allow_missing_package_manager,
         })
     }
 
@@ -187,6 +191,10 @@ impl RunBuilder {
         // Pulled from initAnalyticsClient in run.go
         let is_linked = turborepo_api_client::is_linked(&self.api_auth);
         run_telemetry.track_is_linked(is_linked);
+        run_telemetry.track_arg_usage(
+            "dangerously_allow_missing_package_manager",
+            self.allow_missing_package_manager,
+        );
         // we only track the remote cache if we're linked because this defaults to
         // Vercel
         if is_linked {
