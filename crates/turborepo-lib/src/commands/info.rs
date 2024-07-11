@@ -102,8 +102,7 @@ impl<'a> RepositoryDetails<'a> {
         }
     }
     fn print(&self) -> Result<(), cli::Error> {
-        // We subtract 1 for the root workspace
-        cprintln!(self.ui, BOLD, "{} packages\n", self.workspaces.len() - 1);
+        cprintln!(self.ui, BOLD, "{} packages\n", self.workspaces.len());
 
         for (workspace_name, entry) in &self.workspaces {
             if matches!(workspace_name, PackageName::Root) {
