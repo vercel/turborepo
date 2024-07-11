@@ -271,7 +271,9 @@ impl AnalyzeEcmascriptModuleResultBuilder {
         track_reexport_references: bool,
     ) -> Result<Vc<AnalyzeEcmascriptModuleResult>> {
         let bindings = EsmBindings::new(take(&mut self.bindings));
-        self.add_code_gen(bindings);
+        if !bindings.await?.bindings.is_empty() {
+            self.add_code_gen(bindings);
+        }
 
         let mut references: Vec<_> = self.references.into_iter().collect();
         for r in references.iter_mut() {
