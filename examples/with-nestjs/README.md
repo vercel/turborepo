@@ -20,13 +20,12 @@ This Turborepo includes the following packages/apps:
     ├── apps
     │   ├── api                       # NestJS app (https://nestjs.com).
     │   └── web                       # Next.js app (https://nextjs.org).
-    ├── packages
-    │   ├── @repo/api                 # Shared `NestJS` resources.
-    │   ├── @repo/eslint-config       # `eslint` configurations (includes `prettier`)
-    │   ├── @repo/jest-config         # `jest` configurations
-    │   ├── @repo/typescript-config   # `tsconfig.json`s used throughout the monorepo
-    │   └── @repo/ui                  # Shareable stub React component library.
-    └── root
+    └── packages
+        ├── @repo/api                 # Shared `NestJS` resources.
+        ├── @repo/eslint-config       # `eslint` configurations (includes `prettier`)
+        ├── @repo/jest-config         # `jest` configurations
+        ├── @repo/typescript-config   # `tsconfig.json`s used throughout the monorepo
+        └── @repo/ui                  # Shareable stub React component library.
 
 Each package and application are 100% [TypeScript](https://www.typescriptlang.org/) safe.
 
@@ -48,6 +47,9 @@ This `Turborepo` already configured useful commands for all your apps and packag
 ```bash
 # Will build all the app & packages with the supported `build` script.
 pnpm run build
+
+# ℹ️ If you plan to only build apps individually,
+# Please make sure you've built the packages first.
 ```
 
 #### Develop
