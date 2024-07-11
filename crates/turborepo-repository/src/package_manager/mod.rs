@@ -285,9 +285,8 @@ pub enum Error {
     #[error("We detected multiple package managers in your repository: {}. Please remove one \
     of them.", managers.join(", "))]
     MultiplePackageManagers { managers: Vec<String> },
-    //#[error(transparent)]
-    //Semver(#[from] node_semver::SemverError),
     #[error("invalid semantic version `{version}`")]
+    #[diagnostic(code(invalid_semantic_version))]
     InvalidVersion {
         version: String,
         #[label("version found here")]
@@ -306,6 +305,7 @@ pub enum Error {
         "could not parse the packageManager field in package.json,\nexpected to match regular \
          expression {pattern}"
     )]
+    #[diagnostic(code(invalid_package_manager_field))]
     InvalidPackageManager {
         pattern: String,
         #[label("invalid `packageManager` field")]
