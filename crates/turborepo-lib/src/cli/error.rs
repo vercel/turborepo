@@ -58,58 +58,48 @@ pub enum Error {
 
 const MAX_CHARS_PER_TASK_LINE: usize = 100;
 
-pub async fn print_potential_tasks(base: CommandBase, telemetry: CommandEventBuilder) {
-    let output: Result<_, Error> = try {
-        let signal = get_signal()?;
-        let handler = SignalHandler::new(signal);
-        let ui = base.ui;
+pub async fn print_potential_tasks(
+    base: CommandBase,
+    telemetry: CommandEventBuilder,
+) -> Result<(), Error> {
+    let signal = get_signal()?;
+    let handler = SignalHandler::new(signal);
+    let ui = base.ui;
 
-        let run_builder = RunBuilder::new(base)?;
-        let run = run_builder.build(&handler, telemetry).await?;
-        let potential_tasks = run.get_potential_tasks()?;
+    let run_builder = RunBuilder::new(base)?;
+    let run = run_builder.build(&handler, telemetry).await?;
+    let potential_tasks = run.get_potential_tasks()?;
 
-        potential_tasks
-            .into_iter()
-            .sorted_by(|(a, _), (b, _)| a.cmp(b))
-            .map(|(task, packages)| {
-                let task = color!(ui, BOLD, "{}", task);
-                let mut line_length = 0;
+    println!("No tasks provided, here are some potential ones to run\n",);
 
-                let mut packages_str = String::with_capacity(80);
-                for (idx, package) in packages.iter().enumerate() {
-                    if line_length > MAX_CHARS_PER_TASK_LINE {
-                        if idx != packages.len() {
-                            packages_str.push_str(&format!(" and {} more", packages.len() - idx));
-                        }
+    for (task, packages) in potential_tasks
+        .into_iter()
+        .sorted_by(|(a, _), (b, _)| a.cmp(b))
+    {
+        let task = color!(ui, BOLD, "{}", task);
+        let mut line_length = 0;
 
-                        break;
-                    }
-
-                    line_length += package.len() + 2;
-                    if idx != 0 {
-                        packages_str.push_str(", ");
-                    }
-                    packages_str.push_str(&format!("{}", package));
+        let mut packages_str = String::with_capacity(80);
+        for (idx, package) in packages.iter().sorted().enumerate() {
+            if line_length > MAX_CHARS_PER_TASK_LINE {
+                if idx != packages.len() {
+                    packages_str.push_str(&format!(" and {} more", packages.len() - idx));
                 }
 
-                let packages = color!(ui, GREY, "> {}", packages_str);
+                break;
+            }
 
-                format!("{}\n  {}", task, packages)
-            })
-            .join("\n")
-    };
+            line_length += package.len() + 2;
+            if idx != 0 {
+                packages_str.push_str(", ");
+            }
+            packages_str.push_str(&format!("{}", package));
+        }
 
-    // We don't want to show a random error if someone is running `turbo run`
-    // without any tasks. Instead, we'll just show the no tasks error and exit.
-    match output {
-        Ok(output) => {
-            println!(
-                "No tasks provided, here are some potential ones to run\n\n{}",
-                output
-            );
-        }
-        Err(_) => {
-            println!("No tasks provided");
-        }
+        let packages = color!(ui, GREY, "> {}", packages_str);
+
+        println!("{}\n  {}", task, packages)
     }
+
+    Ok(())
 }

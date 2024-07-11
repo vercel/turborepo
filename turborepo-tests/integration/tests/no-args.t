@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup.sh
+  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh
 
 Make sure exit code is 2 when no args are passed
   $ ${TURBO}
@@ -111,10 +111,28 @@ Make sure exit code is 2 when no args are passed
             Use "none" to remove prefixes from task logs. Use "task" to get task id prefixing. Use "auto" to let turbo decide how to prefix the logs based on the execution environment. In most cases this will be the same as "task". Note that tasks running in parallel interleave their logs, so removing prefixes can make it difficult to associate logs with tasks. Use --log-order=grouped to prevent interleaving. (default auto) [default: auto] [possible values: auto, none, task]
   [1]
 
+
   $ ${TURBO} run
-    x at least one task must be specified
+  No tasks provided, here are some potential ones to run
   
+  
+  build
+    > my-app, util
+  maybefails
+    > my-app, util
   [1]
+
+Run again with a filter and get only the packages that match
+  $ ${TURBO} run --filter my-app
+  No tasks provided, here are some potential ones to run
+  
+  
+  build
+    > my-app
+  maybefails
+    > my-app
+  [1]
+
 
 Run again with an environment variable that corresponds to a run argument and assert that
 we get the full help output.

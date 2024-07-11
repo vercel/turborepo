@@ -1227,7 +1227,7 @@ pub async fn run(
             let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
 
             if execution_args.tasks.is_empty() {
-                print_potential_tasks(base, event).await;
+                print_potential_tasks(base, event).await?;
                 process::exit(1);
             }
 
