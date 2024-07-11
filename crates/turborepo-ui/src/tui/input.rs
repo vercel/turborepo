@@ -2,19 +2,16 @@ use std::time::Duration;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
-use super::{event::Event, Error};
+use super::{app::LayoutSections, event::Event, Error};
 
 #[derive(Debug, Clone, Copy)]
 pub struct InputOptions {
-    pub interact: bool,
+    pub focus: LayoutSections,
     pub tty_stdin: bool,
 }
 /// Return any immediately available event
 pub fn input(options: InputOptions) -> Result<Option<Event>, Error> {
-    let InputOptions {
-        interact,
-        tty_stdin,
-    } = options;
+    let InputOptions { focus, tty_stdin } = options;
     // If stdin is not a tty, then we do not attempt to read from it
     if !tty_stdin {
         return Ok(None);
@@ -23,7 +20,7 @@ pub fn input(options: InputOptions) -> Result<Option<Event>, Error> {
     // for input
     if crossterm::event::poll(Duration::from_millis(0))? {
         match crossterm::event::read()? {
-            crossterm::event::Event::Key(k) => Ok(translate_key_event(interact, k)),
+            crossterm::event::Event::Key(k) => Ok(translate_key_event(&focus, k)),
             crossterm::event::Event::Mouse(m) => match m.kind {
                 crossterm::event::MouseEventKind::ScrollDown => Ok(Some(Event::ScrollDown)),
                 crossterm::event::MouseEventKind::ScrollUp => Ok(Some(Event::ScrollUp)),
@@ -37,7 +34,7 @@ pub fn input(options: InputOptions) -> Result<Option<Event>, Error> {
 }
 
 /// Converts a crossterm key event into a TUI interaction event
-fn translate_key_event(interact: bool, key_event: KeyEvent) -> Option<Event> {
+fn translate_key_event(interact: &LayoutSections, key_event: KeyEvent) -> Option<Event> {
     // On Windows events for releasing a key are produced
     // We skip these to avoid emitting 2 events per key press.
     // There is still a `Repeat` event for when a key is held that will pass through
@@ -51,12 +48,13 @@ fn translate_key_event(interact: bool, key_event: KeyEvent) -> Option<Event> {
         }
         // Interactive branches
         KeyCode::Char('z')
-            if interact && key_event.modifiers == crossterm::event::KeyModifiers::CONTROL =>
+            if matches!(interact, LayoutSections::Pane)
+                && key_event.modifiers == crossterm::event::KeyModifiers::CONTROL =>
         {
             Some(Event::ExitInteractive)
         }
         // If we're in interactive mode, convert the key event to bytes to send to stdin
-        _ if interact => Some(Event::Input {
+        _ if matches!(interact, LayoutSections::Pane) => Some(Event::Input {
             bytes: encode_key(key_event),
         }),
         // Fall through if we aren't in interactive mode
@@ -77,7 +75,7 @@ fn ctrl_c() -> Option<Event> {
     match signal::raise(signal::SIGINT) {
         Ok(_) => None,
         // We're unable to send the signal, stop rendering to force shutdown
-        Err(_) => Some(Event::Stop),
+        Err(_) => Some(Event::InternalStop),
     }
 }
 
@@ -101,7 +99,7 @@ fn ctrl_c() -> Option<Event> {
         None
     } else {
         // We're unable to send the Ctrl-C event, stop rendering to force shutdown
-        Some(Event::Stop)
+        Some(Event::InternalStop)
     }
 }
 

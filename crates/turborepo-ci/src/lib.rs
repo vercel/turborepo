@@ -6,7 +6,10 @@ mod vendors;
 use std::{env, sync::OnceLock};
 
 use crate::vendors::get_vendors;
-pub use crate::{vendor_behavior::VendorBehavior, vendors::Vendor};
+pub use crate::{
+    vendor_behavior::{GroupPrefixFn, VendorBehavior},
+    vendors::Vendor,
+};
 
 static IS_CI: OnceLock<bool> = OnceLock::new();
 static VENDOR: OnceLock<Option<&'static Vendor>> = OnceLock::new();

@@ -4,6 +4,9 @@
   "sideEffects": [
     "**/*.css"
   ],
+  "files": [
+    "dist"
+  ],
   "exports": {
     "./styles.css": "./dist/index.css",
     "./card": "./src/card.tsx"
@@ -25,7 +28,6 @@
     "@types/react": "^18.2.61",
     "autoprefixer": "^10.4.18",
     "postcss": "^8.4.35",
-    "react": "^18.2.0",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.3.3"
   }

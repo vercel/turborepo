@@ -160,13 +160,22 @@ impl Run {
         }
 
         let task_names = self.engine.tasks_with_command(&self.pkg_dep_graph);
+        // If there aren't any tasks to run, then shouldn't start the UI
+        if task_names.is_empty() {
+            return Ok(None);
+        }
+
         let (sender, receiver) = AppSender::new();
         let handle = tokio::task::spawn_blocking(move || tui::run_app(task_names, receiver));
 
         Ok(Some((sender, handle)))
     }
 
-    pub async fn run(&mut self, experimental_ui_sender: Option<AppSender>) -> Result<i32, Error> {
+    pub async fn run(
+        &mut self,
+        experimental_ui_sender: Option<AppSender>,
+        is_watch: bool,
+    ) -> Result<i32, Error> {
         if let Some(subscriber) = self.signal_handler.subscribe() {
             let run_cache = self.run_cache.clone();
             tokio::spawn(async move {
@@ -349,6 +358,7 @@ impl Run {
             &self.repo_root,
             global_env,
             experimental_ui_sender,
+            is_watch,
         );
 
         if self.opts.run_opts.dry_run.is_some() {
@@ -387,7 +397,6 @@ impl Run {
                 &self.engine,
                 &self.env_at_execution_start,
                 self.opts.scope_opts.pkg_inference_root.as_deref(),
-                self.experimental_ui,
             )
             .await?;
 

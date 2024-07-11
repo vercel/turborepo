@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
     change_mapper::{ChangeMapper, DefaultPackageChangeMapper, LockfileChange, PackageChanges},
@@ -93,7 +94,7 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
         }
 
         let lockfile_contents = self.get_lockfile_contents(from_ref, &changed_files);
-
+        debug!("changed_files: {changed_files:?}");
         match self
             .change_mapper
             .changed_packages(changed_files, lockfile_contents)?

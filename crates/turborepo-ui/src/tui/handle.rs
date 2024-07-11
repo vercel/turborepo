@@ -3,7 +3,10 @@ use std::{
     time::Instant,
 };
 
-use super::{Event, TaskResult};
+use super::{
+    event::{CacheResult, OutputLogs},
+    Event, TaskResult,
+};
 
 /// Struct for sending app events to TUI rendering
 #[derive(Debug, Clone)]
@@ -52,9 +55,12 @@ impl AppSender {
 
     /// Stop rendering TUI and restore terminal to default configuration
     pub fn stop(&self) {
+        let (callback_tx, callback_rx) = mpsc::sync_channel(1);
         // Send stop event, if receiver has dropped ignore error as
         // it'll be a no-op.
-        self.primary.send(Event::Stop).ok();
+        self.primary.send(Event::Stop(callback_tx)).ok();
+        // Wait for callback to be sent or the channel closed.
+        callback_rx.recv().ok();
     }
 
     /// Update the list of tasks displayed in the TUI
@@ -82,11 +88,12 @@ impl TuiTask {
     }
 
     /// Mark the task as started
-    pub fn start(&self) {
+    pub fn start(&self, output_logs: OutputLogs) {
         self.handle
             .primary
             .send(Event::StartTask {
                 task: self.name.clone(),
+                output_logs,
             })
             .ok();
     }
@@ -122,7 +129,7 @@ impl TuiTask {
             .ok();
     }
 
-    pub fn status(&self, status: &str) {
+    pub fn status(&self, status: &str, result: CacheResult) {
         // Since this will be rendered via ratatui we any ANSI escape codes will not be
         // handled.
         // TODO: prevent the status from having ANSI codes in this scenario
@@ -132,6 +139,7 @@ impl TuiTask {
             .send(Event::Status {
                 task: self.name.clone(),
                 status,
+                result,
             })
             .ok();
     }

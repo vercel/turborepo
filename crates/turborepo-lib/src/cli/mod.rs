@@ -77,6 +77,18 @@ impl Display for OutputLogsMode {
     }
 }
 
+impl From<OutputLogsMode> for turborepo_ui::tui::event::OutputLogs {
+    fn from(value: OutputLogsMode) -> Self {
+        match value {
+            OutputLogsMode::Full => turborepo_ui::tui::event::OutputLogs::Full,
+            OutputLogsMode::None => turborepo_ui::tui::event::OutputLogs::None,
+            OutputLogsMode::HashOnly => turborepo_ui::tui::event::OutputLogs::HashOnly,
+            OutputLogsMode::NewOnly => turborepo_ui::tui::event::OutputLogs::NewOnly,
+            OutputLogsMode::ErrorsOnly => turborepo_ui::tui::event::OutputLogs::ErrorsOnly,
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
 pub enum LogOrder {
     #[serde(rename = "auto")]

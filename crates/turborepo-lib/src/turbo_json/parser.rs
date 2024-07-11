@@ -1,9 +1,4 @@
-use std::{
-    backtrace,
-    collections::BTreeMap,
-    fmt::{Debug, Display},
-    sync::Arc,
-};
+use std::{backtrace, collections::BTreeMap, fmt::Debug, sync::Arc};
 
 use biome_deserialize::{
     json::deserialize_from_json_str, Deserializable, DeserializableValue,
@@ -13,16 +8,16 @@ use biome_diagnostics::DiagnosticExt;
 use biome_json_parser::JsonParserOptions;
 use biome_json_syntax::TextRange;
 use convert_case::{Case, Casing};
-use miette::{Diagnostic, SourceSpan};
+use miette::Diagnostic;
 use struct_iterable::Iterable;
 use thiserror::Error;
 use turbopath::AnchoredSystemPath;
-use turborepo_errors::WithMetadata;
+use turborepo_errors::{ParseDiagnostic, WithMetadata};
+use turborepo_unescape::UnescapedString;
 
 use crate::{
     run::task_id::TaskName,
     turbo_json::{Pipeline, RawTaskDefinition, RawTurboJson, Spanned},
-    unescape::UnescapedString,
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -33,44 +28,6 @@ pub struct Error {
     diagnostics: Vec<ParseDiagnostic>,
     #[backtrace]
     backtrace: backtrace::Backtrace,
-}
-
-struct BiomeMessage<'a>(&'a biome_diagnostics::Error);
-
-impl Display for BiomeMessage<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.description(f)
-    }
-}
-
-impl From<biome_diagnostics::Error> for ParseDiagnostic {
-    fn from(diagnostic: biome_diagnostics::Error) -> Self {
-        let location = diagnostic.location();
-        let message = BiomeMessage(&diagnostic).to_string();
-        Self {
-            message,
-            source_code: location
-                .source_code
-                .map(|s| s.text.to_string())
-                .unwrap_or_default(),
-            label: location.span.map(|span| {
-                let start: usize = span.start().into();
-                let len: usize = span.len().into();
-                (start, len).into()
-            }),
-        }
-    }
-}
-
-#[derive(Debug, Error, Diagnostic)]
-#[error("{message}")]
-#[diagnostic(code(turbo_json_parse_error))]
-struct ParseDiagnostic {
-    message: String,
-    #[source_code]
-    source_code: String,
-    #[label]
-    label: Option<SourceSpan>,
 }
 
 fn create_unknown_key_diagnostic_from_struct<T: Iterable>(

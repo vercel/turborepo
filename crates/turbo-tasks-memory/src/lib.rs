@@ -10,12 +10,15 @@
 mod aggregation;
 mod cell;
 mod count_hash_set;
+mod edges_set;
 mod gc;
 mod map_guard;
 mod memory_backend;
 mod memory_backend_with_pg;
 mod output;
 mod task;
+mod task_statistics;
 
 pub use memory_backend::MemoryBackend;
 pub use memory_backend_with_pg::MemoryBackendWithPersistedGraph;
+pub use task_statistics::{TaskStatistics, TaskStatisticsApi};

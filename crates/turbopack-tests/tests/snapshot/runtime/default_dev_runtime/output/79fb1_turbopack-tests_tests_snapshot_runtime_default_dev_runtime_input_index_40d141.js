@@ -341,7 +341,7 @@ relativeURL.prototype = URL.prototype;
  *
  * It will be appended to the runtime code of each runtime right after the
  * shared runtime utils.
- */ /* eslint-disable @next/next/no-assign-module-variable */ /// <reference path="../../../shared/runtime-utils.ts" />
+ */ /* eslint-disable @next/next/no-assign-module-variable */ /// <reference path="../../../../shared/runtime-utils.ts" />
 /// <reference path="./globals.d.ts" />
 /// <reference path="./protocol.d.ts" />
 /// <reference path="./extensions.d.ts" />
@@ -570,6 +570,7 @@ function instantiateModule(id, source) {
                 w: loadWebAssembly.bind(null, sourceInfo),
                 u: loadWebAssemblyModule.bind(null, sourceInfo),
                 g: globalThis,
+                P: resolveAbsolutePath,
                 U: relativeURL,
                 k: refresh,
                 R: createResolvePathFromModule(r),
@@ -586,6 +587,12 @@ function instantiateModule(id, source) {
         interopEsm(module.exports, module.namespaceObject);
     }
     return module;
+}
+/**
+ * no-op for browser
+ * @param modulePath
+ */ function resolveAbsolutePath(modulePath) {
+    return `/ROOT/${modulePath ?? ""}`;
 }
 /**
  * NOTE(alexkirsz) Webpack has a "module execution" interception hook that
@@ -1354,7 +1361,7 @@ globalThis.TURBOPACK_CHUNK_LISTS = {
  *
  * It will be appended to the base development runtime code.
  */ /// <reference path="../base/runtime-base.ts" />
-/// <reference path="../../../shared/require-type.d.ts" />
+/// <reference path="../../../../shared/require-type.d.ts" />
 let BACKEND;
 function augmentContext(context) {
     return context;
@@ -1567,7 +1574,11 @@ async function loadWebAssemblyModule(_source, wasmChunkPath) {
 })();
 function _eval({ code, url, map }) {
     code += `\n\n//# sourceURL=${encodeURI(location.origin + CHUNK_BASE_PATH + url)}`;
-    if (map) code += `\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${btoa(map)}`;
+    if (map) {
+        code += `\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${btoa(// btoa doesn't handle nonlatin characters, so escape them as \x sequences
+        // See https://stackoverflow.com/a/26603875
+        unescape(encodeURIComponent(map)))}`;
+    }
     return eval(code);
 }
 const chunksToRegister = globalThis.TURBOPACK;

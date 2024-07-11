@@ -110,17 +110,17 @@ async-recursion = "1.0.2"
 # Keep consistent with preset_env_base through swc_core
 browserslist-rs = { version = "0.15.0" }
 miette = { version = "5.10.0", features = ["fancy"] }
-mdxjs = "0.2.3"
-modularize_imports = { version = "0.68.15" }
-styled_components = { version = "0.96.16" }
-styled_jsx = { version = "0.73.23" }
-swc_core = { version = "0.93.4", features = [
+mdxjs = "0.2.4"
+modularize_imports = { version = "0.68.16" }
+styled_components = { version = "0.96.17" }
+styled_jsx = { version = "0.73.24" }
+swc_core = { version = "0.95.4", features = [
   "ecma_loader_lru",
   "ecma_loader_parking_lot",
 ] }
-swc_emotion = { version = "0.72.14" }
-swc_relay = { version = "0.44.15" }
-testing = { version = "0.35.25" }
+swc_emotion = { version = "0.72.15" }
+swc_relay = { version = "0.44.16" }
+testing = { version = "0.36.0" }
 # Temporary: Reference the latest git minor version of pathfinder_simd until it's published.
 pathfinder_simd = "0.5.3"
 
@@ -185,6 +185,7 @@ turborepo-lib = { path = "crates/turborepo-lib", default-features = false }
 turborepo-lockfiles = { path = "crates/turborepo-lockfiles" }
 turborepo-repository = { path = "crates/turborepo-repository" }
 turborepo-ui = { path = "crates/turborepo-ui" }
+turborepo-unescape = { path = "crates/turborepo-unescape" }
 turborepo-scm = { path = "crates/turborepo-scm" }
 wax = { path = "crates/turborepo-wax" }
 turborepo-vercel-api = { path = "crates/turborepo-vercel-api" }
@@ -214,11 +215,12 @@ async-trait = "0.1.64"
 atty = "0.2.14"
 axum = "0.6.2"
 axum-server = "0.4.4"
-biome_console = "0.5.7"
-biome_deserialize = "0.5.7"
-biome_diagnostics = "0.5.7"
-biome_json_parser = "0.5.7"
-biome_json_syntax = "0.5.7"
+biome_console = { version = "0.5.7" }
+biome_deserialize = { version = "0.6.0", features = ["serde"] }
+biome_deserialize_macros = { version = "0.6.0" }
+biome_diagnostics = { version = "0.5.7" }
+biome_json_parser = { version = "0.5.7" }
+biome_json_syntax = { version = "0.5.7" }
 bytes = "1.1.0"
 camino = { version = "1.1.4", features = ["serde1"] }
 chrono = "0.4.23"
@@ -249,7 +251,6 @@ lightningcss = { version = "1.0.0-alpha.57", features = [
   "into_owned",
 ] }
 mime = "0.3.16"
-nohash-hasher = "0.2.0"
 notify = "6.1.1"
 notify-debouncer-full = "0.3.1"
 notify-debouncer-mini = { version = "0.3.0", default-features = false }
@@ -298,12 +299,14 @@ tokio-util = { version = "0.7.7", features = ["io"] }
 tracing = "0.1.37"
 tracing-appender = "0.2.2"
 tracing-subscriber = "0.3.16"
+triomphe = "0.1.13"
 tui-term = { version = "0.1.9", default-features = false }
 url = "2.2.2"
 urlencoding = "2.1.2"
 webbrowser = "0.8.7"
 which = "4.4.0"
 unicode-segmentation = "1.10.1"
+unsize = "1.1.0"
 
 [patch.crates-io]
 # TODO: Use upstream when https://github.com/servo/pathfinder/pull/566 lands

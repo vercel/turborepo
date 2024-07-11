@@ -4,18 +4,22 @@ use std::{
     fmt::{Debug, Display},
     ops::Deref,
     path::{Path, PathBuf},
-    sync::Arc,
 };
 
 use serde::{Deserialize, Serialize};
+use triomphe::Arc;
 use turbo_tasks_hash::{DeterministicHash, DeterministicHasher};
 
 use crate::debug::{ValueDebugFormat, ValueDebugFormatString};
 
-/// This type exists to allow swapping out the underlying string type easily.
+/// A reference counted [`String`], similar to [`Arc<String>`][std::sync::Arc].
+///
+/// This type is intentionally opaque to allow for optimizations to the
+/// underlying representation. Future implementations may use inline
+/// representations or interning.
 //
 // If you want to change the underlying string type to `Arc<str>`, please ensure that you profile
-// perforamnce. The current implementation offers very cheap `String -> RcStr -> String`, meaning we
+// performance. The current implementation offers very cheap `String -> RcStr -> String`, meaning we
 // only pay for the allocation for `Arc` when we pass `format!("").into()` to a function.
 #[derive(Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
