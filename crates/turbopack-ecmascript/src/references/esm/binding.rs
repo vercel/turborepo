@@ -1,4 +1,5 @@
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
 use swc_core::{
     common::{Span, SyntaxContext},
     ecma::{
@@ -12,7 +13,7 @@ use swc_core::{
         },
     },
 };
-use turbo_tasks::{RcStr, TaskInput, Vc};
+use turbo_tasks::{trace::TraceRawVcs, RcStr, TaskInput, Vc};
 use turbopack_core::chunk::ChunkingContext;
 
 use super::EsmAssetReference;
@@ -36,7 +37,7 @@ impl EsmBindings {
     }
 }
 
-#[derive(Hash, Clone, Debug, TaskInput)]
+#[derive(Hash, Clone, Debug, TaskInput, Serialize, Deserialize, PartialEq, Eq, TraceRawVcs)]
 pub struct EsmBinding {
     pub reference: Vc<EsmAssetReference>,
     pub export: Option<RcStr>,
