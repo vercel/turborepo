@@ -214,8 +214,7 @@ impl RunBuilder {
         run_telemetry.track_ci(turborepo_ci::Vendor::get_name());
 
         // Remove allow when daemon is flagged back on
-        #[allow(unused_mut)]
-        let mut daemon = match (is_ci_or_not_tty, self.opts.run_opts.daemon) {
+        let daemon = match (is_ci_or_not_tty, self.opts.run_opts.daemon) {
             (true, None) => {
                 run_telemetry.track_daemon_init(DaemonInitStatus::Skipped);
                 debug!("skipping turbod since we appear to be in a non-interactive context");
@@ -256,8 +255,7 @@ impl RunBuilder {
             let builder = PackageGraph::builder(&self.repo_root, root_package_json.clone())
                 .with_single_package_mode(self.opts.run_opts.single_package);
 
-            #[cfg(feature = "daemon-package-discovery")]
-            let graph = {
+            let graph = if cfg!(feature = "daemon-package-discovery") {
                 match (&daemon, self.opts.run_opts.daemon) {
                     (None, Some(true)) => {
                         // We've asked for the daemon, but it's not available. This is an error
@@ -299,9 +297,9 @@ impl RunBuilder {
                             .await
                     }
                 }
+            } else {
+                builder.build().await
             };
-            #[cfg(not(feature = "daemon-package-discovery"))]
-            let graph = builder.build().await;
 
             match graph {
                 Ok(graph) => graph,
