@@ -296,7 +296,7 @@ impl Analyzer<'_> {
                         if declarator != item_id {
                             // A write also depends on the declaration.
                             self.g
-                                .add_strong_deps(item_id, [declarator].iter().copied());
+                                .add_strong_deps(item_id, [declarator]);
                         }
                     }
                 }
