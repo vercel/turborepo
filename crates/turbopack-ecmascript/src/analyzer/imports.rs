@@ -139,8 +139,6 @@ pub(crate) struct ImportMap {
 pub(crate) enum ImportedSymbol {
     ModuleEvaluation,
     Symbol(JsWord),
-    /// User requested the whole module
-    Namespace,
     Exports,
     Part(u32),
 }
@@ -221,7 +219,6 @@ impl ImportMap {
 
 struct Analyzer<'a> {
     data: &'a mut ImportMap,
-    skip_namespace: bool,
     source: Option<Vc<Box<dyn Source>>>,
 }
 
@@ -233,10 +230,6 @@ impl<'a> Analyzer<'a> {
         imported_symbol: ImportedSymbol,
         annotations: ImportAnnotations,
     ) -> Option<usize> {
-        if self.skip_namespace && matches!(imported_symbol, ImportedSymbol::Namespace) {
-            return None;
-        }
-
         let issue_source = self
             .source
             .map(|s| IssueSource::from_swc_offsets(s, span.lo.to_usize(), span.hi.to_usize()));
@@ -455,7 +448,7 @@ fn get_import_symbol_from_import(specifier: &ImportSpecifier) -> ImportedSymbol 
             _ => local.sym.clone(),
         }),
         ImportSpecifier::Default(..) => ImportedSymbol::Symbol(js_word!("default")),
-        ImportSpecifier::Namespace(..) => ImportedSymbol::Namespace,
+        ImportSpecifier::Namespace(..) => ImportedSymbol::Exports,
     }
 }
 
@@ -465,6 +458,6 @@ fn get_import_symbol_from_export(specifier: &ExportSpecifier) -> ImportedSymbol 
             ImportedSymbol::Symbol(orig_name(orig))
         }
         ExportSpecifier::Default(..) => ImportedSymbol::Symbol(js_word!("default")),
-        ExportSpecifier::Namespace(..) => ImportedSymbol::Namespace,
+        ExportSpecifier::Namespace(..) => ImportedSymbol::Exports,
     }
 }
