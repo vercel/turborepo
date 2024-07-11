@@ -1,6 +1,6 @@
 import path from "node:path";
 import childProcess from "node:child_process";
-import { bold, cyan, red } from "picocolors";
+import { bold, cyan, green, red } from "picocolors";
 import { setupTestFixtures, spyConsole, spyExit } from "@turbo/test-utils";
 import { logger } from "@turbo/utils";
 import type { PackageManager } from "@turbo/utils";
@@ -94,18 +94,14 @@ describe("create-turbo", () => {
 
       const expected = `${bold(
         logger.turboGradient(">>> Success!")
-      )} Created your Turborepo at ${chalk.green(
+      )} Created your Turborepo at ${green(
         path.relative(process.cwd(), root)
       )}`;
       expect(mockConsole.log).toHaveBeenCalledWith(expected);
       expect(mockConsole.log).toHaveBeenCalledWith();
-      expect(mockConsole.log).toHaveBeenCalledWith(
-        chalk.bold("To get started:")
-      );
+      expect(mockConsole.log).toHaveBeenCalledWith(bold("To get started:"));
 
-      expect(mockConsole.log).toHaveBeenCalledWith(
-        chalk.cyan("Library packages")
-      );
+      expect(mockConsole.log).toHaveBeenCalledWith(cyan("Library packages"));
 
       expect(mockConsole.log).toHaveBeenCalledWith(
         "- Run commands with Turborepo:"
@@ -181,18 +177,14 @@ describe("create-turbo", () => {
 
       const expected = `${bold(
         logger.turboGradient(">>> Success!")
-      )} Created your Turborepo at ${chalk.green(
+      )} Created your Turborepo at ${green(
         path.relative(process.cwd(), root)
       )}`;
       expect(mockConsole.log).toHaveBeenCalledWith(expected);
       expect(mockConsole.log).toHaveBeenCalledWith();
-      expect(mockConsole.log).toHaveBeenCalledWith(
-        chalk.bold("To get started:")
-      );
+      expect(mockConsole.log).toHaveBeenCalledWith(bold("To get started:"));
 
-      expect(mockConsole.log).toHaveBeenCalledWith(
-        chalk.cyan("Library packages")
-      );
+      expect(mockConsole.log).toHaveBeenCalledWith(cyan("Library packages"));
 
       expect(mockConsole.log).toHaveBeenCalledWith(
         "- Run commands with Turborepo:"
@@ -255,12 +247,12 @@ describe("create-turbo", () => {
     expect(mockConsole.error).toHaveBeenCalledTimes(2);
     expect(mockConsole.error).toHaveBeenNthCalledWith(
       1,
-      logger.turboRed.bold(">>>"),
+      logger.turboRed(bold(">>>")),
       red("Unable to download template from Github")
     );
     expect(mockConsole.error).toHaveBeenNthCalledWith(
       2,
-      logger.turboRed.bold(">>>"),
+      logger.turboRed(bold(">>>")),
       red("Could not connect")
     );
     expect(mockExit.exit).toHaveBeenCalledWith(1);

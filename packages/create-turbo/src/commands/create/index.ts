@@ -1,5 +1,5 @@
 import path from "node:path";
-import { bold, red, cyan } from "picocolors";
+import { bold, red, cyan, green } from "picocolors";
 import type { Project } from "@turbo/workspaces";
 import {
   getWorkspaceDetails,
@@ -250,9 +250,9 @@ export async function create(
     );
   } else {
     logger.log(
-      `${bold(
-        turboGradient(">>> Success!")
-      )} Created your Turborepo at ${chalk.green(relativeProjectDir)}`
+      `${bold(turboGradient(">>> Success!"))} Created your Turborepo at ${green(
+        relativeProjectDir
+      )}`
     );
   }
 
@@ -260,14 +260,14 @@ export async function create(
   const packageManagerMeta = getPackageManagerMeta(projectPackageManager);
   if (packageManagerMeta && hasPackageJson) {
     logger.log();
-    logger.log(chalk.bold("To get started:"));
+    logger.log(bold("To get started:"));
     if (!projectDirIsCurrentDir) {
       logger.log(
-        `- Change to the directory: ${chalk.cyan(`cd ${relativeProjectDir}`)}`
+        `- Change to the directory: ${cyan(`cd ${relativeProjectDir}`)}`
       );
     }
     logger.log(
-      `- Enable Remote Caching (recommended): ${chalk.cyan(
+      `- Enable Remote Caching (recommended): ${cyan(
         `${packageManagerMeta.executable} turbo login`
       )}`
     );
