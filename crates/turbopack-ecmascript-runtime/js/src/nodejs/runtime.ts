@@ -49,7 +49,7 @@ type ModuleFactory = (
 ) => undefined;
 
 const url = require("url");
-const fs = require("fs");
+const fs = require("fs/promises");
 const vm = require("vm");
 
 const moduleFactories: ModuleFactories = Object.create(null);
@@ -129,29 +129,26 @@ async function loadChunkAsync(
 
   const resolved = path.resolve(RUNTIME_ROOT, chunkPath);
 
-  return new Promise<void>(function (resolve, reject) {
-    fs.readFile(resolved, "utf-8", function (err: Error, content: string) {
-      if (err) return reject(err);
-      const module = {
-        exports: {},
-      };
-      vm.runInThisContext(
-        "(function(module, exports, require, __dirname, __filename) {" +
-          content +
-          "\n})",
-        resolved
-      )(module, module.exports, require, path.dirname(resolved), resolved);
+  try {
+    const contents = await fs.readFile(resolved, "utf-8");
 
-      const chunkModules: ModuleFactories = module.exports;
-      for (const [moduleId, moduleFactory] of Object.entries(chunkModules)) {
-        if (!moduleFactories[moduleId]) {
-          moduleFactories[moduleId] = moduleFactory;
-        }
+    const module = {
+      exports: {},
+    };
+    vm.runInThisContext(
+      "(function(module, exports, require, __dirname, __filename) {" +
+        contents +
+        "\n})",
+      resolved
+    )(module, module.exports, require, path.dirname(resolved), resolved);
+
+    const chunkModules: ModuleFactories = module.exports;
+    for (const [moduleId, moduleFactory] of Object.entries(chunkModules)) {
+      if (!moduleFactories[moduleId]) {
+        moduleFactories[moduleId] = moduleFactory;
       }
-
-      resolve();
-    });
-  }).catch((e: Error) => {
+    }
+  } catch (e) {
     let errorMessage = `Failed to load chunk ${chunkPath}`;
 
     if (source) {
@@ -161,7 +158,7 @@ async function loadChunkAsync(
     throw new Error(errorMessage, {
       cause: e,
     });
-  });
+  }
 }
 
 function loadWebAssembly(chunkPath: ChunkPath, imports: WebAssembly.Imports) {
