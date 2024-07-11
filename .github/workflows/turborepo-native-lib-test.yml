@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   js_native_packages:
-    name: JS Native Package Tests
+    name: "@turbo/repository ${{matrix.os.name}} / Node ${{matrix.node-version}}"
     timeout-minutes: 30
     runs-on: ${{ matrix.os.runner }}
     strategy:

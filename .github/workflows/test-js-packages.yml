@@ -52,7 +52,7 @@ jobs:
       docs: ${{ steps.docs.outputs.diff != '' }}
 
   js_packages:
-    name: JS Package Tests
+    name: "JS Package Tests ${{matrix.os.name}} / Node ${{matrix.node-version}}"
     timeout-minutes: 30
     if: needs.determine_jobs.outputs.ci == 'true' || needs.determine_jobs.outputs.packages == 'true' || needs.determine_jobs.outputs.docs == 'true'
     needs: [determine_jobs]
