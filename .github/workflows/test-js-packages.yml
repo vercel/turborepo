@@ -91,11 +91,13 @@ jobs:
           ref: ${{ github.ref }}
           fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}
 
-      - name: Setup Turborepo Environment
-        uses: ./.github/actions/setup-turborepo-environment
+      - name: "Setup Node"
+        uses: ./.github/actions/setup-node
         with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          extra-flags: --no-optional
           node-version: ${{ matrix.node-version }}
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
