@@ -97,10 +97,9 @@ pub fn on_added<C: AggregationContext>(
 ) -> usize {
     let uppers = node.uppers();
     let uppers_len = uppers.len();
-    let optimize = (!already_optimizing_for_upper
-        && uppers_len > MAX_UPPERS
-        && (uppers_len - MAX_UPPERS).count_ones() == 1)
-        .then(|| (true, uppers.iter().cloned().collect::<StackVec<_>>()));
+    let optimize =
+        (!already_optimizing_for_upper && uppers_len >= MAX_UPPERS && uppers_len.count_ones() == 1)
+            .then(|| (true, uppers.iter().cloned().collect::<StackVec<_>>()));
     let (add_change, followers) = match &mut *node {
         AggregationNode::Leaf { .. } => {
             let add_change = node.get_add_change();
@@ -158,14 +157,16 @@ pub fn remove_upper_count<C: AggregationContext>(
     upper_id: &C::NodeRef,
     count: usize,
 ) {
-    let removed = match &mut *node {
-        AggregationNode::Leaf { uppers, .. } => uppers.remove_clonable_count(upper_id, count),
+    let uppers = match &mut *node {
+        AggregationNode::Leaf { uppers, .. } => uppers,
         AggregationNode::Aggegating(aggegating) => {
             let AggegatingNode { ref mut uppers, .. } = **aggegating;
-            uppers.remove_clonable_count(upper_id, count)
+            uppers
         }
     };
+    let removed = uppers.remove_clonable_count(upper_id, count);
     if removed {
+        uppers.shrink_amortized();
         on_removed(ctx, balance_queue, node, upper_id);
     }
 }
@@ -185,20 +186,20 @@ pub fn remove_positive_upper_count<C: AggregationContext>(
     upper_id: &C::NodeRef,
     count: usize,
 ) -> RemovePositiveUpperCountResult {
+    let uppers = match &mut *node {
+        AggregationNode::Leaf { uppers, .. } => uppers,
+        AggregationNode::Aggegating(aggegating) => {
+            let AggegatingNode { ref mut uppers, .. } = **aggegating;
+            uppers
+        }
+    };
     let RemovePositiveCountResult {
         removed,
         removed_count,
         count,
-    } = match &mut *node {
-        AggregationNode::Leaf { uppers, .. } => {
-            uppers.remove_positive_clonable_count(upper_id, count)
-        }
-        AggregationNode::Aggegating(aggegating) => {
-            let AggegatingNode { ref mut uppers, .. } = **aggegating;
-            uppers.remove_positive_clonable_count(upper_id, count)
-        }
-    };
+    } = uppers.remove_positive_clonable_count(upper_id, count);
     if removed {
+        uppers.shrink_amortized();
         on_removed(ctx, balance_queue, node, upper_id);
     }
     RemovePositiveUpperCountResult {

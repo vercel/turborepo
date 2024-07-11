@@ -10,23 +10,34 @@ use std::{
 
 use anyhow::Result;
 use serde::{ser::SerializeTuple, Deserialize, Serialize};
+use unsize::CoerceUnsize;
 
 use crate::{
     backend::CellContent,
     id::{FunctionId, TraitTypeId},
     magic_any::MagicAny,
     manager::{read_task_cell, read_task_output},
-    registry, turbo_tasks, CellId, RawVc, RcStr, TaskId, TraitType, ValueTypeId,
+    registry,
+    triomphe_utils::{coerce_to_any_send_sync, downcast_triomphe_arc},
+    turbo_tasks, CellId, RawVc, RcStr, TaskId, TraitType, ValueTypeId,
 };
 
+/// A type-erased wrapper for [`triomphe::Arc`].
 #[derive(Clone)]
-pub struct SharedReference(pub Option<ValueTypeId>, pub Arc<dyn Any + Send + Sync>);
+pub struct SharedReference(
+    pub Option<ValueTypeId>,
+    pub triomphe::Arc<dyn Any + Send + Sync>,
+);
 
 impl SharedReference {
-    pub fn downcast<T: Any + Send + Sync>(self) -> Option<Arc<T>> {
-        match Arc::downcast(self.1) {
-            Ok(data) => Some(data),
-            Err(_) => None,
+    pub fn new(type_id: Option<ValueTypeId>, data: triomphe::Arc<impl Any + Send + Sync>) -> Self {
+        Self(type_id, data.unsize(coerce_to_any_send_sync()))
+    }
+
+    pub fn downcast<T: Any + Send + Sync>(self) -> Result<triomphe::Arc<T>, Self> {
+        match downcast_triomphe_arc(self.1) {
+            Ok(data) => Ok(data),
+            Err(data) => Err(Self(self.0, data)),
         }
     }
 }
@@ -41,10 +52,7 @@ impl PartialEq for SharedReference {
     // only compares their addresses.
     #[allow(ambiguous_wide_pointer_comparisons)]
     fn eq(&self, other: &Self) -> bool {
-        std::ptr::addr_eq(
-            &*self.1 as *const (dyn Any + Send + Sync),
-            &*other.1 as *const (dyn Any + Send + Sync),
-        )
+        triomphe::Arc::ptr_eq(&self.1, &other.1)
     }
 }
 impl Eq for SharedReference {}
@@ -129,7 +137,7 @@ impl<'de> Deserialize<'de> for SharedReference {
                         if let Some(seed) = registry::get_value_type(ty).get_any_deserialize_seed()
                         {
                             if let Some(value) = seq.next_element_seed(seed)? {
-                                Ok(SharedReference(Some(ty), value.into()))
+                                Ok(SharedReference::new(Some(ty), value.into()))
                             } else {
                                 Err(serde::de::Error::invalid_length(
                                     1,
@@ -322,8 +330,8 @@ impl<'de> Deserialize<'de> for SharedValue {
 ///
 /// When a task is called, all its arguments will be converted and stored as
 /// [`ConcreteTaskInput`]s. When the task is actually run, these inputs will be
-/// converted back into the argument types. This is handled by the [`TaskInput`]
-/// trait.
+/// converted back into the argument types. This is handled by the
+/// [`TaskInput`][crate::TaskInput] trait.
 #[allow(clippy::derived_hash_with_manual_eq)]
 #[derive(Debug, Hash, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Default)]
 pub enum ConcreteTaskInput {

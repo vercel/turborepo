@@ -186,6 +186,16 @@ impl<T: Eq + Hash, H: BuildHasher + Default> CountHashSet<T, H> {
             None => 0,
         }
     }
+
+    /// Frees unused memory
+    pub fn shrink_to_fit(&mut self) {
+        self.inner.shrink_to_fit();
+    }
+
+    /// Frees unused memory in an amortized way
+    pub fn shrink_amortized(&mut self) {
+        self.inner.shrink_amortized()
+    }
 }
 
 impl<T: Eq + Hash + Clone, H: BuildHasher + Default> CountHashSet<T, H> {
@@ -363,13 +373,11 @@ impl<'a, T> Iterator for CountHashSetIter<'a, T> {
 
 #[cfg(test)]
 mod tests {
-    use nohash_hasher::BuildNoHashHasher;
-
     use super::*;
 
     #[test]
     fn test_add_remove() {
-        let mut set: CountHashSet<i32, BuildNoHashHasher<i32>> = CountHashSet::new();
+        let mut set: CountHashSet<i32> = CountHashSet::new();
         assert_eq!(set.len(), 0);
         assert!(set.is_empty());
 
@@ -413,7 +421,7 @@ mod tests {
 
     #[test]
     fn test_add_remove_cloneable() {
-        let mut set: CountHashSet<i32, BuildNoHashHasher<i32>> = CountHashSet::new();
+        let mut set: CountHashSet<i32> = CountHashSet::new();
         assert_eq!(set.len(), 0);
         assert!(set.is_empty());
 
@@ -457,7 +465,7 @@ mod tests {
 
     #[test]
     fn test_add_remove_if_entry() {
-        let mut set: CountHashSet<i32, BuildNoHashHasher<i32>> = CountHashSet::new();
+        let mut set: CountHashSet<i32> = CountHashSet::new();
 
         assert!(!set.add_if_entry(&1));
         assert_eq!(set.len(), 0);
@@ -487,7 +495,7 @@ mod tests {
 
     #[test]
     fn test_zero() {
-        let mut set: CountHashSet<i32, BuildNoHashHasher<i32>> = CountHashSet::new();
+        let mut set: CountHashSet<i32> = CountHashSet::new();
 
         assert!(!set.add_count(1, 0));
         assert_eq!(set.len(), 0);

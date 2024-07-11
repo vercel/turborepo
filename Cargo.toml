@@ -251,7 +251,6 @@ lightningcss = { version = "1.0.0-alpha.57", features = [
   "into_owned",
 ] }
 mime = "0.3.16"
-nohash-hasher = "0.2.0"
 notify = "6.1.1"
 notify-debouncer-full = "0.3.1"
 notify-debouncer-mini = { version = "0.3.0", default-features = false }
@@ -300,12 +299,14 @@ tokio-util = { version = "0.7.7", features = ["io"] }
 tracing = "0.1.37"
 tracing-appender = "0.2.2"
 tracing-subscriber = "0.3.16"
+triomphe = "0.1.13"
 tui-term = { version = "0.1.9", default-features = false }
 url = "2.2.2"
 urlencoding = "2.1.2"
 webbrowser = "0.8.7"
 which = "4.4.0"
 unicode-segmentation = "1.10.1"
+unsize = "1.1.0"
 
 [patch.crates-io]
 # TODO: Use upstream when https://github.com/servo/pathfinder/pull/566 lands

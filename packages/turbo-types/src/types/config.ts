@@ -124,7 +124,7 @@ export interface RootSchema extends BaseSchema {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#ui
    *
-   * @defaultValue `"tui"`
+   * @defaultValue `"stream"`
    */
   ui?: UI;
 }

@@ -350,7 +350,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
         package_manager: PackageManager,
     ) -> Result<(), Error> {
         let npmrc = match package_manager {
-            PackageManager::Pnpm | PackageManager::Pnpm6 => {
+            PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
                 let npmrc_path = self.repo_root.join_component(".npmrc");
                 match npmrc_path.read_existing_to_string().ok().flatten() {
                     Some(contents) => NpmRc::from_reader(contents.as_bytes()).ok(),

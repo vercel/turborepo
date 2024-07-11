@@ -121,7 +121,7 @@ impl PersistentTaskType {
     }
 
     /// Returns the name of the function in the code. Trait methods are
-    /// formatted as [`TraitName::method_name`].
+    /// formatted as `TraitName::method_name`.
     ///
     /// Equivalent to [`ToString::to_string`], but potentially more efficient as
     /// it can return a `&'static str` in many cases.
@@ -162,8 +162,8 @@ impl CellContent {
         let data = self.0.ok_or_else(|| anyhow!("Cell is empty"))?;
         let data = data
             .downcast()
-            .ok_or_else(|| anyhow!("Unexpected type in cell"))?;
-        Ok(ReadRef::new(data))
+            .map_err(|_err| anyhow!("Unexpected type in cell"))?;
+        Ok(ReadRef::new_arc(data))
     }
 
     /// # Safety
@@ -185,8 +185,7 @@ impl CellContent {
     }
 
     pub fn try_cast<T: Any + VcValueType>(self) -> Option<ReadRef<T>> {
-        self.0
-            .and_then(|data| data.downcast().map(|data| ReadRef::new(data)))
+        Some(ReadRef::new_arc(self.0?.downcast().ok()?))
     }
 }
 
@@ -376,6 +375,18 @@ impl PersistentTaskType {
         Ok(turbo_tasks.native_call(fn_id, inputs))
     }
 
+    pub async fn resolve_trait_method(
+        trait_type: TraitTypeId,
+        name: Cow<'static, str>,
+        this: ConcreteTaskInput,
+    ) -> Result<FunctionId> {
+        Self::resolve_trait_method_from_value(
+            trait_type,
+            this.resolve().await?.resolve_to_value().await?,
+            name,
+        )
+    }
+
     pub async fn run_resolve_trait<B: Backend + 'static>(
         trait_type: TraitTypeId,
         name: Cow<'static, str>,
@@ -384,45 +395,55 @@ impl PersistentTaskType {
     ) -> Result<RawVc> {
         let mut resolved_inputs = Vec::with_capacity(inputs.len());
         let mut iter = inputs.into_iter();
-        if let Some(this) = iter.next() {
-            let this = this.resolve().await?;
-            let this_value = this.clone().resolve_to_value().await?;
-            match this_value.get_trait_method(trait_type, name) {
-                Ok(native_fn) => {
-                    resolved_inputs.push(this);
-                    for input in iter {
-                        resolved_inputs.push(input)
-                    }
-                    Ok(turbo_tasks.dynamic_call(native_fn, resolved_inputs))
-                }
-                Err(name) => {
-                    if !this_value.has_trait(trait_type) {
-                        let traits =
-                            this_value
-                                .traits()
-                                .iter()
-                                .fold(String::new(), |mut out, t| {
-                                    let _ = write!(out, " {}", t);
-                                    out
-                                });
-                        Err(anyhow!(
-                            "{} doesn't implement {} (only{})",
-                            this_value,
-                            registry::get_trait(trait_type),
-                            traits,
-                        ))
-                    } else {
-                        Err(anyhow!(
-                            "{} implements trait {}, but method {} is missing",
-                            this_value,
-                            registry::get_trait(trait_type),
-                            name
-                        ))
-                    }
+
+        let this = iter
+            .next()
+            .expect("No arguments for trait call")
+            .resolve()
+            .await?;
+        let this_value = this.clone().resolve_to_value().await?;
+
+        let native_fn = Self::resolve_trait_method_from_value(trait_type, this_value, name)?;
+        resolved_inputs.push(this);
+        for input in iter {
+            resolved_inputs.push(input)
+        }
+        Ok(turbo_tasks.dynamic_call(native_fn, resolved_inputs))
+    }
+
+    /// Shared helper used by [`Self::resolve_trait_method`] and
+    /// [`Self::run_resolve_trait`].
+    fn resolve_trait_method_from_value(
+        trait_type: TraitTypeId,
+        this_value: ConcreteTaskInput,
+        name: Cow<'static, str>,
+    ) -> Result<FunctionId> {
+        match this_value.get_trait_method(trait_type, name) {
+            Ok(native_fn) => Ok(native_fn),
+            Err(name) => {
+                if !this_value.has_trait(trait_type) {
+                    let traits = this_value
+                        .traits()
+                        .iter()
+                        .fold(String::new(), |mut out, t| {
+                            let _ = write!(out, " {}", t);
+                            out
+                        });
+                    Err(anyhow!(
+                        "{} doesn't implement {} (only{})",
+                        this_value,
+                        registry::get_trait(trait_type),
+                        traits,
+                    ))
+                } else {
+                    Err(anyhow!(
+                        "{} implements trait {}, but method {} is missing",
+                        this_value,
+                        registry::get_trait(trait_type),
+                        name
+                    ))
                 }
             }
-        } else {
-            panic!("No arguments for trait call");
         }
     }
 
