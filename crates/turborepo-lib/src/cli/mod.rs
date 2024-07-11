@@ -494,7 +494,12 @@ pub enum Command {
     Scan {},
     #[clap(hide = true)]
     Info {
-        workspace: Option<String>,
+        /// Use the given selector to specify package(s) to act as
+        /// entry points. The syntax mirrors pnpm's syntax, and
+        /// additional documentation and examples can be found in
+        /// turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
+        #[clap(short = 'F', long, group = "scope-filter-group")]
+        filter: Vec<String>,
         // We output turbo info as json. Currently just for internal testing
         #[clap(long)]
         json: bool,
@@ -1134,14 +1139,14 @@ pub async fn run(
                 Ok(1)
             }
         }
-        Command::Info { workspace, json } => {
-            CommandEventBuilder::new("info")
-                .with_parent(&root_telemetry)
-                .track_call();
+        Command::Info { filter, json } => {
+            let event = CommandEventBuilder::new("info").with_parent(&root_telemetry);
+
+            event.track_call();
             let json = *json;
-            let workspace = workspace.clone();
-            let mut base = CommandBase::new(cli_args, repo_root, version, ui);
-            info::run(&mut base, workspace.as_deref(), json).await?;
+            let filter = filter.clone();
+            let base = CommandBase::new(cli_args, repo_root, version, ui);
+            info::run(base, event, filter, json).await?;
 
             Ok(0)
         }

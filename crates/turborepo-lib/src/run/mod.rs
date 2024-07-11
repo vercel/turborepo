@@ -160,6 +160,18 @@ impl Run {
         Ok(tasks)
     }
 
+    pub fn pkg_dep_graph(&self) -> &PackageGraph {
+        &self.pkg_dep_graph
+    }
+
+    pub fn filtered_pkgs(&self) -> &HashSet<PackageName> {
+        &self.filtered_pkgs
+    }
+
+    pub fn ui(&self) -> UI {
+        self.ui
+    }
+
     pub fn has_experimental_ui(&self) -> bool {
         self.experimental_ui
     }
