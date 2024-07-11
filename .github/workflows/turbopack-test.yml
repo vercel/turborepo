@@ -692,16 +692,16 @@ jobs:
           body-file: "comment.md"
           edit-mode: replace
 
-      - name: It's not fine
+      - name: It's not fine vin23
         if: steps.info.outputs.failure == 'true'
         run: exit 1
 
-      - name: It's fine
+      - name: It's not ok vin23
         if: steps.info.outputs.success == 'true'
         run: echo Ok
 
   cleanup:
-    name: Cleanup
+    name: Cleanup vin23
     needs: [done]
     if: always()
     uses: ./.github/workflows/pr-clean-caches.yml
