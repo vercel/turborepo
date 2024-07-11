@@ -200,16 +200,11 @@ impl ImportMap {
     }
 
     /// Analyze ES import
-    pub(super) fn analyze(
-        m: &Program,
-        skip_namespace: bool,
-        source: Option<Vc<Box<dyn Source>>>,
-    ) -> Self {
+    pub(super) fn analyze(m: &Program, source: Option<Vc<Box<dyn Source>>>) -> Self {
         let mut data = ImportMap::default();
 
         m.visit_with(&mut Analyzer {
             data: &mut data,
-            skip_namespace,
             source,
         });
 
