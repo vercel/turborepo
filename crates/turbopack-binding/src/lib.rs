@@ -88,6 +88,8 @@ pub mod turbopack {
     pub use turbopack_node as node;
     #[cfg(feature = "__turbopack_nodejs")]
     pub use turbopack_nodejs as nodejs;
+    #[cfg(feature = "__turbopack_postcss")]
+    pub use turbopack_postcss as postcss;
     #[cfg(feature = "__turbopack_static")]
     pub use turbopack_static as r#static;
     #[cfg(feature = "__turbopack_swc_utils")]

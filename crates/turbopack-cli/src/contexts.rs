@@ -25,7 +25,10 @@ use turbopack_ecmascript_plugins::transform::{
     styled_components::{StyledComponentsTransformConfig, StyledComponentsTransformer},
     styled_jsx::StyledJsxTransformer,
 };
-use turbopack_node::execution_context::ExecutionContext;
+use turbopack_node::{
+    execution_context::ExecutionContext, transforms::postcss::PostCssTransformOptions,
+};
+use turbopack_postcss::get_postcss_transform_rule;
 use turbopack_resolve::resolve_options_context::ResolveOptionsContext;
 
 #[turbo_tasks::value(shared)]
@@ -131,25 +134,35 @@ async fn get_client_module_options_context(
         ModuleRuleCondition::ResourcePathEndsWith(".tsx".to_string()),
     ]);
 
-    let custom_rules = ModuleRule::new(
-        conditions,
-        vec![ModuleRuleEffect::ExtendEcmascriptTransforms {
-            prepend: Vc::cell(vec![
-                EcmascriptInputTransform::Plugin(Vc::cell(Box::new(
-                    EmotionTransformer::new(&EmotionTransformConfig::default())
-                        .expect("Should be able to create emotion transformer"),
-                ) as _)),
-                EcmascriptInputTransform::Plugin(Vc::cell(Box::new(
-                    StyledComponentsTransformer::new(&StyledComponentsTransformConfig::default()),
-                ) as _)),
-                EcmascriptInputTransform::Plugin(Vc::cell(Box::new(StyledJsxTransformer::new(
-                    !module_options_context.use_swc_css,
-                    versions,
-                )) as _)),
-            ]),
-            append: Vc::cell(vec![]),
-        }],
-    );
+    let postcss_rule =
+        get_postcss_transform_rule(execution_context, PostCssTransformOptions::default().cell())
+            .await?
+            .unwrap();
+
+    let custom_rules = vec![
+        postcss_rule,
+        ModuleRule::new(
+            conditions,
+            vec![ModuleRuleEffect::ExtendEcmascriptTransforms {
+                prepend: Vc::cell(vec![
+                    EcmascriptInputTransform::Plugin(Vc::cell(Box::new(
+                        EmotionTransformer::new(&EmotionTransformConfig::default())
+                            .expect("Should be able to create emotion transformer"),
+                    ) as _)),
+                    EcmascriptInputTransform::Plugin(Vc::cell(Box::new(
+                        StyledComponentsTransformer::new(
+                            &StyledComponentsTransformConfig::default(),
+                        ),
+                    ) as _)),
+                    EcmascriptInputTransform::Plugin(Vc::cell(Box::new(StyledJsxTransformer::new(
+                        !module_options_context.use_swc_css,
+                        versions,
+                    )) as _)),
+                ]),
+                append: Vc::cell(vec![]),
+            }],
+        ),
+    ];
 
     let module_options_context = ModuleOptionsContext {
         enable_jsx,
@@ -158,7 +171,7 @@ async fn get_client_module_options_context(
             foreign_code_context_condition().await?,
             module_options_context.clone().cell(),
         )],
-        custom_rules: vec![custom_rules],
+        custom_rules,
         ..module_options_context
     }
     .cell();
