@@ -87,12 +87,10 @@ pub fn should_skip_tree_shaking(m: &Program) -> bool {
             }
         }
 
-        {
-            let mut visitor = AbortFinder::default();
-            m.visit_with(&mut visitor);
-            if visitor.abort {
-                return true;
-            }
+        let mut visitor = AbortFinder::default();
+        m.visit_with(&mut visitor);
+        if visitor.abort {
+            return true;
         }
 
         for item in m.body.iter() {
