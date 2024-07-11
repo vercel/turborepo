@@ -2,10 +2,11 @@ use swc_core::ecma::{
     ast::*,
     visit::{noop_visit_type, Visit, VisitWith},
 };
+use turbo_tasks::RcStr;
 
 use crate::TURBOPACK_HELPER;
 
-pub fn should_skip_tree_shaking(m: &Program) -> bool {
+pub fn should_skip_tree_shaking(m: &Program, special_exports: &[RcStr]) -> bool {
     if let Program::Module(m) = m {
         for item in m.body.iter() {
             match item {
@@ -66,7 +67,7 @@ pub fn should_skip_tree_shaking(m: &Program) -> bool {
                 })) => {
                     for decl in decls {
                         if let Pat::Ident(name) = &decl.name {
-                            if is_next_js_special_export(&name.sym) {
+                            if special_exports.iter().any(|s| **s == *name.sym) {
                                 return true;
                             }
                         }
@@ -78,7 +79,7 @@ pub fn should_skip_tree_shaking(m: &Program) -> bool {
                     decl: Decl::Fn(f),
                     ..
                 })) => {
-                    if is_next_js_special_export(&f.ident.sym) {
+                    if special_exports.iter().any(|s| **s == *f.ident.sym) {
                         return true;
                     }
                 }
@@ -103,26 +104,6 @@ pub fn should_skip_tree_shaking(m: &Program) -> bool {
     true
 }
 
-fn is_next_js_special_export(sym: &str) -> bool {
-    matches!(
-        sym,
-        "config"
-            | "middleware"
-            | "runtime"
-            | "revalidate"
-            | "dynamic"
-            | "dynamicParams"
-            | "fetchCache"
-            | "preferredRegion"
-            | "maxDuration"
-            | "generateStaticParams"
-            | "metadata"
-            | "generateMetadata"
-            | "getServerSideProps"
-            | "getInitialProps"
-            | "getStaticProps"
-    )
-}
 #[derive(Default)]
 struct UseServerFinder {
     abort: bool,

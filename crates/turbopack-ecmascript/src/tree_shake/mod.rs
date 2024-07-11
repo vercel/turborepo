@@ -2,7 +2,7 @@ use std::{borrow::Cow, fmt::Write};
 
 use anyhow::{bail, Result};
 use indexmap::IndexSet;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use swc_core::{
     common::{util::take::Take, SyntaxContext, DUMMY_SP, GLOBALS},
     ecma::{
@@ -179,8 +179,7 @@ impl Analyzer<'_> {
                         if declarator != item_id {
                             // A write also depends on the declaration.
                             if item.side_effects {
-                                self.g
-                                    .add_strong_deps(item_id, [declarator]);
+                                self.g.add_strong_deps(item_id, [declarator]);
                             } else {
                                 self.g.add_weak_deps(item_id, [declarator]);
                             }
@@ -277,8 +276,7 @@ impl Analyzer<'_> {
                     if let Some(declarator) = &state.declarator {
                         if declarator != item_id {
                             // A read also depends on the declaration.
-                            self.g
-                                .add_strong_deps(item_id, [declarator]);
+                            self.g.add_strong_deps(item_id, [declarator]);
                         }
                     }
                 }
@@ -295,8 +293,7 @@ impl Analyzer<'_> {
                     if let Some(declarator) = &state.declarator {
                         if declarator != item_id {
                             // A write also depends on the declaration.
-                            self.g
-                                .add_strong_deps(item_id, [declarator]);
+                            self.g.add_strong_deps(item_id, [declarator]);
                         }
                     }
                 }
@@ -451,8 +448,16 @@ impl PartialEq for SplitResult {
 }
 
 #[turbo_tasks::function]
-pub(super) async fn split_module(asset: Vc<EcmascriptModuleAsset>) -> Result<Vc<SplitResult>> {
-    Ok(split(asset.source().ident(), asset.source(), asset.parse()))
+pub(super) async fn split_module(
+    asset: Vc<EcmascriptModuleAsset>,
+    special_exports: Vc<Vec<RcStr>>,
+) -> Result<Vc<SplitResult>> {
+    Ok(split(
+        asset.source().ident(),
+        asset.source(),
+        asset.parse(),
+        special_exports,
+    ))
 }
 
 #[turbo_tasks::function]
@@ -471,6 +476,7 @@ pub(super) async fn split(
     ident: Vc<AssetIdent>,
     source: Vc<Box<dyn Source>>,
     parsed: Vc<ParseResult>,
+    special_exports: Vc<Vec<RcStr>>,
 ) -> Result<Vc<SplitResult>> {
     // If the script file is a common js file, we cannot split the module
     if *should_skip(ident, source).await? {
@@ -492,7 +498,7 @@ pub(super) async fn split(
             ..
         } => {
             // If the script file is a common js file, we cannot split the module
-            if cjs_finder::should_skip_tree_shaking(program) {
+            if cjs_finder::should_skip_tree_shaking(program, &*special_exports.await?) {
                 return Ok(SplitResult::Failed {
                     parse_result: parsed,
                 }

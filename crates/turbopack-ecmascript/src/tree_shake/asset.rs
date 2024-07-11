@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use turbo_tasks::Vc;
+use turbo_tasks::{RcStr, Vc};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{ChunkableModule, ChunkingContext, EvaluatableAsset},
@@ -25,6 +25,7 @@ use crate::{
 pub struct EcmascriptModulePartAsset {
     pub full_module: Vc<EcmascriptModuleAsset>,
     pub(crate) part: Vc<ModulePart>,
+    pub(crate) special_exports: Vc<Vec<RcStr>>,
     pub(crate) import_externals: bool,
 }
 
@@ -37,12 +38,14 @@ impl EcmascriptModulePartAsset {
     pub fn new(
         module: Vc<EcmascriptModuleAsset>,
         part: Vc<ModulePart>,
+        special_exports: Vc<Vec<RcStr>>,
         import_externals: bool,
     ) -> Vc<Self> {
         EcmascriptModulePartAsset {
             full_module: module,
             part,
             import_externals,
+            special_exports,
         }
         .cell()
     }
@@ -65,7 +68,7 @@ impl Module for EcmascriptModulePartAsset {
     #[turbo_tasks::function]
     async fn ident(&self) -> Result<Vc<AssetIdent>> {
         let inner = self.full_module.ident();
-        let result = split_module(self.full_module);
+        let result = split_module(self.full_module, self.special_exports);
 
         match &*result.await? {
             SplitResult::Ok { .. } => Ok(inner.with_part(self.part)),
@@ -75,9 +78,9 @@ impl Module for EcmascriptModulePartAsset {
 
     #[turbo_tasks::function]
     async fn references(&self) -> Result<Vc<ModuleReferences>> {
-        let split_data = split_module(self.full_module).await?;
+        let split_data = split_module(self.full_module, self.special_exports).await?;
 
-        let analyze = analyze(self.full_module, self.part).await?;
+        let analyze = analyze(self.full_module, self.part, self.special_exports).await?;
 
         let (deps, entrypoints) = match &*split_data {
             SplitResult::Ok {
@@ -94,6 +97,7 @@ impl Module for EcmascriptModulePartAsset {
                 Vc::upcast(EcmascriptModulePartAsset::new(
                     self.full_module,
                     ModulePart::evaluation(),
+                    self.special_exports,
                     self.import_externals,
                 )),
                 Vc::cell("ecmascript module evaluation".into()),
@@ -105,6 +109,7 @@ impl Module for EcmascriptModulePartAsset {
                 Vc::upcast(EcmascriptModulePartAsset::new(
                     self.full_module,
                     ModulePart::exports(),
+                    self.special_exports,
                     self.import_externals,
                 )),
                 Vc::cell("ecmascript reexports".into()),
@@ -127,6 +132,7 @@ impl Module for EcmascriptModulePartAsset {
                         Vc::upcast(EcmascriptModulePartAsset::new(
                             self.full_module,
                             ModulePart::export(e.clone()),
+                            self.special_exports,
                             self.import_externals,
                         )),
                         Vc::cell(format!("ecmascript export '{e}'").into()),
@@ -158,6 +164,7 @@ impl Module for EcmascriptModulePartAsset {
                     Vc::upcast(EcmascriptModulePartAsset::new(
                         self.full_module,
                         ModulePart::internal(part_id),
+                        self.special_exports,
                         self.import_externals,
                     )),
                     Vc::cell("ecmascript module part".into()),
@@ -210,7 +217,7 @@ impl EcmascriptModulePartAsset {
     pub(super) async fn analyze(self: Vc<Self>) -> Result<Vc<AnalyzeEcmascriptModuleResult>> {
         let this = self.await?;
 
-        Ok(analyze(this.full_module, this.part))
+        Ok(analyze(this.full_module, this.part, this.special_exports))
     }
 }
 
@@ -218,8 +225,13 @@ impl EcmascriptModulePartAsset {
 async fn analyze(
     module: Vc<EcmascriptModuleAsset>,
     part: Vc<ModulePart>,
+    special_exports: Vc<Vec<RcStr>>,
 ) -> Result<Vc<AnalyzeEcmascriptModuleResult>> {
-    Ok(analyse_ecmascript_module(module, Some(part)))
+    Ok(analyse_ecmascript_module(
+        module,
+        Some(part),
+        special_exports,
+    ))
 }
 
 #[turbo_tasks::value_impl]

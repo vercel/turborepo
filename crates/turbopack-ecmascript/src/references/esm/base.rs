@@ -96,6 +96,7 @@ pub struct EsmAssetReference {
     pub issue_source: Option<Vc<IssueSource>>,
     pub export_name: Option<Vc<ModulePart>>,
     pub import_externals: bool,
+    pub special_exports: Vc<Vec<RcStr>>,
 }
 
 /// A list of [EsmAssetReference]s
@@ -121,6 +122,7 @@ impl EsmAssetReference {
         issue_source: Option<Vc<IssueSource>>,
         annotations: Value<ImportAnnotations>,
         export_name: Option<Vc<ModulePart>>,
+        special_exports: Vc<Vec<RcStr>>,
         import_externals: bool,
     ) -> Vc<Self> {
         Self::cell(EsmAssetReference {
@@ -130,6 +132,7 @@ impl EsmAssetReference {
             annotations: annotations.into_value(),
             export_name,
             import_externals,
+            special_exports,
         })
     }
 
@@ -159,8 +162,12 @@ impl ModuleReference for EsmAssetReference {
                             .await?
                             .expect("EsmAssetReference origin should be a EcmascriptModuleAsset");
 
-                    let module =
-                        EcmascriptModulePartAsset::new(full_module, part, self.import_externals);
+                    let module = EcmascriptModulePartAsset::new(
+                        full_module,
+                        part,
+                        self.special_exports,
+                        self.import_externals,
+                    );
 
                     return Ok(ModuleResolveResult::module(Vc::upcast(module)).cell());
                 }

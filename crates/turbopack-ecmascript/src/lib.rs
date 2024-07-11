@@ -139,6 +139,8 @@ pub struct EcmascriptOptions {
     /// If false, they will reference the whole directory. If true, they won't
     /// reference anything and lead to an runtime error instead.
     pub ignore_dynamic_requests: bool,
+
+    pub special_exports: Vc<Vec<RcStr>>,
 }
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
@@ -239,9 +241,15 @@ impl EcmascriptModuleAssetBuilder {
     }
 
     pub async fn build_part(self, part: Vc<ModulePart>) -> Result<Vc<EcmascriptModulePartAsset>> {
+        let special_exports = self.options.await?.special_exports;
         let import_externals = self.options.await?.import_externals;
         let base = self.build();
-        Ok(EcmascriptModulePartAsset::new(base, part, import_externals))
+        Ok(EcmascriptModulePartAsset::new(
+            base,
+            part,
+            special_exports,
+            import_externals,
+        ))
     }
 }
 
@@ -367,8 +375,10 @@ impl EcmascriptModuleAsset {
     }
 
     #[turbo_tasks::function]
-    pub fn analyze(self: Vc<Self>) -> Vc<AnalyzeEcmascriptModuleResult> {
-        analyse_ecmascript_module(self, None)
+    pub async fn analyze(self: Vc<Self>) -> Result<Vc<AnalyzeEcmascriptModuleResult>> {
+        let this = self.await?;
+        let special_exports = this.options.await?.special_exports;
+        Ok(analyse_ecmascript_module(self, None, special_exports))
     }
 
     #[turbo_tasks::function]
