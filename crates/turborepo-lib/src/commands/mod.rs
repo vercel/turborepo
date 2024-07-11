@@ -79,6 +79,11 @@ impl CommandBase {
                     }
                 })
             }))
+            .with_allow_no_package_manager(
+                self.args
+                    .dangerously_allow_no_package_manager
+                    .then_some(true),
+            )
             .build()
     }
 

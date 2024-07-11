@@ -208,6 +208,8 @@ pub struct ConfigurationOptions {
     pub(crate) spaces_id: Option<String>,
     #[serde(rename = "ui")]
     pub(crate) ui: Option<bool>,
+    #[serde(rename = "dangerouslyAllowNoPackageManager")]
+    pub(crate) allow_no_package_manager: Option<bool>,
 }
 
 #[derive(Default)]
@@ -281,6 +283,14 @@ fn non_empty_str(s: Option<&str>) -> Option<&str> {
     s.filter(|s| !s.is_empty())
 }
 
+fn truth_env_var(s: &str) -> Option<bool> {
+    match s {
+        "true" | "1" => Some(true),
+        "false" | "0" => Some(false),
+        _ => None,
+    }
+}
+
 trait ResolvedConfigurationOptions {
     fn get_configuration_options(self) -> Result<ConfigurationOptions, Error>;
 }
@@ -331,6 +341,10 @@ fn get_env_var_config(
         "upload_timeout",
     );
     turbo_mapping.insert(OsString::from("turbo_ui"), "ui");
+    turbo_mapping.insert(
+        OsString::from("turbo_dangerously_allow_no_package_manager"),
+        "allow_no_package_manager",
+    );
     turbo_mapping.insert(OsString::from("turbo_preflight"), "preflight");
 
     // We do not enable new config sources:
@@ -412,11 +426,15 @@ fn get_env_var_config(
     };
 
     // Process experimentalUI
-    let ui = output_map.get("ui").and_then(|val| match val.as_str() {
-        "true" | "1" => Some(true),
-        "false" | "0" => Some(false),
-        _ => None,
-    });
+    let ui = output_map
+        .get("ui")
+        .map(|s| s.as_str())
+        .and_then(truth_env_var);
+
+    let allow_no_package_manager = output_map
+        .get("allow_no_package_manager")
+        .map(|s| s.as_str())
+        .and_then(truth_env_var);
 
     // We currently don't pick up a Spaces ID via env var, we likely won't
     // continue using the Spaces name, we can add an env var when we have the
@@ -435,6 +453,7 @@ fn get_env_var_config(
         preflight,
         enabled,
         ui,
+        allow_no_package_manager,
 
         // Processed numbers
         timeout,
@@ -498,6 +517,7 @@ fn get_override_env_var_config(
         timeout: None,
         upload_timeout: None,
         spaces_id: None,
+        allow_no_package_manager: None,
     };
 
     Ok(output)
@@ -633,6 +653,11 @@ impl TurborepoConfigBuilder {
     create_builder!(with_preflight, preflight, Option<bool>);
     create_builder!(with_timeout, timeout, Option<u64>);
     create_builder!(with_ui, ui, Option<bool>);
+    create_builder!(
+        with_allow_no_package_manager,
+        allow_no_package_manager,
+        Option<bool>
+    );
 
     pub fn build(&self) -> Result<ConfigurationOptions, Error> {
         // Priority, from least significant to most significant:
@@ -710,6 +735,11 @@ impl TurborepoConfigBuilder {
                     if let Some(ui) = current_source_config.ui {
                         acc.ui = Some(ui);
                     }
+                    if let Some(allow_no_package_manager) =
+                        current_source_config.allow_no_package_manager
+                    {
+                        acc.allow_no_package_manager = Some(allow_no_package_manager);
+                    }
 
                     acc
                 })
@@ -766,6 +796,10 @@ mod test {
             turbo_remote_cache_timeout.to_string().into(),
         );
         env.insert("turbo_ui".into(), "true".into());
+        env.insert(
+            "turbo_dangerously_allow_no_package_manager".into(),
+            "true".into(),
+        );
         env.insert("turbo_preflight".into(), "true".into());
 
         let config = get_env_var_config(&env).unwrap();
@@ -777,6 +811,7 @@ mod test {
         assert_eq!(turbo_token, config.token.unwrap());
         assert_eq!(turbo_remote_cache_timeout, config.timeout.unwrap());
         assert_eq!(Some(true), config.ui);
+        assert_eq!(Some(true), config.allow_no_package_manager);
     }
 
     #[test]

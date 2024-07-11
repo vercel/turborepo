@@ -126,6 +126,11 @@ pub struct RawTurboJson {
     pub(crate) remote_cache: Option<RawRemoteCacheOptions>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "ui")]
     pub ui: Option<UI>,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        rename = "dangerouslyAllowNoPackageManager"
+    )]
+    pub allow_no_package_manager: Option<bool>,
 
     #[deserializable(rename = "//")]
     #[serde(skip)]
