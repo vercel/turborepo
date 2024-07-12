@@ -1123,10 +1123,10 @@ impl DepGraph {
 
         for (local, export_name) in exports {
             let name = match &export_name {
-                Some(ModuleExportName::Ident(v)) => v.to_id(),
-                _ => local.clone(),
+                Some(ModuleExportName::Ident(v)) => v.sym.clone(),
+                _ => local.0.clone(),
             };
-            let id = ItemId::Group(ItemIdGroupKind::Export(local.clone(), name.0.clone()));
+            let id = ItemId::Group(ItemIdGroupKind::Export(local.clone(), name.clone()));
             ids.push(id.clone());
             items.insert(
                 id.clone(),
@@ -1143,8 +1143,8 @@ impl DepGraph {
                         type_only: false,
                         with: None,
                     })),
-                    read_vars: [name.clone()].into_iter().collect(),
-                    export: Some(name.0),
+                    read_vars: [local.clone()].into_iter().collect(),
+                    export: Some(name),
                     ..Default::default()
                 },
             );
