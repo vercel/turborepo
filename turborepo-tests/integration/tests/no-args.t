@@ -30,6 +30,7 @@ Make sure exit code is 2 when no args are passed
         --color                           Force color usage in the terminal
         --cwd <CWD>                       The directory in which to run turbo
         --heap <HEAP>                     Specify a file to save a pprof heap profile
+        --ui <UI>                         Specify whether to use the streaming UI or TUI [possible values: tui, stream]
         --login <LOGIN>                   Override the login endpoint
         --no-color                        Suppress color usage in the terminal
         --preflight                       When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
@@ -38,7 +39,7 @@ Make sure exit code is 2 when no args are passed
         --token <TOKEN>                   Set the auth token for API calls
         --trace <TRACE>                   Specify a file to save a pprof trace
         --verbosity <COUNT>               Verbosity level
-    -h, --help                            Print help
+    -h, --help                            Print help (see more with '--help')
   
   Run Arguments:
         --cache-workers <CACHE_WORKERS>
