@@ -1,6 +1,6 @@
 import path from "node:path";
 import retry from "async-retry";
-import { cyan, dim, red } from "picocolors";
+import { dim, red } from "picocolors";
 import { mkdir, readJsonSync, existsSync } from "fs-extra";
 import * as logger from "./logger";
 import {
