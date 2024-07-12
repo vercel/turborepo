@@ -107,6 +107,8 @@ jobs:
         # changes, and we don't want to enable that beahvior for _all_ our JS packages.
         run: |
           TURBO_API= turbo run check-types test --filter="!turborepo-repository" --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
+        env:
+          NODE_VERSION: ${{ matrix.node-version }}
 
   summary:
     name: Turborepo JS Test Summary
