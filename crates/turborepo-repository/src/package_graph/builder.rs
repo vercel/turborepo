@@ -1,7 +1,4 @@
-use std::{
-    backtrace::Backtrace,
-    collections::{BTreeMap, HashMap, HashSet},
-};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use miette::Diagnostic;
 use petgraph::graph::{Graph, NodeIndex};
