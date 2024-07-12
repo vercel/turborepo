@@ -103,7 +103,7 @@ Turborepo uses your repository's lockfile to determine caching behavior, [Packag
 
 To help with incremental migration or in situations where you can't use the `packageManager` field, you may use `--dangerously-disable-package-manager-check` to opt out of this check and assume the risks of unstable lockfiles producing unpredictable behavior.
 
-```jsonc title="./apps/web/turbo.json"
+```jsonc title="./turbo.json"
 {
   "dangerouslyDisablePackageManagerCheck": true
 }
