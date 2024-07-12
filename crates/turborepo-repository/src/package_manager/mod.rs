@@ -17,6 +17,7 @@ use itertools::{Either, Itertools};
 use lazy_regex::{lazy_regex, Lazy};
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use npm::NpmDetector;
+use node_semver::SemverError;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -285,10 +286,10 @@ pub enum Error {
     #[error("We detected multiple package managers in your repository: {}. Please remove one \
     of them.", managers.join(", "))]
     MultiplePackageManagers { managers: Vec<String> },
-    #[error("invalid semantic version `{version}`")]
+    #[error("invalid semantic version: {explanation}")]
     #[diagnostic(code(invalid_semantic_version))]
     InvalidVersion {
-        version: String,
+        explanation: String,
         #[label("version found here")]
         span: Option<SourceSpan>,
         #[source_code]
@@ -302,7 +303,7 @@ pub enum Error {
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
     #[error(
-        "could not parse the packageManager field in package.json,\nexpected to match regular \
+        "could not parse the packageManager field in package.json, expected to match regular \
          expression {pattern}"
     )]
     #[diagnostic(code(invalid_package_manager_field))]
@@ -456,10 +457,10 @@ impl PackageManager {
         };
 
         let (manager, version) = Self::parse_package_manager_string(package_manager)?;
-        let version = version.parse().map_err(|_| {
+        let version = version.parse().map_err(|err: SemverError| {
             let (span, text) = package_manager.span_and_text("package.json");
             Error::InvalidVersion {
-                version: version.to_string(),
+                explanation: err.to_string(),
                 span,
                 text,
             }

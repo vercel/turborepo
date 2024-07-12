@@ -1,13 +1,22 @@
 Setup
   $ . ${TESTDIR}/../../helpers/setup_integration_test.sh
 
-We write into a file because prysk doesn't play well
-with the square brackets miette uses for source file paths
-  $ ${TURBO} something > tmp.log 2>&1
-  [1]
-  $ grep --quiet -E "root task //#something \(turbo run build\) looks like it invokes turbo and" tmp.log
-  $ grep --quiet -E "might cause a loop" tmp.log
-  $ grep --quiet -E "task found here" tmp.log
-  $ grep --quiet -E "\"something\": \"turbo run build\"" tmp.log
+sed replaces the square brackets with parentheses so prysk can parse the file path
+  $ ${TURBO} something 2>&1 | sed  's/\[\([^]]*\)\]/\(\1)/g'
+  \xe2\x80\xa2 Packages in scope: //, another, my-app, util (esc)
+  \xe2\x80\xa2 Running something in 4 packages (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
+    x root task //#something (turbo run build) looks like it invokes turbo and
+    | might cause a loop
+     ,-\(.*/package.json:3:1\) (re)
+   3 |   "scripts": {
+   4 |     "something": "turbo run build"
+     :                  ^^^^^^^^|^^^^^^^^
+     :                          `-- task found here
+   5 |   },
+     `----
+  
+
+
 
 

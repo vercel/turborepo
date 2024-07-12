@@ -30,6 +30,7 @@ pub enum Error {
     #[error(transparent)]
     ChromeTracing(#[from] crate::tracing::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     BuildPackageGraph(#[from] package_graph::builder::Error),
     #[error(transparent)]
     Rewrite(#[from] RewriteError),
