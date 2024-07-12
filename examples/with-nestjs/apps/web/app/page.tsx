@@ -33,9 +33,15 @@ const Gradient = ({
 };
 
 const LinksSection = async () => {
-  const links: Link[] = await (
-    await fetch('http://localhost:3000/links')
-  ).json();
+  const fetchLinks = async (): Promise<Link[]> => {
+    try {
+      return await (await fetch('http://localhost:3000/links')).json();
+    } catch (_) {
+      return [];
+    }
+  };
+
+  const links = await fetchLinks();
 
   return (
     <div className={styles.grid}>
