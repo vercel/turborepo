@@ -1,7 +1,7 @@
 import path from "node:path";
 import type { CopyFilterAsync } from "fs-extra";
 import { rm, writeJSON, readJSON, copy, existsSync } from "fs-extra";
-import chalk from "chalk";
+import { bold } from "picocolors";
 import {
   createProject,
   logger,
@@ -90,7 +90,7 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
 
   logger.log();
   logger.log(
-    `${chalk.bold(logger.turboGradient(">>> Success!"))} Created ${name} at "${
+    `${bold(logger.turboGradient(">>> Success!"))} Created ${name} at "${
       location.relative
     }"`
   );

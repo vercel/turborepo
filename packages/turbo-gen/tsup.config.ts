@@ -1,6 +1,6 @@
 import { defineConfig, Options } from "tsup";
 import fs from "fs-extra";
-import chalk from "chalk";
+import pc from "picocolors";
 
 export default defineConfig((options: Options) => ({
   entry: ["src/cli.ts", "src/types.ts"],
@@ -14,9 +14,9 @@ export default defineConfig((options: Options) => ({
     await fs.copy("src/templates", "dist/templates");
     // make the output match
     console.log(
-      chalk.hex("#7c5cad")("TEMPLATES"),
+      pc.magenta("TEMPLATES"),
       "copied in",
-      chalk.green(`${Date.now() - start}ms`)
+      pc.green(`${Date.now() - start}ms`)
     );
   },
   ...options,

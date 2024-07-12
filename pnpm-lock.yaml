@@ -162,9 +162,6 @@ importers:
 
   packages/create-turbo:
     dependencies:
-      chalk:
-        specifier: 4.1.2
-        version: 4.1.2
       commander:
         specifier: ^11.0.0
         version: 11.0.0
@@ -174,6 +171,9 @@ importers:
       inquirer:
         specifier: ^8.0.0
         version: 8.2.4
+      picocolors:
+        specifier: 1.0.1
+        version: 1.0.1
       proxy-agent:
         specifier: ^6.2.2
         version: 6.2.2
@@ -241,15 +241,15 @@ importers:
       '@datadog/datadog-api-client':
         specifier: ^1.13.0
         version: 1.13.0
-      chalk:
-        specifier: 2.4.2
-        version: 2.4.2
       inquirer:
         specifier: ^9.2.7
         version: 9.2.7
       minimist:
         specifier: ^1.2.8
         version: 1.2.8
+      picocolors:
+        specifier: 1.0.1
+        version: 1.0.1
       pidusage-tree:
         specifier: ^2.0.5
         version: 2.0.5
@@ -434,9 +434,6 @@ importers:
       axios:
         specifier: 0.27.2
         version: 0.27.2
-      chalk:
-        specifier: 2.4.2
-        version: 2.4.2
       commander:
         specifier: ^9.5.0
         version: 9.5.0
@@ -467,6 +464,9 @@ importers:
       ora:
         specifier: 4.1.1
         version: 4.1.1
+      picocolors:
+        specifier: 1.0.1
+        version: 1.0.1
       semver:
         specifier: ^7.3.7
         version: 7.5.0
@@ -495,9 +495,6 @@ importers:
       '@turbo/workspaces':
         specifier: workspace:*
         version: link:../turbo-workspaces
-      '@types/chalk-animation':
-        specifier: ^1.6.0
-        version: 1.6.1
       '@types/diff':
         specifier: ^5.0.2
         version: 5.0.2
@@ -548,9 +545,6 @@ importers:
       '@turbo/workspaces':
         specifier: workspace:*
         version: link:../turbo-workspaces
-      chalk:
-        specifier: 2.4.2
-        version: 2.4.2
       commander:
         specifier: ^10.0.0
         version: 10.0.0
@@ -566,6 +560,9 @@ importers:
       node-plop:
         specifier: ^0.26.3
         version: 0.26.3
+      picocolors:
+        specifier: 1.0.1
+        version: 1.0.1
       proxy-agent:
         specifier: ^6.2.2
         version: 6.2.2
@@ -682,9 +679,6 @@ importers:
 
   packages/turbo-telemetry:
     dependencies:
-      chalk:
-        specifier: ^4.1.2
-        version: 4.1.2
       ci-info:
         specifier: ^4.0.0
         version: 4.0.0
@@ -694,6 +688,9 @@ importers:
       got:
         specifier: ^11.8.6
         version: 11.8.6
+      picocolors:
+        specifier: 1.0.1
+        version: 1.0.1
       zod:
         specifier: ^3.22.4
         version: 3.22.4
@@ -870,9 +867,6 @@ importers:
       async-retry:
         specifier: ^1.3.3
         version: 1.3.3
-      chalk:
-        specifier: 2.4.2
-        version: 2.4.2
       execa:
         specifier: 5.1.1
         version: 5.1.1
@@ -900,6 +894,9 @@ importers:
       ora:
         specifier: 4.1.1
         version: 4.1.1
+      picocolors:
+        specifier: 1.0.1
+        version: 1.0.1
       tar:
         specifier: 6.1.13
         version: 6.1.13
@@ -934,9 +931,6 @@ importers:
 
   packages/turbo-workspaces:
     dependencies:
-      chalk:
-        specifier: 2.4.2
-        version: 2.4.2
       commander:
         specifier: ^10.0.0
         version: 10.0.0
@@ -961,6 +955,9 @@ importers:
       ora:
         specifier: 4.1.1
         version: 4.1.1
+      picocolors:
+        specifier: 1.0.1
+        version: 1.0.1
       rimraf:
         specifier: ^3.0.2
         version: 3.0.2
@@ -983,9 +980,6 @@ importers:
       '@turbo/utils':
         specifier: workspace:*
         version: link:../turbo-utils
-      '@types/chalk-animation':
-        specifier: ^1.6.0
-        version: 1.6.1
       '@types/fs-extra':
         specifier: ^9.0.13
         version: 9.0.13
@@ -3181,7 +3175,7 @@ packages:
       fast-glob: 3.3.1
       is-glob: 4.0.3
       open: 9.1.0
-      picocolors: 1.0.0
+      picocolors: 1.0.1
       tslib: 2.6.1
     dev: true
 
@@ -3308,10 +3302,6 @@ packages:
       '@types/keyv': 3.1.4
       '@types/node': 18.17.4
       '@types/responselike': 1.0.0
-
-  /@types/chalk-animation@1.6.1:
-    resolution: {integrity: sha512-MSuZqFkBeKcik4oMzd/BjaTRYkLpNftRSYkI/oszmckHAZOTSKslWR1CRdURwsxXBgYHPRlb5JM6Cx+tkyXUAg==}
-    dev: true
 
   /@types/diff@5.0.2:
     resolution: {integrity: sha512-uw8eYMIReOwstQ0QKF0sICefSy8cNO/v7gOTiIy9SbwuHyEecJUm7qlgueOO5S1udZ5I/irVydHVwMchgzbKTg==}
@@ -10320,8 +10310,8 @@ packages:
     resolution: {integrity: sha512-gDKb8aZMDeD/tZWs9P6+q0J9Mwkdl6xMV8TjnGP3qJVJ06bdMgkbBlLU8IdfOsIsFz2BW1rNVT3XuNEl8zPAvw==}
     engines: {node: '>=8'}
 
-  /picocolors@1.0.0:
-    resolution: {integrity: sha512-1fygroTLlHu66zi26VoTDv8yRgm0Fccecssto+MhsZ0D/DGW2sm8E8AjW7NU5VVTRt5GxbeZ5qBuJr+HyLYkjQ==}
+  /picocolors@1.0.1:
+    resolution: {integrity: sha512-anP1Z8qwhkbmu7MFP5iTt+wQKXgwzf7zTyGlcdzabySa9vd0Xt392U0rVmz9poOaBj0uHJKyyo9/upk0HrEQew==}
 
   /picomatch@2.3.1:
     resolution: {integrity: sha512-JU3teHTNjmE2VCGFzuY8EXzCDVwEqB2a8fsIvwaStHhAWJEeVd1o1QD80CU6+ZdEXXSLbSsuLwJjkCBWqRQUVA==}
@@ -10430,7 +10420,7 @@ packages:
     engines: {node: ^10 || ^12 || >=14}
     dependencies:
       nanoid: 3.3.7
-      picocolors: 1.0.0
+      picocolors: 1.0.1
       source-map-js: 1.0.2
     dev: true
 
@@ -10439,7 +10429,7 @@ packages:
     engines: {node: ^10 || ^12 || >=14}
     dependencies:
       nanoid: 3.3.7
-      picocolors: 1.0.0
+      picocolors: 1.0.1
       source-map-js: 1.0.2
     dev: false
 
@@ -12426,7 +12416,7 @@ packages:
     dependencies:
       browserslist: 4.21.5
       escalade: 3.1.1
-      picocolors: 1.0.0
+      picocolors: 1.0.1
     dev: true
 
   /update-browserslist-db@1.0.13(browserslist@4.22.2):
@@ -12437,7 +12427,7 @@ packages:
     dependencies:
       browserslist: 4.22.2
       escalade: 3.1.1
-      picocolors: 1.0.0
+      picocolors: 1.0.1
 
   /update-check@1.5.4:
     resolution: {integrity: sha512-5YHsflzHP4t1G+8WGPlvKbJEbAJGCgw+Em+dGR1KmBUbr1J36SJBqlHLjR7oob7sco5hWHGQVcr9B2poIVDDTQ==}

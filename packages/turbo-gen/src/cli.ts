@@ -2,7 +2,7 @@
 
 import http from "node:http";
 import https from "node:https";
-import chalk from "chalk";
+import { bold } from "picocolors";
 import { Argument, Command, Option } from "commander";
 import { logger } from "@turbo/utils";
 import { ProxyAgent } from "proxy-agent";
@@ -19,7 +19,7 @@ https.globalAgent = agent;
 const turboGenCli = new Command();
 
 turboGenCli
-  .name(chalk.bold(logger.turboGradient("@turbo/gen")))
+  .name(bold(logger.turboGradient("@turbo/gen")))
   .description("Extend your Turborepo")
   .version(cliPkg.version, "-v, --version", "Output the current version")
   .helpOption("-h, --help", "Display help for command")

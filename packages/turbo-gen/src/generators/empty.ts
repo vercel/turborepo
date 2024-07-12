@@ -1,6 +1,6 @@
 import path from "node:path";
 import { writeFileSync, mkdirSync } from "fs-extra";
-import chalk from "chalk";
+import { bold } from "picocolors";
 import { logger, type PackageJson, type DependencyGroups } from "@turbo/utils";
 import { gatherAddRequirements } from "../utils/gatherAddRequirements";
 import type { TurboGeneratorArguments } from "./types";
@@ -45,7 +45,7 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
 
   logger.log();
   logger.log(
-    `${chalk.bold(logger.turboGradient(">>> Success!"))} Created ${name} at "${
+    `${bold(logger.turboGradient(">>> Success!"))} Created ${name} at "${
       location.relative
     }"`
   );
