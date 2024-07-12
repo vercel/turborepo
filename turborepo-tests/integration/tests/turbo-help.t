@@ -55,7 +55,7 @@ Test help flag
             Specify a file to save a pprof trace
         --verbosity <COUNT>
             Verbosity level
-        --dangerously-allow-no-package-manager
+        --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
     -h, --help
             Print help (see more with '--help')
@@ -188,7 +188,7 @@ Test help flag
         --verbosity <COUNT>
             Verbosity level
   
-        --dangerously-allow-no-package-manager
+        --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`.
             
             `turbo` will use hints from codebase to guess which package manager should be used.
@@ -345,7 +345,7 @@ Test help flag for link command
             Specify a file to save a pprof trace
         --verbosity <COUNT>
             Verbosity level
-        --dangerously-allow-no-package-manager
+        --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
     -h, --help
             Print help (see more with '--help')
@@ -391,7 +391,7 @@ Test help flag for unlink command
             Specify a file to save a pprof trace
         --verbosity <COUNT>
             Verbosity level
-        --dangerously-allow-no-package-manager
+        --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
     -h, --help
             Print help (see more with '--help')
@@ -439,7 +439,7 @@ Test help flag for login command
             Specify a file to save a pprof trace
         --verbosity <COUNT>
             Verbosity level
-        --dangerously-allow-no-package-manager
+        --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
     -h, --help
             Print help (see more with '--help')
@@ -485,7 +485,7 @@ Test help flag for logout command
             Specify a file to save a pprof trace
         --verbosity <COUNT>
             Verbosity level
-        --dangerously-allow-no-package-manager
+        --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
     -h, --help
             Print help (see more with '--help')

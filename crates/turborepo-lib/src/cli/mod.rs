@@ -222,7 +222,7 @@ pub struct Args {
     /// `turbo` will use hints from codebase to guess which package manager
     /// should be used.
     #[clap(long, global = true)]
-    pub dangerously_allow_no_package_manager: bool,
+    pub dangerously_disable_package_manager_check: bool,
     #[clap(flatten, next_help_heading = "Run Arguments")]
     pub run_args: Option<RunArgs>,
     // This should be inside `RunArgs` but clap currently has a bug
@@ -2543,12 +2543,16 @@ mod test {
         assert!(
             !Args::try_parse_from(["turbo", "build",])
                 .unwrap()
-                .dangerously_allow_no_package_manager
+                .dangerously_disable_package_manager_check
         );
         assert!(
-            Args::try_parse_from(["turbo", "build", "--dangerously-allow-no-package-manager"])
-                .unwrap()
-                .dangerously_allow_no_package_manager
+            Args::try_parse_from([
+                "turbo",
+                "build",
+                "--dangerously-disable-package-manager-check"
+            ])
+            .unwrap()
+            .dangerously_disable_package_manager_check
         );
     }
 }

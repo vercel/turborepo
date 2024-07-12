@@ -208,7 +208,7 @@ pub struct ConfigurationOptions {
     pub(crate) spaces_id: Option<String>,
     #[serde(rename = "ui")]
     pub(crate) ui: Option<bool>,
-    #[serde(rename = "dangerouslyAllowNoPackageManager")]
+    #[serde(rename = "dangerouslyDisablePackageManagerCheck")]
     pub(crate) allow_no_package_manager: Option<bool>,
 }
 
@@ -347,7 +347,7 @@ fn get_env_var_config(
     );
     turbo_mapping.insert(OsString::from("turbo_ui"), "ui");
     turbo_mapping.insert(
-        OsString::from("turbo_dangerously_allow_no_package_manager"),
+        OsString::from("turbo_dangerously_disable_package_manager_check"),
         "allow_no_package_manager",
     );
     turbo_mapping.insert(OsString::from("turbo_preflight"), "preflight");
@@ -803,7 +803,7 @@ mod test {
         );
         env.insert("turbo_ui".into(), "true".into());
         env.insert(
-            "turbo_dangerously_allow_no_package_manager".into(),
+            "turbo_dangerously_disable_package_manager_check".into(),
             "true".into(),
         );
         env.insert("turbo_preflight".into(), "true".into());

@@ -81,7 +81,7 @@ impl CommandBase {
             }))
             .with_allow_no_package_manager(
                 self.args
-                    .dangerously_allow_no_package_manager
+                    .dangerously_disable_package_manager_check
                     .then_some(true),
             )
             .build()

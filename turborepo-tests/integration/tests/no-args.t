@@ -55,7 +55,7 @@ Make sure exit code is 2 when no args are passed
             Specify a file to save a pprof trace
         --verbosity <COUNT>
             Verbosity level
-        --dangerously-allow-no-package-manager
+        --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
     -h, --help
             Print help (see more with '--help')

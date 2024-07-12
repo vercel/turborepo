@@ -128,7 +128,7 @@ pub struct RawTurboJson {
     pub ui: Option<UI>,
     #[serde(
         skip_serializing_if = "Option::is_none",
-        rename = "dangerouslyAllowNoPackageManager"
+        rename = "dangerouslyDisablePackageManagerCheck"
     )]
     pub allow_no_package_manager: Option<bool>,
 
@@ -1091,8 +1091,8 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
-    #[test_case(r#"{"dangerouslyAllowNoPackageManager":true}"#, Some(true) ; "t")]
-    #[test_case(r#"{"dangerouslyAllowNoPackageManager":false}"#, Some(false) ; "f")]
+    #[test_case(r#"{"dangerouslyDisablePackageManagerCheck":true}"#, Some(true) ; "t")]
+    #[test_case(r#"{"dangerouslyDisablePackageManagerCheck":false}"#, Some(false) ; "f")]
     #[test_case(r#"{}"#, None ; "missing")]
     fn test_allow_no_package_manager_serde(json_str: &str, expected: Option<bool>) {
         let json = RawTurboJson::parse(json_str, AnchoredSystemPath::new("").unwrap()).unwrap();
