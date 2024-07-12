@@ -32,6 +32,7 @@ use crate::{
     run::watch::WatchClient,
     shim::TurboState,
     tracing::TurboSubscriber,
+    turbo_json::UI as ConfigUI,
 };
 
 mod error;
@@ -183,6 +184,9 @@ pub struct Args {
     /// Specify a file to save a pprof heap profile
     #[clap(long, global = true, value_parser)]
     pub heap: Option<String>,
+    /// Specify whether to use the streaming UI or TUI
+    #[clap(long, global = true, value_enum)]
+    pub ui: Option<ConfigUI>,
     /// Override the login endpoint
     #[clap(long, global = true, value_parser)]
     pub login: Option<String>,

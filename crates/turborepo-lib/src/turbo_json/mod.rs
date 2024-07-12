@@ -6,6 +6,7 @@ use std::{
 
 use biome_deserialize_macros::Deserializable;
 use camino::Utf8Path;
+use clap::ValueEnum;
 use miette::{NamedSource, SourceSpan};
 use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
@@ -159,10 +160,12 @@ impl DerefMut for Pipeline {
     }
 }
 
-#[derive(Serialize, Debug, Copy, Clone, Deserializable, PartialEq, Eq)]
+#[derive(Serialize, Debug, Copy, Clone, Deserializable, PartialEq, Eq, ValueEnum)]
 #[serde(rename_all = "camelCase")]
 pub enum UI {
+    /// Use the TUI interface
     Tui,
+    /// Use the standard output stream
     Stream,
 }
 
