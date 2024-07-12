@@ -253,9 +253,13 @@ impl RunBuilder {
 
         let mut pkg_dep_graph = {
             let builder = PackageGraph::builder(&self.repo_root, root_package_json.clone())
-                .with_single_package_mode(self.opts.run_opts.single_package);
+                .with_single_package_mode(self.opts.run_opts.single_package)
+                .with_allow_no_package_manager(self.allow_missing_package_manager);
 
-            let graph = if cfg!(feature = "daemon-package-discovery") {
+            // Daemon package discovery depends on packageManager existing in package.json
+            let graph = if cfg!(feature = "daemon-package-discovery")
+                && !self.allow_missing_package_manager
+            {
                 match (&daemon, self.opts.run_opts.daemon) {
                     (None, Some(true)) => {
                         // We've asked for the daemon, but it's not available. This is an error

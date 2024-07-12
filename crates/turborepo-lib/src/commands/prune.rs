@@ -277,6 +277,7 @@ impl<'a> Prune<'a> {
         let root_package_json = PackageJson::load(&root_package_json_path)?;
 
         let package_graph = PackageGraph::builder(&base.repo_root, root_package_json)
+            .with_allow_no_package_manager(allow_missing_package_manager)
             .build()
             .await?;
 

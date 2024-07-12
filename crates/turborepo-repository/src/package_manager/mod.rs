@@ -429,12 +429,7 @@ impl PackageManager {
         )
     }
 
-    /// Try to detect the package manager by inspecting the repository.
-    /// This method does not read the package.json, instead looking for
-    /// lockfiles and other files that indicate the package manager.
-    ///
-    /// TODO: consider if this method should not need an Option, and possibly be
-    /// a method on PackageJSON
+    /// Try to extract the package manager from package.json.
     pub fn get_package_manager(package_json: &PackageJson) -> Result<Self, Error> {
         Self::read_package_manager(package_json)
     }
@@ -456,7 +451,7 @@ impl PackageManager {
         }
     }
 
-    /// Detect package manager based on configuration files and binaries
+    /// Try to detect package manager based on configuration files and binaries
     /// installed on the system.
     pub fn detect_package_manager(repo_root: &AbsoluteSystemPath) -> Result<Self, Error> {
         let detected_package_managers = PnpmDetector::new(repo_root)
@@ -476,6 +471,15 @@ impl PackageManager {
                 Err(Error::MultiplePackageManagers { managers })
             }
         }
+    }
+
+    /// Try to extract package manager from package.json, otherwise detect based
+    /// on configuration files and binaries installed on the system
+    pub fn read_or_detect_package_manager(
+        package_json: &PackageJson,
+        repo_root: &AbsoluteSystemPath,
+    ) -> Result<Self, Error> {
+        Self::get_package_manager(package_json).or_else(|_| Self::detect_package_manager(repo_root))
     }
 
     pub(crate) fn parse_package_manager_string(manager: &str) -> Result<(&str, &str), Error> {

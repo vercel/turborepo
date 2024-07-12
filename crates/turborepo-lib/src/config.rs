@@ -313,6 +313,7 @@ impl ResolvedConfigurationOptions for RawTurboJson {
             .and_then(|spaces| spaces.id)
             .map(|spaces_id| spaces_id.into());
         opts.ui = self.ui.map(|ui| ui.use_tui());
+        opts.allow_no_package_manager = self.allow_no_package_manager;
         Ok(opts)
     }
 }
