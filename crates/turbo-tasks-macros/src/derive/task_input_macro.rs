@@ -1,11 +1,7 @@
 use proc_macro::TokenStream;
-use proc_macro2::{Ident, Literal, TokenStream as TokenStream2};
+use proc_macro2::Ident;
 use quote::quote;
-use syn::{
-    parse_macro_input, spanned::Spanned, Data, DataEnum, DataStruct, DeriveInput, FieldsNamed,
-    FieldsUnnamed,
-};
-use turbo_tasks_macros_shared::{expand_fields, generate_exhaustive_destructuring};
+use syn::{parse_macro_input, spanned::Spanned, Data, DataEnum, DataStruct, DeriveInput};
 
 pub fn derive_task_input(input: TokenStream) -> TokenStream {
     let derive_input = parse_macro_input!(input as DeriveInput);
@@ -55,116 +51,164 @@ pub fn derive_task_input(input: TokenStream) -> TokenStream {
         }
     }
 
-    let inputs_list_ident = Ident::new(
-        &format!("__{}_inputs_list", ident),
-        derive_input.ident.span(),
-    );
+    let is_resolved_impl;
+    let is_transient_impl;
+    let resolve_impl;
 
-    let expand_named = |ident, fields| expand_named(ident, fields, &inputs_list_ident);
-    let expand_unnamed = |ident, fields| expand_unnamed(ident, fields, &inputs_list_ident);
-
-    let (try_from_impl, from_impl) = match &derive_input.data {
+    match &derive_input.data {
         Data::Enum(DataEnum { variants, .. }) => {
-            let mut variants_idents = vec![];
-            let mut variants_fields_len = vec![];
-            let mut variants_fields_destructuring = vec![];
-            let mut variants_try_from_expansion = vec![];
-            let mut variants_from_expansion = vec![];
-
-            for variant in variants {
-                let variant_ident = &variant.ident;
-                let (fields_destructuring, try_from_expansion, from_expansion) = expand_fields(
-                    &variant.ident,
-                    &variant.fields,
-                    expand_named,
-                    expand_unnamed,
-                    expand_unit,
-                );
-                variants_idents.push(variant_ident);
-                variants_fields_len.push(variant.fields.len());
-                variants_fields_destructuring.push(fields_destructuring);
-                variants_try_from_expansion.push(try_from_expansion);
-                variants_from_expansion.push(from_expansion);
-            }
-
-            // This is similar to what Rust does for enums (configurable via the `repr`
-            // attribute). We use the smallest possible integer type that can
-            // represent all the variants. However, for now, this is not
-            // configurable for TaskInput enums.
-            let repr_bits = usize::BITS - variants.len().leading_zeros();
-            let repr = match repr_bits {
-                0..=8 => quote! { u8 },
-                9..=16 => quote! { u16 },
-                17..=32 => quote! { u32 },
-                33..=64 => quote! { u64 },
-                _ => panic!("too many variants"),
+            let variants = if variants.is_empty() {
+                vec![(
+                    quote! { _ => true },
+                    quote! { _ => false },
+                    quote! { _ => unreachable!() },
+                )]
+            } else {
+                variants
+                    .iter()
+                    .map(|variant| {
+                        let variant_ident = &variant.ident;
+                        let pattern;
+                        let construct;
+                        let field_names: Vec<_>;
+                        match &variant.fields {
+                            syn::Fields::Named(fields) => {
+                                field_names = fields
+                                    .named
+                                    .iter()
+                                    .map(|field| field.ident.clone().unwrap())
+                                    .collect();
+                                pattern = quote! {
+                                    #ident::#variant_ident { #(#field_names,)* }
+                                };
+                                construct = quote! {
+                                    #ident::#variant_ident { #(#field_names,)* }
+                                };
+                            }
+                            syn::Fields::Unnamed(fields) => {
+                                field_names = (0..fields.unnamed.len())
+                                    .map(|i| Ident::new(&format!("field{}", i), fields.span()))
+                                    .collect();
+                                pattern = quote! {
+                                    #ident::#variant_ident ( #(#field_names,)* )
+                                };
+                                construct = quote! {
+                                    #ident::#variant_ident ( #(#field_names,)* )
+                                };
+                            }
+                            syn::Fields::Unit => {
+                                field_names = vec![];
+                                pattern = quote! {
+                                    #ident::#variant_ident
+                                };
+                                construct = quote! {
+                                    #ident::#variant_ident
+                                };
+                            }
+                        }
+                        (
+                            quote! {
+                                #pattern => {
+                                    #(#field_names.is_resolved() &&)* true
+                                },
+                            },
+                            quote! {
+                                #pattern => {
+                                    #(#field_names.is_transient() ||)* false
+                                },
+                            },
+                            quote! {
+                                #pattern => {
+                                    #(
+                                        let #field_names = #field_names.resolve().await?;
+                                    )*
+                                    #construct
+                                },
+                            },
+                        )
+                    })
+                    .collect::<Vec<_>>()
             };
 
-            let variants_discriminants: Vec<_> = (0..variants_idents.len())
-                .map(Literal::usize_unsuffixed)
-                .collect();
+            let is_resolve_variants = variants.iter().map(|(is_resolved, _, _)| is_resolved);
+            let is_transient_variants = variants.iter().map(|(_, is_transient, _)| is_transient);
+            let resolve_variants = variants.iter().map(|(_, _, resolve)| resolve);
 
-            (
-                quote! {
-                    match value {
-                        turbo_tasks::ConcreteTaskInput::List(value) => {
-                            let mut #inputs_list_ident = value.iter();
-
-                            let discriminant = #inputs_list_ident.next().ok_or_else(|| anyhow::anyhow!(concat!("missing discriminant for ", stringify!(#ident))))?;
-                            let discriminant: #repr = turbo_tasks::TaskInput::try_from_concrete(discriminant)?;
-
-                            Ok(match discriminant {
-                                #(
-                                    #variants_discriminants => {
-                                        #variants_try_from_expansion
-                                        #ident::#variants_idents #variants_fields_destructuring
-                                    },
-                                )*
-                                _ => return Err(anyhow::anyhow!("invalid discriminant for {}", stringify!(#ident))),
-                            })
-                        },
-                        _ => Err(anyhow::anyhow!("invalid task input type, expected list (enum)")),
-                    }
-                },
-                quote! {
-                    match self {
-                        #(
-                            #ident::#variants_idents #variants_fields_destructuring => {
-                                let mut #inputs_list_ident = Vec::with_capacity(1 + #variants_fields_len);
-                                let discriminant: #repr = #variants_discriminants;
-                                let discriminant = discriminant.into_concrete();
-                                #inputs_list_ident.push(discriminant);
-                                #variants_from_expansion
-                                turbo_tasks::ConcreteTaskInput::List(#inputs_list_ident)
-                            }
-                        )*
-                    }
-                },
-            )
+            is_resolved_impl = quote! {
+                match self {
+                    #(
+                        #is_resolve_variants
+                    )*
+                }
+            };
+            is_transient_impl = quote! {
+                match self {
+                    #(
+                        #is_transient_variants
+                    )*
+                }
+            };
+            resolve_impl = quote! {
+                Ok(match self {
+                    #(
+                        #resolve_variants
+                    )*
+                })
+            };
         }
         Data::Struct(DataStruct { fields, .. }) => {
-            let (destructuring, try_from_expansion, from_expansion) =
-                expand_fields(ident, fields, expand_named, expand_unnamed, expand_unit);
-            let fields_len = fields.len();
+            let destruct;
+            let construct;
+            let field_names: Vec<Ident>;
+            match fields {
+                syn::Fields::Named(fields) => {
+                    field_names = fields
+                        .named
+                        .iter()
+                        .map(|field| field.ident.clone().unwrap())
+                        .collect();
+                    destruct = quote! {
+                        let #ident { #(#field_names,)* } = self;
+                    };
+                    construct = quote! {
+                        #ident { #(#field_names,)* }
+                    };
+                }
+                syn::Fields::Unnamed(fields) => {
+                    field_names = (0..fields.unnamed.len())
+                        .map(|i| Ident::new(&format!("field{}", i), fields.span()))
+                        .collect();
+                    destruct = quote! {
+                        let #ident ( #(#field_names,)* ) = self;
+                    };
+                    construct = quote! {
+                        #ident ( #(#field_names,)* )
+                    };
+                }
+                syn::Fields::Unit => {
+                    field_names = vec![];
+                    destruct = quote! {};
+                    construct = quote! {
+                        #ident
+                    };
+                }
+            }
 
-            (
-                quote! {
-                    match value {
-                        turbo_tasks::ConcreteTaskInput::List(value) => {
-                            let mut #inputs_list_ident = value.iter();
-                            #try_from_expansion
-                            Ok(#ident #destructuring)
-                        },
-                        _ => Err(anyhow::anyhow!("invalid task input type, expected list (struct)")),
-                    }
-                },
-                quote! {
-                    let mut #inputs_list_ident = Vec::with_capacity(#fields_len);
-                    let #ident #destructuring = self;
-                    #from_expansion
-                    turbo_tasks::ConcreteTaskInput::List(#inputs_list_ident)
-                },
-            )
+            is_resolved_impl = quote! {
+                #destruct
+                #(#field_names.is_resolved() &&)* true
+            };
+            is_transient_impl = quote! {
+                #destruct
+                #(#field_names.is_transient() ||)* false
+            };
+            resolve_impl = quote! {
+                #destruct
+                #(
+                    let #field_names = #field_names.resolve().await?;
+                )*
+                Ok(#construct)
+            };
         }
         _ => {
             derive_input
@@ -173,7 +217,9 @@ pub fn derive_task_input(input: TokenStream) -> TokenStream {
                 .error("unsupported syntax")
                 .emit();
 
-            (quote! {}, quote! {})
+            is_resolved_impl = quote! {};
+            is_transient_impl = quote! {};
+            resolve_impl = quote! {};
         }
     };
 
@@ -190,72 +236,29 @@ pub fn derive_task_input(input: TokenStream) -> TokenStream {
         .collect();
 
     quote! {
+        #[turbo_tasks::macro_helpers::async_trait]
         impl #generics turbo_tasks::TaskInput for #ident #generics
         where
             #(#generic_params: turbo_tasks::TaskInput,)*
         {
             #[allow(non_snake_case)]
             #[allow(unreachable_code)] // This can occur for enums with no variants.
-            fn try_from_concrete(value: &turbo_tasks::ConcreteTaskInput) -> turbo_tasks::Result<Self> {
-                #try_from_impl
+            fn is_resolved(&self) -> bool {
+                #is_resolved_impl
             }
 
             #[allow(non_snake_case)]
             #[allow(unreachable_code)] // This can occur for enums with no variants.
-            fn into_concrete(self) -> turbo_tasks::ConcreteTaskInput {
-                #from_impl
+            fn is_transient(&self) -> bool {
+                #is_transient_impl
+            }
+
+            #[allow(non_snake_case)]
+            #[allow(unreachable_code)] // This can occur for enums with no variants.
+            async fn resolve(&self) -> turbo_tasks::Result<Self> {
+                #resolve_impl
             }
         }
     }
     .into()
-}
-
-fn expand_named(
-    _ident: &Ident,
-    fields: &FieldsNamed,
-    inputs_list_ident: &Ident,
-) -> (TokenStream2, TokenStream2, TokenStream2) {
-    let (destructuring, fields_idents) = generate_exhaustive_destructuring(fields.named.iter());
-    (
-        destructuring,
-        quote! {
-            #(
-                let #fields_idents = #inputs_list_ident.next().ok_or_else(|| anyhow::anyhow!(concat!("missing element for ", stringify!(#fields_idents))))?;
-                let #fields_idents = turbo_tasks::TaskInput::try_from_concrete(#fields_idents)?;
-            )*
-        },
-        quote! {
-            #(
-                let #fields_idents = #fields_idents.into_concrete();
-                #inputs_list_ident.push(#fields_idents);
-            )*
-        },
-    )
-}
-
-fn expand_unnamed(
-    _ident: &Ident,
-    fields: &FieldsUnnamed,
-    inputs_list_ident: &Ident,
-) -> (TokenStream2, TokenStream2, TokenStream2) {
-    let (destructuring, fields_idents) = generate_exhaustive_destructuring(fields.unnamed.iter());
-    (
-        destructuring,
-        quote! {
-            #(
-                let #fields_idents = #inputs_list_ident.next().ok_or_else(|| anyhow::anyhow!(concat!("missing element for ", stringify!(#fields_idents))))?;
-                let #fields_idents = turbo_tasks::TaskInput::try_from_concrete(#fields_idents)?;
-            )*
-        },
-        quote! {
-            #(
-                let #fields_idents = #fields_idents.into_concrete();
-                #inputs_list_ident.push(#fields_idents);
-            )*
-        },
-    )
-}
-
-fn expand_unit(_ident: &Ident) -> (TokenStream2, TokenStream2, TokenStream2) {
-    (quote! {}, quote! {}, quote! {})
 }

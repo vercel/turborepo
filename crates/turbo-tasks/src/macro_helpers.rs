@@ -1,9 +1,13 @@
 //! Runtime helpers for [turbo-tasks-macro].
+pub use async_trait::async_trait;
 pub use once_cell::sync::{Lazy, OnceCell};
 pub use serde;
 pub use tracing;
 
-pub use super::manager::{find_cell_by_type, notify_scheduled_tasks, spawn_detached};
+pub use super::{
+    magic_any::MagicAny,
+    manager::{find_cell_by_type, notify_scheduled_tasks, spawn_detached},
+};
 use crate::debug::ValueDebugFormatString;
 
 #[inline(never)]

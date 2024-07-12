@@ -11,7 +11,7 @@ use turbo_tasks_fs::{
 };
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
-#[derive(PartialOrd, Ord, Hash, Clone, Debug, Default)]
+#[derive(Hash, Clone, Debug, Default)]
 pub enum Pattern {
     Constant(RcStr),
     #[default]
@@ -764,10 +764,27 @@ impl ValueToString for Pattern {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, TraceRawVcs, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, TraceRawVcs, Serialize, Deserialize)]
 pub enum PatternMatch {
     File(RcStr, Vc<FileSystemPath>),
     Directory(RcStr, Vc<FileSystemPath>),
+}
+
+impl PartialOrd<PatternMatch> for PatternMatch {
+    fn partial_cmp(&self, other: &PatternMatch) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for PatternMatch {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match (self, other) {
+            (PatternMatch::File(a, _), PatternMatch::File(b, _))
+            | (PatternMatch::Directory(a, _), PatternMatch::Directory(b, _)) => a.cmp(b),
+            (PatternMatch::File(..), PatternMatch::Directory(..)) => std::cmp::Ordering::Less,
+            (PatternMatch::Directory(..), PatternMatch::File(..)) => std::cmp::Ordering::Greater,
+        }
+    }
 }
 
 // TODO this isn't super efficient
