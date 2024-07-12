@@ -13,7 +13,7 @@ pub mod task_id;
 pub mod watch;
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashSet},
     io::Write,
     sync::Arc,
     time::Duration,
@@ -162,8 +162,8 @@ impl Run {
 
     // Produces a map of tasks to the packages where they're defined.
     // Used to print a list of potential tasks to run. Obeys the `--filter` flag
-    pub fn get_potential_tasks(&self) -> Result<HashMap<String, Vec<String>>, Error> {
-        let mut tasks = HashMap::new();
+    pub fn get_potential_tasks(&self) -> Result<BTreeMap<String, Vec<String>>, Error> {
+        let mut tasks = BTreeMap::new();
         for (name, info) in self.pkg_dep_graph.packages() {
             if !self.filtered_pkgs.contains(name) {
                 continue;
