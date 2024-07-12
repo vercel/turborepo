@@ -1090,4 +1090,14 @@ mod tests {
         let actual = serde_json::to_string(&parsed).unwrap();
         assert_eq!(actual, expected);
     }
+
+    #[test_case(r#"{"dangerouslyAllowNoPackageManager":true}"#, Some(true) ; "t")]
+    #[test_case(r#"{"dangerouslyAllowNoPackageManager":false}"#, Some(false) ; "f")]
+    #[test_case(r#"{}"#, None ; "missing")]
+    fn test_allow_no_package_manager_serde(json_str: &str, expected: Option<bool>) {
+        let json = RawTurboJson::parse(json_str, AnchoredSystemPath::new("").unwrap()).unwrap();
+        assert_eq!(json.allow_no_package_manager, expected);
+        let serialized = serde_json::to_string(&json).unwrap();
+        assert_eq!(serialized, json_str);
+    }
 }

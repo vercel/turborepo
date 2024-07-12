@@ -307,4 +307,44 @@ mod test {
             }
         }
     }
+
+    #[test]
+    fn test_allows_missing_package_manager() {
+        let (_tmp, tmp_dir) = tmp_dir();
+
+        let monorepo_root = tmp_dir.join_component("monorepo_root");
+        let monorepo_pkg_json = monorepo_root.join_component("package.json");
+        let monorepo_contents = "{\"workspaces\": [\"packages/*\"]}";
+        monorepo_pkg_json.ensure_dir().unwrap();
+        monorepo_pkg_json
+            .create_with_contents(monorepo_contents)
+            .unwrap();
+        monorepo_root
+            .join_component("package-lock.json")
+            .create_with_contents("")
+            .unwrap();
+
+        let app_1 = monorepo_root.join_components(&["packages", "app-1"]);
+        let app_1_pkg_json = app_1.join_component("package.json");
+        app_1_pkg_json.ensure_dir().unwrap();
+        app_1_pkg_json
+            .create_with_contents("{\"name\": \"app_1\"}")
+            .unwrap();
+
+        let repo_state_from_root = RepoState::infer(&monorepo_root).unwrap();
+        let repo_state_from_app = RepoState::infer(&app_1).unwrap();
+
+        assert_eq!(&repo_state_from_root.root, &monorepo_root);
+        assert_eq!(&repo_state_from_app.root, &monorepo_root);
+        assert_eq!(repo_state_from_root.mode, RepoMode::MultiPackage);
+        assert_eq!(repo_state_from_app.mode, RepoMode::MultiPackage);
+        assert_eq!(
+            repo_state_from_root.package_manager.unwrap(),
+            PackageManager::Npm
+        );
+        assert_eq!(
+            repo_state_from_app.package_manager.unwrap(),
+            PackageManager::Npm
+        );
+    }
 }

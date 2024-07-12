@@ -778,6 +778,7 @@ mod test {
         assert!(!defaults.preflight());
         assert_eq!(defaults.timeout(), DEFAULT_TIMEOUT);
         assert_eq!(defaults.spaces_id(), None);
+        assert!(!defaults.allow_no_package_manager());
     }
 
     #[test]
