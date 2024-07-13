@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import chalk from "chalk";
+import { red } from "picocolors";
 import { Command } from "commander";
 import { logger } from "@turbo/utils";
 import cliPkg from "../package.json";
@@ -43,9 +43,9 @@ workspacesCli
 workspacesCli.parseAsync().catch((error) => {
   logger.log();
   if (error instanceof ConvertError) {
-    logger.log(chalk.red(error.message));
+    logger.log(red(error.message));
   } else {
-    logger.log(chalk.red("Unexpected error. Please report it as a bug:"));
+    logger.log(red("Unexpected error. Please report it as a bug:"));
     logger.log(error);
   }
   logger.log();

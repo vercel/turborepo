@@ -11,9 +11,11 @@ use std::{
     str::FromStr,
 };
 
+use bun::BunDetector;
 use globwalk::{fix_glob_pattern, ValidatedGlob};
 use itertools::{Either, Itertools};
 use lazy_regex::{lazy_regex, Lazy};
+use npm::NpmDetector;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -427,12 +429,7 @@ impl PackageManager {
         )
     }
 
-    /// Try to detect the package manager by inspecting the repository.
-    /// This method does not read the package.json, instead looking for
-    /// lockfiles and other files that indicate the package manager.
-    ///
-    /// TODO: consider if this method should not need an Option, and possibly be
-    /// a method on PackageJSON
+    /// Try to extract the package manager from package.json.
     pub fn get_package_manager(package_json: &PackageJson) -> Result<Self, Error> {
         Self::read_package_manager(package_json)
     }
@@ -452,6 +449,37 @@ impl PackageManager {
             "pnpm" => Ok(PnpmDetector::detect_pnpm6_or_pnpm(&version)?),
             _ => Err(Error::UnsupportedPackageManager(manager.to_owned())),
         }
+    }
+
+    /// Try to detect package manager based on configuration files and binaries
+    /// installed on the system.
+    pub fn detect_package_manager(repo_root: &AbsoluteSystemPath) -> Result<Self, Error> {
+        let detected_package_managers = PnpmDetector::new(repo_root)
+            .chain(NpmDetector::new(repo_root))
+            .chain(YarnDetector::new(repo_root))
+            .chain(BunDetector::new(repo_root))
+            .collect::<Result<Vec<_>, Error>>()?;
+
+        match detected_package_managers.as_slice() {
+            [] => Err(NoPackageManager.into()),
+            [package_manager] => Ok(*package_manager),
+            _ => {
+                let managers = detected_package_managers
+                    .iter()
+                    .map(|mgr| mgr.to_string())
+                    .collect();
+                Err(Error::MultiplePackageManagers { managers })
+            }
+        }
+    }
+
+    /// Try to extract package manager from package.json, otherwise detect based
+    /// on configuration files and binaries installed on the system
+    pub fn read_or_detect_package_manager(
+        package_json: &PackageJson,
+        repo_root: &AbsoluteSystemPath,
+    ) -> Result<Self, Error> {
+        Self::get_package_manager(package_json).or_else(|_| Self::detect_package_manager(repo_root))
     }
 
     pub(crate) fn parse_package_manager_string(manager: &str) -> Result<(&str, &str), Error> {

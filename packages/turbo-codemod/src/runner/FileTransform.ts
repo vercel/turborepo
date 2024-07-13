@@ -1,7 +1,7 @@
 import os from "node:os";
 import path from "node:path";
 import { logger } from "@turbo/utils";
-import chalk from "chalk";
+import { dim, green, red } from "picocolors";
 import type { Change } from "diff";
 import { diffLines, diffJson } from "diff";
 import {
@@ -85,11 +85,11 @@ export class FileTransform {
     if (args.diff) {
       this.changes.forEach((part) => {
         if (part.added) {
-          process.stdout.write(chalk.green(part.value));
+          process.stdout.write(green(part.value));
         } else if (part.removed) {
-          process.stdout.write(chalk.red(part.value));
+          process.stdout.write(red(part.value));
         } else {
-          process.stdout.write(chalk.dim(part.value));
+          process.stdout.write(dim(part.value));
         }
       });
       logger.log(os.EOL);

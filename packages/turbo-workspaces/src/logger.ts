@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import { bold, green, red, underline, yellow } from "picocolors";
 import gradient from "gradient-string";
 
 const INDENTATION = 2;
@@ -30,12 +30,12 @@ export class Logger {
 
   header(title: string) {
     this.blankLine();
-    this.logger(chalk.bold(title));
+    this.logger(bold(title));
   }
 
   installerFrames() {
     const prefix = `${" ".repeat(INDENTATION)} - ${
-      this.dry ? chalk.yellow("SKIPPED | ") : chalk.green("OK | ")
+      this.dry ? yellow("SKIPPED | ") : green("OK | ")
     }`;
     return [`${prefix}   `, `${prefix}>  `, `${prefix}>> `, `${prefix}>>>`];
   }
@@ -46,7 +46,7 @@ export class Logger {
   }
 
   hero() {
-    this.logger(chalk.bold(this.gradient(`\n>>> TURBOREPO\n`)));
+    this.logger(bold(this.gradient(`\n>>> TURBOREPO\n`)));
   }
 
   info(...args: Array<unknown>) {
@@ -55,7 +55,7 @@ export class Logger {
 
   mainStep(title: string) {
     this.blankLine();
-    this.logger(`${this.step}. ${chalk.underline(title)}`);
+    this.logger(`${this.step}. ${underline(title)}`);
     this.step += 1;
   }
 
@@ -63,13 +63,13 @@ export class Logger {
     this.logger(
       " ".repeat(INDENTATION),
       `-`,
-      this.dry ? chalk.yellow("SKIPPED |") : chalk.green("OK |"),
+      this.dry ? yellow("SKIPPED |") : green("OK |"),
       ...args
     );
   }
 
   subStepFailure(...args: Array<unknown>) {
-    this.logger(" ".repeat(INDENTATION), `-`, chalk.red("ERROR |"), ...args);
+    this.logger(" ".repeat(INDENTATION), `-`, red("ERROR |"), ...args);
   }
 
   rootHeader() {
@@ -81,7 +81,7 @@ export class Logger {
     this.logger(
       " ".repeat(INDENTATION * 3),
       `-`,
-      this.dry ? chalk.yellow("SKIPPED |") : chalk.green("OK |"),
+      this.dry ? yellow("SKIPPED |") : green("OK |"),
       ...args
     );
   }
@@ -95,7 +95,7 @@ export class Logger {
     this.logger(
       " ".repeat(INDENTATION * 3),
       `-`,
-      this.dry ? chalk.yellow("SKIPPED |") : chalk.green("OK |"),
+      this.dry ? yellow("SKIPPED |") : green("OK |"),
       ...args
     );
   }
