@@ -4,9 +4,15 @@ import { TodoService } from "../src/domain/todo/todo.service";
 import { inject } from "../src/helper/di-container";
 import { type Todo } from "../src/domain/todo/todo.entity";
 
+/**
+ *
+ * If you have correctly configured the database connection information in 'packages/typeorm-service/src/orm-config.ts',
+ * remove this skipIf statement and run the tests.
+ */
+
 const todoService = inject(TodoService);
 
-suite("Todo", () => {
+suite.skipIf(true)("Todo", () => {
   let id: Todo["id"];
 
   test("Insert", async () => {

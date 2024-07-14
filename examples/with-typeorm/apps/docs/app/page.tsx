@@ -56,7 +56,10 @@ export default async function Page(): Promise<JSX.Element> {
   const todoService = inject(TodoService);
 
   const todoList = await todoService.findAll().catch((e) => {
-    console.error(e);
+    if (e.name !== "AggregateError") throw e;
+    console.warn(
+      "Please check if you have correctly configured the database connection information."
+    );
     return [];
   });
 
@@ -74,7 +77,7 @@ export default async function Page(): Promise<JSX.Element> {
     <main className={styles.main}>
       <div className={styles.description}>
         <p>
-          examples/basic&nbsp;
+          examples/with-typeorm&nbsp;
           <Code className={styles.code}>docs</Code>
         </p>
         <div>
