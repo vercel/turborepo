@@ -252,7 +252,7 @@ jobs:
     steps:
       - name: Show Stage Commit
         run: echo "${{ needs.stage.outputs.stage-branch }}"
-      - uses: actions/checkout@1.0.0
+      - uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
       - name: Get version
