@@ -1,6 +1,6 @@
 use anyhow::Result;
-use swc_core::ecma::{transforms::base::hygiene::hygiene, visit::VisitMutWith};
-use turbo_tasks::Vc;
+use swc_core::ecma::{ast::Program, transforms::base::hygiene::hygiene, visit::VisitMutWith};
+use turbo_tasks::{RcStr, Vc};
 
 use crate::{analyzer::graph::EvalContext, parse::ParseResult};
 
@@ -21,6 +21,8 @@ pub async fn rename_modules(modules: Vc<Vec<Vc<ParseResult>>>) -> Result<Vc<Vec<
     for &module in modules.iter() {
         buf.push(rename_module(module).resolve().await?);
     }
+
+    // Collect top level identifiers
 
     Ok(Vc::cell(buf))
 }
@@ -58,4 +60,31 @@ async fn rename_module(module: Vc<ParseResult>) -> Result<Vc<ParseResult>> {
         }
         _ => Ok(module),
     }
+}
+
+#[turbo_tasks::function]
+fn collect_top_level_identifiers(module: Vc<ParseResult>) -> Result<Vc<Vec<RcStr>>> {
+    match &*module.await? {
+        ParseResult::Ok {
+            program,
+            comments,
+            eval_context,
+            globals,
+            source_map,
+        } => {}
+
+        _ => Ok(Vc::cell(Vec::new())),
+    }
+}
+
+fn find_top_level_ids(program: &Program) -> Vec<RcStr> {
+    let Program::Module(program) = program else {
+        // We can't merge scrips
+        return vec![];
+    };
+    let mut ids = vec![];
+
+    for item in &program.body {}
+
+    ids
 }
