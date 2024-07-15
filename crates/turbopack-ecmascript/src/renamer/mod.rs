@@ -63,15 +63,13 @@ async fn rename_module(module: Vc<ParseResult>) -> Result<Vc<ParseResult>> {
 }
 
 #[turbo_tasks::function]
-fn collect_top_level_identifiers(module: Vc<ParseResult>) -> Result<Vc<Vec<RcStr>>> {
+async fn collect_top_level_identifiers(module: Vc<ParseResult>) -> Result<Vc<Vec<RcStr>>> {
     match &*module.await? {
-        ParseResult::Ok {
-            program,
-            comments,
-            eval_context,
-            globals,
-            source_map,
-        } => {}
+        ParseResult::Ok { program, .. } => {
+            let ids = find_top_level_ids(&program);
+
+            Ok(Vc::cell(ids))
+        }
 
         _ => Ok(Vc::cell(Vec::new())),
     }
