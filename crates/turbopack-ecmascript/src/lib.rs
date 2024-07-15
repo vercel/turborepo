@@ -121,7 +121,7 @@ pub enum TreeShakingMode {
 }
 
 #[turbo_tasks::value(transparent)]
-pub struct OptionTreeShaking(Option<TreeShakingMode>);
+pub struct OptionTreeShaking(pub Option<TreeShakingMode>);
 
 #[turbo_tasks::value(shared, serialization = "auto_for_input")]
 #[derive(PartialOrd, Ord, Hash, Debug, Default, Copy, Clone)]
