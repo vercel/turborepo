@@ -19,7 +19,6 @@ use turbopack_ecmascript::{
         EcmascriptChunkPlaceable, EcmascriptChunkType, EcmascriptExports,
     },
     references::async_module::OptionAsyncModule,
-    tree_shake::asset::EcmascriptModulePartAsset,
     EcmascriptModuleAsset,
 };
 
