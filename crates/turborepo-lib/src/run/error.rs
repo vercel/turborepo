@@ -34,6 +34,7 @@ pub enum Error {
     #[diagnostic(transparent)]
     Config(#[from] config::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     PackageGraphBuilder(#[from] package_graph::builder::Error),
     #[error(transparent)]
     DaemonConnector(#[from] daemon::DaemonConnectorError),
