@@ -441,15 +441,12 @@ impl PartialEq for SplitResult {
 }
 
 #[turbo_tasks::function]
-pub(super) async fn split_module(
-    asset: Vc<EcmascriptModuleAsset>,
-    special_exports: Vc<Vec<RcStr>>,
-) -> Result<Vc<SplitResult>> {
+pub(super) async fn split_module(asset: Vc<EcmascriptModuleAsset>) -> Result<Vc<SplitResult>> {
     Ok(split(
         asset.source().ident(),
         asset.source(),
         asset.parse(),
-        special_exports,
+        asset.options().await?.special_exports,
     ))
 }
 

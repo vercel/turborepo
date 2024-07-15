@@ -241,15 +241,9 @@ impl EcmascriptModuleAssetBuilder {
     }
 
     pub async fn build_part(self, part: Vc<ModulePart>) -> Result<Vc<EcmascriptModulePartAsset>> {
-        let special_exports = self.options.await?.special_exports;
         let import_externals = self.options.await?.import_externals;
         let base = self.build();
-        Ok(EcmascriptModulePartAsset::new(
-            base,
-            part,
-            special_exports,
-            import_externals,
-        ))
+        Ok(EcmascriptModulePartAsset::new(base, part, import_externals))
     }
 }
 

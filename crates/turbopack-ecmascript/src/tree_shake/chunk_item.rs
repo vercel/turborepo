@@ -38,7 +38,7 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
         let this = self.await?;
         let module = this.module.await?;
 
-        let split_data = split_module(module.full_module, module.special_exports);
+        let split_data = split_module(module.full_module);
         let parsed = part_of_module(split_data, module.part);
 
         let analyze = this.module.analyze().await?;
