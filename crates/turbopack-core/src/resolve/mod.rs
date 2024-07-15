@@ -1925,8 +1925,10 @@ async fn resolve_relative_request(
         // TODO path_pattern might not be a constant?
         // TODO extension might be empty, or dots in filepath
         if let Pattern::Constant(s) = path_pattern {
-            if let Some((base, _ext)) = s.rsplit_once(".") {
-                new_path = Pattern::Alternatives(vec![Pattern::Constant(base.into()), new_path])
+            if let Some((base, ext)) = s.rsplit_once(".") {
+                if ext == "js" {
+                    new_path = Pattern::Alternatives(vec![Pattern::Constant(base.into()), new_path])
+                }
             }
         } else {
             todo!("enable_js_ts_rewriting");
