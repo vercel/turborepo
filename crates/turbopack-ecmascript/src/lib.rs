@@ -140,6 +140,9 @@ pub struct EcmascriptOptions {
     /// reference anything and lead to an runtime error instead.
     pub ignore_dynamic_requests: bool,
 
+    /// The list of export names that should make tree shaking bail off. This is
+    /// required because tree shaking can split imports like `export const
+    /// runtime = 'edge'` as a separate module.
     pub special_exports: Vc<Vec<RcStr>>,
 }
 
