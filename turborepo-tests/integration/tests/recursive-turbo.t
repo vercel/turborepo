@@ -8,7 +8,7 @@ sed replaces the square brackets with parentheses so prysk can parse the file pa
   \xe2\x80\xa2 Remote caching disabled (esc)
     x root task //#something (turbo run build) looks like it invokes turbo and
     | might cause a loop
-     ,-\(.*/package.json:3:1\) (re)
+     ,-\(.*package.json:3:1\) (re)
    3 |   "scripts": {
    4 |     "something": "turbo run build"
      :                  ^^^^^^^^|^^^^^^^^
