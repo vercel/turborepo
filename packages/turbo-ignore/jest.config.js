@@ -17,4 +17,8 @@ module.exports = {
   transformIgnorePatterns: ["node_modules/*"],
   verbose: process.env.RUNNER_DEBUG === "1",
   silent: process.env.RUNNER_DEBUG !== "1",
+  snapshotFormat: {
+    escapeString: true,
+    printBasicPrototype: true,
+  },
 };
