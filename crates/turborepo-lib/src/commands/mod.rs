@@ -68,15 +68,22 @@ impl CommandBase {
             .with_token(self.args.token.clone())
             .with_timeout(self.args.remote_cache_timeout)
             .with_preflight(self.args.preflight.then_some(true))
-            .with_ui(self.args.execution_args.as_ref().and_then(|args| {
-                if !args.log_order.compatible_with_tui() {
-                    Some(false)
-                } else {
-                    // If the argument is compatible with the TUI this does not mean we should
-                    // override other configs
-                    None
-                }
+            .with_ui(self.args.ui.map(|ui| ui.use_tui()).or_else(|| {
+                self.args.execution_args.as_ref().and_then(|args| {
+                    if !args.log_order.compatible_with_tui() {
+                        Some(false)
+                    } else {
+                        // If the argument is compatible with the TUI this does not mean we should
+                        // override other configs
+                        None
+                    }
+                })
             }))
+            .with_allow_no_package_manager(
+                self.args
+                    .dangerously_disable_package_manager_check
+                    .then_some(true),
+            )
             .build()
     }
 

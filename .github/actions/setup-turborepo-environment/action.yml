@@ -17,6 +17,8 @@ runs:
       with:
         extra-flags: --no-optional
         node-version: ${{ inputs.node-version }}
+      env:
+        PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
 
     - name: "Setup Rust"
       uses: ./.github/actions/setup-rust
