@@ -11,6 +11,7 @@ use crate::{analyzer::graph::EvalContext, parse::ParseResult};
 
 struct Renamer {}
 
+#[turbo_tasks::function]
 async fn rename_module(module: Vc<ParseResult>) -> Result<Vc<ParseResult>> {
     match &*module.await? {
         ParseResult::Ok {
