@@ -215,6 +215,8 @@ pub async fn read_from_tsconfigs<T>(
 pub struct TsConfigResolveOptions {
     base_url: Option<Vc<FileSystemPath>>,
     import_map: Option<Vc<ImportMap>>,
+    // TODO Vc<bool> ?
+    is_module_resolution_nodenext: Option<bool>,
 }
 
 #[turbo_tasks::value_impl]
@@ -318,9 +320,17 @@ pub async fn tsconfig_resolve_options(
         None
     };
 
+    let is_module_resolution_nodenext = read_from_tsconfigs(&configs, |json, _| {
+        json["compilerOptions"]["moduleResolution"]
+            .as_str()
+            .map(|module_resolution| module_resolution.eq_ignore_ascii_case("nodenext"))
+    })
+    .await?;
+
     Ok(TsConfigResolveOptions {
         base_url,
         import_map,
+        is_module_resolution_nodenext,
     }
     .cell())
 }
@@ -351,6 +361,14 @@ pub async fn apply_tsconfig_resolve_options(
                 .map(|import_map| import_map.extend(tsconfig_import_map))
                 .unwrap_or(tsconfig_import_map),
         );
+    }
+    // TODO precedence, OR or AND with existing resolve_options value?
+    if let Some(is_module_resolution_nodenext) =
+        tsconfig_resolve_options.is_module_resolution_nodenext
+    {
+        if is_module_resolution_nodenext {
+            resolve_options.enable_js_ts_rewriting = is_module_resolution_nodenext
+        }
     }
     Ok(resolve_options.cell())
 }

@@ -443,6 +443,7 @@ pub struct ResolveOptions {
     pub before_resolve_plugins: Vec<Vc<Box<dyn BeforeResolvePlugin>>>,
     pub plugins: Vec<Vc<Box<dyn AfterResolvePlugin>>>,
     pub placeholder_for_future_extensions: (),
+    pub enable_js_ts_rewriting: bool,
 }
 
 #[turbo_tasks::value_impl]

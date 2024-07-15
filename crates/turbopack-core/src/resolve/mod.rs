@@ -1921,6 +1921,18 @@ async fn resolve_relative_request(
 
     let fragment_val = fragment.await?;
 
+    if !options_value.fully_specified && options_value.enable_js_ts_rewriting {
+        // TODO path_pattern might not be a constant?
+        // TODO extension might be empty, or dots in filepath
+        if let Pattern::Constant(s) = path_pattern {
+            if let Some((base, _ext)) = s.rsplit_once(".") {
+                new_path = Pattern::Alternatives(vec![Pattern::Constant(base.into()), new_path])
+            }
+        } else {
+            todo!("enable_js_ts_rewriting");
+        }
+    }
+
     if !fragment_val.is_empty() {
         new_path.push(Pattern::Alternatives(
             once(Pattern::Constant("".into()))
