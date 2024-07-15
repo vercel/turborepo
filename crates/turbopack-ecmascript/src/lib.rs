@@ -120,6 +120,9 @@ pub enum TreeShakingMode {
     ReexportsOnly,
 }
 
+#[turbo_tasks::value(transparent)]
+pub struct OptionTreeShaking(Option<TreeShakingMode>);
+
 #[turbo_tasks::value(shared, serialization = "auto_for_input")]
 #[derive(PartialOrd, Ord, Hash, Debug, Default, Copy, Clone)]
 pub struct EcmascriptOptions {
