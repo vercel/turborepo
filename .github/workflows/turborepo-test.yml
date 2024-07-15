@@ -208,7 +208,7 @@ jobs:
 
       - name: Cache Prysk
         id: cache-prysk
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: cli/.cram_env
           key: prysk-venv-${{ matrix.os.runner }}
