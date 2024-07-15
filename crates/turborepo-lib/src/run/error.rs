@@ -26,6 +26,7 @@ pub enum Error {
     #[error(transparent)]
     Opts(#[from] opts::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(transparent)]
     PackageManager(#[from] turborepo_repository::package_manager::Error),
