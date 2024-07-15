@@ -93,7 +93,7 @@ pub async fn print_potential_tasks(
             if idx != 0 {
                 packages_str.push_str(", ");
             }
-            packages_str.push_str(&format!("{}", package));
+            packages_str.push_str(package);
         }
 
         let packages = color!(ui, GREY, "{}", packages_str);
