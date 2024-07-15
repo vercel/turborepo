@@ -21,7 +21,7 @@ use tokio::task_local;
 use tracing::Span;
 use turbo_prehash::PreHashed;
 use turbo_tasks::{
-    backend::{PersistentTaskType, TaskCollectiblesMap, TaskExecutionSpec},
+    backend::{CellContent, PersistentTaskType, TaskCollectiblesMap, TaskExecutionSpec},
     event::{Event, EventListener},
     get_invalidator, registry, CellId, Invalidator, RawVc, TaskId, TaskIdSet, TraitTypeId,
     TurboTasksBackendApi, ValueTypeId,
@@ -32,7 +32,7 @@ use crate::{
         aggregation_data, handle_new_edge, prepare_aggregation_data, query_root_info,
         AggregationDataGuard, PreparedOperation,
     },
-    cell::Cell,
+    cell::{Cell, RecomputingCell},
     edges_set::{TaskEdge, TaskEdgesList, TaskEdgesSet},
     gc::{GcQueue, GcTaskState},
     output::{Output, OutputContent},
@@ -441,6 +441,11 @@ pub enum GcResult {
     /// from the graph and only makes sense when the task isn't currently
     /// active.
     Unloaded,
+}
+
+pub enum ReadCellError {
+    CellRemoved,
+    Recomputing(EventListener),
 }
 
 impl Task {
@@ -1292,13 +1297,17 @@ impl Task {
         }
     }
 
-    /// Access to a cell.
-    pub(crate) fn access_cell_for_read<T>(
+    /// Read a cell.
+    pub(crate) fn read_cell(
         &self,
         index: CellId,
         gc_queue: Option<&GcQueue>,
-        func: impl FnOnce(Option<&mut Cell>) -> T,
-    ) -> T {
+        note: impl Fn() -> String + Sync + Send + 'static,
+        reader: Option<TaskId>,
+        backend: &MemoryBackend,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
+    ) -> Result<CellContent, ReadCellError> {
+        let task_id = self.id;
         let mut state = self.full_state_mut();
         if let Some(gc_queue) = gc_queue {
             let generation = gc_queue.generation();
@@ -1306,12 +1315,64 @@ impl Task {
                 let _ = gc_queue.task_accessed(self.id);
             }
         }
-        let list = state.cells.entry(index.type_id).or_default();
-        let i = index.index as usize;
-        if list.len() <= i {
-            func(None)
-        } else {
-            func(Some(&mut list[i]))
+        match state.state_type {
+            Done { .. } | InProgress(..) => {
+                let is_done = matches!(state.state_type, Done { .. });
+                let list = state.cells.entry(index.type_id).or_default();
+                let i = index.index as usize;
+                if list.len() <= i {
+                    if is_done {
+                        return Err(ReadCellError::CellRemoved);
+                    } else {
+                        list.resize_with(i + 1, Default::default);
+                    }
+                }
+                let cell = &mut list[i];
+                let description = move || format!("{task_id} {index}");
+                let read_result = if let Some(reader) = reader {
+                    cell.read_content(reader, description, note)
+                } else {
+                    cell.read_content_untracked(description, note)
+                };
+                drop(state);
+                match read_result {
+                    Ok(content) => Ok(content),
+                    Err(RecomputingCell { listener, schedule }) => {
+                        if schedule {
+                            self.recompute(backend, turbo_tasks);
+                        }
+                        Err(ReadCellError::Recomputing(listener))
+                    }
+                }
+            }
+            Dirty {
+                ref mut outdated_edges,
+            } => {
+                let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
+                let description = self.get_event_description();
+                let event = Event::new(move || format!("TaskState({})::event", description()));
+                let listener = event.listen_with_note(note);
+                state.state_type = Scheduled {
+                    event,
+                    outdated_edges: take(outdated_edges),
+                    clean: false,
+                };
+                let change_job = state.aggregation_node.apply_change(
+                    &aggregation_context,
+                    TaskChange {
+                        dirty_tasks_update: vec![(self.id, -1)],
+                        ..Default::default()
+                    },
+                );
+                drop(state);
+                turbo_tasks.schedule(self.id);
+                change_job.apply(&aggregation_context);
+                aggregation_context.apply_queued_updates();
+                Err(ReadCellError::Recomputing(listener))
+            }
+            Scheduled { ref event, .. } => {
+                Err(ReadCellError::Recomputing(event.listen_with_note(note)))
+            }
         }
     }
 
