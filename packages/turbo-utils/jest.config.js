@@ -1,4 +1,4 @@
-/** @type {import('ts-jest/dist/types').InitialOptionsTsJest} */
+/** @type {import('ts-jest/dist/types').JestConfigWithTsJest} */
 module.exports = {
   preset: "ts-jest/presets/js-with-ts",
   testEnvironment: "node",
@@ -6,4 +6,8 @@ module.exports = {
   transformIgnorePatterns: ["/node_modules/(?!(ansi-regex)/)"],
   verbose: process.env.RUNNER_DEBUG === "1",
   silent: process.env.RUNNER_DEBUG !== "1",
+  snapshotFormat: {
+    escapeString: true,
+    printBasicPrototype: true,
+  },
 };
