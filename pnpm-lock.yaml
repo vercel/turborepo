@@ -733,7 +733,7 @@ importers:
         version: 27.5.1(ts-node@10.9.1)
       ts-jest:
         specifier: ^27.1.1
-        version: 27.1.5(@babel/core@7.23.6)(@types/jest@27.5.2)(esbuild@0.17.18)(jest@27.5.1)(typescript@5.3.3)
+        version: 27.1.5(@babel/core@7.23.6)(@types/jest@27.5.2)(esbuild@0.14.49)(jest@27.5.1)(typescript@5.3.3)
       tsx:
         specifier: ^4.7.2
         version: 4.7.2
@@ -785,7 +785,7 @@ importers:
         version: 27.5.1(ts-node@10.9.1)
       ts-jest:
         specifier: ^27.1.1
-        version: 27.1.5(@babel/core@7.23.6)(@types/jest@27.5.2)(esbuild@0.17.18)(jest@27.5.1)(typescript@5.3.3)
+        version: 27.1.5(@babel/core@7.23.6)(@types/jest@27.5.2)(esbuild@0.14.49)(jest@27.5.1)(typescript@5.3.3)
       typescript:
         specifier: 5.3.3
         version: 5.3.3
@@ -917,7 +917,7 @@ importers:
         version: 6.1.13
       ts-jest:
         specifier: ^27.1.1
-        version: 27.1.5(@babel/core@7.23.6)(@types/jest@27.5.2)(esbuild@0.17.18)(jest@27.5.1)(typescript@5.3.3)
+        version: 27.1.5(@babel/core@7.23.6)(@types/jest@27.5.2)(esbuild@0.14.49)(jest@27.5.1)(typescript@5.3.3)
       typescript:
         specifier: 5.3.3
         version: 5.3.3
@@ -977,7 +977,7 @@ importers:
         specifier: ^3.0.2
         version: 3.0.2
       semver:
-        specifier: ^7.6.2
+        specifier: 7.6.2
         version: 7.6.2
       update-check:
         specifier: ^1.5.4
@@ -1020,7 +1020,7 @@ importers:
         specifier: ^3.0.2
         version: 3.0.2
       '@types/semver':
-        specifier: ^7.5.8
+        specifier: 7.5.8
         version: 7.5.8
       jest:
         specifier: ^27.4.3
@@ -3576,10 +3576,6 @@ packages:
     resolution: {integrity: sha512-WwA1MW0++RfXmCr12xeYOOC5baSC9mSb0ZqCquFzKhcoF4TvHu5MKOuXsncgZcpVFhB1pXd5hZmM0ryAoCp12A==}
     dev: true
 
-  /@types/semver@7.5.1:
-    resolution: {integrity: sha512-cJRQXpObxfNKkFAZbJl2yjWtJCqELQIdShsogr1d2MilP8dKD9TE/nEKHkJgUNHdGKCQaf9HbIynuV2csLGVLg==}
-    dev: true
-
   /@types/semver@7.5.8:
     resolution: {integrity: sha512-I8EUhyrgfLrcTkzV3TSsGyl1tSuPrEDzr0yd5m90UgNxQkyDXULk3b6MlQqTCpZpNtWe1K0hzclnZkTcLBe2UQ==}
     dev: true
@@ -3681,7 +3677,7 @@ packages:
       graphemer: 1.4.0
       ignore: 5.3.0
       natural-compare: 1.4.0
-      semver: 7.5.4
+      semver: 7.6.2
       ts-api-utils: 1.0.2(typescript@5.3.3)
       typescript: 5.3.3
     transitivePeerDependencies:
@@ -3769,7 +3765,7 @@ packages:
       debug: 4.3.4
       globby: 11.1.0
       is-glob: 4.0.3
-      semver: 7.5.4
+      semver: 7.6.2
       tsutils: 3.21.0(typescript@5.3.3)
       typescript: 5.3.3
     transitivePeerDependencies:
@@ -3791,7 +3787,7 @@ packages:
       globby: 11.1.0
       is-glob: 4.0.3
       minimatch: 9.0.3
-      semver: 7.5.4
+      semver: 7.6.2
       ts-api-utils: 1.0.2(typescript@5.3.3)
       typescript: 5.3.3
     transitivePeerDependencies:
@@ -3806,13 +3802,13 @@ packages:
     dependencies:
       '@eslint-community/eslint-utils': 4.4.0(eslint@8.55.0)
       '@types/json-schema': 7.0.12
-      '@types/semver': 7.5.1
+      '@types/semver': 7.5.8
       '@typescript-eslint/scope-manager': 5.62.0
       '@typescript-eslint/types': 5.62.0
       '@typescript-eslint/typescript-estree': 5.62.0(typescript@5.3.3)
       eslint: 8.55.0
       eslint-scope: 5.1.1
-      semver: 7.5.4
+      semver: 7.6.2
     transitivePeerDependencies:
       - supports-color
       - typescript
@@ -3826,12 +3822,12 @@ packages:
     dependencies:
       '@eslint-community/eslint-utils': 4.4.0(eslint@8.55.0)
       '@types/json-schema': 7.0.12
-      '@types/semver': 7.5.1
+      '@types/semver': 7.5.8
       '@typescript-eslint/scope-manager': 6.18.1
       '@typescript-eslint/types': 6.18.1
       '@typescript-eslint/typescript-estree': 6.18.1(typescript@5.3.3)
       eslint: 8.55.0
-      semver: 7.5.4
+      semver: 7.6.2
     transitivePeerDependencies:
       - supports-color
       - typescript
@@ -4620,7 +4616,7 @@ packages:
   /builtins@5.0.1:
     resolution: {integrity: sha512-qwVpFEHNfhYJIzNRBvd2C1kyo6jz3ZSMPyyuR47OPdiKWlbYnZNyDWuyR175qDnAJLiCo5fBBqPb3RiXgWlkOQ==}
     dependencies:
-      semver: 7.5.4
+      semver: 7.6.2
     dev: false
 
   /bundle-name@3.0.0:
@@ -6517,7 +6513,7 @@ packages:
       read-pkg-up: 7.0.1
       regexp-tree: 0.1.27
       regjsparser: 0.10.0
-      semver: 7.5.4
+      semver: 7.6.2
       strip-indent: 3.0.0
     dev: true
 
@@ -8792,7 +8788,7 @@ packages:
       jest-util: 27.5.1
       natural-compare: 1.4.0
       pretty-format: 27.5.1
-      semver: 7.5.4
+      semver: 7.6.2
     transitivePeerDependencies:
       - supports-color
     dev: true
@@ -8823,7 +8819,7 @@ packages:
       jest-util: 29.5.0
       natural-compare: 1.4.0
       pretty-format: 29.5.0
-      semver: 7.5.4
+      semver: 7.6.2
     transitivePeerDependencies:
       - supports-color
     dev: false
@@ -12061,7 +12057,7 @@ packages:
       json5: 2.2.3
       lodash.memoize: 4.1.2
       make-error: 1.3.6
-      semver: 7.5.4
+      semver: 7.6.2
       typescript: 5.3.3
       yargs-parser: 20.2.9
     dev: true
