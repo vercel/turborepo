@@ -33,6 +33,8 @@ export function setupTestFixtures({
         rm(fixture, {
           retryDelay: 50,
           maxRetries: 5,
+          recursive: true,
+          force: true,
         })
       )
     );
@@ -42,6 +44,8 @@ export function setupTestFixtures({
     await rm(parentDirectory, {
       retryDelay: 50,
       maxRetries: 5,
+      recursive: true,
+      force: true,
     });
   });
 
