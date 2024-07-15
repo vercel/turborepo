@@ -47,25 +47,6 @@ use crate::{
     DaemonClient, DaemonConnector,
 };
 
-#[derive(Debug, Default)]
-pub struct PotentialTask {
-    pub packages: Vec<String>,
-    pub rest: u32,
-}
-impl IntoIterator for PotentialTask {
-    type Item = String;
-    type IntoIter = Box<dyn Iterator<Item = Self::Item>>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        let iter = self.packages.into_iter();
-        if self.rest > 0 {
-            Box::new(iter.chain(std::iter::once(format!("{} more", self.rest))))
-        } else {
-            Box::new(iter)
-        }
-    }
-}
-
 #[derive(Clone)]
 pub struct Run {
     version: &'static str,

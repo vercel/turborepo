@@ -79,7 +79,7 @@ pub async fn print_potential_tasks(
         let task = color!(ui, BOLD, "{}", task);
         let mut line_length = 0;
 
-        let mut packages_str = String::with_capacity(80);
+        let mut packages_str = String::with_capacity(MAX_CHARS_PER_TASK_LINE);
         for (idx, package) in packages.iter().sorted().enumerate() {
             if line_length > MAX_CHARS_PER_TASK_LINE {
                 if idx != packages.len() {
