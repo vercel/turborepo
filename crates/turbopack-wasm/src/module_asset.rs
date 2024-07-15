@@ -79,12 +79,6 @@ impl WebAssemblyModuleAsset {
             }))),
         ).module();
 
-        if let Some(esm_asset) =
-            Vc::try_resolve_downcast_type::<EcmascriptModulePartAsset>(module).await?
-        {
-            return Ok(esm_asset.await?.full_module);
-        }
-
         let Some(esm_asset) =
             Vc::try_resolve_downcast_type::<EcmascriptModuleAsset>(module).await?
         else {

@@ -327,6 +327,7 @@ impl Analyzer<'_> {
 pub(crate) enum Key {
     ModuleEvaluation,
     Export(RcStr),
+    Exports,
 }
 
 /// Converts [Vc<ModulePart>] to the index.
@@ -337,9 +338,9 @@ async fn get_part_id(result: &SplitResult, part: Vc<ModulePart>) -> Result<u32> 
     let key = match &*part {
         ModulePart::Evaluation => Key::ModuleEvaluation,
         ModulePart::Export(export) => Key::Export(export.await?.as_str().into()),
+        ModulePart::Exports => Key::Exports,
         ModulePart::Internal(part_id) => return Ok(*part_id),
         ModulePart::Locals
-        | ModulePart::Exports
         | ModulePart::Facade
         | ModulePart::RenamedExport { .. }
         | ModulePart::RenamedNamespace { .. } => {
@@ -356,58 +357,55 @@ async fn get_part_id(result: &SplitResult, part: Vc<ModulePart>) -> Result<u32> 
         bail!("split failed")
     };
 
-    let part_id = match entrypoints.get(&key) {
-        Some(&id) => id,
-        None => {
-            // This is required to handle `export * from 'foo'`
-            if let ModulePart::Export(..) = &*part {
-                if let Some(&v) = entrypoints.get(&Key::ModuleEvaluation) {
-                    return Ok(v);
-                }
-            }
+    if let Some(id) = entrypoints.get(&key) {
+        return Ok(*id);
+    }
 
-            let mut dump = String::new();
+    // This is required to handle `export * from 'foo'`
+    if let ModulePart::Export(..) = &*part {
+        if let Some(&v) = entrypoints.get(&Key::Exports) {
+            return Ok(v);
+        }
+    }
 
-            for (idx, m) in modules.iter().enumerate() {
-                let ParseResult::Ok {
-                    program,
-                    source_map,
-                    ..
-                } = &*m.await?
-                else {
-                    bail!("failed to get module")
+    let mut dump = String::new();
+
+    for (idx, m) in modules.iter().enumerate() {
+        let ParseResult::Ok {
+            program,
+            source_map,
+            ..
+        } = &*m.await?
+        else {
+            bail!("failed to get module")
+        };
+
+        {
+            let mut buf = vec![];
+
+            {
+                let wr = JsWriter::new(Default::default(), "\n", &mut buf, None);
+
+                let mut emitter = Emitter {
+                    cfg: Default::default(),
+                    comments: None,
+                    cm: source_map.clone(),
+                    wr,
                 };
 
-                {
-                    let mut buf = vec![];
-
-                    {
-                        let wr = JsWriter::new(Default::default(), "\n", &mut buf, None);
-
-                        let mut emitter = Emitter {
-                            cfg: Default::default(),
-                            comments: None,
-                            cm: source_map.clone(),
-                            wr,
-                        };
-
-                        emitter.emit_program(program).unwrap();
-                    }
-                    let code = String::from_utf8(buf).unwrap();
-
-                    writeln!(dump, "# Module #{idx}:\n{code}\n\n\n")?;
-                }
+                emitter.emit_program(program).unwrap();
             }
+            let code = String::from_utf8(buf).unwrap();
 
-            bail!(
-                "could not find part id for module part {:?} in {:?}\n\nModule dump:\n{dump}",
-                key,
-                entrypoints
-            )
+            writeln!(dump, "# Module #{idx}:\n{code}\n\n\n")?;
         }
-    };
+    }
 
-    Ok(part_id)
+    bail!(
+        "could not find part id for module part {:?} in {:?}\n\nModule dump:\n{dump}",
+        key,
+        entrypoints
+    )
 }
 
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
@@ -634,10 +632,6 @@ pub(super) async fn part_of_module(
                                 ))),
                             },
                         )));
-
-                    module.body.extend(star_reexports.iter().map(|export_all| {
-                        ModuleItem::ModuleDecl(ModuleDecl::ExportAll(export_all.clone()))
-                    }));
 
                     let program = Program::Module(module);
                     let eval_context = EvalContext::new(
