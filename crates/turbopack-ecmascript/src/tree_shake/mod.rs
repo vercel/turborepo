@@ -24,7 +24,6 @@ use crate::{analyzer::graph::EvalContext, parse::ParseResult, EcmascriptModuleAs
 
 pub mod asset;
 pub mod chunk_item;
-mod cjs_finder;
 mod graph;
 pub mod merge;
 #[cfg(test)]
@@ -469,7 +468,7 @@ pub(super) async fn split(
             ..
         } => {
             // If the script file is a common js file, we cannot split the module
-            if cjs_finder::should_skip_tree_shaking(program, &special_exports.await?) {
+            if util::should_skip_tree_shaking(program, &special_exports.await?) {
                 return Ok(SplitResult::Failed {
                     parse_result: parsed,
                 }
