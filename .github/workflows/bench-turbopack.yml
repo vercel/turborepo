@@ -257,9 +257,9 @@ jobs:
 
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: bench_${{ matrix.bench.name }}
+          name: bench-${{ matrix.bench.name }}
           path: raw.json
 
       # This avoids putting this data into the rust-cache
@@ -288,7 +288,7 @@ jobs:
           ref: benchmark-data
 
       - name: Download benchmark data
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
 
@@ -296,7 +296,7 @@ jobs:
         run: |
           find artifacts -size 0 -delete
           mkdir -p data/${{ steps.date.outputs.year }}/${{ steps.date.outputs.month }}/ubuntu-latest-8-core/${{ steps.date.outputs.date }}-${{ github.sha }}/
-          mv artifacts/bench_* data/${{ steps.date.outputs.year }}/${{ steps.date.outputs.month }}/ubuntu-latest-8-core/${{ steps.date.outputs.date }}-${{ github.sha }}/
+          mv artifacts/bench-* data/${{ steps.date.outputs.year }}/${{ steps.date.outputs.month }}/ubuntu-latest-8-core/${{ steps.date.outputs.date }}-${{ github.sha }}/
 
       - name: Git pull
         run: git pull --depth=1 --no-tags origin benchmark-data
@@ -319,7 +319,7 @@ jobs:
           - name: linux
             title: Linux
             quiet: false
-            runs-on:
+            runner:
               - "self-hosted"
               - "linux"
               - "x64"

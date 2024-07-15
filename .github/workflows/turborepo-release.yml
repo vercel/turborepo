@@ -180,7 +180,7 @@ jobs:
         run: ${{ matrix.settings.rust-build-env }} cargo build --profile release-turborepo -p turbo --target ${{ matrix.settings.target }}
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: turbo-${{ matrix.settings.target }}
           path: target/${{ matrix.settings.target }}/release-turborepo/turbo*
@@ -218,9 +218,10 @@ jobs:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
 
       - name: Download Rust artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: rust-artifacts
+          merge-multiple: true
 
       - name: Move Rust artifacts into place
         run: |
@@ -239,7 +240,7 @@ jobs:
 
       # Upload published artifacts in case they are needed for debugging later
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: turbo-combined
           path: cli/dist
