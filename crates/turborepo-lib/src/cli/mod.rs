@@ -682,8 +682,8 @@ pub struct ExecutionArgs {
     /// Environment variable mode.
     /// Use "loose" to pass the entire existing environment.
     /// Use "strict" to use an allowlist specified in turbo.json.
-    #[clap(long = "env-mode", default_value = "strict", num_args = 0..=1, default_missing_value = "strict")]
-    pub env_mode: EnvMode,
+    #[clap(long = "env-mode", num_args = 0..=1, default_missing_value = "strict")]
+    pub env_mode: Option<EnvMode>,
     /// Use the given selector to specify package(s) to act as
     /// entry points. The syntax mirrors pnpm's syntax, and
     /// additional documentation and examples can be found in
@@ -755,8 +755,8 @@ impl ExecutionArgs {
             );
         }
 
-        if self.env_mode != EnvMode::default() {
-            telemetry.track_arg_value("env-mode", self.env_mode, EventType::NonSensitive);
+        if let Some(env_mode) = self.env_mode {
+            telemetry.track_arg_value("env-mode", env_mode, EventType::NonSensitive);
         }
 
         if let Some(output_logs) = &self.output_logs {
@@ -1443,7 +1443,7 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    env_mode: EnvMode::Strict,
+                    env_mode: Some(EnvMode::Strict),
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
@@ -1453,27 +1453,12 @@ mod test {
         "env_mode: not fully-specified"
     )]
     #[test_case::test_case(
-		&["turbo", "run", "build"],
-        Args {
-            command: Some(Command::Run {
-                execution_args: Box::new(ExecutionArgs {
-                    tasks: vec!["build".to_string()],
-                    env_mode: EnvMode::Strict,
-                    ..get_default_execution_args()
-                }),
-                run_args: Box::new(get_default_run_args())
-            }),
-            ..Args::default()
-		} ;
-        "env_mode: default strict"
-	)]
-    #[test_case::test_case(
 		&["turbo", "run", "build", "--env-mode", "loose"],
         Args {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    env_mode: EnvMode::Loose,
+                    env_mode: Some(EnvMode::Loose),
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
@@ -1488,7 +1473,7 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    env_mode: EnvMode::Strict,
+                    env_mode: Some(EnvMode::Strict),
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
