@@ -4,12 +4,15 @@ use turbo_tasks::Vc;
 
 use crate::{analyzer::graph::EvalContext, parse::ParseResult};
 
+/// Rename `modules` so those modules has no conflict regardless of the way we
+/// use for merging.
+///
 /// Designed after the renamer of esbuild.
 ///
 /// This renamer renames non-top-level identifiers in parallel, and top-level
 /// identifiers in series.
-
-struct Renamer {}
+#[turbo_tasks::function]
+pub async fn rename_modules(modules: Vc<Vec<Vc<ParseResult>>>) -> Result<Vec<Vc<ParseResult>>> {}
 
 #[turbo_tasks::function]
 async fn rename_module(module: Vc<ParseResult>) -> Result<Vc<ParseResult>> {
