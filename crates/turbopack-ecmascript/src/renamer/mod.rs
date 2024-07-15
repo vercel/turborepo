@@ -1,5 +1,9 @@
 use anyhow::Result;
-use swc_core::ecma::{ast::Program, transforms::base::hygiene::hygiene, visit::VisitMutWith};
+use swc_core::ecma::{
+    ast::{ModuleItem, Program},
+    transforms::base::hygiene::hygiene,
+    visit::VisitMutWith,
+};
 use turbo_tasks::{RcStr, Vc};
 
 use crate::{analyzer::graph::EvalContext, parse::ParseResult};
@@ -66,7 +70,7 @@ async fn rename_module(module: Vc<ParseResult>) -> Result<Vc<ParseResult>> {
 async fn collect_top_level_identifiers(module: Vc<ParseResult>) -> Result<Vc<Vec<RcStr>>> {
     match &*module.await? {
         ParseResult::Ok { program, .. } => {
-            let ids = find_top_level_ids(&program);
+            let ids = find_top_level_ids(program);
 
             Ok(Vc::cell(ids))
         }
@@ -82,7 +86,12 @@ fn find_top_level_ids(program: &Program) -> Vec<RcStr> {
     };
     let mut ids = vec![];
 
-    for item in &program.body {}
+    for item in &program.body {
+        match item {
+            ModuleItem::ModuleDecl(item) => {}
+            ModuleItem::Stmt(item) => {}
+        }
+    }
 
     ids
 }
