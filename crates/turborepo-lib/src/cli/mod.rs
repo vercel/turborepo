@@ -217,6 +217,12 @@ pub struct Args {
     pub check_for_update: bool,
     #[clap(long = "__test-run", global = true, hide = true)]
     pub test_run: bool,
+    /// Allow for missing `packageManager` in `package.json`.
+    ///
+    /// `turbo` will use hints from codebase to guess which package manager
+    /// should be used.
+    #[clap(long, global = true)]
+    pub dangerously_disable_package_manager_check: bool,
     #[clap(flatten, next_help_heading = "Run Arguments")]
     pub run_args: Option<RunArgs>,
     // This should be inside `RunArgs` but clap currently has a bug
@@ -2530,5 +2536,23 @@ mod test {
         assert!(LogOrder::Auto.compatible_with_tui());
         assert!(!LogOrder::Stream.compatible_with_tui());
         assert!(!LogOrder::Grouped.compatible_with_tui());
+    }
+
+    #[test]
+    fn test_dangerously_allow_no_package_manager() {
+        assert!(
+            !Args::try_parse_from(["turbo", "build",])
+                .unwrap()
+                .dangerously_disable_package_manager_check
+        );
+        assert!(
+            Args::try_parse_from([
+                "turbo",
+                "build",
+                "--dangerously-disable-package-manager-check"
+            ])
+            .unwrap()
+            .dangerously_disable_package_manager_check
+        );
     }
 }

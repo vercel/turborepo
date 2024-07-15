@@ -64,6 +64,7 @@ pub struct RunBuilder {
     // this package.
     entrypoint_packages: Option<HashSet<PackageName>>,
     should_print_prelude_override: Option<bool>,
+    allow_missing_package_manager: bool,
 }
 
 impl RunBuilder {
@@ -73,6 +74,8 @@ impl RunBuilder {
 
         let mut opts: Opts = base.args().try_into()?;
         let config = base.config()?;
+        let allow_missing_package_manager = config.allow_no_package_manager();
+
         let is_linked = turborepo_api_client::is_linked(&api_auth);
         if !is_linked {
             opts.cache_opts.skip_remote = true;
@@ -116,6 +119,7 @@ impl RunBuilder {
             analytics_sender: None,
             entrypoint_packages: None,
             should_print_prelude_override: None,
+            allow_missing_package_manager,
         })
     }
 
@@ -187,6 +191,10 @@ impl RunBuilder {
         // Pulled from initAnalyticsClient in run.go
         let is_linked = turborepo_api_client::is_linked(&self.api_auth);
         run_telemetry.track_is_linked(is_linked);
+        run_telemetry.track_arg_usage(
+            "dangerously_allow_missing_package_manager",
+            self.allow_missing_package_manager,
+        );
         // we only track the remote cache if we're linked because this defaults to
         // Vercel
         if is_linked {
@@ -206,8 +214,7 @@ impl RunBuilder {
         run_telemetry.track_ci(turborepo_ci::Vendor::get_name());
 
         // Remove allow when daemon is flagged back on
-        #[allow(unused_mut)]
-        let mut daemon = match (is_ci_or_not_tty, self.opts.run_opts.daemon) {
+        let daemon = match (is_ci_or_not_tty, self.opts.run_opts.daemon) {
             (true, None) => {
                 run_telemetry.track_daemon_init(DaemonInitStatus::Skipped);
                 debug!("skipping turbod since we appear to be in a non-interactive context");
@@ -246,10 +253,13 @@ impl RunBuilder {
 
         let mut pkg_dep_graph = {
             let builder = PackageGraph::builder(&self.repo_root, root_package_json.clone())
-                .with_single_package_mode(self.opts.run_opts.single_package);
+                .with_single_package_mode(self.opts.run_opts.single_package)
+                .with_allow_no_package_manager(self.allow_missing_package_manager);
 
-            #[cfg(feature = "daemon-package-discovery")]
-            let graph = {
+            // Daemon package discovery depends on packageManager existing in package.json
+            let graph = if cfg!(feature = "daemon-package-discovery")
+                && !self.allow_missing_package_manager
+            {
                 match (&daemon, self.opts.run_opts.daemon) {
                     (None, Some(true)) => {
                         // We've asked for the daemon, but it's not available. This is an error
@@ -291,9 +301,9 @@ impl RunBuilder {
                             .await
                     }
                 }
+            } else {
+                builder.build().await
             };
-            #[cfg(not(feature = "daemon-package-discovery"))]
-            let graph = builder.build().await;
 
             match graph {
                 Ok(graph) => graph,

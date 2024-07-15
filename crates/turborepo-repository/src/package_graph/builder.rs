@@ -78,6 +78,12 @@ impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
             lockfile: None,
         }
     }
+
+    pub fn with_allow_no_package_manager(mut self, allow_no_package_manager: bool) -> Self {
+        self.package_discovery
+            .with_allow_no_package_manager(allow_no_package_manager);
+        self
+    }
 }
 
 impl<'a, P> PackageGraphBuilder<'a, P> {
