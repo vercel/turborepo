@@ -39,7 +39,6 @@ pub trait LoginServer {
         token: Arc<OnceCell<String>>,
     ) -> Result<(), Error>;
 }
-
 /// A struct that implements LoginServer.
 ///
 /// Listens on 127.0.0.1 and a port that's passed in.

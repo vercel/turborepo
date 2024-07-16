@@ -57,5 +57,7 @@ pub enum Error {
     #[error(transparent)]
     Daemon(#[from] daemon::DaemonError),
     #[error(transparent)]
+    UI(#[from] turborepo_ui::Error),
+    #[error(transparent)]
     Tui(#[from] tui::Error),
 }
