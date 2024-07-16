@@ -236,6 +236,7 @@ impl DepGraph {
             .cloned()
             .collect();
         let mut modules = vec![];
+        let mut exports_module = Module::dummy();
 
         if groups.graph_ix.is_empty() {
             // If there's no dependency, all nodes are in the module evaluaiotn group.
@@ -282,6 +283,24 @@ impl DepGraph {
 
                         if let Some(export) = &data[item].export {
                             exports.insert(Key::Export(export.as_str().into()), ix as u32);
+
+                            let s = ExportSpecifier::Named(ExportNamedSpecifier {
+                                span: DUMMY_SP,
+                                orig: ModuleExportName::Ident(Ident::new(export.clone(), DUMMY_SP)),
+                                exported: None,
+                                is_type_only: false,
+                            });
+                            exports_module.body.push(ModuleItem::ModuleDecl(
+                                ModuleDecl::ExportNamed(NamedExport {
+                                    span: DUMMY_SP,
+                                    specifiers: vec![s],
+                                    src: None,
+                                    type_only: false,
+                                    with: Some(Box::new(create_turbopack_part_id_assert(
+                                        PartId::Export(export.to_string().into()),
+                                    ))),
+                                }),
+                            ));
                         }
                     }
                     ItemId::Group(ItemIdGroupKind::ModuleEvaluation) => {
@@ -374,6 +393,16 @@ impl DepGraph {
 
             modules.push(chunk);
         }
+
+        exports.insert(Key::Exports, modules.len() as u32);
+
+        for star in &star_reexports {
+            exports_module
+                .body
+                .push(ModuleItem::ModuleDecl(ModuleDecl::ExportAll(star.clone())));
+        }
+
+        modules.push(exports_module);
 
         SplitModuleResult {
             entrypoints: exports,

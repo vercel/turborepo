@@ -507,7 +507,6 @@ pub(super) async fn split(
                     modules.len()
                 );
             }
-
             let modules = modules
                 .into_iter()
                 .map(|module| {
