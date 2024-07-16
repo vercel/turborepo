@@ -146,7 +146,9 @@ import { RouteKind } from "__TURBOPACK_PART__" assert {
 ```
 ## Part 4
 ```js
-export { RouteKind };
+export { RouteKind } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export RouteKind"
+};
 
 ```
 ## Merged (module eval)
@@ -213,7 +215,9 @@ import { RouteKind } from "__TURBOPACK_PART__" assert {
 ```
 ## Part 4
 ```js
-export { RouteKind };
+export { RouteKind } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export RouteKind"
+};
 
 ```
 ## Merged (module eval)

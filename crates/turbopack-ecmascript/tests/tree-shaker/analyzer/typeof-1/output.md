@@ -220,7 +220,9 @@ export { GET } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 2
 ```js
-export { GET };
+export { GET } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export GET"
+};
 
 ```
 ## Merged (module eval)
@@ -281,7 +283,9 @@ export { GET } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 2
 ```js
-export { GET };
+export { GET } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export GET"
+};
 
 ```
 ## Merged (module eval)

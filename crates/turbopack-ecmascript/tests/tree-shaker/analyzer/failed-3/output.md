@@ -2078,8 +2078,12 @@ export { getProperError } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 10
 ```js
-export { structuredError };
-export { IPC };
+export { structuredError } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export structuredError"
+};
+export { IPC } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export IPC"
+};
 
 ```
 ## Merged (module eval)
@@ -2489,8 +2493,12 @@ process.on("uncaughtException", (err)=>{
 ```
 ## Part 10
 ```js
-export { structuredError };
-export { IPC };
+export { structuredError } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export structuredError"
+};
+export { IPC } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export IPC"
+};
 
 ```
 ## Merged (module eval)

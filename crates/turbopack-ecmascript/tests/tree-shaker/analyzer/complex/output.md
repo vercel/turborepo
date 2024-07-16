@@ -612,10 +612,18 @@ export { cat } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 14
 ```js
-export { dogRef };
-export { cat };
-export { initialCat };
-export { getChimera };
+export { dogRef } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export dogRef"
+};
+export { cat } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export cat"
+};
+export { initialCat } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export initialCat"
+};
+export { getChimera } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export getChimera"
+};
 
 ```
 ## Merged (module eval)
@@ -794,10 +802,18 @@ export { cat } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 10
 ```js
-export { dogRef };
-export { cat };
-export { initialCat };
-export { getChimera };
+export { dogRef } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export dogRef"
+};
+export { cat } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export cat"
+};
+export { initialCat } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export initialCat"
+};
+export { getChimera } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export getChimera"
+};
 
 ```
 ## Merged (module eval)

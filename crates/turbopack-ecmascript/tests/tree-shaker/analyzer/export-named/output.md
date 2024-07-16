@@ -103,7 +103,9 @@ export { __TURBOPACK__reexport__cat__ } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 2
 ```js
-export { fakeCat };
+export { fakeCat } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export fakeCat"
+};
 
 ```
 ## Merged (module eval)
@@ -143,7 +145,9 @@ export { __TURBOPACK__reexport__cat__ } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 2
 ```js
-export { fakeCat };
+export { fakeCat } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export fakeCat"
+};
 
 ```
 ## Merged (module eval)

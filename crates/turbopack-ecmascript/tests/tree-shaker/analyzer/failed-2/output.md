@@ -873,14 +873,30 @@ export { assertPostpone } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 12
 ```js
-export { createPrerenderState };
-export { markCurrentScopeAsDynamic };
-export { trackDynamicDataAccessed };
-export { Postpone };
-export { trackDynamicFetch };
-export { usedDynamicAPIs };
-export { formatDynamicAPIAccesses };
-export { createPostponedAbortSignal };
+export { createPrerenderState } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export createPrerenderState"
+};
+export { markCurrentScopeAsDynamic } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export markCurrentScopeAsDynamic"
+};
+export { trackDynamicDataAccessed } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export trackDynamicDataAccessed"
+};
+export { Postpone } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export Postpone"
+};
+export { trackDynamicFetch } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export trackDynamicFetch"
+};
+export { usedDynamicAPIs } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export usedDynamicAPIs"
+};
+export { formatDynamicAPIAccesses } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export formatDynamicAPIAccesses"
+};
+export { createPostponedAbortSignal } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export createPostponedAbortSignal"
+};
 
 ```
 ## Merged (module eval)
@@ -1189,14 +1205,30 @@ export { assertPostpone } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 12
 ```js
-export { createPrerenderState };
-export { markCurrentScopeAsDynamic };
-export { trackDynamicDataAccessed };
-export { Postpone };
-export { trackDynamicFetch };
-export { usedDynamicAPIs };
-export { formatDynamicAPIAccesses };
-export { createPostponedAbortSignal };
+export { createPrerenderState } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export createPrerenderState"
+};
+export { markCurrentScopeAsDynamic } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export markCurrentScopeAsDynamic"
+};
+export { trackDynamicDataAccessed } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export trackDynamicDataAccessed"
+};
+export { Postpone } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export Postpone"
+};
+export { trackDynamicFetch } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export trackDynamicFetch"
+};
+export { usedDynamicAPIs } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export usedDynamicAPIs"
+};
+export { formatDynamicAPIAccesses } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export formatDynamicAPIAccesses"
+};
+export { createPostponedAbortSignal } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export createPostponedAbortSignal"
+};
 
 ```
 ## Merged (module eval)

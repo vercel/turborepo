@@ -611,12 +611,24 @@ export { serverHooks } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 13
 ```js
-export { routeModule };
-export { requestAsyncStorage };
-export { staticGenerationAsyncStorage };
-export { serverHooks };
-export { originalPathname };
-export { patchFetch };
+export { routeModule } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export routeModule"
+};
+export { requestAsyncStorage } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export requestAsyncStorage"
+};
+export { staticGenerationAsyncStorage } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export staticGenerationAsyncStorage"
+};
+export { serverHooks } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export serverHooks"
+};
+export { originalPathname } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export originalPathname"
+};
+export { patchFetch } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export patchFetch"
+};
 
 ```
 ## Merged (module eval)
@@ -850,12 +862,24 @@ export { serverHooks } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 13
 ```js
-export { routeModule };
-export { requestAsyncStorage };
-export { staticGenerationAsyncStorage };
-export { serverHooks };
-export { originalPathname };
-export { patchFetch };
+export { routeModule } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export routeModule"
+};
+export { requestAsyncStorage } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export requestAsyncStorage"
+};
+export { staticGenerationAsyncStorage } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export staticGenerationAsyncStorage"
+};
+export { serverHooks } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export serverHooks"
+};
+export { originalPathname } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export originalPathname"
+};
+export { patchFetch } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export patchFetch"
+};
 
 ```
 ## Merged (module eval)

@@ -185,8 +185,12 @@ export { dog } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 4
 ```js
-export { DOG };
-export { CHIMERA };
+export { DOG } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export DOG"
+};
+export { CHIMERA } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export CHIMERA"
+};
 
 ```
 ## Merged (module eval)
@@ -254,8 +258,12 @@ export { dog } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 4
 ```js
-export { DOG };
-export { CHIMERA };
+export { DOG } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export DOG"
+};
+export { CHIMERA } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export CHIMERA"
+};
 
 ```
 ## Merged (module eval)
