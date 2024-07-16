@@ -80,6 +80,7 @@ graph TD
     Export(
         "fakeCat",
     ): 1,
+    Exports: 2,
 }
 ```
 
@@ -100,6 +101,11 @@ export { __TURBOPACK__reexport__cat__ } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
+## Part 2
+```js
+export { fakeCat };
+
+```
 ## Merged (module eval)
 ```js
 import "./lib";
@@ -114,6 +120,7 @@ import "./lib";
     Export(
         "fakeCat",
     ): 1,
+    Exports: 2,
 }
 ```
 
@@ -132,6 +139,11 @@ import { cat as __TURBOPACK__reexport__cat__ } from "./lib";
 export { __TURBOPACK__reexport__cat__ } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
+
+```
+## Part 2
+```js
+export { fakeCat };
 
 ```
 ## Merged (module eval)

@@ -355,6 +355,7 @@ graph TD
     Export(
         "c2_2",
     ): 3,
+    Exports: 9,
 }
 ```
 
@@ -483,6 +484,13 @@ export { d3 } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
+## Part 9
+```js
+export { c1_1 };
+export { c1_3 };
+export { c2_2 };
+
+```
 ## Merged (module eval)
 ```js
 import { c1_3 } from "__TURBOPACK_PART__" assert {
@@ -519,6 +527,7 @@ c2_2();
     Export(
         "c2_2",
     ): 3,
+    Exports: 6,
 }
 ```
 
@@ -617,6 +626,13 @@ export { c2_3 } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
+## Part 6
+```js
+export { c1_1 };
+export { c1_3 };
+export { c2_2 };
+
+```
 ## Merged (module eval)
 ```js
 import { c1_3 } from "__TURBOPACK_PART__" assert {
@@ -644,6 +660,7 @@ c2_2();
     Export(
         "c2_2",
     ): 3,
+    Exports: 6,
 }
 ```
 
@@ -670,6 +687,7 @@ export { c1_3 };
     Export(
         "c2_2",
     ): 3,
+    Exports: 6,
 }
 ```
 

@@ -184,6 +184,7 @@ graph TD
 ```
 {
     ModuleEvaluation: 0,
+    Exports: 3,
     Export(
         "getEnv",
     ): 1,
@@ -248,6 +249,12 @@ export { getEnvWithoutDefaults } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
+## Part 3
+```js
+export { getEnv };
+export { getEnvWithoutDefaults };
+
+```
 ## Merged (module eval)
 ```js
 import '../../utils/environment';
@@ -260,6 +267,7 @@ import './globalThis';
 ```
 {
     ModuleEvaluation: 0,
+    Exports: 3,
     Export(
         "getEnv",
     ): 1,
@@ -322,6 +330,12 @@ export { _globalThis } from "__TURBOPACK_VAR__" assert {
 export { getEnvWithoutDefaults } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
+
+```
+## Part 3
+```js
+export { getEnv };
+export { getEnvWithoutDefaults };
 
 ```
 ## Merged (module eval)

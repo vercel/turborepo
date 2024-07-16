@@ -515,6 +515,7 @@ graph TD
     Export(
         "NextResponse",
     ): 1,
+    Exports: 9,
 }
 ```
 
@@ -799,6 +800,11 @@ export { REDIRECTS } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
+## Part 9
+```js
+export { NextResponse };
+
+```
 ## Merged (module eval)
 ```js
 import "__TURBOPACK_PART__" assert {
@@ -833,6 +839,7 @@ import "__TURBOPACK_PART__" assert {
     Export(
         "NextResponse",
     ): 1,
+    Exports: 9,
 }
 ```
 
@@ -1115,6 +1122,11 @@ const REDIRECTS = new Set([
 export { REDIRECTS } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
+
+```
+## Part 9
+```js
+export { NextResponse };
 
 ```
 ## Merged (module eval)

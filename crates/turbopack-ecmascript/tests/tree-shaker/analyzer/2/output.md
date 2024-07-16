@@ -415,6 +415,7 @@ graph TD
     Export(
         "external1",
     ): 1,
+    Exports: 11,
     Export(
         "foo",
     ): 3,
@@ -600,6 +601,14 @@ export { internal } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
+## Part 11
+```js
+export { external1 };
+export { foobar };
+export { foo };
+export { external2 };
+
+```
 ## Merged (module eval)
 ```js
 import { foobarCopy } from "__TURBOPACK_PART__" assert {
@@ -632,6 +641,7 @@ export { upper } from "__TURBOPACK_VAR__" assert {
     Export(
         "external1",
     ): 1,
+    Exports: 8,
     Export(
         "foo",
     ): 3,
@@ -757,6 +767,14 @@ import { foobar } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
 foobar += "foo";
+
+```
+## Part 8
+```js
+export { external1 };
+export { foobar };
+export { foo };
+export { external2 };
 
 ```
 ## Merged (module eval)

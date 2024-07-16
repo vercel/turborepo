@@ -231,6 +231,7 @@ graph TD
 ```
 {
     ModuleEvaluation: 0,
+    Exports: 4,
     Export(
         "run",
     ): 1,
@@ -376,6 +377,11 @@ export { run } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
+## Part 4
+```js
+export { run };
+
+```
 ## Merged (module eval)
 ```js
 import "__TURBOPACK_PART__" assert {
@@ -392,6 +398,7 @@ import "__TURBOPACK_PART__" assert {
 ```
 {
     ModuleEvaluation: 0,
+    Exports: 4,
     Export(
         "run",
     ): 1,
@@ -535,6 +542,11 @@ export { queue } from "__TURBOPACK_VAR__" assert {
 export { run } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
+
+```
+## Part 4
+```js
+export { run };
 
 ```
 ## Merged (module eval)

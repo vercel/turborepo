@@ -1686,11 +1686,12 @@ graph TD
 {
     ModuleEvaluation: 0,
     Export(
-        "structuredError",
-    ): 1,
-    Export(
         "IPC",
     ): 2,
+    Exports: 10,
+    Export(
+        "structuredError",
+    ): 1,
 }
 ```
 
@@ -2075,6 +2076,12 @@ export { getProperError } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
+## Part 10
+```js
+export { structuredError };
+export { IPC };
+
+```
 ## Merged (module eval)
 ```js
 import "__TURBOPACK_PART__" assert {
@@ -2152,11 +2159,12 @@ export { improveConsole } from "__TURBOPACK_VAR__" assert {
 {
     ModuleEvaluation: 0,
     Export(
-        "structuredError",
-    ): 1,
-    Export(
         "IPC",
     ): 2,
+    Exports: 10,
+    Export(
+        "structuredError",
+    ): 1,
 }
 ```
 
@@ -2477,6 +2485,12 @@ import "__TURBOPACK_PART__" assert {
 process.on("uncaughtException", (err)=>{
     IPC.sendError(err);
 });
+
+```
+## Part 10
+```js
+export { structuredError };
+export { IPC };
 
 ```
 ## Merged (module eval)

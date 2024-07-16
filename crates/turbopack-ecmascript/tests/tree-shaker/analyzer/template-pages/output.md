@@ -845,6 +845,7 @@ graph TD
     Export(
         "unstable_getStaticProps",
     ): 7,
+    Exports: 30,
     Export(
         "default",
     ): 1,
@@ -1347,6 +1348,22 @@ export { unstable_getServerSideProps } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
+## Part 30
+```js
+export { default };
+export { getStaticProps };
+export { getStaticPaths };
+export { getServerSideProps };
+export { config };
+export { reportWebVitals };
+export { unstable_getStaticProps };
+export { unstable_getStaticPaths };
+export { unstable_getStaticParams };
+export { unstable_getServerProps };
+export { unstable_getServerSideProps };
+export { routeModule };
+
+```
 ## Merged (module eval)
 ```js
 import "__TURBOPACK_PART__" assert {
@@ -1405,6 +1422,7 @@ import "__TURBOPACK_PART__" assert {
     Export(
         "unstable_getStaticProps",
     ): 7,
+    Exports: 20,
     Export(
         "default",
     ): 1,
@@ -1805,6 +1823,22 @@ export { userland } from "__TURBOPACK_VAR__" assert {
 export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
+
+```
+## Part 20
+```js
+export { default };
+export { getStaticProps };
+export { getStaticPaths };
+export { getServerSideProps };
+export { config };
+export { reportWebVitals };
+export { unstable_getStaticProps };
+export { unstable_getStaticPaths };
+export { unstable_getStaticParams };
+export { unstable_getServerProps };
+export { unstable_getServerSideProps };
+export { routeModule };
 
 ```
 ## Merged (module eval)

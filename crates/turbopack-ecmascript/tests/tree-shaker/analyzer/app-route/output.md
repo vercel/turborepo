@@ -407,6 +407,7 @@ graph TD
     Export(
         "routeModule",
     ): 1,
+    Exports: 13,
     Export(
         "originalPathname",
     ): 5,
@@ -608,6 +609,16 @@ export { serverHooks } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
+## Part 13
+```js
+export { routeModule };
+export { requestAsyncStorage };
+export { staticGenerationAsyncStorage };
+export { serverHooks };
+export { originalPathname };
+export { patchFetch };
+
+```
 ## Merged (module eval)
 ```js
 import "__TURBOPACK_PART__" assert {
@@ -648,6 +659,7 @@ import "__TURBOPACK_PART__" assert {
     Export(
         "routeModule",
     ): 1,
+    Exports: 13,
     Export(
         "originalPathname",
     ): 5,
@@ -834,6 +846,16 @@ export { staticGenerationAsyncStorage } from "__TURBOPACK_VAR__" assert {
 export { serverHooks } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
+
+```
+## Part 13
+```js
+export { routeModule };
+export { requestAsyncStorage };
+export { staticGenerationAsyncStorage };
+export { serverHooks };
+export { originalPathname };
+export { patchFetch };
 
 ```
 ## Merged (module eval)
