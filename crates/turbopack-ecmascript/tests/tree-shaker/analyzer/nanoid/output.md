@@ -405,6 +405,7 @@ graph TD
 ```
 {
     ModuleEvaluation: 0,
+    Exports: 14,
     Export(
         "customAlphabet",
     ): 2,
@@ -642,6 +643,15 @@ export { nanoid } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
+## Part 14
+```js
+export { nanoid };
+export { customAlphabet };
+export { customRandom };
+export { urlAlphabet };
+export { random };
+
+```
 ## Merged (module eval)
 ```js
 import "__TURBOPACK_PART__" assert {
@@ -664,6 +674,7 @@ import "__TURBOPACK_PART__" assert {
 ```
 {
     ModuleEvaluation: 0,
+    Exports: 14,
     Export(
         "customAlphabet",
     ): 2,
@@ -899,6 +910,15 @@ export { urlAlphabet } from "__TURBOPACK_VAR__" assert {
 export { nanoid } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
+
+```
+## Part 14
+```js
+export { nanoid };
+export { customAlphabet };
+export { customRandom };
+export { urlAlphabet };
+export { random };
 
 ```
 ## Merged (module eval)

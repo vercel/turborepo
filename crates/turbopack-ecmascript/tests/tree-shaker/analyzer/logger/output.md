@@ -197,11 +197,12 @@ graph TD
 {
     ModuleEvaluation: 0,
     Export(
-        "wrapClientComponentLoader",
-    ): 1,
-    Export(
         "getClientComponentLoaderMetrics",
     ): 2,
+    Exports: 6,
+    Export(
+        "wrapClientComponentLoader",
+    ): 1,
 }
 ```
 
@@ -311,6 +312,12 @@ export { clientComponentLoadCount } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
+## Part 6
+```js
+export { wrapClientComponentLoader };
+export { getClientComponentLoaderMetrics };
+
+```
 ## Merged (module eval)
 ```js
 "module evaluation";
@@ -322,11 +329,12 @@ export { clientComponentLoadCount } from "__TURBOPACK_VAR__" assert {
 {
     ModuleEvaluation: 0,
     Export(
-        "wrapClientComponentLoader",
-    ): 1,
-    Export(
         "getClientComponentLoaderMetrics",
     ): 2,
+    Exports: 6,
+    Export(
+        "wrapClientComponentLoader",
+    ): 1,
 }
 ```
 
@@ -434,6 +442,12 @@ let clientComponentLoadCount = 0;
 export { clientComponentLoadCount } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
+
+```
+## Part 6
+```js
+export { wrapClientComponentLoader };
+export { getClientComponentLoaderMetrics };
 
 ```
 ## Merged (module eval)

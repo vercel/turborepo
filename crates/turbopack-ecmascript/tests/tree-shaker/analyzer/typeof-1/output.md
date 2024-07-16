@@ -175,6 +175,7 @@ graph TD
 ```
 {
     ModuleEvaluation: 0,
+    Exports: 2,
     Export(
         "GET",
     ): 1,
@@ -217,6 +218,11 @@ export { GET } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
+## Part 2
+```js
+export { GET };
+
+```
 ## Merged (module eval)
 ```js
 import 'next/server';
@@ -230,6 +236,7 @@ import 'my-module/MyModuleClientComponent';
 ```
 {
     ModuleEvaluation: 0,
+    Exports: 2,
     Export(
         "GET",
     ): 1,
@@ -270,6 +277,11 @@ export { MyModuleClientComponent } from "__TURBOPACK_VAR__" assert {
 export { GET } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
+
+```
+## Part 2
+```js
+export { GET };
 
 ```
 ## Merged (module eval)

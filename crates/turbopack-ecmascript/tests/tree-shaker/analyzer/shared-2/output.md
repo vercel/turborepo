@@ -254,6 +254,7 @@ graph TD
     Export(
         "order",
     ): 1,
+    Exports: 10,
     Export(
         "b",
     ): 3,
@@ -394,6 +395,13 @@ export { a } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
+## Part 10
+```js
+export { order };
+export { a };
+export { b };
+
+```
 ## Merged (module eval)
 ```js
 import "__TURBOPACK_PART__" assert {
@@ -416,6 +424,7 @@ import "__TURBOPACK_PART__" assert {
     Export(
         "order",
     ): 1,
+    Exports: 10,
     Export(
         "b",
     ): 3,
@@ -554,6 +563,13 @@ const a = {
 export { a } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
+
+```
+## Part 10
+```js
+export { order };
+export { a };
+export { b };
 
 ```
 ## Merged (module eval)

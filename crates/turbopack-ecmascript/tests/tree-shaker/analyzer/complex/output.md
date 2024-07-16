@@ -409,6 +409,7 @@ graph TD
     Export(
         "initialCat",
     ): 3,
+    Exports: 14,
     Export(
         "cat",
     ): 2,
@@ -609,6 +610,14 @@ export { cat } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
+## Part 14
+```js
+export { dogRef };
+export { cat };
+export { initialCat };
+export { getChimera };
+
+```
 ## Merged (module eval)
 ```js
 import "__TURBOPACK_PART__" assert {
@@ -634,6 +643,7 @@ import "__TURBOPACK_PART__" assert {
     Export(
         "initialCat",
     ): 3,
+    Exports: 10,
     Export(
         "cat",
     ): 2,
@@ -780,6 +790,14 @@ let cat = "cat";
 export { cat } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
+
+```
+## Part 10
+```js
+export { dogRef };
+export { cat };
+export { initialCat };
+export { getChimera };
 
 ```
 ## Merged (module eval)

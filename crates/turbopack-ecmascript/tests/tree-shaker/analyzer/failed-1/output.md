@@ -239,6 +239,7 @@ graph TD
     Export(
         "addMessageListener",
     ): 1,
+    Exports: 6,
     Export(
         "sendMessage",
     ): 2,
@@ -362,6 +363,13 @@ export { eventCallbacks } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
+## Part 6
+```js
+export { addMessageListener };
+export { sendMessage };
+export { connectHMR };
+
+```
 ## Merged (module eval)
 ```js
 "module evaluation";
@@ -378,6 +386,7 @@ export { eventCallbacks } from "__TURBOPACK_VAR__" assert {
     Export(
         "addMessageListener",
     ): 1,
+    Exports: 6,
     Export(
         "sendMessage",
     ): 2,
@@ -499,6 +508,13 @@ const eventCallbacks = [];
 export { eventCallbacks } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
+
+```
+## Part 6
+```js
+export { addMessageListener };
+export { sendMessage };
+export { connectHMR };
 
 ```
 ## Merged (module eval)

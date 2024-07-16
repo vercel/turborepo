@@ -142,6 +142,7 @@ graph TD
     Export(
         "default",
     ): 1,
+    Exports: 4,
 }
 ```
 
@@ -186,6 +187,11 @@ export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
+## Part 4
+```js
+export { default };
+
+```
 ## Merged (module eval)
 ```js
 import "__TURBOPACK_PART__" assert {
@@ -205,6 +211,7 @@ import "__TURBOPACK_PART__" assert {
     Export(
         "default",
     ): 1,
+    Exports: 4,
 }
 ```
 
@@ -247,6 +254,11 @@ export { fetch } from "__TURBOPACK_VAR__" assert {
 export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
+
+```
+## Part 4
+```js
+export { default };
 
 ```
 ## Merged (module eval)

@@ -125,6 +125,7 @@ graph TD
 ```
 {
     ModuleEvaluation: 0,
+    Exports: 3,
     Export(
         "runtime",
     ): 2,
@@ -168,6 +169,12 @@ export { runtime } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
+## Part 3
+```js
+export { GET };
+export { runtime };
+
+```
 ## Merged (module eval)
 ```js
 import "next/server";
@@ -179,6 +186,7 @@ import "next/server";
 ```
 {
     ModuleEvaluation: 0,
+    Exports: 3,
     Export(
         "runtime",
     ): 2,
@@ -220,6 +228,12 @@ const runtime = "edge";
 export { runtime } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
+
+```
+## Part 3
+```js
+export { GET };
+export { runtime };
 
 ```
 ## Merged (module eval)

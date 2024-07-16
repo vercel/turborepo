@@ -605,6 +605,7 @@ graph TD
     Export(
         "formatDynamicAPIAccesses",
     ): 7,
+    Exports: 12,
 }
 ```
 
@@ -870,6 +871,18 @@ export { assertPostpone } from "__TURBOPACK_VAR__" assert {
 };
 
 ```
+## Part 12
+```js
+export { createPrerenderState };
+export { markCurrentScopeAsDynamic };
+export { trackDynamicDataAccessed };
+export { Postpone };
+export { trackDynamicFetch };
+export { usedDynamicAPIs };
+export { formatDynamicAPIAccesses };
+export { createPostponedAbortSignal };
+
+```
 ## Merged (module eval)
 ```js
 import 'react';
@@ -908,6 +921,7 @@ import '../../lib/url';
     Export(
         "formatDynamicAPIAccesses",
     ): 7,
+    Exports: 12,
 }
 ```
 
@@ -1171,6 +1185,18 @@ function assertPostpone() {
 export { assertPostpone } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
+
+```
+## Part 12
+```js
+export { createPrerenderState };
+export { markCurrentScopeAsDynamic };
+export { trackDynamicDataAccessed };
+export { Postpone };
+export { trackDynamicFetch };
+export { usedDynamicAPIs };
+export { formatDynamicAPIAccesses };
+export { createPostponedAbortSignal };
 
 ```
 ## Merged (module eval)
