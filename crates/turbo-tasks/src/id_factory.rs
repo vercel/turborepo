@@ -98,3 +98,21 @@ where
         let _ = self.free_ids.push(id);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::num::NonZeroU8;
+
+    use super::*;
+
+    #[test]
+    #[should_panic(expected = "Overflow detected")]
+    fn test_overflow() {
+        let factory = IdFactory::<NonZeroU8>::new();
+        assert_eq!(factory.get(), NonZeroU8::new(1).unwrap());
+        assert_eq!(factory.get(), NonZeroU8::new(2).unwrap());
+        for _i in 2..256 {
+            factory.get();
+        }
+    }
+}
