@@ -379,7 +379,9 @@ export { run } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 4
 ```js
-export { run };
+export { run } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export run"
+};
 
 ```
 ## Merged (module eval)
@@ -546,7 +548,9 @@ export { run } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 4
 ```js
-export { run };
+export { run } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export run"
+};
 
 ```
 ## Merged (module eval)

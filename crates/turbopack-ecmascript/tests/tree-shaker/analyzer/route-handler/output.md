@@ -171,8 +171,12 @@ export { runtime } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
-export { GET };
-export { runtime };
+export { GET } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export GET"
+};
+export { runtime } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export runtime"
+};
 
 ```
 ## Merged (module eval)
@@ -232,8 +236,12 @@ export { runtime } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
-export { GET };
-export { runtime };
+export { GET } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export GET"
+};
+export { runtime } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export runtime"
+};
 
 ```
 ## Merged (module eval)

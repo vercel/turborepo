@@ -365,9 +365,15 @@ export { eventCallbacks } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 6
 ```js
-export { addMessageListener };
-export { sendMessage };
-export { connectHMR };
+export { addMessageListener } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export addMessageListener"
+};
+export { sendMessage } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export sendMessage"
+};
+export { connectHMR } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export connectHMR"
+};
 
 ```
 ## Merged (module eval)
@@ -512,9 +518,15 @@ export { eventCallbacks } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 6
 ```js
-export { addMessageListener };
-export { sendMessage };
-export { connectHMR };
+export { addMessageListener } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export addMessageListener"
+};
+export { sendMessage } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export sendMessage"
+};
+export { connectHMR } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export connectHMR"
+};
 
 ```
 ## Merged (module eval)

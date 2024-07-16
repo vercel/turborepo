@@ -802,7 +802,9 @@ export { REDIRECTS } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 9
 ```js
-export { NextResponse };
+export { NextResponse } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export NextResponse"
+};
 
 ```
 ## Merged (module eval)
@@ -1126,7 +1128,9 @@ export { REDIRECTS } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 9
 ```js
-export { NextResponse };
+export { NextResponse } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export NextResponse"
+};
 
 ```
 ## Merged (module eval)

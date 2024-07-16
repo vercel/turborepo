@@ -125,8 +125,12 @@ export { cat } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
-export { DOG };
-export { cat };
+export { DOG } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export DOG"
+};
+export { cat } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export cat"
+};
 
 ```
 ## Merged (module eval)
@@ -176,8 +180,12 @@ export { cat } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
-export { DOG };
-export { cat };
+export { DOG } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export DOG"
+};
+export { cat } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export cat"
+};
 
 ```
 ## Merged (module eval)

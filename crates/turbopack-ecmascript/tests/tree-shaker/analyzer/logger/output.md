@@ -314,8 +314,12 @@ export { clientComponentLoadCount } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 6
 ```js
-export { wrapClientComponentLoader };
-export { getClientComponentLoaderMetrics };
+export { wrapClientComponentLoader } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export wrapClientComponentLoader"
+};
+export { getClientComponentLoaderMetrics } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export getClientComponentLoaderMetrics"
+};
 
 ```
 ## Merged (module eval)
@@ -446,8 +450,12 @@ export { clientComponentLoadCount } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 6
 ```js
-export { wrapClientComponentLoader };
-export { getClientComponentLoaderMetrics };
+export { wrapClientComponentLoader } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export wrapClientComponentLoader"
+};
+export { getClientComponentLoaderMetrics } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export getClientComponentLoaderMetrics"
+};
 
 ```
 ## Merged (module eval)

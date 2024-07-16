@@ -603,10 +603,18 @@ export { internal } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 11
 ```js
-export { external1 };
-export { foobar };
-export { foo };
-export { external2 };
+export { external1 } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export external1"
+};
+export { foobar } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export foobar"
+};
+export { foo } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export foo"
+};
+export { external2 } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export external2"
+};
 
 ```
 ## Merged (module eval)
@@ -771,10 +779,18 @@ foobar += "foo";
 ```
 ## Part 8
 ```js
-export { external1 };
-export { foobar };
-export { foo };
-export { external2 };
+export { external1 } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export external1"
+};
+export { foobar } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export foobar"
+};
+export { foo } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export foo"
+};
+export { external2 } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export external2"
+};
 
 ```
 ## Merged (module eval)

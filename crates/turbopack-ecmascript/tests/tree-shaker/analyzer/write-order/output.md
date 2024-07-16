@@ -405,9 +405,15 @@ order.push("c");
 ```
 ## Part 10
 ```js
-export { order };
-export { func };
-export { shared };
+export { order } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export order"
+};
+export { func } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export func"
+};
+export { shared } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export shared"
+};
 
 ```
 ## Merged (module eval)
@@ -579,9 +585,15 @@ order.push("c");
 ```
 ## Part 10
 ```js
-export { order };
-export { func };
-export { shared };
+export { order } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export order"
+};
+export { func } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export func"
+};
+export { shared } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export shared"
+};
 
 ```
 ## Merged (module eval)

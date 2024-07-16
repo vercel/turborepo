@@ -168,8 +168,12 @@ export { effects } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 4
 ```js
-export { effects };
-export { effect };
+export { effects } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export effects"
+};
+export { effect } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export effect"
+};
 
 ```
 ## Merged (module eval)
@@ -233,8 +237,12 @@ export { effects } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 4
 ```js
-export { effects };
-export { effect };
+export { effects } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export effects"
+};
+export { effect } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export effect"
+};
 
 ```
 ## Merged (module eval)

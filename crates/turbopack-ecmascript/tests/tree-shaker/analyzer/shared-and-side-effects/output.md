@@ -508,8 +508,12 @@ export { a } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 11
 ```js
-export { a };
-export { b };
+export { a } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export a"
+};
+export { b } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export b"
+};
 
 ```
 ## Merged (module eval)
@@ -703,8 +707,12 @@ export { a } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 10
 ```js
-export { a };
-export { b };
+export { a } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export a"
+};
+export { b } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export b"
+};
 
 ```
 ## Merged (module eval)

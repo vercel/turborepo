@@ -1040,11 +1040,21 @@ export { rootSpanAttributesStore } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 14
 ```js
-export { BubbledError };
-export { isBubbledError };
-export { getTracer };
-export { SpanStatusCode };
-export { SpanKind };
+export { BubbledError } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export BubbledError"
+};
+export { isBubbledError } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export isBubbledError"
+};
+export { getTracer } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export getTracer"
+};
+export { SpanStatusCode } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export SpanStatusCode"
+};
+export { SpanKind } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export SpanKind"
+};
 
 ```
 ## Merged (module eval)
@@ -1473,11 +1483,21 @@ export { rootSpanAttributesStore } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 14
 ```js
-export { BubbledError };
-export { isBubbledError };
-export { getTracer };
-export { SpanStatusCode };
-export { SpanKind };
+export { BubbledError } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export BubbledError"
+};
+export { isBubbledError } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export isBubbledError"
+};
+export { getTracer } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export getTracer"
+};
+export { SpanStatusCode } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export SpanStatusCode"
+};
+export { SpanKind } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export SpanKind"
+};
 
 ```
 ## Merged (module eval)

@@ -1350,18 +1350,42 @@ export { unstable_getServerSideProps } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 30
 ```js
-export { default };
-export { getStaticProps };
-export { getStaticPaths };
-export { getServerSideProps };
-export { config };
-export { reportWebVitals };
-export { unstable_getStaticProps };
-export { unstable_getStaticPaths };
-export { unstable_getStaticParams };
-export { unstable_getServerProps };
-export { unstable_getServerSideProps };
-export { routeModule };
+export { default } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export default"
+};
+export { getStaticProps } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export getStaticProps"
+};
+export { getStaticPaths } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export getStaticPaths"
+};
+export { getServerSideProps } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export getServerSideProps"
+};
+export { config } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export config"
+};
+export { reportWebVitals } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export reportWebVitals"
+};
+export { unstable_getStaticProps } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export unstable_getStaticProps"
+};
+export { unstable_getStaticPaths } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export unstable_getStaticPaths"
+};
+export { unstable_getStaticParams } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export unstable_getStaticParams"
+};
+export { unstable_getServerProps } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export unstable_getServerProps"
+};
+export { unstable_getServerSideProps } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export unstable_getServerSideProps"
+};
+export { routeModule } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export routeModule"
+};
 
 ```
 ## Merged (module eval)
@@ -1827,18 +1851,42 @@ export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 20
 ```js
-export { default };
-export { getStaticProps };
-export { getStaticPaths };
-export { getServerSideProps };
-export { config };
-export { reportWebVitals };
-export { unstable_getStaticProps };
-export { unstable_getStaticPaths };
-export { unstable_getStaticParams };
-export { unstable_getServerProps };
-export { unstable_getServerSideProps };
-export { routeModule };
+export { default } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export default"
+};
+export { getStaticProps } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export getStaticProps"
+};
+export { getStaticPaths } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export getStaticPaths"
+};
+export { getServerSideProps } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export getServerSideProps"
+};
+export { config } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export config"
+};
+export { reportWebVitals } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export reportWebVitals"
+};
+export { unstable_getStaticProps } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export unstable_getStaticProps"
+};
+export { unstable_getStaticPaths } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export unstable_getStaticPaths"
+};
+export { unstable_getStaticParams } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export unstable_getStaticParams"
+};
+export { unstable_getServerProps } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export unstable_getServerProps"
+};
+export { unstable_getServerSideProps } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export unstable_getServerSideProps"
+};
+export { routeModule } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export routeModule"
+};
 
 ```
 ## Merged (module eval)

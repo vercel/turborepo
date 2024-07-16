@@ -392,8 +392,12 @@ x += 9;
 ```
 ## Part 7
 ```js
-export { x };
-export { y };
+export { x } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export x"
+};
+export { y } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export y"
+};
 
 ```
 ## Merged (module eval)
@@ -489,8 +493,12 @@ x += 9;
 ```
 ## Part 6
 ```js
-export { x };
-export { y };
+export { x } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export x"
+};
+export { y } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export y"
+};
 
 ```
 ## Merged (module eval)

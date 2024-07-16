@@ -189,7 +189,9 @@ export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 4
 ```js
-export { default };
+export { default } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export default"
+};
 
 ```
 ## Merged (module eval)
@@ -258,7 +260,9 @@ export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 4
 ```js
-export { default };
+export { default } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export default"
+};
 
 ```
 ## Merged (module eval)

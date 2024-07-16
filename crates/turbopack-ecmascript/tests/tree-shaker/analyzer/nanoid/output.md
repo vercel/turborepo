@@ -645,11 +645,21 @@ export { nanoid } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 14
 ```js
-export { nanoid };
-export { customAlphabet };
-export { customRandom };
-export { urlAlphabet };
-export { random };
+export { nanoid } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export nanoid"
+};
+export { customAlphabet } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export customAlphabet"
+};
+export { customRandom } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export customRandom"
+};
+export { urlAlphabet } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export urlAlphabet"
+};
+export { random } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export random"
+};
 
 ```
 ## Merged (module eval)
@@ -914,11 +924,21 @@ export { nanoid } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 14
 ```js
-export { nanoid };
-export { customAlphabet };
-export { customRandom };
-export { urlAlphabet };
-export { random };
+export { nanoid } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export nanoid"
+};
+export { customAlphabet } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export customAlphabet"
+};
+export { customRandom } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export customRandom"
+};
+export { urlAlphabet } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export urlAlphabet"
+};
+export { random } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export random"
+};
 
 ```
 ## Merged (module eval)

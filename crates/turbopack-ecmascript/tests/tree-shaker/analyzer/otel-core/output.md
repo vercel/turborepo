@@ -251,8 +251,12 @@ export { getEnvWithoutDefaults } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
-export { getEnv };
-export { getEnvWithoutDefaults };
+export { getEnv } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export getEnv"
+};
+export { getEnvWithoutDefaults } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export getEnvWithoutDefaults"
+};
 
 ```
 ## Merged (module eval)
@@ -334,8 +338,12 @@ export { getEnvWithoutDefaults } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
-export { getEnv };
-export { getEnvWithoutDefaults };
+export { getEnv } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export getEnv"
+};
+export { getEnvWithoutDefaults } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: "export getEnvWithoutDefaults"
+};
 
 ```
 ## Merged (module eval)
