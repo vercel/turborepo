@@ -294,7 +294,7 @@ impl DepGraph {
                                 ModuleDecl::ExportNamed(NamedExport {
                                     span: DUMMY_SP,
                                     specifiers: vec![s],
-                                    src: None,
+                                    src: Some(Box::new(TURBOPACK_PART_IMPORT_SOURCE.into())),
                                     type_only: false,
                                     with: Some(Box::new(create_turbopack_part_id_assert(
                                         PartId::Export(export.to_string().into()),
