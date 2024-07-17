@@ -51,18 +51,25 @@ Add invalid packageManager field that passes the regex.
    7 |   "workspaces": [
      `----
   
+Restore packageManager field
+  $ jq '.packageManager = "npm@8.19.4"' package.json > package.json.new
+  $ mv package.json.new package.json
+
 Add a trailing comma
   $ echo "{ \"name\": \"foobar\", }" > package.json.new
   $ mv package.json.new apps/my-app/package.json
 Build should fail due to trailing comma (sed replaces square brackets with parentheses)
   $ ${TURBO} build 2>&1 | sed  's/\[\([^]]*\)\]/\(\1)/g'
   package_json_parse_error
-
+  
     x unable to parse package.json
-
+  
   Error:   x Expected a property but instead found '}'.
      ,-\(.*package.json:1:1\) (re)
    1 | { "name": "foobar", }
      :                     ^
      `----
+  
+
+
 
