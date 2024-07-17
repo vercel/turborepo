@@ -442,8 +442,10 @@ pub struct ResolveOptions {
     pub resolved_map: Option<Vc<ResolvedMap>>,
     pub before_resolve_plugins: Vec<Vc<Box<dyn BeforeResolvePlugin>>>,
     pub plugins: Vec<Vc<Box<dyn AfterResolvePlugin>>>,
-    pub placeholder_for_future_extensions: (),
+    /// Support resolving *.js requests to *.ts files
     pub enable_js_ts_rewriting: bool,
+
+    pub placeholder_for_future_extensions: (),
 }
 
 #[turbo_tasks::value_impl]
