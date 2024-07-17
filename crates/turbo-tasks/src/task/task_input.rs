@@ -362,7 +362,7 @@ macro_rules! tuple_impls {
     };
 }
 
-// Implement `TaskInput` for all tuples of 1 to 12 elements.
+// Implement `TaskInput` for all tuples of 1 to 16 elements.
 tuple_impls! { A }
 tuple_impls! { A B }
 tuple_impls! { A B C }
