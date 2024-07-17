@@ -1920,21 +1920,6 @@ async fn resolve_relative_request(
     let mut new_path = path_pattern.clone();
 
     let fragment_val = fragment.await?;
-
-    if !options_value.fully_specified && options_value.enable_js_ts_rewriting {
-        // TODO path_pattern might not be a constant?
-        // TODO extension might be empty, or dots in filepath
-        if let Pattern::Constant(s) = path_pattern {
-            if let Some((base, ext)) = s.rsplit_once(".") {
-                if ext == "js" {
-                    new_path = Pattern::Alternatives(vec![Pattern::Constant(base.into()), new_path])
-                }
-            }
-        } else {
-            todo!("enable_js_ts_rewriting");
-        }
-    }
-
     if !fragment_val.is_empty() {
         new_path.push(Pattern::Alternatives(
             once(Pattern::Constant("".into()))
@@ -1956,6 +1941,36 @@ async fn resolve_relative_request(
                 )
                 .collect(),
         ));
+
+        if options_value.enable_js_ts_rewriting {
+            let mut rewritten_path = path_pattern.clone();
+            let rewritten_path_modified =
+                rewritten_path.replace_final_constants(&|c: &RcStr| -> Option<Pattern> {
+                    let result = match c.rsplit_once(".") {
+                        Some((base, "js")) => Some((
+                            base,
+                            vec![
+                                Pattern::Constant(".ts".into()),
+                                Pattern::Constant(".tsx".into()),
+                            ],
+                        )),
+                        Some((base, "mjs")) => Some((base, vec![Pattern::Constant(".mts".into())])),
+                        Some((base, "cjs")) => Some((base, vec![Pattern::Constant(".cts".into())])),
+                        _ => None,
+                    };
+                    result.map(|(base, replacement)| {
+                        Pattern::Concatenation(vec![
+                            Pattern::Constant(base.into()),
+                            Pattern::Alternatives(replacement),
+                        ])
+                    })
+                });
+
+            if rewritten_path_modified {
+                // Prepend the rewritten pattern to give it higher priority
+                new_path = Pattern::Alternatives(vec![rewritten_path, new_path])
+            }
+        }
 
         new_path.normalize();
     };
