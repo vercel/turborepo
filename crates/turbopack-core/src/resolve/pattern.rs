@@ -770,19 +770,16 @@ pub enum PatternMatch {
     Directory(RcStr, Vc<FileSystemPath>),
 }
 
-impl PartialOrd<PatternMatch> for PatternMatch {
-    fn partial_cmp(&self, other: &PatternMatch) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
+impl PatternMatch {
+    pub fn path(&self) -> Vc<FileSystemPath> {
+        match *self {
+            PatternMatch::File(_, path) | PatternMatch::Directory(_, path) => path,
+        }
     }
-}
 
-impl Ord for PatternMatch {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        match (self, other) {
-            (PatternMatch::File(a, _), PatternMatch::File(b, _))
-            | (PatternMatch::Directory(a, _), PatternMatch::Directory(b, _)) => a.cmp(b),
-            (PatternMatch::File(..), PatternMatch::Directory(..)) => std::cmp::Ordering::Less,
-            (PatternMatch::Directory(..), PatternMatch::File(..)) => std::cmp::Ordering::Greater,
+    pub fn name(&self) -> &str {
+        match self {
+            PatternMatch::File(name, _) | PatternMatch::Directory(name, _) => name.as_str(),
         }
     }
 }
@@ -1104,7 +1101,7 @@ pub async fn read_matches(
         for (pos, nested) in nested.into_iter() {
             results.extend(nested.await?.iter().cloned().map(|p| (pos, p)));
         }
-        results.sort();
+        results.sort_by(|(a, am), (b, bm)| (*a).cmp(b).then_with(|| am.name().cmp(bm.name())));
         Ok(Vc::cell(
             results.into_iter().map(|(_, p)| p).collect::<Vec<_>>(),
         ))
