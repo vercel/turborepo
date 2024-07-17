@@ -609,14 +609,38 @@ pub(super) async fn part_of_module(
                             phase: Default::default(),
                         })));
 
+                    let specifiers = export_names
+                        .into_iter()
+                        .map(|export_name| {
+                            swc_core::ecma::ast::ExportSpecifier::Named(ExportNamedSpecifier {
+                                span: DUMMY_SP,
+                                orig: ModuleExportName::Ident(Ident::new(
+                                    export_name.as_str().into(),
+                                    DUMMY_SP,
+                                )),
+                                exported: None,
+                                is_type_only: false,
+                            })
+                        })
+                        .collect::<Vec<_>>();
+
                     module
                         .body
-                        .push(ModuleItem::ModuleDecl(ModuleDecl::ExportAll(ExportAll {
-                            span: DUMMY_SP,
-                            src: Box::new(TURBOPACK_PART_IMPORT_SOURCE.into()),
-                            type_only: false,
-                            with: Some(Box::new(create_turbopack_part_id_assert(PartId::Exports))),
-                        })));
+                        .push(ModuleItem::ModuleDecl(ModuleDecl::ExportNamed(
+                            NamedExport {
+                                span: DUMMY_SP,
+                                specifiers,
+                                src: Some(Box::new(TURBOPACK_PART_IMPORT_SOURCE.into())),
+                                type_only: false,
+                                with: Some(Box::new(create_turbopack_part_id_assert(
+                                    PartId::Exports,
+                                ))),
+                            },
+                        )));
+
+                    module.body.extend(star_reexports.iter().map(|export_all| {
+                        ModuleItem::ModuleDecl(ModuleDecl::ExportAll(export_all.clone()))
+                    }));
 
                     let program = Program::Module(module);
                     let eval_context = EvalContext::new(
@@ -625,6 +649,7 @@ pub(super) async fn part_of_module(
                         eval_context.top_level_mark,
                         None,
                     );
+
                     return Ok(ParseResult::Ok {
                         program,
                         comments: comments.clone(),
