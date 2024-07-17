@@ -35,40 +35,31 @@ impl ArgMeta {
     where
         T: TaskInput + Serialize + for<'de> Deserialize<'de> + 'static,
     {
+        fn downcast<T>(value: &dyn MagicAny) -> &T
+        where
+            T: MagicAny,
+        {
+            value
+                .downcast_ref::<T>()
+                .with_context(|| {
+                    #[cfg(debug_assertions)]
+                    return format!(
+                        "Invalid argument type, expected {} got {}",
+                        std::any::type_name::<T>(),
+                        value.magic_type_name()
+                    );
+                    #[cfg(not(debug_assertions))]
+                    return "Invalid argument type";
+                })
+                .unwrap()
+        }
         Self {
             serializer: MagicAnySerializeSeed::new::<T>(),
             deserializer: MagicAnyDeserializeSeed::new::<T>(),
-            is_resolved: |value| {
-                value
-                    .downcast_ref::<T>()
-                    .with_context(|| {
-                        #[cfg(debug_assertions)]
-                        return format!(
-                            "Invalid argument type, expected {} got {}",
-                            std::any::type_name::<T>(),
-                            value.magic_type_name()
-                        );
-                        #[cfg(not(debug_assertions))]
-                        return "Invalid argument type";
-                    })
-                    .unwrap()
-                    .is_resolved()
-            },
+            is_resolved: |value| downcast::<T>(value).is_resolved(),
             resolve: |value| {
                 Box::pin(async {
-                    let value = value
-                        .downcast_ref::<T>()
-                        .with_context(|| {
-                            #[cfg(debug_assertions)]
-                            return format!(
-                                "Invalid argument type, expected {} got {}",
-                                std::any::type_name::<T>(),
-                                value.magic_type_name()
-                            );
-                            #[cfg(not(debug_assertions))]
-                            return "Invalid argument type";
-                        })
-                        .unwrap();
+                    let value = downcast::<T>(value);
                     let resolved = value.resolve().await?;
                     Ok(Box::new(resolved) as Box<dyn MagicAny>)
                 })
