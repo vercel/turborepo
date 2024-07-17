@@ -20,3 +20,10 @@ pub async fn value_debug_format_field(value: ValueDebugFormatString<'_>) -> Stri
         Err(err) => format!("{0:?}", err),
     }
 }
+
+#[macro_export]
+macro_rules! stringify_path {
+    ($path:path) => {
+        stringify!($path)
+    };
+}
