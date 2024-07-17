@@ -165,6 +165,7 @@ macro_rules! task_fn_impl {
         {
             #[allow(non_snake_case)]
             fn functor(&self, _this: Option<RawVc>, arg: &ConcreteTaskInput) -> Result<NativeTaskFn> {
+                #[allow(unused_parens)]
                 let ($($arg),*) = <($($arg),*) as TaskInput>::try_from_concrete(arg)?;
 
                 let task_fn = self.clone();
@@ -191,6 +192,7 @@ macro_rules! task_fn_impl {
         {
             #[allow(non_snake_case)]
             fn functor(&self, _this: Option<RawVc>, arg: &ConcreteTaskInput) -> Result<NativeTaskFn> {
+                #[allow(unused_parens)]
                 let ($($arg),*) = <($($arg),*) as TaskInput>::try_from_concrete(arg)?;
 
                 let task_fn = self.clone();
@@ -220,6 +222,7 @@ macro_rules! task_fn_impl {
                 let task_fn = self.clone();
                 let recv = Vc::<Recv>::from(this.expect("Method need to have a `self` argument"));
 
+                #[allow(unused_parens)]
                 let ($($arg),*) = <($($arg),*) as TaskInput>::try_from_concrete(arg)?;
 
                 Ok(Box::new(move || {
@@ -249,6 +252,7 @@ macro_rules! task_fn_impl {
                 let task_fn = self.clone();
                 let recv = Vc::<Recv>::from(this.expect("Method need to have a `self` argument"));
 
+                #[allow(unused_parens)]
                 let ($($arg),*) = <($($arg),*) as TaskInput>::try_from_concrete(arg)?;
 
                 Ok(Box::new(move || {
@@ -290,6 +294,7 @@ macro_rules! task_fn_impl {
                 let task_fn = self.clone();
                 let recv = Vc::<Recv>::from(this.expect("Method need to have a `self` argument"));
 
+                #[allow(unused_parens)]
                 let ($($arg),*) = <($($arg),*) as TaskInput>::try_from_concrete(arg)?;
 
                 Ok(Box::new(move || {
@@ -318,6 +323,7 @@ macro_rules! task_fn_impl {
                 let task_fn = self.clone();
                 let recv = Vc::<Recv>::from(this.expect("Method need to have a `self` argument"));
 
+                #[allow(unused_parens)]
                 let ($($arg),*) = <($($arg),*) as TaskInput>::try_from_concrete(arg)?;
 
                 Ok(Box::new(move || {
