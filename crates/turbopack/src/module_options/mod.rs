@@ -81,6 +81,7 @@ impl ModuleOptions {
                 CssOptionsContext {
                     enable_raw_css,
                     use_swc_css,
+                    ..
                 },
             ref enable_postcss_transform,
             ref enable_webpack_loaders,
