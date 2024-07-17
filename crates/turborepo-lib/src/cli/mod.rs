@@ -217,6 +217,12 @@ pub struct Args {
     pub check_for_update: bool,
     #[clap(long = "__test-run", global = true, hide = true)]
     pub test_run: bool,
+    /// Allow for missing `packageManager` in `package.json`.
+    ///
+    /// `turbo` will use hints from codebase to guess which package manager
+    /// should be used.
+    #[clap(long, global = true)]
+    pub dangerously_disable_package_manager_check: bool,
     #[clap(flatten, next_help_heading = "Run Arguments")]
     pub run_args: Option<RunArgs>,
     // This should be inside `RunArgs` but clap currently has a bug
@@ -676,8 +682,8 @@ pub struct ExecutionArgs {
     /// Environment variable mode.
     /// Use "loose" to pass the entire existing environment.
     /// Use "strict" to use an allowlist specified in turbo.json.
-    #[clap(long = "env-mode", default_value = "strict", num_args = 0..=1, default_missing_value = "strict")]
-    pub env_mode: EnvMode,
+    #[clap(long = "env-mode", num_args = 0..=1, default_missing_value = "strict")]
+    pub env_mode: Option<EnvMode>,
     /// Use the given selector to specify package(s) to act as
     /// entry points. The syntax mirrors pnpm's syntax, and
     /// additional documentation and examples can be found in
@@ -749,8 +755,8 @@ impl ExecutionArgs {
             );
         }
 
-        if self.env_mode != EnvMode::default() {
-            telemetry.track_arg_value("env-mode", self.env_mode, EventType::NonSensitive);
+        if let Some(env_mode) = self.env_mode {
+            telemetry.track_arg_value("env-mode", env_mode, EventType::NonSensitive);
         }
 
         if let Some(output_logs) = &self.output_logs {
@@ -1437,7 +1443,7 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    env_mode: EnvMode::Strict,
+                    env_mode: Some(EnvMode::Strict),
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
@@ -1447,27 +1453,12 @@ mod test {
         "env_mode: not fully-specified"
     )]
     #[test_case::test_case(
-		&["turbo", "run", "build"],
-        Args {
-            command: Some(Command::Run {
-                execution_args: Box::new(ExecutionArgs {
-                    tasks: vec!["build".to_string()],
-                    env_mode: EnvMode::Strict,
-                    ..get_default_execution_args()
-                }),
-                run_args: Box::new(get_default_run_args())
-            }),
-            ..Args::default()
-		} ;
-        "env_mode: default strict"
-	)]
-    #[test_case::test_case(
 		&["turbo", "run", "build", "--env-mode", "loose"],
         Args {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    env_mode: EnvMode::Loose,
+                    env_mode: Some(EnvMode::Loose),
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
@@ -1482,7 +1473,7 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    env_mode: EnvMode::Strict,
+                    env_mode: Some(EnvMode::Strict),
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
@@ -2530,5 +2521,23 @@ mod test {
         assert!(LogOrder::Auto.compatible_with_tui());
         assert!(!LogOrder::Stream.compatible_with_tui());
         assert!(!LogOrder::Grouped.compatible_with_tui());
+    }
+
+    #[test]
+    fn test_dangerously_allow_no_package_manager() {
+        assert!(
+            !Args::try_parse_from(["turbo", "build",])
+                .unwrap()
+                .dangerously_disable_package_manager_check
+        );
+        assert!(
+            Args::try_parse_from([
+                "turbo",
+                "build",
+                "--dangerously-disable-package-manager-check"
+            ])
+            .unwrap()
+            .dangerously_disable_package_manager_check
+        );
     }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@turbo/workspaces",
-  "version": "2.0.7-canary.0",
+  "version": "2.0.7",
   "description": "Tools for working with package managers",
   "homepage": "https://turbo.build/repo",
   "license": "MIT",
@@ -25,7 +25,6 @@
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
   },
   "dependencies": {
-    "chalk": "2.4.2",
     "commander": "^10.0.0",
     "execa": "5.1.1",
     "fast-glob": "^3.2.12",
@@ -34,6 +33,7 @@
     "inquirer": "^8.0.0",
     "js-yaml": "^4.1.0",
     "ora": "4.1.1",
+    "picocolors": "1.0.1",
     "rimraf": "^3.0.2",
     "semver": "^7.3.5",
     "update-check": "^1.5.4"
@@ -43,7 +43,6 @@
     "@turbo/test-utils": "workspace:*",
     "@turbo/tsconfig": "workspace:*",
     "@turbo/utils": "workspace:*",
-    "@types/chalk-animation": "^1.6.0",
     "@types/fs-extra": "^9.0.13",
     "@types/gradient-string": "^1.1.2",
     "@types/inquirer": "^7.3.1",

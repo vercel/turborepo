@@ -1,6 +1,6 @@
 import path from "node:path";
 import fs from "fs-extra";
-import chalk from "chalk";
+import { dim } from "picocolors";
 import { isFolderEmpty } from "./isFolderEmpty";
 
 export function validateDirectory(directory: string): {
@@ -19,7 +19,7 @@ export function validateDirectory(directory: string): {
       valid: false,
       root,
       projectName,
-      error: `${chalk.dim(
+      error: `${dim(
         projectName
       )} is not a directory - please try a different location`,
     };
@@ -32,7 +32,7 @@ export function validateDirectory(directory: string): {
         valid: false,
         root,
         projectName,
-        error: `${chalk.dim(projectName)} (${root}) has ${
+        error: `${dim(projectName)} (${root}) has ${
           conflicts.length
         } conflicting ${
           conflicts.length === 1 ? "file" : "files"

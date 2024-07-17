@@ -23,23 +23,42 @@ Make sure exit code is 2 when no args are passed
     unlink      Unlink the current directory from your Vercel organization and disable Remote Caching
   
   Options:
-        --version                         
-        --skip-infer                      Skip any attempts to infer which version of Turbo the project is configured to use
-        --no-update-notifier              Disable the turbo update notification
-        --api <API>                       Override the endpoint for API calls
-        --color                           Force color usage in the terminal
-        --cwd <CWD>                       The directory in which to run turbo
-        --heap <HEAP>                     Specify a file to save a pprof heap profile
-        --ui <UI>                         Specify whether to use the streaming UI or TUI [possible values: tui, stream]
-        --login <LOGIN>                   Override the login endpoint
-        --no-color                        Suppress color usage in the terminal
-        --preflight                       When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
-        --remote-cache-timeout <TIMEOUT>  Set a timeout for all HTTP requests
-        --team <TEAM>                     Set the team slug for API calls
-        --token <TOKEN>                   Set the auth token for API calls
-        --trace <TRACE>                   Specify a file to save a pprof trace
-        --verbosity <COUNT>               Verbosity level
-    -h, --help                            Print help (see more with '--help')
+        --version
+            
+        --skip-infer
+            Skip any attempts to infer which version of Turbo the project is configured to use
+        --no-update-notifier
+            Disable the turbo update notification
+        --api <API>
+            Override the endpoint for API calls
+        --color
+            Force color usage in the terminal
+        --cwd <CWD>
+            The directory in which to run turbo
+        --heap <HEAP>
+            Specify a file to save a pprof heap profile
+        --ui <UI>
+            Specify whether to use the streaming UI or TUI [possible values: tui, stream]
+        --login <LOGIN>
+            Override the login endpoint
+        --no-color
+            Suppress color usage in the terminal
+        --preflight
+            When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+        --remote-cache-timeout <TIMEOUT>
+            Set a timeout for all HTTP requests
+        --team <TEAM>
+            Set the team slug for API calls
+        --token <TOKEN>
+            Set the auth token for API calls
+        --trace <TRACE>
+            Specify a file to save a pprof trace
+        --verbosity <COUNT>
+            Verbosity level
+        --dangerously-disable-package-manager-check
+            Allow for missing `packageManager` in `package.json`
+    -h, --help
+            Print help (see more with '--help')
   
   Run Arguments:
         --cache-workers <CACHE_WORKERS>
@@ -77,7 +96,7 @@ Make sure exit code is 2 when no args are passed
         --global-deps <GLOBAL_DEPS>
             Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
         --env-mode [<ENV_MODE>]
-            Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json [default: strict] [possible values: loose, strict]
+            Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json [possible values: loose, strict]
     -F, --filter <FILTER>
             Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
         --output-logs <OUTPUT_LOGS>
