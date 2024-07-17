@@ -532,7 +532,7 @@ mod test {
 
     use pretty_assertions::assert_eq;
     use serde_json::json;
-    use tempdir::TempDir;
+    use tempfile::TempDir;
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
     use turborepo_lockfiles::Lockfile;
@@ -645,7 +645,7 @@ mod test {
 
     #[test]
     fn test_turbo_json_loading() {
-        let repo_root_dir = TempDir::new("repo").unwrap();
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
         let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
         let package_graph = mock_package_graph(
             &repo_root,
@@ -695,7 +695,7 @@ mod test {
         task_id: &'static str,
         expected: bool,
     ) {
-        let repo_root_dir = TempDir::new("repo").unwrap();
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
         let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
         let package_graph = mock_package_graph(
             &repo_root,
@@ -774,7 +774,7 @@ mod test {
 
     #[test]
     fn test_default_engine() {
-        let repo_root_dir = TempDir::new("repo").unwrap();
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
         let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
         let package_graph = mock_package_graph(
             &repo_root,
@@ -824,7 +824,7 @@ mod test {
 
     #[test]
     fn test_dependencies_on_unspecified_packages() {
-        let repo_root_dir = TempDir::new("repo").unwrap();
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
         let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
         // app1 -> libA
         //              \
@@ -873,7 +873,7 @@ mod test {
 
     #[test]
     fn test_run_package_task() {
-        let repo_root_dir = TempDir::new("repo").unwrap();
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
         let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
         let package_graph = mock_package_graph(
             &repo_root,
@@ -910,7 +910,7 @@ mod test {
 
     #[test]
     fn test_include_root_tasks() {
-        let repo_root_dir = TempDir::new("repo").unwrap();
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
         let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
         let package_graph = mock_package_graph(
             &repo_root,
@@ -963,7 +963,7 @@ mod test {
 
     #[test]
     fn test_depend_on_root_task() {
-        let repo_root_dir = TempDir::new("repo").unwrap();
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
         let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
         let package_graph = mock_package_graph(
             &repo_root,
@@ -1007,7 +1007,7 @@ mod test {
 
     #[test]
     fn test_depend_on_missing_task() {
-        let repo_root_dir = TempDir::new("repo").unwrap();
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
         let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
         let package_graph = mock_package_graph(
             &repo_root,
@@ -1040,7 +1040,7 @@ mod test {
 
     #[test]
     fn test_depend_on_multiple_package_tasks() {
-        let repo_root_dir = TempDir::new("repo").unwrap();
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
         let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
         let package_graph = mock_package_graph(
             &repo_root,
@@ -1086,7 +1086,7 @@ mod test {
 
     #[test]
     fn test_depends_on_disabled_root_task() {
-        let repo_root_dir = TempDir::new("repo").unwrap();
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
         let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
         let package_graph = mock_package_graph(
             &repo_root,
@@ -1124,7 +1124,7 @@ mod test {
 
     #[test]
     fn test_engine_tasks_only() {
-        let repo_root_dir = TempDir::new("repo").unwrap();
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
         let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
         let package_graph = mock_package_graph(
             &repo_root,
@@ -1174,7 +1174,7 @@ mod test {
 
     #[test]
     fn test_engine_tasks_only_package_deps() {
-        let repo_root_dir = TempDir::new("repo").unwrap();
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
         let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
         let package_graph = mock_package_graph(
             &repo_root,
@@ -1212,7 +1212,7 @@ mod test {
 
     #[test]
     fn test_engine_tasks_only_task_dep() {
-        let repo_root_dir = TempDir::new("repo").unwrap();
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
         let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
         let package_graph = mock_package_graph(
             &repo_root,
