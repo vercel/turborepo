@@ -109,7 +109,7 @@ struct MdxTransformedAsset {
 impl Source for MdxTransformedAsset {
     #[turbo_tasks::function]
     fn ident(&self) -> Vc<AssetIdent> {
-        self.source.ident()
+        self.source.ident().rename_as("*.tsx".into())
     }
 }
 

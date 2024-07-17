@@ -520,17 +520,9 @@ impl ModuleOptions {
                     ModuleRuleCondition::ResourcePathEndsWith(".md".to_string()),
                     ModuleRuleCondition::ResourcePathEndsWith(".mdx".to_string()),
                 ]),
-                vec![
-                    ModuleRuleEffect::ModuleType(ModuleType::Typescript {
-                        transforms: ts_app_transforms,
-                        tsx: true,
-                        analyze_types: false,
-                        options: ecmascript_options_vc,
-                    }),
-                    ModuleRuleEffect::SourceTransforms(Vc::cell(vec![Vc::upcast(
-                        MdxTransform::new(mdx_transform_options),
-                    )])),
-                ],
+                vec![ModuleRuleEffect::SourceTransforms(Vc::cell(vec![
+                    Vc::upcast(MdxTransform::new(mdx_transform_options)),
+                ]))],
             ));
         }
 
