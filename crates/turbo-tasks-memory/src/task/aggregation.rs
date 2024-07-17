@@ -93,8 +93,8 @@ impl Aggregated {
     ) {
         if let Entry::Occupied(mut entry) = self.collectibles.entry(trait_type) {
             let info = entry.get_mut();
-            info.dependent_tasks.remove(&reader);
-            if info.is_unset() {
+            let removed = info.dependent_tasks.remove(&reader);
+            if removed && info.is_unset() {
                 entry.remove();
             }
         }
