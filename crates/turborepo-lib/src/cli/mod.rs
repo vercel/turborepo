@@ -9,7 +9,7 @@ use clap::{
 use clap_complete::{generate, Shell};
 pub use error::Error;
 use serde::Serialize;
-use tracing::{debug, error};
+use tracing::{debug, error, log::warn};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::AnonAPIClient;
 use turborepo_repository::inference::{RepoMode, RepoState};
@@ -26,7 +26,7 @@ use turborepo_ui::UI;
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        bin, daemon, generate, info, link, login, logout, prune, run, scan, telemetry, unlink,
+        bin, daemon, generate, link, login, logout, ls, prune, run, scan, telemetry, unlink,
         CommandBase,
     },
     get_version,
@@ -492,17 +492,15 @@ pub enum Command {
     /// Turbo your monorepo by running a number of 'repo lints' to
     /// identify common issues, suggest fixes, and improve performance.
     Scan {},
-    #[clap(hide = true)]
-    Info {
+    /// EXPERIMENTAL: List packages in your monorepo.
+    Ls {
         /// Use the given selector to specify package(s) to act as
         /// entry points. The syntax mirrors pnpm's syntax, and
         /// additional documentation and examples can be found in
         /// turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
         #[clap(short = 'F', long, group = "scope-filter-group")]
         filter: Vec<String>,
-        // We output turbo info as json. Currently just for internal testing
-        #[clap(long)]
-        json: bool,
+        packages: Vec<String>,
     },
     /// Link your local directory to a Vercel organization and enable remote
     /// caching.
@@ -1139,14 +1137,15 @@ pub async fn run(
                 Ok(1)
             }
         }
-        Command::Info { filter, json } => {
+        Command::Ls { filter, packages } => {
+            warn!("ls command is experimental and may change in the future");
             let event = CommandEventBuilder::new("info").with_parent(&root_telemetry);
 
             event.track_call();
-            let json = *json;
             let filter = filter.clone();
+            let packages = packages.clone();
             let base = CommandBase::new(cli_args, repo_root, version, ui);
-            info::run(base, event, filter, json).await?;
+            ls::run(base, packages, event, filter).await?;
 
             Ok(0)
         }

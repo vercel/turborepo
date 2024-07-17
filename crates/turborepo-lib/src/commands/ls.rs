@@ -4,14 +4,16 @@
 //! Different than run summary or dry run because it can include
 //! sensitive data like your auth token
 
+use miette::Diagnostic;
 use serde::Serialize;
+use thiserror::Error;
 use turbopath::AnchoredSystemPath;
 use turborepo_repository::{
-    package_graph::{PackageGraph, PackageName, PackageNode},
+    package_graph::{PackageName, PackageNode},
     package_manager::PackageManager,
 };
 use turborepo_telemetry::events::command::CommandEventBuilder;
-use turborepo_ui::{cprintln, BOLD, GREY, UI};
+use turborepo_ui::{color, cprintln, BOLD, BOLD_GREEN, GREY, UI};
 
 use crate::{
     cli,
@@ -20,6 +22,12 @@ use crate::{
     run::{builder::RunBuilder, Run},
     signal::SignalHandler,
 };
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum Error {
+    #[error("package `{package}` not found")]
+    PackageNotFound { package: String },
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -37,16 +45,19 @@ struct RepositoryWorkspaceDetails<'a> {
 }
 
 #[derive(Serialize)]
-struct WorkspaceDetails<'a> {
+struct PackageDetails<'a> {
+    #[serde(skip)]
+    ui: UI,
     name: &'a str,
+    tasks: Vec<(&'a str, &'a str)>,
     dependencies: Vec<&'a str>,
 }
 
 pub async fn run(
     mut base: CommandBase,
+    packages: Vec<String>,
     telemetry: CommandEventBuilder,
     filter: Vec<String>,
-    json: bool,
 ) -> Result<(), cli::Error> {
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
@@ -63,11 +74,13 @@ pub async fn run(
     let run_builder = RunBuilder::new(base)?;
     let run = run_builder.build(&handler, telemetry).await?;
 
-    let repo_details = RepositoryDetails::new(&run);
-    if json {
-        println!("{}", serde_json::to_string_pretty(&repo_details)?);
+    if packages.is_empty() {
+        RepositoryDetails::new(&run).print()?;
     } else {
-        repo_details.print()?;
+        for package in packages {
+            let package_details = PackageDetails::new(&run, &package)?;
+            package_details.print();
+        }
     }
 
     Ok(())
@@ -102,7 +115,11 @@ impl<'a> RepositoryDetails<'a> {
         }
     }
     fn print(&self) -> Result<(), cli::Error> {
-        cprintln!(self.ui, BOLD, "{} packages\n", self.workspaces.len());
+        if self.workspaces.len() == 1 {
+            cprintln!(self.ui, BOLD, "{} package\n", self.workspaces.len());
+        } else {
+            cprintln!(self.ui, BOLD, "{} packages\n", self.workspaces.len());
+        }
 
         for (workspace_name, entry) in &self.workspaces {
             if matches!(workspace_name, PackageName::Root) {
@@ -115,39 +132,65 @@ impl<'a> RepositoryDetails<'a> {
     }
 }
 
-impl<'a> WorkspaceDetails<'a> {
-    fn new(package_graph: &'a PackageGraph, workspace_name: &'a str) -> Self {
-        let workspace_node = match workspace_name {
+impl<'a> PackageDetails<'a> {
+    fn new(run: &'a Run, package: &'a str) -> Result<Self, Error> {
+        let ui = run.ui();
+        let package_graph = run.pkg_dep_graph();
+        let package_node = match package {
             "//" => PackageNode::Root,
             name => PackageNode::Workspace(PackageName::Other(name.to_string())),
         };
 
-        let transitive_dependencies = package_graph.transitive_closure(Some(&workspace_node));
+        let package_json = package_graph
+            .package_json(package_node.as_package_name())
+            .ok_or_else(|| Error::PackageNotFound {
+                package: package.to_string(),
+            })?;
+
+        let transitive_dependencies = package_graph.transitive_closure(Some(&package_node));
 
         let mut workspace_dep_names: Vec<&str> = transitive_dependencies
             .into_iter()
             .filter_map(|dependency| match dependency {
-                PackageNode::Root | PackageNode::Workspace(PackageName::Root) => Some("root"),
-                PackageNode::Workspace(PackageName::Other(dep_name))
-                    if dep_name == workspace_name =>
-                {
-                    None
-                }
+                PackageNode::Root | PackageNode::Workspace(PackageName::Root) => None,
+                PackageNode::Workspace(PackageName::Other(dep_name)) if dep_name == package => None,
                 PackageNode::Workspace(PackageName::Other(dep_name)) => Some(dep_name.as_str()),
             })
             .collect();
         workspace_dep_names.sort();
 
-        Self {
-            name: workspace_name,
+        Ok(Self {
+            ui,
+            name: package,
             dependencies: workspace_dep_names,
-        }
+            tasks: package_json
+                .scripts
+                .iter()
+                .map(|(name, command)| (name.as_str(), command.as_str()))
+                .collect(),
+        })
     }
 
     fn print(&self) {
-        println!("{} depends on:", self.name);
-        for dep_name in &self.dependencies {
-            println!("- {}", dep_name);
+        let name = color!(self.ui, BOLD_GREEN, "{}", self.name);
+        let depends_on = color!(self.ui, BOLD, "depends on");
+        let dependencies = if self.dependencies.is_empty() {
+            "<no packages>".to_string()
+        } else {
+            self.dependencies.join(", ")
+        };
+        println!(
+            "{} {}: {}",
+            name,
+            depends_on,
+            color!(self.ui, GREY, "{}", dependencies)
+        );
+        println!();
+
+        cprintln!(self.ui, BOLD, "tasks:");
+        for (name, command) in &self.tasks {
+            println!("  {}: {}", name, color!(self.ui, GREY, "{}", command));
         }
+        println!();
     }
 }
