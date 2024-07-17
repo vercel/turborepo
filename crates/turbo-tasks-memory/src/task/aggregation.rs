@@ -489,8 +489,10 @@ impl<'l> AggregationNodeGuard for TaskGuard<'l> {
                     change.dirty_tasks_update.push((self.id, 1));
                 }
                 if let Some(collectibles) = guard.collectibles.as_ref() {
-                    for (&(trait_type_id, collectible), _) in collectibles.iter() {
-                        change.collectibles.push((trait_type_id, collectible, 1));
+                    for (&(trait_type_id, collectible), count) in collectibles.iter() {
+                        change
+                            .collectibles
+                            .push((trait_type_id, collectible, *count));
                     }
                 }
                 if let TaskStateType::InProgress(box InProgressState {
@@ -499,8 +501,10 @@ impl<'l> AggregationNodeGuard for TaskGuard<'l> {
                 }) = &guard.state_type
                 {
                     if let Some(collectibles) = outdated_collectibles.as_ref() {
-                        for (&(trait_type_id, collectible), _) in collectibles.iter() {
-                            change.collectibles.push((trait_type_id, collectible, 1));
+                        for (&(trait_type_id, collectible), count) in collectibles.iter() {
+                            change
+                                .collectibles
+                                .push((trait_type_id, collectible, *count));
                         }
                     }
                 }
@@ -541,8 +545,10 @@ impl<'l> AggregationNodeGuard for TaskGuard<'l> {
                     change.dirty_tasks_update.push((self.id, -1));
                 }
                 if let Some(collectibles) = guard.collectibles.as_ref() {
-                    for (&(trait_type_id, collectible), _) in collectibles.iter() {
-                        change.collectibles.push((trait_type_id, collectible, -1));
+                    for (&(trait_type_id, collectible), count) in collectibles.iter() {
+                        change
+                            .collectibles
+                            .push((trait_type_id, collectible, -count));
                     }
                 }
                 if let TaskStateType::InProgress(box InProgressState {
@@ -551,8 +557,10 @@ impl<'l> AggregationNodeGuard for TaskGuard<'l> {
                 }) = &guard.state_type
                 {
                     if let Some(collectibles) = outdated_collectibles.as_ref() {
-                        for (&(trait_type_id, collectible), _) in collectibles.iter() {
-                            change.collectibles.push((trait_type_id, collectible, -1));
+                        for (&(trait_type_id, collectible), count) in collectibles.iter() {
+                            change
+                                .collectibles
+                                .push((trait_type_id, collectible, -*count));
                         }
                     }
                 }
@@ -588,19 +596,13 @@ impl<'l> AggregationNodeGuard for TaskGuard<'l> {
             {
                 data.unfinished_tasks = unfinished_tasks_update.into_iter().collect();
             }
-            data.dirty_tasks = dirty_tasks_update.into_iter().collect();
-            data.collectibles = collectibles
-                .into_iter()
-                .map(|(trait_type_id, collectible, count)| {
-                    (
-                        trait_type_id,
-                        CollectiblesInfo {
-                            collectibles: [(collectible, count)].iter().cloned().collect(),
-                            dependent_tasks: TaskIdSet::default(),
-                        },
-                    )
-                })
-                .collect();
+            for (t, n) in dirty_tasks_update.into_iter() {
+                data.dirty_tasks.insert(t, n);
+            }
+            for (trait_type_id, collectible, count) in collectibles.into_iter() {
+                let info = data.collectibles.entry(trait_type_id).or_default();
+                update_count_entry(info.collectibles.entry(collectible), count);
+            }
         }
         data
     }
