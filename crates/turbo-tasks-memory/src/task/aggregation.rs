@@ -10,7 +10,10 @@ use auto_hash_map::{map::Entry, AutoMap};
 use either::Either;
 use parking_lot::Mutex;
 use rustc_hash::FxHasher;
-use turbo_tasks::{event::Event, RawVc, TaskId, TaskIdSet, TraitTypeId, TurboTasksBackendApi};
+use turbo_tasks::{
+    backend::TaskCollectiblesMap, event::Event, RawVc, TaskId, TaskIdSet, TraitTypeId,
+    TurboTasksBackendApi,
+};
 
 use super::{
     meta_state::{FullTaskWriteGuard, TaskMetaStateWriteGuard},
@@ -32,7 +35,7 @@ pub enum RootType {
 
 #[derive(Debug, Default)]
 pub struct CollectiblesInfo {
-    collectibles: AutoMap<RawVc, i32>,
+    collectibles: TaskCollectiblesMap,
     dependent_tasks: TaskIdSet,
 }
 
@@ -101,7 +104,7 @@ impl Aggregated {
         &mut self,
         trait_type: TraitTypeId,
         reader: TaskId,
-    ) -> AutoMap<RawVc, i32> {
+    ) -> TaskCollectiblesMap {
         match self.collectibles.entry(trait_type) {
             Entry::Occupied(mut e) => {
                 let info = e.get_mut();
@@ -293,7 +296,7 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
                 }
                 Entry::Vacant(e) => {
                     let mut collectibles_info = CollectiblesInfo::default();
-                    update_count_entry(collectibles_info.collectibles.entry(collectible), count);
+                    collectibles_info.collectibles.insert(collectible, count);
                     e.insert(collectibles_info);
                 }
             }
