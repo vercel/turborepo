@@ -112,7 +112,6 @@ pub struct JsxTransformOptions {
 #[derive(Clone, Default)]
 #[serde(default)]
 pub struct ModuleOptionsContext {
-    // TODO should these be Vc<...>?
     pub ecmascript: EcmascriptOptionsContext,
     pub css: CssOptionsContext,
 
@@ -157,6 +156,8 @@ pub struct EcmascriptOptionsContext {
     /// If false, they will reference the whole directory. If true, they won't
     /// reference anything and lead to an runtime error instead.
     pub ignore_dynamic_requests: bool,
+
+    pub placeholder_for_future_extensions: (),
 }
 
 #[turbo_tasks::value(shared)]
@@ -170,6 +171,8 @@ pub struct CssOptionsContext {
     /// the module graph, but neither asset types can be emitted directly.
     pub enable_raw_css: bool,
     pub use_swc_css: bool,
+
+    pub placeholder_for_future_extensions: (),
 }
 
 #[turbo_tasks::value_impl]
