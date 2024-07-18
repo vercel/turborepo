@@ -85,6 +85,7 @@ impl ModuleOptions {
             ref enable_typeof_window_inlining,
             ..
         } = *module_options_context.await?;
+        let special_exports = special_exports.unwrap_or_default();
 
         if !rules.is_empty() {
             let path_value = path.await?;
