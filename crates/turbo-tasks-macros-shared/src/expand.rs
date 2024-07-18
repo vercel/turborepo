@@ -52,11 +52,18 @@ pub fn match_expansion<
                     })
                     .unzip();
 
-            quote! {
-                match self {
-                    #(
-                        #idents #variants_fields_capture => #expansion,
-                    )*
+            if idents.is_empty() {
+                let (_, expansion) = expand_unit(quote! { #ident });
+                quote! {
+                    #expansion
+                }
+            } else {
+                quote! {
+                    match self {
+                        #(
+                            #idents #variants_fields_capture => #expansion,
+                        )*
+                    }
                 }
             }
         }

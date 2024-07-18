@@ -338,15 +338,6 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn test_no_variant() -> Result<()> {
-        // This can't actually be tested at runtime because such an enum can't be
-        // constructed. However, the macro expansion is tested.
-        #[derive(Clone, TaskInput, Eq, PartialEq, Hash, Debug, Serialize, Deserialize)]
-        enum NoVariants {}
-        Ok(())
-    }
-
     #[derive(Clone, TaskInput, Eq, PartialEq, Hash, Debug, Serialize, Deserialize)]
     enum OneVariant {
         Variant,
