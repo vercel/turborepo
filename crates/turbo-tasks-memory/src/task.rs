@@ -875,7 +875,7 @@ impl Task {
     ) {
         let mut state = self.full_state_mut();
         match state.state_type {
-            InProgress(box InProgressState { stale, .. }) if stale => {
+            InProgress(state) if state.stale => {
                 // We don't want to assign the output cell here
                 // as we want to avoid unnecessary updates
                 // TODO maybe this should be controlled by a heuristic
