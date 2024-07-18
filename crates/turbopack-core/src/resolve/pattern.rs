@@ -647,8 +647,8 @@ impl Pattern {
                 }
             }
             Pattern::Concatenation(list) => {
-                if let Some(c @ Pattern::Constant(_)) = list.last_mut() {
-                    replaced = c.replace_final_constants(cb) || replaced;
+                if let Some(i) = list.last_mut() {
+                    replaced = i.replace_final_constants(cb) || replaced;
                 }
             }
         }
