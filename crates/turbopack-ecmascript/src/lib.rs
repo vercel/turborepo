@@ -91,7 +91,7 @@ use crate::{
 };
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
-#[derive(PartialOrd, Ord, Hash, Debug, Clone, Copy, Default, TaskInput)]
+#[derive(Hash, Debug, Clone, Copy, Default, TaskInput)]
 pub enum SpecifiedModuleType {
     #[default]
     Automatic,
@@ -120,11 +120,8 @@ pub enum TreeShakingMode {
     ReexportsOnly,
 }
 
-#[turbo_tasks::value(transparent)]
-pub struct OptionTreeShaking(pub Option<TreeShakingMode>);
-
 #[turbo_tasks::value(shared, serialization = "auto_for_input")]
-#[derive(PartialOrd, Ord, Hash, Debug, Default, Copy, Clone)]
+#[derive(Hash, Debug, Default, Copy, Clone)]
 pub struct EcmascriptOptions {
     pub refresh: bool,
     /// variant of tree shaking to use
@@ -142,15 +139,10 @@ pub struct EcmascriptOptions {
     /// If false, they will reference the whole directory. If true, they won't
     /// reference anything and lead to an runtime error instead.
     pub ignore_dynamic_requests: bool,
-
-    /// The list of export names that should make tree shaking bail off. This is
-    /// required because tree shaking can split imports like `export const
-    /// runtime = 'edge'` as a separate module.
-    pub special_exports: Vc<Vec<RcStr>>,
 }
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
-#[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]
+#[derive(Hash, Debug, Copy, Clone)]
 pub enum EcmascriptModuleAssetType {
     /// Module with EcmaScript code
     Ecmascript,
@@ -391,24 +383,30 @@ impl EcmascriptModuleAsset {
         let result = self.analyze();
         let result_value = result.await?;
 
-        if result_value.successful {
-            this.last_successful_analysis
-                .set(Some(MemoizedSuccessfulAnalysis {
-                    operation: result,
-                    // We need to store the ReadRefs since we want to keep a snapshot.
-                    references: result_value.references.await?,
-                    local_references: result_value.local_references.await?,
-                    reexport_references: result_value.reexport_references.await?,
-                    evaluation_references: result_value.evaluation_references.await?,
-                    exports: result_value.exports.await?,
-                    async_module: result_value.async_module.await?,
-                    source_map: if let Some(map) = *result_value.source_map.await? {
-                        Some(map.await?)
-                    } else {
-                        None
-                    },
-                }));
-        } else if let Some(MemoizedSuccessfulAnalysis {
+        let successful = result_value.successful;
+        let current_memo = MemoizedSuccessfulAnalysis {
+            operation: result,
+            // We need to store the ReadRefs since we want to keep a snapshot.
+            references: result_value.references.await?,
+            local_references: result_value.local_references.await?,
+            reexport_references: result_value.reexport_references.await?,
+            evaluation_references: result_value.evaluation_references.await?,
+            exports: result_value.exports.await?,
+            async_module: result_value.async_module.await?,
+            source_map: if let Some(map) = *result_value.source_map.await? {
+                Some(map.await?)
+            } else {
+                None
+            },
+        };
+        let state_ref;
+        let best_value = if successful {
+            &current_memo
+        } else {
+            state_ref = this.last_successful_analysis.get();
+            state_ref.as_ref().unwrap_or(&current_memo)
+        };
+        let MemoizedSuccessfulAnalysis {
             operation,
             references,
             local_references,
@@ -417,26 +415,26 @@ impl EcmascriptModuleAsset {
             exports,
             async_module,
             source_map,
-        }) = &*this.last_successful_analysis.get()
-        {
-            // It's important to connect to the last operation here to keep it active, so
-            // it's potentially recomputed when garbage collected
-            Vc::connect(*operation);
-            return Ok(AnalyzeEcmascriptModuleResult {
-                references: ReadRef::cell(references.clone()),
-                local_references: ReadRef::cell(local_references.clone()),
-                reexport_references: ReadRef::cell(reexport_references.clone()),
-                evaluation_references: ReadRef::cell(evaluation_references.clone()),
-                exports: ReadRef::cell(exports.clone()),
-                code_generation: result_value.code_generation,
-                async_module: ReadRef::cell(async_module.clone()),
-                source_map: Vc::cell(source_map.clone().map(ReadRef::cell)),
-                successful: false,
-            }
-            .cell());
+        } = best_value;
+        // It's important to connect to the last operation here to keep it active, so
+        // it's potentially recomputed when garbage collected
+        Vc::connect(*operation);
+        let result = AnalyzeEcmascriptModuleResult {
+            references: ReadRef::cell(references.clone()),
+            local_references: ReadRef::cell(local_references.clone()),
+            reexport_references: ReadRef::cell(reexport_references.clone()),
+            evaluation_references: ReadRef::cell(evaluation_references.clone()),
+            exports: ReadRef::cell(exports.clone()),
+            code_generation: result_value.code_generation,
+            async_module: ReadRef::cell(async_module.clone()),
+            source_map: Vc::cell(source_map.clone().map(ReadRef::cell)),
+            successful,
         }
-
-        Ok(ReadRef::cell(result_value))
+        .cell();
+        if successful {
+            this.last_successful_analysis.set(Some(current_memo));
+        }
+        Ok(result)
     }
 
     #[turbo_tasks::function]
