@@ -13,7 +13,6 @@ use std::{
 };
 
 use anyhow::{bail, Result};
-use auto_hash_map::AutoMap;
 use dashmap::{mapref::entry::Entry, DashMap};
 use rustc_hash::FxHasher;
 use tokio::task::futures::TaskLocalFuture;
@@ -21,8 +20,8 @@ use tracing::trace_span;
 use turbo_prehash::{BuildHasherExt, PassThroughHash, PreHashed};
 use turbo_tasks::{
     backend::{
-        Backend, BackendJobId, CellContent, PersistentTaskType, TaskExecutionSpec,
-        TransientTaskType,
+        Backend, BackendJobId, CellContent, PersistentTaskType, TaskCollectiblesMap,
+        TaskExecutionSpec, TransientTaskType,
     },
     event::EventListener,
     util::{IdFactoryWithReuse, NoMoveVec},
@@ -295,12 +294,13 @@ impl Backend for MemoryBackend {
         DEPENDENCIES_TO_TRACK.scope(RefCell::new(TaskEdgesSet::new()), future)
     }
 
-    fn try_start_task_execution(
-        &self,
+    fn try_start_task_execution<'a>(
+        &'a self,
         task: TaskId,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
-    ) -> Option<TaskExecutionSpec> {
-        self.with_task(task, |task| task.execute(self, turbo_tasks))
+    ) -> Option<TaskExecutionSpec<'a>> {
+        let task = self.task(task);
+        task.execute(self, turbo_tasks)
     }
 
     fn task_execution_result(
@@ -470,7 +470,8 @@ impl Backend for MemoryBackend {
         trait_id: TraitTypeId,
         reader: TaskId,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
-    ) -> AutoMap<RawVc, i32> {
+    ) -> TaskCollectiblesMap {
+        Task::add_dependency_to_current(TaskEdge::Collectibles(id, trait_id));
         Task::read_collectibles(id, trait_id, reader, self, turbo_tasks)
     }
 
@@ -545,12 +546,25 @@ impl Backend for MemoryBackend {
         {
             // fast pass without creating a new task
             self.task_statistics().map(|stats| match &*task_type {
-                PersistentTaskType::ResolveNative(function_id, ..)
-                | PersistentTaskType::Native(function_id, ..) => {
+                PersistentTaskType::ResolveNative {
+                    fn_type: function_id,
+                    this: _,
+                    arg: _,
+                }
+                | PersistentTaskType::Native {
+                    fn_type: function_id,
+                    this: _,
+                    arg: _,
+                } => {
                     stats.increment_cache_hit(*function_id);
                 }
-                PersistentTaskType::ResolveTrait(trait_type, name, inputs) => {
-                    // HACK: Resolve the first argument (`self`) in order to attribute the cache hit
+                PersistentTaskType::ResolveTrait {
+                    trait_type,
+                    method_name: name,
+                    this,
+                    arg: _,
+                } => {
+                    // HACK: Resolve the this argument (`self`) in order to attribute the cache hit
                     // to the concrete trait implementation, rather than the dynamic trait method.
                     // This ensures cache hits and misses are both attributed to the same thing.
                     //
@@ -565,10 +579,7 @@ impl Backend for MemoryBackend {
                     // ResolveTrait tasks.
                     let trait_type = *trait_type;
                     let name = name.clone();
-                    let this = inputs
-                        .first()
-                        .cloned()
-                        .expect("No arguments for trait call");
+                    let this = *this;
                     let stats = Arc::clone(stats);
                     turbo_tasks.run_once(Box::pin(async move {
                         let function_id =
@@ -582,10 +593,15 @@ impl Backend for MemoryBackend {
             task
         } else {
             self.task_statistics().map(|stats| match &*task_type {
-                PersistentTaskType::Native(function_id, ..) => {
+                PersistentTaskType::Native {
+                    fn_type: function_id,
+                    this: _,
+                    arg: _,
+                } => {
                     stats.increment_cache_miss(*function_id);
                 }
-                PersistentTaskType::ResolveTrait(..) | PersistentTaskType::ResolveNative(..) => {
+                PersistentTaskType::ResolveTrait { .. }
+                | PersistentTaskType::ResolveNative { .. } => {
                     // these types re-execute themselves as `Native` after
                     // resolving their arguments, skip counting their
                     // executions here to avoid double-counting
@@ -593,8 +609,7 @@ impl Backend for MemoryBackend {
             });
             // It's important to avoid overallocating memory as this will go into the task
             // cache and stay there forever. We can to be as small as possible.
-            let (task_type_hash, mut task_type) = PreHashed::into_parts(task_type);
-            task_type.shrink_to_fit();
+            let (task_type_hash, task_type) = PreHashed::into_parts(task_type);
             let task_type = Arc::new(PreHashed::new(task_type_hash, task_type));
             // slow pass with key lock
             let id = turbo_tasks.get_fresh_task_id();

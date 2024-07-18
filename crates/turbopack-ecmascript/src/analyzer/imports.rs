@@ -17,7 +17,7 @@ use super::{top_level_await::has_top_level_await, JsValue, ModuleValue};
 use crate::tree_shake::{find_turbopack_part_id_in_asserts, PartId};
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
-#[derive(Default, Debug, Clone, Hash, PartialOrd, Ord)]
+#[derive(Default, Debug, Clone, Hash)]
 pub struct ImportAnnotations {
     // TODO store this in more structured way
     #[turbo_tasks(trace_ignore)]
@@ -135,15 +135,17 @@ pub(crate) struct ImportMap {
     has_top_level_await: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum ImportedSymbol {
     ModuleEvaluation,
     Symbol(JsWord),
+    /// User requested the whole module
+    Namespace,
     Exports,
     Part(u32),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct ImportMapReference {
     pub module_path: JsWord,
     pub imported_symbol: ImportedSymbol,
@@ -200,11 +202,16 @@ impl ImportMap {
     }
 
     /// Analyze ES import
-    pub(super) fn analyze(m: &Program, source: Option<Vc<Box<dyn Source>>>) -> Self {
+    pub(super) fn analyze(
+        m: &Program,
+        skip_namespace: bool,
+        source: Option<Vc<Box<dyn Source>>>,
+    ) -> Self {
         let mut data = ImportMap::default();
 
         m.visit_with(&mut Analyzer {
             data: &mut data,
+            skip_namespace,
             source,
         });
 
@@ -214,6 +221,7 @@ impl ImportMap {
 
 struct Analyzer<'a> {
     data: &'a mut ImportMap,
+    skip_namespace: bool,
     source: Option<Vc<Box<dyn Source>>>,
 }
 
@@ -225,6 +233,10 @@ impl<'a> Analyzer<'a> {
         imported_symbol: ImportedSymbol,
         annotations: ImportAnnotations,
     ) -> Option<usize> {
+        if self.skip_namespace && matches!(imported_symbol, ImportedSymbol::Namespace) {
+            return None;
+        }
+
         let issue_source = self
             .source
             .map(|s| IssueSource::from_swc_offsets(s, span.lo.to_usize(), span.hi.to_usize()));
@@ -327,7 +339,7 @@ impl Visit for Analyzer<'_> {
         let i = self.ensure_reference(
             export.span,
             export.src.value.clone(),
-            symbol.unwrap_or(ImportedSymbol::Exports),
+            symbol.unwrap_or(ImportedSymbol::Namespace),
             annotations,
         );
         if let Some(i) = i {
@@ -443,7 +455,7 @@ fn get_import_symbol_from_import(specifier: &ImportSpecifier) -> ImportedSymbol 
             _ => local.sym.clone(),
         }),
         ImportSpecifier::Default(..) => ImportedSymbol::Symbol(js_word!("default")),
-        ImportSpecifier::Namespace(..) => ImportedSymbol::Exports,
+        ImportSpecifier::Namespace(..) => ImportedSymbol::Namespace,
     }
 }
 
@@ -453,6 +465,6 @@ fn get_import_symbol_from_export(specifier: &ExportSpecifier) -> ImportedSymbol 
             ImportedSymbol::Symbol(orig_name(orig))
         }
         ExportSpecifier::Default(..) => ImportedSymbol::Symbol(js_word!("default")),
-        ExportSpecifier::Namespace(..) => ImportedSymbol::Exports,
+        ExportSpecifier::Namespace(..) => ImportedSymbol::Namespace,
     }
 }

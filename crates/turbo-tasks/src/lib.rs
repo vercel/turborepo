@@ -33,6 +33,7 @@
 #![feature(arbitrary_self_types)]
 #![feature(type_alias_impl_trait)]
 #![feature(never_type)]
+#![feature(impl_trait_in_assoc_type)]
 
 pub mod backend;
 mod capture_future;
@@ -65,6 +66,7 @@ pub mod small_duration;
 mod state;
 pub mod task;
 pub mod trace;
+mod trait_helpers;
 mod trait_ref;
 mod triomphe_utils;
 pub mod util;
@@ -84,21 +86,19 @@ pub use invalidation::{
     DynamicEqHash, InvalidationReason, InvalidationReasonKind, InvalidationReasonSet,
 };
 pub use join_iter_ext::{JoinIterExt, TryFlatJoinIterExt, TryJoinIterExt};
+pub use magic_any::MagicAny;
 pub use manager::{
-    dynamic_call, emit, get_invalidator, mark_finished, mark_stateful, prevent_gc, run_once,
-    run_once_with_reason, spawn_blocking, spawn_thread, trait_call, turbo_tasks, CurrentCellRef,
-    Invalidator, TaskIdProvider, TurboTasks, TurboTasksApi, TurboTasksBackendApi,
-    TurboTasksCallApi, Unused, UpdateInfo,
+    dynamic_call, dynamic_this_call, emit, get_invalidator, mark_finished, mark_stateful,
+    prevent_gc, run_once, run_once_with_reason, spawn_blocking, spawn_thread, trait_call,
+    turbo_tasks, CurrentCellRef, Invalidator, TaskIdProvider, TurboTasks, TurboTasksApi,
+    TurboTasksBackendApi, TurboTasksCallApi, Unused, UpdateInfo,
 };
 pub use native_function::NativeFunction;
 pub use raw_vc::{CellId, RawVc, ReadRawVcFuture, ResolveTypeError};
 pub use read_ref::ReadRef;
 use rustc_hash::FxHasher;
 pub use state::State;
-pub use task::{
-    concrete_task_input::{ConcreteTaskInput, SharedReference, SharedValue},
-    task_input::TaskInput,
-};
+pub use task::{task_input::TaskInput, SharedReference};
 pub use trait_ref::{IntoTraitRef, TraitRef};
 pub use turbo_tasks_macros::{function, value, value_impl, value_trait, TaskInput};
 pub use value::{TransientInstance, TransientValue, Value};
