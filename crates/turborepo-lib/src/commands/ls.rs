@@ -1,7 +1,6 @@
 //! A command for outputting info about packages and tasks in a turborepo.
 
 use miette::Diagnostic;
-use serde::Serialize;
 use thiserror::Error;
 use turbopath::AnchoredSystemPath;
 use turborepo_repository::{
@@ -25,24 +24,13 @@ pub enum Error {
     PackageNotFound { package: String },
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
 struct RepositoryDetails<'a> {
-    #[serde(skip)]
     ui: UI,
     package_manager: &'a PackageManager,
-    workspaces: Vec<(&'a PackageName, RepositoryWorkspaceDetails<'a>)>,
+    packages: Vec<(&'a PackageName, &'a AnchoredSystemPath)>,
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct RepositoryWorkspaceDetails<'a> {
-    path: &'a AnchoredSystemPath,
-}
-
-#[derive(Serialize)]
 struct PackageDetails<'a> {
-    #[serde(skip)]
     ui: UI,
     name: &'a str,
     tasks: Vec<(&'a str, &'a str)>,
@@ -88,40 +76,36 @@ impl<'a> RepositoryDetails<'a> {
         let package_graph = run.pkg_dep_graph();
         let filtered_pkgs = run.filtered_pkgs();
 
-        let mut workspaces: Vec<_> = package_graph
+        let mut packages: Vec<_> = package_graph
             .packages()
-            .filter_map(|(workspace_name, workspace_info)| {
-                if !filtered_pkgs.contains(workspace_name) {
+            .filter_map(|(package_name, package_info)| {
+                if !filtered_pkgs.contains(package_name) {
                     return None;
                 }
 
-                let workspace_details = RepositoryWorkspaceDetails {
-                    path: workspace_info.package_path(),
-                };
-
-                Some((workspace_name, workspace_details))
+                Some((package_name, package_info.package_path()))
             })
             .collect();
-        workspaces.sort_by(|a, b| a.0.cmp(b.0));
+        packages.sort_by(|a, b| a.0.cmp(b.0));
 
         Self {
             ui,
             package_manager: package_graph.package_manager(),
-            workspaces,
+            packages,
         }
     }
     fn print(&self) -> Result<(), cli::Error> {
-        if self.workspaces.len() == 1 {
-            cprintln!(self.ui, BOLD, "{} package\n", self.workspaces.len());
+        if self.packages.len() == 1 {
+            cprintln!(self.ui, BOLD, "{} package\n", self.packages.len());
         } else {
-            cprintln!(self.ui, BOLD, "{} packages\n", self.workspaces.len());
+            cprintln!(self.ui, BOLD, "{} packages\n", self.packages.len());
         }
 
-        for (workspace_name, entry) in &self.workspaces {
-            if matches!(workspace_name, PackageName::Root) {
+        for (package_name, entry) in &self.packages {
+            if matches!(package_name, PackageName::Root) {
                 continue;
             }
-            println!("  {} {}", workspace_name, GREY.apply_to(entry.path));
+            println!("  {} {}", package_name, GREY.apply_to(entry));
         }
 
         Ok(())
@@ -145,7 +129,7 @@ impl<'a> PackageDetails<'a> {
 
         let transitive_dependencies = package_graph.transitive_closure(Some(&package_node));
 
-        let mut workspace_dep_names: Vec<&str> = transitive_dependencies
+        let mut package_dep_names: Vec<&str> = transitive_dependencies
             .into_iter()
             .filter_map(|dependency| match dependency {
                 PackageNode::Root | PackageNode::Workspace(PackageName::Root) => None,
@@ -153,12 +137,12 @@ impl<'a> PackageDetails<'a> {
                 PackageNode::Workspace(PackageName::Other(dep_name)) => Some(dep_name.as_str()),
             })
             .collect();
-        workspace_dep_names.sort();
+        package_dep_names.sort();
 
         Ok(Self {
             ui,
             name: package,
-            dependencies: workspace_dep_names,
+            dependencies: package_dep_names,
             tasks: package_json
                 .scripts
                 .iter()
