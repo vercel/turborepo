@@ -26,8 +26,8 @@ use turborepo_ui::UI;
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        bin, daemon, generate, link, login, logout, ls, prune, run, scan, telemetry, unlink,
-        CommandBase,
+        bin, config, daemon, generate, link, login, logout, ls, prune, run, scan, telemetry,
+        unlink, CommandBase,
     },
     get_version,
     run::watch::WatchClient,
@@ -491,7 +491,9 @@ pub enum Command {
     },
     /// Turbo your monorepo by running a number of 'repo lints' to
     /// identify common issues, suggest fixes, and improve performance.
-    Scan {},
+    Scan,
+    #[clap(hide = true)]
+    Config,
     /// EXPERIMENTAL: List packages in your monorepo.
     Ls {
         /// Use the given selector to specify package(s) to act as
@@ -1138,6 +1140,11 @@ pub async fn run(
             } else {
                 Ok(1)
             }
+        }
+        Command::Config => {
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
+            config::run(base).await?;
+            Ok(0)
         }
         Command::Ls { filter, packages } => {
             warn!("ls command is experimental and may change in the future");

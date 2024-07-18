@@ -8,7 +8,7 @@ use turborepo_repository::{
     package_manager::PackageManager,
 };
 use turborepo_telemetry::events::command::CommandEventBuilder;
-use turborepo_ui::{color, cprintln, BOLD, BOLD_GREEN, GREY, UI};
+use turborepo_ui::{color, cprint, cprintln, BOLD, BOLD_GREEN, GREY, UI};
 
 use crate::{
     cli,
@@ -167,7 +167,12 @@ impl<'a> PackageDetails<'a> {
         );
         println!();
 
-        cprintln!(self.ui, BOLD, "tasks:");
+        cprint!(self.ui, BOLD, "tasks:");
+        if self.tasks.is_empty() {
+            println!(" <no tasks>");
+        } else {
+            println!();
+        }
         for (name, command) in &self.tasks {
             println!("  {}: {}", name, color!(self.ui, GREY, "{}", command));
         }

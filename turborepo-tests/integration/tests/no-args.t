@@ -14,6 +14,7 @@ Make sure exit code is 2 when no args are passed
     generate    Generate a new app / package
     telemetry   Enable or disable anonymous telemetry
     scan        Turbo your monorepo by running a number of 'repo lints' to identify common issues, suggest fixes, and improve performance
+    ls          EXPERIMENTAL: List packages in your monorepo
     link        Link your local directory to a Vercel organization and enable remote caching
     login       Login to your Vercel account
     logout      Logout to your Vercel account
