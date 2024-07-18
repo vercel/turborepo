@@ -500,6 +500,8 @@ pub enum Command {
         /// turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
         #[clap(short = 'F', long, group = "scope-filter-group")]
         filter: Vec<String>,
+        /// Get insight into a specific package, such as
+        /// its dependencies and tasks
         packages: Vec<String>,
     },
     /// Link your local directory to a Vercel organization and enable remote

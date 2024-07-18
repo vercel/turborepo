@@ -1,8 +1,4 @@
-//! A command for outputting information about a turborepo.
-//! Currently just for internal use (not a public command)
-//! Can output in either text or JSON
-//! Different than run summary or dry run because it can include
-//! sensitive data like your auth token
+//! A command for outputting info about packages and tasks in a turborepo.
 
 use miette::Diagnostic;
 use serde::Serialize;
