@@ -1,4 +1,4 @@
-use std::{backtrace, backtrace::Backtrace, env, fmt, fmt::Display, io, mem, process};
+use std::{backtrace::Backtrace, env, fmt, fmt::Display, io, mem, process};
 
 use biome_deserialize_macros::Deserializable;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -24,6 +24,7 @@ use turborepo_telemetry::{
 use turborepo_ui::UI;
 
 use crate::{
+    cli::error::print_potential_tasks,
     commands::{
         bin, daemon, generate, info, link, login, logout, prune, run, scan, telemetry, unlink,
         CommandBase,
@@ -995,6 +996,7 @@ pub async fn run(
             // missing any execution args.
             .clone()
             .ok_or_else(|| Error::NoCommand(Backtrace::capture()))?;
+
         if execution_args.tasks.is_empty() {
             let mut cmd = <Args as CommandFactory>::command();
             let _ = cmd.print_help();
@@ -1221,17 +1223,19 @@ pub async fn run(
         } => {
             let event = CommandEventBuilder::new("run").with_parent(&root_telemetry);
             event.track_call();
-            // in the case of enabling the run stub, we want to be able to opt-in
-            // to the rust codepath for running turbo
+
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
+
             if execution_args.tasks.is_empty() {
-                return Err(Error::NoTasks(backtrace::Backtrace::capture()));
+                print_potential_tasks(base, event).await?;
+                process::exit(1);
             }
 
             if let Some((file_path, include_args)) = run_args.profile_file_and_include_args() {
                 // TODO: Do we want to handle the result / error?
                 let _ = logger.enable_chrome_tracing(file_path, include_args);
             }
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
+
             run_args.track(&event);
             event.track_run_code_path(CodePath::Rust);
             let exit_code = run::run(base, event).await.inspect(|code| {
