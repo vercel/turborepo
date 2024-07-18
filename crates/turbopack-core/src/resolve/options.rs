@@ -443,7 +443,7 @@ pub struct ResolveOptions {
     pub before_resolve_plugins: Vec<Vc<Box<dyn BeforeResolvePlugin>>>,
     pub plugins: Vec<Vc<Box<dyn AfterResolvePlugin>>>,
     /// Support resolving *.js requests to *.ts files
-    pub enable_js_ts_rewriting: bool,
+    pub enable_typescript_with_output_extension: bool,
 
     pub placeholder_for_future_extensions: (),
 }

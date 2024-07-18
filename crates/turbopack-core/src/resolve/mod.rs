@@ -1942,7 +1942,7 @@ async fn resolve_relative_request(
                 .collect(),
         ));
 
-        if options_value.enable_js_ts_rewriting {
+        if options_value.enable_typescript_with_output_extension {
             let mut rewritten_path = path_pattern.clone();
             let rewritten_path_modified =
                 rewritten_path.replace_final_constants(&|c: &RcStr| -> Option<Pattern> {

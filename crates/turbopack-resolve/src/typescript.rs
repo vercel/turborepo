@@ -362,7 +362,8 @@ pub async fn apply_tsconfig_resolve_options(
                 .unwrap_or(tsconfig_import_map),
         );
     }
-    resolve_options.enable_js_ts_rewriting = tsconfig_resolve_options.is_module_resolution_nodenext;
+    resolve_options.enable_typescript_with_output_extension =
+        tsconfig_resolve_options.is_module_resolution_nodenext;
 
     Ok(resolve_options.cell())
 }
