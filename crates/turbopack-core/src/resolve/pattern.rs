@@ -1399,6 +1399,7 @@ mod tests {
                 let new_ending = Pattern::Alternatives(vec![
                     Pattern::Constant(".ts".into()),
                     Pattern::Constant(".tsx".into()),
+                    Pattern::Constant(".js".into()),
                 ]);
                 if !rest.is_empty() {
                     Pattern::Concatenation(vec![Pattern::Constant(rest.into()), new_ending])
@@ -1414,7 +1415,10 @@ mod tests {
                     Pattern::Constant(".".into()),
                     Pattern::Constant("/".into()),
                     Pattern::Dynamic,
-                    Pattern::Constant(".js".into()),
+                    Pattern::Alternatives(vec![
+                        Pattern::Constant(".js".into()),
+                        Pattern::Constant(".node".into()),
+                    ])
                 ]),
                 &js_to_ts_tsx
             ),
@@ -1423,10 +1427,14 @@ mod tests {
                 Pattern::Constant("/".into()),
                 Pattern::Dynamic,
                 Pattern::Alternatives(vec![
-                    Pattern::Constant(".ts".into()),
-                    Pattern::Constant(".tsx".into()),
-                ]),
-            ])
+                    Pattern::Alternatives(vec![
+                        Pattern::Constant(".ts".into()),
+                        Pattern::Constant(".tsx".into()),
+                        Pattern::Constant(".js".into()),
+                    ]),
+                    Pattern::Constant(".node".into()),
+                ])
+            ]),
         );
         assert_eq!(
             f(
@@ -1445,6 +1453,7 @@ mod tests {
                     Pattern::Alternatives(vec![
                         Pattern::Constant(".ts".into()),
                         Pattern::Constant(".tsx".into()),
+                        Pattern::Constant(".js".into()),
                     ])
                 ]),
             ])
