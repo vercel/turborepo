@@ -830,8 +830,7 @@ mod tests {
         ];
 
         for case in tests {
-            let result =
-                PackageManager::parse_package_manager_string(&Spanned::new(case.package_manager));
+            let result = PackageManager::parse_package_manager_string(&case.package_manager);
             let Ok((received_manager, received_version)) = result else {
                 assert!(case.expected_error, "{}: received error", case.name);
                 continue;
