@@ -15,7 +15,8 @@ Run test run
     "enabled": true,
     "spacesId": null,
     "ui": false,
-    "packageManager": "npm"
+    "packageManager": "npm",
+    "daemon": null
   }
 
 Run test run with api overloaded
