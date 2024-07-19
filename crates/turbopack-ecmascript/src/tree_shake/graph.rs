@@ -227,7 +227,7 @@ impl DepGraph {
     ///
     /// Note: ESM imports are immutable, but we do not handle it.
     pub(super) fn split_module(&self, data: &FxHashMap<ItemId, ItemData>) -> SplitModuleResult {
-        let groups = self.finalize(data);
+        let groups = self.finalize();
         let mut exports = FxHashMap::default();
         let mut part_deps = FxHashMap::<_, Vec<_>>::default();
 
@@ -418,231 +418,47 @@ impl DepGraph {
     ///
     /// Note that [ModuleItem] and [Module] are represented as [ItemId] for
     /// performance.
-    pub(super) fn finalize(
-        &self,
-        data: &FxHashMap<ItemId, ItemData>,
-    ) -> InternedGraph<Vec<ItemId>> {
-        /// Returns true if it should be called again
-        fn add_to_group(
-            graph: &InternedGraph<ItemId>,
-            data: &FxHashMap<ItemId, ItemData>,
-            group: &mut Vec<ItemId>,
-            start_ix: u32,
-            global_done: &mut FxHashSet<u32>,
-            group_done: &mut FxHashSet<u32>,
-        ) -> bool {
-            let mut changed = false;
+    pub(super) fn finalize(&self) -> InternedGraph<Vec<ItemId>> {
+        let graph = self.g.idx_graph.clone().into_graph::<u32>();
 
-            // Check deps of `start`.
-            for dep_ix in graph
-                .idx_graph
-                .neighbors_directed(start_ix, petgraph::Direction::Outgoing)
-            {
-                let dep_id = graph.graph_ix.get_index(dep_ix as _).unwrap();
+        let condensed = condensation(graph, false);
 
-                if global_done.insert(dep_ix)
-                    || (data.get(dep_id).map_or(false, |data| data.pure)
-                        && group_done.insert(dep_ix))
-                {
-                    changed = true;
-
-                    group.push(dep_id.clone());
-
-                    add_to_group(graph, data, group, dep_ix, global_done, group_done);
-                }
-            }
-
-            changed
-        }
-
-        let mut cycles = kosaraju_scc(&self.g.idx_graph);
-        cycles.retain(|v| v.len() > 1);
-        dbg!(&cycles);
-
-        // If a node have two or more dependents, it should be in a separate
-        // group.
-
-        let mut groups = vec![];
-        let mut global_done = FxHashSet::default();
-
-        // Module evaluation node and export nodes starts a group
-        for id in self.g.graph_ix.iter() {
-            let ix = self.g.get_node(id);
-
-            if let ItemId::Group(_) = id {
-                groups.push((vec![id.clone()], FxHashSet::default(), 1));
-                global_done.insert(ix);
-            }
-        }
-
-        // Cycles should form a separate group
-        for id in self.g.graph_ix.iter() {
-            let ix = self.g.get_node(id);
-
-            if let Some(cycle) = cycles.iter().find(|v| v.contains(&ix)) {
-                if cycle.iter().all(|v| !global_done.contains(v)) {
-                    let ids = cycle
-                        .iter()
-                        .map(|&ix| self.g.graph_ix[ix as usize].clone())
-                        .collect::<Vec<_>>();
-
-                    global_done.extend(cycle.iter().copied());
-
-                    let len = ids.len();
-                    groups.push((ids, FxHashSet::default(), len));
-                }
-            }
-        }
-
-        // Expand **starting** nodes
-        for (ix, id) in self.g.graph_ix.iter().enumerate() {
-            // If a node is reachable from two or more nodes, it should be in a
-            // separate group.
-
-            if global_done.contains(&(ix as u32)) {
-                continue;
-            }
-
-            // Don't store a pure item in a separate chunk
-            if data.get(id).map_or(false, |data| data.pure) {
-                continue;
-            }
-
-            // The number of nodes that this node is dependent on.
-            let dependant_count = self
-                .g
-                .idx_graph
-                .neighbors_directed(ix as _, petgraph::Direction::Incoming)
-                .count();
-
-            // The number of starting points that can reach to this node.
-            let count_of_startings = global_done
-                .iter()
-                .filter(|&&staring_point| {
-                    has_path_connecting(&self.g.idx_graph, staring_point, ix as _, None)
-                })
-                .count();
-
-            if dependant_count >= 2 && count_of_startings >= 2 {
-                groups.push((vec![id.clone()], FxHashSet::default(), 1));
-                global_done.insert(ix as u32);
-            }
-        }
-
-        loop {
-            let mut changed = false;
-
-            for (group, group_done, init_len) in &mut groups {
-                // Cycle group
-
-                for i in 0..*init_len {
-                    let start = &group[i];
-                    let start_ix = self.g.get_node(start);
-                    changed |=
-                        add_to_group(&self.g, data, group, start_ix, &mut global_done, group_done);
-                }
-            }
-
-            if !changed {
-                break;
-            }
-        }
-
-        let mut groups = groups.into_iter().map(|v| v.0).collect::<Vec<_>>();
-
-        // We need to sort, because we start from the group item and add others start
-        // from them. But the final module should be in the order of the original code.
-        for group in groups.iter_mut() {
-            group.sort();
-            group.dedup();
-        }
-
-        {
-            dbg!(&self.g);
-            let graph = self.g.idx_graph.clone().into_graph::<u32>();
-            dbg!(&graph);
-            eprintln!("Graph: {:?}", petgraph::dot::Dot::new(&graph));
-
-            let condensed = condensation(graph, false);
-            eprintln!("Condensed: {:?}", petgraph::dot::Dot::new(&condensed));
-
-            let (nodes, edges) = condensed.into_nodes_edges();
-            let mut new_graph = InternedGraph::default();
-            let mut node_ix = vec![];
-            let mut done = FxHashSet::default();
-
-            for node in nodes {
-                let item_ids = node
-                    .weight
-                    .iter()
-                    .map(|&ix| {
-                        done.insert(ix);
-
-                        self.g.graph_ix[ix as usize].clone()
-                    })
-                    .collect::<Vec<_>>();
-                let ix = new_graph.node(&item_ids);
-
-                node_ix.push(ix);
-            }
-
-            for edge in edges {
-                let source = edge.source().index();
-                let target = edge.target().index();
-
-                new_graph
-                    .idx_graph
-                    .add_edge(node_ix[source], node_ix[target], edge.weight);
-            }
-
-            // Insert nodes without any edges
-
-            for node in self.g.graph_ix.iter() {
-                let ix = self.g.get_node(node);
-                if !done.contains(&ix) {
-                    let item_ids = vec![node.clone()];
-                    new_graph.node(&item_ids);
-                }
-            }
-
-            if true {
-                return new_graph;
-            }
-        }
-
+        let (nodes, edges) = condensed.into_nodes_edges();
         let mut new_graph = InternedGraph::default();
-        let mut group_ix_by_item_ix = FxHashMap::default();
+        let mut node_ix = vec![];
+        let mut done = FxHashSet::default();
 
-        for group in &groups {
-            let group_ix = new_graph.node(group);
+        for node in nodes {
+            let item_ids = node
+                .weight
+                .iter()
+                .map(|&ix| {
+                    done.insert(ix);
 
-            for item in group {
-                let item_ix = self.g.get_node(item);
-                group_ix_by_item_ix.insert(item_ix, group_ix);
-            }
+                    self.g.graph_ix[ix as usize].clone()
+                })
+                .collect::<Vec<_>>();
+            let ix = new_graph.node(&item_ids);
+
+            node_ix.push(ix);
         }
 
-        for group in &groups {
-            let group_ix = new_graph.node(group);
+        for edge in edges {
+            let source = edge.source().index();
+            let target = edge.target().index();
 
-            for item in group {
-                let item_ix = self.g.get_node(item);
+            new_graph
+                .idx_graph
+                .add_edge(node_ix[source], node_ix[target], edge.weight);
+        }
 
-                for item_dep_ix in self
-                    .g
-                    .idx_graph
-                    .neighbors_directed(item_ix, petgraph::Direction::Outgoing)
-                {
-                    let dep_group_ix = group_ix_by_item_ix.get(&item_dep_ix);
-                    if let Some(&dep_group_ix) = dep_group_ix {
-                        if group_ix == dep_group_ix {
-                            continue;
-                        }
-                        new_graph
-                            .idx_graph
-                            .add_edge(group_ix, dep_group_ix, Dependency::Strong);
-                    }
-                }
+        // Insert nodes without any edges
+
+        for node in self.g.graph_ix.iter() {
+            let ix = self.g.get_node(node);
+            if !done.contains(&ix) {
+                let item_ids = vec![node.clone()];
+                new_graph.node(&item_ids);
             }
         }
 
