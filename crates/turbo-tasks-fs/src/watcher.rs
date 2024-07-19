@@ -3,10 +3,9 @@ use std::{
     mem::take,
     path::{Path, PathBuf},
     sync::{
-        mpsc::{channel, Receiver, RecvError, TryRecvError},
+        mpsc::{channel, Receiver, TryRecvError},
         Arc, Mutex,
     },
-    thread::sleep,
     time::Duration,
 };
 
@@ -213,14 +212,10 @@ impl DiskWatcher {
         let mut batched_new_paths = HashSet::new();
 
         'outer: loop {
-            let mut event = rx.recv().map_err(|e| match e {
-                RecvError => TryRecvError::Disconnected,
-            });
-            let mut after_delay = true;
+            let mut event = rx.recv().or(Err(TryRecvError::Disconnected));
             loop {
                 match event {
                     Ok(Ok(notify::Event { kind, paths, .. })) => {
-                        after_delay = false;
                         let paths: Vec<PathBuf> = paths
                             .iter()
                             .filter(|p| {
@@ -345,17 +340,19 @@ impl DiskWatcher {
                         break 'outer;
                     }
                     Err(TryRecvError::Empty) => {
-                        if after_delay {
-                            break;
-                        }
                         // Linux watching is too fast, so we need to throttle it a bit to avoid
                         // reading wip files
                         #[cfg(target_os = "linux")]
                         let delay = Duration::from_millis(10);
                         #[cfg(not(target_os = "linux"))]
                         let delay = Duration::from_millis(1);
-                        sleep(delay);
-                        after_delay = true;
+                        match rx.recv_timeout(delay) {
+                            Ok(result) => {
+                                event = Ok(result);
+                                continue;
+                            }
+                            Err(_) => break,
+                        }
                     }
                 }
                 event = rx.try_recv();
