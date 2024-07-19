@@ -78,6 +78,7 @@ pub(crate) struct ItemData {
     /// Is the module item hoisted?
     pub is_hoisted: bool,
 
+    #[allow(unused)] // We may use this in the future.
     pub pure: bool,
 
     /// Variables declared or bound by this module item
