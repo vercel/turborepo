@@ -935,18 +935,18 @@ impl DepGraph {
                     let captured_ids =
                         ids_captured_by(item, unresolved_ctxt, top_level_ctxt, &top_level_vars);
 
+                    let ids_used_by_left = ids_used_by_ignoring_nested(
+                        &assign.left,
+                        unresolved_ctxt,
+                        top_level_ctxt,
+                        &top_level_vars,
+                    );
                     if assign.op != op!("=") {
                         used_ids.read.extend(used_ids.write.iter().cloned());
 
-                        let extra_ids = ids_used_by_ignoring_nested(
-                            &assign.left,
-                            unresolved_ctxt,
-                            top_level_ctxt,
-                            &top_level_vars,
-                        );
-                        used_ids.read.extend(extra_ids.read);
-                        used_ids.write.extend(extra_ids.write);
+                        used_ids.read.extend(ids_used_by_left.read);
                     }
+                    used_ids.write.extend(ids_used_by_left.write);
 
                     let side_effects = used_ids.found_unresolved;
 
