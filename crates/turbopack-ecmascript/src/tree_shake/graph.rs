@@ -941,11 +941,8 @@ impl DepGraph {
                         top_level_ctxt,
                         &top_level_vars,
                     );
-                    if assign.op != op!("=") {
-                        used_ids.read.extend(used_ids.write.iter().cloned());
-
-                        used_ids.read.extend(ids_used_by_left.read);
-                    }
+                    used_ids.read.extend(used_ids.write.iter().cloned());
+                    used_ids.read.extend(ids_used_by_left.read);
                     used_ids.write.extend(ids_used_by_left.write);
 
                     let side_effects = used_ids.found_unresolved;
