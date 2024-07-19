@@ -258,7 +258,7 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
             single_package: inputs.execution_args.single_package,
             graph,
             dry_run: inputs.run_args.dry_run,
-            env_mode: inputs.execution_args.env_mode.unwrap_or_default(),
+            env_mode: inputs.config.env_mode(),
             is_github_actions,
         })
     }

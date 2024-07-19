@@ -86,6 +86,12 @@ impl CommandBase {
                     .then_some(true),
             )
             .with_daemon(self.args.run_args.as_ref().and_then(|args| args.daemon()))
+            .with_env_mode(
+                self.args
+                    .execution_args
+                    .as_ref()
+                    .and_then(|args| args.env_mode),
+            )
             .build()
     }
 
