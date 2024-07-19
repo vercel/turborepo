@@ -35,7 +35,7 @@ where
     type Target = <T::Read as VcRead<T>>::Target;
 
     fn deref(&self) -> &Self::Target {
-        T::Read::value_to_target_ref(&self.0)
+        T::Read::repr_to_target_ref(&self.0)
     }
 }
 

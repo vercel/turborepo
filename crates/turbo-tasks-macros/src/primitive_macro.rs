@@ -38,7 +38,7 @@ pub fn primitive(input: TokenStream) -> TokenStream {
         quote! { #ty },
         None,
         quote! {
-            turbo_tasks::VcTransparentRead<#ty, #ty, #ty>
+            turbo_tasks::VcDefaultRead<#ty>
         },
         quote! {
             turbo_tasks::VcCellSharedMode<#ty>

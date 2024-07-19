@@ -1,8 +1,8 @@
-use std::{marker::PhantomData, mem::ManuallyDrop};
+use std::marker::PhantomData;
 
 use anyhow::Result;
 
-use crate::{backend::CellContent, ReadRef, TraitRef, VcRead, VcValueTrait, VcValueType};
+use crate::{backend::CellContent, ReadRef, TraitRef, VcValueTrait, VcValueType};
 
 /// Trait defined to share behavior between values and traits within
 /// [`ReadRawVcFuture`][crate::ReadRawVcFuture]. See [`VcValueTypeCast`] and
@@ -27,21 +27,7 @@ where
     type Output = ReadRef<T>;
 
     fn cast(content: CellContent) -> Result<Self::Output> {
-        Ok(
-            // Safety: the `VcValueType` implementor must guarantee that both `T` and
-            // `Repr` are #[repr(transparent)].
-            unsafe {
-                // Downcast the cell content to the expected representation type, then
-                // transmute it to the expected type.
-                // See https://users.rust-lang.org/t/transmute-doesnt-work-on-generic-types/87272/9
-                std::mem::transmute_copy::<
-                    ManuallyDrop<ReadRef<<T::Read as VcRead<T>>::Repr>>,
-                    Self::Output,
-                >(&ManuallyDrop::new(
-                    content.cast::<<T::Read as VcRead<T>>::Repr>()?,
-                ))
-            },
-        )
+        content.cast::<T>()
     }
 }
 

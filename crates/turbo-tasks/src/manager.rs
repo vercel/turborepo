@@ -1534,7 +1534,7 @@ impl CurrentCellRef {
             .and_then(|v| v.try_cast::<T>());
         let update =
             functor(content.as_deref().map(|content| {
-                <<T as VcValueType>::Read as VcRead<T>>::target_to_value_ref(content)
+                <<T as VcValueType>::Read as VcRead<T>>::target_to_repr_ref(content)
             }));
         if let Some(update) = update {
             tt.update_own_task_cell(

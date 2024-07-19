@@ -6,7 +6,6 @@ pub(crate) mod resolved;
 mod traits;
 
 use std::{
-    any::Any,
     hash::{Hash, Hasher},
     marker::PhantomData,
     ops::Deref,
@@ -274,14 +273,12 @@ where
     }
 }
 
-impl<T, Inner, Repr> Vc<T>
+impl<T> Vc<T>
 where
-    T: VcValueType<Read = VcTransparentRead<T, Inner, Repr>>,
-    Inner: Any + Send + Sync,
-    Repr: VcValueType,
+    T: VcValueType,
 {
-    pub fn cell(inner: Inner) -> Self {
-        <T::CellMode as VcCellMode<T>>::cell(inner)
+    pub fn cell(value: <T::Read as VcRead<T>>::Target) -> Self {
+        <T::CellMode as VcCellMode<T>>::cell(value)
     }
 }
 

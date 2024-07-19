@@ -9,19 +9,16 @@ use unsize::Coercion;
 pub fn downcast_triomphe_arc<T: Any + Send + Sync>(
     this: triomphe::Arc<dyn Any + Send + Sync>,
 ) -> Result<triomphe::Arc<T>, triomphe::Arc<dyn Any + Send + Sync>> {
-    if (*this).is::<T>() {
-        unsafe {
-            // Get the pointer to the offset (*const T) inside of the ArcInner.
-            let ptr = triomphe::Arc::into_raw(this);
-            // SAFETY: The negative offset from the data (ptr) in an Arc to the start of the
-            // data structure is fixed regardless of type `T`.
-            //
-            // SAFETY: Casting from a fat pointer to a thin pointer is safe, as long as the
-            // types are compatible (they are).
-            Ok(triomphe::Arc::from_raw(ptr.cast()))
-        }
-    } else {
-        Err(this)
+    // assume T is correct (!)
+    unsafe {
+        // Get the pointer to the offset (*const T) inside of the ArcInner.
+        let ptr = triomphe::Arc::into_raw(this);
+        // SAFETY: The negative offset from the data (ptr) in an Arc to the start of the
+        // data structure is fixed regardless of type `T`.
+        //
+        // SAFETY: Casting from a fat pointer to a thin pointer is safe, as long as the
+        // types are compatible (they are).
+        Ok(triomphe::Arc::from_raw(ptr.cast()))
     }
 }
 

@@ -43,6 +43,7 @@ pub fn generic_type(input: TokenStream) -> TokenStream {
 
     let (impl_generics, _, where_clause) = input.generics.split_for_impl();
 
+    // A version of `#ty` with every `Vc<T>` replaced with `Vc<()>`.
     let repr = replace_generics_with_unit(input.generics.params.iter(), &input.ty);
 
     let ty = input.ty;
@@ -68,12 +69,14 @@ pub fn generic_type(input: TokenStream) -> TokenStream {
         quote! { #ty },
         Some(&generics_with_static),
         quote! {
-            turbo_tasks::VcTransparentRead<#ty, #ty, #repr>
+            turbo_tasks::VcDefaultRead<#ty>
         },
         quote! {
             turbo_tasks::VcCellSharedMode<#ty>
         },
         quote! {
+            // Safety: serialization/deserialization of Vc<()> uses the same implementation as Vc<T>
+            // (it defers to the type-erased RawVc).
             turbo_tasks::ValueType::new_with_any_serialization::<#repr>()
         },
     );
