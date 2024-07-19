@@ -13,7 +13,7 @@ use swc_core::{
     common::{util::take::Take, SyntaxContext, DUMMY_SP},
     ecma::{
         ast::{
-            ClassDecl, Decl, DefaultDecl, ExportAll, ExportDecl, ExportNamedSpecifier,
+            op, ClassDecl, Decl, DefaultDecl, ExportAll, ExportDecl, ExportNamedSpecifier,
             ExportSpecifier, Expr, ExprStmt, FnDecl, Id, Ident, ImportDecl, ImportNamedSpecifier,
             ImportSpecifier, ImportStarAsSpecifier, KeyValueProp, Lit, Module, ModuleDecl,
             ModuleExportName, ModuleItem, NamedExport, ObjectLit, Prop, PropName, PropOrSpread,
@@ -935,18 +935,19 @@ impl DepGraph {
                     let captured_ids =
                         ids_captured_by(item, unresolved_ctxt, top_level_ctxt, &top_level_vars);
 
-                    let ids_used_by_left = ids_used_by_ignoring_nested(
-                        &assign.left,
-                        unresolved_ctxt,
-                        top_level_ctxt,
-                        &top_level_vars,
-                    );
                     if assign.op != op!("=") {
+                        let ids_used_by_left = ids_used_by_ignoring_nested(
+                            &assign.left,
+                            unresolved_ctxt,
+                            top_level_ctxt,
+                            &top_level_vars,
+                        );
+
                         used_ids.read.extend(used_ids.write.iter().cloned());
 
                         used_ids.read.extend(ids_used_by_left.read);
+                        used_ids.write.extend(ids_used_by_left.write);
                     }
-                    used_ids.write.extend(ids_used_by_left.write);
 
                     let side_effects = used_ids.found_unresolved;
 
