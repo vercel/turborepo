@@ -6,17 +6,17 @@ Run info
    WARNING  ls command is experimental and may change in the future
   3 packages
   
-    another packages/another
-    my-app apps/my-app
-    util packages/util
+    another packages[\/\\]another (re)
+    my-app apps[\/\\]my-app (re)
+    util packages[\/\\]util (re)
 
 Run info with filter
   $ ${TURBO} ls -F my-app...
    WARNING  ls command is experimental and may change in the future
   2 packages
   
-    my-app apps/my-app
-    util packages/util
+    my-app apps[\/\\]my-app (re)
+    util packages[\/\\]util (re)
 
 Run info on package `another`
   $ ${TURBO} ls another
