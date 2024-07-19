@@ -5,8 +5,7 @@ use std::{
 
 use indexmap::IndexSet;
 use petgraph::{
-    algo::{condensation, has_path_connecting, kosaraju_scc},
-    graphmap::GraphMap,
+    algo::{condensation, has_path_connecting},
     prelude::DiGraphMap,
 };
 use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
