@@ -1,4 +1,4 @@
-use std::{backtrace, backtrace::Backtrace, env, fmt, fmt::Display, io, mem, process};
+use std::{backtrace::Backtrace, env, fmt, fmt::Display, io, mem, process};
 
 use biome_deserialize_macros::Deserializable;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -24,6 +24,7 @@ use turborepo_telemetry::{
 use turborepo_ui::UI;
 
 use crate::{
+    cli::error::print_potential_tasks,
     commands::{
         bin, daemon, generate, info, link, login, logout, prune, run, scan, telemetry, unlink,
         CommandBase,
@@ -682,8 +683,8 @@ pub struct ExecutionArgs {
     /// Environment variable mode.
     /// Use "loose" to pass the entire existing environment.
     /// Use "strict" to use an allowlist specified in turbo.json.
-    #[clap(long = "env-mode", default_value = "strict", num_args = 0..=1, default_missing_value = "strict")]
-    pub env_mode: EnvMode,
+    #[clap(long = "env-mode", num_args = 0..=1, default_missing_value = "strict")]
+    pub env_mode: Option<EnvMode>,
     /// Use the given selector to specify package(s) to act as
     /// entry points. The syntax mirrors pnpm's syntax, and
     /// additional documentation and examples can be found in
@@ -755,8 +756,8 @@ impl ExecutionArgs {
             );
         }
 
-        if self.env_mode != EnvMode::default() {
-            telemetry.track_arg_value("env-mode", self.env_mode, EventType::NonSensitive);
+        if let Some(env_mode) = self.env_mode {
+            telemetry.track_arg_value("env-mode", env_mode, EventType::NonSensitive);
         }
 
         if let Some(output_logs) = &self.output_logs {
@@ -995,6 +996,7 @@ pub async fn run(
             // missing any execution args.
             .clone()
             .ok_or_else(|| Error::NoCommand(Backtrace::capture()))?;
+
         if execution_args.tasks.is_empty() {
             let mut cmd = <Args as CommandFactory>::command();
             let _ = cmd.print_help();
@@ -1221,17 +1223,19 @@ pub async fn run(
         } => {
             let event = CommandEventBuilder::new("run").with_parent(&root_telemetry);
             event.track_call();
-            // in the case of enabling the run stub, we want to be able to opt-in
-            // to the rust codepath for running turbo
+
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
+
             if execution_args.tasks.is_empty() {
-                return Err(Error::NoTasks(backtrace::Backtrace::capture()));
+                print_potential_tasks(base, event).await?;
+                process::exit(1);
             }
 
             if let Some((file_path, include_args)) = run_args.profile_file_and_include_args() {
                 // TODO: Do we want to handle the result / error?
                 let _ = logger.enable_chrome_tracing(file_path, include_args);
             }
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
+
             run_args.track(&event);
             event.track_run_code_path(CodePath::Rust);
             let exit_code = run::run(base, event).await.inspect(|code| {
@@ -1443,7 +1447,7 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    env_mode: EnvMode::Strict,
+                    env_mode: Some(EnvMode::Strict),
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
@@ -1453,27 +1457,12 @@ mod test {
         "env_mode: not fully-specified"
     )]
     #[test_case::test_case(
-		&["turbo", "run", "build"],
-        Args {
-            command: Some(Command::Run {
-                execution_args: Box::new(ExecutionArgs {
-                    tasks: vec!["build".to_string()],
-                    env_mode: EnvMode::Strict,
-                    ..get_default_execution_args()
-                }),
-                run_args: Box::new(get_default_run_args())
-            }),
-            ..Args::default()
-		} ;
-        "env_mode: default strict"
-	)]
-    #[test_case::test_case(
 		&["turbo", "run", "build", "--env-mode", "loose"],
         Args {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    env_mode: EnvMode::Loose,
+                    env_mode: Some(EnvMode::Loose),
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
@@ -1488,7 +1477,7 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    env_mode: EnvMode::Strict,
+                    env_mode: Some(EnvMode::Strict),
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())

@@ -21,7 +21,7 @@ use tokio::task_local;
 use tracing::Span;
 use turbo_prehash::PreHashed;
 use turbo_tasks::{
-    backend::{PersistentTaskType, TaskExecutionSpec},
+    backend::{PersistentTaskType, TaskCollectiblesMap, TaskExecutionSpec},
     event::{Event, EventListener},
     get_invalidator, registry, CellId, Invalidator, RawVc, TaskId, TaskIdSet, TraitTypeId,
     TurboTasksBackendApi, ValueTypeId,
@@ -310,14 +310,22 @@ impl MaybeCollectibles {
 }
 
 struct InProgressState {
+    /// Event is fired when the task is Done.
     event: Event,
+    /// true, when the task was marked as finished.
     count_as_finished: bool,
     /// true, when the task wasn't changed since the last execution
     clean: bool,
+    /// true, when the task was invalidated while executing. It will be
+    /// scheduled again.
+    stale: bool,
     /// Dependencies and children that need to be disconnected once leaving
-    /// this state
+    /// this state.
     outdated_edges: TaskEdgesSet,
+    /// Children that are connected during execution. These children are already
+    /// removed from `outdated_edges`.
     new_children: TaskIdSet,
+    /// Collectibles that need to be removed once leaving this state.
     outdated_collectibles: MaybeCollectibles,
 }
 
@@ -356,19 +364,10 @@ enum TaskStateType {
 
     /// Execution is happening
     ///
-    /// on finish this will move to Done
+    /// on finish this will move to Done (!stale) or Scheduled (stale)
     ///
-    /// on invalidation this will move to InProgressDirty
+    /// on invalidation this will set it's stale flag
     InProgress(Box<InProgressState>),
-
-    /// Invalid execution is happening
-    ///
-    /// on finish this will move to Scheduled
-    InProgressDirty {
-        event: Event,
-        outdated_edges: Box<TaskEdgesSet>,
-        children_count: usize,
-    },
 }
 
 impl TaskStateType {
@@ -385,9 +384,6 @@ impl TaskStateType {
                     .chain(new_children.iter().copied()),
             )),
             TaskStateType::Dirty { outdated_edges, .. } => {
-                Either::Right(Either::Right(outdated_edges.children()))
-            }
-            TaskStateType::InProgressDirty { outdated_edges, .. } => {
                 Either::Right(Either::Right(outdated_edges.children()))
             }
             TaskStateType::Scheduled { outdated_edges, .. } => {
@@ -414,7 +410,6 @@ impl TaskStateType {
                 (edges, children)
             }
             TaskStateType::Dirty { outdated_edges, .. }
-            | TaskStateType::InProgressDirty { outdated_edges, .. }
             | TaskStateType::Scheduled { outdated_edges, .. } => {
                 let mut edges = *outdated_edges;
                 let children = edges.drain_children();
@@ -584,17 +579,30 @@ impl Task {
             TaskTypeForDescription::Root => format!("[{}] root", id),
             TaskTypeForDescription::Once => format!("[{}] once", id),
             TaskTypeForDescription::Persistent(ty) => match &***ty {
-                PersistentTaskType::Native(native_fn, _) => {
+                PersistentTaskType::Native {
+                    fn_type: native_fn,
+                    this: _,
+                    arg: _,
+                } => {
                     format!("[{}] {}", id, registry::get_function(*native_fn).name)
                 }
-                PersistentTaskType::ResolveNative(native_fn, _) => {
+                PersistentTaskType::ResolveNative {
+                    fn_type: native_fn,
+                    this: _,
+                    arg: _,
+                } => {
                     format!(
                         "[{}] [resolve] {}",
                         id,
                         registry::get_function(*native_fn).name
                     )
                 }
-                PersistentTaskType::ResolveTrait(trait_type, fn_name, _) => {
+                PersistentTaskType::ResolveTrait {
+                    trait_type,
+                    method_name: fn_name,
+                    this: _,
+                    arg: _,
+                } => {
                     format!(
                         "[{}] [resolve trait] {} in trait {}",
                         id,
@@ -682,16 +690,16 @@ impl Task {
         TaskMetaStateWriteGuard::partial_from(self.state.write())
     }
 
-    pub(crate) fn execute(
-        self: &Task,
-        backend: &MemoryBackend,
+    pub(crate) fn execute<'a>(
+        self: &'a Task,
+        backend: &'a MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
-    ) -> Option<TaskExecutionSpec> {
+    ) -> Option<TaskExecutionSpec<'a>> {
         let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
         let (future, span) = {
             let mut state = self.full_state_mut();
             match state.state_type {
-                Done { .. } | InProgress { .. } | InProgressDirty { .. } => {
+                Done { .. } | InProgress { .. } => {
                     // should not start in this state
                     return None;
                 }
@@ -707,6 +715,7 @@ impl Task {
                         event,
                         count_as_finished: false,
                         clean,
+                        stale: false,
                         outdated_edges,
                         outdated_collectibles,
                         new_children: Default::default(),
@@ -727,11 +736,14 @@ impl Task {
     }
 
     /// Prepares task execution and returns a future that will execute the task.
-    fn make_execution_future(
-        self: &Task,
+    fn make_execution_future<'a>(
+        self: &'a Task,
         _backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
-    ) -> (Pin<Box<dyn Future<Output = Result<RawVc>> + Send>>, Span) {
+    ) -> (
+        Pin<Box<dyn Future<Output = Result<RawVc>> + Send + 'a>>,
+        Span,
+    ) {
         match &self.ty {
             TaskType::Root(bound_fn) => {
                 (bound_fn(), tracing::trace_span!("turbo_tasks::root_task"))
@@ -741,42 +753,54 @@ impl Task {
                 tracing::trace_span!("turbo_tasks::once_task"),
             ),
             TaskType::Persistent { ty, .. } => match &***ty {
-                PersistentTaskType::Native(native_fn, inputs) => {
+                PersistentTaskType::Native {
+                    fn_type: native_fn,
+                    this,
+                    arg,
+                } => {
                     let func = registry::get_function(*native_fn);
                     let span = func.span();
                     let entered = span.enter();
-                    let bound_fn = func.bind(inputs);
-                    let future = bound_fn();
+                    let future = func.execute(*this, &**arg);
                     drop(entered);
                     (future, span)
                 }
-                PersistentTaskType::ResolveNative(ref native_fn_id, inputs) => {
+                PersistentTaskType::ResolveNative {
+                    fn_type: ref native_fn_id,
+                    this,
+                    arg,
+                } => {
                     let native_fn_id = *native_fn_id;
                     let func = registry::get_function(native_fn_id);
                     let span = func.resolve_span();
                     let entered = span.enter();
-                    let inputs = inputs.clone();
                     let turbo_tasks = turbo_tasks.pin();
                     let future = Box::pin(PersistentTaskType::run_resolve_native(
                         native_fn_id,
-                        inputs,
+                        *this,
+                        &**arg,
                         turbo_tasks,
                     ));
                     drop(entered);
                     (future, span)
                 }
-                PersistentTaskType::ResolveTrait(trait_type_id, name, inputs) => {
+                PersistentTaskType::ResolveTrait {
+                    trait_type: trait_type_id,
+                    method_name: name,
+                    this,
+                    arg,
+                } => {
                     let trait_type_id = *trait_type_id;
                     let trait_type = registry::get_trait(trait_type_id);
                     let span = trait_type.resolve_span(name);
                     let entered = span.enter();
                     let name = name.clone();
-                    let inputs = inputs.clone();
                     let turbo_tasks = turbo_tasks.pin();
                     let future = Box::pin(PersistentTaskType::run_resolve_trait(
                         trait_type_id,
                         name,
-                        inputs,
+                        *this,
+                        &**arg,
                         turbo_tasks,
                     ));
                     drop(entered);
@@ -796,6 +820,7 @@ impl Task {
         };
         let TaskStateType::InProgress(box InProgressState {
             ref mut count_as_finished,
+            ref mut stale,
             ref mut outdated_collectibles,
             ref mut outdated_edges,
             ..
@@ -803,7 +828,7 @@ impl Task {
         else {
             return;
         };
-        if *count_as_finished {
+        if *count_as_finished || *stale {
             return;
         }
         *count_as_finished = true;
@@ -850,7 +875,12 @@ impl Task {
     ) {
         let mut state = self.full_state_mut();
         match state.state_type {
-            InProgress { .. } => match result {
+            InProgress(ref state) if state.stale => {
+                // We don't want to assign the output cell here
+                // as we want to avoid unnecessary updates
+                // TODO maybe this should be controlled by a heuristic
+            }
+            InProgress(..) => match result {
                 Ok(Ok(result)) => {
                     if state.output != result {
                         if cfg!(feature = "print_task_invalidation")
@@ -877,11 +907,7 @@ impl Task {
                 }
                 Err(message) => state.output.panic(message, turbo_tasks),
             },
-            InProgressDirty { .. } => {
-                // We don't want to assign the output cell here
-                // as we want to avoid unnecessary updates
-                // TODO maybe this should be controlled by a heuristic
-            }
+
             Dirty { .. } | Scheduled { .. } | Done { .. } => {
                 panic!(
                     "Task execution completed in unexpected state {}",
@@ -906,99 +932,111 @@ impl Task {
         {
             let mut change_job = None;
             let mut remove_job = None;
-            let mut dependencies = DEPENDENCIES_TO_TRACK.with(|deps| deps.take());
+            let dependencies = DEPENDENCIES_TO_TRACK.with(|deps| deps.take());
             {
                 let mut state = self.full_state_mut();
 
                 state
                     .gc
                     .execution_completed(duration, memory_usage, generation);
-                match state.state_type {
-                    InProgress(box InProgressState {
-                        ref mut event,
-                        count_as_finished,
-                        ref mut outdated_edges,
-                        ref mut outdated_collectibles,
-                        ref mut new_children,
-                        clean: _,
-                    }) => {
-                        let event = event.take();
-                        let mut outdated_edges = take(outdated_edges);
-                        let outdated_collectibles = outdated_collectibles.take_collectibles();
-                        let mut new_edges = take(&mut dependencies);
-                        outdated_edges.remove_all(&new_edges);
-                        for child in take(new_children) {
-                            new_edges.insert(TaskEdge::Child(child));
-                            outdated_edges.remove(TaskEdge::Child(child));
-                        }
-                        if !backend.has_gc() {
-                            // This will stay here for longer, so make sure to not consume too much
-                            // memory
-                            for cells in state.cells.values_mut() {
-                                cells.shrink_to_fit();
-                            }
-                            state.cells.shrink_to_fit();
-                        }
-                        state.state_type = Done {
-                            stateful,
-                            edges: new_edges.into_list(),
-                        };
-                        if !count_as_finished {
-                            let mut change = TaskChange {
-                                unfinished: -1,
-                                #[cfg(feature = "track_unfinished")]
-                                unfinished_tasks_update: vec![(self.id, -1)],
-                                ..Default::default()
-                            };
-                            if let Some(collectibles) = outdated_collectibles {
-                                for ((trait_type, value), count) in collectibles.into_iter() {
-                                    change.collectibles.push((trait_type, value, -count));
-                                }
-                            }
-                            change_job = state
-                                .aggregation_node
-                                .apply_change(&aggregation_context, change);
-                        }
-                        let outdated_children = outdated_edges.drain_children();
-                        if !outdated_children.is_empty() {
-                            remove_job = state.aggregation_node.handle_lost_edges(
-                                &aggregation_context,
-                                &self.id,
-                                outdated_children,
-                            );
-                        }
-                        event.notify(usize::MAX);
-                        drop(state);
-                        self.clear_dependencies(outdated_edges, backend, turbo_tasks);
-                    }
-                    InProgressDirty {
-                        ref mut event,
-                        ref mut outdated_edges,
-                        children_count: _,
-                    } => {
-                        let event = event.take();
-                        for dep in take(outdated_edges).into_iter() {
-                            // TODO Could be more efficent
-                            dependencies.insert(dep);
-                        }
-                        let outdated_edges = take(&mut dependencies);
-                        state.state_type = Scheduled {
-                            event,
-                            outdated_edges: Box::new(outdated_edges),
-                            clean: false,
-                        };
-                        schedule_task = true;
-                    }
-                    Dirty { .. } | Scheduled { .. } | Done { .. } => {
-                        panic!(
-                            "Task execution completed in unexpected state {}",
-                            Task::state_string(&state)
-                        )
-                    }
+                let InProgress(box InProgressState {
+                    ref mut event,
+                    count_as_finished,
+                    ref mut outdated_edges,
+                    ref mut outdated_collectibles,
+                    ref mut new_children,
+                    clean: _,
+                    stale,
+                }) = state.state_type
+                else {
+                    panic!(
+                        "Task execution completed in unexpected state {}",
+                        Task::state_string(&state)
+                    )
                 };
-            }
-            if !dependencies.is_empty() {
-                self.clear_dependencies(dependencies, backend, turbo_tasks);
+                let event = event.take();
+                let outdated_collectibles = outdated_collectibles.take_collectibles();
+                let mut outdated_edges = take(outdated_edges);
+                let mut new_edges = dependencies;
+                let new_children = take(new_children);
+                if stale {
+                    for dep in new_edges.into_iter() {
+                        // TODO Could be more efficent
+                        outdated_edges.insert(dep);
+                    }
+                    for child in new_children {
+                        outdated_edges.insert(TaskEdge::Child(child));
+                    }
+                    if let Some(collectibles) = outdated_collectibles {
+                        let mut change = TaskChange::default();
+                        for ((trait_type, value), count) in collectibles.into_iter() {
+                            change.collectibles.push((trait_type, value, -count));
+                        }
+                        change_job = state
+                            .aggregation_node
+                            .apply_change(&aggregation_context, change);
+                    }
+                    state.state_type = Scheduled {
+                        event,
+                        outdated_edges: Box::new(outdated_edges),
+                        clean: false,
+                    };
+                    drop(state);
+                    schedule_task = true;
+                } else {
+                    outdated_edges.remove_all(&new_edges);
+                    for child in new_children {
+                        new_edges.insert(TaskEdge::Child(child));
+                        outdated_edges.remove(TaskEdge::Child(child));
+                    }
+                    if !backend.has_gc() {
+                        // This will stay here for longer, so make sure to not consume too
+                        // much memory
+                        for cells in state.cells.values_mut() {
+                            cells.shrink_to_fit();
+                        }
+                        state.cells.shrink_to_fit();
+                    }
+                    state.state_type = Done {
+                        stateful,
+                        edges: new_edges.into_list(),
+                    };
+                    if !count_as_finished {
+                        let mut change = TaskChange {
+                            unfinished: -1,
+                            #[cfg(feature = "track_unfinished")]
+                            unfinished_tasks_update: vec![(self.id, -1)],
+                            ..Default::default()
+                        };
+                        if let Some(collectibles) = outdated_collectibles {
+                            for ((trait_type, value), count) in collectibles.into_iter() {
+                                change.collectibles.push((trait_type, value, -count));
+                            }
+                        }
+                        change_job = state
+                            .aggregation_node
+                            .apply_change(&aggregation_context, change);
+                    } else if let Some(collectibles) = outdated_collectibles {
+                        let mut change = TaskChange::default();
+                        for ((trait_type, value), count) in collectibles.into_iter() {
+                            change.collectibles.push((trait_type, value, -count));
+                        }
+                        change_job = state
+                            .aggregation_node
+                            .apply_change(&aggregation_context, change);
+                    }
+                    let outdated_children = outdated_edges.drain_children();
+                    if !outdated_children.is_empty() {
+                        remove_job = state.aggregation_node.handle_lost_edges(
+                            &aggregation_context,
+                            &self.id,
+                            outdated_children,
+                        );
+                    }
+                    event.notify(usize::MAX);
+                    drop(state);
+                    self.clear_dependencies(outdated_edges, backend, turbo_tasks);
+                }
             }
             change_job.apply(&aggregation_context);
             remove_job.apply(&aggregation_context);
@@ -1034,7 +1072,7 @@ impl Task {
                     // already scheduled
                     drop(state);
                 }
-                Dirty { .. } | InProgressDirty { .. } => {
+                Dirty { .. } => {
                     // already dirty
                     drop(state);
                 }
@@ -1085,54 +1123,33 @@ impl Task {
                     }
                 }
                 InProgress(box InProgressState {
-                    ref mut event,
-                    count_as_finished,
-                    ref mut outdated_edges,
-                    ref mut outdated_collectibles,
-                    ref mut new_children,
-                    clean: _,
+                    ref mut count_as_finished,
+                    ref mut clean,
+                    ref mut stale,
+                    ..
                 }) => {
-                    let event = event.take();
-                    let mut outdated_edges = take(outdated_edges);
-                    let children_count = new_children.len();
-                    for child in take(new_children) {
-                        outdated_edges.insert(TaskEdge::Child(child));
-                    }
-                    let outdated_collectibles = outdated_collectibles.take_collectibles();
-                    let change = if count_as_finished {
-                        let mut change = TaskChange {
-                            unfinished: 1,
-                            #[cfg(feature = "track_unfinished")]
-                            unfinished_tasks_update: vec![(self.id, 1)],
-                            ..Default::default()
+                    if !*stale {
+                        *clean = false;
+                        *stale = true;
+                        let change_job = if *count_as_finished {
+                            *count_as_finished = false;
+                            let change = TaskChange {
+                                unfinished: 1,
+                                #[cfg(feature = "track_unfinished")]
+                                unfinished_tasks_update: vec![(self.id, 1)],
+                                ..Default::default()
+                            };
+                            Some(
+                                state
+                                    .aggregation_node
+                                    .apply_change(&aggregation_context, change),
+                            )
+                        } else {
+                            None
                         };
-                        if let Some(collectibles) = outdated_collectibles {
-                            for ((trait_type, value), count) in collectibles.into_iter() {
-                                change.collectibles.push((trait_type, value, -count));
-                            }
-                        }
-                        Some(change)
-                    } else if let Some(collectibles) = outdated_collectibles {
-                        let mut change = TaskChange::default();
-                        for ((trait_type, value), count) in collectibles.into_iter() {
-                            change.collectibles.push((trait_type, value, -count));
-                        }
-                        Some(change)
-                    } else {
-                        None
-                    };
-                    let change_job = change.and_then(|change| {
-                        state
-                            .aggregation_node
-                            .apply_change(&aggregation_context, change)
-                    });
-                    state.state_type = InProgressDirty {
-                        event,
-                        outdated_edges: Box::new(outdated_edges),
-                        children_count,
-                    };
-                    drop(state);
-                    change_job.apply(&aggregation_context);
+                        drop(state);
+                        change_job.apply(&aggregation_context);
+                    }
                 }
             }
         }
@@ -1158,7 +1175,7 @@ impl Task {
                 // already scheduled
                 drop(state);
             }
-            InProgressDirty { .. } | InProgress(..) => {
+            InProgress(..) => {
                 // already in progress
                 drop(state);
             }
@@ -1370,15 +1387,13 @@ impl Task {
     fn state_string(state: &TaskState) -> &'static str {
         match state.state_type {
             Scheduled { .. } => "scheduled",
-            InProgress(box InProgressState {
-                count_as_finished: false,
-                ..
-            }) => "in progress",
+            InProgress(box InProgressState { stale: true, .. }) => "in progress (stale)",
+            InProgress(box InProgressState { clean: true, .. }) => "in progress (clean)",
             InProgress(box InProgressState {
                 count_as_finished: true,
                 ..
             }) => "in progress (marked as finished)",
-            InProgressDirty { .. } => "in progress (dirty)",
+            InProgress(box InProgressState { .. }) => "in progress",
             Done { .. } => "done",
             Dirty { .. } => "dirty",
         }
@@ -1408,24 +1423,6 @@ impl Task {
                                 return;
                             }
                             let number_of_children = new_children.len();
-                            let mut guard = TaskGuard::from_full(self.id, state);
-                            add_job = Some(handle_new_edge(
-                                &aggregation_context,
-                                &mut guard,
-                                &self.id,
-                                &child_id,
-                                number_of_children,
-                            ));
-                        }
-                    }
-                    TaskStateType::InProgressDirty {
-                        outdated_edges,
-                        children_count,
-                        ..
-                    } => {
-                        if outdated_edges.insert(TaskEdge::Child(child_id)) {
-                            *children_count += 1;
-                            let number_of_children = *children_count;
                             let mut guard = TaskGuard::from_full(self.id, state);
                             add_job = Some(handle_new_edge(
                                 &aggregation_context,
@@ -1527,9 +1524,7 @@ impl Task {
                 change_job.apply(&aggregation_context);
                 Ok(Err(listener))
             }
-            Scheduled { ref event, .. }
-            | InProgress(box InProgressState { ref event, .. })
-            | InProgressDirty { ref event, .. } => {
+            Scheduled { ref event, .. } | InProgress(box InProgressState { ref event, .. }) => {
                 let listener = event.listen_with_note(note);
                 drop(state);
                 Ok(Err(listener))
@@ -1545,7 +1540,7 @@ impl Task {
         reader: TaskId,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
-    ) -> AutoMap<RawVc, i32> {
+    ) -> TaskCollectiblesMap {
         let aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
         let mut aggregation_data = aggregation_context.aggregation_data(id);
         aggregation_data.read_collectibles(trait_type, reader)
@@ -1621,22 +1616,22 @@ impl Task {
                 }
                 state.gc.generation = None;
 
-                if active {
-                    let mut cells_to_drop = Vec::new();
-
-                    match &mut state.state_type {
-                        TaskStateType::Done { stateful, edges: _ } => {
-                            if *stateful {
-                                return GcResult::NotPossible;
-                            }
-                        }
-                        TaskStateType::Dirty { .. } => {}
-                        _ => {
-                            // GC can't run in this state. We will reschedule it when the execution
-                            // completes.
+                match &mut state.state_type {
+                    TaskStateType::Done { stateful, edges: _ } => {
+                        if *stateful {
                             return GcResult::NotPossible;
                         }
                     }
+                    TaskStateType::Dirty { .. } => {}
+                    _ => {
+                        // GC can't run in this state. We will reschedule it when the execution
+                        // completes.
+                        return GcResult::NotPossible;
+                    }
+                }
+
+                if active {
+                    let mut cells_to_drop = Vec::new();
 
                     // shrinking memory and dropping cells
                     state.aggregation_node.shrink_to_fit();

@@ -144,10 +144,8 @@ impl PackageJson {
     pub fn load_from_str(contents: &str, path: &str) -> Result<PackageJson, Error> {
         let (result, errors): (Option<RawPackageJson>, _) =
             deserialize_from_json_str(contents, JsonParserOptions::default(), path).consume();
-
-        match result {
-            Some(package_json) => Ok(package_json.into()),
-            None => Err(Error::Parse(
+        if !errors.is_empty() {
+            return Err(Error::Parse(
                 errors
                     .into_iter()
                     .map(|d| {
@@ -156,8 +154,13 @@ impl PackageJson {
                             .into()
                     })
                     .collect(),
-            )),
+            ));
         }
+
+        // We expect a result if there are no errors
+        Ok(result
+            .expect("no parse errors produced but no result")
+            .into())
     }
 
     // Utility method for easy construction of package.json during testing

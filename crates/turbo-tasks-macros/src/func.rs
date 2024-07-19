@@ -14,6 +14,7 @@ pub struct TurboFn {
     // block: Block,
     ident: Ident,
     output: Type,
+    this: Option<Input>,
     inputs: Vec<Input>,
 }
 
@@ -56,6 +57,7 @@ impl TurboFn {
         }
 
         let mut raw_inputs = original_signature.inputs.iter();
+        let mut this = None;
         let mut inputs = Vec::with_capacity(raw_inputs.len());
 
         if let Some(possibly_receiver) = raw_inputs.next() {
@@ -142,7 +144,7 @@ impl TurboFn {
                         _ => {}
                     }
 
-                    inputs.push(Input {
+                    this = Some(Input {
                         ident: Ident::new("self", self_token.span()),
                         ty: parse_quote! { turbo_tasks::Vc<Self> },
                     });
@@ -160,7 +162,7 @@ impl TurboFn {
                         return None;
                     }
 
-                    let ident = if let Pat::Ident(ident) = &*typed.pat {
+                    if let Pat::Ident(ident) = &*typed.pat {
                         if ident.ident == "self" {
                             if let DefinitionContext::NakedFn { .. } = definition_context {
                                 // The function is not associated. The compiler will emit an error
@@ -172,8 +174,13 @@ impl TurboFn {
                             // `turbo_tasks::Vc<Self>` here.
                             // We'll rely on the compiler to emit an error
                             // if the user provided an invalid receiver type
-                            // when
-                            // calling `into_concrete`.
+
+                            let ident = ident.ident.clone();
+
+                            this = Some(Input {
+                                ident,
+                                ty: parse_quote! { turbo_tasks::Vc<Self> },
+                            });
                         } else {
                             match definition_context {
                                 DefinitionContext::NakedFn { .. }
@@ -192,18 +199,22 @@ impl TurboFn {
                                     return None;
                                 }
                             }
-                        }
+                            let ident = ident.ident.clone();
 
-                        ident.ident.clone()
+                            inputs.push(Input {
+                                ident,
+                                ty: (*typed.ty).clone(),
+                            });
+                        }
                     } else {
                         // We can't support destructuring patterns (or other kinds of patterns).
-                        Ident::new("arg1", typed.pat.span())
-                    };
+                        let ident = Ident::new("arg1", typed.pat.span());
 
-                    inputs.push(Input {
-                        ident,
-                        ty: (*typed.ty).clone(),
-                    });
+                        inputs.push(Input {
+                            ident,
+                            ty: (*typed.ty).clone(),
+                        });
+                    }
                 }
             }
         }
@@ -234,6 +245,7 @@ impl TurboFn {
         Some(TurboFn {
             ident: original_signature.ident.clone(),
             output,
+            this,
             inputs,
         })
     }
@@ -242,8 +254,10 @@ impl TurboFn {
     /// converted to a standard turbo_tasks function signature.
     pub fn signature(&self) -> Signature {
         let exposed_inputs: Punctuated<_, Token![,]> = self
-            .inputs
-            .iter()
+            .this
+            .as_ref()
+            .into_iter()
+            .chain(self.inputs.iter())
             .map(|input| {
                 FnArg::Typed(PatType {
                     attrs: Default::default(),
@@ -277,15 +291,23 @@ impl TurboFn {
         }
     }
 
-    fn converted_inputs(&self) -> Punctuated<Expr, Token![,]> {
+    fn inputs(&self) -> Vec<&Ident> {
         self.inputs
             .iter()
-            .map(|Input { ty, ident }| -> Expr {
-                parse_quote! {
-                    <#ty as turbo_tasks::task::TaskInput>::into_concrete(#ident)
-                }
-            })
+            .map(|Input { ident, .. }| ident)
             .collect()
+    }
+
+    pub fn input_types(&self) -> Vec<&Type> {
+        self.inputs.iter().map(|Input { ty, .. }| ty).collect()
+    }
+
+    fn converted_this(&self) -> Option<Expr> {
+        self.this.as_ref().map(|Input { ty: _, ident }| {
+            parse_quote! {
+                turbo_tasks::Vc::into_raw(#ident)
+            }
+        })
     }
 
     /// The block of the exposed function for a dynamic dispatch call to the
@@ -293,16 +315,25 @@ impl TurboFn {
     pub fn dynamic_block(&self, trait_type_id_ident: &Ident) -> Block {
         let ident = &self.ident;
         let output = &self.output;
-        let converted_inputs = self.converted_inputs();
-        parse_quote! {
-            {
-                <#output as turbo_tasks::task::TaskOutput>::try_from_raw_vc(
-                    turbo_tasks::trait_call(
-                        *#trait_type_id_ident,
-                        std::borrow::Cow::Borrowed(stringify!(#ident)),
-                        vec![#converted_inputs],
+        if let Some(converted_this) = self.converted_this() {
+            let inputs = self.inputs();
+            parse_quote! {
+                {
+                    <#output as turbo_tasks::task::TaskOutput>::try_from_raw_vc(
+                        turbo_tasks::trait_call(
+                            *#trait_type_id_ident,
+                            std::borrow::Cow::Borrowed(stringify!(#ident)),
+                            #converted_this,
+                            Box::new((#(#inputs,)*)) as Box<dyn turbo_tasks::MagicAny>,
+                        )
                     )
-                )
+                }
+            }
+        } else {
+            parse_quote! {
+                {
+                    unimplemented!("trait methods without self are not yet supported")
+                }
             }
         }
     }
@@ -311,17 +342,35 @@ impl TurboFn {
     /// given native function.
     pub fn static_block(&self, native_function_id_ident: &Ident) -> Block {
         let output = &self.output;
-        let converted_inputs = self.converted_inputs();
-        parse_quote! {
-            {
-                <#output as turbo_tasks::task::TaskOutput>::try_from_raw_vc(
-                    turbo_tasks::dynamic_call(
-                        *#native_function_id_ident,
-                        vec![#converted_inputs],
+        let inputs = self.inputs();
+        if let Some(converted_this) = self.converted_this() {
+            parse_quote! {
+                {
+                    <#output as turbo_tasks::task::TaskOutput>::try_from_raw_vc(
+                        turbo_tasks::dynamic_this_call(
+                            *#native_function_id_ident,
+                            #converted_this,
+                            Box::new((#(#inputs,)*)) as Box<dyn turbo_tasks::MagicAny>,
+                        )
                     )
-                )
+                }
+            }
+        } else {
+            parse_quote! {
+                {
+                    <#output as turbo_tasks::task::TaskOutput>::try_from_raw_vc(
+                        turbo_tasks::dynamic_call(
+                            *#native_function_id_ident,
+                            Box::new((#(#inputs,)*)) as Box<dyn turbo_tasks::MagicAny>,
+                        )
+                    )
+                }
             }
         }
+    }
+
+    pub(crate) fn is_method(&self) -> bool {
+        self.this.is_some()
     }
 }
 
@@ -343,7 +392,7 @@ fn expand_vc_return_type(orig_output: &Type) -> Type {
         new_output = match new_output {
             Type::Group(TypeGroup { elem, .. }) => *elem,
             Type::Tuple(TypeTuple { elems, .. }) if elems.is_empty() => {
-                Type::Path(parse_quote!(::turbo_tasks::Vc<()>))
+                Type::Path(parse_quote!(turbo_tasks::Vc<()>))
             }
             Type::Path(TypePath {
                 qself: None,
@@ -454,13 +503,15 @@ impl DefinitionContext {
 pub struct NativeFn {
     function_path_string: String,
     function_path: ExprPath,
+    is_method: bool,
 }
 
 impl NativeFn {
-    pub fn new(function_path_string: &str, function_path: &ExprPath) -> NativeFn {
+    pub fn new(function_path_string: &str, function_path: &ExprPath, is_method: bool) -> NativeFn {
         NativeFn {
             function_path_string: function_path_string.to_owned(),
             function_path: function_path.clone(),
+            is_method,
         }
     }
 
@@ -472,13 +523,23 @@ impl NativeFn {
         let Self {
             function_path_string,
             function_path,
+            is_method,
         } = self;
 
-        parse_quote! {
-            turbo_tasks::macro_helpers::Lazy::new(|| {
-                #[allow(deprecated)]
-                turbo_tasks::NativeFunction::new(#function_path_string.to_owned(), #function_path)
-            })
+        if *is_method {
+            parse_quote! {
+                turbo_tasks::macro_helpers::Lazy::new(|| {
+                    #[allow(deprecated)]
+                    turbo_tasks::NativeFunction::new_method(#function_path_string.to_owned(), #function_path)
+                })
+            }
+        } else {
+            parse_quote! {
+                turbo_tasks::macro_helpers::Lazy::new(|| {
+                    #[allow(deprecated)]
+                    turbo_tasks::NativeFunction::new_function(#function_path_string.to_owned(), #function_path)
+                })
+            }
         }
     }
 

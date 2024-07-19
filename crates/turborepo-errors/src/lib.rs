@@ -17,7 +17,7 @@ pub const TURBO_SITE: &str = "https://turbo.build";
 pub struct ParseDiagnostic {
     message: String,
     #[source_code]
-    source_code: String,
+    source_code: NamedSource,
     #[label]
     label: Option<SourceSpan>,
 }
@@ -34,12 +34,19 @@ impl From<biome_diagnostics::Error> for ParseDiagnostic {
     fn from(diagnostic: biome_diagnostics::Error) -> Self {
         let location = diagnostic.location();
         let message = BiomeMessage(&diagnostic).to_string();
+        let path = location
+            .resource
+            .and_then(|r| r.as_file().map(|p| p.to_string()))
+            .unwrap_or_default();
         Self {
             message,
-            source_code: location
-                .source_code
-                .map(|s| s.text.to_string())
-                .unwrap_or_default(),
+            source_code: NamedSource::new(
+                path,
+                location
+                    .source_code
+                    .map(|s| s.text.to_string())
+                    .unwrap_or_default(),
+            ),
             label: location.span.map(|span| {
                 let start: usize = span.start().into();
                 let len: usize = span.len().into();
