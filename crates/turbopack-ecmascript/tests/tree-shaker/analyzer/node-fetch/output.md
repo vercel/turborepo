@@ -125,24 +125,29 @@ graph TD
 # Final
 ```mermaid
 graph TD
-    N0["Items: [ItemId(ModuleEvaluation)]"];
-    N1["Items: [ItemId(Export((&quot;__TURBOPACK__default__export__&quot;, #4), &quot;default&quot;))]"];
-    N2["Items: [ItemId(0, ImportOfModule)]"];
-    N3["Items: [ItemId(2, Normal), ItemId(3, Normal)]"];
-    N0 --> N2;
-    N0 --> N3;
-    N1 --> N3;
+    N0["Items: [ItemId(0, ImportOfModule)]"];
+    N1["Items: [ItemId(2, Normal)]"];
+    N2["Items: [ItemId(3, Normal)]"];
+    N3["Items: [ItemId(ModuleEvaluation)]"];
+    N4["Items: [ItemId(Export((&quot;__TURBOPACK__default__export__&quot;, #4), &quot;default&quot;))]"];
+    N5["Items: [ItemId(0, ImportBinding(0))]"];
+    N6["Items: [ItemId(1, VarDeclarator(0))]"];
+    N6 --> N5;
+    N2 --> N1;
+    N2 --> N0;
+    N4 --> N2;
+    N3 --> N0;
     N3 --> N2;
 ```
 # Entrypoints
 
 ```
 {
-    ModuleEvaluation: 0,
+    ModuleEvaluation: 3,
     Export(
         "default",
-    ): 1,
-    Exports: 4,
+    ): 4,
+    Exports: 7,
 }
 ```
 
@@ -150,44 +155,70 @@ graph TD
 # Modules (dev)
 ## Part 0
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-"module evaluation";
+import 'node:stream';
 
 ```
 ## Part 1
 ```js
-import { __TURBOPACK__default__export__ } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
+function fetch() {}
+export { fetch } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
 };
-export { __TURBOPACK__default__export__ as default };
 
 ```
 ## Part 2
 ```js
-import 'node:stream';
-
-```
-## Part 3
-```js
+import { fetch } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
+};
 import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
+    __turbopack_part__: 0
 };
-function fetch() {}
 const __TURBOPACK__default__export__ = fetch;
-export { fetch } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 
 ```
+## Part 3
+```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
+"module evaluation";
+
+```
 ## Part 4
+```js
+import { __TURBOPACK__default__export__ } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
+export { __TURBOPACK__default__export__ as default };
+
+```
+## Part 5
+```js
+import Stream from 'node:stream';
+export { Stream } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+
+```
+## Part 6
+```js
+import { Stream } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
+const streamDestructionSupported = 'destroy' in Stream.Readable.prototype;
+export { streamDestructionSupported } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+
+```
+## Part 7
 ```js
 export { default } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: "export default"
@@ -197,10 +228,10 @@ export { default } from "__TURBOPACK_PART__" assert {
 ## Merged (module eval)
 ```js
 import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
+    __turbopack_part__: 0
 };
 import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
+    __turbopack_part__: 2
 };
 "module evaluation";
 
@@ -209,11 +240,11 @@ import "__TURBOPACK_PART__" assert {
 
 ```
 {
-    ModuleEvaluation: 0,
+    ModuleEvaluation: 3,
     Export(
         "default",
-    ): 1,
-    Exports: 4,
+    ): 4,
+    Exports: 7,
 }
 ```
 
@@ -221,44 +252,70 @@ import "__TURBOPACK_PART__" assert {
 # Modules (prod)
 ## Part 0
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-"module evaluation";
+import 'node:stream';
 
 ```
 ## Part 1
 ```js
-import { __TURBOPACK__default__export__ } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
+function fetch() {}
+export { fetch } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
 };
-export { __TURBOPACK__default__export__ as default };
 
 ```
 ## Part 2
 ```js
-import 'node:stream';
-
-```
-## Part 3
-```js
+import { fetch } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
+};
 import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
+    __turbopack_part__: 0
 };
-function fetch() {}
 const __TURBOPACK__default__export__ = fetch;
-export { fetch } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
 export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 
 ```
+## Part 3
+```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
+"module evaluation";
+
+```
 ## Part 4
+```js
+import { __TURBOPACK__default__export__ } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
+export { __TURBOPACK__default__export__ as default };
+
+```
+## Part 5
+```js
+import Stream from 'node:stream';
+export { Stream } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+
+```
+## Part 6
+```js
+import { Stream } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
+const streamDestructionSupported = 'destroy' in Stream.Readable.prototype;
+export { streamDestructionSupported } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
+
+```
+## Part 7
 ```js
 export { default } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: "export default"
@@ -268,10 +325,10 @@ export { default } from "__TURBOPACK_PART__" assert {
 ## Merged (module eval)
 ```js
 import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
+    __turbopack_part__: 0
 };
 import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
+    __turbopack_part__: 2
 };
 "module evaluation";
 
