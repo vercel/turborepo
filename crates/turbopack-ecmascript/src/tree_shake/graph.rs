@@ -5,7 +5,8 @@ use std::{
 
 use indexmap::IndexSet;
 use petgraph::{
-    algo::{has_path_connecting, kosaraju_scc},
+    algo::{condensation, has_path_connecting, kosaraju_scc},
+    graphmap::GraphMap,
     prelude::DiGraphMap,
 };
 use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
@@ -456,6 +457,7 @@ impl DepGraph {
 
         let mut cycles = kosaraju_scc(&self.g.idx_graph);
         cycles.retain(|v| v.len() > 1);
+        dbg!(&cycles);
 
         // If a node have two or more dependents, it should be in a separate
         // group.
@@ -553,6 +555,59 @@ impl DepGraph {
         for group in groups.iter_mut() {
             group.sort();
             group.dedup();
+        }
+
+        {
+            dbg!(&self.g);
+            let graph = self.g.idx_graph.clone().into_graph::<u32>();
+            dbg!(&graph);
+            eprintln!("Graph: {:?}", petgraph::dot::Dot::new(&graph));
+
+            let condensed = condensation(graph, false);
+            eprintln!("Condensed: {:?}", petgraph::dot::Dot::new(&condensed));
+
+            let (nodes, edges) = condensed.into_nodes_edges();
+            let mut new_graph = InternedGraph::default();
+            let mut node_ix = vec![];
+            let mut done = FxHashSet::default();
+
+            for node in nodes {
+                let item_ids = node
+                    .weight
+                    .iter()
+                    .map(|&ix| {
+                        done.insert(ix);
+
+                        self.g.graph_ix[ix as usize].clone()
+                    })
+                    .collect::<Vec<_>>();
+                let ix = new_graph.node(&item_ids);
+
+                node_ix.push(ix);
+            }
+
+            for edge in edges {
+                let source = edge.source().index();
+                let target = edge.target().index();
+
+                new_graph
+                    .idx_graph
+                    .add_edge(node_ix[source], node_ix[target], edge.weight);
+            }
+
+            // Insert nodes without any edges
+
+            for node in self.g.graph_ix.iter() {
+                let ix = self.g.get_node(node);
+                if !done.contains(&ix) {
+                    let item_ids = vec![node.clone()];
+                    new_graph.node(&item_ids);
+                }
+            }
+
+            if true {
+                return new_graph;
+            }
         }
 
         let mut new_graph = InternedGraph::default();
