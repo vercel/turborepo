@@ -78,7 +78,8 @@ pub(crate) struct ItemData {
     /// Is the module item hoisted?
     pub is_hoisted: bool,
 
-    #[allow(unused)] // We may use this in the future.
+    /// TOOD(PACK-3166): We can use this field to optimize tree shaking
+    #[allow(unused)]
     pub pure: bool,
 
     /// Variables declared or bound by this module item
