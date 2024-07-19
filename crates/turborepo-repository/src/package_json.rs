@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 
 use anyhow::Result;
 use biome_deserialize::{json::deserialize_from_json_str, Text};
@@ -8,7 +11,7 @@ use biome_json_parser::JsonParserOptions;
 use miette::Diagnostic;
 use serde::Serialize;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
-use turborepo_errors::ParseDiagnostic;
+use turborepo_errors::{ParseDiagnostic, Spanned, WithMetadata};
 use turborepo_unescape::UnescapedString;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -19,7 +22,7 @@ pub struct PackageJson {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub package_manager: Option<String>,
+    pub package_manager: Option<Spanned<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dependencies: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -29,7 +32,7 @@ pub struct PackageJson {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub peer_dependencies: Option<BTreeMap<String, String>>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub scripts: BTreeMap<String, String>,
+    pub scripts: BTreeMap<String, Spanned<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub resolutions: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -53,12 +56,12 @@ pub struct PnpmConfig {
 pub struct RawPackageJson {
     pub name: Option<UnescapedString>,
     pub version: Option<UnescapedString>,
-    pub package_manager: Option<UnescapedString>,
+    pub package_manager: Option<Spanned<UnescapedString>>,
     pub dependencies: Option<BTreeMap<String, UnescapedString>>,
     pub dev_dependencies: Option<BTreeMap<String, UnescapedString>>,
     pub optional_dependencies: Option<BTreeMap<String, UnescapedString>>,
     pub peer_dependencies: Option<BTreeMap<String, UnescapedString>>,
-    pub scripts: BTreeMap<String, UnescapedString>,
+    pub scripts: BTreeMap<String, Spanned<UnescapedString>>,
     pub resolutions: Option<BTreeMap<String, UnescapedString>>,
     pub pnpm: Option<RawPnpmConfig>,
     // Unstructured fields kept for round trip capabilities
@@ -85,12 +88,32 @@ pub enum Error {
     Parse(#[related] Vec<ParseDiagnostic>),
 }
 
+impl WithMetadata for RawPackageJson {
+    fn add_text(&mut self, text: Arc<str>) {
+        if let Some(ref mut package_manager) = self.package_manager {
+            package_manager.add_text(text.clone());
+        }
+        self.scripts
+            .iter_mut()
+            .for_each(|(_, v)| v.add_text(text.clone()));
+    }
+
+    fn add_path(&mut self, path: Arc<str>) {
+        if let Some(ref mut package_manager) = self.package_manager {
+            package_manager.add_path(path.clone());
+        }
+        self.scripts
+            .iter_mut()
+            .for_each(|(_, v)| v.add_path(path.clone()));
+    }
+}
+
 impl From<RawPackageJson> for PackageJson {
     fn from(raw: RawPackageJson) -> Self {
         Self {
             name: raw.name.map(|s| s.into()),
             version: raw.version.map(|s| s.into()),
-            package_manager: raw.package_manager.map(|s| s.into()),
+            package_manager: raw.package_manager.map(|s| s.map(|s| s.into())),
             dependencies: raw
                 .dependencies
                 .map(|m| m.into_iter().map(|(k, v)| (k, v.into())).collect()),
@@ -106,7 +129,7 @@ impl From<RawPackageJson> for PackageJson {
             scripts: raw
                 .scripts
                 .into_iter()
-                .map(|(k, v)| (k, v.into()))
+                .map(|(k, v)| (k, v.map(|v| v.into())))
                 .collect(),
             resolutions: raw
                 .resolutions
@@ -158,9 +181,12 @@ impl PackageJson {
         }
 
         // We expect a result if there are no errors
-        Ok(result
-            .expect("no parse errors produced but no result")
-            .into())
+        let mut package_json = result.expect("no parse errors produced but no result");
+
+        package_json.add_path(path.into());
+        package_json.add_text(contents.into());
+
+        Ok(package_json.into())
     }
 
     // Utility method for easy construction of package.json during testing
