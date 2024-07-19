@@ -85,7 +85,7 @@ impl DiskWatcher {
 
         if let Some(watcher) = watcher.as_mut() {
             let mut path = dir_path;
-            while let Err(err) = watcher.watcher().watch(path, RecursiveMode::NonRecursive) {
+            while let Err(err) = watcher.watch(path, RecursiveMode::NonRecursive) {
                 if path == root_path {
                     return Err(err).context(format!(
                         "Unable to watch {} (tried up to {})",
