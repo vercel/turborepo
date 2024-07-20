@@ -150,17 +150,17 @@ graph TD
     Item13["export x"];
     Item14;
     Item14["export y"];
-    Item2 -.-> Item1;
-    Item3 -.-> Item1;
-    Item4 --> Item1;
+    Item2 --> Item1;
+    Item3 --> Item1;
     Item4 --> Item3;
+    Item4 --> Item1;
     Item5 -.-> Item4;
-    Item5 -.-> Item1;
+    Item5 --> Item1;
     Item6 -.-> Item4;
-    Item6 -.-> Item1;
-    Item7 --> Item1;
+    Item6 --> Item1;
     Item7 --> Item3;
     Item7 --> Item6;
+    Item7 --> Item1;
     Item7 -.-> Item4;
     Item8 --> Item7;
     Item8 --> Item1;
@@ -197,17 +197,17 @@ graph TD
     Item13["export x"];
     Item14;
     Item14["export y"];
-    Item2 -.-> Item1;
-    Item3 -.-> Item1;
-    Item4 --> Item1;
+    Item2 --> Item1;
+    Item3 --> Item1;
     Item4 --> Item3;
+    Item4 --> Item1;
     Item5 -.-> Item4;
-    Item5 -.-> Item1;
+    Item5 --> Item1;
     Item6 -.-> Item4;
-    Item6 -.-> Item1;
-    Item7 --> Item1;
+    Item6 --> Item1;
     Item7 --> Item3;
     Item7 --> Item6;
+    Item7 --> Item1;
     Item7 -.-> Item4;
     Item8 --> Item7;
     Item8 --> Item1;
@@ -244,17 +244,17 @@ graph TD
     Item13["export x"];
     Item14;
     Item14["export y"];
-    Item2 -.-> Item1;
-    Item3 -.-> Item1;
-    Item4 --> Item1;
+    Item2 --> Item1;
+    Item3 --> Item1;
     Item4 --> Item3;
+    Item4 --> Item1;
     Item5 -.-> Item4;
-    Item5 -.-> Item1;
+    Item5 --> Item1;
     Item6 -.-> Item4;
-    Item6 -.-> Item1;
-    Item7 --> Item1;
+    Item6 --> Item1;
     Item7 --> Item3;
     Item7 --> Item6;
+    Item7 --> Item1;
     Item7 -.-> Item4;
     Item8 --> Item7;
     Item8 --> Item1;
@@ -289,17 +289,17 @@ graph TD
     N11["Items: [ItemId(Export((&quot;y&quot;, #2), &quot;y&quot;))]"];
     N12["Items: [ItemId(4, Normal)]"];
     N13["Items: [ItemId(1, Normal)]"];
-    N13 -.-> N0;
-    N1 -.-> N0;
-    N2 --> N0;
+    N13 --> N0;
+    N1 --> N0;
     N2 --> N1;
+    N2 --> N0;
     N12 -.-> N2;
-    N12 -.-> N0;
+    N12 --> N0;
     N4 -.-> N2;
-    N4 -.-> N0;
-    N5 --> N0;
+    N4 --> N0;
     N5 --> N1;
     N5 --> N4;
+    N5 --> N0;
     N5 -.-> N2;
     N6 --> N5;
     N6 --> N0;
@@ -352,11 +352,11 @@ x = 3;
 ```
 ## Part 2
 ```js
-import { x } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
+};
+import { x } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
 };
 console.log(x);
 
@@ -382,14 +382,14 @@ x = 5;
 ```
 ## Part 5
 ```js
-import { x } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
+};
+import { x } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
 };
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
@@ -528,36 +528,45 @@ import "__TURBOPACK_PART__" assert {
 # Modules (prod)
 ## Part 0
 ```js
-x = 5;
-
-```
-## Part 1
-```js
-x = 4;
-
-```
-## Part 2
-```js
-x = 3;
-
-```
-## Part 3
-```js
 let x = 1;
 export { x } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 
 ```
-## Part 4
+## Part 1
 ```js
 import { x } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
+x = 5;
+
+```
+## Part 2
+```js
+import { x } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
+x = 4;
+
+```
+## Part 3
+```js
+import { x } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
+x = 3;
+
+```
+## Part 4
+```js
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
 import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
+    __turbopack_part__: 1
 };
-import "__TURBOPACK_PART__" assert {
+import { x } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
 x += 6;
@@ -569,7 +578,7 @@ import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
 import { x } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
+    __turbopack_part__: 0
 };
 x += 7;
 
@@ -580,7 +589,7 @@ import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
 import { x } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
+    __turbopack_part__: 0
 };
 x += 8;
 
@@ -591,18 +600,18 @@ import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
 import { x } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
+    __turbopack_part__: 0
 };
 x += 9;
 
 ```
 ## Part 8
 ```js
+import { x } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
-};
-import { x } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
 };
 const y = x;
 export { y } from "__TURBOPACK_VAR__" assert {
@@ -620,22 +629,22 @@ export { y };
 ```
 ## Part 10
 ```js
+import { x } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
-};
-import { x } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
 };
 export { x as x };
 
 ```
 ## Part 11
 ```js
-import { x } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
+import { x } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
 };
 console.log(x);
 
@@ -650,6 +659,9 @@ import "__TURBOPACK_PART__" assert {
 ```
 ## Part 13
 ```js
+import { x } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
 x = 2;
 
 ```
