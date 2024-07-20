@@ -880,24 +880,18 @@ impl DepGraph {
                         ids.push(id.clone());
 
                         let decl_ids: Vec<Id> = find_pat_ids(&decl.name);
-                        let mut vars = ids_used_by(
+                        let mut vars = ids_used_by_ignoring_nested(
                             &decl.init,
                             unresolved_ctxt,
                             top_level_ctxt,
                             &top_level_vars,
                         );
-                        let mut eventual_vars =
-                            if matches!(decl.init.as_deref(), Some(Expr::Fn(..) | Expr::Arrow(..)))
-                            {
-                                ids_captured_by(
-                                    &decl.init,
-                                    unresolved_ctxt,
-                                    top_level_ctxt,
-                                    &top_level_vars,
-                                )
-                            } else {
-                                Vars::default()
-                            };
+                        let mut eventual_vars = ids_captured_by(
+                            &decl.init,
+                            unresolved_ctxt,
+                            top_level_ctxt,
+                            &top_level_vars,
+                        );
 
                         vars.read.retain(|id| !decl_ids.contains(id));
                         eventual_vars.read.retain(|id| !decl_ids.contains(id));
@@ -908,6 +902,7 @@ impl DepGraph {
                             decls: vec![decl.clone()],
                             ..*v.clone()
                         });
+                        vars.write.extend(decl_ids.iter().cloned());
                         let content = ModuleItem::Stmt(Stmt::Decl(Decl::Var(var_decl)));
                         items.insert(
                             id,
@@ -915,7 +910,7 @@ impl DepGraph {
                                 var_decls: decl_ids.clone().into_iter().collect(),
                                 read_vars: vars.read,
                                 eventual_read_vars: eventual_vars.read,
-                                write_vars: decl_ids.into_iter().chain(vars.write).collect(),
+                                write_vars: vars.write,
                                 eventual_write_vars: eventual_vars.write,
                                 content,
                                 side_effects,
