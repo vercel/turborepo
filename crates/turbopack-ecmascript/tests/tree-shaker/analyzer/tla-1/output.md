@@ -138,9 +138,6 @@ await Promise.resolve();
 ```
 ## Part 1
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
 "module evaluation";
 
 ```
@@ -165,8 +162,8 @@ export { effects };
 import { effects } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
+import { effects } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
 };
 function effect(name) {
     effects.push(name);
@@ -196,9 +193,6 @@ export { effect } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
 "module evaluation";
 
 ```
@@ -226,9 +220,6 @@ await Promise.resolve();
 ```
 ## Part 1
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
 "module evaluation";
 
 ```
@@ -242,6 +233,9 @@ export { effects } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
+import { effects } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
 import { effects } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
@@ -281,9 +275,6 @@ export { effects } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
 "module evaluation";
 
 ```

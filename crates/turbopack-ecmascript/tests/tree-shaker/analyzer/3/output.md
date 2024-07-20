@@ -383,9 +383,6 @@ export { d3 } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 1
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 1
-};
 import { d3 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
@@ -435,14 +432,11 @@ export { d1 } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 5
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
+import { d2 } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
 };
 import { d1 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
-};
-import { d2 } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
 };
 function c1_3() {
     return c1_1(d2);
@@ -485,18 +479,6 @@ export { c1_3 };
 import { c1_3 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 1
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
 c1_3();
 
 ```
@@ -505,32 +487,11 @@ c1_3();
 import { c2_2 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
 c2_2();
 
 ```
 ## Part 10
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
 "module evaluation";
 
 ```
@@ -549,12 +510,6 @@ export { c1_3 } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
 "module evaluation";
 
 ```
@@ -591,9 +546,6 @@ export { d3 } from "__TURBOPACK_VAR__" assert {
 import { d3 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 1
-};
 function c2_2() {
     return c2_3();
 }
@@ -642,9 +594,6 @@ export { d1 } from "__TURBOPACK_VAR__" assert {
 ```js
 import { d2 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
 };
 import { d1 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
@@ -698,20 +647,11 @@ c1_3();
 import { c2_2 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
 c2_2();
 
 ```
 ## Part 10
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
 "module evaluation";
 
 ```
@@ -730,12 +670,6 @@ export { c1_3 } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
 "module evaluation";
 
 ```

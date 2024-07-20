@@ -65,9 +65,6 @@ process.turbopack = {};
 ```
 ## Part 1
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
 "module evaluation";
 
 ```
@@ -77,9 +74,6 @@ import "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
 "module evaluation";
 
 ```
@@ -101,9 +95,6 @@ process.turbopack = {};
 ```
 ## Part 1
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
 "module evaluation";
 
 ```
@@ -113,9 +104,6 @@ import "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
 "module evaluation";
 
 ```

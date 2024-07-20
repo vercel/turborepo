@@ -31,7 +31,7 @@ const streamDestructionSupported = 'destroy' in Stream.Readable.prototype;
 
 - Declares: `streamDestructionSupported`
 - Reads: `Stream`
-- Write: `streamDestructionSupported`, `Stream`
+- Write: `Stream`, `streamDestructionSupported`
 
 ## Item 4: Stmt 2, `Normal`
 
@@ -171,9 +171,6 @@ export { fetch } from "__TURBOPACK_VAR__" assert {
 import { fetch } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
 const __TURBOPACK__default__export__ = fetch;
 export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
@@ -182,12 +179,6 @@ export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
-};
 "module evaluation";
 
 ```
@@ -212,6 +203,9 @@ export { Stream } from "__TURBOPACK_VAR__" assert {
 import { Stream } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
+import { Stream } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
 const streamDestructionSupported = 'destroy' in Stream.Readable.prototype;
 export { streamDestructionSupported } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
@@ -227,12 +221,6 @@ export { default } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
-};
 "module evaluation";
 
 ```
@@ -268,9 +256,6 @@ export { fetch } from "__TURBOPACK_VAR__" assert {
 import { fetch } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
 const __TURBOPACK__default__export__ = fetch;
 export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
@@ -279,12 +264,6 @@ export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
-};
 "module evaluation";
 
 ```
@@ -309,6 +288,9 @@ export { Stream } from "__TURBOPACK_VAR__" assert {
 import { Stream } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
+import { Stream } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
 const streamDestructionSupported = 'destroy' in Stream.Readable.prototype;
 export { streamDestructionSupported } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
@@ -324,12 +306,6 @@ export { default } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
-};
 "module evaluation";
 
 ```

@@ -35,7 +35,7 @@ export const GET = (req)=>{
 
 - Declares: `GET`
 - Reads: `NextResponse`
-- Write: `GET`, `NextResponse`
+- Write: `NextResponse`, `GET`
 
 ## Item 4: Stmt 2, `VarDeclarator(0)`
 
@@ -152,9 +152,6 @@ import "next/server";
 ```
 ## Part 1
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
 "module evaluation";
 
 ```
@@ -184,6 +181,9 @@ export { NextResponse } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 5
 ```js
+import { NextResponse } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
 import { NextResponse } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
@@ -217,9 +217,6 @@ export { GET } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
 "module evaluation";
 
 ```
@@ -247,9 +244,6 @@ import "next/server";
 ```
 ## Part 1
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
 "module evaluation";
 
 ```
@@ -279,6 +273,9 @@ export { NextResponse } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 5
 ```js
+import { NextResponse } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
 import { NextResponse } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
@@ -312,9 +309,6 @@ export { GET } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
 "module evaluation";
 
 ```

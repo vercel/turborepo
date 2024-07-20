@@ -297,6 +297,12 @@ import { eventCallbacks } from "__TURBOPACK_PART__" assert {
 import { getSocketProtocol } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
+import { source } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
+};
+import { eventCallbacks } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
 function connectHMR(options) {
     const { timeout = 5 * 1000 } = options;
     function init() {
@@ -356,6 +362,9 @@ export { connectHMR };
 import { source } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
+import { source } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
+};
 function sendMessage(data) {
     if (!source || source.readyState !== source.OPEN) return;
     return source.send(data);
@@ -375,6 +384,9 @@ export { sendMessage };
 ```
 ## Part 7
 ```js
+import { eventCallbacks } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
 import { eventCallbacks } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
@@ -478,6 +490,12 @@ import { eventCallbacks } from "__TURBOPACK_PART__" assert {
 import { getSocketProtocol } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
+import { source } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
+};
+import { eventCallbacks } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
 function connectHMR(options) {
     const { timeout = 5 * 1000 } = options;
     function init() {
@@ -537,6 +555,9 @@ export { connectHMR };
 import { source } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
+import { source } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
+};
 function sendMessage(data) {
     if (!source || source.readyState !== source.OPEN) return;
     return source.send(data);
@@ -556,6 +577,9 @@ export { sendMessage };
 ```
 ## Part 7
 ```js
+import { eventCallbacks } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
 import { eventCallbacks } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };

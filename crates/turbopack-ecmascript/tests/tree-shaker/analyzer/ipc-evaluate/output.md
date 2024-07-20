@@ -143,7 +143,7 @@ export const run = async (moduleFactory)=>{
 - Side effects
 - Declares: `run`
 - Reads: `ipc`, `queue`
-- Write: `run`, `ipc`, `queue`
+- Write: `ipc`, `queue`, `run`
 
 # Phase 1
 ```mermaid
@@ -286,8 +286,11 @@ import { ipc } from "__TURBOPACK_PART__" assert {
 import { queue } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
+import { ipc } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
+import { queue } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
 };
 const run = async (moduleFactory)=>{
     let nextId = 1;
@@ -387,12 +390,6 @@ export { run } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 5
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
 "module evaluation";
 
 ```
@@ -413,12 +410,6 @@ export { run } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
 "module evaluation";
 
 ```
@@ -476,8 +467,11 @@ import { ipc } from "__TURBOPACK_PART__" assert {
 import { queue } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
+import { ipc } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
+import { queue } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
 };
 const run = async (moduleFactory)=>{
     let nextId = 1;
@@ -577,12 +571,6 @@ export { run } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 5
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
 "module evaluation";
 
 ```
@@ -603,12 +591,6 @@ export { run } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
 "module evaluation";
 
 ```

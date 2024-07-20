@@ -91,7 +91,7 @@ const hasPostpone = typeof React.unstable_postpone === 'function';
 
 - Declares: `hasPostpone`
 - Reads: `React`
-- Write: `hasPostpone`, `React`
+- Write: `React`, `hasPostpone`
 
 ## Item 10: Stmt 5, `Normal`
 
@@ -759,6 +759,9 @@ export { React } from "__TURBOPACK_VAR__" assert {
 import { React } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
 };
+import { React } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
+};
 const hasPostpone = typeof React.unstable_postpone === 'function';
 export { hasPostpone } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
@@ -785,8 +788,8 @@ export { assertPostpone } from "__TURBOPACK_VAR__" assert {
 import { assertPostpone } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 10
+import { React } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
 };
 import { React } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
@@ -819,8 +822,8 @@ export { createPostponedAbortSignal };
 import { assertPostpone } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 10
+import { React } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
 };
 import { React } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
@@ -979,51 +982,21 @@ import 'react';
 ```
 ## Part 24
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 23
-};
 import '../../client/components/hooks-server-context';
 
 ```
 ## Part 25
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 23
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 24
-};
 import '../../client/components/static-generation-bailout';
 
 ```
 ## Part 26
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 23
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 24
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 25
-};
 import '../../lib/url';
 
 ```
 ## Part 27
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 23
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 24
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 25
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 26
-};
 "module evaluation";
 
 ```
@@ -1057,18 +1030,6 @@ export { markCurrentScopeAsDynamic } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 23
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 24
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 25
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 26
-};
 "module evaluation";
 
 ```
@@ -1215,6 +1176,9 @@ export { React } from "__TURBOPACK_VAR__" assert {
 import { React } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
 };
+import { React } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
+};
 const hasPostpone = typeof React.unstable_postpone === 'function';
 export { hasPostpone } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
@@ -1241,8 +1205,8 @@ export { assertPostpone } from "__TURBOPACK_VAR__" assert {
 import { assertPostpone } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 10
+import { React } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
 };
 import { React } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
@@ -1275,8 +1239,8 @@ export { createPostponedAbortSignal };
 import { assertPostpone } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 10
+import { React } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
 };
 import { React } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
@@ -1435,51 +1399,21 @@ import 'react';
 ```
 ## Part 24
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 23
-};
 import '../../client/components/hooks-server-context';
 
 ```
 ## Part 25
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 23
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 24
-};
 import '../../client/components/static-generation-bailout';
 
 ```
 ## Part 26
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 23
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 24
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 25
-};
 import '../../lib/url';
 
 ```
 ## Part 27
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 23
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 24
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 25
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 26
-};
 "module evaluation";
 
 ```
@@ -1513,18 +1447,6 @@ export { markCurrentScopeAsDynamic } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 23
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 24
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 25
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 26
-};
 "module evaluation";
 
 ```

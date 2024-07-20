@@ -247,6 +247,15 @@ import { clientComponentLoadTimes } from "__TURBOPACK_PART__" assert {
 import { clientComponentLoadCount } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
+import { clientComponentLoadStart } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
+import { clientComponentLoadTimes } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
+import { clientComponentLoadCount } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
+};
 function getClientComponentLoaderMetrics(options = {}) {
     const metrics = clientComponentLoadStart === 0 ? undefined : {
         clientComponentLoadStart,
@@ -275,6 +284,9 @@ export { getClientComponentLoaderMetrics };
 ```
 ## Part 5
 ```js
+import { clientComponentLoadStart } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
 import { clientComponentLoadStart } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
@@ -397,6 +409,15 @@ import { clientComponentLoadTimes } from "__TURBOPACK_PART__" assert {
 import { clientComponentLoadCount } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
+import { clientComponentLoadStart } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
+import { clientComponentLoadTimes } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
+import { clientComponentLoadCount } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
+};
 function getClientComponentLoaderMetrics(options = {}) {
     const metrics = clientComponentLoadStart === 0 ? undefined : {
         clientComponentLoadStart,
@@ -425,6 +446,9 @@ export { getClientComponentLoaderMetrics };
 ```
 ## Part 5
 ```js
+import { clientComponentLoadStart } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
 import { clientComponentLoadStart } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };

@@ -103,7 +103,7 @@ const routeModule = new AppRouteRouteModule({
 - Side effects
 - Declares: `routeModule`
 - Reads: `AppRouteRouteModule`, `RouteKind`, `userland`
-- Write: `routeModule`, `RouteKind`, `userland`
+- Write: `RouteKind`, `userland`, `routeModule`
 
 ## Item 10: Stmt 5, `VarDeclarator(0)`
 
@@ -483,34 +483,16 @@ import '../../server/future/route-modules/app-route/module.compiled';
 ```
 ## Part 7
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
-};
 import '../../server/future/route-kind';
 
 ```
 ## Part 8
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
 import '../../server/lib/patch-fetch';
 
 ```
 ## Part 9
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
 import 'VAR_USERLAND';
 
 ```
@@ -525,20 +507,11 @@ import { RouteKind } from "__TURBOPACK_PART__" assert {
 import { userland } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
+import { RouteKind } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
 };
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
+import { userland } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
 };
 const routeModule = new AppRouteRouteModule({
     definition: {
@@ -559,21 +532,6 @@ export { routeModule } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 11
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 10
-};
 "module evaluation";
 
 ```
@@ -623,14 +581,17 @@ export { staticGenerationAsyncStorage as staticGenerationAsyncStorage };
 import { _patchFetch } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
-import { staticGenerationAsyncStorage, serverHooks } from "__TURBOPACK_PART__" assert {
+import { serverHooks } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 13
 };
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 14
+import { staticGenerationAsyncStorage } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 13
 };
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 15
+import { serverHooks } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 13
+};
+import { staticGenerationAsyncStorage } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 13
 };
 function patchFetch() {
     return _patchFetch({
@@ -683,21 +644,6 @@ export { requestAsyncStorage } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 10
-};
 "module evaluation";
 
 ```
@@ -785,34 +731,16 @@ import '../../server/future/route-modules/app-route/module.compiled';
 ```
 ## Part 7
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
-};
 import '../../server/future/route-kind';
 
 ```
 ## Part 8
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
 import '../../server/lib/patch-fetch';
 
 ```
 ## Part 9
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
 import 'VAR_USERLAND';
 
 ```
@@ -827,17 +755,11 @@ import { RouteKind } from "__TURBOPACK_PART__" assert {
 import { userland } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
+import { RouteKind } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
 };
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
+import { userland } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
 };
 const routeModule = new AppRouteRouteModule({
     definition: {
@@ -886,7 +808,16 @@ export { serverHooks } from "__TURBOPACK_VAR__" assert {
 import { _patchFetch } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
-import { staticGenerationAsyncStorage, serverHooks } from "__TURBOPACK_PART__" assert {
+import { serverHooks } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 12
+};
+import { staticGenerationAsyncStorage } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 12
+};
+import { serverHooks } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 12
+};
+import { staticGenerationAsyncStorage } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 12
 };
 function patchFetch() {
@@ -934,21 +865,6 @@ export { requestAsyncStorage as requestAsyncStorage };
 ```
 ## Part 18
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 10
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
 "module evaluation";
 
 ```
@@ -976,21 +892,6 @@ export { requestAsyncStorage } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 10
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 8
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 6
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
-};
 "module evaluation";
 
 ```

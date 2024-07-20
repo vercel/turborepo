@@ -416,6 +416,9 @@ import { Main } from "__TURBOPACK_PART__" assert {
 import { NextScript } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
+import { Document } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
+};
 class MyDocument extends Document {
     static async getInitialProps(ctx) {
         const initialProps = await Document.getInitialProps(ctx);
@@ -459,9 +462,6 @@ import "react/jsx-runtime";
 ```
 ## Part 10
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
 import 'next/document';
 
 ```
@@ -469,12 +469,6 @@ import 'next/document';
 ```js
 import { MyDocument } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 10
 };
 const __TURBOPACK__default__export__ = MyDocument;
 export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
@@ -484,15 +478,6 @@ export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 12
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 10
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 11
-};
 "module evaluation";
 
 ```
@@ -513,15 +498,6 @@ export { default } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 10
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 11
-};
 "module evaluation";
 
 ```
@@ -629,6 +605,9 @@ import { Main } from "__TURBOPACK_PART__" assert {
 import { NextScript } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
+import { Document } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
+};
 class MyDocument extends Document {
     static async getInitialProps(ctx) {
         const initialProps = await Document.getInitialProps(ctx);
@@ -672,9 +651,6 @@ import "react/jsx-runtime";
 ```
 ## Part 10
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
 import 'next/document';
 
 ```
@@ -682,12 +658,6 @@ import 'next/document';
 ```js
 import { MyDocument } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 10
 };
 const __TURBOPACK__default__export__ = MyDocument;
 export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
@@ -697,15 +667,6 @@ export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 12
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 10
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 11
-};
 "module evaluation";
 
 ```
@@ -726,15 +687,6 @@ export { default } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 10
-};
-import "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 11
-};
 "module evaluation";
 
 ```
