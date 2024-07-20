@@ -71,6 +71,12 @@ impl Visit for IdentUsageCollector<'_> {
         })
     }
 
+    fn visit_class(&mut self, n: &Class) {
+        self.with_nested(|this| {
+            n.visit_children_with(this);
+        });
+    }
+
     fn visit_constructor(&mut self, n: &Constructor) {
         self.with_nested(|this| {
             n.visit_children_with(this);
@@ -92,7 +98,6 @@ impl Visit for IdentUsageCollector<'_> {
             e.visit_children_with(this);
         })
     }
-
     fn visit_function(&mut self, n: &Function) {
         self.with_nested(|this| {
             n.visit_children_with(this);
@@ -163,12 +168,6 @@ impl Visit for IdentUsageCollector<'_> {
         })
     }
 
-    fn visit_prop_name(&mut self, n: &PropName) {
-        if let PropName::Computed(..) = n {
-            n.visit_children_with(self);
-        }
-    }
-
     fn visit_prop(&mut self, n: &Prop) {
         match n {
             Prop::Shorthand(v) => {
@@ -176,6 +175,12 @@ impl Visit for IdentUsageCollector<'_> {
             }
 
             _ => n.visit_children_with(self),
+        }
+    }
+
+    fn visit_prop_name(&mut self, n: &PropName) {
+        if let PropName::Computed(..) = n {
+            n.visit_children_with(self);
         }
     }
 
