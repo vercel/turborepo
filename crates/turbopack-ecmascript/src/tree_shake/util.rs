@@ -72,8 +72,12 @@ impl Visit for IdentUsageCollector<'_> {
     }
 
     fn visit_class(&mut self, n: &Class) {
+        n.super_class.visit_with(self);
+
         self.with_nested(|this| {
-            n.visit_children_with(this);
+            n.decorators.visit_with(this);
+
+            n.body.visit_with(this);
         });
     }
 
