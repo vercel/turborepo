@@ -880,13 +880,13 @@ impl DepGraph {
                         ids.push(id.clone());
 
                         let decl_ids: Vec<Id> = find_pat_ids(&decl.name);
-                        let vars = ids_used_by(
+                        let mut vars = ids_used_by(
                             &decl.init,
                             unresolved_ctxt,
                             top_level_ctxt,
                             &top_level_vars,
                         );
-                        let eventual_vars =
+                        let mut eventual_vars =
                             if matches!(decl.init.as_deref(), Some(Expr::Fn(..) | Expr::Arrow(..)))
                             {
                                 ids_captured_by(
@@ -898,6 +898,9 @@ impl DepGraph {
                             } else {
                                 Vars::default()
                             };
+
+                        vars.read.retain(|id| !decl_ids.contains(id));
+                        eventual_vars.read.retain(|id| !decl_ids.contains(id));
 
                         let side_effects = vars.found_unresolved;
 
