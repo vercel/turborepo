@@ -6,6 +6,7 @@ use std::{
 use indexmap::IndexSet;
 use petgraph::{
     algo::{condensation, has_path_connecting},
+    graphmap::GraphMap,
     prelude::DiGraphMap,
 };
 use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
@@ -295,7 +296,7 @@ impl DepGraph {
                         .chain(data.eventual_read_vars.iter())
                         .chain(data.eventual_write_vars.iter())
                 })
-                .collect::<FxHashSet<_>>();
+                .collect::<IndexSet<_>>();
 
             for item in group {
                 if let ItemId::Group(ItemIdGroupKind::Export(id, _)) = item {
@@ -468,34 +469,26 @@ impl DepGraph {
 
         let condensed = condensation(graph, false);
 
-        let (nodes, edges) = condensed.into_nodes_edges();
         let mut new_graph = InternedGraph::default();
-        let mut node_ix = vec![];
         let mut done = FxHashSet::default();
 
-        for node in nodes {
-            let item_ids = node
-                .weight
-                .iter()
-                .map(|&ix| {
-                    done.insert(ix);
+        let mapped = condensed.map(
+            |_, node| {
+                let item_ids = node
+                    .iter()
+                    .map(|&ix| {
+                        done.insert(ix);
 
-                    self.g.graph_ix[ix as usize].clone()
-                })
-                .collect::<Vec<_>>();
-            let ix = new_graph.node(&item_ids);
+                        self.g.graph_ix[ix as usize].clone()
+                    })
+                    .collect::<Vec<_>>();
 
-            node_ix.push(ix);
-        }
+                new_graph.node(&item_ids)
+            },
+            |_, edge| *edge,
+        );
 
-        for edge in edges {
-            let source = edge.source().index();
-            let target = edge.target().index();
-
-            new_graph
-                .idx_graph
-                .add_edge(node_ix[source], node_ix[target], edge.weight);
-        }
+        let map = GraphMap::from_graph(mapped);
 
         // Insert nodes without any edges
 
@@ -507,7 +500,10 @@ impl DepGraph {
             }
         }
 
-        new_graph
+        InternedGraph {
+            idx_graph: map,
+            graph_ix: new_graph.graph_ix,
+        }
     }
 
     /// Fills information per module items
