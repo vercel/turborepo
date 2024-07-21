@@ -73,7 +73,6 @@ impl fmt::Debug for ItemId {
 type FxBuildHasher = BuildHasherDefault<FxHasher>;
 
 /// Data about a module item
-#[derive(Debug)]
 pub(crate) struct ItemData {
     /// Is the module item hoisted?
     pub is_hoisted: bool,
@@ -113,6 +112,21 @@ pub(crate) struct ItemData {
     pub content: ModuleItem,
 
     pub export: Option<JsWord>,
+}
+
+impl fmt::Debug for ItemData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ItemData")
+            .field("is_hoisted", &self.is_hoisted)
+            .field("var_decls", &self.var_decls)
+            .field("read_vars", &self.read_vars)
+            .field("eventual_read_vars", &self.eventual_read_vars)
+            .field("write_vars", &self.write_vars)
+            .field("eventual_write_vars", &self.eventual_write_vars)
+            .field("side_effects", &self.side_effects)
+            .field("export", &self.export)
+            .finish()
+    }
 }
 
 impl Default for ItemData {
@@ -254,15 +268,15 @@ impl DepGraph {
 
         for (ix, group) in groups.graph_ix.iter().enumerate() {
             for id in group {
-                let data = data.get(id).unwrap();
+                let item = data.get(id).unwrap();
 
-                for var in data.var_decls.iter() {
+                for var in item.var_decls.iter() {
                     let output = declarator.insert(var.clone(), ix as u32);
 
-                    assert_eq!(
+                    debug_assert_eq!(
                         output, None,
-                        "var {:?} is declared in multiple parts\n{:?}",
-                        var, groups.graph_ix
+                        "var {:?} is declared in multiple parts\n{:?}\n{:?}",
+                        var, groups.graph_ix, data
                     );
                 }
             }
