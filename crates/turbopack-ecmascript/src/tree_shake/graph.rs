@@ -118,6 +118,7 @@ impl fmt::Debug for ItemData {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ItemData")
             .field("is_hoisted", &self.is_hoisted)
+            .field("pure", &self.pure)
             .field("var_decls", &self.var_decls)
             .field("read_vars", &self.read_vars)
             .field("eventual_read_vars", &self.eventual_read_vars)
