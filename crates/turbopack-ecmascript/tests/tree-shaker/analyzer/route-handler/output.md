@@ -152,6 +152,9 @@ import "next/server";
 ```
 ## Part 1
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
 "module evaluation";
 
 ```
@@ -165,6 +168,9 @@ export { runtime } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
 import { runtime } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
@@ -181,7 +187,7 @@ export { NextResponse } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 5
 ```js
-import { NextResponse } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
 import { NextResponse } from "__TURBOPACK_PART__" assert {
@@ -199,6 +205,9 @@ export { GET } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 6
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
 import { GET } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
@@ -217,6 +226,9 @@ export { GET } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
 "module evaluation";
 
 ```
@@ -244,6 +256,9 @@ import "next/server";
 ```
 ## Part 1
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
 "module evaluation";
 
 ```
@@ -257,6 +272,9 @@ export { runtime } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
 import { runtime } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
@@ -273,7 +291,7 @@ export { NextResponse } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 5
 ```js
-import { NextResponse } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
 import { NextResponse } from "__TURBOPACK_PART__" assert {
@@ -291,6 +309,9 @@ export { GET } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 6
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
 import { GET } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
@@ -309,6 +330,9 @@ export { GET } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
 "module evaluation";
 
 ```

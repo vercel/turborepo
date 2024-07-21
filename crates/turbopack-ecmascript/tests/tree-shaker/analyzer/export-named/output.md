@@ -97,6 +97,9 @@ import "./lib";
 ```
 ## Part 1
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
 "module evaluation";
 
 ```
@@ -110,6 +113,9 @@ export { __TURBOPACK__reexport__cat__ } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
 import { __TURBOPACK__reexport__cat__ } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
@@ -125,6 +131,9 @@ export { fakeCat } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
 "module evaluation";
 
 ```
@@ -149,6 +158,9 @@ import "./lib";
 ```
 ## Part 1
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
 "module evaluation";
 
 ```
@@ -162,6 +174,9 @@ export { __TURBOPACK__reexport__cat__ } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
 import { __TURBOPACK__reexport__cat__ } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
@@ -177,6 +192,9 @@ export { fakeCat } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
 "module evaluation";
 
 ```

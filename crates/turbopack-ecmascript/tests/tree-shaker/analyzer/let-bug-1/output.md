@@ -238,23 +238,23 @@ export { clientComponentLoadStart } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
-import { clientComponentLoadStart } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
-import { clientComponentLoadTimes } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
-import { clientComponentLoadCount } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
 import { clientComponentLoadStart } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
-import { clientComponentLoadTimes } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
 import { clientComponentLoadCount } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
+};
+import { clientComponentLoadTimes } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
 };
 function getClientComponentLoaderMetrics(options = {}) {
     const metrics = clientComponentLoadStart === 0 ? undefined : {
@@ -276,6 +276,9 @@ export { getClientComponentLoaderMetrics } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 4
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
 import { getClientComponentLoaderMetrics } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
@@ -284,8 +287,14 @@ export { getClientComponentLoaderMetrics };
 ```
 ## Part 5
 ```js
-import { clientComponentLoadStart } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
 };
 import { clientComponentLoadStart } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
@@ -331,6 +340,9 @@ export { wrapClientComponentLoader } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 6
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
 import { wrapClientComponentLoader } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
@@ -400,23 +412,23 @@ export { clientComponentLoadStart } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
-import { clientComponentLoadStart } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
-import { clientComponentLoadTimes } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
-import { clientComponentLoadCount } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
 import { clientComponentLoadStart } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
-import { clientComponentLoadTimes } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
 import { clientComponentLoadCount } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
+};
+import { clientComponentLoadTimes } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
 };
 function getClientComponentLoaderMetrics(options = {}) {
     const metrics = clientComponentLoadStart === 0 ? undefined : {
@@ -438,6 +450,9 @@ export { getClientComponentLoaderMetrics } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 4
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
 import { getClientComponentLoaderMetrics } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
@@ -446,8 +461,14 @@ export { getClientComponentLoaderMetrics };
 ```
 ## Part 5
 ```js
-import { clientComponentLoadStart } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
 };
 import { clientComponentLoadStart } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
@@ -493,6 +514,9 @@ export { wrapClientComponentLoader } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 6
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
 import { wrapClientComponentLoader } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };

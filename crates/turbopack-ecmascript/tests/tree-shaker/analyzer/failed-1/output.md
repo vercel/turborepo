@@ -288,20 +288,23 @@ export { eventCallbacks } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
-import { source } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
 };
 import { eventCallbacks } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
+};
+import { source } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
 };
 import { getSocketProtocol } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
-};
-import { source } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 1
-};
-import { eventCallbacks } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
 };
 function connectHMR(options) {
     const { timeout = 5 * 1000 } = options;
@@ -351,6 +354,9 @@ export { connectHMR } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 4
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
 import { connectHMR } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
@@ -359,7 +365,7 @@ export { connectHMR };
 ```
 ## Part 5
 ```js
-import { source } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
 import { source } from "__TURBOPACK_PART__" assert {
@@ -376,6 +382,9 @@ export { sendMessage } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 6
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
 import { sendMessage } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
@@ -384,7 +393,7 @@ export { sendMessage };
 ```
 ## Part 7
 ```js
-import { eventCallbacks } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
 import { eventCallbacks } from "__TURBOPACK_PART__" assert {
@@ -400,6 +409,9 @@ export { addMessageListener } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 8
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
+};
 import { addMessageListener } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
 };
@@ -481,20 +493,23 @@ export { eventCallbacks } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
-import { source } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
 };
 import { eventCallbacks } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
+};
+import { source } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
 };
 import { getSocketProtocol } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
-};
-import { source } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 1
-};
-import { eventCallbacks } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
 };
 function connectHMR(options) {
     const { timeout = 5 * 1000 } = options;
@@ -544,6 +559,9 @@ export { connectHMR } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 4
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
 import { connectHMR } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
@@ -552,7 +570,7 @@ export { connectHMR };
 ```
 ## Part 5
 ```js
-import { source } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
 import { source } from "__TURBOPACK_PART__" assert {
@@ -569,6 +587,9 @@ export { sendMessage } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 6
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
 import { sendMessage } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
@@ -577,7 +598,7 @@ export { sendMessage };
 ```
 ## Part 7
 ```js
-import { eventCallbacks } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
 import { eventCallbacks } from "__TURBOPACK_PART__" assert {
@@ -593,6 +614,9 @@ export { addMessageListener } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 8
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
+};
 import { addMessageListener } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
 };

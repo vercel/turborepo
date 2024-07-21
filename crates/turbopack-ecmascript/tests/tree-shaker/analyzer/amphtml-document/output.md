@@ -392,32 +392,53 @@ export { Document } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 8
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 6
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
+import { Html } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
 import { Document } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
 };
 import { _jsxs } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
-import { _Fragment } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
+import { Head } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
 };
 import { _jsx } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
-import { Html } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import { Head } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
-};
-import { Main } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 1
-};
 import { NextScript } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
-import { Document } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
+import { _Fragment } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
+import { Main } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
 };
 class MyDocument extends Document {
     static async getInitialProps(ctx) {
@@ -462,11 +483,23 @@ import "react/jsx-runtime";
 ```
 ## Part 10
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
+};
 import 'next/document';
 
 ```
 ## Part 11
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 8
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 10
+};
 import { MyDocument } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
 };
@@ -478,11 +511,23 @@ export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 12
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 10
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 11
+};
 "module evaluation";
 
 ```
 ## Part 13
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 11
+};
 import { __TURBOPACK__default__export__ } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
@@ -498,6 +543,15 @@ export { default } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 10
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 11
+};
 "module evaluation";
 
 ```
@@ -581,32 +635,53 @@ export { Document } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 8
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 6
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
+import { Html } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
 import { Document } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
 };
 import { _jsxs } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
-import { _Fragment } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
+import { Head } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
 };
 import { _jsx } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
-import { Html } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import { Head } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
-};
-import { Main } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 1
-};
 import { NextScript } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
-import { Document } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 7
+import { _Fragment } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
+import { Main } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
 };
 class MyDocument extends Document {
     static async getInitialProps(ctx) {
@@ -651,11 +726,23 @@ import "react/jsx-runtime";
 ```
 ## Part 10
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
+};
 import 'next/document';
 
 ```
 ## Part 11
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 8
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 10
+};
 import { MyDocument } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
 };
@@ -667,11 +754,23 @@ export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 12
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 10
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 11
+};
 "module evaluation";
 
 ```
 ## Part 13
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 11
+};
 import { __TURBOPACK__default__export__ } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
 };
@@ -687,6 +786,15 @@ export { default } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 10
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 11
+};
 "module evaluation";
 
 ```

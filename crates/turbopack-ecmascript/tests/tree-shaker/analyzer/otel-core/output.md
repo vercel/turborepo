@@ -238,6 +238,12 @@ export { parseEnvironment } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
+};
 import { parseEnvironment } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
@@ -254,6 +260,9 @@ export { getEnvWithoutDefaults } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 4
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
 import { getEnvWithoutDefaults } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
@@ -262,11 +271,20 @@ export { getEnvWithoutDefaults };
 ```
 ## Part 5
 ```js
-import { parseEnvironment } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
 };
 import { _globalThis } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
+};
+import { parseEnvironment } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
 };
 import { DEFAULT_ENVIRONMENT } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
@@ -282,6 +300,9 @@ export { getEnv } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 6
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
 import { getEnv } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
@@ -295,11 +316,20 @@ import '../../utils/environment';
 ```
 ## Part 8
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
+};
 import './globalThis';
 
 ```
 ## Part 9
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 8
+};
 "module evaluation";
 
 ```
@@ -315,6 +345,12 @@ export { getEnv } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 8
+};
 "module evaluation";
 
 ```
@@ -361,6 +397,12 @@ export { parseEnvironment } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
+};
 import { parseEnvironment } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
@@ -377,6 +419,9 @@ export { getEnvWithoutDefaults } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 4
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
 import { getEnvWithoutDefaults } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
@@ -385,11 +430,20 @@ export { getEnvWithoutDefaults };
 ```
 ## Part 5
 ```js
-import { parseEnvironment } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
 };
 import { _globalThis } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
+};
+import { parseEnvironment } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
 };
 import { DEFAULT_ENVIRONMENT } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
@@ -405,6 +459,9 @@ export { getEnv } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 6
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
 import { getEnv } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
@@ -418,11 +475,20 @@ import '../../utils/environment';
 ```
 ## Part 8
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
+};
 import './globalThis';
 
 ```
 ## Part 9
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 8
+};
 "module evaluation";
 
 ```
@@ -438,6 +504,12 @@ export { getEnv } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 8
+};
 "module evaluation";
 
 ```

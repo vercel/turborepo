@@ -20,6 +20,7 @@ __turbopack_esm__({});
 var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2d$tree$2d$shake$2f$import$2d$side$2d$effect$2f$input$2f$lib$2e$js__$5b$test$5d$__$28$ecmascript$29$__$3c$internal__part__4$3e$__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/basic-tree-shake/import-side-effect/input/lib.js [test] (ecmascript) <internal part 4>");
 "__TURBOPACK__ecmascript__hoisting__location__";
 ;
+;
 __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2d$tree$2d$shake$2f$import$2d$side$2d$effect$2f$input$2f$lib$2e$js__$5b$test$5d$__$28$ecmascript$29$__$3c$internal__part__4$3e$__["dog"] += "!";
 
 })()),
@@ -30,6 +31,7 @@ __turbopack_esm__({});
 var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2d$tree$2d$shake$2f$import$2d$side$2d$effect$2f$input$2f$lib$2e$js__$5b$test$5d$__$28$ecmascript$29$__$3c$internal__part__6$3e$__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/basic-tree-shake/import-side-effect/input/lib.js [test] (ecmascript) <internal part 6>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2d$tree$2d$shake$2f$import$2d$side$2d$effect$2f$input$2f$lib$2e$js__$5b$test$5d$__$28$ecmascript$29$__$3c$internal__part__4$3e$__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/basic-tree-shake/import-side-effect/input/lib.js [test] (ecmascript) <internal part 4>");
 "__TURBOPACK__ecmascript__hoisting__location__";
+;
 ;
 ;
 __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2d$tree$2d$shake$2f$import$2d$side$2d$effect$2f$input$2f$lib$2e$js__$5b$test$5d$__$28$ecmascript$29$__$3c$internal__part__4$3e$__["dog"] += "!";
@@ -44,6 +46,7 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests
 "__TURBOPACK__ecmascript__hoisting__location__";
 ;
 ;
+;
 __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2d$tree$2d$shake$2f$import$2d$side$2d$effect$2f$input$2f$lib$2e$js__$5b$test$5d$__$28$ecmascript$29$__$3c$internal__part__4$3e$__["dog"] += "!";
 
 })()),
@@ -54,6 +57,7 @@ __turbopack_esm__({});
 var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2d$tree$2d$shake$2f$import$2d$side$2d$effect$2f$input$2f$lib$2e$js__$5b$test$5d$__$28$ecmascript$29$__$3c$internal__part__6$3e$__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/basic-tree-shake/import-side-effect/input/lib.js [test] (ecmascript) <internal part 6>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2d$tree$2d$shake$2f$import$2d$side$2d$effect$2f$input$2f$lib$2e$js__$5b$test$5d$__$28$ecmascript$29$__$3c$internal__part__4$3e$__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/basic-tree-shake/import-side-effect/input/lib.js [test] (ecmascript) <internal part 4>");
 "__TURBOPACK__ecmascript__hoisting__location__";
+;
 ;
 ;
 console.log(__TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2d$tree$2d$shake$2f$import$2d$side$2d$effect$2f$input$2f$lib$2e$js__$5b$test$5d$__$28$ecmascript$29$__$3c$internal__part__4$3e$__["dog"]);
@@ -70,6 +74,7 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests
 ;
 ;
 ;
+;
 console.log(__TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2d$tree$2d$shake$2f$import$2d$side$2d$effect$2f$input$2f$lib$2e$js__$5b$test$5d$__$28$ecmascript$29$__$3c$internal__part__4$3e$__["dog"]);
 
 })()),
@@ -82,6 +87,7 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests
 var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2d$tree$2d$shake$2f$import$2d$side$2d$effect$2f$input$2f$lib$2e$js__$5b$test$5d$__$28$ecmascript$29$__$3c$internal__part__14$3e$__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/basic-tree-shake/import-side-effect/input/lib.js [test] (ecmascript) <internal part 14>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2d$tree$2d$shake$2f$import$2d$side$2d$effect$2f$input$2f$lib$2e$js__$5b$test$5d$__$28$ecmascript$29$__$3c$internal__part__15$3e$__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/basic-tree-shake/import-side-effect/input/lib.js [test] (ecmascript) <internal part 15>");
 "__TURBOPACK__ecmascript__hoisting__location__";
+;
 ;
 ;
 ;

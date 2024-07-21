@@ -168,6 +168,12 @@ export { fetch } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 2
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
 import { fetch } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
@@ -179,11 +185,20 @@ export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
 "module evaluation";
 
 ```
 ## Part 4
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
 import { __TURBOPACK__default__export__ } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
@@ -200,7 +215,7 @@ export { Stream } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 6
 ```js
-import { Stream } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
 import { Stream } from "__TURBOPACK_PART__" assert {
@@ -221,6 +236,12 @@ export { default } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
 "module evaluation";
 
 ```
@@ -253,6 +274,12 @@ export { fetch } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 2
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
 import { fetch } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
@@ -264,11 +291,20 @@ export { __TURBOPACK__default__export__ } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
 "module evaluation";
 
 ```
 ## Part 4
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
 import { __TURBOPACK__default__export__ } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
@@ -285,7 +321,7 @@ export { Stream } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 6
 ```js
-import { Stream } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
 import { Stream } from "__TURBOPACK_PART__" assert {
@@ -306,6 +342,12 @@ export { default } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
 "module evaluation";
 
 ```

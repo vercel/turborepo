@@ -138,6 +138,9 @@ await Promise.resolve();
 ```
 ## Part 1
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
 "module evaluation";
 
 ```
@@ -151,6 +154,9 @@ export { effects } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
 import { effects } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
@@ -159,8 +165,11 @@ export { effects };
 ```
 ## Part 4
 ```js
-import { effects } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
 };
 import { effects } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
@@ -175,6 +184,9 @@ export { effect } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 5
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
 import { effect } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
@@ -193,6 +205,9 @@ export { effect } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
 "module evaluation";
 
 ```
@@ -220,6 +235,9 @@ await Promise.resolve();
 ```
 ## Part 1
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
 "module evaluation";
 
 ```
@@ -233,7 +251,7 @@ export { effects } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
-import { effects } from "__TURBOPACK_PART__" assert {
+import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
 import { effects } from "__TURBOPACK_PART__" assert {
@@ -249,6 +267,9 @@ export { effect } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 4
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
 import { effect } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
@@ -257,6 +278,9 @@ export { effect };
 ```
 ## Part 5
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
 import { effects } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
@@ -275,6 +299,9 @@ export { effects } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
 "module evaluation";
 
 ```

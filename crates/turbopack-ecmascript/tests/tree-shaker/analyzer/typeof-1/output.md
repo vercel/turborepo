@@ -227,6 +227,15 @@ export { NextResponse } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
 import { NextResponse } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
@@ -235,9 +244,6 @@ import { ClientComponent } from "__TURBOPACK_PART__" assert {
 };
 import { MyModuleClientComponent } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
-};
-import { NextResponse } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
 };
 function GET() {
     return NextResponse.json({
@@ -252,6 +258,9 @@ export { GET } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 4
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
 import { GET } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
@@ -265,16 +274,34 @@ import 'next/server';
 ```
 ## Part 6
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
 import '../../ClientComponent';
 
 ```
 ## Part 7
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 6
+};
 import 'my-module/MyModuleClientComponent';
 
 ```
 ## Part 8
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 6
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
+};
 "module evaluation";
 
 ```
@@ -287,6 +314,15 @@ export { GET } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 6
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
+};
 "module evaluation";
 
 ```
@@ -330,6 +366,15 @@ export { NextResponse } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 3
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
 import { NextResponse } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
@@ -338,9 +383,6 @@ import { ClientComponent } from "__TURBOPACK_PART__" assert {
 };
 import { MyModuleClientComponent } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
-};
-import { NextResponse } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
 };
 function GET() {
     return NextResponse.json({
@@ -355,6 +397,9 @@ export { GET } from "__TURBOPACK_VAR__" assert {
 ```
 ## Part 4
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
 import { GET } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
@@ -368,16 +413,34 @@ import 'next/server';
 ```
 ## Part 6
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
 import '../../ClientComponent';
 
 ```
 ## Part 7
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 6
+};
 import 'my-module/MyModuleClientComponent';
 
 ```
 ## Part 8
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 6
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
+};
 "module evaluation";
 
 ```
@@ -390,6 +453,15 @@ export { GET } from "__TURBOPACK_PART__" assert {
 ```
 ## Merged (module eval)
 ```js
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 6
+};
+import "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 7
+};
 "module evaluation";
 
 ```
