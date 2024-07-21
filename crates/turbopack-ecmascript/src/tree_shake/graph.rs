@@ -257,7 +257,13 @@ impl DepGraph {
                 let data = data.get(id).unwrap();
 
                 for var in data.var_decls.iter() {
-                    declarator.insert(var.clone(), ix as u32);
+                    let output = declarator.insert(var.clone(), ix as u32);
+
+                    assert_eq!(
+                        output, None,
+                        "var {:?} is declared in multiple parts\n{:?}",
+                        var, groups.graph_ix
+                    );
                 }
             }
         }
