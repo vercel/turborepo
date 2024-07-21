@@ -250,6 +250,18 @@ impl DepGraph {
             exports.insert(Key::ModuleEvaluation, 0);
         }
 
+        let mut declarator = FxHashMap::default();
+
+        for (ix, group) in groups.graph_ix.iter().enumerate() {
+            for id in group {
+                let data = data.get(id).unwrap();
+
+                for var in data.var_decls.iter() {
+                    declarator.insert(var.clone(), ix as u32);
+                }
+            }
+        }
+
         for (ix, group) in groups.graph_ix.iter().enumerate() {
             let mut chunk = Module {
                 span: DUMMY_SP,
@@ -270,6 +282,12 @@ impl DepGraph {
                 })
                 .collect::<FxHashSet<_>>();
 
+            for item in group {
+                if let ItemId::Group(ItemIdGroupKind::Export(id, _)) = item {
+                    required_vars.insert(id);
+                }
+            }
+
             for id in group {
                 let data = data.get(id).unwrap();
 
@@ -280,9 +298,7 @@ impl DepGraph {
 
             for item in group {
                 match item {
-                    ItemId::Group(ItemIdGroupKind::Export(id, _)) => {
-                        required_vars.insert(id);
-
+                    ItemId::Group(ItemIdGroupKind::Export(..)) => {
                         if let Some(export) = &data[item].export {
                             exports.insert(Key::Export(export.as_str().into()), ix as u32);
 
@@ -313,28 +329,41 @@ impl DepGraph {
                 }
             }
 
+            // Depend on direct dependencies so that they are executed before this module.
             for dep in groups
                 .idx_graph
                 .neighbors_directed(ix as u32, petgraph::Direction::Outgoing)
             {
-                let mut specifiers = vec![];
+                chunk
+                    .body
+                    .push(ModuleItem::ModuleDecl(ModuleDecl::Import(ImportDecl {
+                        span: DUMMY_SP,
+                        specifiers: vec![],
+                        src: Box::new(TURBOPACK_PART_IMPORT_SOURCE.into()),
+                        type_only: false,
+                        with: Some(Box::new(create_turbopack_part_id_assert(PartId::Internal(
+                            dep,
+                        )))),
+                        phase: Default::default(),
+                    })));
+            }
 
-                let dep_items = groups.graph_ix.get_index(dep as usize).unwrap();
+            // Import variables
+            for var in required_vars {
+                let Some(&dep) = declarator.get(var) else {
+                    continue;
+                };
 
-                for dep_item in dep_items {
-                    let data = data.get(dep_item).unwrap();
-
-                    for var in data.var_decls.iter() {
-                        if required_vars.contains(var) {
-                            specifiers.push(ImportSpecifier::Named(ImportNamedSpecifier {
-                                span: DUMMY_SP,
-                                local: var.clone().into(),
-                                imported: None,
-                                is_type_only: false,
-                            }));
-                        }
-                    }
+                if dep == ix as u32 {
+                    continue;
                 }
+
+                let specifiers = vec![ImportSpecifier::Named(ImportNamedSpecifier {
+                    span: DUMMY_SP,
+                    local: var.clone().into(),
+                    imported: None,
+                    is_type_only: false,
+                })];
 
                 part_deps.entry(ix as u32).or_default().push(dep);
 
