@@ -247,11 +247,11 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
-import { clientComponentLoadStart } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
-};
 import { clientComponentLoadCount } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
+};
+import { clientComponentLoadStart } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
 };
 import { clientComponentLoadTimes } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
@@ -296,14 +296,14 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
+import { clientComponentLoadTimes } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
 import { clientComponentLoadStart } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
 import { clientComponentLoadCount } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
-};
-import { clientComponentLoadTimes } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
 };
 function wrapClientComponentLoader(ComponentMod) {
     if (!('performance' in globalThis)) {
@@ -421,11 +421,11 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
-import { clientComponentLoadStart } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
-};
 import { clientComponentLoadCount } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
+};
+import { clientComponentLoadStart } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
 };
 import { clientComponentLoadTimes } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
@@ -470,14 +470,14 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
+import { clientComponentLoadTimes } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
 import { clientComponentLoadStart } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
 import { clientComponentLoadCount } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
-};
-import { clientComponentLoadTimes } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
 };
 function wrapClientComponentLoader(ComponentMod) {
     if (!('performance' in globalThis)) {

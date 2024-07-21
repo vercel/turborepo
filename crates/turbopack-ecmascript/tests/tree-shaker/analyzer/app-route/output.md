@@ -543,14 +543,14 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
-import { userland } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
 import { AppRouteRouteModule } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
 import { RouteKind } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
+};
+import { userland } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
 };
 const routeModule = new AppRouteRouteModule({
     definition: {
@@ -656,13 +656,13 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 15
 };
-import { serverHooks } from "__TURBOPACK_PART__" assert {
+import { staticGenerationAsyncStorage } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 13
 };
 import { _patchFetch } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
-import { staticGenerationAsyncStorage } from "__TURBOPACK_PART__" assert {
+import { serverHooks } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 13
 };
 function patchFetch() {
@@ -881,14 +881,14 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 9
 };
-import { userland } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
 import { AppRouteRouteModule } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
 import { RouteKind } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
+};
+import { userland } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
 };
 const routeModule = new AppRouteRouteModule({
     definition: {
@@ -946,13 +946,13 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 12
 };
-import { serverHooks } from "__TURBOPACK_PART__" assert {
+import { staticGenerationAsyncStorage } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 12
 };
 import { _patchFetch } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
-import { staticGenerationAsyncStorage } from "__TURBOPACK_PART__" assert {
+import { serverHooks } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 12
 };
 function patchFetch() {

@@ -297,14 +297,14 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
-import { eventCallbacks } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
+import { getSocketProtocol } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
 };
 import { source } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
-import { getSocketProtocol } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
+import { eventCallbacks } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
 };
 function connectHMR(options) {
     const { timeout = 5 * 1000 } = options;
@@ -502,14 +502,14 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
-import { eventCallbacks } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
+import { getSocketProtocol } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
 };
 import { source } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
-import { getSocketProtocol } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
+import { eventCallbacks } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
 };
 function connectHMR(options) {
     const { timeout = 5 * 1000 } = options;

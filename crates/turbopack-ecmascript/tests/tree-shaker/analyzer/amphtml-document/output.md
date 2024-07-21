@@ -416,29 +416,29 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
-import { Html } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
 import { Document } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
 };
 import { _jsxs } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
-import { Head } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
+import { _Fragment } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
 };
 import { _jsx } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
-import { NextScript } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
+import { Html } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
 };
-import { _Fragment } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
+import { Head } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
 };
 import { Main } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
+};
+import { NextScript } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
 };
 class MyDocument extends Document {
     static async getInitialProps(ctx) {
@@ -659,29 +659,29 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
-import { Html } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
 import { Document } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 7
 };
 import { _jsxs } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
-import { Head } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
+import { _Fragment } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
 };
 import { _jsx } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
-import { NextScript } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
+import { Html } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
 };
-import { _Fragment } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
+import { Head } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
 };
 import { Main } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
+};
+import { NextScript } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
 };
 class MyDocument extends Document {
     static async getInitialProps(ctx) {

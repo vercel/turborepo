@@ -450,11 +450,11 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
-import { d2 } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
 import { d1 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
+};
+import { d2 } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
 };
 function c1_3() {
     return c1_1(d2);
@@ -679,11 +679,11 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
-import { d2 } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
 import { d1 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
+};
+import { d2 } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
 };
 function c1_3() {
     return c1_1(d2);

@@ -406,14 +406,14 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
-import { value3 } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
 import { value } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
 import { value2 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
+};
+import { value3 } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
 };
 const shared = {
     value,
@@ -664,14 +664,14 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
-import { value3 } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
 import { value } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
 import { value2 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
+};
+import { value3 } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
 };
 const shared = {
     value,

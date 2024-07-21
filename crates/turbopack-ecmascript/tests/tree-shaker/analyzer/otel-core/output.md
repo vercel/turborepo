@@ -244,11 +244,11 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
-import { parseEnvironment } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
-};
 import { _globalThis } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
+};
+import { parseEnvironment } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
 };
 function getEnvWithoutDefaults() {
     return parseEnvironment(_globalThis);
@@ -280,14 +280,14 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
-import { _globalThis } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 1
+import { DEFAULT_ENVIRONMENT } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
 };
 import { parseEnvironment } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
-import { DEFAULT_ENVIRONMENT } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
+import { _globalThis } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
 };
 function getEnv() {
     var globalEnv = parseEnvironment(_globalThis);
@@ -403,11 +403,11 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
-import { parseEnvironment } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
-};
 import { _globalThis } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
+};
+import { parseEnvironment } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
 };
 function getEnvWithoutDefaults() {
     return parseEnvironment(_globalThis);
@@ -439,14 +439,14 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
-import { _globalThis } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 1
+import { DEFAULT_ENVIRONMENT } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
 };
 import { parseEnvironment } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
-import { DEFAULT_ENVIRONMENT } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
+import { _globalThis } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
 };
 function getEnv() {
     var globalEnv = parseEnvironment(_globalThis);

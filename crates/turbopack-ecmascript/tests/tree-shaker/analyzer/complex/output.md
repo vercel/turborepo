@@ -569,11 +569,11 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
-import { cat } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
 import { dog } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
+};
+import { cat } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
 };
 function getChimera() {
     return cat + dog;
@@ -868,11 +868,11 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
 };
-import { cat } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
 import { dog } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
+};
+import { cat } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
 };
 function getChimera() {
     return cat + dog;
@@ -926,14 +926,14 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
-import { setDog } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
-};
 import { dog } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
 import { getDog } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 11
+};
+import { setDog } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
 };
 const dogRef = {
     initial: dog,

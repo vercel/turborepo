@@ -2083,11 +2083,11 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
-import { getProperError } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
-};
 import { parseStackTrace } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
+};
+import { getProperError } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
 };
 function structuredError(e) {
     e = getProperError(e);
@@ -2110,11 +2110,11 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
-import { createConnection } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
 import { structuredError } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
+};
+import { createConnection } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
 };
 function createIpc(port) {
     const socket = createConnection(port, "127.0.0.1");
@@ -2340,11 +2340,11 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
-import { PORT } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
 import { createIpc } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
+};
+import { PORT } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
 };
 const IPC = createIpc(parseInt(PORT, 10));
 export { IPC } from "__TURBOPACK_VAR__" assert {
@@ -3677,11 +3677,11 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
-import { getProperError } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
-};
 import { parseStackTrace } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
+};
+import { getProperError } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
 };
 function structuredError(e) {
     e = getProperError(e);
@@ -3715,11 +3715,11 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
-import { createConnection } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
-};
 import { structuredError } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
+};
+import { createConnection } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
 };
 function createIpc(port) {
     const socket = createConnection(port, "127.0.0.1");
@@ -3910,11 +3910,11 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 8
 };
-import { PORT } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 9
-};
 import { createIpc } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
+};
+import { PORT } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 9
 };
 const IPC = createIpc(parseInt(PORT, 10));
 export { IPC } from "__TURBOPACK_VAR__" assert {

@@ -771,11 +771,11 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
-import { toNodeOutgoingHttpHeaders } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 1
-};
 import { ResponseCookies } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
+};
+import { stringifyCookie } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
 };
 import { handleMiddlewareField } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
@@ -783,20 +783,20 @@ import { handleMiddlewareField } from "__TURBOPACK_PART__" assert {
 import { ReflectAdapter } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
+import { INTERNALS } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 12
+};
+import { NextURL } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
+import { toNodeOutgoingHttpHeaders } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
+};
 import { validateURL } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
 import { REDIRECTS } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 13
-};
-import { NextURL } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
-};
-import { INTERNALS } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 12
-};
-import { stringifyCookie } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
 };
 class NextResponse extends Response {
     constructor(body, init = {}){
@@ -1183,11 +1183,11 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
-import { toNodeOutgoingHttpHeaders } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 1
-};
 import { ResponseCookies } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
+};
+import { stringifyCookie } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 5
 };
 import { handleMiddlewareField } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
@@ -1195,20 +1195,20 @@ import { handleMiddlewareField } from "__TURBOPACK_PART__" assert {
 import { ReflectAdapter } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
+import { INTERNALS } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 12
+};
+import { NextURL } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
+};
+import { toNodeOutgoingHttpHeaders } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
+};
 import { validateURL } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
 import { REDIRECTS } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 13
-};
-import { NextURL } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
-};
-import { INTERNALS } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 12
-};
-import { stringifyCookie } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 5
 };
 class NextResponse extends Response {
     constructor(body, init = {}){

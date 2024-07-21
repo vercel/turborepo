@@ -236,14 +236,14 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
+import { MyModuleClientComponent } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
 import { NextResponse } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
 import { ClientComponent } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
-};
-import { MyModuleClientComponent } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
 };
 function GET() {
     return NextResponse.json({
@@ -375,14 +375,14 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
+import { MyModuleClientComponent } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
 import { NextResponse } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
 };
 import { ClientComponent } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
-};
-import { MyModuleClientComponent } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
 };
 function GET() {
     return NextResponse.json({

@@ -991,32 +991,20 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
-import { closeSpanWithError } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 18
+import { trace } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 15
 };
-import { LogSpanAllowList } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 1
-};
-import { clientTraceDataSetter } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import { isPromise } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
+import { context } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 15
 };
 import { propagation } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 15
 };
+import { clientTraceDataSetter } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
 import { NextVanillaSpanAllowlist } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
-};
-import { rootSpanAttributesStore } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 13
-};
-import { rootSpanIdKey } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 17
-};
-import { context } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 15
 };
 import { ROOT_CONTEXT } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 15
@@ -1024,8 +1012,20 @@ import { ROOT_CONTEXT } from "__TURBOPACK_PART__" assert {
 import { getSpanId } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
-import { trace } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 15
+import { rootSpanIdKey } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 17
+};
+import { rootSpanAttributesStore } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 13
+};
+import { LogSpanAllowList } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
+};
+import { closeSpanWithError } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 18
+};
+import { isPromise } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
 };
 class NextTracerImpl {
     getTracerInstance() {
@@ -1572,32 +1572,20 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
-import { closeSpanWithError } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 18
+import { trace } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 16
 };
-import { LogSpanAllowList } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 1
-};
-import { clientTraceDataSetter } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 3
-};
-import { isPromise } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
+import { context } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 16
 };
 import { propagation } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 16
 };
+import { clientTraceDataSetter } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 3
+};
 import { NextVanillaSpanAllowlist } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 2
-};
-import { rootSpanAttributesStore } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 14
-};
-import { rootSpanIdKey } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 13
-};
-import { context } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 16
 };
 import { ROOT_CONTEXT } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 16
@@ -1605,8 +1593,20 @@ import { ROOT_CONTEXT } from "__TURBOPACK_PART__" assert {
 import { getSpanId } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 5
 };
-import { trace } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 16
+import { rootSpanIdKey } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 13
+};
+import { rootSpanAttributesStore } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 14
+};
+import { LogSpanAllowList } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
+};
+import { closeSpanWithError } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 18
+};
+import { isPromise } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
 };
 class NextTracerImpl {
     getTracerInstance() {

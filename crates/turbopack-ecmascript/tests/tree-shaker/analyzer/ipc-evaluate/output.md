@@ -292,11 +292,11 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
-import { queue } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 1
-};
 import { ipc } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
+};
+import { queue } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
 };
 const run = async (moduleFactory)=>{
     let nextId = 1;
@@ -494,11 +494,11 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
-import { queue } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 1
-};
 import { ipc } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
+};
+import { queue } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 1
 };
 const run = async (moduleFactory)=>{
     let nextId = 1;

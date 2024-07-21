@@ -1443,20 +1443,20 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 6
 };
-import { userland } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
 import { PagesRouteModule } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
-import { Document } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
+import { RouteKind } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
 };
 import { App } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
-import { RouteKind } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
+import { Document } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
+import { userland } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
 };
 const routeModule = new PagesRouteModule({
     definition: {
@@ -1658,20 +1658,20 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
-import { userland } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
 import { PagesRouteModule } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
-import { Document } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 0
+import { RouteKind } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 2
 };
 import { App } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 1
 };
-import { RouteKind } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 2
+import { Document } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 0
+};
+import { userland } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
 };
 const routeModule = new PagesRouteModule({
     definition: {
