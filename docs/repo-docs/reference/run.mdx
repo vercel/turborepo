@@ -190,7 +190,7 @@ You can combine multiple filters to further refine your targets. Multiple filter
 
 ```bash title="Terminal"
 # Any packages in `apps` subdirectories that have changed since the last commit
-turbo run build --filter=.apps/* --filter=[HEAD^1]
+turbo run build --filter={.apps/*}[HEAD^1]
 
 # Any packages in `apps` subdirectories except ./apps/admin
 turbo run build --filter=./apps/* --filter=!./apps/admin
