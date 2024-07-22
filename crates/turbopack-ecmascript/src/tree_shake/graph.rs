@@ -474,7 +474,7 @@ impl DepGraph {
 
         let mapped = condensed.map(
             |_, node| {
-                let item_ids = node
+                let mut item_ids = node
                     .iter()
                     .map(|&ix| {
                         done.insert(ix);
@@ -482,6 +482,7 @@ impl DepGraph {
                         self.g.graph_ix[ix as usize].clone()
                     })
                     .collect::<Vec<_>>();
+                item_ids.sort();
 
                 new_graph.node(&item_ids)
             },
