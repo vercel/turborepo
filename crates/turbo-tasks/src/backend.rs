@@ -22,8 +22,8 @@ use crate::{
     raw_vc::CellId,
     registry,
     trait_helpers::{get_trait_method, has_trait, traits},
-    FunctionId, RawVc, ReadRef, SharedReference, TaskId, TaskIdProvider, TaskIdSet, TraitRef,
-    TraitTypeId, ValueTypeId, VcValueTrait, VcValueType,
+    FunctionId, RawVc, ReadRef, SharedReference, TaskId, TaskIdSet, TraitRef, TraitTypeId,
+    ValueTypeId, VcValueTrait, VcValueType,
 };
 
 pub enum TaskType {
@@ -393,7 +393,7 @@ pub type TaskCollectiblesMap = AutoMap<RawVc, i32, BuildHasherDefault<FxHasher>,
 
 pub trait Backend: Sync + Send {
     #[allow(unused_variables)]
-    fn initialize(&mut self, task_id_provider: &dyn TaskIdProvider) {}
+    fn initialize(&mut self) {}
 
     #[allow(unused_variables)]
     fn startup(&self, turbo_tasks: &dyn TurboTasksBackendApi<Self>) {}
