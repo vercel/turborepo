@@ -475,7 +475,7 @@ pub fn should_skip_tree_shaking(m: &Program, special_exports: &[RcStr]) -> bool 
             }
         }
 
-        let mut visitor = UseServerFinder::default();
+        let mut visitor = ShouldAbort::default();
         m.visit_with(&mut visitor);
         if visitor.abort {
             return true;
@@ -492,11 +492,11 @@ pub fn should_skip_tree_shaking(m: &Program, special_exports: &[RcStr]) -> bool 
 }
 
 #[derive(Default)]
-struct UseServerFinder {
+struct ShouldAbort {
     abort: bool,
 }
 
-impl Visit for UseServerFinder {
+impl Visit for ShouldAbort {
     fn visit_expr_stmt(&mut self, e: &ExprStmt) {
         e.visit_children_with(self);
 
@@ -510,6 +510,23 @@ impl Visit for UseServerFinder {
     fn visit_stmt(&mut self, n: &Stmt) {
         if self.abort {
             return;
+        }
+
+        n.visit_children_with(self);
+    }
+
+    fn visit_await_expr(&mut self, n: &AwaitExpr) {
+        // __turbopack_wasm_module__ is not analyzable because __turbopack_wasm_module__
+        // is injected global.
+        if let Expr::Call(CallExpr {
+            callee: Callee::Expr(expr),
+            ..
+        }) = &*n.arg
+        {
+            if expr.is_ident_ref_to("__turbopack_wasm_module__") {
+                self.abort = true;
+                return;
+            }
         }
 
         n.visit_children_with(self);
