@@ -321,11 +321,11 @@ graph TD
 ```mermaid
 graph TD
     N0["Items: [ItemId(2, Normal)]"];
-    N1["Items: [ItemId(7, Normal), ItemId(8, Normal), ItemId(6, Normal)]"];
+    N1["Items: [ItemId(6, Normal), ItemId(7, Normal), ItemId(8, Normal)]"];
     N2["Items: [ItemId(Export((&quot;c2_2&quot;, #2), &quot;c2_2&quot;))]"];
     N3["Items: [ItemId(1, Normal)]"];
     N4["Items: [ItemId(0, Normal)]"];
-    N5["Items: [ItemId(5, Normal), ItemId(4, Normal), ItemId(3, Normal)]"];
+    N5["Items: [ItemId(3, Normal), ItemId(4, Normal), ItemId(5, Normal)]"];
     N6["Items: [ItemId(Export((&quot;c1_1&quot;, #2), &quot;c1_1&quot;))]"];
     N7["Items: [ItemId(Export((&quot;c1_3&quot;, #2), &quot;c1_3&quot;))]"];
     N8["Items: [ItemId(9, Normal)]"];
@@ -392,22 +392,22 @@ import "__TURBOPACK_PART__" assert {
 import { d3 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
+function c2_1() {
+    return c2_2(d3);
+}
 function c2_2() {
     return c2_3();
 }
 function c2_3() {
     return c2_1();
 }
-function c2_1() {
-    return c2_2(d3);
-}
+export { c2_1 } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { c2_2 } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 export { c2_3 } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { c2_1 } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 
@@ -450,28 +450,28 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
-import { d1 } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
 import { d2 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
-function c1_3() {
-    return c1_1(d2);
+import { d1 } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
+function c1_1() {
+    return c1_2();
 }
 function c1_2() {
     return c1_3(d1);
 }
-function c1_1() {
-    return c1_2();
+function c1_3() {
+    return c1_1(d2);
 }
-export { c1_3 } from "__TURBOPACK_VAR__" assert {
+export { c1_1 } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 export { c1_2 } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
-export { c1_1 } from "__TURBOPACK_VAR__" assert {
+export { c1_3 } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 
@@ -621,22 +621,22 @@ import "__TURBOPACK_PART__" assert {
 import { d3 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 0
 };
+function c2_1() {
+    return c2_2(d3);
+}
 function c2_2() {
     return c2_3();
 }
 function c2_3() {
     return c2_1();
 }
-function c2_1() {
-    return c2_2(d3);
-}
+export { c2_1 } from "__TURBOPACK_VAR__" assert {
+    __turbopack_var__: true
+};
 export { c2_2 } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 export { c2_3 } from "__TURBOPACK_VAR__" assert {
-    __turbopack_var__: true
-};
-export { c2_1 } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 
@@ -679,28 +679,28 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 4
 };
-import { d1 } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
 import { d2 } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 3
 };
-function c1_3() {
-    return c1_1(d2);
+import { d1 } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
+function c1_1() {
+    return c1_2();
 }
 function c1_2() {
     return c1_3(d1);
 }
-function c1_1() {
-    return c1_2();
+function c1_3() {
+    return c1_1(d2);
 }
-export { c1_3 } from "__TURBOPACK_VAR__" assert {
+export { c1_1 } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 export { c1_2 } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
-export { c1_1 } from "__TURBOPACK_VAR__" assert {
+export { c1_3 } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 

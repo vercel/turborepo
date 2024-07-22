@@ -370,7 +370,7 @@ graph TD
     N12["Items: [ItemId(3, Normal)]"];
     N13["Items: [ItemId(8, Normal)]"];
     N14["Items: [ItemId(ModuleEvaluation)]"];
-    N15["Items: [ItemId(9, VarDeclarator(0)), ItemId(6, Normal)]"];
+    N15["Items: [ItemId(6, Normal), ItemId(9, VarDeclarator(0))]"];
     N16["Items: [ItemId(Export((&quot;dogRef&quot;, #2), &quot;dogRef&quot;))]"];
     N5 --> N4;
     N6 --> N5;
@@ -664,24 +664,24 @@ import "__TURBOPACK_PART__" assert {
 import "__TURBOPACK_PART__" assert {
     __turbopack_part__: 13
 };
-import { dog } from "__TURBOPACK_PART__" assert {
-    __turbopack_part__: 4
-};
 import { getDog } from "__TURBOPACK_PART__" assert {
     __turbopack_part__: 12
 };
+import { dog } from "__TURBOPACK_PART__" assert {
+    __turbopack_part__: 4
+};
+function setDog(newDog) {
+    dog = newDog;
+}
 const dogRef = {
     initial: dog,
     get: getDog,
     set: setDog
 };
-function setDog(newDog) {
-    dog = newDog;
-}
-export { dogRef } from "__TURBOPACK_VAR__" assert {
+export { setDog } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
-export { setDog } from "__TURBOPACK_VAR__" assert {
+export { dogRef } from "__TURBOPACK_VAR__" assert {
     __turbopack_var__: true
 };
 
