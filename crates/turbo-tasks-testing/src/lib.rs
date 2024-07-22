@@ -13,15 +13,15 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use auto_hash_map::AutoMap;
 use futures::FutureExt;
 use turbo_tasks::{
-    backend::CellContent,
+    backend::{CellContent, TaskCollectiblesMap},
     event::{Event, EventListener},
     registry,
     test_helpers::with_turbo_tasks_for_testing,
     util::{SharedError, StaticOrArc},
-    CellId, InvalidationReason, RawVc, TaskId, TraitTypeId, TurboTasksApi, TurboTasksCallApi,
+    CellId, InvalidationReason, MagicAny, RawVc, TaskId, TraitTypeId, TurboTasksApi,
+    TurboTasksCallApi,
 };
 
 enum Task {
@@ -36,16 +36,16 @@ pub struct VcStorage {
     tasks: Mutex<Vec<Task>>,
 }
 
-impl TurboTasksCallApi for VcStorage {
+impl VcStorage {
     fn dynamic_call(
         &self,
         func: turbo_tasks::FunctionId,
-        inputs: Vec<turbo_tasks::ConcreteTaskInput>,
+        this_arg: Option<RawVc>,
+        arg: Box<dyn MagicAny>,
     ) -> RawVc {
         let this = self.this.upgrade().unwrap();
-        let func = registry::get_function(func).bind(&inputs);
         let handle = tokio::runtime::Handle::current();
-        let future = func();
+        let future = registry::get_function(func).execute(this_arg, &*arg);
         let i = {
             let mut tasks = self.tasks.lock().unwrap();
             let i = tasks.len();
@@ -77,11 +77,31 @@ impl TurboTasksCallApi for VcStorage {
         }));
         RawVc::TaskOutput(id)
     }
+}
 
-    fn native_call(
+impl TurboTasksCallApi for VcStorage {
+    fn dynamic_call(&self, func: turbo_tasks::FunctionId, arg: Box<dyn MagicAny>) -> RawVc {
+        self.dynamic_call(func, None, arg)
+    }
+
+    fn dynamic_this_call(
+        &self,
+        func: turbo_tasks::FunctionId,
+        this_arg: RawVc,
+        arg: Box<dyn MagicAny>,
+    ) -> RawVc {
+        self.dynamic_call(func, Some(this_arg), arg)
+    }
+
+    fn native_call(&self, _func: turbo_tasks::FunctionId, _arg: Box<dyn MagicAny>) -> RawVc {
+        unreachable!()
+    }
+
+    fn this_call(
         &self,
         _func: turbo_tasks::FunctionId,
-        _inputs: Vec<turbo_tasks::ConcreteTaskInput>,
+        _this: RawVc,
+        _arg: Box<dyn MagicAny>,
     ) -> RawVc {
         unreachable!()
     }
@@ -90,7 +110,8 @@ impl TurboTasksCallApi for VcStorage {
         &self,
         _trait_type: turbo_tasks::TraitTypeId,
         _trait_fn_name: Cow<'static, str>,
-        _inputs: Vec<turbo_tasks::ConcreteTaskInput>,
+        _this: RawVc,
+        _arg: Box<dyn MagicAny>,
     ) -> RawVc {
         unreachable!()
     }
@@ -214,12 +235,12 @@ impl TurboTasksApi for VcStorage {
     fn unemit_collectibles(
         &self,
         _trait_type: turbo_tasks::TraitTypeId,
-        _collectibles: &AutoMap<RawVc, i32>,
+        _collectibles: &TaskCollectiblesMap,
     ) {
         unimplemented!()
     }
 
-    fn read_task_collectibles(&self, _task: TaskId, _trait_id: TraitTypeId) -> AutoMap<RawVc, i32> {
+    fn read_task_collectibles(&self, _task: TaskId, _trait_id: TraitTypeId) -> TaskCollectiblesMap {
         unimplemented!()
     }
 

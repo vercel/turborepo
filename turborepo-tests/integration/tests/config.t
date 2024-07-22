@@ -2,46 +2,40 @@ Setup
   $ . ${TESTDIR}/../../helpers/setup_integration_test.sh
 
 Run test run
-  $ ${TURBO} info --json | jq .config
+  $ ${TURBO} config
   {
-    "apiUrl": null,
-    "loginUrl": null,
+    "apiUrl": "https://vercel.com/api",
+    "loginUrl": "https://vercel.com",
     "teamSlug": null,
     "teamId": null,
-    "token": null,
-    "signature": null,
-    "preflight": null,
-    "timeout": null,
-    "enabled": null,
-    "spacesId": null
+    "signature": false,
+    "preflight": false,
+    "timeout": 30,
+    "uploadTimeout": 60,
+    "enabled": true,
+    "spacesId": null,
+    "ui": false,
+    "packageManager": "npm"
   }
 
 Run test run with api overloaded
-  $ ${TURBO} info --json --api http://localhost:8000 | jq .config.apiUrl
+  $ ${TURBO} config --api http://localhost:8000 | jq .apiUrl
   "http://localhost:8000"
 
-Run test run with token overloaded
-  $ ${TURBO} info --json --token 1234567890 | jq .config.token
-  "1234567890"
-
-Run test run with token overloaded from both TURBO_TOKEN and VERCEL_ARTIFACTS_TOKEN
-  $ TURBO_TOKEN=turbo VERCEL_ARTIFACTS_TOKEN=vercel ${TURBO} info --json | jq .config.token
-  "vercel"
-
 Run test run with team overloaded
-  $ ${TURBO} info --json --team vercel | jq .config.teamSlug
+  $ ${TURBO} config --team vercel | jq .teamSlug
   "vercel"
 
 Run test run with team overloaded from both env and flag (flag should take precedence)
-  $ TURBO_TEAM=vercel ${TURBO} info --json --team turbo | jq .config.teamSlug
+  $ TURBO_TEAM=vercel ${TURBO} config --team turbo | jq .teamSlug
   "turbo"
 
 Run test run with remote cache timeout env variable set
-  $ TURBO_REMOTE_CACHE_TIMEOUT=123 ${TURBO} info --json | jq .config.timeout
+  $ TURBO_REMOTE_CACHE_TIMEOUT=123 ${TURBO} config | jq .timeout
   123
 
 Run test run with remote cache timeout from both env and flag (flag should take precedence)
-  $ TURBO_REMOTE_CACHE_TIMEOUT=123 ${TURBO} info --json --remote-cache-timeout 456 | jq .config.timeout
+  $ TURBO_REMOTE_CACHE_TIMEOUT=123 ${TURBO} config --remote-cache-timeout 456 | jq .timeout
   456
 
 Use our custom turbo config with an invalid env var
